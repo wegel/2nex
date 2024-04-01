@@ -1,0 +1,44 @@
+diff --git a/configure b/configure
+index 7e43da4..363cd10 100755
+--- a/configure
++++ b/configure
+@@ -51392,6 +51392,17 @@ main ()
+ 
+     /* Try rmdir first, in case the chdir failed.  */
+     rmdir (DIR_NAME);
++
++    /* Getting rid of the very bottom dirs inside a Docker container is tricky */
++    if (chdir ("../../..") < 0) exit (errno);
++    rename (DIR_NAME"/"DIR_NAME"/"DIR_NAME, "b");
++    rename (DIR_NAME"/"DIR_NAME, "c");
++    rename (DIR_NAME, "d");
++    rmdir ("b");
++    rmdir ("c");
++    rmdir ("d");
++
++    /* Now for the rest */
+     for (i = 0; i <= n_chdirs; i++)
+       {
+         if (chdir ("..") < 0)
+diff --git a/m4/getcwd-path-max.m4 b/m4/getcwd-path-max.m4
+index d30e75a..c726e03 100644
+--- a/m4/getcwd-path-max.m4
++++ b/m4/getcwd-path-max.m4
+@@ -196,6 +196,17 @@ main ()
+ 
+     /* Try rmdir first, in case the chdir failed.  */
+     rmdir (DIR_NAME);
++
++    /* Getting rid of the very bottom dirs inside a Docker container is tricky */
++    if (chdir ("../../..") < 0) exit (errno);
++    rename (DIR_NAME"/"DIR_NAME"/"DIR_NAME, "b");
++    rename (DIR_NAME"/"DIR_NAME, "c");
++    rename (DIR_NAME, "d");
++    rmdir ("b");
++    rmdir ("c");
++    rmdir ("d");
++
++    /* Now for the rest */
+     for (i = 0; i <= n_chdirs; i++)
+       {
+         if (chdir ("..") < 0)

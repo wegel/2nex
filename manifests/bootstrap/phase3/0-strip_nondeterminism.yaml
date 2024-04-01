@@ -1,0 +1,112 @@
+package:
+  schema: 1
+  name: "strip-nondeterminism"
+  slug: "strip-nondeterminism"
+  flavor: "bootstrap/phase3"
+  version: "1.13.0"
+  description: "A program for automating interactive applications"
+  homepage: "https://core.tcl.tk/expect/"
+  checksum: 53840bce0f43539a8c69e5d1957265139a995db6044595f0cb808b84c9f17e32
+
+sources:
+  - name: "strip_nondeterminism"
+    url: "https://salsa.debian.org/reproducible-builds/reproducible-lfs/-/raw/master/releases/strip-nondeterminism/strip-nondeterminism_1.13.0.tar.bz2?ref_type=heads"
+    sha256: "a70cdad5d728ea78b75d09880c4b51c7d887e89d0b610149b10cfb2abc70b4fc"
+
+dependencies:
+  - name: "bootstrap_tools"
+    commit: "x86_64/bootstrap_tools/0.0.1/bootstrap/phase1/bundles/dev"
+  - name: "ncurses"
+    commit: "x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev"
+  - name: "bash"
+    commit: "x86_64/bash/5.2.21/bootstrap/phase1/bundles/dev"
+  - name: "coreutils"
+    commit: "x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev"
+  - name: "diffutils"
+    commit: "x86_64/diffutils/3.10/bootstrap/phase1/bundles/dev"
+  - name: "findutils"
+    commit: "x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev"
+  - name: "gawk"
+    commit: "x86_64/gawk/5.3.0/bootstrap/phase1/bundles/dev"
+  - name: "grep"
+    commit: "x86_64/grep/3.11/bootstrap/phase1/bundles/dev"
+  - name: "gzip"
+    commit: "x86_64/gzip/1.13/bootstrap/phase1/bundles/dev"
+  - name: "make"
+    commit: "x86_64/make/4.4.1/bootstrap/phase1/bundles/dev"
+  - name: "patch"
+    commit: "x86_64/patch/2.7.6/bootstrap/phase1/bundles/dev"
+  - name: "sed"
+    commit: "x86_64/sed/4.9/bootstrap/phase1/bundles/dev"
+  - name: "tar"
+    commit: "x86_64/tar/1.35/bootstrap/phase1/bundles/dev"
+  - name: "binutils"
+    commit: "x86_64/binutils/2.42/bootstrap/phase1/bundles/dev"
+  - name: "gcc"
+    commit: "x86_64/gcc/13.2.0/bootstrap/phase1/bundles/dev"
+  - name: "bison"
+    commit: "x86_64/bison/3.8.2/bootstrap/phase2/bundles/dev"
+  - name: "gettext"
+    commit: "x86_64/gettext/0.22.5/bootstrap/phase2/bundles/dev"
+  - name: "perl"
+    commit: "x86_64/perl/5.38.2/bootstrap/phase2/bundles/dev"
+  - name: "bzip2"
+    commit: "x86_64/bzip2/1.0.8/bootstrap/phase1/bundles/dev"
+
+build:  
+  script: |
+    tar --no-same-owner -xf ${SOURCE_strip_nondeterminism} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    perl Makefile.PL
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+    
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  full:
+    - man
+    - bin
+    - lib
+
+  dev:
+    - lib
+    - bin
+    
+outputs:
+  man:
+    - /usr/share/man/man1/dh_strip_nondeterminism.1
+    - /usr/share/man/man1/strip-nondeterminism.1
+    - /usr/share/man/man3/File::StripNondeterminism::handlers::ar.3
+    - /usr/share/man/man3/File::StripNondeterminism::handlers::bflt.3
+    - /usr/share/man/man3/File::StripNondeterminism::handlers::cpio.3
+    - /usr/share/man/man3/File::StripNondeterminism::handlers::gettext.3
+    - /usr/share/man/man3/File::StripNondeterminism::handlers::gzip.3
+    - /usr/share/man/man3/File::StripNondeterminism::handlers::jar.3
+    - /usr/share/man/man3/File::StripNondeterminism::handlers::javadoc.3
+    - /usr/share/man/man3/File::StripNondeterminism::handlers::jmod.3
+    - /usr/share/man/man3/File::StripNondeterminism::handlers::png.3
+    - /usr/share/man/man3/File::StripNondeterminism::handlers::pyzip.3
+    - /usr/share/man/man3/File::StripNondeterminism::handlers::uimage.3
+    - /usr/share/man/man3/File::StripNondeterminism::handlers::zip.3
+  bin:
+    - /usr/bin/dh_strip_nondeterminism
+    - /usr/bin/strip-nondeterminism
+  lib:
+    - /usr/lib/perl5/5.38/core_perl/perllocal.pod
+    - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism.pm
+    - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/Common.pm
+    - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/ar.pm
+    - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/bflt.pm
+    - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/cpio.pm
+    - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/gettext.pm
+    - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/gzip.pm
+    - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/jar.pm
+    - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/javadoc.pm
+    - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/jmod.pm
+    - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/png.pm
+    - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/pyzip.pm
+    - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/uimage.pm
+    - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/zip.pm
+    - /usr/lib/perl5/5.38/site_perl/auto/File/StripNondeterminism/.packlist

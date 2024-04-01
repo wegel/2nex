@@ -1,0 +1,139 @@
+package:
+  schema: 1
+  name: "Xz"
+  slug: "xz"
+  flavor: "bootstrap/phase1" 
+  version: "5.4.6"
+  description: "General-purpose data compression with high compression ratio"
+  homepage: "https://tukaani.org/xz/"
+  stable_checksum: false
+
+sources:
+  - name: "xz"
+    url: "https://github.com/tukaani-project/xz/releases/download/v5.4.6/xz-5.4.6.tar.xz"
+    sha256: "b92d4e3a438affcf13362a1305cd9d94ed47ddda22e456a42791e630a5644f5c"
+
+dependencies:
+  - name: "bootstrap_tools"
+    commit: "x86_64/bootstrap-tools/2.42/bootstrap/phase0/bundles/dev"
+  - name: "m4"
+    commit: "x86_64/m4/1.4.19/bootstrap/phase1/bundles/dev"
+  - name: "ncurses"
+    commit: "x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev"
+  - name: "coreutils"
+    commit: "x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev"
+  - name: "diffutils"
+    commit: "x86_64/diffutils/3.10/bootstrap/phase1/bundles/dev"
+  - name: "file"
+    commit: "x86_64/file/5.45/bootstrap/phase1/bundles/dev"
+  - name: "findutils"
+    commit: "x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev"
+  - name: "gawk"
+    commit: "x86_64/gawk/5.3.0/bootstrap/phase1/bundles/dev"
+  - name: "grep"
+    commit: "x86_64/grep/3.11/bootstrap/phase1/bundles/dev"
+  - name: "gzip"
+    commit: "x86_64/gzip/1.13/bootstrap/phase1/bundles/dev"
+  - name: "make"
+    commit: "x86_64/patch/2.7.6/bootstrap/phase1/bundles/dev"
+  - name: "patch"
+    commit: "x86_64/patch/2.7.6/bootstrap/phase1/bundles/dev"
+  - name: "sed"
+    commit: "x86_64/sed/4.9/bootstrap/phase1/bundles/dev"
+  - name: "tar"
+    commit: "x86_64/tar/1.35/bootstrap/phase1/bundles/dev"
+
+build:
+  script: |
+    tar --no-same-owner -xf ${SOURCE_xz} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --libdir=/usr/lib \
+          --disable-static \
+          --docdir=/usr/share/doc/xz-5.4.6
+    make
+    make check
+
+    make DESTDIR=${OUT_DIR} install
+    rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
+    
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+    - lib
+    - bin
+    - dev
+    - locale
+
+outputs:
+  lib:
+    - /usr/lib/liblzma.so
+    - /usr/lib/liblzma.so.5
+    - /usr/lib/liblzma.so.5.4.6
+  bin:
+    - /usr/bin/lzcat
+    - /usr/bin/lzcmp
+    - /usr/bin/lzdiff
+    - /usr/bin/lzegrep
+    - /usr/bin/lzfgrep
+    - /usr/bin/lzgrep
+    - /usr/bin/lzless
+    - /usr/bin/lzma
+    - /usr/bin/lzmadec
+    - /usr/bin/lzmainfo
+    - /usr/bin/lzmore
+    - /usr/bin/unlzma
+    - /usr/bin/unxz
+    - /usr/bin/xz
+    - /usr/bin/xzcat
+    - /usr/bin/xzcmp
+    - /usr/bin/xzdec
+    - /usr/bin/xzdiff
+    - /usr/bin/xzegrep
+    - /usr/bin/xzfgrep
+    - /usr/bin/xzgrep
+    - /usr/bin/xzless
+    - /usr/bin/xzmore
+  locale:
+    - /usr/share/locale/ca/LC_MESSAGES/xz.mo
+    - /usr/share/locale/cs/LC_MESSAGES/xz.mo
+    - /usr/share/locale/da/LC_MESSAGES/xz.mo
+    - /usr/share/locale/de/LC_MESSAGES/xz.mo
+    - /usr/share/locale/eo/LC_MESSAGES/xz.mo
+    - /usr/share/locale/es/LC_MESSAGES/xz.mo
+    - /usr/share/locale/fi/LC_MESSAGES/xz.mo
+    - /usr/share/locale/fr/LC_MESSAGES/xz.mo
+    - /usr/share/locale/hr/LC_MESSAGES/xz.mo
+    - /usr/share/locale/hu/LC_MESSAGES/xz.mo
+    - /usr/share/locale/it/LC_MESSAGES/xz.mo
+    - /usr/share/locale/ko/LC_MESSAGES/xz.mo
+    - /usr/share/locale/pl/LC_MESSAGES/xz.mo
+    - /usr/share/locale/pt/LC_MESSAGES/xz.mo
+    - /usr/share/locale/pt_BR/LC_MESSAGES/xz.mo
+    - /usr/share/locale/ro/LC_MESSAGES/xz.mo
+    - /usr/share/locale/sr/LC_MESSAGES/xz.mo
+    - /usr/share/locale/sv/LC_MESSAGES/xz.mo
+    - /usr/share/locale/tr/LC_MESSAGES/xz.mo
+    - /usr/share/locale/uk/LC_MESSAGES/xz.mo
+    - /usr/share/locale/vi/LC_MESSAGES/xz.mo
+    - /usr/share/locale/zh_CN/LC_MESSAGES/xz.mo
+    - /usr/share/locale/zh_TW/LC_MESSAGES/xz.mo
+  dev:
+    - /usr/include/lzma.h
+    - /usr/include/lzma/base.h
+    - /usr/include/lzma/bcj.h
+    - /usr/include/lzma/block.h
+    - /usr/include/lzma/check.h
+    - /usr/include/lzma/container.h
+    - /usr/include/lzma/delta.h
+    - /usr/include/lzma/filter.h
+    - /usr/include/lzma/hardware.h
+    - /usr/include/lzma/index.h
+    - /usr/include/lzma/index_hash.h
+    - /usr/include/lzma/lzma12.h
+    - /usr/include/lzma/stream_flags.h
+    - /usr/include/lzma/version.h
+    - /usr/include/lzma/vli.h
+    - /usr/lib/liblzma.la
+    - /usr/lib/pkgconfig/liblzma.pc

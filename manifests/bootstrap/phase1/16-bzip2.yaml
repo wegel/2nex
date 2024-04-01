@@ -1,0 +1,98 @@
+package:
+  schema: 1
+  name: "Bzip2"  
+  slug: "bzip2"
+  flavor: "bootstrap/phase1"
+  version: "1.0.8"
+  description: "A freely available, patent free, high-quality data compressor"
+  homepage: "https://sourceware.org/bzip2/"
+  stable_checksum: false
+
+sources:
+  - name: "bzip2"
+    url: "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz"
+    sha256: "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269"
+  - name: "install_docs_patch"
+    url: "https://www.linuxfromscratch.org/patches/downloads/bzip2/bzip2-1.0.8-install_docs-1.patch"
+    sha256: "35e3bbd9642af51fef2a8a83afba040d272da42d7e3a251d8e43255a7b496702"
+
+dependencies:
+  - name: "bootstrap_tools"
+    commit: "x86_64/bootstrap-tools/2.42/bootstrap/phase0/bundles/dev"
+  - name: "m4"
+    commit: "x86_64/m4/1.4.19/bootstrap/phase1/bundles/dev"
+  - name: "ncurses"
+    commit: "x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev"
+  - name: "coreutils"
+    commit: "x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev"
+  - name: "diffutils"
+    commit: "x86_64/diffutils/3.10/bootstrap/phase1/bundles/dev"
+  - name: "file"
+    commit: "x86_64/file/5.45/bootstrap/phase1/bundles/dev"
+  - name: "findutils"
+    commit: "x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev"
+  - name: "gawk"
+    commit: "x86_64/gawk/5.3.0/bootstrap/phase1/bundles/dev"
+  - name: "grep"
+    commit: "x86_64/grep/3.11/bootstrap/phase1/bundles/dev"
+  - name: "gzip"
+    commit: "x86_64/gzip/1.13/bootstrap/phase1/bundles/dev"
+  - name: "make"
+    commit: "x86_64/patch/2.7.6/bootstrap/phase1/bundles/dev"
+  - name: "patch"
+    commit: "x86_64/patch/2.7.6/bootstrap/phase1/bundles/dev"
+  - name: "sed"
+    commit: "x86_64/sed/4.9/bootstrap/phase1/bundles/dev"
+  - name: "tar"
+    commit: "x86_64/tar/1.35/bootstrap/phase1/bundles/dev"
+  - name: "xz"
+    commit: "x86_64/xz/5.4.6/bootstrap/phase1/bundles/dev"
+
+build:
+  script: |
+    tar --no-same-owner -xf ${SOURCE_bzip2} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    patch -Np1 -i ${SOURCE_install_docs_patch}
+
+    sed -i "s@\(ln -s -f \)\$(PREFIX)/bin/@\1@" Makefile
+    sed -i "s@(PREFIX)/man@(PREFIX)/share/man@g" Makefile
+    make -f Makefile-libbz2_so
+    make clean
+    make
+    make PREFIX=${OUT_DIR}/usr install
+    cp -afv libbz2.so.* ${OUT_DIR}/usr/lib
+    ln -sfv libbz2.so.1.0.8 ${OUT_DIR}/usr/lib/libbz2.so
+    cp -fv bzip2-shared ${OUT_DIR}/usr/bin/bzip2
+    for i in ${OUT_DIR}/usr/bin/{bzcat,bunzip2}; do
+      ln -sfv bzip2 $i
+    done
+    rm -fv ${OUT_DIR}/usr/lib/libbz2.a
+    rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+    - dev
+    - lib
+    - bin
+
+outputs:
+  dev:
+    - /usr/include/bzlib.h
+  bin:
+    - /usr/bin/bunzip2
+    - /usr/bin/bzcat
+    - /usr/bin/bzcmp
+    - /usr/bin/bzdiff
+    - /usr/bin/bzegrep
+    - /usr/bin/bzfgrep
+    - /usr/bin/bzgrep
+    - /usr/bin/bzip2
+    - /usr/bin/bzip2recover
+    - /usr/bin/bzless
+    - /usr/bin/bzmore
+  lib:
+    - /usr/lib/libbz2.so
+    - /usr/lib/libbz2.so.1.0
+    - /usr/lib/libbz2.so.1.0.8

@@ -1,0 +1,149 @@
+package:
+  schema: 1
+  name: "Pkgconf"
+  slug: "pkgconf"
+  flavor: "bootstrap/phase3"
+  version: "2.2.0"
+  description: "A program which helps to configure compiler and linker flags for development frameworks"
+  homepage: "https://github.com/pkgconf/pkgconf"
+  checksum: e1ef7f55e31572853276fc650df0db08ae47aa36a98638e5d834c9c8464e7ade
+
+sources:
+  - name: "pkgconf"
+    url: "https://distfiles.dereferenced.org/pkgconf/pkgconf-2.2.0.tar.xz"
+    sha256: "b06ff63a83536aa8c2f6422fa80ad45e4833f590266feb14eaddfe1d4c853c69"
+
+
+dependencies:
+  - name: "bootstrap_tools"
+    commit: "x86_64/bootstrap_tools/0.0.1/bootstrap/phase1/bundles/dev"
+  - name: "ncurses"
+    commit: "x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev"
+  - name: "bash"
+    commit: "x86_64/bash/5.2.21/bootstrap/phase1/bundles/dev"
+  - name: "coreutils"
+    commit: "x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev"
+  - name: "diffutils"
+    commit: "x86_64/diffutils/3.10/bootstrap/phase1/bundles/dev"
+  - name: "findutils"
+    commit: "x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev"
+  - name: "2nex-utilities"
+    commit: "x86_64/2nex-utilities/0.0.1/bootstrap/phase3/bundles/dev"
+  - name: "gawk"
+    commit: "x86_64/gawk/5.3.0/bootstrap/phase1/bundles/dev"
+  - name: "grep"
+    commit: "x86_64/grep/3.11/bootstrap/phase1/bundles/dev"
+  - name: "gzip"
+    commit: "x86_64/gzip/1.13/bootstrap/phase1/bundles/dev"
+  - name: "make"
+    commit: "x86_64/make/4.4.1/bootstrap/phase1/bundles/dev"
+  - name: "patch"
+    commit: "x86_64/patch/2.7.6/bootstrap/phase1/bundles/dev"
+  - name: "sed"
+    commit: "x86_64/sed/4.9/bootstrap/phase1/bundles/dev"
+  - name: "tar"
+    commit: "x86_64/tar/1.35/bootstrap/phase1/bundles/dev"
+  - name: "binutils"
+    commit: "x86_64/binutils/2.42/bootstrap/phase1/bundles/dev"
+  - name: "gcc"
+    commit: "x86_64/gcc/13.2.0/bootstrap/phase1/bundles/dev"
+  - name: "bison"
+    commit: "x86_64/bison/3.8.2/bootstrap/phase2/bundles/dev"
+  - name: "gettext"
+    commit: "x86_64/gettext/0.22.5/bootstrap/phase2/bundles/dev"
+  - name: "perl"
+    commit: "x86_64/perl/5.38.2/bootstrap/phase2/bundles/dev"
+  - name: "strip_nondeterminism"
+    commit: "x86_64/strip-nondeterminism/1.13.0/bootstrap/phase3/bundles/dev"
+  - name: "python3"
+    commit: "x86_64/python3/3.12.2/bootstrap/phase2/bundles/dev"
+  - name: "texinfo"
+    commit: "x86_64/texinfo/7.1/bootstrap/phase2/bundles/dev"
+  - name: "glibc"
+    commit: "x86_64/glibc/2.39/bootstrap/phase3/bundles/dev"
+  - name: "zlib"
+    commit: "x86_64/zlib/1.3.1/bootstrap/phase3/bundles/dev"
+  - name: "bzip2"
+    commit: "x86_64/bzip2/1.0.8/bootstrap/phase3/bundles/dev"
+  - name: "xz"
+    commit: "x86_64/xz/5.4.6/bootstrap/phase3/bundles/dev"
+  - name: "lz4"
+    commit: "x86_64/lz4/1.9.4/bootstrap/phase3/bundles/dev"
+  - name: "zstd"
+    commit: "x86_64/zstd/1.5.6/bootstrap/phase3/outputs/dev"
+  - name: "file"
+    commit: "x86_64/file/5.45/bootstrap/phase3/bundles/dev"
+  - name: "m4"
+    commit: "x86_64/m4/1.4.19/bootstrap/phase3/bundles/dev"
+  - name: "bc"
+    commit: "x86_64/bc/6.7.5/bootstrap/phase3/bundles/dev"
+  - name: "flex"
+    commit: "x86_64/flex/2.6.4/bootstrap/phase3/bundles/dev"
+  - name: "tcl"
+    commit: "x86_64/tcl/8.6.14/bootstrap/phase3/bundles/dev"
+  - name: "expect"
+    commit: "x86_64/expect/5.45.4/bootstrap/phase3/bundles/dev"
+  - name: "dejagnu"
+    commit: "x86_64/dejagnu/1.6.3/bootstrap/phase3/bundles/dev"
+
+build:
+  script: |
+    tar --no-same-owner -xf /inputs/pkgconf-*.tar.* -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    
+    ./configure --prefix=/usr              \
+              --docdir=/usr/share/doc/pkgconf-2.2.0
+    
+    make
+    make DESTDIR="${OUT_DIR}" install
+    ln -sv pkgconf   "${OUT_DIR}"/usr/bin/pkg-config
+    ln -sv pkgconf.1 "${OUT_DIR}"/usr/share/man/man1/pkg-config.1
+    
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  full:
+    - doc
+    - dev
+    - lib
+    - static
+    - bin
+    - man
+
+  dev:
+    - dev
+    - lib
+    - static
+    - bin
+
+outputs:
+  doc:
+    - /usr/share/doc/pkgconf-2.2.0/AUTHORS
+    - /usr/share/doc/pkgconf-2.2.0/README.md
+  dev:
+    - /usr/include/pkgconf/libpkgconf/bsdstubs.h
+    - /usr/include/pkgconf/libpkgconf/iter.h
+    - /usr/include/pkgconf/libpkgconf/libpkgconf-api.h
+    - /usr/include/pkgconf/libpkgconf/libpkgconf.h
+    - /usr/include/pkgconf/libpkgconf/stdinc.h
+    - /usr/lib/libpkgconf.la
+    - /usr/lib/pkgconfig/libpkgconf.pc
+    - /usr/share/aclocal/pkg.m4
+  lib:
+    - /usr/lib/libpkgconf.so
+    - /usr/lib/libpkgconf.so.5
+    - /usr/lib/libpkgconf.so.5.0.0
+  static:
+    - /usr/lib/libpkgconf.a
+  bin:
+    - /usr/bin/bomtool
+    - /usr/bin/pkg-config
+    - /usr/bin/pkgconf
+  man:
+    - /usr/share/man/man1/pkg-config.1
+    - /usr/share/man/man1/pkgconf.1
+    - /usr/share/man/man5/pc.5
+    - /usr/share/man/man5/pkgconf-personality.5
+    - /usr/share/man/man7/pkg.m4.7

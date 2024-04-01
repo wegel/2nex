@@ -1,0 +1,108 @@
+package:
+  schema: 1
+  name: "Tar"
+  slug: "tar"
+  flavor: "bootstrap/phase1"
+  version: "1.35"
+  description: "An archiving program"
+  homepage: "https://www.gnu.org/software/tar/"
+  stable_checksum: false
+
+sources:
+  - name: "tar"
+    url: "https://ftp.gnu.org/gnu/tar/tar-1.35.tar.xz"
+    sha256: "4d62ff37342ec7aed748535323930c7cf94acf71c3591882b26a7ea50f3edc16"
+
+dependencies:
+  - name: "bootstrap_tools"
+    commit: "x86_64/bootstrap-tools/2.42/bootstrap/phase0/bundles/dev"
+  - name: "m4"
+    commit: "x86_64/m4/1.4.19/bootstrap/phase1/bundles/dev"
+  - name: "ncurses"
+    commit: "x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev"
+  - name: "coreutils"
+    commit: "x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev"
+  - name: "diffutils"
+    commit: "x86_64/diffutils/3.10/bootstrap/phase1/bundles/dev"
+  - name: "file"
+    commit: "x86_64/file/5.45/bootstrap/phase1/bundles/dev"
+  - name: "findutils"
+    commit: "x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev"
+  - name: "gawk"
+    commit: "x86_64/gawk/5.3.0/bootstrap/phase1/bundles/dev"
+  - name: "grep"
+    commit: "x86_64/grep/3.11/bootstrap/phase1/bundles/dev"
+  - name: "gzip"
+    commit: "x86_64/gzip/1.13/bootstrap/phase1/bundles/dev"
+  - name: "make"
+    commit: "x86_64/patch/2.7.6/bootstrap/phase1/bundles/dev"
+  - name: "patch"
+    commit: "x86_64/patch/2.7.6/bootstrap/phase1/bundles/dev"
+  - name: "sed"
+    commit: "x86_64/sed/4.9/bootstrap/phase1/bundles/dev"
+
+build:
+  script: |
+    tar --no-same-owner -xf ${SOURCE_tar} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    FORCE_UNSAFE_CONFIGURE=1
+    ./configure --prefix=/usr                     \
+          --host=${TARGET}                   \
+          --build=$(build-aux/config.guess)
+
+    make
+    make DESTDIR=${OUT_DIR} install
+    rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+    - bin
+    - locale
+
+outputs:
+  bin:
+    - /usr/bin/tar
+    - /usr/libexec/rmt
+  locale:
+    - /usr/share/locale/bg/LC_MESSAGES/tar.mo
+    - /usr/share/locale/ca/LC_MESSAGES/tar.mo
+    - /usr/share/locale/cs/LC_MESSAGES/tar.mo
+    - /usr/share/locale/da/LC_MESSAGES/tar.mo
+    - /usr/share/locale/de/LC_MESSAGES/tar.mo
+    - /usr/share/locale/el/LC_MESSAGES/tar.mo
+    - /usr/share/locale/eo/LC_MESSAGES/tar.mo
+    - /usr/share/locale/es/LC_MESSAGES/tar.mo
+    - /usr/share/locale/et/LC_MESSAGES/tar.mo
+    - /usr/share/locale/eu/LC_MESSAGES/tar.mo
+    - /usr/share/locale/fi/LC_MESSAGES/tar.mo
+    - /usr/share/locale/fr/LC_MESSAGES/tar.mo
+    - /usr/share/locale/ga/LC_MESSAGES/tar.mo
+    - /usr/share/locale/gl/LC_MESSAGES/tar.mo
+    - /usr/share/locale/hr/LC_MESSAGES/tar.mo
+    - /usr/share/locale/hu/LC_MESSAGES/tar.mo
+    - /usr/share/locale/id/LC_MESSAGES/tar.mo
+    - /usr/share/locale/it/LC_MESSAGES/tar.mo
+    - /usr/share/locale/ja/LC_MESSAGES/tar.mo
+    - /usr/share/locale/ka/LC_MESSAGES/tar.mo
+    - /usr/share/locale/ko/LC_MESSAGES/tar.mo
+    - /usr/share/locale/ky/LC_MESSAGES/tar.mo
+    - /usr/share/locale/ms/LC_MESSAGES/tar.mo
+    - /usr/share/locale/nb/LC_MESSAGES/tar.mo
+    - /usr/share/locale/nl/LC_MESSAGES/tar.mo
+    - /usr/share/locale/pl/LC_MESSAGES/tar.mo
+    - /usr/share/locale/pt/LC_MESSAGES/tar.mo
+    - /usr/share/locale/pt_BR/LC_MESSAGES/tar.mo
+    - /usr/share/locale/ro/LC_MESSAGES/tar.mo
+    - /usr/share/locale/ru/LC_MESSAGES/tar.mo
+    - /usr/share/locale/sk/LC_MESSAGES/tar.mo
+    - /usr/share/locale/sl/LC_MESSAGES/tar.mo
+    - /usr/share/locale/sr/LC_MESSAGES/tar.mo
+    - /usr/share/locale/sv/LC_MESSAGES/tar.mo
+    - /usr/share/locale/tr/LC_MESSAGES/tar.mo
+    - /usr/share/locale/uk/LC_MESSAGES/tar.mo
+    - /usr/share/locale/vi/LC_MESSAGES/tar.mo
+    - /usr/share/locale/zh_CN/LC_MESSAGES/tar.mo
+    - /usr/share/locale/zh_TW/LC_MESSAGES/tar.mo

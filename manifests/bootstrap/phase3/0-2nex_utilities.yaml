@@ -1,0 +1,76 @@
+package:
+  schema: 1
+  name: "2nex Utilities"
+  slug: "2nex-utilities"
+  flavor: "bootstrap/phase3"
+  version: "0.0.1"
+  description: "2nex build-time utilities"
+  homepage: ""
+  checksum: be6e264d9caa32f449bdd61271e3382ef9825638f3e330f429472da9042efa04
+
+sources:
+
+dependencies:
+  - name: "bootstrap_tools"
+    commit: "x86_64/bootstrap_tools/0.0.1/bootstrap/phase1/bundles/dev"
+  - name: "ncurses"
+    commit: "x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev"
+  - name: "bash"
+    commit: "x86_64/bash/5.2.21/bootstrap/phase1/bundles/dev"
+  - name: "coreutils"
+    commit: "x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev"
+
+build:
+  script: |
+    mkdir -vp ${OUT_DIR}/usr/bin
+    cat << 'EOF' > ${OUT_DIR}/usr/bin/2nex_strip_binaries
+    #!/bin/sh
+
+    # Set the path to the build output directory
+    BUILD_DIR="$1"
+
+    # Check if the build directory is provided
+    if [ -z "$BUILD_DIR" ]; then
+      echo "Please provide the path to the build output directory as an argument."
+      exit 1
+    fi
+
+    STRIP_TARGETS="ELF|current ar archive"
+    if [ -n "${SKIP_AR:-}" ]; then
+      echo "Skipping static libraries"
+      STRIP_TARGETS="ELF"
+    fi
+
+    # Function to strip debugging symbols from a binary
+    strip_debug_symbols() {
+      local file="$1"
+  
+      # Check if the file is a binary (ELF) file or a .a (ar archive)
+      if file "$file" | grep -Eq "${STRIP_TARGETS}"; then
+        # Strip debugging symbols from the binary
+        strip "$file"
+        echo "Stripped debugging symbols from: $file"
+      fi
+    }
+
+    # Traverse the build directory and strip debugging symbols from binaries
+    find "$BUILD_DIR" -type f -print0 | while IFS= read -r -d '' file; do
+      strip_debug_symbols "$file"
+    done
+    EOF
+    chmod +x ${OUT_DIR}/usr/bin/2nex_strip_binaries
+    mkdir -p ${OUT_DIR}/etc
+    echo "root:x:0:0:root:/:/bin/sh" > ${OUT_DIR}/etc/passwd
+    echo "root:x:0:" > ${OUT_DIR}/etc/group
+
+bundles:
+  dev:
+    - bin
+    - etc
+    
+outputs:
+  bin:
+    - /usr/bin/2nex_strip_binaries
+  etc:
+    - /etc/passwd
+    - /etc/group
