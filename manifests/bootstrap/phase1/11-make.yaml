@@ -1,0 +1,95 @@
+package:
+  schema: 1
+  name: "Make"
+  slug: "make"
+  flavor: "bootstrap/phase1"
+  version: "4.4.1"
+  description: "Utility to maintain groups of programs"  
+  homepage: "https://www.gnu.org/software/make/"
+  stable_checksum: false
+
+sources:
+  - name: "make" 
+    url: "https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz"
+    sha256: "dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3"
+
+dependencies:
+  - name: "bootstrap_tools"
+    commit: "x86_64/bootstrap-tools/2.42/bootstrap/phase0/bundles/dev"
+  - name: "m4"
+    commit: "x86_64/m4/1.4.19/bootstrap/phase1/bundles/dev"
+  - name: "ncurses"
+    commit: "x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev"
+  - name: "coreutils"
+    commit: "x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev"
+  - name: "diffutils"
+    commit: "x86_64/diffutils/3.10/bootstrap/phase1/bundles/dev"
+  - name: "file"
+    commit: "x86_64/file/5.45/bootstrap/phase1/bundles/dev"
+  - name: "findutils"
+    commit: "x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev"
+  - name: "gawk"
+    commit: "x86_64/gawk/5.3.0/bootstrap/phase1/bundles/dev"
+  - name: "grep"
+    commit: "x86_64/grep/3.11/bootstrap/phase1/bundles/dev"
+  - name: "gzip"
+    commit: "x86_64/gzip/1.13/bootstrap/phase1/bundles/dev"
+
+build:
+  script: |
+    tar --no-same-owner -xf ${SOURCE_make} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr   \
+        --without-guile \
+        --host=${TARGET} \
+        --build=$(build-aux/config.guess)
+
+    make
+    make DESTDIR=${OUT_DIR} install
+    rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+    - dev
+    - locale
+    - bin
+ 
+outputs:
+  dev:
+    - /usr/include/gnumake.h
+  locale:
+    - /usr/share/locale/be/LC_MESSAGES/make.mo
+    - /usr/share/locale/bg/LC_MESSAGES/make.mo
+    - /usr/share/locale/cs/LC_MESSAGES/make.mo
+    - /usr/share/locale/da/LC_MESSAGES/make.mo
+    - /usr/share/locale/de/LC_MESSAGES/make.mo
+    - /usr/share/locale/es/LC_MESSAGES/make.mo
+    - /usr/share/locale/fi/LC_MESSAGES/make.mo
+    - /usr/share/locale/fr/LC_MESSAGES/make.mo
+    - /usr/share/locale/ga/LC_MESSAGES/make.mo
+    - /usr/share/locale/gl/LC_MESSAGES/make.mo
+    - /usr/share/locale/he/LC_MESSAGES/make.mo
+    - /usr/share/locale/hr/LC_MESSAGES/make.mo
+    - /usr/share/locale/id/LC_MESSAGES/make.mo
+    - /usr/share/locale/it/LC_MESSAGES/make.mo
+    - /usr/share/locale/ja/LC_MESSAGES/make.mo
+    - /usr/share/locale/ko/LC_MESSAGES/make.mo
+    - /usr/share/locale/lt/LC_MESSAGES/make.mo
+    - /usr/share/locale/nl/LC_MESSAGES/make.mo
+    - /usr/share/locale/pl/LC_MESSAGES/make.mo
+    - /usr/share/locale/pt/LC_MESSAGES/make.mo
+    - /usr/share/locale/pt_BR/LC_MESSAGES/make.mo
+    - /usr/share/locale/ro/LC_MESSAGES/make.mo
+    - /usr/share/locale/ru/LC_MESSAGES/make.mo
+    - /usr/share/locale/sr/LC_MESSAGES/make.mo
+    - /usr/share/locale/sv/LC_MESSAGES/make.mo
+    - /usr/share/locale/tr/LC_MESSAGES/make.mo
+    - /usr/share/locale/uk/LC_MESSAGES/make.mo
+    - /usr/share/locale/vi/LC_MESSAGES/make.mo
+    - /usr/share/locale/zh_CN/LC_MESSAGES/make.mo
+    - /usr/share/locale/zh_TW/LC_MESSAGES/make.mo
+  bin:
+    - /usr/bin/make

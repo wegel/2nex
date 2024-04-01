@@ -1,0 +1,132 @@
+package:
+  schema: 1
+  name: "Bc"
+  slug: "bc"
+  flavor: "bootstrap/phase3"
+  version: "6.7.5"
+  description: "An arbitrary precision numeric processing language"
+  homepage: "https://git.yzena.com/gavin/bc"
+  checksum: a3008e1eb5591549f4cdca56da7c463ea0347e448aba349b86c601a6a8ffff15
+
+sources:
+  - name: "bc"  
+    url: "https://github.com/gavinhoward/bc/releases/download/6.7.5/bc-6.7.5.tar.xz"
+    sha256: "c3e02c948d51f3ca9cdb23e011050d2d3a48226c581e0749ed7cbac413ce5461"
+
+dependencies:
+  - name: "bootstrap_tools"
+    commit: "x86_64/bootstrap_tools/0.0.1/bootstrap/phase1/bundles/dev"
+  - name: "ncurses"
+    commit: "x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev"
+  - name: "bash"
+    commit: "x86_64/bash/5.2.21/bootstrap/phase1/bundles/dev"
+  - name: "coreutils"
+    commit: "x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev"
+  - name: "diffutils"
+    commit: "x86_64/diffutils/3.10/bootstrap/phase1/bundles/dev"
+  - name: "findutils"
+    commit: "x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev"
+  - name: "gawk"
+    commit: "x86_64/gawk/5.3.0/bootstrap/phase1/bundles/dev"
+  - name: "grep"
+    commit: "x86_64/grep/3.11/bootstrap/phase1/bundles/dev"
+  - name: "gzip"
+    commit: "x86_64/gzip/1.13/bootstrap/phase1/bundles/dev"
+  - name: "make"
+    commit: "x86_64/make/4.4.1/bootstrap/phase1/bundles/dev"
+  - name: "patch"
+    commit: "x86_64/patch/2.7.6/bootstrap/phase1/bundles/dev"
+  - name: "sed"
+    commit: "x86_64/sed/4.9/bootstrap/phase1/bundles/dev"
+  - name: "tar"
+    commit: "x86_64/tar/1.35/bootstrap/phase1/bundles/dev"
+  - name: "binutils"
+    commit: "x86_64/binutils/2.42/bootstrap/phase1/bundles/dev"
+  - name: "gcc"
+    commit: "x86_64/gcc/13.2.0/bootstrap/phase1/bundles/dev"
+  - name: "bison"
+    commit: "x86_64/bison/3.8.2/bootstrap/phase2/bundles/dev"
+  - name: "gettext"
+    commit: "x86_64/gettext/0.22.5/bootstrap/phase2/bundles/dev"
+  - name: "perl"
+    commit: "x86_64/perl/5.38.2/bootstrap/phase2/bundles/dev"
+  - name: "python3"
+    commit: "x86_64/python3/3.12.2/bootstrap/phase2/bundles/dev"
+  - name: "texinfo"
+    commit: "x86_64/texinfo/7.1/bootstrap/phase2/bundles/dev"
+  - name: "glibc"
+    commit: "x86_64/glibc/2.39/bootstrap/phase3/bundles/dev"
+  - name: "zlib"
+    commit: "x86_64/zlib/1.3.1/bootstrap/phase3/bundles/dev"
+  - name: "2nex-utilities"
+    commit: "x86_64/2nex-utilities/0.0.1/bootstrap/phase3/bundles/dev"
+  - name: "bzip2"
+    commit: "x86_64/bzip2/1.0.8/bootstrap/phase3/bundles/dev"
+  - name: "xz"
+    commit: "x86_64/xz/5.4.6/bootstrap/phase3/bundles/dev"
+  - name: "lz4"
+    commit: "x86_64/lz4/1.9.4/bootstrap/phase3/bundles/dev"
+  - name: "zstd"
+    commit: "x86_64/zstd/1.5.6/bootstrap/phase3/outputs/dev"
+  - name: "file"
+    commit: "x86_64/file/5.45/bootstrap/phase3/bundles/dev"
+  - name: "m4"
+    commit: "x86_64/m4/1.4.19/bootstrap/phase3/bundles/dev"
+
+build:
+  script: |
+    tar --no-same-owner -xf ${SOURCE_bc} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    
+    CC=gcc ./configure --prefix=/usr -G -O3 -r
+    make
+    make test  
+    make DESTDIR="${OUT_DIR}" install
+  
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  full:
+    - bin
+    - man
+    - locale
+
+  dev:
+    - bin
+  
+outputs:
+  locale:
+    - /usr/share/locale/de_AT.UTF-8/bc
+    - /usr/share/locale/de_CH.UTF-8/bc
+    - /usr/share/locale/de_DE.UTF-8/bc
+    - /usr/share/locale/en_AU.UTF-8/bc
+    - /usr/share/locale/en_CA.UTF-8/bc
+    - /usr/share/locale/en_GB.UTF-8/bc
+    - /usr/share/locale/en_IE.UTF-8/bc
+    - /usr/share/locale/en_NZ.UTF-8/bc
+    - /usr/share/locale/en_US.UTF-8/bc
+    - /usr/share/locale/en_US/bc
+    - /usr/share/locale/es_ES.UTF-8/bc
+    - /usr/share/locale/fr_BE.UTF-8/bc
+    - /usr/share/locale/fr_CA.UTF-8/bc
+    - /usr/share/locale/fr_CH.UTF-8/bc
+    - /usr/share/locale/fr_FR.UTF-8/bc
+    - /usr/share/locale/ja_JP.UTF-8/bc
+    - /usr/share/locale/nl_NL.UTF-8/bc
+    - /usr/share/locale/pl_PL.UTF-8/bc
+    - /usr/share/locale/pt_BR.UTF-8/bc
+    - /usr/share/locale/pt_PT.UTF-8/bc
+    - /usr/share/locale/ru_RU.CP1251/bc
+    - /usr/share/locale/ru_RU.KOI8-R/bc
+    - /usr/share/locale/ru_RU.UTF-8/bc
+    - /usr/share/locale/zh_CN.GB18030/bc
+    - /usr/share/locale/zh_CN.GB2312/bc
+    - /usr/share/locale/zh_CN.GBK/bc
+    - /usr/share/locale/zh_CN.UTF-8/bc
+  bin:
+    - /usr/bin/bc
+    - /usr/bin/dc
+  man:
+    - /usr/share/man/man1/bc.1
+    - /usr/share/man/man1/dc.1

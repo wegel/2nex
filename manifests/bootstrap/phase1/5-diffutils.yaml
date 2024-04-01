@@ -1,0 +1,82 @@
+package:
+  schema: 1
+  name: Diffutils
+  slug: diffutils
+  flavor: bootstrap/phase1
+  version: '3.10'
+  description: A package of several programs related to finding differences between files
+  homepage: https://www.gnu.org/software/diffutils/
+  stable_checksum: false
+  sha256: eb1b97b228b1156c753c24cae7738c8b4b739267515eaff031911eb1149f38e8
+dependencies:
+- name: bootstrap_tools
+  commit: x86_64/bootstrap-tools/2.42/bootstrap/phase0/bundles/dev
+- name: m4
+  commit: x86_64/m4/1.4.19/bootstrap/phase1/bundles/dev
+- name: ncurses
+  commit: x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev
+- name: coreutils
+  commit: x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev
+sources:
+- name: diffutils
+  url: https://ftp.gnu.org/gnu/diffutils/diffutils-3.10.tar.xz
+  sha256: 90e5e93cc724e4ebe12ede80df1634063c7a855692685919bfe60b556c9bd09e
+build:
+  script: |
+    tar --no-same-owner -xf ${SOURCE_diffutils} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr   \
+      --host=${TARGET} \
+      --build=$(./build-aux/config.guess)
+    make
+    make DESTDIR=$OUT_DIR install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+bundles:
+  dev:
+  - bin
+  - locale
+outputs:
+  locale:
+  - /usr/share/locale/bg/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/ca/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/cs/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/da/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/de/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/el/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/eo/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/es/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/fi/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/fr/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/ga/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/gl/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/he/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/hr/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/hu/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/id/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/it/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/ja/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/ka/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/ko/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/lv/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/ms/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/nb/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/nl/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/pl/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/pt/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/pt_BR/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/ro/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/ru/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/sr/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/sv/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/tr/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/uk/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/vi/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/zh_CN/LC_MESSAGES/diffutils.mo
+  - /usr/share/locale/zh_TW/LC_MESSAGES/diffutils.mo
+  bin:
+  - /usr/bin/cmp
+  - /usr/bin/diff
+  - /usr/bin/diff3
+  - /usr/bin/sdiff

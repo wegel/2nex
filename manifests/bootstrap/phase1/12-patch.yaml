@@ -1,0 +1,61 @@
+package:
+  schema: 1
+  name: "Patch"
+  slug: "patch"
+  flavor: "bootstrap/phase1"
+  version: "2.7.6"
+  description: "A utility to apply patch files to original sources"
+  homepage: "https://savannah.gnu.org/projects/patch/"
+  stable_checksum: false
+
+sources:
+  - name: "patch"
+    url: "https://ftp.gnu.org/gnu/patch/patch-2.7.6.tar.xz"
+    sha256: "ac610bda97abe0d9f6b7c963255a11dcb196c25e337c61f94e4778d632f1d8fd"
+
+dependencies:
+  - name: "bootstrap_tools"
+    commit: "x86_64/bootstrap-tools/2.42/bootstrap/phase0/bundles/dev"
+  - name: "m4"
+    commit: "x86_64/m4/1.4.19/bootstrap/phase1/bundles/dev"
+  - name: "ncurses"
+    commit: "x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev"
+  - name: "coreutils"
+    commit: "x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev"
+  - name: "diffutils"
+    commit: "x86_64/diffutils/3.10/bootstrap/phase1/bundles/dev"
+  - name: "file"
+    commit: "x86_64/file/5.45/bootstrap/phase1/bundles/dev"
+  - name: "findutils"
+    commit: "x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev"
+  - name: "gawk"
+    commit: "x86_64/gawk/5.3.0/bootstrap/phase1/bundles/dev"
+  - name: "grep"
+    commit: "x86_64/grep/3.11/bootstrap/phase1/bundles/dev"
+  - name: "gzip"
+    commit: "x86_64/gzip/1.13/bootstrap/phase1/bundles/dev"
+  - name: "make"
+    commit: "x86_64/make/4.4.1/bootstrap/phase1/bundles/dev"
+
+build:
+  script: |
+    tar --no-same-owner -xf ${SOURCE_patch} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr   \
+      --host=${TARGET} \
+      --build=$(build-aux/config.guess)
+
+    make
+    make DESTDIR=${OUT_DIR} install
+    rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+    - bin
+
+outputs:
+  bin:
+    - /usr/bin/patch

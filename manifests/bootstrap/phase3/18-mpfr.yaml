@@ -1,0 +1,202 @@
+package:
+  schema: 1
+  name: "MPFR"
+  slug: "mpfr"
+  flavor: "bootstrap/phase3"
+  version: "4.2.1"
+  description: "Multiple Precision Floating-Point Reliable Library"
+  homepage: "https://www.mpfr.org/"
+  checksum: 5807cbf4f23f2dc282f1b885f941d359a7042c62fb863ac6145f6b6d8bf23328
+
+sources:
+  - name: "mpfr"
+    url: "https://ftp.gnu.org/gnu/mpfr/mpfr-4.2.1.tar.xz"
+    sha256: "277807353a6726978996945af13e52829e3abd7a9a5b7fb2793894e18f1fcbb2"
+
+
+dependencies:
+  - name: "bootstrap_tools"
+    commit: "x86_64/bootstrap_tools/0.0.1/bootstrap/phase1/bundles/dev"
+  - name: "ncurses"
+    commit: "x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev"
+  - name: "bash"
+    commit: "x86_64/bash/5.2.21/bootstrap/phase1/bundles/dev"
+  - name: "coreutils"
+    commit: "x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev"
+  - name: "diffutils"
+    commit: "x86_64/diffutils/3.10/bootstrap/phase1/bundles/dev"
+  - name: "findutils"
+    commit: "x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev"
+  - name: "2nex-utilities"
+    commit: "x86_64/2nex-utilities/0.0.1/bootstrap/phase3/bundles/dev"
+  - name: "gawk"
+    commit: "x86_64/gawk/5.3.0/bootstrap/phase1/bundles/dev"
+  - name: "grep"
+    commit: "x86_64/grep/3.11/bootstrap/phase1/bundles/dev"
+  - name: "gzip"
+    commit: "x86_64/gzip/1.13/bootstrap/phase1/bundles/dev"
+  - name: "make"
+    commit: "x86_64/make/4.4.1/bootstrap/phase1/bundles/dev"
+  - name: "patch"
+    commit: "x86_64/patch/2.7.6/bootstrap/phase1/bundles/dev"
+  - name: "sed"
+    commit: "x86_64/sed/4.9/bootstrap/phase1/bundles/dev"
+  - name: "tar"
+    commit: "x86_64/tar/1.35/bootstrap/phase1/bundles/dev"
+  - name: "gcc"
+    commit: "x86_64/gcc/13.2.0/bootstrap/phase1/bundles/dev"
+  - name: "bison"
+    commit: "x86_64/bison/3.8.2/bootstrap/phase2/bundles/dev"
+  - name: "gettext"
+    commit: "x86_64/gettext/0.22.5/bootstrap/phase2/bundles/dev"
+  - name: "perl"
+    commit: "x86_64/perl/5.38.2/bootstrap/phase2/bundles/dev"
+  - name: "strip_nondeterminism"
+    commit: "x86_64/strip-nondeterminism/1.13.0/bootstrap/phase3/bundles/dev"
+  - name: "python3"
+    commit: "x86_64/python3/3.12.2/bootstrap/phase2/bundles/dev"
+  - name: "texinfo"
+    commit: "x86_64/texinfo/7.1/bootstrap/phase2/bundles/dev"
+  - name: "glibc"
+    commit: "x86_64/glibc/2.39/bootstrap/phase3/bundles/dev"
+  - name: "zlib"
+    commit: "x86_64/zlib/1.3.1/bootstrap/phase3/bundles/dev"
+  - name: "bzip2"
+    commit: "x86_64/bzip2/1.0.8/bootstrap/phase3/bundles/dev"
+  - name: "xz"
+    commit: "x86_64/xz/5.4.6/bootstrap/phase3/bundles/dev"
+  - name: "lz4"
+    commit: "x86_64/lz4/1.9.4/bootstrap/phase3/bundles/dev"
+  - name: "zstd"
+    commit: "x86_64/zstd/1.5.6/bootstrap/phase3/outputs/dev"
+  - name: "file"
+    commit: "x86_64/file/5.45/bootstrap/phase3/bundles/dev"
+  - name: "m4"
+    commit: "x86_64/m4/1.4.19/bootstrap/phase3/bundles/dev"
+  - name: "bc"
+    commit: "x86_64/bc/6.7.5/bootstrap/phase3/bundles/dev"
+  - name: "flex"
+    commit: "x86_64/flex/2.6.4/bootstrap/phase3/bundles/dev"
+  - name: "tcl"
+    commit: "x86_64/tcl/8.6.14/bootstrap/phase3/bundles/dev"
+  - name: "expect"
+    commit: "x86_64/expect/5.45.4/bootstrap/phase3/bundles/dev"
+  - name: "dejagnu"
+    commit: "x86_64/dejagnu/1.6.3/bootstrap/phase3/bundles/dev"
+  - name: "pkgconf"
+    commit: "x86_64/pkgconf/2.2.0/bootstrap/phase3/bundles/dev"
+  - name: "binutils"
+    commit: "x86_64/binutils/2.42/bootstrap/phase3/bundles/dev"
+  - name: "gmp"
+    commit: "x86_64/gmp/6.3.0/bootstrap/phase3/bundles/dev"
+
+build:
+  script: |
+    tar --no-same-owner -xf ${SOURCE_mpfr} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr        \
+              --enable-thread-safe \
+              --docdir=/usr/share/doc/mpfr-4.2.1
+
+    make
+    make html
+    make check
+    make DESTDIR="${OUT_DIR}" install
+    make DESTDIR="${OUT_DIR}" install-html
+    
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  full:
+    - dev
+    - lib
+    - static
+    - doc
+    - info
+
+  dev:
+    - dev
+    - lib
+    - static
+
+outputs:
+  dev:
+    - /usr/include/mpf2mpfr.h
+    - /usr/include/mpfr.h
+    - /usr/lib/libmpfr.la
+    - /usr/lib/pkgconfig/mpfr.pc
+  lib:
+    - /usr/lib/libmpfr.so
+    - /usr/lib/libmpfr.so.6
+    - /usr/lib/libmpfr.so.6.2.1
+  static:
+    - /usr/lib/libmpfr.a
+  doc:
+    - /usr/share/doc/mpfr-4.2.1/AUTHORS
+    - /usr/share/doc/mpfr-4.2.1/BUGS
+    - /usr/share/doc/mpfr-4.2.1/COPYING
+    - /usr/share/doc/mpfr-4.2.1/COPYING.LESSER
+    - /usr/share/doc/mpfr-4.2.1/FAQ.html
+    - /usr/share/doc/mpfr-4.2.1/NEWS
+    - /usr/share/doc/mpfr-4.2.1/TODO
+    - /usr/share/doc/mpfr-4.2.1/examples/ReadMe
+    - /usr/share/doc/mpfr-4.2.1/examples/can_round.c
+    - /usr/share/doc/mpfr-4.2.1/examples/divworst.c
+    - /usr/share/doc/mpfr-4.2.1/examples/rndo-add.c
+    - /usr/share/doc/mpfr-4.2.1/examples/sample.c
+    - /usr/share/doc/mpfr-4.2.1/examples/threads.c
+    - /usr/share/doc/mpfr-4.2.1/examples/version.c
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/API-Compatibility.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Added-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Arithmetic-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Assignment-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Changed-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Combined-Initialization-and-Assignment-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Comparison-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Compatibility-with-MPF.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Concept-Index.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Contributors.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Conversion-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Copying.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Custom-Interface.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Exception-Related-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Exceptions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Floating_002dPoint-Values-on-Special-Numbers.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Formatted-Output-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Function-and-Type-Index.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/GNU-Free-Documentation-License.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Getting-the-Best-Efficiency-Out-of-MPFR.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Headers-and-Libraries.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Initialization-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Input-and-Output-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Installing-MPFR.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Integer-and-Remainder-Related-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Internals.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Introduction-to-MPFR.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/MPFR-Basics.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/MPFR-Interface.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/MPFR-Variable-Conventions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/MPFR-and-the-IEEE-754-Standard.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Memory-Handling-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Memory-Handling.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Miscellaneous-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Nomenclature-and-Types.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Other-Changes.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/References.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Removed-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Reporting-Bugs.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Rounding.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Rounding_002dRelated-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Transcendental-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Type-and-Macro-Changes.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/index.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/mpfr_005fget_005fstr.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/mpfr_005fget_005fstr_005fndigits.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/mpfr_005fpow.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/ternary-value.html
+  info:
+    - /usr/share/info/dir
+    - /usr/share/info/mpfr.info

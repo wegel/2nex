@@ -1,0 +1,126 @@
+package:
+  schema: 1
+  name: Gawk
+  slug: gawk
+  flavor: bootstrap/phase1
+  version: 5.3.0
+  description: GNU awk, a pattern scanning and processing language
+  homepage: https://www.gnu.org/software/gawk/
+  stable_checksum: false
+  sha256: a411609eeed33dd00dd035b0bdabe908f60a6aeb491d7e3e8d94cf1c9690434b
+dependencies:
+- name: bootstrap_tools
+  commit: x86_64/bootstrap-tools/2.42/bootstrap/phase0/bundles/dev
+- name: m4
+  commit: x86_64/m4/1.4.19/bootstrap/phase1/bundles/dev
+- name: ncurses
+  commit: x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev
+- name: coreutils
+  commit: x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev
+- name: diffutils
+  commit: x86_64/diffutils/3.10/bootstrap/phase1/bundles/dev
+- name: file
+  commit: x86_64/file/5.45/bootstrap/phase1/bundles/dev
+- name: findutils
+  commit: x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev
+sources:
+- name: gawk
+  url: https://ftp.gnu.org/gnu/gawk/gawk-5.3.0.tar.xz
+  sha256: ca9c16d3d11d0ff8c69d79dc0b47267e1329a69b39b799895604ed447d3ca90b
+build:
+  script: |
+    tar --no-same-owner -xf ${SOURCE_gawk} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    sed -i 's/extras//' Makefile.in
+    ./configure --prefix=/usr   \
+              --host=${TARGET} \
+              --build=$(build-aux/config.guess)
+    make
+    make DESTDIR=${OUT_DIR} install
+    rm -rf ${OUT_DIR}/usr/share/man ${OUT_DIR}/usr/share/info
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - misc
+  - locale
+outputs:
+  misc:
+  - /usr/share/awk/assert.awk
+  - /usr/share/awk/bits2str.awk
+  - /usr/share/awk/cliff_rand.awk
+  - /usr/share/awk/ctime.awk
+  - /usr/share/awk/ftrans.awk
+  - /usr/share/awk/getopt.awk
+  - /usr/share/awk/gettime.awk
+  - /usr/share/awk/group.awk
+  - /usr/share/awk/have_mpfr.awk
+  - /usr/share/awk/inplace.awk
+  - /usr/share/awk/intdiv0.awk
+  - /usr/share/awk/isnumeric.awk
+  - /usr/share/awk/join.awk
+  - /usr/share/awk/libintl.awk
+  - /usr/share/awk/noassign.awk
+  - /usr/share/awk/ns_passwd.awk
+  - /usr/share/awk/ord.awk
+  - /usr/share/awk/passwd.awk
+  - /usr/share/awk/processarray.awk
+  - /usr/share/awk/quicksort.awk
+  - /usr/share/awk/readable.awk
+  - /usr/share/awk/readfile.awk
+  - /usr/share/awk/rewind.awk
+  - /usr/share/awk/round.awk
+  - /usr/share/awk/shellquote.awk
+  - /usr/share/awk/strtonum.awk
+  - /usr/share/awk/tocsv.awk
+  - /usr/share/awk/walkarray.awk
+  - /usr/share/awk/zerofile.awk
+  bin:
+  - /usr/bin/awk
+  - /usr/bin/gawk
+  - /usr/bin/gawk-5.3.0
+  - /usr/bin/gawkbug
+  - /usr/libexec/awk/grcat
+  - /usr/libexec/awk/pwcat
+  locale:
+  - /usr/share/locale/bg/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/ca/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/da/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/de/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/es/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/fi/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/fr/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/id/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/it/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/ja/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/ko/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/ms/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/nl/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/pl/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/pt/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/pt_BR/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/ro/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/sr/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/sv/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/uk/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/vi/LC_MESSAGES/gawk.mo
+  - /usr/share/locale/zh_CN/LC_MESSAGES/gawk.mo
+  lib:
+  - /usr/lib/gawk/filefuncs.so
+  - /usr/lib/gawk/fnmatch.so
+  - /usr/lib/gawk/fork.so
+  - /usr/lib/gawk/inplace.so
+  - /usr/lib/gawk/intdiv.so
+  - /usr/lib/gawk/ordchr.so
+  - /usr/lib/gawk/readdir.so
+  - /usr/lib/gawk/readfile.so
+  - /usr/lib/gawk/revoutput.so
+  - /usr/lib/gawk/revtwoway.so
+  - /usr/lib/gawk/rwarray.so
+  - /usr/lib/gawk/time.so
+  dev:
+  - /usr/include/gawkapi.h

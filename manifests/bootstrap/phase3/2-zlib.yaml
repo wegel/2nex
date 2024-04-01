@@ -1,0 +1,106 @@
+package:
+  schema: 1
+  name: "Zlib"
+  slug: "zlib"
+  flavor: "bootstrap/phase3"
+  version: "1.3.1"
+  description: "A Massively Spiffy Yet Delicately Unobtrusive Compression Library"
+  homepage: "https://zlib.net/"
+  checksum: 28fa99c7befe653f2e4c35add32f5ec3d0e02e59829555d888ab35de7f2c5009
+
+sources:
+  - name: "zlib"
+    url: "https://zlib.net/zlib-1.3.1.tar.xz"
+    sha256: "38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32"
+
+dependencies:
+  - name: "bootstrap_tools"
+    commit: "x86_64/bootstrap_tools/0.0.1/bootstrap/phase1/bundles/dev"
+  - name: "m4"
+    commit: "x86_64/m4/1.4.19/bootstrap/phase1/bundles/dev"
+  - name: "ncurses"
+    commit: "x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev"
+  - name: "bash"
+    commit: "x86_64/bash/5.2.21/bootstrap/phase1/bundles/dev"
+  - name: "coreutils"
+    commit: "x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev"
+  - name: "diffutils"
+    commit: "x86_64/diffutils/3.10/bootstrap/phase1/bundles/dev"
+  - name: "file"
+    commit: "x86_64/file/5.45/bootstrap/phase1/bundles/dev"
+  - name: "findutils"
+    commit: "x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev"
+  - name: "gawk"
+    commit: "x86_64/gawk/5.3.0/bootstrap/phase1/bundles/dev"
+  - name: "grep"
+    commit: "x86_64/grep/3.11/bootstrap/phase1/bundles/dev"
+  - name: "gzip"
+    commit: "x86_64/gzip/1.13/bootstrap/phase1/bundles/dev"
+  - name: "make"
+    commit: "x86_64/make/4.4.1/bootstrap/phase1/bundles/dev"
+  - name: "patch"
+    commit: "x86_64/patch/2.7.6/bootstrap/phase1/bundles/dev"
+  - name: "sed"
+    commit: "x86_64/sed/4.9/bootstrap/phase1/bundles/dev"
+  - name: "tar"
+    commit: "x86_64/tar/1.35/bootstrap/phase1/bundles/dev"
+  - name: "xz"
+    commit: "x86_64/xz/5.4.6/bootstrap/phase1/bundles/dev"
+  - name: "bzip2"
+    commit: "x86_64/bzip2/1.0.8/bootstrap/phase1/bundles/dev"
+  - name: "binutils"
+    commit: "x86_64/binutils/2.42/bootstrap/phase1/bundles/dev"
+  - name: "gcc"
+    commit: "x86_64/gcc/13.2.0/bootstrap/phase1/bundles/dev"
+  - name: "bison"
+    commit: "x86_64/bison/3.8.2/bootstrap/phase2/bundles/dev"
+  - name: "gettext"
+    commit: "x86_64/gettext/0.22.5/bootstrap/phase2/bundles/dev"
+  - name: "perl"
+    commit: "x86_64/perl/5.38.2/bootstrap/phase2/bundles/dev"
+  - name: "python3"
+    commit: "x86_64/python3/3.12.2/bootstrap/phase2/bundles/dev"
+  - name: "texinfo"
+    commit: "x86_64/texinfo/7.1/bootstrap/phase2/bundles/dev"
+  - name: "glibc"
+    commit: "x86_64/glibc/2.39/bootstrap/phase3/bundles/dev"
+  - name: "2nex-utilities"
+    commit: "x86_64/2nex-utilities/0.0.1/bootstrap/phase3/bundles/dev"
+
+
+build:
+  script: |
+    tar --no-same-owner -xf ${SOURCE_zlib} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr
+    make
+    make check
+    make DESTDIR=${OUT_DIR} install
+
+    rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man ${OUT_DIR}/usr/share/doc
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+    for F in ${OUT_DIR}/usr/lib/*.a; do
+      strip $F
+    done
+
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+    - static
+    - dev
+    - lib
+    
+outputs:
+  static:
+    - /usr/lib/libz.a
+  dev:
+    - /usr/include/zconf.h
+    - /usr/include/zlib.h
+    - /usr/lib/pkgconfig/zlib.pc
+  lib:
+    - /usr/lib/libz.so
+    - /usr/lib/libz.so.1
+    - /usr/lib/libz.so.1.3.1

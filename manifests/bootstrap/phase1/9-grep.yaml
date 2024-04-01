@@ -1,0 +1,100 @@
+package:
+  schema: 1
+  name: Grep
+  slug: grep
+  flavor: bootstrap/phase1
+  version: '3.11'
+  description: Print lines that match patterns
+  homepage: https://www.gnu.org/software/grep/
+  stable_checksum: false
+  sha256: 985c6cd3fcf7ce0f364c15fc2e2cf4e0b723f8db01088a96649063d3b389d4ed
+dependencies:
+- name: bootstrap_tools
+  commit: x86_64/bootstrap-tools/2.42/bootstrap/phase0/bundles/dev
+- name: m4
+  commit: x86_64/m4/1.4.19/bootstrap/phase1/bundles/dev
+- name: ncurses
+  commit: x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev
+- name: coreutils
+  commit: x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev
+- name: diffutils
+  commit: x86_64/diffutils/3.10/bootstrap/phase1/bundles/dev
+- name: file
+  commit: x86_64/file/5.45/bootstrap/phase1/bundles/dev
+- name: findutils
+  commit: x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev
+- name: gawk
+  commit: x86_64/gawk/5.3.0/bootstrap/phase1/bundles/dev
+sources:
+- name: grep
+  url: https://ftp.gnu.org/gnu/grep/grep-3.11.tar.xz
+  sha256: 1db2aedde89d0dea42b16d9528f894c8d15dae4e190b59aecc78f5a951276eab
+build:
+  script: |
+    tar --no-same-owner -xf ${SOURCE_grep} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr   \
+      --host=${TARGET} \
+      --build=$(./build-aux/config.guess)
+
+    make
+    make DESTDIR=${OUT_DIR} install
+    rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+bundles:
+  dev:
+  - locale
+  - bin
+outputs:
+  bin:
+  - /usr/bin/egrep
+  - /usr/bin/fgrep
+  - /usr/bin/grep
+  locale:
+  - /usr/share/locale/af/LC_MESSAGES/grep.mo
+  - /usr/share/locale/be/LC_MESSAGES/grep.mo
+  - /usr/share/locale/bg/LC_MESSAGES/grep.mo
+  - /usr/share/locale/ca/LC_MESSAGES/grep.mo
+  - /usr/share/locale/cs/LC_MESSAGES/grep.mo
+  - /usr/share/locale/da/LC_MESSAGES/grep.mo
+  - /usr/share/locale/de/LC_MESSAGES/grep.mo
+  - /usr/share/locale/el/LC_MESSAGES/grep.mo
+  - /usr/share/locale/eo/LC_MESSAGES/grep.mo
+  - /usr/share/locale/es/LC_MESSAGES/grep.mo
+  - /usr/share/locale/et/LC_MESSAGES/grep.mo
+  - /usr/share/locale/eu/LC_MESSAGES/grep.mo
+  - /usr/share/locale/fi/LC_MESSAGES/grep.mo
+  - /usr/share/locale/fr/LC_MESSAGES/grep.mo
+  - /usr/share/locale/ga/LC_MESSAGES/grep.mo
+  - /usr/share/locale/gl/LC_MESSAGES/grep.mo
+  - /usr/share/locale/he/LC_MESSAGES/grep.mo
+  - /usr/share/locale/hr/LC_MESSAGES/grep.mo
+  - /usr/share/locale/hu/LC_MESSAGES/grep.mo
+  - /usr/share/locale/id/LC_MESSAGES/grep.mo
+  - /usr/share/locale/it/LC_MESSAGES/grep.mo
+  - /usr/share/locale/ja/LC_MESSAGES/grep.mo
+  - /usr/share/locale/ka/LC_MESSAGES/grep.mo
+  - /usr/share/locale/ko/LC_MESSAGES/grep.mo
+  - /usr/share/locale/ky/LC_MESSAGES/grep.mo
+  - /usr/share/locale/lt/LC_MESSAGES/grep.mo
+  - /usr/share/locale/nb/LC_MESSAGES/grep.mo
+  - /usr/share/locale/nl/LC_MESSAGES/grep.mo
+  - /usr/share/locale/pa/LC_MESSAGES/grep.mo
+  - /usr/share/locale/pl/LC_MESSAGES/grep.mo
+  - /usr/share/locale/pt/LC_MESSAGES/grep.mo
+  - /usr/share/locale/pt_BR/LC_MESSAGES/grep.mo
+  - /usr/share/locale/ro/LC_MESSAGES/grep.mo
+  - /usr/share/locale/ru/LC_MESSAGES/grep.mo
+  - /usr/share/locale/sk/LC_MESSAGES/grep.mo
+  - /usr/share/locale/sl/LC_MESSAGES/grep.mo
+  - /usr/share/locale/sr/LC_MESSAGES/grep.mo
+  - /usr/share/locale/sv/LC_MESSAGES/grep.mo
+  - /usr/share/locale/ta/LC_MESSAGES/grep.mo
+  - /usr/share/locale/th/LC_MESSAGES/grep.mo
+  - /usr/share/locale/tr/LC_MESSAGES/grep.mo
+  - /usr/share/locale/uk/LC_MESSAGES/grep.mo
+  - /usr/share/locale/vi/LC_MESSAGES/grep.mo
+  - /usr/share/locale/zh_CN/LC_MESSAGES/grep.mo
+  - /usr/share/locale/zh_TW/LC_MESSAGES/grep.mo

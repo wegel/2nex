@@ -1,0 +1,232 @@
+package:
+  schema: 1
+  name: "DejaGNU"
+  slug: "dejagnu"
+  flavor: "bootstrap/phase3"
+  version: "1.6.3"
+  description: "A framework for testing other programs"
+  homepage: "https://www.gnu.org/software/dejagnu/"
+  checksum: 54a4f2598449e954ce552ac2c0b7b4b9ec8395795ce2821a65acc46bba7cb1c5
+
+sources:
+  - name: "dejagnu"
+    url: "https://ftp.gnu.org/gnu/dejagnu/dejagnu-1.6.3.tar.gz"
+    sha256: "87daefacd7958b4a69f88c6856dbd1634261963c414079d0c371f589cd66a2e3"
+
+dependencies:
+  - name: "bootstrap_tools"
+    commit: "x86_64/bootstrap_tools/0.0.1/bootstrap/phase1/bundles/dev"
+  - name: "ncurses"
+    commit: "x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev"
+  - name: "bash"
+    commit: "x86_64/bash/5.2.21/bootstrap/phase1/bundles/dev"
+  - name: "coreutils"
+    commit: "x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev"
+  - name: "diffutils"
+    commit: "x86_64/diffutils/3.10/bootstrap/phase1/bundles/dev"
+  - name: "findutils"
+    commit: "x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev"
+  - name: "2nex-utilities"
+    commit: "x86_64/2nex-utilities/0.0.1/bootstrap/phase3/bundles/dev"
+  - name: "gawk"
+    commit: "x86_64/gawk/5.3.0/bootstrap/phase1/bundles/dev"
+  - name: "grep"
+    commit: "x86_64/grep/3.11/bootstrap/phase1/bundles/dev"
+  - name: "gzip"
+    commit: "x86_64/gzip/1.13/bootstrap/phase1/bundles/dev"
+  - name: "make"
+    commit: "x86_64/make/4.4.1/bootstrap/phase1/bundles/dev"
+  - name: "patch"
+    commit: "x86_64/patch/2.7.6/bootstrap/phase1/bundles/dev"
+  - name: "sed"
+    commit: "x86_64/sed/4.9/bootstrap/phase1/bundles/dev"
+  - name: "tar"
+    commit: "x86_64/tar/1.35/bootstrap/phase1/bundles/dev"
+  - name: "binutils"
+    commit: "x86_64/binutils/2.42/bootstrap/phase1/bundles/dev"
+  - name: "gcc"
+    commit: "x86_64/gcc/13.2.0/bootstrap/phase1/bundles/dev"
+  - name: "bison"
+    commit: "x86_64/bison/3.8.2/bootstrap/phase2/bundles/dev"
+  - name: "gettext"
+    commit: "x86_64/gettext/0.22.5/bootstrap/phase2/bundles/dev"
+  - name: "perl"
+    commit: "x86_64/perl/5.38.2/bootstrap/phase2/bundles/dev"
+  - name: "strip_nondeterminism"
+    commit: "x86_64/strip-nondeterminism/1.13.0/bootstrap/phase3/bundles/dev"
+  - name: "python3"
+    commit: "x86_64/python3/3.12.2/bootstrap/phase2/bundles/dev"
+  - name: "texinfo"
+    commit: "x86_64/texinfo/7.1/bootstrap/phase2/bundles/dev"
+  - name: "glibc"
+    commit: "x86_64/glibc/2.39/bootstrap/phase3/bundles/dev"
+  - name: "zlib"
+    commit: "x86_64/zlib/1.3.1/bootstrap/phase3/bundles/dev"
+  - name: "bzip2"
+    commit: "x86_64/bzip2/1.0.8/bootstrap/phase3/bundles/dev"
+  - name: "xz"
+    commit: "x86_64/xz/5.4.6/bootstrap/phase3/bundles/dev"
+  - name: "lz4"
+    commit: "x86_64/lz4/1.9.4/bootstrap/phase3/bundles/dev"
+  - name: "zstd"
+    commit: "x86_64/zstd/1.5.6/bootstrap/phase3/outputs/dev"
+  - name: "file"
+    commit: "x86_64/file/5.45/bootstrap/phase3/bundles/dev"
+  - name: "m4"
+    commit: "x86_64/m4/1.4.19/bootstrap/phase3/bundles/dev"
+  - name: "bc"
+    commit: "x86_64/bc/6.7.5/bootstrap/phase3/bundles/dev"
+  - name: "flex"
+    commit: "x86_64/flex/2.6.4/bootstrap/phase3/bundles/dev"
+  - name: "tcl"
+    commit: "x86_64/tcl/8.6.14/bootstrap/phase3/bundles/dev"
+  - name: "expect"
+    commit: "x86_64/expect/5.45.4/bootstrap/phase3/bundles/dev"
+
+build:
+  script: |  
+    tar --no-same-owner -xf ${SOURCE_dejagnu} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    SHELL=/usr/bin/bash
+    
+    mkdir -v build
+    cd       build
+    ../configure --prefix=/usr
+    makeinfo --html --no-split -o doc/dejagnu.html ../doc/dejagnu.texi
+    makeinfo --plaintext       -o doc/dejagnu.txt  ../doc/dejagnu.texi
+    make
+    make check
+    make DESTDIR="${OUT_DIR}" install
+    install -v -dm755  "${OUT_DIR}"/usr/share/doc/dejagnu-1.6.3
+    install -v -m644   doc/dejagnu.{html,txt} "${OUT_DIR}"/usr/share/doc/dejagnu-1.6.3
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  full:
+    - doc
+    - bin
+    - dev
+    - man
+    - info
+
+  dev:
+    - dev
+    - bin
+    
+outputs:
+  doc:
+    - /usr/share/doc/dejagnu-1.6.3/dejagnu.html
+    - /usr/share/doc/dejagnu-1.6.3/dejagnu.txt
+  bin:
+    - /usr/bin/dejagnu
+    - /usr/bin/runtest
+  dev:
+    - /usr/include/dejagnu.h
+    - /usr/share/dejagnu/baseboards/README
+    - /usr/share/dejagnu/baseboards/aarch64-sim.exp
+    - /usr/share/dejagnu/baseboards/am33_2.0-libremote.exp
+    - /usr/share/dejagnu/baseboards/androideabi.exp
+    - /usr/share/dejagnu/baseboards/arm-ice.exp
+    - /usr/share/dejagnu/baseboards/arm-sid.exp
+    - /usr/share/dejagnu/baseboards/arm-sim.exp
+    - /usr/share/dejagnu/baseboards/basic-sid.exp
+    - /usr/share/dejagnu/baseboards/basic-sim.exp
+    - /usr/share/dejagnu/baseboards/cris-sim.exp
+    - /usr/share/dejagnu/baseboards/d30v-sim.exp
+    - /usr/share/dejagnu/baseboards/fr30-sim.exp
+    - /usr/share/dejagnu/baseboards/frv-sim.exp
+    - /usr/share/dejagnu/baseboards/gdbserver-sample.exp
+    - /usr/share/dejagnu/baseboards/generic-sim.exp
+    - /usr/share/dejagnu/baseboards/i386-sid.exp
+    - /usr/share/dejagnu/baseboards/iq2000-sim.exp
+    - /usr/share/dejagnu/baseboards/jmr3904-sim.exp
+    - /usr/share/dejagnu/baseboards/linux-gdbserver.exp
+    - /usr/share/dejagnu/baseboards/linux-libremote.exp
+    - /usr/share/dejagnu/baseboards/m68k-sid.exp
+    - /usr/share/dejagnu/baseboards/mcore-moto-sim.exp
+    - /usr/share/dejagnu/baseboards/mcore-sim.exp
+    - /usr/share/dejagnu/baseboards/mips-lnews-sim.exp
+    - /usr/share/dejagnu/baseboards/mips-lsi-sim.exp
+    - /usr/share/dejagnu/baseboards/mips-sim-idt32.exp
+    - /usr/share/dejagnu/baseboards/mips-sim-idt64.exp
+    - /usr/share/dejagnu/baseboards/mips-sim-mti32.exp
+    - /usr/share/dejagnu/baseboards/mips-sim-mti64.exp
+    - /usr/share/dejagnu/baseboards/mips-sim-mti64_64.exp
+    - /usr/share/dejagnu/baseboards/mips-sim-mti64_n32.exp
+    - /usr/share/dejagnu/baseboards/mips-sim-sde32.exp
+    - /usr/share/dejagnu/baseboards/mips-sim-sde64.exp
+    - /usr/share/dejagnu/baseboards/mips-sim.exp
+    - /usr/share/dejagnu/baseboards/mmixware-sim.exp
+    - /usr/share/dejagnu/baseboards/mn10200-sim.exp
+    - /usr/share/dejagnu/baseboards/mn10300-sim.exp
+    - /usr/share/dejagnu/baseboards/moxie-sim.exp
+    - /usr/share/dejagnu/baseboards/msp430-sim.exp
+    - /usr/share/dejagnu/baseboards/mt-sid.exp
+    - /usr/share/dejagnu/baseboards/multi-sim.exp
+    - /usr/share/dejagnu/baseboards/pi.exp
+    - /usr/share/dejagnu/baseboards/powerpc-sim.exp
+    - /usr/share/dejagnu/baseboards/powerpcle-sim.exp
+    - /usr/share/dejagnu/baseboards/pru-sim.exp
+    - /usr/share/dejagnu/baseboards/qemu.exp
+    - /usr/share/dejagnu/baseboards/riscv-sim.exp
+    - /usr/share/dejagnu/baseboards/rx-sim.exp
+    - /usr/share/dejagnu/baseboards/sh-sid.exp
+    - /usr/share/dejagnu/baseboards/sh-sim.exp
+    - /usr/share/dejagnu/baseboards/sparc-sim.exp
+    - /usr/share/dejagnu/baseboards/sparc64-sim.exp
+    - /usr/share/dejagnu/baseboards/sparclite-sim-le.exp
+    - /usr/share/dejagnu/baseboards/sparclite-sim.exp
+    - /usr/share/dejagnu/baseboards/tx39-sim.exp
+    - /usr/share/dejagnu/baseboards/unix.exp
+    - /usr/share/dejagnu/baseboards/v850-sim.exp
+    - /usr/share/dejagnu/baseboards/visium-sim.exp
+    - /usr/share/dejagnu/baseboards/vr4100-sim.exp
+    - /usr/share/dejagnu/baseboards/vr4111-sim.exp
+    - /usr/share/dejagnu/baseboards/vr4300-sim.exp
+    - /usr/share/dejagnu/baseboards/xtensa-sim.exp
+    - /usr/share/dejagnu/commands/help.sh
+    - /usr/share/dejagnu/commands/report-card.awk
+    - /usr/share/dejagnu/config/README
+    - /usr/share/dejagnu/config/aarch64-fv8.exp
+    - /usr/share/dejagnu/config/adb.exp
+    - /usr/share/dejagnu/config/default.exp
+    - /usr/share/dejagnu/config/gdb-comm.exp
+    - /usr/share/dejagnu/config/gdb_stub.exp
+    - /usr/share/dejagnu/config/sid.exp
+    - /usr/share/dejagnu/config/sim.exp
+    - /usr/share/dejagnu/config/unix.exp
+    - /usr/share/dejagnu/config/vxworks.exp
+    - /usr/share/dejagnu/debugger.exp
+    - /usr/share/dejagnu/dejagnu.exp
+    - /usr/share/dejagnu/dg.exp
+    - /usr/share/dejagnu/dmucs.exp
+    - /usr/share/dejagnu/framework.exp
+    - /usr/share/dejagnu/ftp.exp
+    - /usr/share/dejagnu/kermit.exp
+    - /usr/share/dejagnu/libexec/config.guess
+    - /usr/share/dejagnu/libgloss.exp
+    - /usr/share/dejagnu/remote.exp
+    - /usr/share/dejagnu/rlogin.exp
+    - /usr/share/dejagnu/rsh.exp
+    - /usr/share/dejagnu/runtest.exp
+    - /usr/share/dejagnu/ssh.exp
+    - /usr/share/dejagnu/standard.exp
+    - /usr/share/dejagnu/stub-loader.c
+    - /usr/share/dejagnu/target.exp
+    - /usr/share/dejagnu/targetdb.exp
+    - /usr/share/dejagnu/telnet.exp
+    - /usr/share/dejagnu/testglue.c
+    - /usr/share/dejagnu/tip.exp
+    - /usr/share/dejagnu/utils.exp
+  man:
+    - /usr/share/man/man1/dejagnu-help.1
+    - /usr/share/man/man1/dejagnu-report-card.1
+    - /usr/share/man/man1/dejagnu.1
+    - /usr/share/man/man1/runtest.1
+  info:
+    - /usr/share/info/dejagnu.info
+    - /usr/share/info/dir
