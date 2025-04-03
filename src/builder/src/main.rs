@@ -699,96 +699,34 @@ fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Result
     if let Some(url) = &input_spec.url {
         println!("Fetching input from URL: {}", url);
 
-        let client = reqwest::blocking::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        // Extract a reasonable filename from the URL
+        let url_path = url.split('/').last().unwrap_or("downloaded_file");
+        let expected_filename = url_path.split('?').next().unwrap_or(url_path);
+        let dst_path = Path::new(download_dir).join(expected_filename);
 
-        let mut current_url = url.clone();
-        let mut final_url = url.clone();
-        let mut response = None;
+        // Download the file using curl
+        if !dst_path.exists() {
+            println!("Downloading {} using curl", dst_path.display());
 
-        // Follow redirects manually
-        for _ in 0..20 {
-            // Limit to 20 redirects to prevent infinite loops
-            println!("Trying URL: {}", current_url);
-            let resp = client
-                .get(&current_url)
-                .send()
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            let status = std::process::Command::new("curl")
+                .args([
+                    "-L", // Follow redirects
+                    "-f", // Fail on server errors
+                    "-s", // Silent mode
+                    "--output",
+                    dst_path.to_str().unwrap(),
+                    url,
+                ])
+                .status()?;
 
-            let status = resp.status();
-            println!("Response status: {}", status);
-
-            if status.is_redirection() {
-                if let Some(location) = resp.headers().get(LOCATION) {
-                    let new_url = location
-                        .to_str()
-                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-                    println!("Redirecting to: {}", new_url);
-                    current_url = if new_url.starts_with("http") {
-                        new_url.to_string()
-                    } else {
-                        Url::parse(&current_url)
-                            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
-                            .join(new_url)
-                            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
-                            .to_string()
-                    };
-                    final_url = current_url.clone();
-                } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "Redirect without Location header",
-                    ));
-                }
-            } else if status.is_success() {
-                response = Some(resp);
-                break;
-            } else {
+            if !status.success() {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
-                    format!("Unexpected status code: {}", status),
+                    format!("curl download failed with status: {}", status),
                 ));
             }
-        }
-
-        let mut response =
-            response.ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Too many redirects"))?;
-
-        println!("Final URL after redirects: {}", final_url);
-
-        let file_name = response
-            .headers()
-            .get(CONTENT_DISPOSITION)
-            .and_then(|header| header.to_str().ok())
-            .map(parse_content_disposition)
-            .and_then(|disp| disp.filename().map(|(name, _)| name))
-            .or_else(|| {
-                response
-                    .headers()
-                    .get(CONTENT_DISPOSITION)
-                    .and_then(|header| header.to_str().ok())
-                    .map(parse_content_disposition)
-                    .and_then(|disp| disp.filename_full())
-            })
-            .unwrap_or_else(|| {
-                Url::parse(&final_url)
-                    .ok()
-                    .and_then(|url| {
-                        url.path_segments()
-                            .and_then(|segments| segments.last().map(String::from))
-                    })
-                    .unwrap_or_else(|| "downloaded_file".to_string())
-            });
-
-        let dst_path = Path::new(download_dir).join(file_name);
-
-        if !dst_path.exists() {
-            println!("Downloading {} from {}", dst_path.display(), final_url);
-            let mut file = fs::File::create(&dst_path)?;
-            io::copy(&mut response, &mut file)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        } else {
+            println!("File already exists: {}", dst_path.display());
         }
 
         let mut file = fs::File::open(&dst_path)?;
