@@ -12,10 +12,15 @@ sources:
   - name: "expect"
     url: "https://downloads.sourceforge.net/expect/expect5.45.4.tar.gz"
     sha256: "49a7da83b0bdd9f46d04a04deec19c7767bb9a323e40c4781f89caf760b92c34"
+  - name: "patch"
+    url: "https://raw.githubusercontent.com/buildroot/buildroot/c05e6aa361a4049eabd8b21eb64a34899ef83fc7/package/expect/0001-enable-cross-compilation.patch"
+    sha256: "bd1448c28bc35728b958b4a9f1dfe7be53196306e6ea7775ca5d4b3fe082dd2e"
 
 dependencies:
   - name: "bootstrap_tools"
     commit: "x86_64/bootstrap_tools/0.0.1/bootstrap/phase1/bundles/dev"
+  - name: "strip-nondeterminism"
+    commit: "x86_64/strip-nondeterminism/1.13.0/bootstrap/phase3/bundles/dev"
   - name: "ncurses"
     commit: "x86_64/ncurses/6.4-20230520/bootstrap/phase1/bundles/dev"
   - name: "bash"
@@ -83,6 +88,7 @@ build:
   script: |
     tar --no-same-owner -xf ${SOURCE_expect} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch -Np1 -i /./${SOURCE_patch}
 
     CFLAGS="${CFLAGS/ -Werror=format-security/}"
 
