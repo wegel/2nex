@@ -24,12 +24,17 @@ build:
     tar --no-same-owner -xf ${SOURCE_bash} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
+    # add flags to handle old K&R C code in bash build tools with modern GCC
+    export CFLAGS="$CFLAGS -Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types"
+
     ./configure --prefix=/usr                      \
                 --build=$(sh support/config.guess) \
                 --host=${TARGET}                   \
                 --without-bash-malloc
 
-    make
+    # bash uses CFLAGS_FOR_BUILD for host compiler when building tools like mkbuiltins
+    # use -std=gnu89 for old C89 standard that allows K&R function declarations
+    make CFLAGS_FOR_BUILD="-g -DCROSS_COMPILING -std=gnu89"
     make DESTDIR=${OUT_DIR} install
     ln -sv bash ${OUT_DIR}/usr/bin/sh
 
