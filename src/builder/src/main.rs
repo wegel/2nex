@@ -8,6 +8,7 @@ use std::process::Command;
 use clap::Parser;
 use hostname;
 use num_cpus;
+use serde::de::Deserializer;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
@@ -42,7 +43,8 @@ struct Manifest {
     sources: Vec<Source>,
     build: Build,
     outputs: HashMap<String, Vec<String>>,
-    bundles: HashMap<String, Vec<String>>,
+    #[serde(deserialize_with = "deserialize_bundles")]
+    bundles: HashMap<String, Bundle>,
 }
 
 #[derive(Deserialize)]
@@ -71,6 +73,44 @@ struct Source {
 #[derive(Deserialize)]
 struct Build {
     script: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+struct Bundle {
+    #[serde(default)]
+    includes: Vec<String>,
+    #[serde(default)]
+    requires: Vec<String>,
+    #[serde(default)]
+    suggests: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum BundleDef {
+    Simple(Vec<String>),
+    Detailed(Bundle),
+}
+
+impl From<BundleDef> for Bundle {
+    fn from(def: BundleDef) -> Self {
+        match def {
+            BundleDef::Simple(includes) => Bundle {
+                includes,
+                requires: Vec::new(),
+                suggests: Vec::new(),
+            },
+            BundleDef::Detailed(bundle) => bundle,
+        }
+    }
+}
+
+fn deserialize_bundles<'de, D>(deserializer: D) -> Result<HashMap<String, Bundle>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw: HashMap<String, BundleDef> = HashMap::deserialize(deserializer)?;
+    Ok(raw.into_iter().map(|(k, v)| (k, v.into())).collect())
 }
 
 fn main() -> io::Result<()> {
@@ -600,8 +640,8 @@ fn create_and_commit_bundles(
 
     let bundles = &manifest.bundles;
 
-    for (bundle_name, includes) in bundles {
-        commit_bundle(repo_path, bundle_name, includes, manifest)?;
+    for (bundle_name, bundle) in bundles {
+        commit_bundle(repo_path, bundle_name, &bundle.includes, manifest)?;
     }
 
     Ok(())
@@ -977,5 +1017,58 @@ fn print_outputs(outputs: &HashMap<String, Vec<String>>) {
         for file in files {
             println!("    - {}", file);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base_manifest() -> &'static str {
+        r#"
+package:
+  schema: 1
+  name: sample
+  slug: sample
+  flavor: bootstrap/phase0
+  version: "1.0"
+dependencies: []
+sources: []
+build:
+  script: "true"
+outputs: {}
+"#
+    }
+
+    #[test]
+    fn parses_detailed_bundle_with_metadata() {
+        let yaml = format!(
+            "{base}bundles:\n  dev:\n    includes:\n      - bin\n      - lib\n    requires:\n      - x86_64/foo/1.0/outputs/lib\n    suggests:\n      - x86_64/bar/2.0/bundles/dev\n",
+            base = base_manifest()
+        );
+        let manifest: Manifest = serde_yaml::from_str(&yaml).unwrap();
+        let bundle = manifest.bundles.get("dev").unwrap();
+        assert_eq!(bundle.includes, vec!["bin".to_string(), "lib".to_string()]);
+        assert_eq!(
+            bundle.requires,
+            vec!["x86_64/foo/1.0/outputs/lib".to_string()]
+        );
+        assert_eq!(
+            bundle.suggests,
+            vec!["x86_64/bar/2.0/bundles/dev".to_string()]
+        );
+    }
+
+    #[test]
+    fn parses_legacy_bundle_format() {
+        let yaml = format!(
+            "{base}bundles:\n  dev:\n    - bin\n    - lib\n",
+            base = base_manifest()
+        );
+        let manifest: Manifest = serde_yaml::from_str(&yaml).unwrap();
+        let bundle = manifest.bundles.get("dev").unwrap();
+        assert_eq!(bundle.includes, vec!["bin".to_string(), "lib".to_string()]);
+        assert!(bundle.requires.is_empty());
+        assert!(bundle.suggests.is_empty());
     }
 }
