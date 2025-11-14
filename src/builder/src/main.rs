@@ -1,11 +1,12 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::env;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, BufRead, Read, Write};
+use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use clap::Parser;
+use goblin::Object;
 use hostname;
 use num_cpus;
 use serde::de::Deserializer;
@@ -34,6 +35,11 @@ struct Opts {
         help = "Run the build script on the host's filesystem (for bootstrapping)"
     )]
     bootstrap: bool,
+    #[clap(
+        long,
+        help = "Scan built outputs and suggest runtime dependency requires entries"
+    )]
+    scan_runtime_deps: bool,
 }
 
 #[derive(Deserialize)]
@@ -149,6 +155,11 @@ fn main() -> io::Result<()> {
     verify_and_commit_outputs(&manifest, base_dir, &opts.repo_path)?;
 
     create_and_commit_bundles(&manifest, base_dir, &opts.repo_path)?;
+
+    if opts.scan_runtime_deps {
+        scan_runtime_dependencies(&manifest, base_dir)?;
+    }
+
     println!("Build, packaging, and commit to OSTree completed for all outputs.");
 
     let output_dir = Path::new(base_dir).join("2nex/out");
@@ -1020,9 +1031,378 @@ fn print_outputs(outputs: &HashMap<String, Vec<String>>) {
     }
 }
 
+fn scan_runtime_dependencies(manifest: &Manifest, base_dir: &str) -> io::Result<()> {
+    let base_dir_path = Path::new(base_dir);
+    let out_dir = base_dir_path.join("2nex/out");
+
+    if !out_dir.exists() {
+        println!(
+            "No output directory found at {}. Skipping runtime dependency scan.",
+            out_dir.display()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "Scanning runtime dependencies for {} {}",
+        manifest.package.name, manifest.package.version
+    );
+
+    let local_basenames = collect_local_basenames(&out_dir)?;
+    let provider_index = build_provider_index(base_dir_path, &out_dir)?;
+    let mut result = RuntimeScanResult::default();
+
+    for entry in WalkDir::new(&out_dir).into_iter().filter_map(|e| e.ok()) {
+        if !entry.file_type().is_file() && !entry.file_type().is_symlink() {
+            continue;
+        }
+
+        let rel = entry
+            .path()
+            .strip_prefix(&out_dir)
+            .unwrap_or(entry.path())
+            .to_string_lossy();
+        let display_path = format!("/{}", rel);
+
+        scan_file_for_dependencies(
+            entry.path(),
+            &display_path,
+            &out_dir,
+            &local_basenames,
+            &provider_index,
+            &mut result,
+        )?;
+    }
+
+    print_runtime_scan_results(&manifest.package.name, &result);
+
+    Ok(())
+}
+
+fn collect_local_basenames(out_dir: &Path) -> io::Result<HashSet<String>> {
+    let mut names = HashSet::new();
+    for entry in WalkDir::new(out_dir).into_iter().filter_map(|e| e.ok()) {
+        if !entry.file_type().is_file() && !entry.file_type().is_symlink() {
+            continue;
+        }
+
+        if let Some(name) = entry.file_name().to_str() {
+            names.insert(name.to_string());
+        }
+    }
+    Ok(names)
+}
+
+#[derive(Default)]
+struct ProviderIndex {
+    by_basename: HashMap<String, Vec<String>>,
+    by_full_path: HashSet<String>,
+}
+
+fn build_provider_index(base_dir: &Path, out_dir: &Path) -> io::Result<ProviderIndex> {
+    let mut index = ProviderIndex::default();
+    for entry in WalkDir::new(base_dir).into_iter().filter_map(|e| e.ok()) {
+        if entry.path().starts_with(out_dir) {
+            continue;
+        }
+        if !entry.file_type().is_file() && !entry.file_type().is_symlink() {
+            continue;
+        }
+
+        let rel_path = match entry.path().strip_prefix(base_dir) {
+            Ok(rel) => rel,
+            Err(_) => continue,
+        };
+
+        if rel_path
+            .components()
+            .next()
+            .and_then(|c| c.as_os_str().to_str())
+            == Some("2nex")
+        {
+            continue;
+        }
+
+        let rel_string = format!("/{}", rel_path.to_string_lossy());
+        if let Some(name) = entry.file_name().to_str() {
+            index
+                .by_basename
+                .entry(name.to_string())
+                .or_default()
+                .push(rel_string.clone());
+        }
+        index.by_full_path.insert(rel_string);
+    }
+
+    Ok(index)
+}
+
+fn scan_file_for_dependencies(
+    path: &Path,
+    display_path: &str,
+    out_dir: &Path,
+    local_basenames: &HashSet<String>,
+    providers: &ProviderIndex,
+    result: &mut RuntimeScanResult,
+) -> io::Result<()> {
+    if let Some(elf) = read_elf_metadata(path)? {
+        for needed in elf.needed {
+            if needed.is_empty() || local_basenames.contains(&needed) {
+                continue;
+            }
+            let reason = format!("{} needs {}", display_path, needed);
+            let matches = resolve_requirement(providers, &needed);
+            if matches.is_empty() {
+                result.add_unresolved(needed, reason);
+            } else {
+                for candidate in matches {
+                    result.add_resolved(candidate, reason.clone());
+                }
+            }
+        }
+
+        if let Some(interpreter) = elf.interpreter {
+            if !interpreter.is_empty() {
+                let reason = format!("{} uses interpreter {}", display_path, interpreter);
+                let matches = resolve_requirement(providers, &interpreter);
+                if matches.is_empty() {
+                    result.add_unresolved(interpreter, reason);
+                } else {
+                    for candidate in matches {
+                        result.add_resolved(candidate, reason.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(shebang) = parse_shebang_info(path)? {
+        handle_shebang_requirement(
+            &shebang.interpreter,
+            display_path,
+            out_dir,
+            local_basenames,
+            providers,
+            result,
+        );
+
+        if interpreter_is_env(&shebang.interpreter) {
+            if let Some(target) = shebang.args.first() {
+                handle_shebang_requirement(
+                    target,
+                    display_path,
+                    out_dir,
+                    local_basenames,
+                    providers,
+                    result,
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn resolve_requirement(providers: &ProviderIndex, reference: &str) -> Vec<String> {
+    let trimmed = reference.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+
+    if providers.by_full_path.contains(trimmed) {
+        return vec![trimmed.to_string()];
+    }
+
+    if let Some(basename) = Path::new(trimmed).file_name().and_then(|n| n.to_str()) {
+        if let Some(matches) = providers.by_basename.get(basename) {
+            return matches.clone();
+        }
+    }
+
+    providers
+        .by_basename
+        .get(trimmed)
+        .cloned()
+        .unwrap_or_else(Vec::new)
+}
+
+fn handle_shebang_requirement(
+    target: &str,
+    display_path: &str,
+    out_dir: &Path,
+    local_basenames: &HashSet<String>,
+    providers: &ProviderIndex,
+    result: &mut RuntimeScanResult,
+) {
+    let trimmed = target.trim();
+    if trimmed.is_empty() {
+        return;
+    }
+
+    if let Some(basename) = Path::new(trimmed).file_name().and_then(|n| n.to_str()) {
+        if local_basenames.contains(basename) {
+            return;
+        }
+    }
+
+    if trimmed.starts_with('/') {
+        let rel_path = trimmed.trim_start_matches('/');
+        let candidate_path = out_dir.join(rel_path);
+        if candidate_path.exists() {
+            return;
+        }
+    }
+
+    let reason = format!("{} shebang references {}", display_path, trimmed);
+    let matches = resolve_requirement(providers, trimmed);
+    if matches.is_empty() {
+        result.add_unresolved(trimmed.to_string(), reason);
+    } else {
+        for candidate in matches {
+            result.add_resolved(candidate, reason.clone());
+        }
+    }
+}
+
+fn interpreter_is_env(interpreter: &str) -> bool {
+    Path::new(interpreter)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|name| name == "env")
+        .unwrap_or(false)
+}
+
+#[derive(Default)]
+struct RuntimeScanResult {
+    resolved: BTreeMap<String, BTreeSet<String>>,
+    unresolved: BTreeMap<String, BTreeSet<String>>,
+}
+
+impl RuntimeScanResult {
+    fn add_resolved(&mut self, requirement: String, reason: String) {
+        self.resolved.entry(requirement).or_default().insert(reason);
+    }
+
+    fn add_unresolved(&mut self, requirement: String, reason: String) {
+        self.unresolved
+            .entry(requirement)
+            .or_default()
+            .insert(reason);
+    }
+}
+
+fn print_runtime_scan_results(package_name: &str, result: &RuntimeScanResult) {
+    println!("Runtime dependency suggestions for {}", package_name);
+
+    if result.resolved.is_empty() {
+        println!("  No external runtime dependencies detected.");
+    } else {
+        println!("Suggested requires entries:");
+        for (req, reasons) in &result.resolved {
+            println!("  - {}", req);
+            for reason in reasons {
+                println!("      # {}", reason);
+            }
+        }
+    }
+
+    if !result.unresolved.is_empty() {
+        println!();
+        println!("Unresolved references (no provider found locally or in dependencies):");
+        for (req, reasons) in &result.unresolved {
+            println!("  - {}", req);
+            for reason in reasons {
+                println!("      # {}", reason);
+            }
+        }
+    }
+}
+
+struct ElfMetadata {
+    needed: Vec<String>,
+    interpreter: Option<String>,
+}
+
+fn read_elf_metadata(path: &Path) -> io::Result<Option<ElfMetadata>> {
+    let data = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            return Err(e);
+        }
+    };
+
+    if data.len() < 4 || &data[..4] != b"\x7FELF" {
+        return Ok(None);
+    }
+
+    match Object::parse(&data) {
+        Ok(Object::Elf(elf)) => {
+            let needed = elf
+                .libraries
+                .iter()
+                .map(|lib| lib.trim().to_string())
+                .filter(|lib| !lib.is_empty())
+                .collect();
+            let interpreter = elf
+                .interpreter
+                .map(|interp| interp.trim().to_string())
+                .filter(|interp| !interp.is_empty());
+
+            Ok(Some(ElfMetadata {
+                needed,
+                interpreter,
+            }))
+        }
+        _ => Ok(None),
+    }
+}
+
+struct ShebangInfo {
+    interpreter: String,
+    args: Vec<String>,
+}
+
+fn parse_shebang_info(path: &Path) -> io::Result<Option<ShebangInfo>> {
+    let file = match File::open(path) {
+        Ok(f) => f,
+        Err(e) => {
+            if e.kind() == io::ErrorKind::PermissionDenied {
+                return Ok(None);
+            }
+            return Err(e);
+        }
+    };
+
+    let mut reader = BufReader::new(file);
+    let mut buffer = Vec::new();
+    let bytes_read = reader.read_until(b'\n', &mut buffer)?;
+
+    if bytes_read < 2 || !buffer.starts_with(b"#!") {
+        return Ok(None);
+    }
+
+    let line = String::from_utf8_lossy(&buffer[2..]);
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    let mut parts = trimmed.split_whitespace();
+    if let Some(interpreter) = parts.next() {
+        let args = parts.map(|s| s.to_string()).collect();
+        return Ok(Some(ShebangInfo {
+            interpreter: interpreter.to_string(),
+            args,
+        }));
+    }
+
+    Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     fn base_manifest() -> &'static str {
         r#"
@@ -1070,5 +1450,39 @@ outputs: {}
         assert_eq!(bundle.includes, vec!["bin".to_string(), "lib".to_string()]);
         assert!(bundle.requires.is_empty());
         assert!(bundle.suggests.is_empty());
+    }
+
+    #[test]
+    fn parse_shebang_extracts_interpreter_and_args() {
+        let dir = tempfile::tempdir().unwrap();
+        let script_path = dir.path().join("script.sh");
+        fs::write(
+            &script_path,
+            b"#!/usr/bin/env python3 -OO\nprint('hello world')\n",
+        )
+        .unwrap();
+
+        let info = parse_shebang_info(&script_path)
+            .expect("parse shebang")
+            .expect("expected shebang info");
+        assert_eq!(info.interpreter, "/usr/bin/env");
+        assert_eq!(info.args, vec!["python3".to_string(), "-OO".to_string()]);
+    }
+
+    #[test]
+    fn provider_index_resolves_full_and_basename_matches() {
+        let mut index = ProviderIndex::default();
+        index.by_full_path.insert("/usr/bin/python3".to_string());
+        index
+            .by_basename
+            .entry("python3".to_string())
+            .or_default()
+            .push("/usr/bin/python3".to_string());
+
+        let basename_matches = resolve_requirement(&index, "python3");
+        assert_eq!(basename_matches, vec!["/usr/bin/python3".to_string()]);
+
+        let path_matches = resolve_requirement(&index, "/usr/bin/python3");
+        assert_eq!(path_matches, vec!["/usr/bin/python3".to_string()]);
     }
 }
