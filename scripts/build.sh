@@ -1,8 +1,11 @@
 #!/bin/sh
 
 FORCE_TARGETS=${FORCE_TARGETS:-}
+FORCE="${FORCE:-}"
+PHASES="${PHASES:-bootstrap/phase0 bootstrap/phase1 bootstrap/phase2 bootstrap/phase3 base embedded}"
+UPDATE_OUTPUTS="${UPDATE_OUTPUTS:-0}"
 
-for PHASE in bootstrap/phase0 bootstrap/phase1 bootstrap/phase2 bootstrap/phase3 base embedded; do
+for PHASE in ${PHASES}; do
   echo "Phase: $PHASE"
   MANIFEST_DIR="manifests/${PHASE}"
 
@@ -30,7 +33,10 @@ for PHASE in bootstrap/phase0 bootstrap/phase1 bootstrap/phase2 bootstrap/phase3
     BUNDLE_REF="x86_64/${SLUG}/${VERSION}/${FLAVOR}/bundles/${BUNDLE_NAME}"
 
     FORCE_REBUILD=0
-    if [ -n "$FORCE" ] && printf '%s\n' "$FORCE" | tr ',' '\n' | grep -Fxq "$M"; then
+    if [ "$FORCE" = "1" ]; then
+      FORCE_REBUILD=1
+      echo "Globally forcing rebuild of ${M}"
+    elif [ -n "$FORCE_TARGETS" ] && printf '%s\n' "$FORCE_TARGETS" | tr ',' '\n' | grep -Fxq "$M"; then
       FORCE_REBUILD=1
       echo "Forcing rebuild of ${M}"
     fi
@@ -59,7 +65,12 @@ for PHASE in bootstrap/phase0 bootstrap/phase1 bootstrap/phase2 bootstrap/phase3
         B="--bootstrap"
         ;;
     esac
-    if ! src/builder/target/debug/nex $B bootstrap_store $M > /tmp/build_log 2>&1; then
+    UPDATE_FLAG=""
+    if [ "$UPDATE_OUTPUTS" = "1" ]; then
+      UPDATE_FLAG="--update-outputs-requires-only"
+    fi
+
+    if ! src/builder/target/debug/nex $B bootstrap_store $M $UPDATE_FLAG > /tmp/build_log 2>&1; then
       cat /tmp/build_log
       echo "Failed ${M}"
       exit 1

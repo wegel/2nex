@@ -2,6 +2,7 @@ use std::collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet, Ve
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::mem;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -10,7 +11,8 @@ use goblin::Object;
 use hostname;
 use num_cpus;
 use serde::de::Deserializer;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_yaml::{Mapping, Value};
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 use walkdir::WalkDir;
@@ -47,9 +49,19 @@ struct Opts {
         help = "Treat missing files during runtime dependency scanning as warnings instead of errors"
     )]
     allow_missing_runtime_files: bool,
+    #[clap(
+        long,
+        help = "Rewrite outputs.*.requires based on the runtime dependency scanner (implies scanning)"
+    )]
+    update_outputs_requires: bool,
+    #[clap(
+        long,
+        help = "Update outputs.*.requires using existing OSTree outputs without rebuilding"
+    )]
+    update_outputs_requires_only: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct Manifest {
     package: Package,
     dependencies: Vec<Dependency>,
@@ -61,7 +73,7 @@ struct Manifest {
     bundles: HashMap<String, Bundle>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct Package {
     name: String,
     slug: String,
@@ -71,12 +83,12 @@ struct Package {
     stable_checksum: Option<bool>,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct Dependency {
     commit: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 struct Source {
     name: String,
     url: Option<String>,
@@ -84,12 +96,12 @@ struct Source {
     sha256: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct Build {
     script: String,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct Bundle {
     #[serde(default)]
     includes: Vec<String>,
@@ -127,7 +139,7 @@ where
     Ok(raw.into_iter().map(|(k, v)| (k, v.into())).collect())
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct OutputSpec {
     #[serde(default)]
     files: Vec<String>,
@@ -168,13 +180,33 @@ where
 fn main() -> io::Result<()> {
     let opts: Opts = Opts::parse();
 
-    let manifest = load_manifest(&opts.manifest_file)?;
+    let mut manifest = load_manifest(&opts.manifest_file)?;
     let manifest_dir = Path::new(&opts.manifest_file).parent().unwrap();
     let base_dir = "./build_rootfs";
     let download_dir = "./inputs_cache";
     fs::create_dir_all(download_dir)?;
 
     let dependency_commits = resolve_dependency_closure(&manifest.dependencies, &opts.repo_path)?;
+    let wants_update_outputs = opts.update_outputs_requires || opts.update_outputs_requires_only;
+
+    if opts.update_outputs_requires_only {
+        stage_existing_outputs(&manifest, base_dir, &opts.repo_path)?;
+        let runtime_result = scan_runtime_dependencies(
+            &manifest,
+            base_dir,
+            &opts.repo_path,
+            &dependency_commits,
+            opts.runtime_deps_verbose,
+            opts.allow_missing_runtime_files,
+        )?;
+        update_manifest_outputs(&opts.manifest_file, &runtime_result)?;
+        apply_runtime_requires(&mut manifest, &runtime_result);
+        println!(
+            "Updated outputs.requires for {} without rebuilding",
+            opts.manifest_file
+        );
+        return Ok(());
+    }
 
     setup_composite_rootfs(&manifest, base_dir, &opts.repo_path, &dependency_commits)?;
     let input_env_vars = handle_inputs(
@@ -196,24 +228,12 @@ fn main() -> io::Result<()> {
 
     let mut env_vars = HashMap::new();
     env_vars.extend(input_env_vars);
-    let build_script = &manifest.build.script;
+    let build_script = manifest.build.script.clone();
 
-    run_build_script(build_script, base_dir, &env_vars, opts.bootstrap)?;
+    run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
 
-    if !opts.skip_runtime_deps {
-        scan_runtime_dependencies(
-            &manifest,
-            base_dir,
-            &opts.repo_path,
-            &dependency_commits,
-            opts.runtime_deps_verbose,
-            opts.allow_missing_runtime_files,
-        )?;
-    }
-
-    let runtime_suggestions = if opts.skip_runtime_deps {
-        None
-    } else {
+    let need_runtime_scan = !opts.skip_runtime_deps || wants_update_outputs;
+    let runtime_analysis: Option<RuntimeScanResult> = if need_runtime_scan {
         Some(scan_runtime_dependencies(
             &manifest,
             base_dir,
@@ -222,13 +242,30 @@ fn main() -> io::Result<()> {
             opts.runtime_deps_verbose,
             opts.allow_missing_runtime_files,
         )?)
+    } else {
+        None
+    };
+
+    if wants_update_outputs {
+        if let Some(result) = runtime_analysis.as_ref() {
+            update_manifest_outputs(&opts.manifest_file, result)?;
+            apply_runtime_requires(&mut manifest, result);
+        } else {
+            println!("Skipping output requires update because runtime scanning was disabled.");
+        }
+    }
+
+    let runtime_suggestions: Option<&RuntimeScanResult> = if opts.skip_runtime_deps {
+        None
+    } else {
+        runtime_analysis.as_ref()
     };
 
     verify_and_commit_outputs(
         &manifest,
         base_dir,
         &opts.repo_path,
-        runtime_suggestions.as_ref(),
+        runtime_suggestions,
         opts.runtime_deps_verbose,
     )?;
 
@@ -264,12 +301,12 @@ fn main() -> io::Result<()> {
             base_dir,
             opts.bootstrap,
         )?;
-        run_build_script(build_script, base_dir, &env_vars, opts.bootstrap)?;
+        run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
         verify_and_commit_outputs(
             &manifest,
             base_dir,
             &opts.repo_path,
-            runtime_suggestions.as_ref(),
+            runtime_suggestions,
             opts.runtime_deps_verbose,
         )?;
         create_and_commit_bundles(&manifest, base_dir, &opts.repo_path)?;
@@ -367,6 +404,30 @@ fn resolve_dependency_closure(
     }
 
     Ok(resolved)
+}
+
+fn stage_existing_outputs(manifest: &Manifest, base_dir: &str, repo_path: &str) -> io::Result<()> {
+    let base_path = Path::new(base_dir);
+    if base_path.exists() {
+        fs::remove_dir_all(base_path)?;
+    }
+    let out_dir = base_path.join("2nex/out");
+    fs::create_dir_all(&out_dir)?;
+
+    for category in manifest.outputs.keys() {
+        let branch_name = format!(
+            "x86_64/{}/{}/{}/outputs/{}",
+            manifest.package.slug, manifest.package.version, manifest.package.flavor, category
+        );
+        println!(
+            "Checking out existing outputs from {} into {}",
+            branch_name,
+            out_dir.display()
+        );
+        checkout_ostree_into(repo_path, &branch_name, &out_dir, true)?;
+    }
+
+    Ok(())
 }
 
 fn setup_composite_rootfs(
@@ -910,6 +971,235 @@ fn parse_metadata_list_output(raw: &[u8]) -> io::Result<Vec<String>> {
         Ok(Vec::new())
     } else {
         serde_json::from_str(trimmed).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }
+}
+
+fn update_manifest_outputs(manifest_path: &str, suggestions: &RuntimeScanResult) -> io::Result<()> {
+    let contents = fs::read_to_string(manifest_path)?;
+    let mut doc: Value = serde_yaml::from_str(&contents)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let outputs_value = doc.get_mut("outputs").ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Manifest missing outputs section",
+        )
+    })?;
+    let outputs_map = outputs_value
+        .as_mapping_mut()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "outputs is not a mapping"))?;
+
+    let mut changed = false;
+
+    for (key, value) in outputs_map.iter_mut() {
+        let category = match key.as_str() {
+            Some(s) => s.to_string(),
+            None => continue,
+        };
+
+        let new_requires: Vec<String> = suggestions
+            .category_resolved(&category)
+            .map(|commits| commits.keys().cloned().collect())
+            .unwrap_or_default();
+
+        let (mapping, converted) = ensure_output_mapping(value)?;
+        if converted {
+            changed = true;
+        }
+        if update_requires_field(mapping, &new_requires) {
+            changed = true;
+        }
+        normalize_output_keys(mapping);
+    }
+
+    if !changed {
+        println!(
+            "No outputs.requires changes were necessary for {}",
+            manifest_path
+        );
+        return Ok(());
+    }
+
+    let outputs_block = serialize_outputs_section(outputs_value)?;
+    let (start, end) = locate_outputs_block(&contents)?;
+    let mut new_contents = String::new();
+    new_contents.push_str(&contents[..start]);
+    new_contents.push_str(&outputs_block);
+    if !outputs_block.ends_with('\n')
+        && (end >= contents.len() || contents[start..end].contains('\n'))
+    {
+        new_contents.push('\n');
+    }
+    new_contents.push_str(&contents[end..]);
+    fs::write(manifest_path, new_contents)?;
+    println!(
+        "Updated outputs.requires entries based on runtime scan in {}",
+        manifest_path
+    );
+
+    Ok(())
+}
+
+fn ensure_output_mapping(value: &mut Value) -> io::Result<(&mut Mapping, bool)> {
+    match value {
+        Value::Mapping(map) => Ok((map, false)),
+        Value::Sequence(_) | Value::Null => {
+            let files_seq = if let Value::Sequence(seq) = value {
+                mem::take(seq)
+            } else {
+                Vec::new()
+            };
+            let mut mapping = Mapping::new();
+            mapping.insert(
+                Value::String("files".to_string()),
+                Value::Sequence(files_seq),
+            );
+            *value = Value::Mapping(mapping);
+            if let Value::Mapping(map) = value {
+                Ok((map, true))
+            } else {
+                unreachable!()
+            }
+        }
+        _ => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Output entry must be a sequence or mapping",
+        )),
+    }
+}
+
+fn update_requires_field(mapping: &mut Mapping, new_values: &[String]) -> bool {
+    let key = Value::String("requires".to_string());
+    let current: Vec<String> = mapping
+        .get(&key)
+        .and_then(|v| v.as_sequence())
+        .map(|seq| {
+            seq.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if new_values.is_empty() {
+        if mapping.remove(&key).is_some() && !current.is_empty() {
+            return true;
+        }
+        return false;
+    }
+
+    if current == new_values {
+        return false;
+    }
+
+    let seq = Value::Sequence(
+        new_values
+            .iter()
+            .map(|val| Value::String(val.clone()))
+            .collect(),
+    );
+    mapping.insert(key, seq);
+    true
+}
+
+fn normalize_output_keys(mapping: &mut Mapping) {
+    let mut entries: Vec<(Value, Value)> = Vec::new();
+    for key in ["files", "requires", "suggests"] {
+        let key_value = Value::String(key.to_string());
+        if let Some(value) = mapping.remove(&key_value) {
+            entries.push((Value::String(key.to_string()), value));
+        }
+    }
+    for (k, v) in mapping.iter() {
+        entries.push((k.clone(), v.clone()));
+    }
+    mapping.clear();
+    for (k, v) in entries {
+        mapping.insert(k, v);
+    }
+}
+
+fn serialize_outputs_section(outputs_value: &Value) -> io::Result<String> {
+    let mapping = outputs_value
+        .as_mapping()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "outputs is not a mapping"))?;
+    let mut inner = serde_yaml::to_string(&Value::Mapping(mapping.clone()))
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    if inner.starts_with("---\n") {
+        inner = inner[4..].to_string();
+    } else if inner.starts_with("---") {
+        inner = inner.trim_start_matches("---").trim_start().to_string();
+    }
+    if inner.ends_with("\n...\n") {
+        inner.truncate(inner.len() - 5);
+    } else if inner.ends_with("\n...") {
+        inner.truncate(inner.len() - 4);
+    }
+    inner = inner.trim_end().to_string();
+
+    let mut block = String::from("outputs:\n");
+    for line in inner.lines() {
+        if line.is_empty() {
+            block.push('\n');
+        } else {
+            block.push_str("  ");
+            block.push_str(line);
+            block.push('\n');
+        }
+    }
+
+    Ok(block)
+}
+
+fn locate_outputs_block(contents: &str) -> io::Result<(usize, usize)> {
+    let mut start = None;
+    let mut end = contents.len();
+    let mut line_start = 0;
+
+    while line_start < contents.len() {
+        let line_end = contents[line_start..]
+            .find('\n')
+            .map(|idx| line_start + idx + 1)
+            .unwrap_or(contents.len());
+        let line = &contents[line_start..line_end];
+        let trimmed = line.trim_end();
+
+        if start.is_none() {
+            if !line.starts_with(' ') && !line.starts_with('\t') && trimmed == "outputs:" {
+                start = Some(line_start);
+            }
+        } else {
+            let trimmed_ws = trimmed.trim();
+            let is_top_level =
+                !line.starts_with(' ') && !line.starts_with('\t') && !trimmed_ws.is_empty();
+            if is_top_level && trimmed_ws != "outputs:" {
+                end = line_start;
+                break;
+            }
+        }
+
+        if line_end == contents.len() {
+            break;
+        }
+        line_start = line_end;
+    }
+
+    if let Some(start_idx) = start {
+        Ok((start_idx, end))
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Unable to locate outputs section",
+        ))
+    }
+}
+
+fn apply_runtime_requires(manifest: &mut Manifest, suggestions: &RuntimeScanResult) {
+    for (category, spec) in manifest.outputs.iter_mut() {
+        let new_requires: Vec<String> = suggestions
+            .category_resolved(category)
+            .map(|commits| commits.keys().cloned().collect())
+            .unwrap_or_default();
+        spec.requires = new_requires;
     }
 }
 
