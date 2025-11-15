@@ -109,6 +109,9 @@ struct SystemMeta {
     boot_method: Option<String>,
     #[serde(default)]
     description: Option<String>,
+    checksum: Option<String>,
+    #[serde(default)]
+    stable_checksum: Option<bool>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -540,12 +543,6 @@ fn build_system_manifest(opts: &Opts, manifest: &SystemManifest) -> io::Result<(
     if opts.runtime_deps_verbose || opts.skip_runtime_deps {
         println!("Note: runtime dependency scanning is not available for system manifests yet.");
     }
-    if opts.validate_reproducibility {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "--validate-reproducibility is not supported for system manifests yet",
-        ));
-    }
 
     let base_dir = "./build_rootfs";
     let download_dir = "./inputs_cache";
@@ -559,7 +556,89 @@ fn build_system_manifest(opts: &Opts, manifest: &SystemManifest) -> io::Result<(
     layer_commits_into_rootfs(base_dir, &opts.repo_path, &package_commits)?;
     materialize_system_packages(base_dir, &opts.repo_path, &package_commits)?;
 
-    let mut env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
+    let env_vars = build_system_env_vars(manifest, download_dir, base_dir, opts.bootstrap)?;
+
+    println!(
+        "Building system {} {}",
+        manifest.system.slug, manifest.system.version
+    );
+
+    run_build_script(&manifest.build.script, base_dir, &env_vars, opts.bootstrap)?;
+
+    let target_dir = Path::new(base_dir).join("target");
+    let checksum = calculate_output_checksum(&target_dir)?;
+    println!("System build checksum: {}", checksum);
+
+    if let Some(expected_checksum) = &manifest.system.checksum {
+        if checksum != *expected_checksum {
+            eprintln!(
+                "Checksum mismatch. Expected: {}, Calculated: {}",
+                expected_checksum, checksum
+            );
+            process::exit(-2);
+        } else {
+            println!("Checksum verified successfully.");
+        }
+    }
+
+    commit_system_rootfs(
+        manifest,
+        base_dir,
+        &opts.repo_path,
+        &package_commits,
+        &dependency_commits,
+        &checksum,
+    )?;
+
+    println!(
+        "System commit stored at systems/{}/{}",
+        manifest.system.slug, manifest.system.version
+    );
+
+    if opts.validate_reproducibility {
+        println!("Validating build reproducibility by building the system a second time.");
+        fs::remove_dir_all(base_dir)?;
+
+        setup_composite_rootfs(base_dir, &opts.repo_path, &dependency_commits)?;
+        layer_commits_into_rootfs(base_dir, &opts.repo_path, &package_commits)?;
+        materialize_system_packages(base_dir, &opts.repo_path, &package_commits)?;
+
+        let env_vars = build_system_env_vars(manifest, download_dir, base_dir, opts.bootstrap)?;
+        run_build_script(&manifest.build.script, base_dir, &env_vars, opts.bootstrap)?;
+
+        let second_checksum = calculate_output_checksum(&target_dir)?;
+        println!("Second build checksum: {}", second_checksum);
+
+        if checksum == second_checksum {
+            println!("Build is reproducible. Checksums match.");
+        } else {
+            println!("Build is not reproducible. Checksums do not match.");
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Build is not reproducible.",
+            ));
+        }
+
+        commit_system_rootfs(
+            manifest,
+            base_dir,
+            &opts.repo_path,
+            &package_commits,
+            &dependency_commits,
+            &second_checksum,
+        )?;
+    }
+
+    Ok(())
+}
+
+fn build_system_env_vars(
+    manifest: &SystemManifest,
+    download_dir: &str,
+    base_dir: &str,
+    bootstrap: bool,
+) -> io::Result<HashMap<String, String>> {
+    let mut env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, bootstrap)?;
     env_vars.insert("SYSTEM_NAME".to_string(), manifest.system.name.clone());
     env_vars.insert("SYSTEM_SLUG".to_string(), manifest.system.slug.clone());
     env_vars.insert(
@@ -577,28 +656,7 @@ fn build_system_manifest(opts: &Opts, manifest: &SystemManifest) -> io::Result<(
     if let Some(desc) = &manifest.system.description {
         env_vars.insert("SYSTEM_DESCRIPTION".to_string(), desc.clone());
     }
-
-    println!(
-        "Building system {} {}",
-        manifest.system.slug, manifest.system.version
-    );
-
-    run_build_script(&manifest.build.script, base_dir, &env_vars, opts.bootstrap)?;
-
-    commit_system_rootfs(
-        manifest,
-        base_dir,
-        &opts.repo_path,
-        &package_commits,
-        &dependency_commits,
-    )?;
-
-    println!(
-        "System commit stored at systems/{}/{}",
-        manifest.system.slug, manifest.system.version
-    );
-
-    Ok(())
+    Ok(env_vars)
 }
 
 fn dependencies_from_system_packages(packages: &[SystemPackage]) -> Vec<Dependency> {
@@ -635,6 +693,7 @@ fn commit_system_rootfs(
     repo_path: &str,
     package_commits: &[String],
     dependency_commits: &[String],
+    checksum: &str,
 ) -> io::Result<()> {
     let target_dir = Path::new(base_dir).join("target");
     if !target_dir.exists() {
@@ -655,6 +714,7 @@ fn commit_system_rootfs(
         "nex.system.version".to_string(),
         manifest.system.version.clone(),
     ));
+    metadata.push(("nex.build.checksum".to_string(), checksum.to_string()));
     if let Some(desc) = &manifest.system.description {
         metadata.push(("nex.system.description".to_string(), desc.clone()));
     }
