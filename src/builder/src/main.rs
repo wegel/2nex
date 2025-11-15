@@ -1,5 +1,4 @@
-use std::collections::hash_map::Entry;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -36,11 +35,18 @@ struct Opts {
         help = "Run the build script on the host's filesystem (for bootstrapping)"
     )]
     bootstrap: bool,
+    #[clap(long, help = "Skip runtime dependency scanning")]
+    skip_runtime_deps: bool,
     #[clap(
         long,
-        help = "Scan built outputs and suggest runtime dependency requires entries"
+        help = "Include per-reference explanations in runtime dependency output"
     )]
-    scan_runtime_deps: bool,
+    runtime_deps_verbose: bool,
+    #[clap(
+        long,
+        help = "Treat missing files during runtime dependency scanning as warnings instead of errors"
+    )]
+    allow_missing_runtime_files: bool,
 }
 
 #[derive(Deserialize)]
@@ -49,7 +55,8 @@ struct Manifest {
     dependencies: Vec<Dependency>,
     sources: Vec<Source>,
     build: Build,
-    outputs: HashMap<String, Vec<String>>,
+    #[serde(deserialize_with = "deserialize_outputs")]
+    outputs: HashMap<String, OutputSpec>,
     #[serde(deserialize_with = "deserialize_bundles")]
     bundles: HashMap<String, Bundle>,
 }
@@ -120,6 +127,44 @@ where
     Ok(raw.into_iter().map(|(k, v)| (k, v.into())).collect())
 }
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+struct OutputSpec {
+    #[serde(default)]
+    files: Vec<String>,
+    #[serde(default)]
+    requires: Vec<String>,
+    #[serde(default)]
+    suggests: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum OutputDef {
+    Simple(Vec<String>),
+    Detailed(OutputSpec),
+}
+
+impl From<OutputDef> for OutputSpec {
+    fn from(def: OutputDef) -> Self {
+        match def {
+            OutputDef::Simple(files) => OutputSpec {
+                files,
+                requires: Vec::new(),
+                suggests: Vec::new(),
+            },
+            OutputDef::Detailed(spec) => spec,
+        }
+    }
+}
+
+fn deserialize_outputs<'de, D>(deserializer: D) -> Result<HashMap<String, OutputSpec>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw: HashMap<String, OutputDef> = HashMap::deserialize(deserializer)?;
+    Ok(raw.into_iter().map(|(k, v)| (k, v.into())).collect())
+}
+
 fn main() -> io::Result<()> {
     let opts: Opts = Opts::parse();
 
@@ -129,7 +174,9 @@ fn main() -> io::Result<()> {
     let download_dir = "./inputs_cache";
     fs::create_dir_all(download_dir)?;
 
-    setup_composite_rootfs(&manifest, base_dir, &opts.repo_path)?;
+    let dependency_commits = resolve_dependency_closure(&manifest.dependencies, &opts.repo_path)?;
+
+    setup_composite_rootfs(&manifest, base_dir, &opts.repo_path, &dependency_commits)?;
     let input_env_vars = handle_inputs(
         &manifest,
         manifest_dir,
@@ -153,13 +200,39 @@ fn main() -> io::Result<()> {
 
     run_build_script(build_script, base_dir, &env_vars, opts.bootstrap)?;
 
-    verify_and_commit_outputs(&manifest, base_dir, &opts.repo_path)?;
+    if !opts.skip_runtime_deps {
+        scan_runtime_dependencies(
+            &manifest,
+            base_dir,
+            &opts.repo_path,
+            &dependency_commits,
+            opts.runtime_deps_verbose,
+            opts.allow_missing_runtime_files,
+        )?;
+    }
+
+    let runtime_suggestions = if opts.skip_runtime_deps {
+        None
+    } else {
+        Some(scan_runtime_dependencies(
+            &manifest,
+            base_dir,
+            &opts.repo_path,
+            &dependency_commits,
+            opts.runtime_deps_verbose,
+            opts.allow_missing_runtime_files,
+        )?)
+    };
+
+    verify_and_commit_outputs(
+        &manifest,
+        base_dir,
+        &opts.repo_path,
+        runtime_suggestions.as_ref(),
+        opts.runtime_deps_verbose,
+    )?;
 
     create_and_commit_bundles(&manifest, base_dir, &opts.repo_path)?;
-
-    if opts.scan_runtime_deps {
-        scan_runtime_dependencies(&manifest, base_dir, &opts.repo_path)?;
-    }
 
     println!("Build, packaging, and commit to OSTree completed for all outputs.");
 
@@ -183,7 +256,7 @@ fn main() -> io::Result<()> {
     if opts.validate_reproducibility {
         println!("Validating build reproducibility by building the package a second time.");
         fs::remove_dir_all(base_dir)?;
-        setup_composite_rootfs(&manifest, base_dir, &opts.repo_path)?;
+        setup_composite_rootfs(&manifest, base_dir, &opts.repo_path, &dependency_commits)?;
         handle_inputs(
             &manifest,
             manifest_dir,
@@ -192,7 +265,13 @@ fn main() -> io::Result<()> {
             opts.bootstrap,
         )?;
         run_build_script(build_script, base_dir, &env_vars, opts.bootstrap)?;
-        verify_and_commit_outputs(&manifest, base_dir, &opts.repo_path)?;
+        verify_and_commit_outputs(
+            &manifest,
+            base_dir,
+            &opts.repo_path,
+            runtime_suggestions.as_ref(),
+            opts.runtime_deps_verbose,
+        )?;
         create_and_commit_bundles(&manifest, base_dir, &opts.repo_path)?;
 
         let second_checksum = calculate_output_checksum(&output_dir)?;
@@ -260,7 +339,42 @@ fn load_manifest(file_path: &str) -> io::Result<Manifest> {
     Ok(manifest)
 }
 
-fn setup_composite_rootfs(manifest: &Manifest, base_dir: &str, repo_path: &str) -> io::Result<()> {
+fn resolve_dependency_closure(
+    dependencies: &[Dependency],
+    repo_path: &str,
+) -> io::Result<Vec<String>> {
+    let mut resolved = Vec::new();
+    let mut queue = VecDeque::new();
+    for dep in dependencies {
+        queue.push_back(dep.commit.clone());
+    }
+
+    let mut seen = HashSet::new();
+    while let Some(commit) = queue.pop_front() {
+        if !seen.insert(commit.clone()) {
+            continue;
+        }
+        resolved.push(commit.clone());
+
+        for key in ["nex.bundle.requires", "nex.output.requires"] {
+            let required = read_metadata_list(repo_path, &commit, key)?;
+            for req in required {
+                if !req.is_empty() {
+                    queue.push_back(req);
+                }
+            }
+        }
+    }
+
+    Ok(resolved)
+}
+
+fn setup_composite_rootfs(
+    _manifest: &Manifest,
+    base_dir: &str,
+    repo_path: &str,
+    dependency_commits: &[String],
+) -> io::Result<()> {
     println!("Setting up composite rootfs at {}", base_dir);
     fs::create_dir_all(base_dir)?;
 
@@ -277,8 +391,8 @@ fn setup_composite_rootfs(manifest: &Manifest, base_dir: &str, repo_path: &str) 
         fs::create_dir_all(dir)?;
     }
 
-    for dep in &manifest.dependencies {
-        checkout_ostree_into(repo_path, &dep.commit, Path::new(base_dir), true)?;
+    for commit in dependency_commits {
+        checkout_ostree_into(repo_path, commit, Path::new(base_dir), true)?;
     }
 
     Ok(())
@@ -552,10 +666,12 @@ fn verify_and_commit_outputs(
     manifest: &Manifest,
     base_dir: &str,
     repo_path: &str,
+    runtime_suggestions: Option<&RuntimeScanResult>,
+    verbose_reasons: bool,
 ) -> io::Result<()> {
     println!("Verifying and committing outputs to OSTree branches");
 
-    let output_types = &manifest.outputs;
+    let output_specs = &manifest.outputs;
     let out_dir = Path::new(base_dir).join("2nex/out");
 
     let all_out_files: Vec<String> = WalkDir::new(&out_dir)
@@ -576,9 +692,9 @@ fn verify_and_commit_outputs(
 
     let outputs = categorize_files(&out_dir);
     println!("Suggested manifest outputs:");
-    print_outputs(&outputs);
+    print_outputs(&outputs, runtime_suggestions, verbose_reasons);
 
-    for (output_type, files) in output_types {
+    for (output_type, spec) in output_specs {
         if output_type == "discard" {
             continue;
         }
@@ -588,7 +704,7 @@ fn verify_and_commit_outputs(
             manifest.package.slug, manifest.package.version, manifest.package.flavor, output_type
         );
 
-        for file_path in files {
+        for file_path in &spec.files {
             let source_path = out_dir.join(file_path.trim_start_matches('/'));
             if !source_path.is_symlink() && !source_path.exists() {
                 return Err(io::Error::new(
@@ -616,17 +732,17 @@ fn verify_and_commit_outputs(
 
         let commit_output_dir = out_dir.join(output_type);
 
-        // Use the package checksum as metadata if available
+        let mut metadata = Vec::new();
         if let Some(checksum) = &manifest.package.checksum {
-            commit_to_ostree_with_metadata(
-                &commit_output_dir,
-                &branch_name,
-                repo_path,
-                Some(checksum),
-            )?;
-        } else {
-            commit_to_ostree(&commit_output_dir, &branch_name, repo_path)?;
+            metadata.push(("nex.build.checksum".to_string(), checksum.clone()));
         }
+        if let Some(encoded) = encode_metadata_list(&spec.requires)? {
+            metadata.push(("nex.output.requires".to_string(), encoded));
+        }
+        if let Some(encoded) = encode_metadata_list(&spec.suggests)? {
+            metadata.push(("nex.output.suggests".to_string(), encoded));
+        }
+        commit_to_ostree(&commit_output_dir, &branch_name, repo_path, &metadata)?;
     }
 
     let unaccounted_files: Vec<String> = all_out_files
@@ -653,7 +769,7 @@ fn create_and_commit_bundles(
     let bundles = &manifest.bundles;
 
     for (bundle_name, bundle) in bundles {
-        commit_bundle(repo_path, bundle_name, &bundle.includes, manifest)?;
+        commit_bundle(repo_path, bundle_name, bundle, manifest)?;
     }
 
     Ok(())
@@ -699,15 +815,11 @@ fn checkout_ostree_into(
     Ok(())
 }
 
-fn commit_to_ostree(output_dir: &Path, branch_name: &str, repo_path: &str) -> io::Result<()> {
-    commit_to_ostree_with_metadata(output_dir, branch_name, repo_path, None)
-}
-
-fn commit_to_ostree_with_metadata(
+fn commit_to_ostree(
     output_dir: &Path,
     branch_name: &str,
     repo_path: &str,
-    metadata: Option<&str>,
+    metadata: &[(String, String)],
 ) -> io::Result<()> {
     println!(
         "Committing {} to OSTree branch {}",
@@ -725,8 +837,8 @@ fn commit_to_ostree_with_metadata(
     command.arg("--no-xattrs");
     command.arg("--no-bindings");
 
-    if let Some(md) = metadata {
-        let metadata_arg = format!("nex.build.checksum={}", md);
+    for (key, value) in metadata {
+        let metadata_arg = format!("{}={}", key, value);
         command.arg("--add-metadata-string");
         command.arg(metadata_arg);
     }
@@ -748,10 +860,63 @@ fn commit_to_ostree_with_metadata(
     Ok(())
 }
 
+fn encode_metadata_list(values: &[String]) -> io::Result<Option<String>> {
+    if values.is_empty() {
+        Ok(None)
+    } else {
+        serde_json::to_string(values)
+            .map(Some)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }
+}
+
+fn read_metadata_list(repo_path: &str, commit: &str, key: &str) -> io::Result<Vec<String>> {
+    let mut command = Command::new("unshare");
+    command.args(&["--user", "--map-root-user", "--"]);
+    command.arg("ostree");
+    command.arg("show");
+    command.arg("--repo");
+    command.arg(repo_path);
+    command.arg(format!("--print-metadata-key={}", key));
+    command.arg(commit);
+
+    let output = command.output()?;
+    if output.status.success() {
+        parse_metadata_list_output(&output.stdout)
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("No such metadata key") {
+            Ok(Vec::new())
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "Failed to read metadata {} from {}: {}",
+                    key, commit, stderr
+                ),
+            ))
+        }
+    }
+}
+
+fn parse_metadata_list_output(raw: &[u8]) -> io::Result<Vec<String>> {
+    if raw.is_empty() {
+        return Ok(Vec::new());
+    }
+    let value = String::from_utf8(raw.to_vec())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        Ok(Vec::new())
+    } else {
+        serde_json::from_str(trimmed).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }
+}
+
 fn commit_bundle(
     repo_path: &str,
     bundle_name: &str,
-    includes: &[String],
+    bundle: &Bundle,
     manifest: &Manifest,
 ) -> io::Result<()> {
     println!("Creating bundle: {}", bundle_name);
@@ -759,7 +924,7 @@ fn commit_bundle(
     let temp_dir = TempDir::new()?;
     let temp_dir_path = temp_dir.path();
 
-    for output in includes {
+    for output in &bundle.includes {
         let branch_name = format!(
             "x86_64/{}/{}/{}/outputs/{}",
             manifest.package.slug, manifest.package.version, manifest.package.flavor, output
@@ -772,11 +937,18 @@ fn commit_bundle(
         manifest.package.slug, manifest.package.version, manifest.package.flavor, bundle_name
     );
 
+    let mut metadata = Vec::new();
     if let Some(checksum) = &manifest.package.checksum {
-        commit_to_ostree_with_metadata(temp_dir_path, &bundle_branch, repo_path, Some(checksum))?;
-    } else {
-        commit_to_ostree(temp_dir_path, &bundle_branch, repo_path)?;
+        metadata.push(("nex.build.checksum".to_string(), checksum.clone()));
     }
+    if let Some(encoded) = encode_metadata_list(&bundle.requires)? {
+        metadata.push(("nex.bundle.requires".to_string(), encoded));
+    }
+    if let Some(encoded) = encode_metadata_list(&bundle.suggests)? {
+        metadata.push(("nex.bundle.suggests".to_string(), encoded));
+    }
+
+    commit_to_ostree(temp_dir_path, &bundle_branch, repo_path, &metadata)?;
 
     Ok(())
 }
@@ -1030,12 +1202,44 @@ fn determine_category(file_path: &str) -> String {
     }
 }
 
-fn print_outputs(outputs: &HashMap<String, Vec<String>>) {
+fn print_outputs(
+    outputs: &HashMap<String, Vec<String>>,
+    runtime_suggestions: Option<&RuntimeScanResult>,
+    verbose_reasons: bool,
+) {
     println!("outputs:");
-    for (category, files) in outputs {
+    let mut categories: Vec<_> = outputs.keys().collect();
+    categories.sort();
+    for category in categories {
+        let files = outputs.get(category).unwrap();
         println!("  {}:", category);
+        println!("    files:");
         for file in files {
-            println!("    - {}", file);
+            println!("      - {}", file);
+        }
+        if let Some(suggestions) = runtime_suggestions {
+            if let Some(commits) = suggestions.category_resolved(category) {
+                println!("    requires:");
+                for (commit, reasons) in commits {
+                    println!("      - {}", commit);
+                    if verbose_reasons {
+                        for reason in reasons {
+                            println!("        # {}", reason);
+                        }
+                    }
+                }
+            }
+            if let Some(unresolved) = suggestions.category_unresolved(category) {
+                println!("    unresolved:");
+                for (req, reasons) in unresolved {
+                    println!("      - {}", req);
+                    if verbose_reasons {
+                        for reason in reasons {
+                            println!("        # {}", reason);
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -1044,7 +1248,10 @@ fn scan_runtime_dependencies(
     manifest: &Manifest,
     base_dir: &str,
     repo_path: &str,
-) -> io::Result<()> {
+    dependency_commits: &[String],
+    verbose_reasons: bool,
+    allow_missing_files: bool,
+) -> io::Result<RuntimeScanResult> {
     let base_dir_path = Path::new(base_dir);
     let out_dir = base_dir_path.join("2nex/out");
 
@@ -1053,7 +1260,7 @@ fn scan_runtime_dependencies(
             "No output directory found at {}. Skipping runtime dependency scan.",
             out_dir.display()
         );
-        return Ok(());
+        return Ok(RuntimeScanResult::default());
     }
 
     println!(
@@ -1062,7 +1269,7 @@ fn scan_runtime_dependencies(
     );
 
     let local_basenames = collect_local_basenames(&out_dir)?;
-    let provider_index = build_provider_index(repo_path, &manifest.dependencies)?;
+    let provider_index = build_provider_index(repo_path, dependency_commits)?;
     let mut result = RuntimeScanResult::default();
 
     for entry in WalkDir::new(&out_dir).into_iter().filter_map(|e| e.ok()) {
@@ -1084,12 +1291,19 @@ fn scan_runtime_dependencies(
             &local_basenames,
             &provider_index,
             &mut result,
+            allow_missing_files,
         )?;
     }
 
-    print_runtime_scan_results(&manifest.package.name, &result);
+    if verbose_reasons && result.resolved.is_empty() {
+        println!(
+            "Runtime dependency suggestions for {} {}",
+            manifest.package.name, manifest.package.version
+        );
+        println!("  No external runtime dependencies detected.");
+    }
 
-    Ok(())
+    Ok(result)
 }
 
 fn collect_local_basenames(out_dir: &Path) -> io::Result<HashSet<String>> {
@@ -1134,12 +1348,12 @@ impl ProviderIndex {
     }
 }
 
-fn build_provider_index(repo_path: &str, dependencies: &[Dependency]) -> io::Result<ProviderIndex> {
+fn build_provider_index(repo_path: &str, dependencies: &[String]) -> io::Result<ProviderIndex> {
     let mut index = ProviderIndex::default();
     let mut outputs_cache: HashMap<String, HashSet<String>> = HashMap::new();
 
     for dep in dependencies {
-        let prefix = manifest_prefix(&dep.commit).unwrap_or_else(|| dep.commit.clone());
+        let prefix = manifest_prefix(dep).unwrap_or_else(|| dep.clone());
         let outputs = match outputs_cache.entry(prefix.clone()) {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => {
@@ -1155,7 +1369,7 @@ fn build_provider_index(repo_path: &str, dependencies: &[Dependency]) -> io::Res
         command.arg("--repo");
         command.arg(repo_path);
         command.arg("--recursive");
-        command.arg(&dep.commit);
+        command.arg(dep);
 
         let output = command.output()?;
         if !output.status.success() {
@@ -1163,7 +1377,7 @@ fn build_provider_index(repo_path: &str, dependencies: &[Dependency]) -> io::Res
                 io::ErrorKind::Other,
                 format!(
                     "Failed to list OSTree commit {}: {}",
-                    dep.commit,
+                    dep,
                     String::from_utf8_lossy(&output.stderr)
                 ),
             ));
@@ -1193,7 +1407,7 @@ fn build_provider_index(repo_path: &str, dependencies: &[Dependency]) -> io::Res
                 if outputs.contains(&branch) {
                     branch
                 } else {
-                    dep.commit.clone()
+                    dep.clone()
                 }
             };
             index.add_entry(&canonical_branch, path);
@@ -1256,8 +1470,13 @@ fn scan_file_for_dependencies(
     local_basenames: &HashSet<String>,
     providers: &ProviderIndex,
     result: &mut RuntimeScanResult,
+    allow_missing_files: bool,
 ) -> io::Result<()> {
-    if let Some(elf) = read_elf_metadata(path)? {
+    if path.is_dir() {
+        return Ok(());
+    }
+    let category = determine_category(display_path);
+    if let Some(elf) = read_elf_metadata(path, allow_missing_files)? {
         for needed in elf.needed {
             if needed.is_empty() || local_basenames.contains(&needed) {
                 continue;
@@ -1265,10 +1484,10 @@ fn scan_file_for_dependencies(
             let reason = format!("{} needs {}", display_path, needed);
             let matches = resolve_requirement(providers, &needed);
             if matches.is_empty() {
-                result.add_unresolved(needed, reason);
+                result.add_unresolved(&category, needed, reason);
             } else {
                 for candidate in matches {
-                    result.add_resolved(&candidate.commit, reason.clone());
+                    result.add_resolved(&category, &candidate.commit, reason.clone());
                 }
             }
         }
@@ -1278,17 +1497,17 @@ fn scan_file_for_dependencies(
                 let reason = format!("{} uses interpreter {}", display_path, interpreter);
                 let matches = resolve_requirement(providers, &interpreter);
                 if matches.is_empty() {
-                    result.add_unresolved(interpreter, reason);
+                    result.add_unresolved(&category, interpreter, reason);
                 } else {
                     for candidate in matches {
-                        result.add_resolved(&candidate.commit, reason.clone());
+                        result.add_resolved(&category, &candidate.commit, reason.clone());
                     }
                 }
             }
         }
     }
 
-    if let Some(shebang) = parse_shebang_info(path)? {
+    if let Some(shebang) = parse_shebang_info(path, allow_missing_files)? {
         handle_shebang_requirement(
             &shebang.interpreter,
             display_path,
@@ -1296,6 +1515,8 @@ fn scan_file_for_dependencies(
             local_basenames,
             providers,
             result,
+            &category,
+            allow_missing_files,
         );
 
         if interpreter_is_env(&shebang.interpreter) {
@@ -1307,6 +1528,8 @@ fn scan_file_for_dependencies(
                     local_basenames,
                     providers,
                     result,
+                    &category,
+                    allow_missing_files,
                 );
             }
         }
@@ -1341,6 +1564,8 @@ fn handle_shebang_requirement(
     local_basenames: &HashSet<String>,
     providers: &ProviderIndex,
     result: &mut RuntimeScanResult,
+    category: &str,
+    _allow_missing_files: bool,
 ) {
     let trimmed = target.trim();
     if trimmed.is_empty() {
@@ -1364,10 +1589,10 @@ fn handle_shebang_requirement(
     let reason = format!("{} shebang references {}", display_path, trimmed);
     let matches = resolve_requirement(providers, trimmed);
     if matches.is_empty() {
-        result.add_unresolved(trimmed.to_string(), reason);
+        result.add_unresolved(category, trimmed.to_string(), reason);
     } else {
         for candidate in matches {
-            result.add_resolved(&candidate.commit, reason.clone());
+            result.add_resolved(category, &candidate.commit, reason.clone());
         }
     }
 }
@@ -1382,50 +1607,35 @@ fn interpreter_is_env(interpreter: &str) -> bool {
 
 #[derive(Default)]
 struct RuntimeScanResult {
-    resolved: BTreeMap<String, BTreeSet<String>>,
-    unresolved: BTreeMap<String, BTreeSet<String>>,
+    resolved: BTreeMap<String, BTreeMap<String, BTreeSet<String>>>,
+    unresolved: BTreeMap<String, BTreeMap<String, BTreeSet<String>>>,
 }
 
 impl RuntimeScanResult {
-    fn add_resolved(&mut self, commit: &str, reason: String) {
+    fn add_resolved(&mut self, category: &str, commit: &str, reason: String) {
         self.resolved
+            .entry(category.to_string())
+            .or_default()
             .entry(commit.to_string())
             .or_default()
             .insert(reason);
     }
 
-    fn add_unresolved(&mut self, requirement: String, reason: String) {
+    fn add_unresolved(&mut self, category: &str, requirement: String, reason: String) {
         self.unresolved
+            .entry(category.to_string())
+            .or_default()
             .entry(requirement)
             .or_default()
             .insert(reason);
     }
-}
 
-fn print_runtime_scan_results(package_name: &str, result: &RuntimeScanResult) {
-    println!("Runtime dependency suggestions for {}", package_name);
-
-    if result.resolved.is_empty() {
-        println!("  No external runtime dependencies detected.");
-    } else {
-        println!("Suggested requires entries:");
-        for (commit, reasons) in &result.resolved {
-            println!("  - {}", commit);
-            for reason in reasons {
-                println!("      # {}", reason);
-            }
-        }
+    fn category_resolved(&self, category: &str) -> Option<&BTreeMap<String, BTreeSet<String>>> {
+        self.resolved.get(category)
     }
 
-    if !result.unresolved.is_empty() {
-        println!();
-        println!("Unresolved references (no provider found locally or in dependencies):");
-        for (req, reasons) in &result.unresolved {
-            println!("  - {}", req);
-            for reason in reasons {
-                println!("      # {}", reason);
-            }
-        }
+    fn category_unresolved(&self, category: &str) -> Option<&BTreeMap<String, BTreeSet<String>>> {
+        self.unresolved.get(category)
     }
 }
 
@@ -1434,12 +1644,22 @@ struct ElfMetadata {
     interpreter: Option<String>,
 }
 
-fn read_elf_metadata(path: &Path) -> io::Result<Option<ElfMetadata>> {
+fn read_elf_metadata(path: &Path, allow_missing: bool) -> io::Result<Option<ElfMetadata>> {
     let data = match fs::read(path) {
         Ok(bytes) => bytes,
-        Err(e) => {
-            return Err(e);
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            if handle_missing_path(path, allow_missing) {
+                return Ok(None);
+            }
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "Missing file during runtime dependency scan: {}",
+                    path.display()
+                ),
+            ));
         }
+        Err(e) => return Err(e),
     };
 
     if data.len() < 4 || &data[..4] != b"\x7FELF" {
@@ -1473,15 +1693,23 @@ struct ShebangInfo {
     args: Vec<String>,
 }
 
-fn parse_shebang_info(path: &Path) -> io::Result<Option<ShebangInfo>> {
+fn parse_shebang_info(path: &Path, allow_missing: bool) -> io::Result<Option<ShebangInfo>> {
     let file = match File::open(path) {
         Ok(f) => f,
-        Err(e) => {
-            if e.kind() == io::ErrorKind::PermissionDenied {
+        Err(e) if matches!(e.kind(), io::ErrorKind::PermissionDenied) => return Ok(None),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            if handle_missing_path(path, allow_missing) {
                 return Ok(None);
             }
-            return Err(e);
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "Missing file during runtime dependency scan: {}",
+                    path.display()
+                ),
+            ));
         }
+        Err(e) => return Err(e),
     };
 
     let mut reader = BufReader::new(file);
@@ -1508,6 +1736,19 @@ fn parse_shebang_info(path: &Path) -> io::Result<Option<ShebangInfo>> {
     }
 
     Ok(None)
+}
+
+fn handle_missing_path(path: &Path, allow_missing: bool) -> bool {
+    if let Ok(meta) = fs::symlink_metadata(path) {
+        if meta.file_type().is_symlink() {
+            println!(
+                "Skipping dangling symlink during runtime scan: {}",
+                path.display()
+            );
+            return true;
+        }
+    }
+    allow_missing
 }
 
 #[cfg(test)]
@@ -1551,6 +1792,42 @@ outputs: {}
     }
 
     #[test]
+    fn parses_detailed_output_with_metadata() {
+        let yaml = format!(
+            "{}\nbundles:\n  dev:\n    includes:\n      - bin",
+            base_manifest().replacen(
+                "outputs: {}",
+                "outputs:\n  bin:\n    files:\n      - /usr/bin/foo\n    requires:\n      - x86_64/libfoo/1.0/outputs/lib\n    suggests:\n      - x86_64/foo-doc/1.0/outputs/doc",
+                1,
+            )
+        );
+        let manifest: Manifest = serde_yaml::from_str(&yaml).unwrap();
+        let output = manifest.outputs.get("bin").unwrap();
+        assert_eq!(output.files, vec!["/usr/bin/foo".to_string()]);
+        assert_eq!(
+            output.requires,
+            vec!["x86_64/libfoo/1.0/outputs/lib".to_string()]
+        );
+        assert_eq!(
+            output.suggests,
+            vec!["x86_64/foo-doc/1.0/outputs/doc".to_string()]
+        );
+    }
+
+    #[test]
+    fn parses_legacy_output_format() {
+        let yaml = format!(
+            "{}\nbundles:\n  dev:\n    includes:\n      - bin",
+            base_manifest().replacen("outputs: {}", "outputs:\n  bin:\n    - /usr/bin/foo", 1)
+        );
+        let manifest: Manifest = serde_yaml::from_str(&yaml).unwrap();
+        let output = manifest.outputs.get("bin").unwrap();
+        assert_eq!(output.files, vec!["/usr/bin/foo".to_string()]);
+        assert!(output.requires.is_empty());
+        assert!(output.suggests.is_empty());
+    }
+
+    #[test]
     fn parses_legacy_bundle_format() {
         let yaml = format!(
             "{base}bundles:\n  dev:\n    - bin\n    - lib\n",
@@ -1573,7 +1850,7 @@ outputs: {}
         )
         .unwrap();
 
-        let info = parse_shebang_info(&script_path)
+        let info = parse_shebang_info(&script_path, false)
             .expect("parse shebang")
             .expect("expected shebang info");
         assert_eq!(info.interpreter, "/usr/bin/env");
