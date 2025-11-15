@@ -1,4 +1,4 @@
-use std::collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap, HashSet};
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Read, Write};
@@ -380,30 +380,92 @@ fn resolve_dependency_closure(
     dependencies: &[Dependency],
     repo_path: &str,
 ) -> io::Result<Vec<String>> {
+    resolve_dependency_closure_with_fetch(dependencies, |commit| {
+        fetch_requires_from_repo(repo_path, commit)
+    })
+}
+
+fn resolve_dependency_closure_with_fetch<F>(
+    dependencies: &[Dependency],
+    mut fetch: F,
+) -> io::Result<Vec<String>>
+where
+    F: FnMut(&str) -> io::Result<Vec<String>>,
+{
     let mut resolved = Vec::new();
-    let mut queue = VecDeque::new();
-    for dep in dependencies {
-        queue.push_back(dep.commit.clone());
-    }
-
     let mut seen = HashSet::new();
-    while let Some(commit) = queue.pop_front() {
-        if !seen.insert(commit.clone()) {
-            continue;
-        }
-        resolved.push(commit.clone());
+    let mut visiting = HashSet::new();
+    let mut stack = Vec::new();
 
-        for key in ["nex.bundle.requires", "nex.output.requires"] {
-            let required = read_metadata_list(repo_path, &commit, key)?;
-            for req in required {
-                if !req.is_empty() {
-                    queue.push_back(req);
-                }
-            }
-        }
+    for dep in dependencies {
+        visit_commit(
+            &dep.commit,
+            &mut fetch,
+            &mut seen,
+            &mut visiting,
+            &mut stack,
+            &mut resolved,
+        )?;
     }
 
     Ok(resolved)
+}
+
+fn visit_commit<F>(
+    commit: &str,
+    fetch: &mut F,
+    seen: &mut HashSet<String>,
+    visiting: &mut HashSet<String>,
+    stack: &mut Vec<String>,
+    resolved: &mut Vec<String>,
+) -> io::Result<()>
+where
+    F: FnMut(&str) -> io::Result<Vec<String>>,
+{
+    if seen.contains(commit) {
+        return Ok(());
+    }
+    if !visiting.insert(commit.to_string()) {
+        let cycle = build_cycle_path(stack, commit);
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Runtime dependency cycle detected: {}", cycle),
+        ));
+    }
+
+    stack.push(commit.to_string());
+    let requires = fetch(commit)?;
+    for req in requires {
+        visit_commit(&req, fetch, seen, visiting, stack, resolved)?;
+    }
+    stack.pop();
+    visiting.remove(commit);
+    seen.insert(commit.to_string());
+    resolved.push(commit.to_string());
+    Ok(())
+}
+
+fn build_cycle_path(stack: &[String], repeat: &str) -> String {
+    if let Some(pos) = stack.iter().position(|c| c == repeat) {
+        let mut path = stack[pos..].join(" -> ");
+        path.push_str(" -> ");
+        path.push_str(repeat);
+        path
+    } else if stack.is_empty() {
+        repeat.to_string()
+    } else {
+        stack.join(" -> ")
+    }
+}
+
+fn fetch_requires_from_repo(repo_path: &str, commit: &str) -> io::Result<Vec<String>> {
+    let mut combined = Vec::new();
+    for key in ["nex.bundle.requires", "nex.output.requires"] {
+        let mut entries = read_metadata_list(repo_path, commit, key)?;
+        combined.append(&mut entries);
+    }
+    combined.retain(|entry| !entry.is_empty());
+    Ok(combined)
 }
 
 fn stage_existing_outputs(manifest: &Manifest, base_dir: &str, repo_path: &str) -> io::Result<()> {
@@ -2044,6 +2106,7 @@ fn handle_missing_path(path: &Path, allow_missing: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::{HashMap, HashSet};
     use std::fs;
 
     fn base_manifest() -> &'static str {
@@ -2181,5 +2244,65 @@ outputs: {}
             Some("x86_64/foo/1.0/base".to_string())
         );
         assert_eq!(manifest_prefix("x86_64/foo/1.0/base"), None);
+    }
+
+    #[test]
+    fn closure_resolution_collects_all_commits() {
+        let deps = vec![
+            Dependency {
+                commit: "pkg/A".into(),
+            },
+            Dependency {
+                commit: "pkg/D".into(),
+            },
+        ];
+        let mut graph: HashMap<&str, Vec<&str>> = HashMap::new();
+        graph.insert("pkg/A", vec!["pkg/B", "pkg/C"]);
+        graph.insert("pkg/B", vec!["pkg/C"]);
+        graph.insert("pkg/C", vec!["pkg/D"]);
+        graph.insert("pkg/D", vec![]);
+
+        let result = resolve_dependency_closure_with_fetch(&deps, |commit| {
+            Ok(graph
+                .get(commit)
+                .cloned()
+                .unwrap_or_default()
+                .iter()
+                .map(|s| s.to_string())
+                .collect())
+        })
+        .unwrap();
+        let expected: HashSet<String> = ["pkg/A", "pkg/B", "pkg/C", "pkg/D"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let actual: HashSet<String> = result.into_iter().collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn closure_resolution_errors_on_cycle() {
+        let deps = vec![Dependency {
+            commit: "pkg/A".into(),
+        }];
+        let mut graph: HashMap<&str, Vec<&str>> = HashMap::new();
+        graph.insert("pkg/A", vec!["pkg/B"]);
+        graph.insert("pkg/B", vec!["pkg/A"]);
+
+        let err = resolve_dependency_closure_with_fetch(&deps, |commit| {
+            Ok(graph
+                .get(commit)
+                .cloned()
+                .unwrap_or_default()
+                .iter()
+                .map(|s| s.to_string())
+                .collect())
+        })
+        .expect_err("expected cycle to be detected");
+        assert!(
+            err.to_string().contains("pkg/A -> pkg/B -> pkg/A"),
+            "unexpected error message: {}",
+            err
+        );
     }
 }
