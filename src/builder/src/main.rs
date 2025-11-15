@@ -61,7 +61,7 @@ struct Opts {
     update_outputs_requires_only: bool,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 struct Manifest {
     package: Package,
     dependencies: Vec<Dependency>,
@@ -73,7 +73,7 @@ struct Manifest {
     bundles: HashMap<String, Bundle>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 struct Package {
     name: String,
     slug: String,
@@ -83,9 +83,74 @@ struct Package {
     stable_checksum: Option<bool>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Copy, Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum ManifestKind {
+    Package,
+    System,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+struct SystemMeta {
+    name: String,
+    slug: String,
+    #[serde(default)]
+    architecture: Option<String>,
+    #[serde(default)]
+    boot_method: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+struct SystemManifest {
+    #[serde(default)]
+    schema: Option<u32>,
+    system: SystemMeta,
+    #[serde(default)]
+    packages: Vec<SystemPackage>,
+    #[serde(default)]
+    dependencies: Vec<Dependency>,
+    #[serde(default)]
+    sources: Vec<Source>,
+    build: Build,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+struct SystemPackage {
+    commit: String,
+    #[serde(default)]
+    name: Option<String>,
+}
+
+fn detect_manifest_kind(doc: &Value) -> ManifestKind {
+    if let Some(kind) = doc.get("kind").and_then(|v| v.as_str()) {
+        if kind.eq_ignore_ascii_case("system") {
+            return ManifestKind::System;
+        }
+    }
+    if doc.get("system").is_some() && doc.get("package").is_none() {
+        ManifestKind::System
+    } else {
+        ManifestKind::Package
+    }
+}
+
+fn validate_system_manifest(manifest: &SystemManifest) -> io::Result<()> {
+    if manifest.packages.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "System manifests must specify at least one entry under 'packages'",
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
 struct Dependency {
     commit: String,
+    #[serde(default)]
+    name: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -96,7 +161,7 @@ struct Source {
     sha256: String,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 struct Build {
     script: String,
 }
@@ -371,9 +436,25 @@ fn append_checksum_file(package: &Package, checksum: &str, file_path: &Path) -> 
 
 fn load_manifest(file_path: &str) -> io::Result<Manifest> {
     let manifest_str = fs::read_to_string(file_path)?;
-    let manifest: Manifest = serde_yaml::from_str(&manifest_str)
+    let doc: Value = serde_yaml::from_str(&manifest_str)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    Ok(manifest)
+    match detect_manifest_kind(&doc) {
+        ManifestKind::Package => {
+            serde_yaml::from_value(doc).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        }
+        ManifestKind::System => {
+            let sys: SystemManifest = serde_yaml::from_value(doc)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            validate_system_manifest(&sys)?;
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                format!(
+                    "System manifests are not supported yet (saw slug: {})",
+                    sys.system.slug
+                ),
+            ))
+        }
+    }
 }
 
 fn resolve_dependency_closure(
@@ -2108,6 +2189,7 @@ mod tests {
     use super::*;
     use std::collections::{HashMap, HashSet};
     use std::fs;
+    use tempfile::NamedTempFile;
 
     fn base_manifest() -> &'static str {
         r#"
@@ -2251,9 +2333,11 @@ outputs: {}
         let deps = vec![
             Dependency {
                 commit: "pkg/A".into(),
+                name: None,
             },
             Dependency {
                 commit: "pkg/D".into(),
+                name: None,
             },
         ];
         let mut graph: HashMap<&str, Vec<&str>> = HashMap::new();
@@ -2284,6 +2368,7 @@ outputs: {}
     fn closure_resolution_errors_on_cycle() {
         let deps = vec![Dependency {
             commit: "pkg/A".into(),
+            name: None,
         }];
         let mut graph: HashMap<&str, Vec<&str>> = HashMap::new();
         graph.insert("pkg/A", vec!["pkg/B"]);
@@ -2304,5 +2389,49 @@ outputs: {}
             "unexpected error message: {}",
             err
         );
+    }
+
+    #[test]
+    fn detects_system_manifest_kind() {
+        let yaml = r#"
+schema: 1
+kind: system
+system:
+  name: Demo
+  slug: demo
+packages:
+  - commit: x86_64/foo/1.0/base/bundles/dev
+build:
+  script: ":"
+sources: []
+dependencies: []
+"#;
+        let value: serde_yaml::Value = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(detect_manifest_kind(&value), ManifestKind::System);
+        let sys: SystemManifest = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(sys.system.slug, "demo");
+    }
+
+    #[test]
+    fn load_manifest_rejects_system_kind() {
+        let yaml = r#"
+schema: 1
+kind: system
+system:
+  name: Demo
+  slug: demo
+packages:
+  - commit: x86_64/foo/1.0/base/bundles/dev
+build:
+  script: ":"
+sources: []
+dependencies: []
+"#;
+        let mut file = NamedTempFile::new().unwrap();
+        std::io::Write::write_all(&mut file, yaml.as_bytes()).unwrap();
+        let err = load_manifest(file.path().to_str().unwrap()).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("System manifests are not supported yet"));
     }
 }
