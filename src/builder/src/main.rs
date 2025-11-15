@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::env;
 use std::fs::{self, File, OpenOptions};
@@ -157,7 +158,7 @@ fn main() -> io::Result<()> {
     create_and_commit_bundles(&manifest, base_dir, &opts.repo_path)?;
 
     if opts.scan_runtime_deps {
-        scan_runtime_dependencies(&manifest, base_dir)?;
+        scan_runtime_dependencies(&manifest, base_dir, &opts.repo_path)?;
     }
 
     println!("Build, packaging, and commit to OSTree completed for all outputs.");
@@ -277,7 +278,7 @@ fn setup_composite_rootfs(manifest: &Manifest, base_dir: &str, repo_path: &str) 
     }
 
     for dep in &manifest.dependencies {
-        checkout_ostree_dependency(repo_path, &dep.commit, base_dir)?;
+        checkout_ostree_into(repo_path, &dep.commit, Path::new(base_dir), true)?;
     }
 
     Ok(())
@@ -658,30 +659,38 @@ fn create_and_commit_bundles(
     Ok(())
 }
 
-fn checkout_ostree_dependency(
+fn checkout_ostree_into(
     repo_path: &str,
     commit_id: &str,
-    target_dir: &str,
+    target_dir: &Path,
+    union: bool,
 ) -> io::Result<()> {
     println!(
-        "Checking out OSTree dependency {} into {}",
-        commit_id, target_dir
+        "Checking out OSTree commit {} into {} (union: {})",
+        commit_id,
+        target_dir.display(),
+        union
     );
 
-    let checkout_command = &[
-        "ostree", "checkout", "--repo", repo_path, "--union", commit_id, target_dir,
-    ];
+    let mut command = Command::new("unshare");
+    command.args(&["--user", "--map-root-user", "--"]);
+    command.arg("ostree");
+    command.arg("checkout");
+    command.arg("--repo");
+    command.arg(repo_path);
+    if union {
+        command.arg("--union");
+    }
+    command.arg(commit_id);
+    command.arg(target_dir.to_str().unwrap());
 
-    let output = Command::new("unshare")
-        .args(&["--user", "--map-root-user", "--"])
-        .args(checkout_command)
-        .output()?;
+    let output = command.output()?;
 
     if !output.status.success() {
         return Err(io::Error::new(
             io::ErrorKind::Other,
             format!(
-                "Failed to checkout OSTree dependency: {}",
+                "Failed to checkout OSTree commit: {}",
                 String::from_utf8_lossy(&output.stderr)
             ),
         ));
@@ -755,7 +764,7 @@ fn commit_bundle(
             "x86_64/{}/{}/{}/outputs/{}",
             manifest.package.slug, manifest.package.version, manifest.package.flavor, output
         );
-        checkout_ostree_dependency(repo_path, &branch_name, temp_dir_path.to_str().unwrap())?;
+        checkout_ostree_into(repo_path, &branch_name, temp_dir_path, true)?;
     }
 
     let bundle_branch = format!(
@@ -1031,7 +1040,11 @@ fn print_outputs(outputs: &HashMap<String, Vec<String>>) {
     }
 }
 
-fn scan_runtime_dependencies(manifest: &Manifest, base_dir: &str) -> io::Result<()> {
+fn scan_runtime_dependencies(
+    manifest: &Manifest,
+    base_dir: &str,
+    repo_path: &str,
+) -> io::Result<()> {
     let base_dir_path = Path::new(base_dir);
     let out_dir = base_dir_path.join("2nex/out");
 
@@ -1049,7 +1062,7 @@ fn scan_runtime_dependencies(manifest: &Manifest, base_dir: &str) -> io::Result<
     );
 
     let local_basenames = collect_local_basenames(&out_dir)?;
-    let provider_index = build_provider_index(base_dir_path, &out_dir)?;
+    let provider_index = build_provider_index(repo_path, &manifest.dependencies)?;
     let mut result = RuntimeScanResult::default();
 
     for entry in WalkDir::new(&out_dir).into_iter().filter_map(|e| e.ok()) {
@@ -1093,48 +1106,147 @@ fn collect_local_basenames(out_dir: &Path) -> io::Result<HashSet<String>> {
     Ok(names)
 }
 
-#[derive(Default)]
-struct ProviderIndex {
-    by_basename: HashMap<String, Vec<String>>,
-    by_full_path: HashSet<String>,
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ProviderMatch {
+    commit: String,
+    path: String,
 }
 
-fn build_provider_index(base_dir: &Path, out_dir: &Path) -> io::Result<ProviderIndex> {
-    let mut index = ProviderIndex::default();
-    for entry in WalkDir::new(base_dir).into_iter().filter_map(|e| e.ok()) {
-        if entry.path().starts_with(out_dir) {
-            continue;
-        }
-        if !entry.file_type().is_file() && !entry.file_type().is_symlink() {
-            continue;
-        }
+#[derive(Default)]
+struct ProviderIndex {
+    by_basename: HashMap<String, Vec<ProviderMatch>>,
+    by_full_path: HashMap<String, Vec<ProviderMatch>>,
+}
 
-        let rel_path = match entry.path().strip_prefix(base_dir) {
-            Ok(rel) => rel,
-            Err(_) => continue,
+impl ProviderIndex {
+    fn add_entry(&mut self, commit: &str, path: String) {
+        let provider = ProviderMatch {
+            commit: commit.to_string(),
+            path: path.clone(),
         };
-
-        if rel_path
-            .components()
-            .next()
-            .and_then(|c| c.as_os_str().to_str())
-            == Some("2nex")
-        {
-            continue;
-        }
-
-        let rel_string = format!("/{}", rel_path.to_string_lossy());
-        if let Some(name) = entry.file_name().to_str() {
-            index
-                .by_basename
+        if let Some(name) = Path::new(&path).file_name().and_then(|n| n.to_str()) {
+            self.by_basename
                 .entry(name.to_string())
                 .or_default()
-                .push(rel_string.clone());
+                .push(provider.clone());
         }
-        index.by_full_path.insert(rel_string);
+        self.by_full_path.entry(path).or_default().push(provider);
+    }
+}
+
+fn build_provider_index(repo_path: &str, dependencies: &[Dependency]) -> io::Result<ProviderIndex> {
+    let mut index = ProviderIndex::default();
+    let mut outputs_cache: HashMap<String, HashSet<String>> = HashMap::new();
+
+    for dep in dependencies {
+        let prefix = manifest_prefix(&dep.commit).unwrap_or_else(|| dep.commit.clone());
+        let outputs = match outputs_cache.entry(prefix.clone()) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                let set = list_output_refs(repo_path, &prefix)?;
+                entry.insert(set)
+            }
+        };
+
+        let mut command = Command::new("unshare");
+        command.args(&["--user", "--map-root-user", "--"]);
+        command.arg("ostree");
+        command.arg("ls");
+        command.arg("--repo");
+        command.arg(repo_path);
+        command.arg("--recursive");
+        command.arg(&dep.commit);
+
+        let output = command.output()?;
+        if !output.status.success() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "Failed to list OSTree commit {}: {}",
+                    dep.commit,
+                    String::from_utf8_lossy(&output.stderr)
+                ),
+            ));
+        }
+
+        let listing = String::from_utf8(output.stdout)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+        for line in listing.lines() {
+            if line.is_empty() {
+                continue;
+            }
+            let entry_type = line.chars().next().unwrap_or(' ');
+            if entry_type != '-' && entry_type != 'l' {
+                continue;
+            }
+            let path = match line.find(" /") {
+                Some(idx) => {
+                    let raw = &line[idx + 1..];
+                    raw.split(" -> ").next().unwrap_or(raw).to_string()
+                }
+                None => continue,
+            };
+            let category = determine_category(&path);
+            let canonical_branch = {
+                let branch = format!("{}/outputs/{}", prefix, category);
+                if outputs.contains(&branch) {
+                    branch
+                } else {
+                    dep.commit.clone()
+                }
+            };
+            index.add_entry(&canonical_branch, path);
+        }
     }
 
     Ok(index)
+}
+
+fn manifest_prefix(commit: &str) -> Option<String> {
+    if let Some(idx) = commit.find("/bundles/") {
+        Some(commit[..idx].to_string())
+    } else if let Some(idx) = commit.find("/outputs/") {
+        Some(commit[..idx].to_string())
+    } else {
+        None
+    }
+}
+
+fn list_output_refs(repo_path: &str, prefix: &str) -> io::Result<HashSet<String>> {
+    let search_prefix = format!("{}/outputs", prefix);
+    let mut command = Command::new("unshare");
+    command.args(&["--user", "--map-root-user", "--"]);
+    command.arg("ostree");
+    command.arg("refs");
+    command.arg("--repo");
+    command.arg(repo_path);
+    command.arg("--list");
+    command.arg(&search_prefix);
+
+    let output = command.output()?;
+    if !output.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "Failed to list output refs for {}: {}",
+                prefix,
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        ));
+    }
+
+    let stdout = String::from_utf8(output.stdout)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let mut refs = HashSet::new();
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+            refs.insert(trimmed.to_string());
+        }
+    }
+
+    Ok(refs)
 }
 
 fn scan_file_for_dependencies(
@@ -1156,7 +1268,7 @@ fn scan_file_for_dependencies(
                 result.add_unresolved(needed, reason);
             } else {
                 for candidate in matches {
-                    result.add_resolved(candidate, reason.clone());
+                    result.add_resolved(&candidate.commit, reason.clone());
                 }
             }
         }
@@ -1169,7 +1281,7 @@ fn scan_file_for_dependencies(
                     result.add_unresolved(interpreter, reason);
                 } else {
                     for candidate in matches {
-                        result.add_resolved(candidate, reason.clone());
+                        result.add_resolved(&candidate.commit, reason.clone());
                     }
                 }
             }
@@ -1203,14 +1315,14 @@ fn scan_file_for_dependencies(
     Ok(())
 }
 
-fn resolve_requirement(providers: &ProviderIndex, reference: &str) -> Vec<String> {
+fn resolve_requirement(providers: &ProviderIndex, reference: &str) -> Vec<ProviderMatch> {
     let trimmed = reference.trim();
     if trimmed.is_empty() {
         return Vec::new();
     }
 
-    if providers.by_full_path.contains(trimmed) {
-        return vec![trimmed.to_string()];
+    if let Some(matches) = providers.by_full_path.get(trimmed) {
+        return matches.clone();
     }
 
     if let Some(basename) = Path::new(trimmed).file_name().and_then(|n| n.to_str()) {
@@ -1219,11 +1331,7 @@ fn resolve_requirement(providers: &ProviderIndex, reference: &str) -> Vec<String
         }
     }
 
-    providers
-        .by_basename
-        .get(trimmed)
-        .cloned()
-        .unwrap_or_else(Vec::new)
+    Vec::new()
 }
 
 fn handle_shebang_requirement(
@@ -1259,7 +1367,7 @@ fn handle_shebang_requirement(
         result.add_unresolved(trimmed.to_string(), reason);
     } else {
         for candidate in matches {
-            result.add_resolved(candidate, reason.clone());
+            result.add_resolved(&candidate.commit, reason.clone());
         }
     }
 }
@@ -1279,8 +1387,11 @@ struct RuntimeScanResult {
 }
 
 impl RuntimeScanResult {
-    fn add_resolved(&mut self, requirement: String, reason: String) {
-        self.resolved.entry(requirement).or_default().insert(reason);
+    fn add_resolved(&mut self, commit: &str, reason: String) {
+        self.resolved
+            .entry(commit.to_string())
+            .or_default()
+            .insert(reason);
     }
 
     fn add_unresolved(&mut self, requirement: String, reason: String) {
@@ -1298,8 +1409,8 @@ fn print_runtime_scan_results(package_name: &str, result: &RuntimeScanResult) {
         println!("  No external runtime dependencies detected.");
     } else {
         println!("Suggested requires entries:");
-        for (req, reasons) in &result.resolved {
-            println!("  - {}", req);
+        for (commit, reasons) in &result.resolved {
+            println!("  - {}", commit);
             for reason in reasons {
                 println!("      # {}", reason);
             }
@@ -1472,17 +1583,36 @@ outputs: {}
     #[test]
     fn provider_index_resolves_full_and_basename_matches() {
         let mut index = ProviderIndex::default();
-        index.by_full_path.insert("/usr/bin/python3".to_string());
-        index
-            .by_basename
-            .entry("python3".to_string())
-            .or_default()
-            .push("/usr/bin/python3".to_string());
-
+        index.add_entry(
+            "x86_64/python/3.12/base/bundles/dev",
+            "/usr/bin/python3".to_string(),
+        );
         let basename_matches = resolve_requirement(&index, "python3");
-        assert_eq!(basename_matches, vec!["/usr/bin/python3".to_string()]);
+        assert_eq!(basename_matches.len(), 1);
+        assert_eq!(
+            basename_matches[0].commit,
+            "x86_64/python/3.12/base/bundles/dev"
+        );
+        assert_eq!(basename_matches[0].path, "/usr/bin/python3");
 
         let path_matches = resolve_requirement(&index, "/usr/bin/python3");
-        assert_eq!(path_matches, vec!["/usr/bin/python3".to_string()]);
+        assert_eq!(path_matches.len(), 1);
+        assert_eq!(
+            path_matches[0].commit,
+            "x86_64/python/3.12/base/bundles/dev"
+        );
+    }
+
+    #[test]
+    fn manifest_prefix_extracts_base_path() {
+        assert_eq!(
+            manifest_prefix("x86_64/foo/1.0/base/bundles/dev"),
+            Some("x86_64/foo/1.0/base".to_string())
+        );
+        assert_eq!(
+            manifest_prefix("x86_64/foo/1.0/base/outputs/lib"),
+            Some("x86_64/foo/1.0/base".to_string())
+        );
+        assert_eq!(manifest_prefix("x86_64/foo/1.0/base"), None);
     }
 }
