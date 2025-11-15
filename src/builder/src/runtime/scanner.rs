@@ -7,8 +7,51 @@ use std::process::Command;
 use goblin::Object;
 use walkdir::WalkDir;
 
-use crate::determine_category;
-use crate::manifest_prefix;
+use crate::utils::{determine_category, manifest_prefix};
+
+/// High-level API for running the runtime dependency scanner.
+///
+/// The struct owns the contextual information shared across scans
+/// (repository path, dependency closure, and runtime handling flags)
+/// so callers only provide per-package bits (name, version, base dir).
+pub struct RuntimeScanner<'a> {
+    repo_path: &'a str,
+    dependency_commits: &'a [String],
+    allow_missing_files: bool,
+}
+
+impl<'a> RuntimeScanner<'a> {
+    pub fn new(repo_path: &'a str, dependency_commits: &'a [String]) -> Self {
+        Self {
+            repo_path,
+            dependency_commits,
+            allow_missing_files: false,
+        }
+    }
+
+    pub fn with_allow_missing_files(mut self, allow_missing_files: bool) -> Self {
+        self.allow_missing_files = allow_missing_files;
+        self
+    }
+
+    pub fn scan<P: AsRef<Path>>(
+        &self,
+        package_name: &str,
+        package_version: &str,
+        base_dir: P,
+        verbose_reasons: bool,
+    ) -> io::Result<RuntimeScanResult> {
+        scan_runtime_dependencies(
+            package_name,
+            package_version,
+            base_dir.as_ref(),
+            self.repo_path,
+            self.dependency_commits,
+            verbose_reasons,
+            self.allow_missing_files,
+        )
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ProviderMatch {
@@ -38,17 +81,16 @@ impl ProviderIndex {
     }
 }
 
-pub fn scan_runtime_dependencies(
+fn scan_runtime_dependencies(
     package_name: &str,
     package_version: &str,
-    base_dir: &str,
+    base_dir: &Path,
     repo_path: &str,
     dependency_commits: &[String],
     verbose_reasons: bool,
     allow_missing_files: bool,
 ) -> io::Result<RuntimeScanResult> {
-    let base_dir_path = Path::new(base_dir);
-    let out_dir = base_dir_path.join("2nex/out");
+    let out_dir = base_dir.join("2nex/out");
 
     if !out_dir.exists() {
         println!(
@@ -550,5 +592,14 @@ mod tests {
             path_matches[0].commit,
             "x86_64/python/3.12/base/bundles/dev"
         );
+    }
+
+    #[test]
+    fn runtime_scanner_builder_sets_flags() {
+        let deps: Vec<String> = Vec::new();
+        let scanner = RuntimeScanner::new("/tmp/repo", &deps).with_allow_missing_files(true);
+        assert!(scanner.allow_missing_files);
+        assert_eq!(scanner.repo_path, "/tmp/repo");
+        assert!(scanner.dependency_commits.is_empty());
     }
 }

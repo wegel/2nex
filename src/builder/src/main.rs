@@ -16,15 +16,15 @@ use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
-use content_disposition::parse_content_disposition;
-use reqwest::header::{CONTENT_DISPOSITION, LOCATION};
 use std::fmt;
 use std::process;
-use url::Url;
 
 pub mod runtime;
 
-use runtime::scanner::{scan_runtime_dependencies, RuntimeScanResult};
+mod utils;
+
+use runtime::scanner::{RuntimeScanResult, RuntimeScanner};
+use utils::determine_category;
 
 #[derive(Parser)]
 #[clap(version = "1.0", author = "Your Name")]
@@ -62,6 +62,11 @@ struct Opts {
         help = "Update outputs.*.requires using existing OSTree outputs without rebuilding"
     )]
     update_outputs_requires_only: bool,
+    #[clap(
+        long,
+        help = "Rewrite OSTree output/bundle metadata without rebuilding (package manifests only)"
+    )]
+    refresh_ostree_metadata: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -97,6 +102,7 @@ enum ManifestKind {
 struct SystemMeta {
     name: String,
     slug: String,
+    version: String,
     #[serde(default)]
     architecture: Option<String>,
     #[serde(default)]
@@ -126,6 +132,11 @@ struct SystemPackage {
     name: Option<String>,
 }
 
+enum ManifestData {
+    Package(Manifest),
+    System(SystemManifest),
+}
+
 fn detect_manifest_kind(doc: &Value) -> ManifestKind {
     if let Some(kind) = doc.get("kind").and_then(|v| v.as_str()) {
         if kind.eq_ignore_ascii_case("system") {
@@ -144,6 +155,12 @@ fn validate_system_manifest(manifest: &SystemManifest) -> io::Result<()> {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "System manifests must specify at least one entry under 'packages'",
+        ));
+    }
+    if manifest.system.version.trim().is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "System manifests must set system.version",
         ));
     }
     Ok(())
@@ -247,29 +264,57 @@ where
 
 fn main() -> io::Result<()> {
     let opts: Opts = Opts::parse();
+    if opts.refresh_ostree_metadata
+        && (opts.update_outputs_requires
+            || opts.update_outputs_requires_only
+            || opts.validate_reproducibility)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "--refresh-ostree-metadata cannot be combined with build/update flags",
+        ));
+    }
+    match load_manifest(&opts.manifest_file)? {
+        ManifestData::Package(mut manifest) => {
+            if opts.refresh_ostree_metadata {
+                refresh_package_metadata(&opts.repo_path, &manifest)?;
+                Ok(())
+            } else {
+                build_package_manifest(&opts, &mut manifest)
+            }
+        }
+        ManifestData::System(manifest) => {
+            if opts.refresh_ostree_metadata {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "--refresh-ostree-metadata only applies to package manifests",
+                ));
+            }
+            build_system_manifest(&opts, &manifest)
+        }
+    }
+}
 
-    let mut manifest = load_manifest(&opts.manifest_file)?;
-    let manifest_dir = Path::new(&opts.manifest_file).parent().unwrap();
+fn build_package_manifest(opts: &Opts, manifest: &mut Manifest) -> io::Result<()> {
     let base_dir = "./build_rootfs";
     let download_dir = "./inputs_cache";
     fs::create_dir_all(download_dir)?;
 
     let dependency_commits = resolve_dependency_closure(&manifest.dependencies, &opts.repo_path)?;
     let wants_update_outputs = opts.update_outputs_requires || opts.update_outputs_requires_only;
+    let runtime_scanner = RuntimeScanner::new(&opts.repo_path, &dependency_commits)
+        .with_allow_missing_files(opts.allow_missing_runtime_files);
 
     if opts.update_outputs_requires_only {
-        stage_existing_outputs(&manifest, base_dir, &opts.repo_path)?;
-        let runtime_result = scan_runtime_dependencies(
+        stage_existing_outputs(manifest, base_dir, &opts.repo_path)?;
+        let runtime_result = runtime_scanner.scan(
             &manifest.package.name,
             &manifest.package.version,
             base_dir,
-            &opts.repo_path,
-            &dependency_commits,
             opts.runtime_deps_verbose,
-            opts.allow_missing_runtime_files,
         )?;
         update_manifest_outputs(&opts.manifest_file, &runtime_result)?;
-        apply_runtime_requires(&mut manifest, &runtime_result);
+        apply_runtime_requires(manifest, &runtime_result);
         println!(
             "Updated outputs.requires for {} without rebuilding",
             opts.manifest_file
@@ -277,14 +322,8 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
-    setup_composite_rootfs(&manifest, base_dir, &opts.repo_path, &dependency_commits)?;
-    let input_env_vars = handle_inputs(
-        &manifest,
-        manifest_dir,
-        download_dir,
-        base_dir,
-        opts.bootstrap,
-    )?;
+    setup_composite_rootfs(base_dir, &opts.repo_path, &dependency_commits)?;
+    let input_env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
 
     let package_name = &manifest.package.name;
     let package_version = &manifest.package.version;
@@ -303,14 +342,11 @@ fn main() -> io::Result<()> {
 
     let need_runtime_scan = !opts.skip_runtime_deps || wants_update_outputs;
     let runtime_analysis: Option<RuntimeScanResult> = if need_runtime_scan {
-        Some(scan_runtime_dependencies(
+        Some(runtime_scanner.scan(
             &manifest.package.name,
             &manifest.package.version,
             base_dir,
-            &opts.repo_path,
-            &dependency_commits,
             opts.runtime_deps_verbose,
-            opts.allow_missing_runtime_files,
         )?)
     } else {
         None
@@ -319,7 +355,7 @@ fn main() -> io::Result<()> {
     if wants_update_outputs {
         if let Some(result) = runtime_analysis.as_ref() {
             update_manifest_outputs(&opts.manifest_file, result)?;
-            apply_runtime_requires(&mut manifest, result);
+            apply_runtime_requires(manifest, result);
         } else {
             println!("Skipping output requires update because runtime scanning was disabled.");
         }
@@ -332,14 +368,14 @@ fn main() -> io::Result<()> {
     };
 
     verify_and_commit_outputs(
-        &manifest,
+        manifest,
         base_dir,
         &opts.repo_path,
         runtime_suggestions,
         opts.runtime_deps_verbose,
     )?;
 
-    create_and_commit_bundles(&manifest, base_dir, &opts.repo_path)?;
+    create_and_commit_bundles(manifest, base_dir, &opts.repo_path)?;
 
     println!("Build, packaging, and commit to OSTree completed for all outputs.");
 
@@ -347,7 +383,6 @@ fn main() -> io::Result<()> {
     let checksum = calculate_output_checksum(&output_dir)?;
     println!("Build output checksum: {}", checksum);
 
-    // Verify checksum if it's provided in the manifest
     if let Some(expected_checksum) = &manifest.package.checksum {
         if checksum != *expected_checksum {
             eprintln!(
@@ -363,23 +398,17 @@ fn main() -> io::Result<()> {
     if opts.validate_reproducibility {
         println!("Validating build reproducibility by building the package a second time.");
         fs::remove_dir_all(base_dir)?;
-        setup_composite_rootfs(&manifest, base_dir, &opts.repo_path, &dependency_commits)?;
-        handle_inputs(
-            &manifest,
-            manifest_dir,
-            download_dir,
-            base_dir,
-            opts.bootstrap,
-        )?;
+        setup_composite_rootfs(base_dir, &opts.repo_path, &dependency_commits)?;
+        handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
         run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
         verify_and_commit_outputs(
-            &manifest,
+            manifest,
             base_dir,
             &opts.repo_path,
             runtime_suggestions,
             opts.runtime_deps_verbose,
         )?;
-        create_and_commit_bundles(&manifest, base_dir, &opts.repo_path)?;
+        create_and_commit_bundles(manifest, base_dir, &opts.repo_path)?;
 
         let second_checksum = calculate_output_checksum(&output_dir)?;
         println!("Second build output checksum: {}", second_checksum);
@@ -398,6 +427,251 @@ fn main() -> io::Result<()> {
     append_checksum_file(&manifest.package, &checksum, &Path::new("checksums.txt"))?;
 
     Ok(())
+}
+
+fn refresh_package_metadata(repo_path: &str, manifest: &Manifest) -> io::Result<()> {
+    println!(
+        "Refreshing OSTree metadata for {}/{} ({})",
+        manifest.package.slug, manifest.package.version, manifest.package.flavor
+    );
+    refresh_output_branches(repo_path, manifest)?;
+    refresh_bundle_branches(repo_path, manifest)?;
+    println!("Finished refreshing metadata for {}", manifest.package.slug);
+    Ok(())
+}
+
+fn refresh_output_branches(repo_path: &str, manifest: &Manifest) -> io::Result<()> {
+    for (category, spec) in &manifest.outputs {
+        if category == "discard" {
+            continue;
+        }
+        let branch_name = format!(
+            "x86_64/{}/{}/{}/outputs/{}",
+            manifest.package.slug, manifest.package.version, manifest.package.flavor, category
+        );
+        ensure_branch_exists(repo_path, &branch_name)?;
+        let metadata = output_branch_metadata(manifest, spec)?;
+        rewrite_branch_metadata(repo_path, &branch_name, &metadata)?;
+    }
+    Ok(())
+}
+
+fn refresh_bundle_branches(repo_path: &str, manifest: &Manifest) -> io::Result<()> {
+    for (bundle_name, bundle) in &manifest.bundles {
+        let branch_name = format!(
+            "x86_64/{}/{}/{}/bundles/{}",
+            manifest.package.slug, manifest.package.version, manifest.package.flavor, bundle_name
+        );
+        ensure_branch_exists(repo_path, &branch_name)?;
+        let metadata = bundle_branch_metadata(manifest, bundle)?;
+        rewrite_branch_metadata(repo_path, &branch_name, &metadata)?;
+    }
+    Ok(())
+}
+
+fn ensure_branch_exists(repo_path: &str, branch: &str) -> io::Result<()> {
+    let mut command = Command::new("unshare");
+    command.args(&["--user", "--map-root-user", "--"]);
+    command.arg("ostree");
+    command.arg("rev-parse");
+    command.arg("--repo");
+    command.arg(repo_path);
+    command.arg(branch);
+    let output = command.output()?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "Branch {} missing in {}: {}",
+                branch,
+                repo_path,
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        ))
+    }
+}
+
+fn rewrite_branch_metadata(
+    repo_path: &str,
+    branch: &str,
+    metadata: &[(String, String)],
+) -> io::Result<()> {
+    println!("Rewriting metadata for {}", branch);
+    let mut command = Command::new("unshare");
+    command.args(&["--map-root-user", "--user", "--"]);
+    command.arg("ostree");
+    command.arg("commit");
+    command.arg("--repo").arg(repo_path);
+    command.arg("--branch").arg(branch);
+    command.arg(format!("--tree=ref={}", branch));
+    command.arg("--no-xattrs");
+    command.arg("--no-bindings");
+
+    for (key, value) in metadata {
+        let metadata_arg = format!("{}={}", key, value);
+        command.arg("--add-metadata-string");
+        command.arg(metadata_arg);
+    }
+
+    let output = command.output()?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "Failed to rewrite metadata for {}: {}",
+                branch,
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        ))
+    }
+}
+
+fn build_system_manifest(opts: &Opts, manifest: &SystemManifest) -> io::Result<()> {
+    if opts.update_outputs_requires || opts.update_outputs_requires_only {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "System manifests do not define outputs, so --update-outputs-requires flags are invalid.",
+        ));
+    }
+    if opts.runtime_deps_verbose || opts.skip_runtime_deps {
+        println!("Note: runtime dependency scanning is not available for system manifests yet.");
+    }
+    if opts.validate_reproducibility {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "--validate-reproducibility is not supported for system manifests yet",
+        ));
+    }
+
+    let base_dir = "./build_rootfs";
+    let download_dir = "./inputs_cache";
+    fs::create_dir_all(download_dir)?;
+
+    let dependency_commits = resolve_dependency_closure(&manifest.dependencies, &opts.repo_path)?;
+    let package_dependency_specs = dependencies_from_system_packages(&manifest.packages);
+    let package_commits = resolve_dependency_closure(&package_dependency_specs, &opts.repo_path)?;
+
+    setup_composite_rootfs(base_dir, &opts.repo_path, &dependency_commits)?;
+    layer_commits_into_rootfs(base_dir, &opts.repo_path, &package_commits)?;
+    materialize_system_packages(base_dir, &opts.repo_path, &package_commits)?;
+
+    let mut env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
+    env_vars.insert("SYSTEM_NAME".to_string(), manifest.system.name.clone());
+    env_vars.insert("SYSTEM_SLUG".to_string(), manifest.system.slug.clone());
+    env_vars.insert(
+        "SYSTEM_VERSION".to_string(),
+        manifest.system.version.clone(),
+    );
+    env_vars.insert("TARGET_DIR".to_string(), "/target".to_string());
+    env_vars.insert("SYSTEM_TARGET".to_string(), "/target".to_string());
+    if let Some(arch) = &manifest.system.architecture {
+        env_vars.insert("SYSTEM_ARCH".to_string(), arch.clone());
+    }
+    if let Some(boot) = &manifest.system.boot_method {
+        env_vars.insert("SYSTEM_BOOT_METHOD".to_string(), boot.clone());
+    }
+    if let Some(desc) = &manifest.system.description {
+        env_vars.insert("SYSTEM_DESCRIPTION".to_string(), desc.clone());
+    }
+
+    println!(
+        "Building system {} {}",
+        manifest.system.slug, manifest.system.version
+    );
+
+    run_build_script(&manifest.build.script, base_dir, &env_vars, opts.bootstrap)?;
+
+    commit_system_rootfs(
+        manifest,
+        base_dir,
+        &opts.repo_path,
+        &package_commits,
+        &dependency_commits,
+    )?;
+
+    println!(
+        "System commit stored at systems/{}/{}",
+        manifest.system.slug, manifest.system.version
+    );
+
+    Ok(())
+}
+
+fn dependencies_from_system_packages(packages: &[SystemPackage]) -> Vec<Dependency> {
+    packages
+        .iter()
+        .map(|pkg| Dependency {
+            commit: pkg.commit.clone(),
+            name: pkg.name.clone(),
+        })
+        .collect()
+}
+
+fn materialize_system_packages(
+    base_dir: &str,
+    repo_path: &str,
+    package_commits: &[String],
+) -> io::Result<()> {
+    let target_dir = Path::new(base_dir).join("target");
+    if target_dir.exists() {
+        fs::remove_dir_all(&target_dir)?;
+    }
+    fs::create_dir_all(&target_dir)?;
+
+    for commit in package_commits {
+        checkout_ostree_into(repo_path, commit, &target_dir, true)?;
+    }
+
+    Ok(())
+}
+
+fn commit_system_rootfs(
+    manifest: &SystemManifest,
+    base_dir: &str,
+    repo_path: &str,
+    package_commits: &[String],
+    dependency_commits: &[String],
+) -> io::Result<()> {
+    let target_dir = Path::new(base_dir).join("target");
+    if !target_dir.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "System target directory missing after build",
+        ));
+    }
+
+    let branch_name = format!(
+        "systems/{}/{}",
+        manifest.system.slug, manifest.system.version
+    );
+    let mut metadata = Vec::new();
+    metadata.push(("nex.system.name".to_string(), manifest.system.name.clone()));
+    metadata.push(("nex.system.slug".to_string(), manifest.system.slug.clone()));
+    metadata.push((
+        "nex.system.version".to_string(),
+        manifest.system.version.clone(),
+    ));
+    if let Some(desc) = &manifest.system.description {
+        metadata.push(("nex.system.description".to_string(), desc.clone()));
+    }
+    if let Some(arch) = &manifest.system.architecture {
+        metadata.push(("nex.system.arch".to_string(), arch.clone()));
+    }
+    if let Some(boot) = &manifest.system.boot_method {
+        metadata.push(("nex.system.boot_method".to_string(), boot.clone()));
+    }
+    if let Some(encoded) = encode_metadata_list(package_commits)? {
+        metadata.push(("nex.system.packages".to_string(), encoded));
+    }
+    if let Some(encoded) = encode_metadata_list(dependency_commits)? {
+        metadata.push(("nex.system.dependencies".to_string(), encoded));
+    }
+
+    commit_to_ostree(&target_dir, &branch_name, repo_path, &metadata)
 }
 
 impl fmt::Display for Package {
@@ -439,25 +713,21 @@ fn append_checksum_file(package: &Package, checksum: &str, file_path: &Path) -> 
     Ok(())
 }
 
-fn load_manifest(file_path: &str) -> io::Result<Manifest> {
+fn load_manifest(file_path: &str) -> io::Result<ManifestData> {
     let manifest_str = fs::read_to_string(file_path)?;
     let doc: Value = serde_yaml::from_str(&manifest_str)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     match detect_manifest_kind(&doc) {
         ManifestKind::Package => {
-            serde_yaml::from_value(doc).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+            let manifest: Manifest = serde_yaml::from_value(doc)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            Ok(ManifestData::Package(manifest))
         }
         ManifestKind::System => {
             let sys: SystemManifest = serde_yaml::from_value(doc)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
             validate_system_manifest(&sys)?;
-            Err(io::Error::new(
-                io::ErrorKind::Unsupported,
-                format!(
-                    "System manifests are not supported yet (saw slug: {})",
-                    sys.system.slug
-                ),
-            ))
+            Ok(ManifestData::System(sys))
         }
     }
 }
@@ -579,7 +849,6 @@ fn stage_existing_outputs(manifest: &Manifest, base_dir: &str, repo_path: &str) 
 }
 
 fn setup_composite_rootfs(
-    _manifest: &Manifest,
     base_dir: &str,
     repo_path: &str,
     dependency_commits: &[String],
@@ -607,9 +876,19 @@ fn setup_composite_rootfs(
     Ok(())
 }
 
+fn layer_commits_into_rootfs(
+    base_dir: &str,
+    repo_path: &str,
+    commits: &[String],
+) -> io::Result<()> {
+    for commit in commits {
+        checkout_ostree_into(repo_path, commit, Path::new(base_dir), true)?;
+    }
+    Ok(())
+}
+
 fn handle_inputs(
-    manifest: &Manifest,
-    _manifest_dir: &Path,
+    sources: &[Source],
     download_dir: &str,
     build_dir: &str,
     is_bootstrap: bool,
@@ -619,7 +898,7 @@ fn handle_inputs(
     let mut input_env_vars = HashMap::new();
     let current_dir = env::current_dir().expect("Failed to get current directory");
 
-    for (i, source) in manifest.sources.iter().enumerate() {
+    for (i, source) in sources.iter().enumerate() {
         let input = fetch_and_verify_input(source, download_dir)?;
         let inputs_dir = Path::new(build_dir).join("inputs");
         fs::create_dir_all(&inputs_dir)?;
@@ -662,6 +941,22 @@ fn run_build_script(
     let num_cpus = num_cpus::get();
     env.insert("MAKEFLAGS".to_string(), format!("-j{num_cpus}"));
 
+    let current_dir = env::current_dir().expect("Failed to get current directory");
+    let build_dir_path = Path::new(build_dir);
+    let build_dir_abs = if build_dir_path.is_absolute() {
+        build_dir_path.to_path_buf()
+    } else {
+        current_dir.join(build_dir_path)
+    };
+    let build_dir_str = build_dir_abs
+        .to_str()
+        .ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "build_dir must be valid UTF-8")
+        })?
+        .to_string();
+    let tmpdir_path = build_dir_abs.join("2nex").join("tmp");
+    std::fs::create_dir_all(&tmpdir_path)?;
+
     let unshare_command = vec![
         "unshare",
         "--user",
@@ -680,17 +975,13 @@ fn run_build_script(
         "-c",
     ];
 
-    let current_dir = env::current_dir().expect("Failed to get current directory");
-    let tmpdir_path = current_dir.join("build_rootfs").join("2nex").join("tmp");
-    std::fs::create_dir_all(&tmpdir_path)?;
-
     let mut command_args = unshare_command.clone();
     let launch_script = if bootstrap {
-        let bootstrap_sysroot_path = current_dir.join("build_rootfs").join("bootstrap");
+        let bootstrap_sysroot_path = build_dir_abs.join("bootstrap");
         let bootstrap_tools_path = bootstrap_sysroot_path.join("tools");
         let bootstrap_tools_path_display = bootstrap_tools_path.display();
-        let workdir_path = current_dir.join("build_rootfs").join("2nex").join("work");
-        let outdir_path = current_dir.join("build_rootfs").join("2nex").join("out");
+        let workdir_path = build_dir_abs.join("2nex").join("work");
+        let outdir_path = build_dir_abs.join("2nex").join("out");
 
         println!("Bootstrap mode.");
 
@@ -810,6 +1101,8 @@ fn run_build_script(
                 rmdir {build_dir}/usr/lib64
             fi
 
+            mkdir -p {build_dir}/usr
+
             if [ ! -e {build_dir}/bin ]; then
                 ln -sf /usr/bin {build_dir}/bin
             fi
@@ -837,7 +1130,7 @@ fn run_build_script(
             chmod +x {build_dir}/2nex/tmp/build_script.sh
             unshare --root={build_dir} /2nex/tmp/build_script.sh
             "#,
-            build_dir = build_dir
+            build_dir = build_dir_str
         )
     };
     command_args.push(&launch_script);
@@ -941,16 +1234,7 @@ fn verify_and_commit_outputs(
 
         let commit_output_dir = out_dir.join(output_type);
 
-        let mut metadata = Vec::new();
-        if let Some(checksum) = &manifest.package.checksum {
-            metadata.push(("nex.build.checksum".to_string(), checksum.clone()));
-        }
-        if let Some(encoded) = encode_metadata_list(&spec.requires)? {
-            metadata.push(("nex.output.requires".to_string(), encoded));
-        }
-        if let Some(encoded) = encode_metadata_list(&spec.suggests)? {
-            metadata.push(("nex.output.suggests".to_string(), encoded));
-        }
+        let metadata = output_branch_metadata(manifest, spec)?;
         commit_to_ostree(&commit_output_dir, &branch_name, repo_path, &metadata)?;
     }
 
@@ -1079,6 +1363,40 @@ fn encode_metadata_list(values: &[String]) -> io::Result<Option<String>> {
     }
 }
 
+fn output_branch_metadata(
+    manifest: &Manifest,
+    spec: &OutputSpec,
+) -> io::Result<Vec<(String, String)>> {
+    let mut metadata = Vec::new();
+    if let Some(checksum) = &manifest.package.checksum {
+        metadata.push(("nex.build.checksum".to_string(), checksum.clone()));
+    }
+    if let Some(encoded) = encode_metadata_list(&spec.requires)? {
+        metadata.push(("nex.output.requires".to_string(), encoded));
+    }
+    if let Some(encoded) = encode_metadata_list(&spec.suggests)? {
+        metadata.push(("nex.output.suggests".to_string(), encoded));
+    }
+    Ok(metadata)
+}
+
+fn bundle_branch_metadata(
+    manifest: &Manifest,
+    bundle: &Bundle,
+) -> io::Result<Vec<(String, String)>> {
+    let mut metadata = Vec::new();
+    if let Some(checksum) = &manifest.package.checksum {
+        metadata.push(("nex.build.checksum".to_string(), checksum.clone()));
+    }
+    if let Some(encoded) = encode_metadata_list(&bundle.requires)? {
+        metadata.push(("nex.bundle.requires".to_string(), encoded));
+    }
+    if let Some(encoded) = encode_metadata_list(&bundle.suggests)? {
+        metadata.push(("nex.bundle.suggests".to_string(), encoded));
+    }
+    Ok(metadata)
+}
+
 fn read_metadata_list(repo_path: &str, commit: &str, key: &str) -> io::Result<Vec<String>> {
     let mut command = Command::new("unshare");
     command.args(&["--user", "--map-root-user", "--"]);
@@ -1114,11 +1432,19 @@ fn parse_metadata_list_output(raw: &[u8]) -> io::Result<Vec<String>> {
     }
     let value = String::from_utf8(raw.to_vec())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    let trimmed = value.trim();
+    let mut trimmed = value.trim().to_string();
+    if trimmed.starts_with('\'') && trimmed.ends_with('\'') && trimmed.len() >= 2 {
+        trimmed = trimmed[1..trimmed.len() - 1].to_string();
+    }
     if trimmed.is_empty() {
         Ok(Vec::new())
     } else {
-        serde_json::from_str(trimmed).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        serde_json::from_str(&trimmed).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Invalid JSON metadata '{}': {}", trimmed, e),
+            )
+        })
     }
 }
 
@@ -1375,16 +1701,7 @@ fn commit_bundle(
         manifest.package.slug, manifest.package.version, manifest.package.flavor, bundle_name
     );
 
-    let mut metadata = Vec::new();
-    if let Some(checksum) = &manifest.package.checksum {
-        metadata.push(("nex.build.checksum".to_string(), checksum.clone()));
-    }
-    if let Some(encoded) = encode_metadata_list(&bundle.requires)? {
-        metadata.push(("nex.bundle.requires".to_string(), encoded));
-    }
-    if let Some(encoded) = encode_metadata_list(&bundle.suggests)? {
-        metadata.push(("nex.bundle.suggests".to_string(), encoded));
-    }
+    let metadata = bundle_branch_metadata(manifest, bundle)?;
 
     commit_to_ostree(temp_dir_path, &bundle_branch, repo_path, &metadata)?;
 
@@ -1500,15 +1817,22 @@ fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Result
     } else if let Some(file_path) = &input_spec.file {
         println!("Fetching input from local file: {}", file_path);
 
-        let file_path = Path::new("./inputs_cache").join(file_path);
-        if !file_path.exists() {
+        let candidate_path = Path::new(file_path);
+        let mut resolved_path = if candidate_path.is_absolute() {
+            candidate_path.to_path_buf()
+        } else if candidate_path.exists() {
+            candidate_path.to_path_buf()
+        } else {
+            Path::new("./inputs_cache").join(candidate_path)
+        };
+        if !resolved_path.exists() {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
-                format!("Local file not found: {}", file_path.display()),
+                format!("Local file not found: {}", file_path),
             ));
         }
 
-        let mut file = fs::File::open(&file_path)?;
+        let mut file = fs::File::open(&resolved_path)?;
         let mut contents = Vec::new();
         file.read_to_end(&mut contents)?;
 
@@ -1520,11 +1844,43 @@ fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Result
             ));
         }
 
+        let download_dir_path = Path::new(download_dir);
+        let staged_path = {
+            let cwd = env::current_dir().expect("Failed to determine current directory");
+            let resolved_abs = if resolved_path.is_absolute() {
+                resolved_path.clone()
+            } else {
+                cwd.join(&resolved_path)
+            };
+            let download_abs = if download_dir_path.is_absolute() {
+                download_dir_path.to_path_buf()
+            } else {
+                cwd.join(download_dir_path)
+            };
+            if resolved_abs.starts_with(&download_abs) {
+                resolved_path.clone()
+            } else {
+                let file_name = resolved_path.file_name().ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "Local file must have a valid filename",
+                    )
+                })?;
+                let target_path = download_dir_path.join(file_name);
+                if !target_path.exists() {
+                    fs::copy(&resolved_path, &target_path)?;
+                }
+                target_path
+            }
+        };
+
+        resolved_path = staged_path;
+
         // Create a symbolic link from the hash to the file
         let hash_link_path = Path::new(download_dir).join(format!("sha256-{}", input_spec.sha256));
         if !hash_link_path.exists() {
             // Create relative path for the symlink to avoid including inputs_cache itself
-            let filename = file_path.file_name().unwrap();
+            let filename = resolved_path.file_name().unwrap();
             println!(
                 "Creating hash symbolic link: {} -> {}",
                 hash_link_path.display(),
@@ -1533,7 +1889,7 @@ fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Result
             std::os::unix::fs::symlink(&filename, &hash_link_path)?;
         }
 
-        Ok(file_path)
+        Ok(resolved_path)
     } else {
         Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -1603,51 +1959,6 @@ fn categorize_files(rootfs_dir: &Path) -> HashMap<String, Vec<String>> {
     }
 
     outputs
-}
-
-pub(crate) fn determine_category(file_path: &str) -> String {
-    if file_path.ends_with(".so") || file_path.contains(".so.") {
-        "lib".to_string()
-    } else if file_path.contains("/include/") {
-        "dev".to_string()
-    } else if file_path.ends_with(".pc") || file_path.contains("/pkgconfig/") {
-        "dev".to_string()
-    } else if file_path.ends_with(".la") {
-        "dev".to_string()
-    } else if file_path.ends_with(".a") {
-        "static".to_string()
-    } else if file_path.contains("/share/man/") {
-        "man".to_string()
-    } else if file_path.contains("/share/info/") {
-        "info".to_string()
-    } else if file_path.contains("/share/doc") {
-        "doc".to_string()
-    } else if file_path.contains("/locale/") {
-        "locale".to_string()
-    } else if file_path.contains("/bin/") {
-        "bin".to_string()
-    } else if file_path.contains("/libexec/") {
-        "bin".to_string()
-    } else if file_path.contains("/lib/") || file_path.contains("/lib64/") {
-        "lib".to_string()
-    } else if file_path.contains("/conf/")
-        || file_path.contains("/etc/")
-        || file_path.ends_with(".conf")
-    {
-        "conf".to_string()
-    } else {
-        "misc".to_string()
-    }
-}
-
-pub(crate) fn manifest_prefix(commit: &str) -> Option<String> {
-    if let Some(idx) = commit.find("/bundles/") {
-        Some(commit[..idx].to_string())
-    } else if let Some(idx) = commit.find("/outputs/") {
-        Some(commit[..idx].to_string())
-    } else {
-        None
-    }
 }
 
 fn print_outputs(
@@ -1783,19 +2094,6 @@ outputs: {}
     }
 
     #[test]
-    fn manifest_prefix_extracts_base_path() {
-        assert_eq!(
-            manifest_prefix("x86_64/foo/1.0/base/bundles/dev"),
-            Some("x86_64/foo/1.0/base".to_string())
-        );
-        assert_eq!(
-            manifest_prefix("x86_64/foo/1.0/base/outputs/lib"),
-            Some("x86_64/foo/1.0/base".to_string())
-        );
-        assert_eq!(manifest_prefix("x86_64/foo/1.0/base"), None);
-    }
-
-    #[test]
     fn closure_resolution_collects_all_commits() {
         let deps = vec![
             Dependency {
@@ -1866,6 +2164,7 @@ kind: system
 system:
   name: Demo
   slug: demo
+  version: "1.0"
 packages:
   - commit: x86_64/foo/1.0/base/bundles/dev
 build:
@@ -1877,16 +2176,18 @@ dependencies: []
         assert_eq!(detect_manifest_kind(&value), ManifestKind::System);
         let sys: SystemManifest = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(sys.system.slug, "demo");
+        assert_eq!(sys.system.version, "1.0");
     }
 
     #[test]
-    fn load_manifest_rejects_system_kind() {
+    fn load_manifest_parses_system_kind() {
         let yaml = r#"
 schema: 1
 kind: system
 system:
   name: Demo
   slug: demo
+  version: "1.0"
 packages:
   - commit: x86_64/foo/1.0/base/bundles/dev
 build:
@@ -1896,9 +2197,12 @@ dependencies: []
 "#;
         let mut file = NamedTempFile::new().unwrap();
         std::io::Write::write_all(&mut file, yaml.as_bytes()).unwrap();
-        let err = load_manifest(file.path().to_str().unwrap()).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("System manifests are not supported yet"));
+        match load_manifest(file.path().to_str().unwrap()).unwrap() {
+            ManifestData::System(sys) => {
+                assert_eq!(sys.system.slug, "demo");
+                assert_eq!(sys.packages.len(), 1);
+            }
+            _ => panic!("Expected system manifest"),
+        }
     }
 }

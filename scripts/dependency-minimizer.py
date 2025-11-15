@@ -59,7 +59,7 @@ def signal_handler(sig, frame):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Minimize dependencies in YAML manifest files")
+    parser = argparse.ArgumentParser(description="Minimize dependencies or packages in YAML manifest files")
     parser.add_argument("manifest_file", help="Path to the manifest YAML file")
     parser.add_argument("--builder", default="src/builder/target/debug/nex",
                         help="Path to the builder executable (default: src/builder/target/debug/nex)")
@@ -80,6 +80,12 @@ def parse_args():
                         help="Skip the name-based dependency deduplication step")
     parser.add_argument("--only-deduplicate", action="store_true",
                         help="Only perform name-based deduplication without minimization testing")
+    parser.add_argument(
+        "--section",
+        choices=["dependencies", "packages"],
+        default="dependencies",
+        help="Manifest section to minimize (default: dependencies)",
+    )
     return parser.parse_args()
 
 
@@ -95,6 +101,14 @@ def save_yaml(data, file_path):
         yaml.dump(data, f, default_flow_style=False)
 
 
+def get_manifest_entries(manifest, section):
+    """Return entries for the requested section."""
+    section_data = manifest.get(section, [])
+    if section_data is None:
+        return []
+    return section_data
+
+
 def read_file_content(file_path):
     """Read the content of a file."""
     with open(file_path, 'r') as f:
@@ -107,17 +121,16 @@ def write_file_content(file_path, content):
         f.write(content)
 
 
-def update_dependencies_in_file(file_path, dependencies):
-    """Update only the dependencies section in the manifest file, preserving all other content."""
+def update_section_in_file(file_path, section, entries):
+    """Update only the chosen section in the manifest file, preserving other content."""
     # Read the original file content
     content = read_file_content(file_path)
     
     # Convert dependencies to YAML format while preserving indentation
-    deps_yaml = yaml.dump(dependencies, default_flow_style=False)
+    deps_yaml = yaml.dump(entries, default_flow_style=False)
     
     # Find the dependencies section using regex
-    # This pattern looks for 'dependencies:' followed by a list of items with proper indentation
-    pattern = r'(dependencies:)(\s*-.*?(?=\n\w|\Z))'
+    pattern = rf'({section}:)(\s*-.*?(?=\n\w|\Z))'
     
     if re.search(pattern, content, re.DOTALL):
         # If found, replace only that section with the new dependencies
@@ -125,7 +138,7 @@ def update_dependencies_in_file(file_path, dependencies):
     else:
         # If dependencies section is not found or has different format
         # Find any key called 'dependencies' and replace its value
-        pattern = r'(dependencies:).*?(\n\w+:|$)'
+        pattern = rf'({section}:).*?(\n\w+:|$)'
         if re.search(pattern, content, re.DOTALL):
             new_content = re.sub(pattern, r'\1\n' + deps_yaml + r'\2', content, flags=re.DOTALL)
         else:
@@ -136,13 +149,13 @@ def update_dependencies_in_file(file_path, dependencies):
     write_file_content(file_path, new_content)
 
 
-def create_temp_manifest(original_file, temp_path, dependencies):
+def create_temp_manifest(original_file, temp_path, entries, section):
     """Create a temporary manifest file with modified dependencies but original structure."""
     # Load the original manifest to get its structure
     manifest = load_yaml(original_file)
     
     # Update only the dependencies
-    manifest['dependencies'] = dependencies
+    manifest[section] = entries
     
     # Save to the temporary location
     save_yaml(manifest, temp_path)
@@ -232,7 +245,14 @@ def deduplicate_dependencies(dependencies):
     return deduplicated_deps, removed_deps
 
 
-def minimize_dependencies(manifest_file, builder_path, parallel=1, timeout=600, ignore_deps=None):
+def minimize_dependencies(
+    manifest_file,
+    builder_path,
+    parallel=1,
+    timeout=600,
+    ignore_deps=None,
+    section="dependencies",
+):
     """Find the minimal set of dependencies required for building the manifest."""
     global cancelled
     
@@ -244,15 +264,16 @@ def minimize_dependencies(manifest_file, builder_path, parallel=1, timeout=600, 
     manifest = load_yaml(manifest_file)
     
     # Extract the list of dependencies
-    original_deps = manifest.get('dependencies', [])
+    original_deps = get_manifest_entries(manifest, section)
     if not original_deps:
-        print("No dependencies found in the manifest file.")
+        print(f"No {section} found in the manifest file.")
         return manifest, []
     
-    print(f"Original dependency count: {len(original_deps)}")
+    print(f"Original {section} count: {len(original_deps)}")
+    entry_label = section[:-1] if section.endswith("s") else section
     
     # First deduplicate dependencies by name
-    print("\nDeduplicating dependencies by name...")
+    print(f"\nDeduplicating {section} by name...")
     deduplicated_deps, name_removed_deps = deduplicate_dependencies(original_deps)
     
     # Create a working directory for all temporary manifest files
@@ -261,7 +282,7 @@ def minimize_dependencies(manifest_file, builder_path, parallel=1, timeout=600, 
         print("\nTesting deduplicated manifest build...")
         
         deduped_manifest_path = os.path.join(main_temp_dir, "deduplicated_manifest.yaml")
-        create_temp_manifest(manifest_file, deduped_manifest_path, deduplicated_deps)
+        create_temp_manifest(manifest_file, deduped_manifest_path, deduplicated_deps, section)
         success, stdout, stderr = test_build(deduped_manifest_path, builder_path, timeout)
         
         if not success:
@@ -285,17 +306,17 @@ def minimize_dependencies(manifest_file, builder_path, parallel=1, timeout=600, 
             
             # Skip if this dependency is in the ignore list
             if dep_name in ignore_deps:
-                print(f"\nSkipping dependency: {dep_name} (in ignore list)")
+                print(f"\nSkipping {entry_label} {dep_name} (in ignore list)")
                 continue
                 
-            print(f"\nTesting removal of dependency: {dep_name} ({i+1}/{len(current_deps)})")
+            print(f"\nTesting removal of {entry_label}: {dep_name} ({i+1}/{len(current_deps)})")
             
             # Create a test dependencies list without the current dependency
             test_deps = [d for d in current_deps if d != dep]
             
             # Create a unique temporary manifest file for this test
             test_manifest_path = os.path.join(main_temp_dir, f"test_manifest_{i}.yaml")
-            create_temp_manifest(manifest_file, test_manifest_path, test_deps)
+            create_temp_manifest(manifest_file, test_manifest_path, test_deps, section)
             
             # Test if it builds
             success, stdout, stderr = test_build(test_manifest_path, builder_path, timeout)
@@ -307,10 +328,10 @@ def minimize_dependencies(manifest_file, builder_path, parallel=1, timeout=600, 
                 success = False
             
             if success:
-                print(f"✅ Dependency {dep_name} can be removed!")
+                print(f"✅ {entry_label.capitalize()} {dep_name} can be removed!")
                 removable_deps.append(dep)
             else:
-                print(f"❌ Dependency {dep_name} is required")
+                print(f"❌ {entry_label.capitalize()} {dep_name} is required")
                 
             # Optional: give user a moment to review results
             time.sleep(0.5)
@@ -321,7 +342,7 @@ def minimize_dependencies(manifest_file, builder_path, parallel=1, timeout=600, 
         # Verify the final minimized manifest before returning
         print("\nVerifying the final minimized manifest...")
         final_manifest_path = os.path.join(main_temp_dir, "final_minimized_manifest.yaml")
-        create_temp_manifest(manifest_file, final_manifest_path, minimized_deps)
+        create_temp_manifest(manifest_file, final_manifest_path, minimized_deps, section)
         success, stdout, stderr = test_build(final_manifest_path, builder_path, timeout)
         
         if not success:
@@ -331,55 +352,55 @@ def minimize_dependencies(manifest_file, builder_path, parallel=1, timeout=600, 
             debug_file = Path(manifest_file).with_suffix(f".min_failed{Path(manifest_file).suffix}")
             shutil.copy2(final_manifest_path, debug_file)
             print(f"Saved problematic minimized manifest to: {debug_file}")
-            print("\nReturning only deduplicated dependencies instead of fully minimized ones.")
+            print(f"\nReturning only deduplicated {section} instead of fully minimized ones.")
             return deduplicated_deps, name_removed_deps
     
     # Combine the dependencies removed in both stages
     total_removed_deps = name_removed_deps + removable_deps
     
     print(f"\nMinimization complete.")
-    print(f"Original dependencies: {len(original_deps)}")
+    print(f"Original {section}: {len(original_deps)}")
     print(f"After name deduplication: {len(current_deps)}")
-    print(f"Dependencies tested: {len(current_deps) - len(ignore_deps)}")
-    print(f"Dependencies ignored: {len(ignore_deps)}")
-    print(f"Final minimized dependencies: {len(minimized_deps)}")
-    print(f"Total removed dependencies: {len(total_removed_deps)}")
+    print(f"{entry_label.capitalize()} entries tested: {len(current_deps) - len(ignore_deps)}")
+    print(f"{entry_label.capitalize()} entries ignored: {len(ignore_deps)}")
+    print(f"Final minimized {section}: {len(minimized_deps)}")
+    print(f"Total removed {section}: {len(total_removed_deps)}")
     
     # Show a summary of what's been removed
     if name_removed_deps:
-        print("\nDuplicate dependencies removed by name:")
+        print(f"\nDuplicate {section} removed by name:")
         for dep in name_removed_deps:
             print(f"  - {dep.get('name', str(dep))}: {dep.get('commit', 'no commit')}")
             
     if removable_deps:
-        print("\nUnnecessary dependencies removed:")
+        print(f"\nRemoved {section} entries:")
         for dep in removable_deps:
             print(f"  - {dep.get('name', str(dep))}: {dep.get('commit', 'no commit')}")
     
     # Show ignored dependencies
     if ignore_deps:
-        print("\nDependencies that were ignored:")
+        print(f"\n{section.capitalize()} that were ignored:")
         for name in ignore_deps:
             print(f"  - {name}")
     
     return minimized_deps, total_removed_deps
 
 
-def only_deduplicate_dependencies(manifest_file):
+def only_deduplicate_dependencies(manifest_file, section):
     """Deduplicate dependencies by name without running any builds."""
     # Load the manifest
     manifest = load_yaml(manifest_file)
     
     # Extract the list of dependencies
-    original_deps = manifest.get('dependencies', [])
+    original_deps = get_manifest_entries(manifest, section)
     if not original_deps:
-        print("No dependencies found in the manifest file.")
+        print(f"No {section} found in the manifest file.")
         return None, []
     
-    print(f"Original dependency count: {len(original_deps)}")
+    print(f"Original {section} count: {len(original_deps)}")
     
     # Deduplicate dependencies by name
-    print("\nDeduplicating dependencies by name...")
+    print(f"\nDeduplicating {section} by name...")
     deduplicated_deps, removed_deps = deduplicate_dependencies(original_deps)
     
     return deduplicated_deps, removed_deps
@@ -423,7 +444,9 @@ def main():
             # Determine operation mode based on flags
             if args.only_deduplicate:
                 print(f"Only deduplicating dependencies in manifest: {manifest_file}")
-                processed_deps, removed_deps = only_deduplicate_dependencies(temp_manifest_path)
+                processed_deps, removed_deps = only_deduplicate_dependencies(
+                    temp_manifest_path, args.section
+                )
             else:
                 # Standard minimization (with or without deduplication)
                 print(f"Analyzing manifest: {manifest_file}")
@@ -434,6 +457,7 @@ def main():
                     print(f"Original manifest will be overwritten with minimized version")
                 if args.skip_deduplication:
                     print(f"Skipping name-based deduplication step")
+                print(f"Target section: {args.section}")
                 print(f"Press Ctrl+C during a build to cancel that specific build and mark the dependency as required.")
                 print(f"Press Ctrl+C twice in rapid succession to exit the script completely.")
                 
@@ -450,7 +474,12 @@ def main():
                     globals()['deduplicate_dependencies'] = bypass_deduplication
                     
                     processed_deps, removed_deps = minimize_dependencies(
-                        temp_manifest_path, args.builder, args.parallel, args.timeout, args.ignore
+                        temp_manifest_path,
+                        args.builder,
+                        args.parallel,
+                        args.timeout,
+                        args.ignore,
+                        args.section,
                     )
                     
                     # Restore the original function
@@ -458,7 +487,12 @@ def main():
                 else:
                     # Normal minimization with deduplication
                     processed_deps, removed_deps = minimize_dependencies(
-                        temp_manifest_path, args.builder, args.parallel, args.timeout, args.ignore
+                        temp_manifest_path,
+                        args.builder,
+                        args.parallel,
+                        args.timeout,
+                        args.ignore,
+                        args.section,
                     )
             
             # Reset cancelled flag after processing
@@ -476,7 +510,7 @@ def main():
             # Make a fresh copy of the original to work with
             shutil.copy2(manifest_file, deduped_manifest_path)
             # Update only the dependencies section
-            update_dependencies_in_file(deduped_manifest_path, processed_deps)
+            update_section_in_file(deduped_manifest_path, args.section, processed_deps)
             
             # Perform a verification build before saving the final result
             print("\nVerifying final manifest with updated dependencies...")
@@ -500,14 +534,14 @@ def main():
                 # Copy the verified manifest to the final destination
                 shutil.copy2(deduped_manifest_path, final_output_file)
                 if args.overwrite:
-                    print(f"Original manifest file has been updated with processed dependencies")
+                    print(f"Original manifest file has been updated with processed {args.section}")
                 else:
                     print(f"Saved processed manifest to: {final_output_file}")
             else:
                 # Copy the verified manifest to the default output location
                 shutil.copy2(deduped_manifest_path, final_output_file)
                 print(f"Saved processed manifest to: {final_output_file}")
-            
+
             # Save the list of removed dependencies for reference
             if not args.no_removed_list and removed_deps:
                 removed_deps_file = Path(final_output_file).with_suffix(".removed_deps.json")
@@ -516,7 +550,7 @@ def main():
                         "name": d.get('name', "unknown"),
                         "commit": d.get('commit', "unknown")
                     } for d in removed_deps], f, indent=2)
-                print(f"Saved list of removed dependencies to: {removed_deps_file}")
+                print(f"Saved list of removed {args.section} entries to: {removed_deps_file}")
             
             print(f"\nProcess completed in {elapsed_time:.2f} seconds")
             return 0

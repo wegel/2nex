@@ -1,0 +1,33 @@
+schema: 1
+kind: system
+
+system:
+  name: "Demo Minimal System"
+  slug: "demo-minimal"
+  version: "0.1.0"
+  architecture: "x86_64"
+  description: "Tiny system manifest exercising packages, dependencies, and sources."
+
+sources:
+  - name: issue
+    file: manifests/systems/demo-issue.txt
+    sha256: cf43179882d602d9dce06e376f13bf14be4a8b6cb9c32ba4c7086e76a67e59b0
+
+packages:
+  - name: coreutils-userland
+    commit: x86_64/coreutils/9.5/bootstrap/phase3/outputs/bin
+  - name: bash-shell
+    commit: x86_64/bash/5.2.21/bootstrap/phase3/outputs/bin
+  - name: coreutils-tools
+    commit: x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev
+
+dependencies:
+
+build:
+  script: |
+    set -eux
+    echo "hello world"
+    mkdir -p /target/etc
+    install -m 0644 ${SOURCE_issue} /target/etc/issue
+    printf 'Built from %s/%s\n' "${SYSTEM_SLUG}" "${SYSTEM_VERSION}" > /target/etc/demo-release
+    ln -sf issue /target/etc/motd
