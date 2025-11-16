@@ -4,6 +4,7 @@ FORCE_TARGETS=${FORCE_TARGETS:-}
 FORCE="${FORCE:-}"
 PHASES="${PHASES:-bootstrap/phase0 bootstrap/phase1 bootstrap/phase2 bootstrap/phase3 base embedded}"
 UPDATE_OUTPUTS="${UPDATE_OUTPUTS:-0}"
+UPDATE_CHECKSUM="${UPDATE_CHECKSUM:-0}"
 
 for PHASE in ${PHASES}; do
   echo "Phase: $PHASE"
@@ -69,8 +70,12 @@ for PHASE in ${PHASES}; do
     if [ "$UPDATE_OUTPUTS" = "1" ]; then
       UPDATE_FLAG="--update-outputs-requires-only"
     fi
+    CHECKSUM_FLAG=""
+    if [ "$UPDATE_CHECKSUM" = "1" ]; then
+      CHECKSUM_FLAG="--update-checksum"
+    fi
 
-    if ! src/builder/target/debug/nex $B bootstrap_store $M $UPDATE_FLAG > /tmp/build_log 2>&1; then
+    if ! src/builder/target/debug/nex $B bootstrap_store $M $UPDATE_FLAG $CHECKSUM_FLAG > /tmp/build_log 2>&1; then
       cat /tmp/build_log
       echo "Failed ${M}"
       exit 1

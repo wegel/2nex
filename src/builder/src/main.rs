@@ -36,6 +36,11 @@ struct Opts {
     validate_reproducibility: bool,
     #[clap(
         long,
+        help = "Update the manifest checksum when build outputs differ from what is recorded"
+    )]
+    update_checksum: bool,
+    #[clap(
+        long,
         help = "Run the build script on the host's filesystem (for bootstrapping)"
     )]
     bootstrap: bool,
@@ -385,15 +390,44 @@ fn build_package_manifest(opts: &Opts, manifest: &mut Manifest) -> io::Result<()
     let checksum = calculate_output_checksum(&output_dir)?;
     println!("Build output checksum: {}", checksum);
 
-    if let Some(expected_checksum) = &manifest.package.checksum {
-        if checksum != *expected_checksum {
-            eprintln!(
-                "Checksum mismatch. Expected: {}, Calculated: {}",
-                expected_checksum, checksum
-            );
-            process::exit(-2);
-        } else {
-            println!("Checksum verified successfully.");
+    match manifest.package.checksum.as_ref() {
+        Some(expected_checksum) => {
+            if checksum != *expected_checksum {
+                if opts.update_checksum {
+                    println!(
+                        "Checksum mismatch (expected {}, calculated {}). Updating manifest.",
+                        expected_checksum, checksum
+                    );
+                    update_manifest_checksum_field(
+                        &opts.manifest_file,
+                        ManifestKind::Package,
+                        &checksum,
+                    )?;
+                    manifest.package.checksum = Some(checksum.clone());
+                } else {
+                    eprintln!(
+                        "Checksum mismatch. Expected: {}, Calculated: {}",
+                        expected_checksum, checksum
+                    );
+                    process::exit(-2);
+                }
+            } else {
+                println!("Checksum verified successfully.");
+            }
+        }
+        None => {
+            if opts.update_checksum {
+                println!(
+                    "Manifest {} does not record a checksum. Storing {}.",
+                    opts.manifest_file, checksum
+                );
+                update_manifest_checksum_field(
+                    &opts.manifest_file,
+                    ManifestKind::Package,
+                    &checksum,
+                )?;
+                manifest.package.checksum = Some(checksum.clone());
+            }
         }
     }
 
@@ -568,15 +602,42 @@ fn build_system_manifest(opts: &Opts, manifest: &SystemManifest) -> io::Result<(
     let checksum = calculate_output_checksum(&target_dir)?;
     println!("System build checksum: {}", checksum);
 
-    if let Some(expected_checksum) = &manifest.system.checksum {
-        if checksum != *expected_checksum {
-            eprintln!(
-                "Checksum mismatch. Expected: {}, Calculated: {}",
-                expected_checksum, checksum
-            );
-            process::exit(-2);
-        } else {
-            println!("Checksum verified successfully.");
+    match manifest.system.checksum.as_ref() {
+        Some(expected_checksum) => {
+            if checksum != *expected_checksum {
+                if opts.update_checksum {
+                    println!(
+                        "System checksum mismatch (expected {}, calculated {}). Updating manifest.",
+                        expected_checksum, checksum
+                    );
+                    update_manifest_checksum_field(
+                        &opts.manifest_file,
+                        ManifestKind::System,
+                        &checksum,
+                    )?;
+                } else {
+                    eprintln!(
+                        "Checksum mismatch. Expected: {}, Calculated: {}",
+                        expected_checksum, checksum
+                    );
+                    process::exit(-2);
+                }
+            } else {
+                println!("Checksum verified successfully.");
+            }
+        }
+        None => {
+            if opts.update_checksum {
+                println!(
+                    "System manifest {} does not record a checksum. Storing {}.",
+                    opts.manifest_file, checksum
+                );
+                update_manifest_checksum_field(
+                    &opts.manifest_file,
+                    ManifestKind::System,
+                    &checksum,
+                )?;
+            }
         }
     }
 
@@ -1585,6 +1646,96 @@ fn update_manifest_outputs(manifest_path: &str, suggestions: &RuntimeScanResult)
         manifest_path
     );
 
+    Ok(())
+}
+
+fn update_manifest_checksum_field(
+    manifest_path: &str,
+    kind: ManifestKind,
+    new_checksum: &str,
+) -> io::Result<()> {
+    let contents = fs::read_to_string(manifest_path)?;
+    let block_name = match kind {
+        ManifestKind::Package => "package",
+        ManifestKind::System => "system",
+    };
+    let header_tag = format!("{block_name}:");
+    let mut lines: Vec<String> = contents.lines().map(|l| l.to_string()).collect();
+    let mut in_section = false;
+    let mut replaced = false;
+    let mut header_index = None;
+    let mut last_section_line = None;
+    let mut indent: Option<String> = None;
+
+    for idx in 0..lines.len() {
+        let line = lines[idx].clone();
+        let trimmed = line.trim();
+
+        if in_section && !line.starts_with(' ') && !line.starts_with('\t') && !trimmed.is_empty() {
+            in_section = false;
+        }
+
+        if !in_section && trimmed == header_tag {
+            in_section = true;
+            header_index = Some(idx);
+            continue;
+        }
+
+        if in_section {
+            if indent.is_none() && !line.trim().is_empty() {
+                indent = Some(
+                    line.chars()
+                        .take_while(|c| c.is_whitespace())
+                        .collect::<String>(),
+                );
+            }
+            last_section_line = Some(idx);
+            let trimmed_start = line.trim_start();
+            if let Some(rest) = trimmed_start.strip_prefix("checksum:") {
+                let trimmed_value = rest.trim();
+                let indent_str = indent.clone().unwrap_or_else(|| "  ".to_string());
+                let (prefix, suffix) = match trimmed_value.chars().next() {
+                    Some('"') if trimmed_value.ends_with('"') && trimmed_value.len() >= 2 => {
+                        ("\"".to_string(), "\"".to_string())
+                    }
+                    Some('\'') if trimmed_value.ends_with('\'') && trimmed_value.len() >= 2 => {
+                        ("'".to_string(), "'".to_string())
+                    }
+                    _ => ("".to_string(), "".to_string()),
+                };
+                lines[idx] = format!("{indent_str}checksum: {prefix}{new_checksum}{suffix}");
+                replaced = true;
+                break;
+            }
+        }
+    }
+
+    let header_position = header_index.ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Manifest missing {} section", block_name),
+        )
+    })?;
+
+    if !replaced {
+        let insert_after = last_section_line.unwrap_or(header_position);
+        let indent_str = indent.unwrap_or_else(|| "  ".to_string());
+        lines.insert(
+            insert_after + 1,
+            format!("{indent_str}checksum: {}", new_checksum),
+        );
+    }
+
+    let had_trailing_newline = contents.ends_with('\n');
+    let mut new_contents = lines.join("\n");
+    if had_trailing_newline {
+        new_contents.push('\n');
+    }
+    fs::write(manifest_path, new_contents)?;
+    println!(
+        "Updated {} checksum in {} to {}",
+        block_name, manifest_path, new_checksum
+    );
     Ok(())
 }
 
