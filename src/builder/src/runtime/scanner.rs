@@ -105,9 +105,13 @@ fn scan_runtime_dependencies(
         package_name, package_version
     );
 
+    // detect if we're building a phase3 package by checking dependencies
+    let is_phase3 = dependency_commits.iter().any(|dep| dep.contains("/bootstrap/phase3/"));
+
     let local_basenames = collect_local_basenames(&out_dir)?;
     let provider_index = build_provider_index(repo_path, dependency_commits)?;
     let mut result = RuntimeScanResult::default();
+    result.is_phase3 = is_phase3;
 
     for entry in WalkDir::new(&out_dir).into_iter().filter_map(|e| e.ok()) {
         if !entry.file_type().is_file() && !entry.file_type().is_symlink() {
@@ -335,23 +339,53 @@ fn scan_file_for_dependencies(
     Ok(())
 }
 
+// extract phase priority from commit path
+// higher number = later phase = higher priority
+fn phase_priority(commit: &str) -> u32 {
+    if commit.contains("/bootstrap/phase3/") {
+        3
+    } else if commit.contains("/bootstrap/phase2/") {
+        2
+    } else if commit.contains("/bootstrap/phase1/") {
+        1
+    } else {
+        // non-bootstrap packages (e.g., kernel flavor) have highest priority
+        100
+    }
+}
+
 fn resolve_requirement(providers: &ProviderIndex, reference: &str) -> Vec<ProviderMatch> {
     let trimmed = reference.trim();
     if trimmed.is_empty() {
         return Vec::new();
     }
 
-    if let Some(matches) = providers.by_full_path.get(trimmed) {
-        return matches.clone();
-    }
-
-    if let Some(basename) = Path::new(trimmed).file_name().and_then(|n| n.to_str()) {
-        if let Some(matches) = providers.by_basename.get(basename) {
-            return matches.clone();
+    let mut matches = if let Some(m) = providers.by_full_path.get(trimmed) {
+        m.clone()
+    } else if let Some(basename) = Path::new(trimmed).file_name().and_then(|n| n.to_str()) {
+        if let Some(m) = providers.by_basename.get(basename) {
+            m.clone()
+        } else {
+            return Vec::new();
         }
+    } else {
+        return Vec::new();
+    };
+
+    if matches.len() <= 1 {
+        return matches;
     }
 
-    Vec::new()
+    // find highest phase priority among matches
+    let max_priority = matches.iter()
+        .map(|m| phase_priority(&m.commit))
+        .max()
+        .unwrap_or(0);
+
+    // filter to only keep matches with highest priority
+    matches.retain(|m| phase_priority(&m.commit) == max_priority);
+
+    matches
 }
 
 fn handle_shebang_requirement(
@@ -387,7 +421,12 @@ fn handle_shebang_requirement(
     if matches.is_empty() {
         result.add_unresolved(category, trimmed.to_string(), reason);
     } else {
+        // for phase3 packages, drop shebang dependencies to phase1/phase2
+        // (shell scripts don't need strict runtime deps on interpreters during bootstrap)
         for candidate in matches {
+            if result.is_phase3 && phase_priority(&candidate.commit) < 3 {
+                continue;
+            }
             result.add_resolved(category, &candidate.commit, reason.clone());
         }
     }
@@ -405,6 +444,7 @@ fn interpreter_is_env(interpreter: &str) -> bool {
 pub struct RuntimeScanResult {
     resolved: BTreeMap<String, BTreeMap<String, BTreeSet<String>>>,
     unresolved: BTreeMap<String, BTreeMap<String, BTreeSet<String>>>,
+    is_phase3: bool,
 }
 
 impl RuntimeScanResult {
