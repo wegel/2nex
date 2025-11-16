@@ -1279,15 +1279,34 @@ fn verify_and_commit_outputs(
             }
 
             let target_dir_structure = source_path.parent().unwrap();
-            let output_dir = out_dir
-                .join(output_type)
-                .join(target_dir_structure.strip_prefix(&out_dir).unwrap());
+            let relative_parent = target_dir_structure.strip_prefix(&out_dir).unwrap();
+            let output_dir = if relative_parent.as_os_str().is_empty() {
+                // file is directly in out_dir (e.g., /init)
+                out_dir.join(output_type)
+            } else {
+                out_dir.join(output_type).join(relative_parent)
+            };
+
+            // if output_dir path exists as a file (not dir), temporarily move it
+            let temp_path = if output_dir.exists() && !output_dir.is_dir() {
+                let tmp = output_dir.with_extension("tmp_rename");
+                fs::rename(&output_dir, &tmp)?;
+                Some(tmp)
+            } else {
+                None
+            };
+
             fs::create_dir_all(&output_dir)?;
 
-            fs::rename(
-                &source_path,
-                output_dir.join(source_path.file_name().unwrap()),
-            )?;
+            // if we temporarily moved a file, move it back to its final location
+            if let Some(tmp) = temp_path {
+                fs::rename(&tmp, output_dir.join(source_path.file_name().unwrap()))?;
+            } else {
+                fs::rename(
+                    &source_path,
+                    output_dir.join(source_path.file_name().unwrap()),
+                )?;
+            }
 
             accounted_files.push(file_path.trim_start_matches('/').to_string());
         }
