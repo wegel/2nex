@@ -106,7 +106,9 @@ fn scan_runtime_dependencies(
     );
 
     // detect if we're building a phase3 package by checking dependencies
-    let is_phase3 = dependency_commits.iter().any(|dep| dep.contains("/bootstrap/phase3/"));
+    let is_phase3 = dependency_commits
+        .iter()
+        .any(|dep| dep.contains("/bootstrap/phase3/"));
 
     let local_basenames = collect_local_basenames(&out_dir)?;
     let provider_index = build_provider_index(repo_path, dependency_commits)?;
@@ -377,7 +379,8 @@ fn resolve_requirement(providers: &ProviderIndex, reference: &str) -> Vec<Provid
     }
 
     // find highest phase priority among matches
-    let max_priority = matches.iter()
+    let max_priority = matches
+        .iter()
         .map(|m| phase_priority(&m.commit))
         .max()
         .unwrap_or(0);

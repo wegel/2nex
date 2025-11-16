@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use clap::Parser;
-use hostname;
 use num_cpus;
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
@@ -1114,27 +1113,24 @@ fn run_build_script(
 
         // Write the build_script content to the temporary file
         temp_file.write_all(b"#!/usr/bin/bash -eu\n")?;
-        match hostname::get() {
-            Ok(current_hostname) => {
-                if current_hostname.to_string_lossy() != "2nex-builder" {
-                    // Add hostname-setting commands only if the hostname is not already "2nex-builder"
-                    temp_file.write_all(b"echo 'Setting hostname to 2nex-builder'\n")?;
-                    temp_file.write_all(b"hostname 2nex-builder\n")?;
-                }
-            }
-            Err(e) => {
-                eprintln!(
-                    "Warning: Couldn't get current hostname: {}. Forcing hostname.",
-                    e
-                );
-                temp_file.write_all(b"echo 'Setting hostname to 2nex-builder'\n")?;
-                temp_file.write_all(b"hostname 2nex-builder\n")?;
-            }
-        }
         temp_file.write_all(build_script.as_bytes())?;
 
         format!(
             r#"
+            if ! read -r current_hostname < /proc/sys/kernel/hostname; then
+                echo 'Warning: Could not read current hostname; forcing to 2nex-builder' >&2
+                current_hostname=""
+            fi
+
+            if [ "$current_hostname" != "2nex-builder" ]; then
+                # Can't write /proc/sys/kernel/hostname inside a user namespace,
+                # so set it here via the host's hostname binary before chrooting.
+                echo 'Setting hostname to 2nex-builder'
+                if ! hostname 2nex-builder; then
+                    echo 'Warning: Failed to run hostname command' >&2
+                fi
+            fi
+
             mkdir -p {build_dir}/dev
             for D in null zero random urandom tty console full; do
                 touch {build_dir}/dev/$D
