@@ -153,6 +153,8 @@ struct Package {
     flavor: String,
     checksum: Option<String>,
     stable_checksum: Option<bool>,
+    #[serde(default)]
+    bootstrap: bool,
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -876,12 +878,13 @@ fn build_with_dependencies(
         };
 
         // create temporary opts for this build
+        // use bootstrap setting from manifest, not from CLI opts
         let build_opts = Opts {
             repo_path: opts.repo_path.clone(),
             manifest_file: path.to_str().unwrap().to_string(),
             validate_reproducibility: opts.validate_reproducibility,
             update_checksum: opts.update_checksum,
-            bootstrap: opts.bootstrap,
+            bootstrap: manifest.package.bootstrap,
             skip_runtime_deps: opts.skip_runtime_deps,
             runtime_deps_verbose: opts.runtime_deps_verbose,
             allow_missing_runtime_files: opts.allow_missing_runtime_files,
