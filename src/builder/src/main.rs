@@ -543,34 +543,39 @@ fn collect_dependencies_recursive(
 
     // load manifest
     let manifest_data = load_manifest(manifest_path.to_str().unwrap())?;
-    let manifest = match manifest_data {
-        ManifestData::Package(m) => m,
-        ManifestData::System(_) => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "System manifests not supported for graph building",
-            ));
+
+    let (is_system, slug, dependencies) = match manifest_data {
+        ManifestData::Package(ref m) => {
+            (false, m.package.slug.clone(), m.dependencies.clone())
+        }
+        ManifestData::System(ref s) => {
+            // for system manifests, combine dependencies and packages into one list
+            let mut all_deps = s.dependencies.clone();
+            all_deps.extend(system::dependencies_from_system_packages(&s.packages));
+            (true, s.system.slug.clone(), all_deps)
         }
     };
 
-    // check if already built - if so, skip adding to graph
-    if check_if_built(repo_path, &manifest) {
-        println!("Package {} already built, skipping", manifest.package.slug);
-        // we still need to add it to the map to prevent duplicate lookups,
-        // but we use a special marker node that won't be in the build order
-        let node = graph.add_node(PathBuf::new()); // empty path = skip
-        manifest_map.insert(manifest_path.to_path_buf(), node);
-        return Ok(node);
+    // for package manifests, check if already built
+    if !is_system {
+        if let ManifestData::Package(ref manifest) = manifest_data {
+            if check_if_built(repo_path, manifest) {
+                println!("Package {} already built, skipping", manifest.package.slug);
+                let node = graph.add_node(PathBuf::new()); // empty path = skip
+                manifest_map.insert(manifest_path.to_path_buf(), node);
+                return Ok(node);
+            }
+        }
     }
 
     // add this manifest to graph
     let node = graph.add_node(manifest_path.to_path_buf());
     manifest_map.insert(manifest_path.to_path_buf(), node);
 
-    println!("Processing dependencies for {}", manifest.package.slug);
+    println!("Processing dependencies for {}", slug);
 
     // process dependencies
-    for dep in &manifest.dependencies {
+    for dep in &dependencies {
         // check if dependency is already in OSTree
         if ensure_branch_exists(repo_path, &dep.commit).is_ok() {
             println!("  Dependency {} already in OSTree, skipping", dep.commit);
@@ -722,58 +727,94 @@ fn build_packages_parallel(
                     Err(e) => return Err(format!("Failed to load {}: {}", path.display(), e)),
                 };
 
-                let mut manifest = match manifest_data {
-                    ManifestData::Package(m) => m,
-                    ManifestData::System(_) => return Ok("skipped".to_string()),
-                };
+                let result = match manifest_data {
+                    ManifestData::Package(mut manifest) => {
+                        // use unique build directory based on slug and flavor
+                        let build_dir = format!("./build_rootfs_{}_{}",
+                            manifest.package.slug.replace("/", "_"),
+                            manifest.package.flavor.replace("/", "_"));
 
-                // use unique build directory based on slug and flavor
-                let build_dir = format!("./build_rootfs_{}_{}",
-                    manifest.package.slug.replace("/", "_"),
-                    manifest.package.flavor.replace("/", "_"));
+                        // create opts for this build
+                        let build_opts = Opts {
+                            repo_path: opts.repo_path.clone(),
+                            manifest_file: path.to_str().unwrap().to_string(),
+                            validate_reproducibility: opts.validate_reproducibility,
+                            update_checksum: opts.update_checksum,
+                            bootstrap: manifest.package.bootstrap,
+                            skip_runtime_deps: opts.skip_runtime_deps,
+                            runtime_deps_verbose: opts.runtime_deps_verbose,
+                            allow_missing_runtime_files: opts.allow_missing_runtime_files,
+                            update_outputs_requires: opts.update_outputs_requires,
+                            update_outputs_requires_only: opts.update_outputs_requires_only,
+                            refresh_ostree_metadata: opts.refresh_ostree_metadata,
+                        };
 
-                // create opts for this build
-                let build_opts = Opts {
-                    repo_path: opts.repo_path.clone(),
-                    manifest_file: path.to_str().unwrap().to_string(),
-                    validate_reproducibility: opts.validate_reproducibility,
-                    update_checksum: opts.update_checksum,
-                    bootstrap: manifest.package.bootstrap,
-                    skip_runtime_deps: opts.skip_runtime_deps,
-                    runtime_deps_verbose: opts.runtime_deps_verbose,
-                    allow_missing_runtime_files: opts.allow_missing_runtime_files,
-                    update_outputs_requires: opts.update_outputs_requires,
-                    update_outputs_requires_only: opts.update_outputs_requires_only,
-                    refresh_ostree_metadata: opts.refresh_ostree_metadata,
-                };
+                        println!("[{}/{}] Building: {}", build_num, total, manifest.package.slug);
 
-                println!("[{}/{}] Building: {}", build_num, total, manifest.package.slug);
+                        // build the package
+                        let slug = manifest.package.slug.clone();
+                        if let Err(e) = build_package_manifest_with_dir(&build_opts, &mut manifest, &build_dir) {
+                            return Err(format!("Failed to build {}: {}", slug, e));
+                        }
 
-                // build the package
-                if let Err(e) = build_package_manifest_with_dir(&build_opts, &mut manifest, &build_dir) {
-                    return Err(format!("Failed to build {}: {}", manifest.package.slug, e));
-                }
+                        // clean up build directory
+                        let build_path = Path::new(&build_dir);
+                        if build_path.exists() {
+                            if let Err(e) = fs::remove_dir_all(build_path) {
+                                eprintln!("Warning: failed to clean up {}: {}", build_dir, e);
+                            }
+                        }
 
-                // clean up build directory
-                let build_path = Path::new(&build_dir);
-                if build_path.exists() {
-                    if let Err(e) = fs::remove_dir_all(build_path) {
-                        eprintln!("Warning: failed to clean up {}: {}", build_dir, e);
+                        Ok(slug)
                     }
-                }
+                    ManifestData::System(system_manifest) => {
+                        let build_dir = format!("./build_rootfs_{}_{}",
+                            system_manifest.system.slug.replace("/", "_"),
+                            "system");
 
-                Ok(manifest.package.slug.clone())
+                        let build_opts = Opts {
+                            repo_path: opts.repo_path.clone(),
+                            manifest_file: path.to_str().unwrap().to_string(),
+                            validate_reproducibility: opts.validate_reproducibility,
+                            update_checksum: opts.update_checksum,
+                            bootstrap: opts.bootstrap,
+                            skip_runtime_deps: opts.skip_runtime_deps,
+                            runtime_deps_verbose: opts.runtime_deps_verbose,
+                            allow_missing_runtime_files: opts.allow_missing_runtime_files,
+                            update_outputs_requires: opts.update_outputs_requires,
+                            update_outputs_requires_only: opts.update_outputs_requires_only,
+                            refresh_ostree_metadata: opts.refresh_ostree_metadata,
+                        };
+
+                        println!("[{}/{}] Building system: {}", build_num, total, system_manifest.system.slug);
+
+                        // build the system using the legacy builder since it handles all the dependency resolution
+                        let slug = system_manifest.system.slug.clone();
+                        if let Err(e) = system::build_system_manifest_with_dir(&build_opts, &system_manifest, &build_dir) {
+                            return Err(format!("Failed to build system {}: {}", slug, e));
+                        }
+
+                        // clean up build directory
+                        let build_path = Path::new(&build_dir);
+                        if build_path.exists() {
+                            if let Err(e) = fs::remove_dir_all(build_path) {
+                                eprintln!("Warning: failed to clean up {}: {}", build_dir, e);
+                            }
+                        }
+
+                        Ok(slug)
+                    }
+                };
+
+                result
             })
             .collect();
 
         // check results and mark completed
         for (i, result) in results.iter().enumerate() {
             match result {
-                Ok(slug) if slug != "skipped" => {
+                Ok(slug) => {
                     println!("✓ Successfully built {}", slug);
-                    completed.lock().unwrap().insert(wave[i]);
-                }
-                Ok(_) => {
                     completed.lock().unwrap().insert(wave[i]);
                 }
                 Err(e) => {
