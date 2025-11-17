@@ -1,5 +1,8 @@
 .PHONY: all builder init build clean
 
+# repository location (can be overridden)
+REPO ?= bootstrap_store
+
 # default target
 all: builder init build
 
@@ -9,11 +12,12 @@ builder:
 	cargo build --manifest-path src/builder/Cargo.toml
 
 # initialize the ostree repository
-bootstrap_store:
-	@echo "Initializing OSTree repository..."
-	ostree --repo=bootstrap_store init --mode=bare-user
+init:
+	@echo "Initializing OSTree repository at $(REPO)..."
+	ostree --repo=$(REPO) init --mode=bare-user
 
-init: bootstrap_store
+# legacy target for compatibility
+bootstrap_store: init
 
 # build all bootstrap phases
 build:
@@ -24,7 +28,7 @@ build:
 			echo "Building: $$M"; \
 			B=""; \
 			[ $$PHASE -lt 2 ] && B="--bootstrap"; \
-			if ! src/builder/target/debug/nex $$B bootstrap_store $$M > /tmp/build_log 2>&1; then \
+			if ! src/builder/target/debug/nex $$B $(REPO) $$M > /tmp/build_log 2>&1; then \
 				cat /tmp/build_log; \
 				echo "Failed $$M"; \
 				exit 1; \
@@ -37,5 +41,5 @@ build:
 # clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
-	rm -rf build_rootfs bootstrap_store
+	rm -rf build_rootfs $(REPO)
 	cargo clean --manifest-path src/builder/Cargo.toml

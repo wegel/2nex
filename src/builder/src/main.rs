@@ -5,9 +5,11 @@ use std::io::{self, BufRead, Read, Write};
 use std::mem;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Arc, Mutex};
 
 use clap::Parser;
 use num_cpus;
+use rayon::prelude::*;
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use serde_yaml::{Mapping, Value};
@@ -428,7 +430,10 @@ fn main() -> io::Result<()> {
 }
 
 fn build_package_manifest(opts: &Opts, manifest: &mut Manifest) -> io::Result<()> {
-    let base_dir = "./build_rootfs";
+    build_package_manifest_with_dir(opts, manifest, "./build_rootfs")
+}
+
+fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_dir: &str) -> io::Result<()> {
     let download_dir = "./inputs_cache";
     fs::create_dir_all(download_dir)?;
 
@@ -813,7 +818,187 @@ fn collect_dependencies_recursive(
     Ok(node)
 }
 
-// build a manifest and all its missing dependencies
+// show how packages would be built in parallel waves
+fn show_parallel_execution_plan(graph: &DiGraph<PathBuf, ()>, build_order: &[NodeIndex]) {
+    let mut dependencies: HashMap<NodeIndex, Vec<NodeIndex>> = HashMap::new();
+    for &node in build_order {
+        let deps: Vec<NodeIndex> = graph
+            .neighbors_directed(node, petgraph::Direction::Incoming)
+            .filter(|&dep| graph[dep] != PathBuf::new())
+            .collect();
+        dependencies.insert(node, deps);
+    }
+
+    let mut remaining: Vec<NodeIndex> = build_order.to_vec();
+    let mut completed = HashSet::new();
+    let mut wave_num = 0;
+
+    while !remaining.is_empty() {
+        wave_num += 1;
+
+        // find all packages that can be built in this wave
+        let wave: Vec<NodeIndex> = remaining
+            .iter()
+            .filter(|&&node| {
+                let deps = &dependencies[&node];
+                deps.iter().all(|dep| completed.contains(dep))
+            })
+            .cloned()
+            .collect();
+
+        if wave.is_empty() {
+            println!("\nERROR: Cannot make progress - circular dependency detected");
+            break;
+        }
+
+        println!("\n  Wave {}: {} package(s) in parallel", wave_num, wave.len());
+        for &node_idx in &wave {
+            let path = &graph[node_idx];
+            let filename = path.file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or("unknown");
+            println!("    - {}", filename.trim_end_matches(".yaml"));
+        }
+
+        // mark as completed
+        for &node in &wave {
+            completed.insert(node);
+        }
+
+        // remove from remaining
+        remaining.retain(|node| !completed.contains(node));
+    }
+}
+
+// build a manifest and all its missing dependencies in parallel
+fn build_packages_parallel(
+    graph: &DiGraph<PathBuf, ()>,
+    build_order: &[NodeIndex],
+    opts: &Opts,
+) -> io::Result<()> {
+    let total = build_order.len();
+    let completed = Arc::new(Mutex::new(HashSet::new()));
+    let build_counter = Arc::new(Mutex::new(0usize));
+
+    // create a map of node -> dependencies for quick lookup
+    let mut dependencies: HashMap<NodeIndex, Vec<NodeIndex>> = HashMap::new();
+    for &node in build_order {
+        let deps: Vec<NodeIndex> = graph
+            .neighbors_directed(node, petgraph::Direction::Incoming)
+            .filter(|&dep| graph[dep] != PathBuf::new())
+            .collect();
+        dependencies.insert(node, deps);
+    }
+
+    // build in waves: at each step, build all packages whose deps are complete
+    let mut remaining: Vec<NodeIndex> = build_order.to_vec();
+
+    while !remaining.is_empty() {
+        // find all packages that can be built in this wave
+        let wave: Vec<NodeIndex> = remaining
+            .iter()
+            .filter(|&&node| {
+                let deps = &dependencies[&node];
+                let completed_set = completed.lock().unwrap();
+                deps.iter().all(|dep| completed_set.contains(dep))
+            })
+            .cloned()
+            .collect();
+
+        if wave.is_empty() {
+            // no progress can be made - shouldn't happen with valid toposort
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Cannot make progress: all remaining packages have unmet dependencies",
+            ));
+        }
+
+        println!("Building wave of {} package(s) in parallel...", wave.len());
+
+        // build all packages in this wave in parallel
+        let results: Vec<Result<String, String>> = wave
+            .par_iter()
+            .map(|&node_idx| {
+                let path = &graph[node_idx];
+                let build_num = {
+                    let mut counter = build_counter.lock().unwrap();
+                    *counter += 1;
+                    *counter
+                };
+
+                // load manifest
+                let manifest_data = match load_manifest(path.to_str().unwrap()) {
+                    Ok(data) => data,
+                    Err(e) => return Err(format!("Failed to load {}: {}", path.display(), e)),
+                };
+
+                let mut manifest = match manifest_data {
+                    ManifestData::Package(m) => m,
+                    ManifestData::System(_) => return Ok("skipped".to_string()),
+                };
+
+                // use unique build directory based on slug and flavor
+                let build_dir = format!("./build_rootfs_{}_{}",
+                    manifest.package.slug.replace("/", "_"),
+                    manifest.package.flavor.replace("/", "_"));
+
+                // create opts for this build
+                let build_opts = Opts {
+                    repo_path: opts.repo_path.clone(),
+                    manifest_file: path.to_str().unwrap().to_string(),
+                    validate_reproducibility: opts.validate_reproducibility,
+                    update_checksum: opts.update_checksum,
+                    bootstrap: manifest.package.bootstrap,
+                    skip_runtime_deps: opts.skip_runtime_deps,
+                    runtime_deps_verbose: opts.runtime_deps_verbose,
+                    allow_missing_runtime_files: opts.allow_missing_runtime_files,
+                    update_outputs_requires: opts.update_outputs_requires,
+                    update_outputs_requires_only: opts.update_outputs_requires_only,
+                    refresh_ostree_metadata: opts.refresh_ostree_metadata,
+                };
+
+                println!("[{}/{}] Building: {}", build_num, total, manifest.package.slug);
+
+                // build the package
+                if let Err(e) = build_package_manifest_with_dir(&build_opts, &mut manifest, &build_dir) {
+                    return Err(format!("Failed to build {}: {}", manifest.package.slug, e));
+                }
+
+                // clean up build directory
+                let build_path = Path::new(&build_dir);
+                if build_path.exists() {
+                    if let Err(e) = fs::remove_dir_all(build_path) {
+                        eprintln!("Warning: failed to clean up {}: {}", build_dir, e);
+                    }
+                }
+
+                Ok(manifest.package.slug.clone())
+            })
+            .collect();
+
+        // check results and mark completed
+        for (i, result) in results.iter().enumerate() {
+            match result {
+                Ok(slug) if slug != "skipped" => {
+                    println!("✓ Successfully built {}", slug);
+                    completed.lock().unwrap().insert(wave[i]);
+                }
+                Ok(_) => {
+                    completed.lock().unwrap().insert(wave[i]);
+                }
+                Err(e) => {
+                    return Err(io::Error::new(io::ErrorKind::Other, e.clone()));
+                }
+            }
+        }
+
+        // remove completed packages from remaining
+        remaining.retain(|node| !completed.lock().unwrap().contains(node));
+    }
+
+    Ok(())
+}
+
 fn build_with_dependencies(
     repo_path: &str,
     manifest_path: &Path,
@@ -866,58 +1051,23 @@ fn build_with_dependencies(
         .filter(|&idx| graph[idx] != PathBuf::new())
         .collect();
 
+    // if dry run, show parallel execution plan
+    if dry_run {
+        println!("\nDRY RUN: Parallel execution plan:");
+        show_parallel_execution_plan(&graph, &build_order);
+        println!("\nDRY RUN: Would build {} packages", build_order.len());
+        return Ok(());
+    }
+
     println!("\nBuild order:");
     for (i, &node_idx) in build_order.iter().enumerate() {
         let path = &graph[node_idx];
         println!("  {}. {}", i + 1, path.display());
     }
 
-    // if dry run, stop here
-    if dry_run {
-        println!("\nDRY RUN: Would build {} packages", build_order.len());
-        return Ok(());
-    }
-
-    // build in order
-    println!("\nStarting builds...\n");
-    for (i, &node_idx) in build_order.iter().enumerate() {
-        let path = &graph[node_idx];
-        println!("==================================================");
-        println!("Building {}/{}: {}", i + 1, build_order.len(), path.display());
-        println!("==================================================");
-
-        // load and build manifest
-        let manifest_data = load_manifest(path.to_str().unwrap())?;
-        let mut manifest = match manifest_data {
-            ManifestData::Package(m) => m,
-            ManifestData::System(_) => continue,
-        };
-
-        // create temporary opts for this build
-        // use bootstrap setting from manifest, not from CLI opts
-        let build_opts = Opts {
-            repo_path: opts.repo_path.clone(),
-            manifest_file: path.to_str().unwrap().to_string(),
-            validate_reproducibility: opts.validate_reproducibility,
-            update_checksum: opts.update_checksum,
-            bootstrap: manifest.package.bootstrap,
-            skip_runtime_deps: opts.skip_runtime_deps,
-            runtime_deps_verbose: opts.runtime_deps_verbose,
-            allow_missing_runtime_files: opts.allow_missing_runtime_files,
-            update_outputs_requires: opts.update_outputs_requires,
-            update_outputs_requires_only: opts.update_outputs_requires_only,
-            refresh_ostree_metadata: opts.refresh_ostree_metadata,
-        };
-
-        build_package_manifest(&build_opts, &mut manifest)?;
-        println!("✓ Successfully built {}\n", manifest.package.slug);
-
-        // clean up build_rootfs for next package
-        let build_rootfs = Path::new("./build_rootfs");
-        if build_rootfs.exists() {
-            fs::remove_dir_all(build_rootfs)?;
-        }
-    }
+    // build in parallel waves
+    println!("\nStarting parallel builds...\n");
+    build_packages_parallel(&graph, &build_order, opts)?;
 
     println!("==================================================");
     println!("All packages built successfully!");
@@ -964,6 +1114,10 @@ fn rewrite_branch_metadata(
 }
 
 fn build_system_manifest(opts: &Opts, manifest: &SystemManifest) -> io::Result<()> {
+    build_system_manifest_with_dir(opts, manifest, "./build_rootfs")
+}
+
+fn build_system_manifest_with_dir(opts: &Opts, manifest: &SystemManifest, base_dir: &str) -> io::Result<()> {
     if opts.update_outputs_requires || opts.update_outputs_requires_only {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -974,7 +1128,6 @@ fn build_system_manifest(opts: &Opts, manifest: &SystemManifest) -> io::Result<(
         println!("Note: runtime dependency scanning is not available for system manifests yet.");
     }
 
-    let base_dir = "./build_rootfs";
     let download_dir = "./inputs_cache";
     fs::create_dir_all(download_dir)?;
 
