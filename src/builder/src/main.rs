@@ -542,6 +542,7 @@ fn collect_dependencies_recursive(
     graph: &mut DiGraph<PathBuf, ()>,
     manifest_map: &mut HashMap<PathBuf, NodeIndex>,
     force: bool,
+    ostree_cache: &mut HashMap<String, bool>,
 ) -> io::Result<NodeIndex> {
     // check if already processed
     if let Some(&node) = manifest_map.get(manifest_path) {
@@ -583,8 +584,12 @@ fn collect_dependencies_recursive(
 
     // process dependencies
     for dep in &dependencies {
-        // check if dependency is already in OSTree
-        if ensure_branch_exists(repo_path, &dep.commit).is_ok() {
+        // check if dependency is already in OSTree (with caching)
+        let in_ostree = ostree_cache.entry(dep.commit.clone()).or_insert_with(|| {
+            ensure_branch_exists(repo_path, &dep.commit).is_ok()
+        });
+
+        if *in_ostree {
             println!("  Dependency {} already in OSTree, skipping", dep.commit);
             continue;
         }
@@ -602,6 +607,7 @@ fn collect_dependencies_recursive(
                     graph,
                     manifest_map,
                     force,
+                    ostree_cache,
                 )?;
 
                 // add edge: dep must be built before current
@@ -939,6 +945,7 @@ fn build_with_dependencies(
 
     let mut graph = DiGraph::new();
     let mut manifest_map = HashMap::new();
+    let mut ostree_cache = HashMap::new();
 
     // collect all dependencies recursively
     collect_dependencies_recursive(
@@ -948,6 +955,7 @@ fn build_with_dependencies(
         &mut graph,
         &mut manifest_map,
         force,
+        &mut ostree_cache,
     )?;
 
     // filter out empty path markers (already-built packages)

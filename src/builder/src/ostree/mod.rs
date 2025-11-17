@@ -4,15 +4,12 @@ use std::process::Command;
 
 /// Check if an OSTree branch exists in the repository
 pub fn ensure_branch_exists(repo_path: &str, branch: &str) -> io::Result<()> {
-    let mut command = Command::new("unshare");
-    command.args(&["--user", "--map-root-user", "--"]);
-    command.arg("ostree");
-    command.arg("rev-parse");
-    command.arg("--repo");
-    command.arg(repo_path);
-    command.arg(branch);
-
-    let output = command.output()
+    let output = Command::new("ostree")
+        .arg("rev-parse")
+        .arg("--repo")
+        .arg(repo_path)
+        .arg(branch)
+        .output()
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e)))?;
 
     if !output.status.success() {
