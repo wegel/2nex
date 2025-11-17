@@ -66,6 +66,12 @@ struct Cli {
 
     #[clap(short = 'j', long, help = "Maximum number of parallel build jobs (default: number of CPUs)")]
     jobs: Option<usize>,
+
+    #[clap(long, help = "Show dependency paths for all packages")]
+    show_dep_paths: bool,
+
+    #[clap(long, help = "Force rebuild even if package is already built")]
+    force: bool,
 }
 
 #[derive(Parser)]
@@ -232,7 +238,7 @@ fn main() -> io::Result<()> {
                 refresh_ostree_metadata: false,
             };
 
-            build_with_dependencies(&repo_path, manifest_path, &manifest_dirs, &opts, cli.dry_run)
+            build_with_dependencies(&repo_path, manifest_path, &manifest_dirs, &opts, cli.dry_run, cli.show_dep_paths, cli.force)
         }
     }
 }
@@ -535,6 +541,7 @@ fn collect_dependencies_recursive(
     manifest_dirs: &[PathBuf],
     graph: &mut DiGraph<PathBuf, ()>,
     manifest_map: &mut HashMap<PathBuf, NodeIndex>,
+    force: bool,
 ) -> io::Result<NodeIndex> {
     // check if already processed
     if let Some(&node) = manifest_map.get(manifest_path) {
@@ -556,8 +563,8 @@ fn collect_dependencies_recursive(
         }
     };
 
-    // for package manifests, check if already built
-    if !is_system {
+    // for package manifests, check if already built (unless force is true)
+    if !is_system && !force {
         if let ManifestData::Package(ref manifest) = manifest_data {
             if check_if_built(repo_path, manifest) {
                 println!("Package {} already built, skipping", manifest.package.slug);
@@ -594,6 +601,7 @@ fn collect_dependencies_recursive(
                     manifest_dirs,
                     graph,
                     manifest_map,
+                    force,
                 )?;
 
                 // add edge: dep must be built before current
@@ -830,12 +838,70 @@ fn build_packages_parallel(
     Ok(())
 }
 
+fn show_dependency_paths(
+    graph: &DiGraph<PathBuf, ()>,
+    manifest_map: &HashMap<PathBuf, NodeIndex>,
+    root_path: &Path,
+) {
+    use petgraph::visit::Dfs;
+
+    let root_node = manifest_map.get(root_path).expect("Root manifest should be in map");
+
+    // for each node in the graph, show the path from root to that node
+    for (path, &node) in manifest_map.iter() {
+        if path == root_path || *path == PathBuf::new() {
+            continue; // skip root and empty markers
+        }
+
+        // find a path from root to this node using DFS
+        let mut dfs = Dfs::new(graph, *root_node);
+        let mut parent_map: HashMap<NodeIndex, Option<NodeIndex>> = HashMap::new();
+        parent_map.insert(*root_node, None);
+
+        while let Some(current) = dfs.next(graph) {
+            if current == node {
+                // reconstruct path
+                let mut path_nodes = vec![current];
+                let mut cur = current;
+                while let Some(Some(parent)) = parent_map.get(&cur) {
+                    path_nodes.push(*parent);
+                    cur = *parent;
+                }
+                path_nodes.reverse();
+
+                // print path
+                print!("  ");
+                for (i, &n) in path_nodes.iter().enumerate() {
+                    let p = &graph[n];
+                    if i > 0 {
+                        print!(" → ");
+                    }
+                    if let Some(name) = p.file_stem().and_then(|s| s.to_str()) {
+                        print!("{}", name);
+                    } else {
+                        print!("{}", p.display());
+                    }
+                }
+                println!();
+                break;
+            }
+
+            // record parents
+            for neighbor in graph.neighbors(current) {
+                parent_map.entry(neighbor).or_insert(Some(current));
+            }
+        }
+    }
+}
+
 fn build_with_dependencies(
     repo_path: &str,
     manifest_path: &Path,
     manifest_dirs: &[PathBuf],
     opts: &Opts,
     dry_run: bool,
+    show_dep_paths: bool,
+    force: bool,
 ) -> io::Result<()> {
     if dry_run {
         println!("DRY RUN: Analyzing dependency graph for {}", manifest_path.display());
@@ -853,6 +919,7 @@ fn build_with_dependencies(
         manifest_dirs,
         &mut graph,
         &mut manifest_map,
+        force,
     )?;
 
     // filter out empty path markers (already-built packages)
@@ -867,6 +934,12 @@ fn build_with_dependencies(
     }
 
     println!("\nDependency graph has {} packages to build", valid_nodes.len());
+
+    // show dependency paths if requested
+    if show_dep_paths {
+        println!("\nDependency paths:");
+        show_dependency_paths(&graph, &manifest_map, manifest_path);
+    }
 
     // topological sort to get build order
     let build_order = toposort(&graph, None).map_err(|cycle| {

@@ -194,10 +194,15 @@ pub fn read_metadata_list(repo_path: &str, commit: &str, key: &str) -> io::Resul
 /// Parse OSTree metadata list output
 pub fn parse_metadata_list_output(raw: &[u8]) -> io::Result<Vec<String>> {
     let text = String::from_utf8_lossy(raw);
-    let trimmed = text.trim();
+    let mut trimmed = text.trim();
 
     if trimmed.is_empty() {
         return Ok(Vec::new());
+    }
+
+    // ostree wraps the JSON in single quotes, strip them
+    if trimmed.starts_with('\'') && trimmed.ends_with('\'') {
+        trimmed = &trimmed[1..trimmed.len()-1];
     }
 
     let parsed: Vec<String> = serde_json::from_str(trimmed)
@@ -208,5 +213,10 @@ pub fn parse_metadata_list_output(raw: &[u8]) -> io::Result<Vec<String>> {
 
 /// Fetch requires metadata from OSTree repository
 pub fn fetch_requires_from_repo(repo_path: &str, commit: &str) -> io::Result<Vec<String>> {
+    // try output requires first (for output commits), then bundle requires (for bundle commits)
+    let output_requires = read_metadata_list(repo_path, commit, "nex.output.requires")?;
+    if !output_requires.is_empty() {
+        return Ok(output_requires);
+    }
     read_metadata_list(repo_path, commit, "nex.bundle.requires")
 }
