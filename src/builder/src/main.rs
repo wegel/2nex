@@ -115,6 +115,10 @@ enum Commands {
         /// Rewrite outputs.*.requires based on the runtime dependency scanner
         #[clap(long)]
         update_outputs_requires: bool,
+
+        /// Show what would be built without actually building (dry run)
+        #[clap(long)]
+        dry_run: bool,
     },
 }
 
@@ -344,6 +348,7 @@ fn main() -> io::Result<()> {
             runtime_deps_verbose,
             allow_missing_runtime_files,
             update_outputs_requires,
+            dry_run,
         }) => {
             // new graph-based build command
             let manifest_path = Path::new(&manifest_file);
@@ -363,7 +368,7 @@ fn main() -> io::Result<()> {
                 refresh_ostree_metadata: false,
             };
 
-            build_with_dependencies(&repo_path, manifest_path, &manifest_dirs, &opts)
+            build_with_dependencies(&repo_path, manifest_path, &manifest_dirs, &opts, dry_run)
         }
         None => {
             // legacy mode - original behavior
@@ -814,8 +819,13 @@ fn build_with_dependencies(
     manifest_path: &Path,
     manifest_dirs: &[PathBuf],
     opts: &Opts,
+    dry_run: bool,
 ) -> io::Result<()> {
-    println!("Building dependency graph for {}", manifest_path.display());
+    if dry_run {
+        println!("DRY RUN: Analyzing dependency graph for {}", manifest_path.display());
+    } else {
+        println!("Building dependency graph for {}", manifest_path.display());
+    }
 
     let mut graph = DiGraph::new();
     let mut manifest_map = HashMap::new();
@@ -860,6 +870,12 @@ fn build_with_dependencies(
     for (i, &node_idx) in build_order.iter().enumerate() {
         let path = &graph[node_idx];
         println!("  {}. {}", i + 1, path.display());
+    }
+
+    // if dry run, stop here
+    if dry_run {
+        println!("\nDRY RUN: Would build {} packages", build_order.len());
+        return Ok(());
     }
 
     // build in order
