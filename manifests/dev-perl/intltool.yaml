@@ -1,0 +1,100 @@
+package:
+  schema: 1
+  name: "intltool"
+  slug: "intltool"
+  flavor: "dev-perl"
+  version: "0.51.0"
+  description: "intltool is a set of tools to centralize translation of many different file formats using GNU gettext-compatible PO files."
+  homepage: "https://freedesktop.org/wiki/Software/intltool"
+  checksum: ec29ce03f93b199331b3d1ae367cdd58eb3479e09062eb84c3c53e81f534cd90
+
+sources:
+  - name: "intltool"
+    url: "https://launchpad.net/intltool/trunk/0.51.0/+download/intltool-0.51.0.tar.gz"
+    sha256: "67c74d94196b153b774ab9f89b2fa6c6ba79352407037c8c14d5aeb334e959cd"
+
+dependencies:
+- commit: x86_64/coreutils/9.5/bootstrap/phase1/bundles/dev
+  name: coreutils
+- commit: x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev
+  name: findutils
+- commit: x86_64/2nex-utilities/0.0.1/sys-apps/bundles/dev
+  name: 2nex-utilities
+- commit: x86_64/gawk/5.3.0/bootstrap/phase1/bundles/dev
+  name: gawk
+- commit: x86_64/gzip/1.13/bootstrap/phase1/bundles/dev
+  name: gzip
+- commit: x86_64/make/4.4.1/bootstrap/phase1/bundles/dev
+  name: make
+- commit: x86_64/tar/1.35/bootstrap/phase1/bundles/dev
+  name: tar
+- commit: x86_64/glibc/2.39/sys-libs/bundles/dev
+  name: glibc
+- commit: x86_64/attr/2.5.2/bootstrap/phase3/bundles/dev
+  name: attr
+- commit: x86_64/acl/2.3.2/bootstrap/phase3/bundles/dev
+  name: acl
+- commit: x86_64/libxcrypt/4.4.36/bootstrap/phase3/bundles/dev
+  name: libxcrypt
+- commit: x86_64/ncurses/6.4-20230520/bootstrap/phase3/bundles/dev
+  name: ncurses
+- commit: x86_64/sed/4.9/sys-apps/bundles/dev
+  name: sed
+- commit: x86_64/bash/5.2.21/app-shells/bundles/dev
+  name: bash
+- commit: x86_64/expat/2.6.2/sys-libs/bundles/dev
+  name: expat
+- commit: x86_64/perl/5.38.2/dev-lang/bundles/dev
+  name: perl
+- commit: x86_64/xml_parser/2.47/bootstrap/phase3/bundles/dev
+  name: perl_xml_parser
+
+build:
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    sed -i 's:\\\${:\\\$\\{:' intltool-update.in
+    ./configure --prefix=/usr
+    make
+    make DESTDIR=$OUT_DIR install
+    install -v -Dm644 doc/I18N-HOWTO ${OUT_DIR}/usr/share/doc/intltool-0.51.0/I18N-HOWTO
+    
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  full:
+    - bin
+    - doc
+    - man
+    - misc
+  dev:
+    - bin
+    - misc
+
+outputs:
+  bin:
+    files:
+    - /usr/bin/intltool-extract
+    - /usr/bin/intltool-merge
+    - /usr/bin/intltool-prepare
+    - /usr/bin/intltool-update
+    - /usr/bin/intltoolize
+    requires:
+    - x86_64/bash/5.2.21/app-shells/outputs/bin
+    - x86_64/perl/5.38.2/dev-lang/outputs/bin
+  doc:
+    files:
+    - /usr/share/doc/intltool-0.51.0/I18N-HOWTO
+  man:
+    files:
+    - /usr/share/man/man8/intltool-extract.8
+    - /usr/share/man/man8/intltool-merge.8
+    - /usr/share/man/man8/intltool-prepare.8
+    - /usr/share/man/man8/intltool-update.8
+    - /usr/share/man/man8/intltoolize.8
+  misc:
+    files:
+    - /usr/share/aclocal/intltool.m4
+    - /usr/share/intltool/Makefile.in.in

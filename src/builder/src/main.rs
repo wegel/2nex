@@ -18,6 +18,9 @@ use walkdir::WalkDir;
 use std::fmt;
 use std::process;
 
+use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::algo::toposort;
+
 pub mod runtime;
 
 mod utils;
@@ -27,11 +30,17 @@ use utils::determine_category;
 
 #[derive(Parser)]
 #[clap(version = "1.0", author = "Your Name")]
-struct Opts {
-    #[clap(value_name = "REPO", help = "Path to the OSTree repository")]
-    repo_path: String,
-    #[clap(value_name = "MANIFEST", help = "Path to the manifest file")]
-    manifest_file: String,
+struct Cli {
+    #[clap(subcommand)]
+    command: Option<Commands>,
+
+    // legacy positional args (for backward compatibility when no subcommand)
+    #[clap(value_name = "REPO")]
+    repo_path: Option<String>,
+    #[clap(value_name = "MANIFEST")]
+    manifest_file: Option<String>,
+
+    // legacy flags
     #[clap(long, help = "Validate build reproducibility")]
     validate_reproducibility: bool,
     #[clap(
@@ -70,6 +79,57 @@ struct Opts {
         long,
         help = "Rewrite OSTree output/bundle metadata without rebuilding (package manifests only)"
     )]
+    refresh_ostree_metadata: bool,
+}
+
+#[derive(Parser)]
+enum Commands {
+    /// Build a manifest and all its missing dependencies using dependency graph
+    BuildGraph {
+        /// Path to OSTree repository
+        repo_path: String,
+
+        /// Path to manifest file to build
+        manifest_file: String,
+
+        /// Base directory for searching manifests (default: ./manifests)
+        #[clap(long, default_value = "./manifests")]
+        manifest_dir: String,
+
+        /// Run the build script on the host's filesystem (for bootstrapping)
+        #[clap(long)]
+        bootstrap: bool,
+
+        /// Skip runtime dependency scanning
+        #[clap(long)]
+        skip_runtime_deps: bool,
+
+        /// Include per-reference explanations in runtime dependency output
+        #[clap(long)]
+        runtime_deps_verbose: bool,
+
+        /// Treat missing files during runtime dependency scanning as warnings
+        #[clap(long)]
+        allow_missing_runtime_files: bool,
+
+        /// Rewrite outputs.*.requires based on the runtime dependency scanner
+        #[clap(long)]
+        update_outputs_requires: bool,
+    },
+}
+
+// legacy Opts struct for backward compatibility
+struct Opts {
+    repo_path: String,
+    manifest_file: String,
+    validate_reproducibility: bool,
+    update_checksum: bool,
+    bootstrap: bool,
+    skip_runtime_deps: bool,
+    runtime_deps_verbose: bool,
+    allow_missing_runtime_files: bool,
+    update_outputs_requires: bool,
+    update_outputs_requires_only: bool,
     refresh_ostree_metadata: bool,
 }
 
@@ -270,34 +330,92 @@ where
 }
 
 fn main() -> io::Result<()> {
-    let opts: Opts = Opts::parse();
-    if opts.refresh_ostree_metadata
-        && (opts.update_outputs_requires
-            || opts.update_outputs_requires_only
-            || opts.validate_reproducibility)
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "--refresh-ostree-metadata cannot be combined with build/update flags",
-        ));
-    }
-    match load_manifest(&opts.manifest_file)? {
-        ManifestData::Package(mut manifest) => {
-            if opts.refresh_ostree_metadata {
-                refresh_package_metadata(&opts.repo_path, &manifest)?;
-                Ok(())
-            } else {
-                build_package_manifest(&opts, &mut manifest)
-            }
+    let cli: Cli = Cli::parse();
+
+    match cli.command {
+        Some(Commands::BuildGraph {
+            repo_path,
+            manifest_file,
+            manifest_dir,
+            bootstrap,
+            skip_runtime_deps,
+            runtime_deps_verbose,
+            allow_missing_runtime_files,
+            update_outputs_requires,
+        }) => {
+            // new graph-based build command
+            let manifest_path = Path::new(&manifest_file);
+            let manifest_dirs = vec![PathBuf::from(manifest_dir)];
+
+            let opts = Opts {
+                repo_path: repo_path.clone(),
+                manifest_file: manifest_file.clone(),
+                validate_reproducibility: false,
+                update_checksum: false,
+                bootstrap,
+                skip_runtime_deps,
+                runtime_deps_verbose,
+                allow_missing_runtime_files,
+                update_outputs_requires,
+                update_outputs_requires_only: false,
+                refresh_ostree_metadata: false,
+            };
+
+            build_with_dependencies(&repo_path, manifest_path, &manifest_dirs, &opts)
         }
-        ManifestData::System(manifest) => {
-            if opts.refresh_ostree_metadata {
+        None => {
+            // legacy mode - original behavior
+            let repo_path = cli.repo_path.ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidInput, "REPO argument required")
+            })?;
+            let manifest_file = cli.manifest_file.ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidInput, "MANIFEST argument required")
+            })?;
+
+            let opts = Opts {
+                repo_path,
+                manifest_file: manifest_file.clone(),
+                validate_reproducibility: cli.validate_reproducibility,
+                update_checksum: cli.update_checksum,
+                bootstrap: cli.bootstrap,
+                skip_runtime_deps: cli.skip_runtime_deps,
+                runtime_deps_verbose: cli.runtime_deps_verbose,
+                allow_missing_runtime_files: cli.allow_missing_runtime_files,
+                update_outputs_requires: cli.update_outputs_requires,
+                update_outputs_requires_only: cli.update_outputs_requires_only,
+                refresh_ostree_metadata: cli.refresh_ostree_metadata,
+            };
+
+            if opts.refresh_ostree_metadata
+                && (opts.update_outputs_requires
+                    || opts.update_outputs_requires_only
+                    || opts.validate_reproducibility)
+            {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    "--refresh-ostree-metadata only applies to package manifests",
+                    "--refresh-ostree-metadata cannot be combined with build/update flags",
                 ));
             }
-            build_system_manifest(&opts, &manifest)
+
+            match load_manifest(&manifest_file)? {
+                ManifestData::Package(mut manifest) => {
+                    if opts.refresh_ostree_metadata {
+                        refresh_package_metadata(&opts.repo_path, &manifest)?;
+                        Ok(())
+                    } else {
+                        build_package_manifest(&opts, &mut manifest)
+                    }
+                }
+                ManifestData::System(manifest) => {
+                    if opts.refresh_ostree_metadata {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            "--refresh-ostree-metadata only applies to package manifests",
+                        ));
+                    }
+                    build_system_manifest(&opts, &manifest)
+                }
+            }
         }
     }
 }
@@ -527,6 +645,266 @@ fn ensure_branch_exists(repo_path: &str, branch: &str) -> io::Result<()> {
             ),
         ))
     }
+}
+
+// parse commit ref to extract slug, version, and flavor
+// format: x86_64/{slug}/{version}/{flavor}/outputs/{output} or .../bundles/{bundle}
+fn parse_commit_ref(commit: &str) -> Option<(String, String, String)> {
+    let parts: Vec<&str> = commit.split('/').collect();
+    if parts.len() >= 5 && parts[0] == "x86_64" {
+        let slug = parts[1].to_string();
+        let version = parts[2].to_string();
+        // flavor can be multi-part (e.g., "bootstrap/phase3")
+        let flavor_parts = &parts[3..parts.len()-2]; // skip "outputs" or "bundles" and name
+        let flavor = flavor_parts.join("/");
+        return Some((slug, version, flavor));
+    }
+    None
+}
+
+// find manifest file for a given commit reference
+fn find_manifest_for_commit(
+    commit: &str,
+    manifest_dirs: &[PathBuf],
+) -> io::Result<PathBuf> {
+    let (slug, _version, flavor) = parse_commit_ref(commit).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Invalid commit reference format: {}", commit),
+        )
+    })?;
+
+    // search in manifest directories
+    for base_dir in manifest_dirs {
+        let flavor_path = base_dir.join(&flavor);
+
+        // try bootstrap pattern first: {flavor}/*-{slug}.yaml
+        if flavor_path.exists() && flavor_path.is_dir() {
+            for entry in fs::read_dir(&flavor_path)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+                    let filename = path.file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("");
+                    // check if filename ends with -{slug}
+                    if filename.ends_with(&format!("-{}", slug)) || filename == slug {
+                        return Ok(path);
+                    }
+                }
+            }
+        }
+
+        // try categorical pattern: {flavor}/{slug}.yaml
+        let categorical_path = flavor_path.join(format!("{}.yaml", slug));
+        if categorical_path.exists() {
+            return Ok(categorical_path);
+        }
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        format!("Could not find manifest for commit {} (slug: {}, flavor: {})", commit, slug, flavor),
+    ))
+}
+
+// check if all outputs of a manifest are already built in OSTree
+fn check_if_built(repo_path: &str, manifest: &Manifest) -> bool {
+    let arch = "x86_64"; // TODO: make configurable
+    let slug = &manifest.package.slug;
+    let version = &manifest.package.version;
+    let flavor = &manifest.package.flavor;
+
+    // check all outputs
+    for (output_name, _spec) in &manifest.outputs {
+        let branch = format!("{}/{}/{}/{}/outputs/{}", arch, slug, version, flavor, output_name);
+        if ensure_branch_exists(repo_path, &branch).is_err() {
+            return false;
+        }
+    }
+
+    true
+}
+
+// recursively collect dependencies and build graph
+fn collect_dependencies_recursive(
+    manifest_path: &Path,
+    repo_path: &str,
+    manifest_dirs: &[PathBuf],
+    graph: &mut DiGraph<PathBuf, ()>,
+    manifest_map: &mut HashMap<PathBuf, NodeIndex>,
+) -> io::Result<NodeIndex> {
+    // check if already processed
+    if let Some(&node) = manifest_map.get(manifest_path) {
+        return Ok(node);
+    }
+
+    // load manifest
+    let manifest_data = load_manifest(manifest_path.to_str().unwrap())?;
+    let manifest = match manifest_data {
+        ManifestData::Package(m) => m,
+        ManifestData::System(_) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "System manifests not supported for graph building",
+            ));
+        }
+    };
+
+    // check if already built - if so, skip adding to graph
+    if check_if_built(repo_path, &manifest) {
+        println!("Package {} already built, skipping", manifest.package.slug);
+        // we still need to add it to the map to prevent duplicate lookups,
+        // but we use a special marker node that won't be in the build order
+        let node = graph.add_node(PathBuf::new()); // empty path = skip
+        manifest_map.insert(manifest_path.to_path_buf(), node);
+        return Ok(node);
+    }
+
+    // add this manifest to graph
+    let node = graph.add_node(manifest_path.to_path_buf());
+    manifest_map.insert(manifest_path.to_path_buf(), node);
+
+    println!("Processing dependencies for {}", manifest.package.slug);
+
+    // process dependencies
+    for dep in &manifest.dependencies {
+        // check if dependency is already in OSTree
+        if ensure_branch_exists(repo_path, &dep.commit).is_ok() {
+            println!("  Dependency {} already in OSTree, skipping", dep.commit);
+            continue;
+        }
+
+        // find manifest for this dependency
+        match find_manifest_for_commit(&dep.commit, manifest_dirs) {
+            Ok(dep_manifest_path) => {
+                println!("  Found dependency manifest: {}", dep_manifest_path.display());
+
+                // recurse
+                let dep_node = collect_dependencies_recursive(
+                    &dep_manifest_path,
+                    repo_path,
+                    manifest_dirs,
+                    graph,
+                    manifest_map,
+                )?;
+
+                // add edge: dep must be built before current
+                // edge direction: dep_node -> node (dep comes before dependent)
+                // only add edge if dep_node is a real node (not empty path marker)
+                if graph[dep_node] != PathBuf::new() {
+                    graph.add_edge(dep_node, node, ());
+                }
+            }
+            Err(e) => {
+                eprintln!("  Warning: Could not find manifest for dependency {}: {}", dep.commit, e);
+                // continue anyway - might be a bootstrap dependency that's already built
+            }
+        }
+    }
+
+    Ok(node)
+}
+
+// build a manifest and all its missing dependencies
+fn build_with_dependencies(
+    repo_path: &str,
+    manifest_path: &Path,
+    manifest_dirs: &[PathBuf],
+    opts: &Opts,
+) -> io::Result<()> {
+    println!("Building dependency graph for {}", manifest_path.display());
+
+    let mut graph = DiGraph::new();
+    let mut manifest_map = HashMap::new();
+
+    // collect all dependencies recursively
+    collect_dependencies_recursive(
+        manifest_path,
+        repo_path,
+        manifest_dirs,
+        &mut graph,
+        &mut manifest_map,
+    )?;
+
+    // filter out empty path markers (already-built packages)
+    let valid_nodes: Vec<NodeIndex> = graph
+        .node_indices()
+        .filter(|&idx| graph[idx] != PathBuf::new())
+        .collect();
+
+    if valid_nodes.is_empty() {
+        println!("All packages already built!");
+        return Ok(());
+    }
+
+    println!("\nDependency graph has {} packages to build", valid_nodes.len());
+
+    // topological sort to get build order
+    let build_order = toposort(&graph, None).map_err(|cycle| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("Circular dependency detected at node {:?}", cycle.node_id()),
+        )
+    })?;
+
+    // filter build order to only include valid nodes
+    let build_order: Vec<NodeIndex> = build_order
+        .into_iter()
+        .filter(|&idx| graph[idx] != PathBuf::new())
+        .collect();
+
+    println!("\nBuild order:");
+    for (i, &node_idx) in build_order.iter().enumerate() {
+        let path = &graph[node_idx];
+        println!("  {}. {}", i + 1, path.display());
+    }
+
+    // build in order
+    println!("\nStarting builds...\n");
+    for (i, &node_idx) in build_order.iter().enumerate() {
+        let path = &graph[node_idx];
+        println!("==================================================");
+        println!("Building {}/{}: {}", i + 1, build_order.len(), path.display());
+        println!("==================================================");
+
+        // load and build manifest
+        let manifest_data = load_manifest(path.to_str().unwrap())?;
+        let mut manifest = match manifest_data {
+            ManifestData::Package(m) => m,
+            ManifestData::System(_) => continue,
+        };
+
+        // create temporary opts for this build
+        let build_opts = Opts {
+            repo_path: opts.repo_path.clone(),
+            manifest_file: path.to_str().unwrap().to_string(),
+            validate_reproducibility: opts.validate_reproducibility,
+            update_checksum: opts.update_checksum,
+            bootstrap: opts.bootstrap,
+            skip_runtime_deps: opts.skip_runtime_deps,
+            runtime_deps_verbose: opts.runtime_deps_verbose,
+            allow_missing_runtime_files: opts.allow_missing_runtime_files,
+            update_outputs_requires: opts.update_outputs_requires,
+            update_outputs_requires_only: opts.update_outputs_requires_only,
+            refresh_ostree_metadata: opts.refresh_ostree_metadata,
+        };
+
+        build_package_manifest(&build_opts, &mut manifest)?;
+        println!("✓ Successfully built {}\n", manifest.package.slug);
+
+        // clean up build_rootfs for next package
+        let build_rootfs = Path::new("./build_rootfs");
+        if build_rootfs.exists() {
+            fs::remove_dir_all(build_rootfs)?;
+        }
+    }
+
+    println!("==================================================");
+    println!("All packages built successfully!");
+    println!("==================================================");
+
+    Ok(())
 }
 
 fn rewrite_branch_metadata(
