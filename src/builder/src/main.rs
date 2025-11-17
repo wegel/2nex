@@ -121,6 +121,10 @@ enum Commands {
         /// Show what would be built without actually building (dry run)
         #[clap(long)]
         dry_run: bool,
+
+        /// Maximum number of parallel build jobs (default: number of CPUs)
+        #[clap(short = 'j', long)]
+        jobs: Option<usize>,
     },
 }
 
@@ -351,7 +355,16 @@ fn main() -> io::Result<()> {
             allow_missing_runtime_files,
             update_outputs_requires,
             dry_run,
+            jobs,
         }) => {
+            // configure rayon thread pool if jobs specified
+            if let Some(num_jobs) = jobs {
+                rayon::ThreadPoolBuilder::new()
+                    .num_threads(num_jobs)
+                    .build_global()
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to configure thread pool: {}", e)))?;
+            }
+
             // new graph-based build command
             let manifest_path = Path::new(&manifest_file);
             let manifest_dirs = vec![PathBuf::from(manifest_dir)];
