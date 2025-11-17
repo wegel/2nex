@@ -698,7 +698,7 @@ fn build_packages_parallel(
 
     while !remaining.is_empty() {
         // find all packages that can be built in this wave
-        let wave: Vec<NodeIndex> = remaining
+        let mut wave: Vec<NodeIndex> = remaining
             .iter()
             .filter(|&&node| {
                 let deps = &dependencies[&node];
@@ -714,6 +714,30 @@ fn build_packages_parallel(
                 io::ErrorKind::Other,
                 "Cannot make progress: all remaining packages have unmet dependencies",
             ));
+        }
+
+        // bootstrap packages must build sequentially (they share ./build_rootfs directory)
+        // if this wave contains bootstrap packages, only build one at a time
+        let has_bootstrap = wave.iter().any(|&node_idx| {
+            let path = &graph[node_idx];
+            if let Ok(manifest_data) = load_manifest(path.to_str().unwrap()) {
+                matches!(manifest_data, ManifestData::Package(m) if m.package.bootstrap)
+            } else {
+                false
+            }
+        });
+
+        if has_bootstrap {
+            // find the first bootstrap package and build only that one
+            let bootstrap_idx = wave.iter().position(|&node_idx| {
+                let path = &graph[node_idx];
+                if let Ok(manifest_data) = load_manifest(path.to_str().unwrap()) {
+                    matches!(manifest_data, ManifestData::Package(m) if m.package.bootstrap)
+                } else {
+                    false
+                }
+            }).unwrap();
+            wave = vec![wave[bootstrap_idx]];
         }
 
         println!("Building wave of {} package(s) in parallel...", wave.len());
@@ -737,10 +761,14 @@ fn build_packages_parallel(
 
                 let result = match manifest_data {
                     ManifestData::Package(mut manifest) => {
-                        // use unique build directory based on slug and flavor
-                        let build_dir = format!("./build_rootfs_{}_{}",
-                            manifest.package.slug.replace("/", "_"),
-                            manifest.package.flavor.replace("/", "_"));
+                        // bootstrap packages must use fixed directory name so GCC's hardcoded sysroot path remains valid
+                        let build_dir = if manifest.package.bootstrap {
+                            "./build_rootfs".to_string()
+                        } else {
+                            format!("./build_rootfs_{}_{}",
+                                manifest.package.slug.replace("/", "_"),
+                                manifest.package.flavor.replace("/", "_"))
+                        };
 
                         // create opts for this build
                         let build_opts = Opts {
@@ -765,7 +793,7 @@ fn build_packages_parallel(
                             return Err(format!("Failed to build {}: {}", slug, e));
                         }
 
-                        // clean up build directory
+                        // clean up build directory after each package
                         let build_path = Path::new(&build_dir);
                         if build_path.exists() {
                             if let Err(e) = fs::remove_dir_all(build_path) {
