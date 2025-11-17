@@ -1,0 +1,212 @@
+use std::io;
+use std::path::Path;
+use std::process::Command;
+
+/// Check if an OSTree branch exists in the repository
+pub fn ensure_branch_exists(repo_path: &str, branch: &str) -> io::Result<()> {
+    let mut command = Command::new("unshare");
+    command.args(&["--user", "--map-root-user", "--"]);
+    command.arg("ostree");
+    command.arg("rev-parse");
+    command.arg("--repo");
+    command.arg(repo_path);
+    command.arg(branch);
+
+    let output = command.output()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e)))?;
+
+    if !output.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "Branch {} missing in {}: {}",
+                branch,
+                repo_path,
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Parse an OSTree commit reference into (slug, version, flavor)
+pub fn parse_commit_ref(commit: &str) -> Option<(String, String, String)> {
+    // format: x86_64/{slug}/{version}/{flavor}/...
+    let parts: Vec<&str> = commit.split('/').collect();
+    if parts.len() >= 4 {
+        let slug = parts[1].to_string();
+        let version = parts[2].to_string();
+        let flavor = parts[3].to_string();
+        Some((slug, version, flavor))
+    } else {
+        None
+    }
+}
+
+/// Checkout an OSTree commit into a directory
+pub fn checkout_ostree_into(
+    repo_path: &str,
+    commit: &str,
+    dest: &Path,
+    union: bool,
+    allow_noent: bool,
+) -> io::Result<()> {
+    println!(
+        "Checking out OSTree commit {} into {} (union: {})",
+        commit,
+        dest.display(),
+        union
+    );
+
+    let mut command = Command::new("unshare");
+    command.args(&["--map-root-user", "--user", "--"]);
+    command.arg("ostree");
+    command.arg("checkout");
+    command.arg("--repo").arg(repo_path);
+    if union {
+        command.arg("--union");
+    }
+    if allow_noent {
+        command.arg("--allow-noent");
+    }
+    command.arg(commit);
+    command.arg(dest);
+
+    let output = command
+        .output()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree checkout: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to checkout {}: {}", commit, stderr),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Commit a directory to OSTree
+pub fn commit_to_ostree(
+    repo_path: &str,
+    branch: &str,
+    tree_path: &Path,
+    metadata: &[(String, String)],
+) -> io::Result<()> {
+    println!("Committing {} to OSTree branch {}", tree_path.display(), branch);
+
+    let mut command = Command::new("unshare");
+    command.args(&["--map-root-user", "--user", "--"]);
+    command.arg("ostree");
+    command.arg("commit");
+    command.arg("--repo").arg(repo_path);
+    command.arg("--branch").arg(branch);
+    command.arg("--no-xattrs");
+    command.arg("--no-bindings");
+
+    for (key, value) in metadata {
+        command.arg("--add-metadata-string");
+        command.arg(format!("{}={}", key, value));
+    }
+
+    command.arg(tree_path.to_str().unwrap());
+
+    let output = command
+        .output()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree commit: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to commit to {}: {}", branch, stderr),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Rewrite OSTree branch metadata without changing the tree
+pub fn rewrite_branch_metadata(
+    repo_path: &str,
+    branch: &str,
+    metadata: &[(String, String)],
+) -> io::Result<()> {
+    println!("Rewriting metadata for {}", branch);
+    let mut command = Command::new("unshare");
+    command.args(&["--map-root-user", "--user", "--"]);
+    command.arg("ostree");
+    command.arg("commit");
+    command.arg("--repo").arg(repo_path);
+    command.arg("--branch").arg(branch);
+    command.arg("--tree=ref=").arg(branch);
+
+    for (key, value) in metadata {
+        command.arg(format!("--add-metadata-string={}={}", key, value));
+    }
+
+    let output = command
+        .output()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to rewrite metadata for {}: {}", branch, stderr),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Encode a list of strings as JSON for OSTree metadata
+pub fn encode_metadata_list(values: &[String]) -> io::Result<Option<String>> {
+    if values.is_empty() {
+        return Ok(None);
+    }
+    let json = serde_json::to_string(values)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to encode metadata: {}", e)))?;
+    Ok(Some(json))
+}
+
+/// Read a metadata list from an OSTree commit
+pub fn read_metadata_list(repo_path: &str, commit: &str, key: &str) -> io::Result<Vec<String>> {
+    let output = Command::new("ostree")
+        .arg("show")
+        .arg("--repo")
+        .arg(repo_path)
+        .arg("--print-metadata-key")
+        .arg(key)
+        .arg(commit)
+        .output()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e)))?;
+
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+
+    parse_metadata_list_output(&output.stdout)
+}
+
+/// Parse OSTree metadata list output
+pub fn parse_metadata_list_output(raw: &[u8]) -> io::Result<Vec<String>> {
+    let text = String::from_utf8_lossy(raw);
+    let trimmed = text.trim();
+
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let parsed: Vec<String> = serde_json::from_str(trimmed)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Failed to parse metadata: {}", e)))?;
+
+    Ok(parsed)
+}
+
+/// Fetch requires metadata from OSTree repository
+pub fn fetch_requires_from_repo(repo_path: &str, commit: &str) -> io::Result<Vec<String>> {
+    read_metadata_list(repo_path, commit, "nex.bundle.requires")
+}
