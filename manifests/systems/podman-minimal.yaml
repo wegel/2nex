@@ -1,0 +1,36 @@
+schema: 1
+kind: system
+
+system:
+  name: "Podman Minimal System"
+  slug: "podman-minimal"
+  version: "0.1.0"
+  architecture: "x86_64"
+  description: "Minimal system with podman for testing container functionality."
+
+  checksum: 812853fbf0416ba8208fe68f4c8916b7782ac8b453d36930c5176df7a7257631
+sources:
+  - name: issue
+    file: manifests/systems/demo-issue.txt
+    sha256: cf43179882d602d9dce06e376f13bf14be4a8b6cb9c32ba4c7086e76a67e59b0
+
+packages:
+  - name: coreutils-userland
+    commit: x86_64/coreutils/9.5/sys-apps/outputs/bin
+  - name: bash-shell
+    commit: x86_64/bash/5.2.21/app-shells/outputs/bin
+  - name: podman
+    commit: x86_64/podman/5.4.1/app-containers/outputs/bin
+  - name: podman-conf
+    commit: x86_64/podman/5.4.1/app-containers/outputs/conf
+
+dependencies:
+
+build:
+  script: |
+    set -eux
+    echo "Building podman-minimal system"
+    mkdir -p /target/etc
+    install -m 0644 ${SOURCE_issue} /target/etc/issue
+    printf 'Built from %s/%s\n' "${SYSTEM_SLUG}" "${SYSTEM_VERSION}" > /target/etc/podman-release
+    ln -sf issue /target/etc/motd
