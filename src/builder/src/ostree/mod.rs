@@ -217,3 +217,33 @@ pub fn fetch_requires_from_repo(repo_path: &str, commit: &str) -> io::Result<Vec
     }
     read_metadata_list(repo_path, commit, "nex.bundle.requires")
 }
+
+/// Read build checksum from an OSTree commit
+pub fn read_checksum_from_commit(repo_path: &str, commit: &str) -> io::Result<String> {
+    let output = Command::new("ostree")
+        .arg("show")
+        .arg("--repo")
+        .arg(repo_path)
+        .arg("--print-metadata-key")
+        .arg("nex.build.checksum")
+        .arg(commit)
+        .output()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e)))?;
+
+    if !output.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "Checksum metadata not found",
+        ));
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let trimmed = text.trim();
+
+    // ostree wraps strings in single quotes, strip them
+    if trimmed.starts_with('\'') && trimmed.ends_with('\'') {
+        Ok(trimmed[1..trimmed.len()-1].to_string())
+    } else {
+        Ok(trimmed.to_string())
+    }
+}

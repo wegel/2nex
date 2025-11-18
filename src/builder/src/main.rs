@@ -72,6 +72,9 @@ struct Cli {
 
     #[clap(long, help = "Force rebuild even if package is already built")]
     force: bool,
+
+    #[clap(long, help = "Add checksums to manifests missing them (from OSTree or by building)")]
+    add_checksums: bool,
 }
 
 #[derive(Parser)]
@@ -238,7 +241,7 @@ fn main() -> io::Result<()> {
                 refresh_ostree_metadata: false,
             };
 
-            build_with_dependencies(&repo_path, manifest_path, &manifest_dirs, &opts, cli.dry_run, cli.show_dep_paths, cli.force)
+            build_with_dependencies(&repo_path, manifest_path, &manifest_dirs, &opts, cli.dry_run, cli.add_checksums, cli.show_dep_paths, cli.force)
         }
     }
 }
@@ -928,12 +931,91 @@ fn show_dependency_paths(
     }
 }
 
+fn add_missing_checksums_to_manifests(
+    build_order: &[NodeIndex],
+    graph: &DiGraph<PathBuf, ()>,
+    repo_path: &str,
+    opts: &Opts,
+) -> io::Result<()> {
+    use crate::ostree::read_checksum_from_commit;
+    use crate::manifest::update::update_manifest_checksum_field;
+    use crate::manifest::ManifestKind;
+
+    for &node_idx in build_order {
+        let manifest_path = &graph[node_idx];
+        let manifest_data = load_manifest(manifest_path.to_str().unwrap())?;
+
+        match manifest_data {
+            ManifestData::Package(manifest) => {
+                // skip if already has checksum
+                if manifest.package.checksum.is_some() {
+                    continue;
+                }
+
+                println!("Processing: {}", manifest.package.slug);
+
+                // try to get checksum from OSTree (check first bundle)
+                if let Some((bundle_name, _)) = manifest.bundles.iter().next() {
+                    let commit_ref = format!(
+                        "x86_64/{}/{}/{}/bundles/{}",
+                        manifest.package.slug,
+                        manifest.package.version,
+                        manifest.package.flavor,
+                        bundle_name
+                    );
+
+                    match read_checksum_from_commit(repo_path, &commit_ref) {
+                        Ok(checksum) => {
+                            println!("  Found checksum in OSTree: {}", checksum);
+                            update_manifest_checksum_field(
+                                manifest_path.to_str().unwrap(),
+                                ManifestKind::Package,
+                                &checksum,
+                            )?;
+                            continue;
+                        }
+                        Err(_) => {
+                            println!("  Not found in OSTree, building to get checksum...");
+                        }
+                    }
+                }
+
+                // build to get checksum
+                let mut manifest_copy = manifest.clone();
+                let build_opts = Opts {
+                    repo_path: repo_path.to_string(),
+                    manifest_file: manifest_path.to_str().unwrap().to_string(),
+                    validate_reproducibility: false,
+                    update_checksum: true, // enable checksum updating
+                    bootstrap: manifest.package.bootstrap,
+                    skip_runtime_deps: opts.skip_runtime_deps,
+                    runtime_deps_verbose: opts.runtime_deps_verbose,
+                    allow_missing_runtime_files: opts.allow_missing_runtime_files,
+                    update_outputs_requires: opts.update_outputs_requires,
+                    update_outputs_requires_only: false,
+                    refresh_ostree_metadata: false,
+                };
+
+                build_package_manifest(&build_opts, &mut manifest_copy)?;
+                println!("  Built and checksummed");
+            }
+            ManifestData::System(_) => {
+                // system manifests don't need checksums for this purpose
+                continue;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn build_with_dependencies(
     repo_path: &str,
     manifest_path: &Path,
     manifest_dirs: &[PathBuf],
     opts: &Opts,
     dry_run: bool,
+    add_checksums: bool,
     show_dep_paths: bool,
     force: bool,
 ) -> io::Result<()> {
@@ -948,13 +1030,14 @@ fn build_with_dependencies(
     let mut ostree_cache = HashMap::new();
 
     // collect all dependencies recursively
+    // when add_checksums is true, treat it like force to include already-built packages
     collect_dependencies_recursive(
         manifest_path,
         repo_path,
         manifest_dirs,
         &mut graph,
         &mut manifest_map,
-        force,
+        force || add_checksums,
         &mut ostree_cache,
     )?;
 
@@ -991,6 +1074,14 @@ fn build_with_dependencies(
         .into_iter()
         .filter(|&idx| graph[idx] != PathBuf::new())
         .collect();
+
+    // if add_checksums mode, process manifests to add missing checksums
+    if add_checksums {
+        println!("\nAdding missing checksums...");
+        add_missing_checksums_to_manifests(&build_order, &graph, repo_path, opts)?;
+        println!("Checksums updated!");
+        return Ok(());
+    }
 
     // if dry run, show parallel execution plan
     if dry_run {
