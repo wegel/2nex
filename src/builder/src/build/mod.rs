@@ -93,6 +93,25 @@ pub fn setup_composite_rootfs(
         checkout_ostree_into(repo_path, commit, Path::new(base_dir), true, false)?;
     }
 
+    // create FHS compatibility symlinks (only if there are actual dependencies to checkout)
+    if !dependency_commits.is_empty() {
+        let symlinks = vec![
+            ("bin", "/usr/bin"),
+            ("lib", "/usr/lib"),
+            ("sbin", "/usr/bin"),
+            ("lib64", "/usr/lib"),
+            ("usr/lib64", "lib"),
+            ("usr/sbin", "bin"),
+        ];
+
+        for (link_path, target) in symlinks {
+            let full_link_path = Path::new(base_dir).join(link_path);
+            if !full_link_path.exists() {
+                std::os::unix::fs::symlink(target, &full_link_path)?;
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -342,6 +361,35 @@ pub fn run_build_script(
 
             if [ ! -e {build_dir}/usr/sbin ]; then
                 ln -sf bin {build_dir}/usr/sbin
+            fi
+
+            # create same FHS symlinks in /target for system builds
+            if [ -d {build_dir}/target ]; then
+                mkdir -p {build_dir}/target/usr
+
+                if [ ! -e {build_dir}/target/bin ]; then
+                    ln -sf /usr/bin {build_dir}/target/bin
+                fi
+
+                if [ ! -e {build_dir}/target/lib ]; then
+                    ln -sf /usr/lib {build_dir}/target/lib
+                fi
+
+                if [ ! -e {build_dir}/target/sbin ]; then
+                    ln -sf /usr/bin {build_dir}/target/sbin
+                fi
+
+                if [ ! -e {build_dir}/target/lib64 ]; then
+                    ln -sf /usr/lib {build_dir}/target/lib64
+                fi
+
+                if [ ! -e {build_dir}/target/usr/lib64 ]; then
+                    ln -sf lib {build_dir}/target/usr/lib64
+                fi
+
+                if [ ! -e {build_dir}/target/usr/sbin ]; then
+                    ln -sf bin {build_dir}/target/usr/sbin
+                fi
             fi
 
             chmod +x {build_dir}/2nex/tmp/build_script.sh
