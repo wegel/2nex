@@ -321,20 +321,25 @@ pub fn run_build_script(
             mount -t devpts devpts {build_dir}/dev/pts
             ln -sf /dev/pts/ptmx {build_dir}/dev/ptmx
 
-            if [ -e {build_dir}/bin ]; then
-                rmdir {build_dir}/lib
+            # remove symlinks for usrmerge compatibility (only remove if symlink, not dir)
+            if [ -L {build_dir}/lib ]; then
+                rm -f {build_dir}/lib
             fi
-            
-            if [ -e {build_dir}/lib64 ]; then
-                rmdir {build_dir}/lib64
+
+            if [ -L {build_dir}/lib64 ]; then
+                rm -f {build_dir}/lib64
             fi
-            
-            if [ -e {build_dir}/sbin ]; then
-                rmdir {build_dir}/usr/sbin
+
+            if [ -L {build_dir}/sbin ]; then
+                rm -f {build_dir}/sbin
             fi
-            
-            if [ -e {build_dir}/lib64 ]; then
-                rmdir {build_dir}/usr/lib64
+
+            if [ -L {build_dir}/usr/lib64 ]; then
+                rm -f {build_dir}/usr/lib64
+            fi
+
+            if [ -L {build_dir}/usr/sbin ]; then
+                rm -f {build_dir}/usr/sbin
             fi
 
             mkdir -p {build_dir}/usr
