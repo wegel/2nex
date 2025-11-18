@@ -75,6 +75,9 @@ struct Cli {
 
     #[clap(long, help = "Add checksums to manifests missing them (from OSTree or by building)")]
     add_checksums: bool,
+
+    #[clap(long, help = "Trace which packages pull in a specific dependency (e.g. 'bootstrap/phase1')")]
+    trace_dependency: Option<String>,
 }
 
 #[derive(Parser)]
@@ -241,7 +244,7 @@ fn main() -> io::Result<()> {
                 refresh_ostree_metadata: false,
             };
 
-            build_with_dependencies(&repo_path, manifest_path, &manifest_dirs, &opts, cli.dry_run, cli.add_checksums, cli.show_dep_paths, cli.force)
+            build_with_dependencies(&repo_path, manifest_path, &manifest_dirs, &opts, cli.dry_run, cli.add_checksums, cli.show_dep_paths, cli.force, cli.trace_dependency.as_deref())
         }
     }
 }
@@ -1009,6 +1012,95 @@ fn add_missing_checksums_to_manifests(
     Ok(())
 }
 
+/// Trace and display dependency chains that include a specific pattern
+fn trace_dependency_chains(
+    repo_path: &str,
+    manifest_path: &Path,
+    _manifest_dirs: &[PathBuf],
+    pattern: &str,
+) -> io::Result<()> {
+    println!("Tracing dependencies matching pattern: '{}'", pattern);
+    println!("Starting from: {}\n", manifest_path.display());
+
+    // load the root manifest
+    let manifest_data = load_manifest(manifest_path.to_str().unwrap())?;
+    let (root_slug, root_deps) = match manifest_data {
+        ManifestData::Package(ref m) => {
+            (m.package.slug.clone(), m.dependencies.clone())
+        }
+        ManifestData::System(ref s) => {
+            let mut all_deps = s.dependencies.clone();
+            all_deps.extend(system::dependencies_from_system_packages(&s.packages));
+            (s.system.slug.clone(), all_deps)
+        }
+    };
+
+    // recursively trace all dependencies
+    let mut found_matches = false;
+    for dep in &root_deps {
+        let mut chain = vec![root_slug.clone()];
+        if trace_commit_recursive(repo_path, &dep.commit, pattern, &mut chain)? {
+            found_matches = true;
+        }
+    }
+
+    if !found_matches {
+        println!("No dependencies matching pattern '{}' found.", pattern);
+    }
+
+    Ok(())
+}
+
+/// Recursively trace a commit and its dependencies for a pattern
+fn trace_commit_recursive(
+    repo_path: &str,
+    commit: &str,
+    pattern: &str,
+    chain: &mut Vec<String>,
+) -> io::Result<bool> {
+    // check if this commit matches the pattern
+    let matches_pattern = commit.contains(pattern);
+
+    // extract package name from commit for display
+    let pkg_name = if let Some((slug, version, flavor)) = parse_commit_ref(commit) {
+        format!("{}/{}/{}", slug, version, flavor)
+    } else {
+        commit.to_string()
+    };
+
+    chain.push(pkg_name.clone());
+
+    // if this commit matches the pattern, print the chain
+    if matches_pattern {
+        println!("Found match: {}", commit);
+        println!("  Chain: {}", chain.join(" → "));
+        println!();
+        chain.pop();
+        return Ok(true);
+    }
+
+    // fetch runtime dependencies from OSTree
+    let requires = match fetch_requires_from_repo(repo_path, commit) {
+        Ok(reqs) => reqs,
+        Err(_) => {
+            // commit might not exist in repo yet, skip it
+            chain.pop();
+            return Ok(false);
+        }
+    };
+
+    // recursively check each dependency
+    let mut found_in_subtree = false;
+    for req in &requires {
+        if trace_commit_recursive(repo_path, req, pattern, chain)? {
+            found_in_subtree = true;
+        }
+    }
+
+    chain.pop();
+    Ok(found_in_subtree)
+}
+
 fn build_with_dependencies(
     repo_path: &str,
     manifest_path: &Path,
@@ -1018,6 +1110,7 @@ fn build_with_dependencies(
     add_checksums: bool,
     show_dep_paths: bool,
     force: bool,
+    trace_dependency: Option<&str>,
 ) -> io::Result<()> {
     if dry_run {
         println!("DRY RUN: Analyzing dependency graph for {}", manifest_path.display());
@@ -1040,6 +1133,12 @@ fn build_with_dependencies(
         force || add_checksums,
         &mut ostree_cache,
     )?;
+
+    // if tracing dependencies, show all packages that pull in the traced pattern
+    if let Some(pattern) = trace_dependency {
+        trace_dependency_chains(repo_path, manifest_path, manifest_dirs, pattern)?;
+        return Ok(());
+    }
 
     // filter out empty path markers (already-built packages)
     let valid_nodes: Vec<NodeIndex> = graph
