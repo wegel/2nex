@@ -1,0 +1,200 @@
+package:
+  schema: 1
+  name: "Python flit-core"
+  slug: "flit-core"
+  flavor: "dev/python"
+  version: "3.9.0"
+  description: "The distribution-building parts of Flit (a packaging tool for simple Python modules)"
+  homepage: "https://pypi.org/project/flit-core/"
+  checksum: b133cca31126631d02f87dfc35ef54e6cf9c009ee5de509c424eac0190b0c21b
+
+sources:
+  - name: "flit_core"
+    url: "https://pypi.org/packages/source/f/flit-core/flit_core-3.9.0.tar.gz"
+    sha256: "72ad266176c4a3fcfab5f2930d76896059851240570ce9a98733b658cb786eba"
+
+dependencies:
+- commit: x86_64/findutils/4.9.0/bootstrap/phase1/bundles/dev
+  name: findutils
+- commit: x86_64/2nex-utilities/0.0.1/sys/apps/bundles/dev
+  name: 2nex-utilities
+- commit: x86_64/gzip/1.13/bootstrap/phase1/bundles/dev
+  name: gzip
+- commit: x86_64/tar/1.35/bootstrap/phase1/bundles/dev
+  name: tar
+- commit: x86_64/glibc/2.39/sys/libs/bundles/dev
+  name: glibc
+- commit: x86_64/zlib/1.3.1/bootstrap/phase3/bundles/dev
+  name: zlib
+- commit: x86_64/ncurses/6.4-20230520/sys/libs/bundles/dev
+  name: ncurses
+- commit: x86_64/bash/5.2.21/app/shells/bundles/dev
+  name: bash
+- commit: x86_64/expat/2.6.2/sys/libs/bundles/dev
+  name: expat
+- commit: x86_64/python3/3.12.2/dev/lang/bundles/dev
+  name: python3
+- commit: x86_64/inetutils/2.5/net/misc/bundles/dev
+  name: inetutils
+
+build:
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    pip3 wheel -w dist --no-cache-dir --no-build-isolation --no-deps $PWD
+    pip3 install --no-index --no-user --root=${OUT_DIR} --find-links dist flit_core
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  full:
+    - lib
+    - man
+
+  dev:
+    - lib
+
+outputs:
+  man:
+    files:
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/with_data_dir/data/share/man/man1/foo.1
+  lib:
+    files:
+    - /usr/lib/python3.12/site-packages/flit_core-3.9.0.dist-info/INSTALLER
+    - /usr/lib/python3.12/site-packages/flit_core-3.9.0.dist-info/LICENSE
+    - /usr/lib/python3.12/site-packages/flit_core-3.9.0.dist-info/METADATA
+    - /usr/lib/python3.12/site-packages/flit_core-3.9.0.dist-info/RECORD
+    - /usr/lib/python3.12/site-packages/flit_core-3.9.0.dist-info/REQUESTED
+    - /usr/lib/python3.12/site-packages/flit_core-3.9.0.dist-info/WHEEL
+    - /usr/lib/python3.12/site-packages/flit_core/__init__.py
+    - /usr/lib/python3.12/site-packages/flit_core/__pycache__/__init__.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/__pycache__/buildapi.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/__pycache__/common.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/__pycache__/config.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/__pycache__/sdist.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/__pycache__/versionno.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/__pycache__/wheel.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/buildapi.py
+    - /usr/lib/python3.12/site-packages/flit_core/common.py
+    - /usr/lib/python3.12/site-packages/flit_core/config.py
+    - /usr/lib/python3.12/site-packages/flit_core/sdist.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/__init__.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/__pycache__/__init__.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/__pycache__/test_build_thyself.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/__pycache__/test_buildapi.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/__pycache__/test_common.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/__pycache__/test_config.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/__pycache__/test_sdist.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/__pycache__/test_versionno.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/__pycache__/test_wheel.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/EG_README.rst
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/__pycache__/invalid_version1.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/__pycache__/module1.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/__pycache__/module2.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/__pycache__/moduleunimportable.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/__pycache__/moduleunimportabledouble.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/__pycache__/no_docstring.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/bad-description-ext.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/conflicting_modules/__pycache__/module1.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/conflicting_modules/module1.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/conflicting_modules/pyproject.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/conflicting_modules/src/__pycache__/module1.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/conflicting_modules/src/module1.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/constructed_version/__pycache__/module1.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/constructed_version/module1.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/constructed_version/pyproject.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/extras-dev-conflict.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/extras.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/imported_version/package1/__init__.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/imported_version/package1/__pycache__/__init__.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/imported_version/package1/__pycache__/_version.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/imported_version/package1/_version.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/imported_version/pyproject.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/inclusion/LICENSES/README
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/inclusion/__pycache__/module1.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/inclusion/doc/subdir/subsubdir/test.md
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/inclusion/doc/subdir/test.txt
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/inclusion/doc/test.rst
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/inclusion/doc/test.txt
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/inclusion/module1.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/inclusion/pyproject.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/invalid_version1.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/missing-description-file.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/misspelled-key.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/module1-pkg.ini
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/module1-pkg.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/module1.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/module2.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/moduleunimportable.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/moduleunimportabledouble.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/my-description.rst
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/no_docstring-pkg.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/no_docstring.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/normalization/__pycache__/my_python_module.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/normalization/my_python_module.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/normalization/pyproject.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/ns1-pkg/EG_README.rst
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/ns1-pkg/ns1/pkg/__init__.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/ns1-pkg/ns1/pkg/__pycache__/__init__.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/ns1-pkg/pyproject.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/__init__.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/__pycache__/__init__.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/__pycache__/foo.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/data_dir/foo.sh
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/foo.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/subpkg/__init__.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/subpkg/__pycache__/__init__.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/subpkg/sp_data_dir/test.json
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/subpkg2/__init__.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/subpkg2/__pycache__/__init__.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep517/LICENSE
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep517/README.rst
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep517/__pycache__/module1.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep517/module1.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep517/pyproject.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621/LICENSE
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621/README.rst
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621/__pycache__/module1a.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621/module1a.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621/pyproject.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621_nodynamic/README.rst
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621_nodynamic/__pycache__/module1.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621_nodynamic/module1.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621_nodynamic/pyproject.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/requires-dev.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/requires-envmark.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/requires-extra-envmark.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/requires-requests.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/with_data_dir/LICENSE
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/with_data_dir/README.rst
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/with_data_dir/__pycache__/module1.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/with_data_dir/module1.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/samples/with_data_dir/pyproject.toml
+    - /usr/lib/python3.12/site-packages/flit_core/tests/test_build_thyself.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/test_buildapi.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/test_common.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/test_config.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/test_sdist.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/test_versionno.py
+    - /usr/lib/python3.12/site-packages/flit_core/tests/test_wheel.py
+    - /usr/lib/python3.12/site-packages/flit_core/vendor/README
+    - /usr/lib/python3.12/site-packages/flit_core/vendor/__init__.py
+    - /usr/lib/python3.12/site-packages/flit_core/vendor/__pycache__/__init__.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/vendor/tomli-1.2.3.dist-info/LICENSE
+    - /usr/lib/python3.12/site-packages/flit_core/vendor/tomli-1.2.3.dist-info/METADATA
+    - /usr/lib/python3.12/site-packages/flit_core/vendor/tomli/__init__.py
+    - /usr/lib/python3.12/site-packages/flit_core/vendor/tomli/__pycache__/__init__.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/vendor/tomli/__pycache__/_parser.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/vendor/tomli/__pycache__/_re.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/vendor/tomli/__pycache__/_types.cpython-312.pyc
+    - /usr/lib/python3.12/site-packages/flit_core/vendor/tomli/_parser.py
+    - /usr/lib/python3.12/site-packages/flit_core/vendor/tomli/_re.py
+    - /usr/lib/python3.12/site-packages/flit_core/vendor/tomli/_types.py
+    - /usr/lib/python3.12/site-packages/flit_core/vendor/tomli/py.typed
+    - /usr/lib/python3.12/site-packages/flit_core/versionno.py
+    - /usr/lib/python3.12/site-packages/flit_core/wheel.py
+    requires:
+    - x86_64/bash/5.2.21/app/shells/outputs/bin

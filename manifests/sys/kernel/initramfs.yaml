@@ -1,0 +1,182 @@
+package:
+  schema: 1
+  name: "Initramfs"
+  slug: "initramfs"
+  flavor: "sys/kernel"
+  version: "0.1.0"
+  description: "Initial ramdisk for early boot"
+  homepage: "https://github.com/wegelcorp/2nex"
+  checksum: 53339efe2b7fd07eaa052b68070052122c221776739a39d15debe070cb94c226
+
+sources: []
+
+dependencies:
+- commit: x86_64/bash/5.2.21/app/shells/outputs/bin
+  name: bash
+- commit: x86_64/coreutils/9.5/sys/apps/outputs/bin
+  name: coreutils
+- commit: x86_64/util_linux/2.40/sys/apps/outputs/bin
+  name: util-linux
+- commit: x86_64/util_linux/2.40/sys/apps/outputs/lib
+  name: util-linux-lib
+- commit: x86_64/kmod/32/sys/kernel/outputs/bin
+  name: kmod
+- commit: x86_64/glibc/2.39/sys/libs/outputs/lib
+  name: glibc
+- commit: x86_64/inetutils/2.5/net/misc/outputs/bin
+  name: inetutils
+- commit: x86_64/findutils/4.9.0/sys/apps/outputs/bin
+  name: findutils
+
+build:
+  script: |
+    set -eux
+
+    # create initramfs directory structure
+    mkdir -p ${OUT_DIR}/{bin,sbin,etc,proc,sys,dev,run,mnt/root,lib,usr/{bin,sbin,lib}}
+
+    # copy essential binaries
+    cp -a /usr/bin/bash ${OUT_DIR}/bin/
+    ln -s bash ${OUT_DIR}/bin/sh
+
+    # copy essential coreutils
+    for tool in cat cp dd echo ls mkdir mount mknod switch_root sleep ln chmod chown; do
+      if [ -f /usr/bin/$tool ]; then
+        cp -a /usr/bin/$tool ${OUT_DIR}/bin/
+      fi
+    done
+
+    # copy kmod and create modprobe symlink
+    cp -a /usr/bin/kmod ${OUT_DIR}/bin/
+    ln -s kmod ${OUT_DIR}/bin/modprobe
+    ln -s kmod ${OUT_DIR}/bin/lsmod
+
+    # copy required libraries (from glibc output)
+    cp -a /usr/lib/libc.so.6 ${OUT_DIR}/lib/
+    cp -a /usr/lib/ld-linux-x86-64.so.2 ${OUT_DIR}/lib/
+    cp -a /usr/lib/libm.so.6 ${OUT_DIR}/lib/
+
+    # copy any additional libs that exist (for bash, kmod, mount, etc.)
+    for lib in libdl libreadline libncursesw libz libcrypto libzstd libmount libblkid; do
+      if ls /usr/lib/${lib}.so* >/dev/null 2>&1; then
+        cp -a /usr/lib/${lib}.so* ${OUT_DIR}/lib/ || true
+      fi
+    done
+
+    # create init script
+    cat > ${OUT_DIR}/init <<'EOF'
+    #!/bin/sh
+    # 2nex initramfs init script
+
+    # mount essential filesystems
+    mount -t proc proc /proc
+    mount -t sysfs sysfs /sys
+    mount -t devtmpfs devtmpfs /dev
+
+    # parse kernel command line for root= and modules
+    ROOT_DEV=""
+    MODULES=""
+
+    for param in $(cat /proc/cmdline); do
+      case "$param" in
+        root=*)
+          ROOT_DEV="${param#root=}"
+          ;;
+        initramfs.modules=*)
+          MODULES="${param#initramfs.modules=}"
+          ;;
+      esac
+    done
+
+    # load modules if specified
+    if [ -n "$MODULES" ]; then
+      echo "Loading modules: $MODULES"
+      for mod in $(echo $MODULES | tr ',' ' '); do
+        modprobe $mod || echo "Warning: failed to load module $mod"
+      done
+    fi
+
+    # wait a bit for devices to settle
+    sleep 1
+
+    # mount root filesystem
+    if [ -n "$ROOT_DEV" ]; then
+      echo "Mounting root filesystem: $ROOT_DEV"
+      mount -o ro $ROOT_DEV /mnt/root || {
+        echo "ERROR: Failed to mount root filesystem"
+        exec /bin/sh
+      }
+    else
+      echo "ERROR: No root= specified on kernel command line"
+      exec /bin/sh
+    fi
+
+    # switch to real root
+    echo "Switching to real root..."
+    exec switch_root /mnt/root /sbin/init
+    EOF
+
+    chmod +x ${OUT_DIR}/init
+
+    # create minimal device nodes (if devtmpfs fails)
+    mknod -m 600 ${OUT_DIR}/dev/console c 5 1 || true
+    mknod -m 666 ${OUT_DIR}/dev/null c 1 3 || true
+
+    # deterministic timestamps
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+outputs:
+  bin:
+    files:
+    - /bin/bash
+    - /bin/sh
+    - /bin/cat
+    - /bin/cp
+    - /bin/dd
+    - /bin/echo
+    - /bin/ls
+    - /bin/mkdir
+    - /bin/mount
+    - /bin/mknod
+    - /bin/switch_root
+    - /bin/sleep
+    - /bin/ln
+    - /bin/chmod
+    - /bin/chown
+    - /bin/kmod
+    - /bin/modprobe
+    - /bin/lsmod
+
+  lib:
+    files:
+    - /lib/libc.so.6
+    - /lib/ld-linux-x86-64.so.2
+    - /lib/libm.so.6
+    - /lib/libdl.so.2
+    - /lib/libncursesw.so
+    - /lib/libncursesw.so.6
+    - /lib/libncursesw.so.6.4
+    - /lib/libz.so
+    - /lib/libz.so.1
+    - /lib/libz.so.1.3.1
+    - /lib/libcrypto.so
+    - /lib/libcrypto.so.3
+    - /lib/libzstd.so
+    - /lib/libzstd.so.1
+    - /lib/libzstd.so.1.5.6
+    - /lib/libmount.so
+    - /lib/libmount.so.1
+    - /lib/libmount.so.1.1.0
+    - /lib/libblkid.so
+    - /lib/libblkid.so.1
+    - /lib/libblkid.so.1.1.0
+
+  init:
+    files:
+    - /init
+
+bundles:
+  base:
+    - bin
+    - lib
+    - init
