@@ -107,6 +107,9 @@ pub fn setup_composite_rootfs(
         for (link_path, target) in symlinks {
             let full_link_path = Path::new(base_dir).join(link_path);
             if !full_link_path.exists() {
+                if let Some(parent) = full_link_path.parent() {
+                    fs::create_dir_all(parent)?;
+                }
                 std::os::unix::fs::symlink(target, &full_link_path)?;
             }
         }
