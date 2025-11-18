@@ -15,8 +15,10 @@ use crate::utils::determine_category;
 pub fn output_branch_metadata(
     manifest: &Manifest,
     spec: &OutputSpec,
+    manifest_hash: &str,
 ) -> io::Result<Vec<(String, String)>> {
     let mut metadata = Vec::new();
+    metadata.push(("nex.manifest.hash".to_string(), manifest_hash.to_string()));
     if let Some(checksum) = &manifest.package.checksum {
         metadata.push(("nex.build.checksum".to_string(), checksum.clone()));
     }
@@ -32,8 +34,10 @@ pub fn output_branch_metadata(
 pub fn bundle_branch_metadata(
     manifest: &Manifest,
     bundle: &Bundle,
+    manifest_hash: &str,
 ) -> io::Result<Vec<(String, String)>> {
     let mut metadata = Vec::new();
+    metadata.push(("nex.manifest.hash".to_string(), manifest_hash.to_string()));
     if let Some(checksum) = &manifest.package.checksum {
         metadata.push(("nex.build.checksum".to_string(), checksum.clone()));
     }
@@ -51,6 +55,7 @@ pub fn commit_bundle(
     bundle_name: &str,
     bundle: &Bundle,
     manifest: &Manifest,
+    manifest_hash: &str,
 ) -> io::Result<()> {
     println!("Creating bundle: {}", bundle_name);
 
@@ -70,7 +75,7 @@ pub fn commit_bundle(
         manifest.package.slug, manifest.package.version, manifest.package.flavor, bundle_name
     );
 
-    let metadata = bundle_branch_metadata(manifest, bundle)?;
+    let metadata = bundle_branch_metadata(manifest, bundle, manifest_hash)?;
 
     commit_to_ostree(repo_path, &bundle_branch, temp_dir_path, &metadata)?;
 

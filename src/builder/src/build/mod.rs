@@ -436,8 +436,12 @@ pub fn verify_and_commit_outputs(
     repo_path: &str,
     runtime_suggestions: Option<&RuntimeScanResult>,
     verbose_reasons: bool,
+    manifest_path: &Path,
 ) -> io::Result<()> {
     println!("Verifying and committing outputs to OSTree branches");
+
+    // compute manifest hash once
+    let manifest_hash = crate::compute_manifest_hash(manifest_path)?;
 
     let output_specs = &manifest.outputs;
     let out_dir = Path::new(base_dir).join("2nex/out");
@@ -519,7 +523,7 @@ pub fn verify_and_commit_outputs(
 
         let commit_output_dir = out_dir.join(output_type);
 
-        let metadata = output_branch_metadata(manifest, spec)?;
+        let metadata = output_branch_metadata(manifest, spec, &manifest_hash)?;
         commit_to_ostree(repo_path, &branch_name, &commit_output_dir, &metadata)?;
     }
 
@@ -541,13 +545,15 @@ pub fn create_and_commit_bundles(
     manifest: &Manifest,
     _base_dir: &str,
     repo_path: &str,
+    manifest_path: &Path,
 ) -> io::Result<()> {
     println!("Processing bundles");
 
+    let manifest_hash = crate::compute_manifest_hash(manifest_path)?;
     let bundles = &manifest.bundles;
 
     for (bundle_name, bundle) in bundles {
-        commit_bundle(repo_path, bundle_name, bundle, manifest)?;
+        commit_bundle(repo_path, bundle_name, bundle, manifest, &manifest_hash)?;
     }
 
     Ok(())

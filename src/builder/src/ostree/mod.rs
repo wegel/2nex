@@ -159,6 +159,31 @@ pub fn rewrite_branch_metadata(
     Ok(())
 }
 
+/// Get metadata value from an OSTree branch
+pub fn get_branch_metadata(repo_path: &str, branch: &str, key: &str) -> io::Result<String> {
+    let output = Command::new("ostree")
+        .arg("show")
+        .arg("--repo")
+        .arg(repo_path)
+        .arg("--print-metadata-key")
+        .arg(key)
+        .arg(branch)
+        .output()
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e)))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Failed to get metadata {}: {}", key, stderr),
+        ));
+    }
+
+    let value = String::from_utf8_lossy(&output.stdout);
+    // ostree outputs the value with quotes and newline, strip them
+    Ok(value.trim().trim_matches('\'').to_string())
+}
+
 /// Encode a list of strings as JSON for OSTree metadata
 pub fn encode_metadata_list(values: &[String]) -> io::Result<Option<String>> {
     if values.is_empty() {

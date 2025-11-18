@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use clap::Parser;
 use rayon::prelude::*;
+use sha2::{Digest, Sha256};
 
 use std::fmt;
 
@@ -193,7 +194,7 @@ fn main() -> io::Result<()> {
             match load_manifest(&manifest_file)? {
                 ManifestData::Package(mut manifest) => {
                     if opts.refresh_ostree_metadata {
-                        refresh_package_metadata(&opts.repo_path, &manifest)?;
+                        refresh_package_metadata(&opts.repo_path, &manifest, Path::new(&manifest_file))?;
                         Ok(())
                     } else {
                         build_package_manifest(&opts, &mut manifest)
@@ -330,9 +331,10 @@ fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_di
         &opts.repo_path,
         runtime_suggestions,
         opts.runtime_deps_verbose,
+        Path::new(&opts.manifest_file),
     )?;
 
-    create_and_commit_bundles(manifest, base_dir, &opts.repo_path)?;
+    create_and_commit_bundles(manifest, base_dir, &opts.repo_path, Path::new(&opts.manifest_file))?;
 
     println!("Build, packaging, and commit to OSTree completed for all outputs.");
 
@@ -393,8 +395,9 @@ fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_di
             &opts.repo_path,
             runtime_suggestions,
             opts.runtime_deps_verbose,
+            Path::new(&opts.manifest_file),
         )?;
-        create_and_commit_bundles(manifest, base_dir, &opts.repo_path)?;
+        create_and_commit_bundles(manifest, base_dir, &opts.repo_path, Path::new(&opts.manifest_file))?;
 
         let second_checksum = calculate_output_checksum(&output_dir)?;
         println!("Second build output checksum: {}", second_checksum);
@@ -415,18 +418,19 @@ fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_di
     Ok(())
 }
 
-fn refresh_package_metadata(repo_path: &str, manifest: &Manifest) -> io::Result<()> {
+fn refresh_package_metadata(repo_path: &str, manifest: &Manifest, manifest_path: &Path) -> io::Result<()> {
     println!(
         "Refreshing OSTree metadata for {}/{} ({})",
         manifest.package.slug, manifest.package.version, manifest.package.flavor
     );
-    refresh_output_branches(repo_path, manifest)?;
-    refresh_bundle_branches(repo_path, manifest)?;
+    let manifest_hash = compute_manifest_hash(manifest_path)?;
+    refresh_output_branches(repo_path, manifest, &manifest_hash)?;
+    refresh_bundle_branches(repo_path, manifest, &manifest_hash)?;
     println!("Finished refreshing metadata for {}", manifest.package.slug);
     Ok(())
 }
 
-fn refresh_output_branches(repo_path: &str, manifest: &Manifest) -> io::Result<()> {
+fn refresh_output_branches(repo_path: &str, manifest: &Manifest, manifest_hash: &str) -> io::Result<()> {
     for (category, spec) in &manifest.outputs {
         if category == "discard" {
             continue;
@@ -436,20 +440,20 @@ fn refresh_output_branches(repo_path: &str, manifest: &Manifest) -> io::Result<(
             manifest.package.slug, manifest.package.version, manifest.package.flavor, category
         );
         ensure_branch_exists(repo_path, &branch_name)?;
-        let metadata = output_branch_metadata(manifest, spec)?;
+        let metadata = output_branch_metadata(manifest, spec, manifest_hash)?;
         rewrite_branch_metadata(repo_path, &branch_name, &metadata)?;
     }
     Ok(())
 }
 
-fn refresh_bundle_branches(repo_path: &str, manifest: &Manifest) -> io::Result<()> {
+fn refresh_bundle_branches(repo_path: &str, manifest: &Manifest, manifest_hash: &str) -> io::Result<()> {
     for (bundle_name, bundle) in &manifest.bundles {
         let branch_name = format!(
             "x86_64/{}/{}/{}/bundles/{}",
             manifest.package.slug, manifest.package.version, manifest.package.flavor, bundle_name
         );
         ensure_branch_exists(repo_path, &branch_name)?;
-        let metadata = bundle_branch_metadata(manifest, bundle)?;
+        let metadata = bundle_branch_metadata(manifest, bundle, manifest_hash)?;
         rewrite_branch_metadata(repo_path, &branch_name, &metadata)?;
     }
     Ok(())
@@ -522,22 +526,50 @@ fn find_manifest_for_commit(
     ))
 }
 
-// check if all outputs of a manifest are already built in OSTree
-fn check_if_built(repo_path: &str, manifest: &Manifest) -> bool {
+// compute SHA256 hash of manifest file
+fn compute_manifest_hash(manifest_path: &Path) -> io::Result<String> {
+    let contents = fs::read(manifest_path)?;
+    let mut hasher = Sha256::new();
+    hasher.update(&contents);
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+// check if all outputs of a manifest are already built in OSTree with current manifest hash
+fn check_if_built(repo_path: &str, manifest: &Manifest, manifest_path: &Path) -> io::Result<bool> {
     let arch = "x86_64"; // TODO: make configurable
     let slug = &manifest.package.slug;
     let version = &manifest.package.version;
     let flavor = &manifest.package.flavor;
 
+    // compute current manifest hash
+    let current_hash = compute_manifest_hash(manifest_path)?;
+
     // check all outputs
     for (output_name, _spec) in &manifest.outputs {
         let branch = format!("{}/{}/{}/{}/outputs/{}", arch, slug, version, flavor, output_name);
+
+        // check if branch exists
         if ensure_branch_exists(repo_path, &branch).is_err() {
-            return false;
+            return Ok(false);
+        }
+
+        // check if manifest hash matches
+        match get_branch_metadata(repo_path, &branch, "nex.manifest.hash") {
+            Ok(stored_hash) => {
+                if stored_hash != current_hash {
+                    println!("  Manifest {} has changed (hash mismatch), rebuilding", manifest_path.display());
+                    return Ok(false);
+                }
+            }
+            Err(_) => {
+                // old commit without manifest hash metadata - rebuild to add it
+                println!("  No manifest hash found in commit, rebuilding to add metadata");
+                return Ok(false);
+            }
         }
     }
 
-    true
+    Ok(true)
 }
 
 // recursively collect dependencies and build graph
@@ -573,7 +605,7 @@ fn collect_dependencies_recursive(
     // for package manifests, check if already built (unless force is true)
     if !is_system && !force {
         if let ManifestData::Package(ref manifest) = manifest_data {
-            if check_if_built(repo_path, manifest) {
+            if check_if_built(repo_path, manifest, manifest_path)? {
                 println!("Package {} already built, skipping", manifest.package.slug);
                 let node = graph.add_node(PathBuf::new()); // empty path = skip
                 manifest_map.insert(manifest_path.to_path_buf(), node);
