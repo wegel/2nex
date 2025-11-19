@@ -142,6 +142,7 @@ pub struct Opts {
     update_outputs_requires: bool,
     update_outputs_requires_only: bool,
     refresh_ostree_metadata: bool,
+    force: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -178,6 +179,7 @@ fn main() -> io::Result<()> {
                 update_outputs_requires,
                 update_outputs_requires_only,
                 refresh_ostree_metadata,
+                force: false,
             };
 
             if opts.refresh_ostree_metadata
@@ -243,6 +245,7 @@ fn main() -> io::Result<()> {
                 update_outputs_requires: cli.update_outputs_requires,
                 update_outputs_requires_only: false,
                 refresh_ostree_metadata: false,
+                force: cli.force,
             };
 
             build_with_dependencies(&repo_path, manifest_path, &manifest_dirs, &opts, cli.dry_run, cli.add_checksums, cli.show_dep_paths, cli.force, cli.trace_dependency.as_deref())
@@ -251,7 +254,7 @@ fn main() -> io::Result<()> {
 }
 
 fn build_package_manifest(opts: &Opts, manifest: &mut Manifest) -> io::Result<()> {
-    build_package_manifest_with_dir(opts, manifest, "./build_rootfs", false)
+    build_package_manifest_with_dir(opts, manifest, "./build_rootfs")
 }
 
 fn package_already_built(manifest: &Manifest, repo_path: &str) -> io::Result<bool> {
@@ -858,6 +861,7 @@ fn build_packages_parallel(
                             update_outputs_requires: opts.update_outputs_requires,
                             update_outputs_requires_only: opts.update_outputs_requires_only,
                             refresh_ostree_metadata: opts.refresh_ostree_metadata,
+                            force: opts.force,
                         };
 
                         println!("[{}/{}] Building: {}", build_num, total, manifest.package.slug);
@@ -895,6 +899,7 @@ fn build_packages_parallel(
                             update_outputs_requires: opts.update_outputs_requires,
                             update_outputs_requires_only: opts.update_outputs_requires_only,
                             refresh_ostree_metadata: opts.refresh_ostree_metadata,
+                            force: opts.force,
                         };
 
                         println!("[{}/{}] Building system: {}", build_num, total, system_manifest.system.slug);
@@ -1060,6 +1065,7 @@ fn add_missing_checksums_to_manifests(
                     update_outputs_requires: opts.update_outputs_requires,
                     update_outputs_requires_only: false,
                     refresh_ostree_metadata: false,
+                    force: false,
                 };
 
                 build_package_manifest(&build_opts, &mut manifest_copy)?;
@@ -1186,14 +1192,14 @@ fn build_with_dependencies(
     let mut ostree_cache = HashMap::new();
 
     // collect all dependencies recursively
-    // when add_checksums is true, treat it like force to include already-built packages
+    // when add_checksums or update_outputs_requires is true, treat it like force to include already-built packages
     collect_dependencies_recursive(
         manifest_path,
         repo_path,
         manifest_dirs,
         &mut graph,
         &mut manifest_map,
-        force || add_checksums,
+        force || add_checksums || opts.update_outputs_requires,
         &mut ostree_cache,
     )?;
 
