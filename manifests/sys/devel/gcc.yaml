@@ -6,7 +6,7 @@ package:
   version: "13.2.0"
   description: "The GNU Compiler Collection includes front ends for C, C++, Objective-C, Fortran, Ada, Go, and D, as well as libraries for these languages."
   homepage: "https://gcc.gnu.org/"
-  checksum: 68a7fa204b2a0aab405666aa0bd1aaef98c011c3c71644c452862b8c8bbaacf2
+  checksum: 38382236566ec14b48a580b5f59d8614ee7a128653126b7e15f906519182501f
 
 sources:
   - name: "gcc"
@@ -114,6 +114,9 @@ build:
     mkdir -pv ${OUT_DIR}/usr/share/gdb/auto-load/usr/lib
     mv -v ${OUT_DIR}/usr/lib/*gdb.py ${OUT_DIR}/usr/share/gdb/auto-load/usr/lib
     find "${OUT_DIR}" -name "*.la" -delete
+
+    # strip runtime libraries (but not .o files or plugins)
+    find "${OUT_DIR}/usr/lib" -type f -name "*.so.*" -exec strip {} \;
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
