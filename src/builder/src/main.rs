@@ -251,7 +251,32 @@ fn main() -> io::Result<()> {
 }
 
 fn build_package_manifest(opts: &Opts, manifest: &mut Manifest) -> io::Result<()> {
-    build_package_manifest_with_dir(opts, manifest, "./build_rootfs")
+    build_package_manifest_with_dir(opts, manifest, "./build_rootfs", false)
+}
+
+fn package_already_built(manifest: &Manifest, repo_path: &str) -> io::Result<bool> {
+    use std::process::Command;
+
+    // check if at least one output exists in ostree
+    for category in manifest.outputs.keys() {
+        let branch_name = format!(
+            "x86_64/{}/{}/{}/outputs/{}",
+            manifest.package.slug, manifest.package.version, manifest.package.flavor, category
+        );
+
+        let output = Command::new("ostree")
+            .arg("refs")
+            .arg("--repo")
+            .arg(repo_path)
+            .arg(&branch_name)
+            .output()?;
+
+        if output.status.success() && !output.stdout.is_empty() {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_dir: &str) -> io::Result<()> {
@@ -263,7 +288,13 @@ fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_di
     let runtime_scanner = RuntimeScanner::new(&opts.repo_path, &dependency_commits)
         .with_allow_missing_files(opts.allow_missing_runtime_files);
 
-    if opts.update_outputs_requires_only {
+    // check if package is already built and we can skip rebuilding
+    let can_skip_rebuild = !opts.force && opts.update_outputs_requires && package_already_built(manifest, &opts.repo_path)?;
+
+    if opts.update_outputs_requires_only || can_skip_rebuild {
+        if can_skip_rebuild {
+            println!("Package already built, updating requires without rebuilding");
+        }
         stage_existing_outputs(manifest, base_dir, &opts.repo_path)?;
         let runtime_result = runtime_scanner.scan(
             &manifest.package.name,
