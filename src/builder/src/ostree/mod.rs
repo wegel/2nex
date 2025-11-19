@@ -240,7 +240,33 @@ pub fn fetch_requires_from_repo(repo_path: &str, commit: &str) -> io::Result<Vec
     if !output_requires.is_empty() {
         return Ok(output_requires);
     }
-    read_metadata_list(repo_path, commit, "nex.bundle.requires")
+
+    // try explicit bundle requires
+    let bundle_requires = read_metadata_list(repo_path, commit, "nex.bundle.requires")?;
+    if !bundle_requires.is_empty() {
+        return Ok(bundle_requires);
+    }
+
+    // if no explicit bundle requires, compute them dynamically from included outputs
+    let bundle_outputs = read_metadata_list(repo_path, commit, "nex.bundle.outputs")?;
+    if !bundle_outputs.is_empty() {
+        // this is a bundle without explicit requires - compute them from outputs
+        let mut all_requires = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+
+        for output_commit in bundle_outputs {
+            let output_reqs = read_metadata_list(repo_path, &output_commit, "nex.output.requires")?;
+            for req in output_reqs {
+                if seen.insert(req.clone()) {
+                    all_requires.push(req);
+                }
+            }
+        }
+
+        return Ok(all_requires);
+    }
+
+    Ok(Vec::new())
 }
 
 /// Read build checksum from an OSTree commit

@@ -62,12 +62,16 @@ pub fn commit_bundle(
     let temp_dir = TempDir::new()?;
     let temp_dir_path = temp_dir.path();
 
+    // collect output commit refs
+    let mut output_commits = Vec::new();
+
     for output in &bundle.includes {
         let branch_name = format!(
             "x86_64/{}/{}/{}/outputs/{}",
             manifest.package.slug, manifest.package.version, manifest.package.flavor, output
         );
         checkout_ostree_into(repo_path, &branch_name, temp_dir_path, true, false)?;
+        output_commits.push(branch_name);
     }
 
     let bundle_branch = format!(
@@ -75,7 +79,12 @@ pub fn commit_bundle(
         manifest.package.slug, manifest.package.version, manifest.package.flavor, bundle_name
     );
 
-    let metadata = bundle_branch_metadata(manifest, bundle, manifest_hash)?;
+    let mut metadata = bundle_branch_metadata(manifest, bundle, manifest_hash)?;
+
+    // add bundle outputs metadata
+    if let Some(encoded) = encode_metadata_list(&output_commits)? {
+        metadata.push(("nex.bundle.outputs".to_string(), encoded));
+    }
 
     commit_to_ostree(repo_path, &bundle_branch, temp_dir_path, &metadata)?;
 
