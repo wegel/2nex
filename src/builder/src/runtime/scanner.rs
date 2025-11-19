@@ -7,6 +7,7 @@ use std::process::Command;
 use goblin::Object;
 use walkdir::WalkDir;
 
+use crate::manifest::Manifest;
 use crate::utils::{determine_category, manifest_prefix};
 
 /// High-level API for running the runtime dependency scanner.
@@ -39,6 +40,7 @@ impl<'a> RuntimeScanner<'a> {
         package_name: &str,
         package_version: &str,
         base_dir: P,
+        manifest: &Manifest,
         verbose_reasons: bool,
     ) -> io::Result<RuntimeScanResult> {
         scan_runtime_dependencies(
@@ -47,6 +49,7 @@ impl<'a> RuntimeScanner<'a> {
             base_dir.as_ref(),
             self.repo_path,
             self.dependency_commits,
+            manifest,
             verbose_reasons,
             self.allow_missing_files,
         )
@@ -87,6 +90,7 @@ fn scan_runtime_dependencies(
     base_dir: &Path,
     repo_path: &str,
     dependency_commits: &[String],
+    manifest: &Manifest,
     verbose_reasons: bool,
     allow_missing_files: bool,
 ) -> io::Result<RuntimeScanResult> {
@@ -110,30 +114,45 @@ fn scan_runtime_dependencies(
         .iter()
         .any(|dep| dep.contains("/bootstrap/phase3/"));
 
+    // build reverse map: file path -> category from manifest
+    let mut file_to_category: HashMap<String, String> = HashMap::new();
+    for (category, spec) in &manifest.outputs {
+        if category == "discard" {
+            continue;
+        }
+        for file_path in &spec.files {
+            file_to_category.insert(file_path.clone(), category.clone());
+        }
+    }
+
     let local_basenames = collect_local_basenames(&out_dir)?;
     let provider_index = build_provider_index(repo_path, dependency_commits)?;
     let mut result = RuntimeScanResult::default();
     result.is_phase3 = is_phase3;
 
-    for entry in WalkDir::new(&out_dir).into_iter().filter_map(|e| e.ok()) {
-        if !entry.file_type().is_file() && !entry.file_type().is_symlink() {
-            continue;
+    // only scan files that are listed in the manifest outputs
+    for (file_path, category) in &file_to_category {
+        let physical_path = out_dir.join(file_path.trim_start_matches('/'));
+
+        if !physical_path.exists() {
+            if allow_missing_files {
+                continue;
+            } else {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("File listed in manifest outputs not found: {}", file_path),
+                ));
+            }
         }
 
-        let rel = entry
-            .path()
-            .strip_prefix(&out_dir)
-            .unwrap_or(entry.path())
-            .to_string_lossy();
-        let display_path = format!("/{}", rel);
-
         scan_file_for_dependencies(
-            entry.path(),
-            &display_path,
+            &physical_path,
+            file_path,
             &out_dir,
             &local_basenames,
             &provider_index,
             &mut result,
+            category,
             allow_missing_files,
         )?;
     }
@@ -275,12 +294,12 @@ fn scan_file_for_dependencies(
     local_basenames: &HashSet<String>,
     providers: &ProviderIndex,
     result: &mut RuntimeScanResult,
+    category: &str,
     allow_missing_files: bool,
 ) -> io::Result<()> {
     if path.is_dir() {
         return Ok(());
     }
-    let category = determine_category(display_path);
     if let Some(elf) = read_elf_metadata(path, allow_missing_files)? {
         for needed in elf.needed {
             if needed.is_empty() || local_basenames.contains(&needed) {

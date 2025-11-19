@@ -240,6 +240,7 @@ fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_di
             &manifest.package.name,
             &manifest.package.version,
             base_dir,
+            manifest,
             opts.runtime_deps_verbose,
         )?;
         update_manifest_outputs(&opts.manifest_file, &runtime_result)?;
@@ -275,6 +276,7 @@ fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_di
             &manifest.package.name,
             &manifest.package.version,
             base_dir,
+            manifest,
             opts.runtime_deps_verbose,
         )?)
     } else {
