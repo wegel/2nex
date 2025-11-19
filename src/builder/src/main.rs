@@ -34,10 +34,7 @@ use runtime::scanner::{RuntimeScanResult, RuntimeScanner};
 #[derive(Parser)]
 #[clap(version = "1.0", author = "Your Name")]
 struct Cli {
-    #[clap(subcommand)]
-    command: Option<Commands>,
-
-    // default: graph builder positional args (when no subcommand)
+    // positional args
     #[clap(value_name = "REPO")]
     repo_path: Option<String>,
     #[clap(value_name = "MANIFEST")]
@@ -62,6 +59,21 @@ struct Cli {
     #[clap(long, help = "Rewrite outputs.*.requires based on the runtime dependency scanner")]
     update_outputs_requires: bool,
 
+    #[clap(long, help = "Update outputs.*.requires using existing OSTree outputs without rebuilding")]
+    update_outputs_requires_only: bool,
+
+    #[clap(long, help = "Validate build reproducibility")]
+    validate_reproducibility: bool,
+
+    #[clap(long, help = "Update the manifest checksum when build outputs differ from what is recorded")]
+    update_checksum: bool,
+
+    #[clap(long, help = "Rewrite OSTree output/bundle metadata without rebuilding (package manifests only)")]
+    refresh_ostree_metadata: bool,
+
+    #[clap(long, help = "Build only the specified manifest without dependencies")]
+    single: bool,
+
     #[clap(long, help = "Show what would be built without actually building (dry run)")]
     dry_run: bool,
 
@@ -81,55 +93,7 @@ struct Cli {
     trace_dependency: Option<String>,
 }
 
-#[derive(Parser)]
-enum Commands {
-    /// DEPRECATED: Use legacy single-package builder (will be removed in future version)
-    BuildLegacy {
-        /// Path to OSTree repository
-        repo_path: String,
 
-        /// Path to manifest file to build
-        manifest_file: String,
-
-        /// Validate build reproducibility
-        #[clap(long)]
-        validate_reproducibility: bool,
-
-        /// Update the manifest checksum when build outputs differ from what is recorded
-        #[clap(long)]
-        update_checksum: bool,
-
-        /// Run the build script on the host's filesystem (for bootstrapping)
-        #[clap(long)]
-        bootstrap: bool,
-
-        /// Skip runtime dependency scanning
-        #[clap(long)]
-        skip_runtime_deps: bool,
-
-        /// Include per-reference explanations in runtime dependency output
-        #[clap(long)]
-        runtime_deps_verbose: bool,
-
-        /// Treat missing files during runtime dependency scanning as warnings
-        #[clap(long)]
-        allow_missing_runtime_files: bool,
-
-        /// Rewrite outputs.*.requires based on the runtime dependency scanner
-        #[clap(long)]
-        update_outputs_requires: bool,
-
-        /// Update outputs.*.requires using existing OSTree outputs without rebuilding
-        #[clap(long)]
-        update_outputs_requires_only: bool,
-
-        /// Rewrite OSTree output/bundle metadata without rebuilding (package manifests only)
-        #[clap(long)]
-        refresh_ostree_metadata: bool,
-    },
-}
-
-// legacy Opts struct for backward compatibility
 pub struct Opts {
     repo_path: String,
     manifest_file: String,
@@ -148,113 +112,86 @@ pub struct Opts {
 fn main() -> io::Result<()> {
     let cli: Cli = Cli::parse();
 
-    match cli.command {
-        Some(Commands::BuildLegacy {
-            repo_path,
-            manifest_file,
-            validate_reproducibility,
-            update_checksum,
-            bootstrap,
-            skip_runtime_deps,
-            runtime_deps_verbose,
-            allow_missing_runtime_files,
-            update_outputs_requires,
-            update_outputs_requires_only,
-            refresh_ostree_metadata,
-        }) => {
-            // legacy single-package builder
-            eprintln!("WARNING: Using deprecated legacy builder (build-legacy subcommand).");
-            eprintln!("         Please use 'nex <repo> <manifest>' instead.");
-            eprintln!("         The legacy builder will be removed in a future version.");
+    let repo_path = cli.repo_path.ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "REPO argument required")
+    })?;
+    let manifest_file = cli.manifest_file.ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "MANIFEST argument required")
+    })?;
 
-            let opts = Opts {
-                repo_path: repo_path.clone(),
-                manifest_file: manifest_file.clone(),
-                validate_reproducibility,
-                update_checksum,
-                bootstrap,
-                skip_runtime_deps,
-                runtime_deps_verbose,
-                allow_missing_runtime_files,
-                update_outputs_requires,
-                update_outputs_requires_only,
-                refresh_ostree_metadata,
-                force: false,
-            };
+    // configure rayon thread pool if jobs specified
+    if let Some(num_jobs) = cli.jobs {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(num_jobs)
+            .build_global()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to configure thread pool: {}", e)))?;
+    }
 
-            if opts.refresh_ostree_metadata
-                && (opts.update_outputs_requires
-                    || opts.update_outputs_requires_only
-                    || opts.validate_reproducibility)
-            {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "--refresh-ostree-metadata cannot be combined with build/update flags",
-                ));
-            }
+    let manifest_path = Path::new(&manifest_file);
+    let manifest_dirs = vec![PathBuf::from(&cli.manifest_dir)];
 
-            match load_manifest(&manifest_file)? {
-                ManifestData::Package(mut manifest) => {
-                    if opts.refresh_ostree_metadata {
-                        refresh_package_metadata(&opts.repo_path, &manifest, Path::new(&manifest_file))?;
-                        Ok(())
-                    } else {
-                        build_package_manifest(&opts, &mut manifest)
-                    }
-                }
-                ManifestData::System(manifest) => {
-                    if opts.refresh_ostree_metadata {
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidInput,
-                            "--refresh-ostree-metadata only applies to package manifests",
-                        ));
-                    }
-                    system::build_system_manifest(&opts, &manifest)
-                }
-            }
-        }
-        None => {
-            // default: graph-based builder with dependency resolution
-            let repo_path = cli.repo_path.ok_or_else(|| {
-                io::Error::new(io::ErrorKind::InvalidInput, "REPO argument required")
-            })?;
-            let manifest_file = cli.manifest_file.ok_or_else(|| {
-                io::Error::new(io::ErrorKind::InvalidInput, "MANIFEST argument required")
-            })?;
+    let opts = Opts {
+        repo_path: repo_path.clone(),
+        manifest_file: manifest_file.clone(),
+        validate_reproducibility: cli.validate_reproducibility,
+        update_checksum: cli.update_checksum,
+        bootstrap: cli.bootstrap,
+        skip_runtime_deps: cli.skip_runtime_deps,
+        runtime_deps_verbose: cli.runtime_deps_verbose,
+        allow_missing_runtime_files: cli.allow_missing_runtime_files,
+        update_outputs_requires: cli.update_outputs_requires,
+        update_outputs_requires_only: cli.update_outputs_requires_only,
+        refresh_ostree_metadata: cli.refresh_ostree_metadata,
+        force: cli.force,
+    };
 
-            // configure rayon thread pool if jobs specified
-            if let Some(num_jobs) = cli.jobs {
-                rayon::ThreadPoolBuilder::new()
-                    .num_threads(num_jobs)
-                    .build_global()
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to configure thread pool: {}", e)))?;
-            }
-
-            let manifest_path = Path::new(&manifest_file);
-            let manifest_dirs = vec![PathBuf::from(&cli.manifest_dir)];
-
-            let opts = Opts {
-                repo_path: repo_path.clone(),
-                manifest_file: manifest_file.clone(),
-                validate_reproducibility: false,
-                update_checksum: false,
-                bootstrap: cli.bootstrap,
-                skip_runtime_deps: cli.skip_runtime_deps,
-                runtime_deps_verbose: cli.runtime_deps_verbose,
-                allow_missing_runtime_files: cli.allow_missing_runtime_files,
-                update_outputs_requires: cli.update_outputs_requires,
-                update_outputs_requires_only: false,
-                refresh_ostree_metadata: false,
-                force: cli.force,
-            };
-
-            build_with_dependencies(&repo_path, manifest_path, &manifest_dirs, &opts, cli.dry_run, cli.add_checksums, cli.show_dep_paths, cli.force, cli.trace_dependency.as_deref())
-        }
+    if cli.single {
+        // single mode: build only the specified manifest without dependencies
+        build_single(&opts)
+    } else {
+        // default: build with full dependency resolution
+        build_with_dependencies(&repo_path, manifest_path, &manifest_dirs, &opts, cli.dry_run, cli.add_checksums, cli.show_dep_paths, cli.force, cli.trace_dependency.as_deref())
     }
 }
 
 fn build_package_manifest(opts: &Opts, manifest: &mut Manifest) -> io::Result<()> {
     build_package_manifest_with_dir(opts, manifest, "./build_rootfs")
+}
+
+fn build_single(opts: &Opts) -> io::Result<()> {
+    // load the manifest
+    let manifest_data = load_manifest(&opts.manifest_file)?;
+
+    // validate flags for refresh_ostree_metadata
+    if opts.refresh_ostree_metadata {
+        if matches!(manifest_data, ManifestData::System(_)) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--refresh-ostree-metadata only applies to package manifests",
+            ));
+        }
+        if opts.update_outputs_requires || opts.update_outputs_requires_only || opts.validate_reproducibility {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--refresh-ostree-metadata cannot be combined with build/update flags",
+            ));
+        }
+    }
+
+    match manifest_data {
+        ManifestData::Package(mut manifest) => {
+            if opts.refresh_ostree_metadata {
+                refresh_package_metadata(&opts.repo_path, &manifest, Path::new(&opts.manifest_file))
+            } else {
+                println!("Building package: {}", manifest.package.slug);
+                build_package_manifest(opts, &mut manifest)
+            }
+        }
+        ManifestData::System(manifest) => {
+            println!("Building system: {}", manifest.system.slug);
+            system::build_system_manifest(opts, &manifest)
+        }
+    }
 }
 
 fn package_already_built(manifest: &Manifest, repo_path: &str) -> io::Result<bool> {
