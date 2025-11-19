@@ -23,15 +23,22 @@ packages:
 
 build:
   script: |
-    # create minimal /etc/passwd and /etc/group
+    # create minimal /etc/passwd and /etc/group with systemd users
     mkdir -p /target/etc
 
     cat > /target/etc/passwd << 'EOF'
     root:x:0:0:root:/root:/bin/bash
+    systemd-network:x:192:192:systemd Network Management:/:/usr/bin/nologin
+    systemd-resolve:x:193:193:systemd Resolver:/:/usr/bin/nologin
+    systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/bin/nologin
     EOF
 
     cat > /target/etc/group << 'EOF'
     root:x:0:
+    systemd-network:x:192:
+    systemd-resolve:x:193:
+    systemd-timesync:x:194:
+    systemd-journal:x:190:
     EOF
 
     # create mount points for essential filesystems
@@ -40,6 +47,7 @@ build:
     # create minimal systemd directories
     mkdir -p /target/etc/systemd/system
     mkdir -p /target/var/log/journal
+    mkdir -p /target/var/lib/systemd
 
     # symlink init to systemd
     ln -sf /usr/lib/systemd/systemd /target/init
