@@ -138,7 +138,7 @@ pub fn rewrite_branch_metadata(
     command.arg("commit");
     command.arg("--repo").arg(repo_path);
     command.arg("--branch").arg(branch);
-    command.arg("--tree=ref=").arg(branch);
+    command.arg(format!("--tree=ref={}", branch));
 
     for (key, value) in metadata {
         command.arg(format!("--add-metadata-string={}={}", key, value));
