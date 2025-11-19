@@ -1,0 +1,64 @@
+system:
+  schema: 1
+  name: "Bootable Minimal System"
+  slug: "bootable-minimal"
+  version: "0.0.1"
+  description: "Minimal bootable system with basic userland"
+
+dependencies:
+- commit: x86_64/2nex-utilities/0.0.1/sys/apps/bundles/dev
+  name: 2nex-utilities
+- commit: x86_64/findutils/4.9.0/sys/apps/bundles/dev
+  name: findutils
+
+packages:
+- commit: x86_64/glibc/2.39/sys/libs/outputs/lib
+  name: glibc-lib
+- commit: x86_64/bash/5.2.21/app/shells/outputs/bin
+  name: bash-bin
+- commit: x86_64/coreutils/9.5/sys/apps/outputs/bin
+  name: coreutils-bin
+- commit: x86_64/util_linux/2.40/sys/apps/outputs/bin
+  name: util-linux-bin
+- commit: x86_64/util_linux/2.40/sys/apps/outputs/lib
+  name: util-linux-lib
+
+build:
+  script: |
+    # create minimal /etc/passwd and /etc/group
+    mkdir -p /target/etc
+
+    cat > /target/etc/passwd << 'EOF'
+    root:x:0:0:root:/root:/bin/bash
+    EOF
+
+    cat > /target/etc/group << 'EOF'
+    root:x:0:
+    EOF
+
+    # create mount points for essential filesystems
+    mkdir -p /target/{proc,sys,dev,run}
+
+    # create a simple init script
+    cat > /target/init << 'EOF'
+    #!/usr/bin/bash
+
+    mount -t proc proc /proc
+    mount -t sysfs sysfs /sys
+    mount -t tmpfs tmpfs /run
+
+    echo "=== 2nex bootable-minimal started ==="
+    echo "System info:"
+    uname -a
+    echo ""
+    echo "Mounted filesystems:"
+    mount
+    echo ""
+    echo "Starting shell..."
+
+    exec /bin/bash
+    EOF
+
+    chmod +x /target/init
+
+    find /target -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
