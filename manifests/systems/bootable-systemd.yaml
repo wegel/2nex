@@ -20,6 +20,10 @@ packages:
   name: util-linux-bin
 - commit: x86_64/bash/5.2.21/app/shells/outputs/bin
   name: bash-bin
+- commit: x86_64/shadow/4.15.1/sys/apps/outputs/bin
+  name: shadow-bin
+- commit: x86_64/shadow/4.15.1/sys/apps/outputs/conf
+  name: shadow-conf
 
 build:
   script: |
@@ -40,6 +44,15 @@ build:
     systemd-timesync:x:194:
     systemd-journal:x:190:
     EOF
+
+    # create /etc/shadow with blank password for root user
+    cat > /target/etc/shadow << 'EOF'
+    root::19735:0:99999:7:::
+    systemd-network:!*:19735::::::
+    systemd-resolve:!*:19735::::::
+    systemd-timesync:!*:19735::::::
+    EOF
+    chmod 600 /target/etc/shadow
 
     # create mount points for essential filesystems
     mkdir -p /target/{proc,sys,dev,run,tmp}
