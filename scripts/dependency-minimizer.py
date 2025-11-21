@@ -4,15 +4,15 @@ Dependency Minimizer
 
 This script minimizes the dependencies in a YAML manifest file by systematically
 testing which dependencies are truly necessary for building the manifest.
-It also automatically removes duplicate dependencies based on their name.
+It also automatically removes duplicate dependencies based on their commit.
 
 Examples:
     # Full minimization with deduplication
     python3 dependency-minimizer.py manifests/base/24-podman.yaml
-    
-    # Only deduplicate dependencies by name without testing
+
+    # Only deduplicate dependencies by commit without testing
     python3 dependency-minimizer.py manifests/base/24-podman.yaml --only-deduplicate
-    
+
     # Minimization without deduplication
     python3 dependency-minimizer.py manifests/base/24-podman.yaml --skip-deduplication
     
@@ -77,15 +77,19 @@ def parse_args():
     parser.add_argument("--ignore", nargs="*", default=["gmp", "glibc"],
                         help="List of dependency names to ignore during minimization (default: gmp glibc)")
     parser.add_argument("--skip-deduplication", action="store_true",
-                        help="Skip the name-based dependency deduplication step")
+                        help="Skip the commit-based dependency deduplication step")
     parser.add_argument("--only-deduplicate", action="store_true",
-                        help="Only perform name-based deduplication without minimization testing")
+                        help="Only perform commit-based deduplication without minimization testing")
+    parser.add_argument("--hydrate-dependencies-first", action="store_true",
+                        help="Hydrate dependencies (expand transitive deps) before minimization")
     parser.add_argument(
         "--section",
         choices=["dependencies", "packages"],
         default="dependencies",
         help="Manifest section to minimize (default: dependencies)",
     )
+    parser.add_argument("--repo", default="bootstrap_store",
+                        help="OSTree repo path for hydration (default: bootstrap_store)")
     return parser.parse_args()
 
 
@@ -207,41 +211,40 @@ def test_build(manifest_file, builder_path, timeout):
 
 def deduplicate_dependencies(dependencies):
     """
-    Remove duplicate dependencies based on their name.
+    Remove duplicate dependencies based on their commit path.
     Returns the deduplicated list and a list of removed dependencies.
     """
     unique_deps = {}
     removed_deps = []
-    
+
     for dep in dependencies:
-        # Get the name value, use an empty string if not present
-        name = dep.get('name', '')
-        
-        if name:
-            if name not in unique_deps:
-                # First time seeing this name, add it to unique_deps
-                unique_deps[name] = dep
+        # use commit as the unique identifier
+        commit = dep.get('commit', '')
+
+        if commit:
+            if commit not in unique_deps:
+                # first time seeing this commit, add it
+                unique_deps[commit] = dep
             else:
-                # Duplicate name, add to removed_deps
+                # duplicate commit, add to removed_deps
                 removed_deps.append(dep)
-                print(f"Found duplicate dependency with name: {name}")
-                print(f"  Keeping: {unique_deps[name].get('commit', 'no commit')}")
-                print(f"  Removing: {dep.get('commit', 'no commit')}")
+                name = dep.get('name', 'unnamed')
+                print(f"Found duplicate dependency: {name}")
+                print(f"  Commit: {commit}")
         else:
-            # Dependencies without names are kept as is
-            # But we'll use a unique identifier to avoid overriding
+            # dependencies without commits are kept as is
             unique_id = id(dep)
-            unique_deps[f"no_name_{unique_id}"] = dep
-    
-    # Convert the dictionary back to a list
+            unique_deps[f"no_commit_{unique_id}"] = dep
+
+    # convert the dictionary back to a list
     deduplicated_deps = list(unique_deps.values())
-    
+
     if removed_deps:
-        print(f"\nDeduplication by name complete.")
+        print(f"\nDeduplication by commit complete.")
         print(f"Original dependencies: {len(dependencies)}")
         print(f"Deduplicated dependencies: {len(deduplicated_deps)}")
         print(f"Removed duplicates: {len(removed_deps)}")
-    
+
     return deduplicated_deps, removed_deps
 
 
@@ -272,8 +275,8 @@ def minimize_dependencies(
     print(f"Original {section} count: {len(original_deps)}")
     entry_label = section[:-1] if section.endswith("s") else section
     
-    # First deduplicate dependencies by name
-    print(f"\nDeduplicating {section} by name...")
+    # First deduplicate dependencies by commit
+    print(f"\nDeduplicating {section} by commit...")
     deduplicated_deps, name_removed_deps = deduplicate_dependencies(original_deps)
     
     # Create a working directory for all temporary manifest files
@@ -371,7 +374,7 @@ def minimize_dependencies(
     
     print(f"\nMinimization complete.")
     print(f"Original {section}: {len(original_deps)}")
-    print(f"After name deduplication: {len(current_deps)}")
+    print(f"After commit deduplication: {len(current_deps)}")
     print(f"{entry_label.capitalize()} entries tested: {len(current_deps) - len(ignore_deps)}")
     print(f"{entry_label.capitalize()} entries ignored: {len(ignore_deps)}")
     print(f"Final minimized {section}: {len(minimized_deps)}")
@@ -395,6 +398,27 @@ def minimize_dependencies(
             print(f"  - {name}")
     
     return minimized_deps, total_removed_deps
+
+
+def hydrate_dependencies(manifest_file, builder_path, repo_path):
+    """Hydrate dependencies by expanding transitive deps using the builder."""
+    print(f"\nHydrating dependencies...")
+    cmd = [builder_path, repo_path, "--hydrate-dependencies", manifest_file]
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        if result.returncode != 0:
+            print(f"Error hydrating dependencies: {result.stderr}")
+            return False
+        print(result.stdout.strip())
+        return True
+    except Exception as e:
+        print(f"Error during hydration: {e}")
+        return False
 
 
 def only_deduplicate_dependencies(manifest_file, section):
@@ -452,6 +476,12 @@ def main():
         
         start_time = time.time()
         try:
+            # Hydrate dependencies first if requested
+            if args.hydrate_dependencies_first:
+                if not hydrate_dependencies(temp_manifest_path, args.builder, args.repo):
+                    print("Failed to hydrate dependencies. Aborting.")
+                    return 1
+
             # Determine operation mode based on flags
             if args.only_deduplicate:
                 print(f"Only deduplicating dependencies in manifest: {manifest_file}")

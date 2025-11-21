@@ -22,10 +22,46 @@ So I present 2nex. Currently, it's only a proof-of-concept sandbox to make a ful
 
 Packages are described in a yaml Manifest (see [manifests](manifests)). The Manifest lists the sources, dependencies (in the form of other packages), and build instructions. The Manifest includes the checksum of the result of the build; we thus can know that the result of the build is what we expect, and is reproducible. The [builder](src/builder) is used to build the Manifest, and the bundles are then commited to an ostree repository.
 
+There are two types of manifests:
+
+- **Package manifests**: Build a single piece of software (e.g., zlib, coreutils). They specify sources, build-time dependencies, and produce outputs that get committed to OSTree. The runtime dependency scanner automatically detects what each output actually needs.
+
+- **System manifests**: Assemble packages (including their transitive runtime dependencies) into a file structure. Can specify build-time only `dependencies` that are available during a configure-time build script to modify the resulting filesystem. The output could be a bootable system or just a configured rootfs.
+
 ## The builder
 
-The builder is a currently a simple (and pretty badly written) rust program that reads the Manifest, builds and verify it, and then commits the result to an ostree repository. It makes sure that the build environment itself is controlled and reproducible, and that the build is reproducible.
+The builder is a rust program that reads the Manifest, builds and verifies it, and then commits the result to an ostree repository. It controls the build environment for reproducibility (sandboxing, timestamp clamping, etc).
 
-## Status
+## Current Status
 
-This is still at the very early proof of concept stage. The bootstrap toolchain build is reproducible on my machine and on a VM; I'm sure there are many corner cases that need to be addressed to make it full reproducible in all cases.
+**Bootstrap toolchain**: Complete. Three-phase bootstrap from any x64 GCC system. The whole thing is 100% reproducible.
+
+**Packages**: ~50 packages in categories (sys/libs, sys/apps, app/*, dev/*, net/*). Runtime dependency scanner auto-detects what each package needs.
+
+**System manifests**: Working. Minimal systems (14MB) and more complex ones (podman). No bootstrap deps leak into production.
+
+**Kernel + initramfs**: Built as reproducible packages. Kernel is EFI-enabled.
+
+**Builder features**:
+- Parallel graph-based builds with automatic dependency ordering
+- Runtime dependency scanning (`--update-outputs-requires`)
+- Dependency tracing (`--trace-dependency "bootstrap/phase1"`)
+- Checksum verification
+- Dependency minimizer script
+
+## TODOs
+
+**Next up**:
+- Content-addressable manifest refs (blob SHAs for reproducible builds across commits)
+- Re-organize manifests hierarchy
+
+**Custom EFI boot manager**:
+- Boot manager that scans OSTree commits and boots selected kernel
+- Rollback support
+- QEMU test harness
+- OSTree-aware initramfs for root mounting
+
+**Later**:
+- Deployment tooling for real hardware
+- User environments and composition
+- More packages
