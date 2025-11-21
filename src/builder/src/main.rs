@@ -639,7 +639,11 @@ fn collect_dependencies_recursive(
 }
 
 // show how packages would be built in parallel waves
-fn show_parallel_execution_plan(graph: &DiGraph<PathBuf, ()>, build_order: &[NodeIndex]) {
+fn show_parallel_execution_plan(
+    graph: &DiGraph<PathBuf, ()>,
+    build_order: &[NodeIndex],
+    compact: bool,
+) {
     let mut dependencies: HashMap<NodeIndex, Vec<NodeIndex>> = HashMap::new();
     for &node in build_order {
         let deps: Vec<NodeIndex> = graph
@@ -671,13 +675,28 @@ fn show_parallel_execution_plan(graph: &DiGraph<PathBuf, ()>, build_order: &[Nod
             break;
         }
 
-        println!("\n  Wave {}: {} package(s) in parallel", wave_num, wave.len());
-        for &node_idx in &wave {
-            let path = &graph[node_idx];
-            let filename = path.file_name()
-                .and_then(|f| f.to_str())
-                .unwrap_or("unknown");
-            println!("    - {}", filename.trim_end_matches(".yaml"));
+        let wave_names: Vec<String> = wave.iter()
+            .map(|&node_idx| {
+                let path = &graph[node_idx];
+                let filename = path.file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or("unknown");
+                filename.trim_end_matches(".yaml").to_string()
+            })
+            .collect();
+
+        if compact {
+            println!(
+                "  Wave {} ({}): {}",
+                wave_num,
+                wave.len(),
+                wave_names.join(", ")
+            );
+        } else {
+            println!("\n  Wave {}: {} package(s) in parallel", wave_num, wave.len());
+            for name in &wave_names {
+                println!("    - {}", name);
+            }
         }
 
         // mark as completed
@@ -1193,7 +1212,7 @@ fn build_with_dependencies(
     // if dry run, show parallel execution plan
     if dry_run {
         println!("\nDRY RUN: Parallel execution plan:");
-        show_parallel_execution_plan(&graph, &build_order);
+        show_parallel_execution_plan(&graph, &build_order, false);
         println!("\nDRY RUN: Would build {} packages", build_order.len());
         return Ok(());
     }
@@ -1203,6 +1222,9 @@ fn build_with_dependencies(
         let path = &graph[node_idx];
         println!("  {}. {}", i + 1, path.display());
     }
+
+    println!("\nParallel execution plan:");
+    show_parallel_execution_plan(&graph, &build_order, true);
 
     // build in parallel waves
     println!("\nStarting parallel builds...\n");
