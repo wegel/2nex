@@ -74,6 +74,9 @@ pub fn setup_composite_rootfs(
     dependency_commits: &[String],
 ) -> io::Result<()> {
     println!("Setting up composite rootfs at {}", base_dir);
+    if Path::new(base_dir).exists() {
+        fs::remove_dir_all(base_dir)?;
+    }
     fs::create_dir_all(base_dir)?;
 
     let work_dir = Path::new(base_dir).join("2nex/work");

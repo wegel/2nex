@@ -94,6 +94,12 @@ struct Cli {
 
     #[clap(long, help = "Specify build directory (default: ./build_rootfs_{slug}_{flavor})")]
     build_dir: Option<String>,
+
+    #[clap(long, help = "Expand dependencies to include all transitive deps, ordered by depth")]
+    hydrate_dependencies: bool,
+
+    #[clap(long, help = "Include transitive runtime deps (requires) from manifest dependencies")]
+    transitive_requires: bool,
 }
 
 
@@ -111,6 +117,7 @@ pub struct Opts {
     refresh_ostree_metadata: bool,
     force: bool,
     build_dir: Option<String>,
+    transitive_requires: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -148,15 +155,106 @@ fn main() -> io::Result<()> {
         refresh_ostree_metadata: cli.refresh_ostree_metadata,
         force: cli.force,
         build_dir: cli.build_dir,
+        transitive_requires: cli.transitive_requires,
     };
 
-    if cli.single {
+    if cli.hydrate_dependencies {
+        // hydrate mode: expand dependencies to include all transitive deps
+        hydrate_dependencies(&repo_path, &manifest_file)
+    } else if cli.single {
         // single mode: build only the specified manifest without dependencies
         build_single(&opts)
     } else {
         // default: build with full dependency resolution
         build_with_dependencies(&repo_path, manifest_path, &manifest_dirs, &opts, cli.dry_run, cli.add_checksums, cli.show_dep_paths, cli.force, cli.trace_dependency.as_deref())
     }
+}
+
+fn hydrate_dependencies(repo_path: &str, manifest_file: &str) -> io::Result<()> {
+    // load manifest to get dependencies
+    let manifest_data = load_manifest(manifest_file)?;
+
+    let dependencies = match &manifest_data {
+        ManifestData::Package(m) => &m.dependencies,
+        ManifestData::System(_) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--hydrate-dependencies only applies to package manifests",
+            ));
+        }
+    };
+
+    // resolve all transitive dependencies (already in topological order, deepest first)
+    let all_commits = resolve_dependency_closure(dependencies, repo_path)?;
+
+    // convert commits to Dependency entries
+    let hydrated_deps: Vec<Dependency> = all_commits
+        .into_iter()
+        .map(|commit| {
+            // extract name from commit path like x86_64/zlib/1.3.1/sys/libs/bundles/dev
+            let name = commit
+                .split('/')
+                .nth(1)
+                .map(|s| s.to_string());
+            Dependency { commit, name }
+        })
+        .collect();
+
+    // read the original file
+    let content = fs::read_to_string(manifest_file)?;
+
+    // find the dependencies section and replace only that
+    let lines: Vec<&str> = content.lines().collect();
+    let mut dep_start = None;
+    let mut dep_end = None;
+
+    for (i, line) in lines.iter().enumerate() {
+        if line.starts_with("dependencies:") {
+            dep_start = Some(i);
+        } else if dep_start.is_some() && dep_end.is_none() {
+            // check if this is a new top-level key (no indentation)
+            if !line.is_empty() && !line.starts_with(' ') && !line.starts_with('\t') && !line.starts_with('-') {
+                dep_end = Some(i);
+                break;
+            }
+        }
+    }
+
+    let dep_start = dep_start.ok_or_else(|| {
+        io::Error::new(io::ErrorKind::NotFound, "No dependencies section found in manifest")
+    })?;
+    let dep_end = dep_end.unwrap_or(lines.len());
+
+    // build the new dependencies section
+    let mut new_dep_section = vec!["dependencies:".to_string()];
+    for dep in &hydrated_deps {
+        if let Some(name) = &dep.name {
+            new_dep_section.push(format!("  - name: {}", name));
+            new_dep_section.push(format!("    commit: {}", dep.commit));
+        } else {
+            new_dep_section.push(format!("  - commit: {}", dep.commit));
+        }
+    }
+
+    // reconstruct the file
+    let mut result: Vec<String> = lines[..dep_start].iter().map(|s| s.to_string()).collect();
+    result.extend(new_dep_section);
+    result.extend(lines[dep_end..].iter().map(|s| s.to_string()));
+
+    // write back
+    let output = result.join("\n");
+    // preserve trailing newline if original had one
+    let output = if content.ends_with('\n') {
+        format!("{}\n", output)
+    } else {
+        output
+    };
+
+    fs::write(manifest_file, output)?;
+
+    println!("Hydrated {} dependencies (was {})", hydrated_deps.len(), dependencies.len());
+
+    Ok(())
 }
 
 fn build_package_manifest(opts: &Opts, manifest: &mut Manifest) -> io::Result<()> {
@@ -237,7 +335,12 @@ fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_di
     let download_dir = "./inputs_cache";
     fs::create_dir_all(download_dir)?;
 
-    let dependency_commits = resolve_dependency_closure(&manifest.dependencies, &opts.repo_path)?;
+    let dependency_commits = if opts.transitive_requires {
+        resolve_dependency_closure(&manifest.dependencies, &opts.repo_path)?
+    } else {
+        // just use direct commits from dependencies, no transitive resolution
+        manifest.dependencies.iter().map(|d| d.commit.clone()).collect()
+    };
     let wants_update_outputs = opts.update_outputs_requires || opts.update_outputs_requires_only;
     let runtime_scanner = RuntimeScanner::new(&opts.repo_path, &dependency_commits)
         .with_allow_missing_files(opts.allow_missing_runtime_files);
@@ -835,6 +938,7 @@ fn build_packages_parallel(
                             refresh_ostree_metadata: opts.refresh_ostree_metadata,
                             force: opts.force,
                             build_dir: None,
+                            transitive_requires: true,
                         };
 
                         println!("[{}/{}] Building: {}", build_num, total, manifest.package.slug);
@@ -874,6 +978,7 @@ fn build_packages_parallel(
                             refresh_ostree_metadata: opts.refresh_ostree_metadata,
                             force: opts.force,
                             build_dir: None,
+                            transitive_requires: true,
                         };
 
                         println!("[{}/{}] Building system: {}", build_num, total, system_manifest.system.slug);
@@ -1041,6 +1146,7 @@ fn add_missing_checksums_to_manifests(
                     refresh_ostree_metadata: false,
                     force: false,
                     build_dir: None,
+                    transitive_requires: true,
                 };
 
                 build_package_manifest(&build_opts, &mut manifest_copy)?;
