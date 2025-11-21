@@ -91,6 +91,9 @@ struct Cli {
 
     #[clap(long, help = "Trace which packages pull in a specific dependency (e.g. 'bootstrap/phase1')")]
     trace_dependency: Option<String>,
+
+    #[clap(long, help = "Specify build directory (default: ./build_rootfs_{slug}_{flavor})")]
+    build_dir: Option<String>,
 }
 
 
@@ -107,6 +110,7 @@ pub struct Opts {
     update_outputs_requires_only: bool,
     refresh_ostree_metadata: bool,
     force: bool,
+    build_dir: Option<String>,
 }
 
 fn main() -> io::Result<()> {
@@ -143,6 +147,7 @@ fn main() -> io::Result<()> {
         update_outputs_requires_only: cli.update_outputs_requires_only,
         refresh_ostree_metadata: cli.refresh_ostree_metadata,
         force: cli.force,
+        build_dir: cli.build_dir,
     };
 
     if cli.single {
@@ -184,12 +189,21 @@ fn build_single(opts: &Opts) -> io::Result<()> {
                 refresh_package_metadata(&opts.repo_path, &manifest, Path::new(&opts.manifest_file))
             } else {
                 println!("Building package: {}", manifest.package.slug);
-                build_package_manifest(opts, &mut manifest)
+                let build_dir = opts.build_dir.clone().unwrap_or_else(|| {
+                    format!("./build_rootfs_{}_{}",
+                        manifest.package.slug.replace("/", "_"),
+                        manifest.package.flavor.replace("/", "_"))
+                });
+                build_package_manifest_with_dir(opts, &mut manifest, &build_dir)
             }
         }
         ManifestData::System(manifest) => {
             println!("Building system: {}", manifest.system.slug);
-            system::build_system_manifest(opts, &manifest)
+            let build_dir = opts.build_dir.clone().unwrap_or_else(|| {
+                format!("./build_rootfs_{}_system",
+                    manifest.system.slug.replace("/", "_"))
+            });
+            system::build_system_manifest_with_dir(opts, &manifest, &build_dir)
         }
     }
 }
@@ -820,6 +834,7 @@ fn build_packages_parallel(
                             update_outputs_requires_only: opts.update_outputs_requires_only,
                             refresh_ostree_metadata: opts.refresh_ostree_metadata,
                             force: opts.force,
+                            build_dir: None,
                         };
 
                         println!("[{}/{}] Building: {}", build_num, total, manifest.package.slug);
@@ -858,6 +873,7 @@ fn build_packages_parallel(
                             update_outputs_requires_only: opts.update_outputs_requires_only,
                             refresh_ostree_metadata: opts.refresh_ostree_metadata,
                             force: opts.force,
+                            build_dir: None,
                         };
 
                         println!("[{}/{}] Building system: {}", build_num, total, system_manifest.system.slug);
@@ -1024,6 +1040,7 @@ fn add_missing_checksums_to_manifests(
                     update_outputs_requires_only: false,
                     refresh_ostree_metadata: false,
                     force: false,
+                    build_dir: None,
                 };
 
                 build_package_manifest(&build_opts, &mut manifest_copy)?;

@@ -174,8 +174,8 @@ def test_build(manifest_file, builder_path, timeout):
     if os.path.exists(build_dir):
         shutil.rmtree(build_dir)
     
-    # Run the build command
-    cmd = [builder_path, "bootstrap_store", manifest_file]
+    # Run the build command with --single --force to avoid cache issues
+    cmd = [builder_path, "bootstrap_store", "--single", "--force", manifest_file]
     try:
         current_process = subprocess.Popen(
             cmd, 
@@ -299,20 +299,28 @@ def minimize_dependencies(
         
         # Track which dependencies can be removed through minimization
         removable_deps = []
-        
+
+        # Start with all deps, progressively remove as we find removable ones
+        working_deps = list(current_deps)
+
         # Test each dependency individually
         for i, dep in enumerate(current_deps):
             dep_name = dep.get('name', f"unknown-{i}")
-            
+
             # Skip if this dependency is in the ignore list
             if dep_name in ignore_deps:
                 print(f"\nSkipping {entry_label} {dep_name} (in ignore list)")
                 continue
-                
+
+            # Skip if already removed in a previous iteration
+            if dep not in working_deps:
+                print(f"\nSkipping {entry_label} {dep_name} (already removed)")
+                continue
+
             print(f"\nTesting removal of {entry_label}: {dep_name} ({i+1}/{len(current_deps)})")
-            
+
             # Create a test dependencies list without the current dependency
-            test_deps = [d for d in current_deps if d != dep]
+            test_deps = [d for d in working_deps if d != dep]
             
             # Create a unique temporary manifest file for this test
             test_manifest_path = os.path.join(main_temp_dir, f"test_manifest_{i}.yaml")
@@ -320,7 +328,8 @@ def minimize_dependencies(
             
             # Test if it builds
             success, stdout, stderr = test_build(test_manifest_path, builder_path, timeout)
-            
+            print(f"DEBUG: success={success}, stderr_tail={stderr[-200:] if stderr else 'empty'}")
+
             # Reset cancelled flag after each test
             if cancelled:
                 print(f"⚠️ Build for {dep_name} was cancelled by user, marking as required")
@@ -330,14 +339,16 @@ def minimize_dependencies(
             if success:
                 print(f"✅ {entry_label.capitalize()} {dep_name} can be removed!")
                 removable_deps.append(dep)
+                # progressively remove from working set
+                working_deps = test_deps
             else:
                 print(f"❌ {entry_label.capitalize()} {dep_name} is required")
                 
             # Optional: give user a moment to review results
             time.sleep(0.5)
         
-        # Create the minimized dependencies list
-        minimized_deps = [d for d in current_deps if d not in removable_deps]
+        # Use the progressively reduced working list as the minimized set
+        minimized_deps = working_deps
         
         # Verify the final minimized manifest before returning
         print("\nVerifying the final minimized manifest...")
