@@ -502,6 +502,10 @@ impl RuntimeScanResult {
     pub fn is_empty(&self) -> bool {
         self.resolved.is_empty() && self.unresolved.is_empty()
     }
+
+    pub fn all_resolved_commits(&self) -> impl Iterator<Item = &String> {
+        self.resolved.values().flat_map(|commits| commits.keys())
+    }
 }
 
 struct ElfMetadata {

@@ -100,6 +100,9 @@ struct Cli {
 
     #[clap(long, help = "Include transitive runtime deps (requires) from manifest dependencies")]
     transitive_requires: bool,
+
+    #[clap(long, help = "Allow bootstrap packages in requires (normally rejected)")]
+    allow_bootstrap_requires: bool,
 }
 
 
@@ -118,6 +121,7 @@ pub struct Opts {
     force: bool,
     build_dir: Option<String>,
     transitive_requires: bool,
+    allow_bootstrap_requires: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -156,6 +160,7 @@ fn main() -> io::Result<()> {
         force: cli.force,
         build_dir: cli.build_dir,
         transitive_requires: cli.transitive_requires,
+        allow_bootstrap_requires: cli.allow_bootstrap_requires,
     };
 
     if cli.hydrate_dependencies {
@@ -360,6 +365,23 @@ fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_di
             manifest,
             opts.runtime_deps_verbose,
         )?;
+        // check for bootstrap requires unless allowed
+        if !opts.allow_bootstrap_requires {
+            let bootstrap_requires: Vec<String> = runtime_result
+                .all_resolved_commits()
+                .filter(|commit| commit.contains("/bootstrap/"))
+                .cloned()
+                .collect();
+            if !bootstrap_requires.is_empty() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "Bootstrap requires detected (use --allow-bootstrap-requires to override):\n  {}",
+                        bootstrap_requires.join("\n  ")
+                    ),
+                ));
+            }
+        }
         update_manifest_outputs(&opts.manifest_file, &runtime_result)?;
         apply_runtime_requires(manifest, &runtime_result);
         println!(
@@ -402,6 +424,23 @@ fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_di
 
     if wants_update_outputs {
         if let Some(result) = runtime_analysis.as_ref() {
+            // check for bootstrap requires unless allowed
+            if !opts.allow_bootstrap_requires {
+                let bootstrap_requires: Vec<String> = result
+                    .all_resolved_commits()
+                    .filter(|commit| commit.contains("/bootstrap/"))
+                    .cloned()
+                    .collect();
+                if !bootstrap_requires.is_empty() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "Bootstrap requires detected (use --allow-bootstrap-requires to override):\n  {}",
+                            bootstrap_requires.join("\n  ")
+                        ),
+                    ));
+                }
+            }
             update_manifest_outputs(&opts.manifest_file, result)?;
             apply_runtime_requires(manifest, result);
         } else {
@@ -939,6 +978,7 @@ fn build_packages_parallel(
                             force: opts.force,
                             build_dir: None,
                             transitive_requires: true,
+                            allow_bootstrap_requires: false,
                         };
 
                         println!("[{}/{}] Building: {}", build_num, total, manifest.package.slug);
@@ -979,6 +1019,7 @@ fn build_packages_parallel(
                             force: opts.force,
                             build_dir: None,
                             transitive_requires: true,
+                            allow_bootstrap_requires: false,
                         };
 
                         println!("[{}/{}] Building system: {}", build_num, total, system_manifest.system.slug);
@@ -1147,6 +1188,7 @@ fn add_missing_checksums_to_manifests(
                     force: false,
                     build_dir: None,
                     transitive_requires: true,
+                    allow_bootstrap_requires: false,
                 };
 
                 build_package_manifest(&build_opts, &mut manifest_copy)?;
