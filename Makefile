@@ -24,17 +24,19 @@ build:
 	@echo "Building all phases..."
 	@for PHASE in 0 1 2 3; do \
 		echo "Phase: $$PHASE"; \
-		for M in $$(ls manifests/bootstrap/phase$$PHASE/*.yaml | sort -V); do \
-			echo "Building: $$M"; \
-			B=""; \
-			[ $$PHASE -lt 2 ] && B="--bootstrap"; \
-			if ! src/builder/target/debug/nex $$B $(REPO) $$M > /tmp/build_log 2>&1; then \
-				cat /tmp/build_log; \
-				echo "Failed $$M"; \
-				exit 1; \
-			fi; \
-			rm -rf build_rootfs; \
-		done; \
+		if [ -d pkg/bootstrap/phase$$PHASE ]; then \
+			for M in $$(find pkg/bootstrap/phase$$PHASE -maxdepth 1 -name '*.yaml' | sort -V); do \
+				echo "Building: $$M"; \
+				B=""; \
+				[ $$PHASE -lt 2 ] && B="--bootstrap"; \
+				if ! src/builder/target/debug/nex $$B $(REPO) $$M > /tmp/build_log 2>&1; then \
+					cat /tmp/build_log; \
+					echo "Failed $$M"; \
+					exit 1; \
+				fi; \
+				rm -rf build_rootfs; \
+			done; \
+		fi; \
 	done
 	@echo "Build complete!"
 

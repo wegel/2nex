@@ -1,0 +1,125 @@
+package:
+  schema: 1
+  name: GDBM
+  slug: gdbm
+  namespace: libs/system
+  version: '1.23'
+  description: GNU dbm is a set of database routines that use extensible hashing
+  homepage: https://www.gnu.org/software/gdbm/
+  checksum: e0f6100452193e91bb8cb38b1015efeb8d5dfc5f0f2cd6fd653678bb983d3c04
+sources:
+- name: gdbm
+  url: https://ftp.gnu.org/gnu/gdbm/gdbm-1.23.tar.gz
+  sha256: 74b1081d21fff13ae4bd7c16e5d6e504a4c26f7cde1dca0d963a484174bbcacd
+dependencies:
+- commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
+  name: mpc
+- commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+  name: coreutils
+- commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
+  name: findutils
+- commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+  name: 2nex-utilities
+- commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
+  name: gawk
+- commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
+  name: gzip
+- commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
+  name: make
+- commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+  name: tar
+- commit: x86_64/pkg/bootstrap/phase2/texinfo/7.1/bundles/dev
+  name: texinfo
+- commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
+  name: zlib
+- commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
+  name: bzip2
+- commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+  name: xz
+- commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
+  name: file
+- commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  name: binutils
+- commit: x86_64/gmp/6.3.0/bootstrap/phase3/bundles/dev
+  name: gmp
+- commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+  name: mpfr
+- commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
+  name: mpc
+- commit: x86_64/pkg/bootstrap/phase3/attr/2.5.2/bundles/dev
+  name: attr
+- commit: x86_64/pkg/bootstrap/phase3/acl/2.3.2/bundles/dev
+  name: acl
+- commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+  name: gcc
+- commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  name: linux
+- commit: x86_64/pkg/bootstrap/phase3/ncurses/6.4-20230520/bundles/dev
+  name: ncurses
+- commit: x86_64/sed/4.9/bootstrap/phase3/bundles/dev
+  name: sed
+- commit: x86_64/grep/3.11/bootstrap/phase3/bundles/dev
+  name: grep
+- commit: x86_64/bash/5.2.21/bootstrap/phase3/bundles/dev
+  name: bash
+- commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+  name: glibc
+build:
+  script: "tar --no-same-owner -xf ${SOURCE0} -C \"${WORK_DIR}\" --strip-components=1\n\
+    cd ${WORK_DIR}\n\n./configure --prefix=/usr    \\\n            --disable-static\
+    \ \\\n            --enable-libgdbm-compat\nmake\nmake DESTDIR=$OUT_DIR install\n\
+    \nfind \"${OUT_DIR}\" -exec touch -d \"2024-01-01T00:00:00+00:00\" {} \\;\n2nex_strip_binaries\
+    \ ${OUT_DIR}\n"
+bundles:
+  full:
+  - info
+  - locale
+  - man
+  - dev
+  - bin
+  - lib
+  dev:
+  - dev
+  - bin
+  - lib
+outputs:
+  info:
+  - /usr/share/info/dir
+  - /usr/share/info/gdbm.info
+  locale:
+  - /usr/share/locale/da/LC_MESSAGES/gdbm.mo
+  - /usr/share/locale/de/LC_MESSAGES/gdbm.mo
+  - /usr/share/locale/eo/LC_MESSAGES/gdbm.mo
+  - /usr/share/locale/es/LC_MESSAGES/gdbm.mo
+  - /usr/share/locale/fi/LC_MESSAGES/gdbm.mo
+  - /usr/share/locale/fr/LC_MESSAGES/gdbm.mo
+  - /usr/share/locale/ja/LC_MESSAGES/gdbm.mo
+  - /usr/share/locale/pl/LC_MESSAGES/gdbm.mo
+  - /usr/share/locale/pt_BR/LC_MESSAGES/gdbm.mo
+  - /usr/share/locale/ru/LC_MESSAGES/gdbm.mo
+  - /usr/share/locale/sr/LC_MESSAGES/gdbm.mo
+  - /usr/share/locale/sv/LC_MESSAGES/gdbm.mo
+  - /usr/share/locale/uk/LC_MESSAGES/gdbm.mo
+  - /usr/share/locale/vi/LC_MESSAGES/gdbm.mo
+  man:
+  - /usr/share/man/man1/gdbm_dump.1
+  - /usr/share/man/man1/gdbm_load.1
+  - /usr/share/man/man1/gdbmtool.1
+  - /usr/share/man/man3/gdbm.3
+  dev:
+  - /usr/include/dbm.h
+  - /usr/include/gdbm.h
+  - /usr/include/ndbm.h
+  - /usr/lib/libgdbm.la
+  - /usr/lib/libgdbm_compat.la
+  bin:
+  - /usr/bin/gdbm_dump
+  - /usr/bin/gdbm_load
+  - /usr/bin/gdbmtool
+  lib:
+  - /usr/lib/libgdbm.so
+  - /usr/lib/libgdbm.so.6
+  - /usr/lib/libgdbm.so.6.0.0
+  - /usr/lib/libgdbm_compat.so
+  - /usr/lib/libgdbm_compat.so.4
+  - /usr/lib/libgdbm_compat.so.4.0.0

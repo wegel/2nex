@@ -10,7 +10,7 @@ if [[ ! -x "${BUILDER}" ]]; then
   exit 1
 fi
 
-find "${ROOT_DIR}/manifests" -type f -name '*.yaml' | sort | while read -r manifest; do
+find "${ROOT_DIR}/pkg" -type f -name '*.yaml' | sort | while read -r manifest; do
   if grep -qi '^kind:\s*system' "${manifest}"; then
     echo "Skipping system manifest ${manifest}"
     continue

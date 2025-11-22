@@ -1,0 +1,168 @@
+package:
+  schema: 1
+  name: MPFR
+  slug: mpfr
+  namespace: libs/system
+  version: 4.2.1
+  description: Multiple Precision Floating-Point Reliable Library
+  homepage: https://www.mpfr.org/
+  checksum: a750dc948f4cae3d8264f0a04fe660bdb926d5e37d58131b848e154cbaca5205
+sources:
+- name: mpfr
+  url: https://ftp.gnu.org/gnu/mpfr/mpfr-4.2.1.tar.xz
+  sha256: 277807353a6726978996945af13e52829e3abd7a9a5b7fb2793894e18f1fcbb2
+dependencies:
+  - name: bootstrap_tools
+    commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
+  - name: gcc
+    commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/outputs/lib
+  - name: mpfr
+    commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/outputs/lib
+  - name: bash
+    commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
+  - name: findutils
+    commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
+  - name: 2nex-utilities-bootstrap
+    commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+  - name: gawk
+    commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
+  - name: grep
+    commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+  - name: make
+    commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
+  - name: sed
+    commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+  - name: tar
+    commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+  - name: mpc
+    commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/outputs/lib
+  - name: gcc
+    commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+  - name: perl
+    commit: x86_64/pkg/bootstrap/phase2/perl/5.38.2/bundles/dev
+  - name: coreutils
+    commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/outputs/bin
+  - name: texinfo
+    commit: x86_64/pkg/bootstrap/phase2/texinfo/7.1/bundles/dev
+  - name: zlib
+    commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
+  - name: xz
+    commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+  - name: bzip2
+    commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/outputs/lib
+  - name: file
+    commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
+  - name: binutils
+    commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  - name: glibc
+    commit: x86_64/pkg/libs/system/glibc/2.39/outputs/lib
+  - name: gcc
+    commit: x86_64/pkg/core/toolchain/gcc/13.2.0/outputs/lib
+  - name: gmp
+    commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+  - name: glibc
+    commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+build:
+  script: "tar --no-same-owner -xf ${SOURCE_mpfr} -C \"${WORK_DIR}\" --strip-components=1\n\
+    cd ${WORK_DIR}\n\n./configure --prefix=/usr        \\\n          --enable-thread-safe\
+    \ \\\n          --docdir=/usr/share/doc/mpfr-4.2.1\n\nmake\nmake html\nmake check\n\
+    make DESTDIR=\"${OUT_DIR}\" install\nmake DESTDIR=\"${OUT_DIR}\" install-html\n\
+    \nfind \"${OUT_DIR}\" -exec touch -d '2024-01-01T00:00:00+00:00' {} \\;\n2nex_strip_binaries\
+    \ ${OUT_DIR}\n"
+bundles:
+  full:
+  - dev
+  - lib
+  - static
+  - doc
+  - info
+  dev:
+  - dev
+  - lib
+  - static
+outputs:
+  dev:
+    files:
+    - /usr/include/mpf2mpfr.h
+    - /usr/include/mpfr.h
+    - /usr/lib/libmpfr.la
+    - /usr/lib/pkgconfig/mpfr.pc
+  lib:
+    files:
+    - /usr/lib/libmpfr.so
+    - /usr/lib/libmpfr.so.6
+    - /usr/lib/libmpfr.so.6.2.1
+    requires:
+    - x86_64/pkg/libs/system/glibc/2.39/outputs/lib
+    - x86_64/pkg/libs/system/gmp/6.3.0/outputs/lib
+  static:
+    files:
+    - /usr/lib/libmpfr.a
+  doc:
+    files:
+    - /usr/share/doc/mpfr-4.2.1/AUTHORS
+    - /usr/share/doc/mpfr-4.2.1/BUGS
+    - /usr/share/doc/mpfr-4.2.1/COPYING
+    - /usr/share/doc/mpfr-4.2.1/COPYING.LESSER
+    - /usr/share/doc/mpfr-4.2.1/FAQ.html
+    - /usr/share/doc/mpfr-4.2.1/NEWS
+    - /usr/share/doc/mpfr-4.2.1/TODO
+    - /usr/share/doc/mpfr-4.2.1/examples/ReadMe
+    - /usr/share/doc/mpfr-4.2.1/examples/can_round.c
+    - /usr/share/doc/mpfr-4.2.1/examples/divworst.c
+    - /usr/share/doc/mpfr-4.2.1/examples/rndo-add.c
+    - /usr/share/doc/mpfr-4.2.1/examples/sample.c
+    - /usr/share/doc/mpfr-4.2.1/examples/threads.c
+    - /usr/share/doc/mpfr-4.2.1/examples/version.c
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/API-Compatibility.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Added-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Arithmetic-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Assignment-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Changed-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Combined-Initialization-and-Assignment-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Comparison-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Compatibility-with-MPF.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Concept-Index.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Contributors.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Conversion-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Copying.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Custom-Interface.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Exception-Related-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Exceptions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Floating_002dPoint-Values-on-Special-Numbers.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Formatted-Output-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Function-and-Type-Index.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/GNU-Free-Documentation-License.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Getting-the-Best-Efficiency-Out-of-MPFR.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Headers-and-Libraries.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Initialization-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Input-and-Output-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Installing-MPFR.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Integer-and-Remainder-Related-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Internals.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Introduction-to-MPFR.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/MPFR-Basics.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/MPFR-Interface.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/MPFR-Variable-Conventions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/MPFR-and-the-IEEE-754-Standard.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Memory-Handling-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Memory-Handling.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Miscellaneous-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Nomenclature-and-Types.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Other-Changes.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/References.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Removed-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Reporting-Bugs.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Rounding.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Rounding_002dRelated-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Transcendental-Functions.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/Type-and-Macro-Changes.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/index.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/mpfr_005fget_005fstr.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/mpfr_005fget_005fstr_005fndigits.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/mpfr_005fpow.html
+    - /usr/share/doc/mpfr-4.2.1/mpfr.html/ternary-value.html
+  info:
+    files:
+    - /usr/share/info/dir
+    - /usr/share/info/mpfr.info

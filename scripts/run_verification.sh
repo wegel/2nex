@@ -13,7 +13,7 @@ ostree --repo=bootstrap_store init --mode=bare-user
 mkdir -p /my-build && cp -a * /my-build/ && cd /my-build
 for PHASE in 0 1 2 3; do
   echo "Phase: $PHASE"
-  for M in $(ls manifests/bootstrap/phase${PHASE}/*.yaml 2>/dev/null | sort -V); do
+  for M in $(ls pkg/bootstrap/phase${PHASE}/*.yaml 2>/dev/null | sort -V); do
     echo "Building: ${M}"
     B=""
     [ $PHASE -lt 2 ] && B="--bootstrap"

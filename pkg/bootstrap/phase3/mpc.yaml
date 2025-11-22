@@ -1,0 +1,93 @@
+package:
+  schema: 1
+  name: MPC
+  slug: mpc
+  namespace: bootstrap/phase3
+  version: 1.2.1
+  description: Multiple Precision Complex Library
+  homepage: https://www.multiprecision.org/mpc/
+  checksum: e8054eff4e172bc708136cd54b99502f8a5f619947b4a294f70627f9678120a1
+sources:
+- name: mpc
+  url: https://ftp.gnu.org/gnu/mpc/mpc-1.3.1.tar.gz
+  sha256: ab642492f5cf882b74aa0cb730cd410a81edcdbec895183ce930e706c1c759b8
+dependencies:
+  - name: bootstrap_tools
+    commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
+  - name: bash
+    commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
+  - name: coreutils
+    commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+  - name: findutils
+    commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
+  - name: 2nex-utilities
+    commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+  - name: gawk
+    commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
+  - name: grep
+    commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+  - name: gzip
+    commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
+  - name: make
+    commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
+  - name: sed
+    commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+  - name: tar
+    commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+  - name: gcc
+    commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/bundles/dev
+  - name: texinfo
+    commit: x86_64/pkg/bootstrap/phase2/texinfo/7.1/bundles/dev
+  - name: glibc
+    commit: x86_64/pkg/bootstrap/phase3/glibc-bootstrap/2.39/bundles/dev
+  - name: zlib
+    commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
+  - name: bzip2
+    commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
+  - name: xz
+    commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+  - name: file
+    commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
+  - name: binutils
+    commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  - name: gmp
+    commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
+  - name: mpfr
+    commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+build:
+  script: "tar --no-same-owner -xf ${SOURCE_mpc} -C \"${WORK_DIR}\" --strip-components=1\n\
+    cd ${WORK_DIR}\n\n./configure \\\n    --prefix=/usr \\\n    --with-gmp=/usr \\\
+    \n    --with-mpfr=/usr\n\nmake\nmake check\nmake DESTDIR=\"${OUT_DIR}\" install\n\
+    \nfind \"${OUT_DIR}\" -exec touch -d '2024-01-01T00:00:00+00:00' {} \\;\n2nex_strip_binaries\
+    \ ${OUT_DIR}\n"
+bundles:
+  full:
+  - static
+  - dev
+  - lib
+  - info
+  dev:
+  - static
+  - dev
+  - lib
+outputs:
+  static:
+    files:
+    - /usr/lib/libmpc.a
+  dev:
+    files:
+    - /usr/include/mpc.h
+    - /usr/lib/libmpc.la
+  lib:
+    files:
+    - /usr/lib/libmpc.so
+    - /usr/lib/libmpc.so.3
+    - /usr/lib/libmpc.so.3.3.1
+    requires:
+    - x86_64/pkg/bootstrap/phase3/glibc-bootstrap/2.39/outputs/lib
+    - x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/outputs/lib
+    - x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/outputs/lib
+  info:
+    files:
+    - /usr/share/info/dir
+    - /usr/share/info/mpc.info

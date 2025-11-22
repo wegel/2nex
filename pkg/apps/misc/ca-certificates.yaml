@@ -1,0 +1,79 @@
+package:
+  schema: 1
+  name: CA Certificates
+  slug: ca-certificates
+  namespace: apps/misc
+  version: '20241223'
+  description: Certificate Authority certificates for SSL/TLS
+  homepage: https://packages.debian.org/sid/ca-certificates
+  checksum: ddf040ae1b1de2c325d5af8f85ec12c79d70fe7b2dbebeb9a3b319a727dd68b6
+sources:
+- name: ca_certificates
+  url: https://mirrors.edge.kernel.org/debian/pool/main/c/ca-certificates/ca-certificates_20250419.tar.xz
+  sha256: 33b44ef78653ecd3f0f2f13e5bba6be466be2e7da72182f737912b81798ba5d2
+dependencies:
+- commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+  name: bash
+- commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+  name: coreutils
+- commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+  name: findutils
+- commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+  name: 2nex-utilities
+- commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+  name: tar
+- commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+  name: glibc
+- commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+  name: gcc
+- commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+  name: ncurses
+- commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
+  name: inetutils
+- commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+  name: attr
+- commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+  name: acl
+- commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
+  name: mpc
+- commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+  name: mpfr
+- commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+  name: gmp
+- commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+  name: xz
+- commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+  name: gawk
+build:
+  script: "tar --no-same-owner -xf ${SOURCE_ca_certificates} -C \"${WORK_DIR}\" --strip-components=1\n\
+    cd ${WORK_DIR}\n\n# Install\nmkdir -p ${OUT_DIR}/usr/share/ca-certificates\nmkdir\
+    \ -p ${OUT_DIR}/etc/ssl/certs\n\n# Install certificates\ncp -a mozilla/* ${OUT_DIR}/usr/share/ca-certificates/\n\
+    \n# Generate ca-certificates.crt file\ncd ${OUT_DIR}/usr/share/ca-certificates\n\
+    find . -name \"*.crt\" | LC_ALL=C sort > ${OUT_DIR}/etc/ca-certificates.conf\n\
+    cd ${WORK_DIR}\n\n# Use openssl to create certificate bundle\nawk '{print \"mozilla/\"\
+    \ $0}' ${OUT_DIR}/etc/ca-certificates.conf | \\\n  while read crt; do \\\n   \
+    \ cat ${OUT_DIR}/usr/share/ca-certificates/$crt >> ${OUT_DIR}/etc/ssl/certs/ca-certificates.crt;\
+    \ \\\n    echo >> ${OUT_DIR}/etc/ssl/certs/ca-certificates.crt; \\\n  done\n\n\
+    # Create individual certificate symlinks\ncd ${OUT_DIR}/etc/ssl/certs\nfor cert\
+    \ in $(find ${OUT_DIR}/usr/share/ca-certificates -name \"*.crt\"); do\n  filename=$(basename\
+    \ \"$cert\")\n  hash=$(openssl x509 -hash -noout -in \"$cert\")\n  ln -sf ../../../usr/share/ca-certificates/mozilla/$filename\
+    \ $hash.0\ndone\n\n# Set consistent timestamps for reproducible builds\nfind \"\
+    ${OUT_DIR}\" -exec touch -d '2024-01-01T00:00:00+00:00' {} \\;\n"
+bundles:
+  full:
+  - conf
+  - misc
+  dev:
+  - conf
+  - misc
+outputs:
+  conf:
+    files:
+    - /etc/ca-certificates.conf
+  misc:
+    files:
+    - /usr/share/ca-certificates/Makefile
+    - /usr/share/ca-certificates/blacklist.txt
+    - /usr/share/ca-certificates/certdata.txt
+    - /usr/share/ca-certificates/certdata2pem.py
+    - /usr/share/ca-certificates/nssckbi.h

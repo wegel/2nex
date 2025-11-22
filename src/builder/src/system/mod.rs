@@ -17,7 +17,11 @@ pub fn build_system_manifest(opts: &Opts, manifest: &SystemManifest) -> io::Resu
     build_system_manifest_with_dir(opts, manifest, "./build_rootfs")
 }
 
-pub fn build_system_manifest_with_dir(opts: &Opts, manifest: &SystemManifest, base_dir: &str) -> io::Result<()> {
+pub fn build_system_manifest_with_dir(
+    opts: &Opts,
+    manifest: &SystemManifest,
+    base_dir: &str,
+) -> io::Result<()> {
     if opts.update_outputs_requires || opts.update_outputs_requires_only {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -243,4 +247,3 @@ pub fn commit_system_rootfs(
 
     commit_to_ostree(repo_path, &branch_name, &target_dir, &metadata)
 }
-

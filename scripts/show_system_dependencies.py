@@ -7,7 +7,7 @@ This reads `packages` and `dependencies` from the YAML manifest, then invokes
 needing the system commit to exist yet.
 
 Example:
-    ./scripts/show_system_dependencies.py manifests/systems/demo-minimal.yaml
+    ./scripts/show_system_dependencies.py asm/demo-minimal.yaml
 """
 
 import argparse

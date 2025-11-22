@@ -4,7 +4,7 @@ set -eu
 
 REPO="bootstrap_store"
 KERNEL_REF="x86_64/linux/6.12.58/sys/kernel/outputs/boot"
-SYSTEM_REF="systems/bootable-minimal/0.0.1"
+SYSTEM_REF="asm/bootable-minimal/0.0.1"
 
 TMPDIR=$(mktemp -d)
 trap "rm -rf $TMPDIR" EXIT

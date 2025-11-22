@@ -36,7 +36,7 @@ pub fn determine_category(file_path: &str) -> String {
     }
 }
 
-/// Extracts the manifest prefix (slug/version/flavor) from a bundle or output
+/// Extracts the manifest prefix (namespace/slug/version) from a bundle or output
 /// branch reference. This is used by the runtime scanner when it has to resolve
 /// canonical dependency paths from arbitrary OSTree refs.
 pub fn manifest_prefix(commit: &str) -> Option<String> {
@@ -65,13 +65,13 @@ mod tests {
     #[test]
     fn manifest_prefix_extracts_base_path() {
         assert_eq!(
-            manifest_prefix("x86_64/foo/1.0/base/bundles/dev"),
-            Some("x86_64/foo/1.0/base".to_string())
+            manifest_prefix("x86_64/pkg/base/foo/1.0/bundles/dev"),
+            Some("x86_64/pkg/base/foo/1.0".to_string())
         );
         assert_eq!(
-            manifest_prefix("x86_64/foo/1.0/base/outputs/lib"),
-            Some("x86_64/foo/1.0/base".to_string())
+            manifest_prefix("x86_64/pkg/base/foo/1.0/outputs/lib"),
+            Some("x86_64/pkg/base/foo/1.0".to_string())
         );
-        assert_eq!(manifest_prefix("x86_64/foo/1.0/base"), None);
+        assert_eq!(manifest_prefix("x86_64/pkg/base/foo/1.0"), None);
     }
 }

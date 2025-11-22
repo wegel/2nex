@@ -14,7 +14,7 @@ Examples:
 
     # Point at a custom repo and emit JSON
     ./scripts/show_dependency_closure.py --repo /path/to/repo \
-        --json systems/demo-minimal/0.1.0
+        --json asm/demo-minimal/0.1.0
 """
 
 import argparse

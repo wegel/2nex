@@ -11,8 +11,8 @@ use sha2::{Digest, Sha256};
 
 use std::fmt;
 
-use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::algo::toposort;
+use petgraph::graph::{DiGraph, NodeIndex};
 
 pub mod build;
 pub mod deps;
@@ -41,43 +41,75 @@ struct Cli {
     manifest_file: Option<String>,
 
     // graph builder flags (default mode)
-    #[clap(long, default_value = "./manifests", help = "Base directory for searching manifests")]
+    #[clap(
+        long,
+        default_value = ".",
+        help = "Base directory for searching manifests"
+    )]
     manifest_dir: String,
 
-    #[clap(long, help = "Run the build script on the host's filesystem (for bootstrapping)")]
+    #[clap(
+        long,
+        help = "Run the build script on the host's filesystem (for bootstrapping)"
+    )]
     bootstrap: bool,
 
     #[clap(long, help = "Skip runtime dependency scanning")]
     skip_runtime_deps: bool,
 
-    #[clap(long, help = "Include per-reference explanations in runtime dependency output")]
+    #[clap(
+        long,
+        help = "Include per-reference explanations in runtime dependency output"
+    )]
     runtime_deps_verbose: bool,
 
-    #[clap(long, help = "Treat missing files during runtime dependency scanning as warnings")]
+    #[clap(
+        long,
+        help = "Treat missing files during runtime dependency scanning as warnings"
+    )]
     allow_missing_runtime_files: bool,
 
-    #[clap(long, help = "Rewrite outputs.*.requires based on the runtime dependency scanner")]
+    #[clap(
+        long,
+        help = "Rewrite outputs.*.requires based on the runtime dependency scanner"
+    )]
     update_outputs_requires: bool,
 
-    #[clap(long, help = "Update outputs.*.requires using existing OSTree outputs without rebuilding")]
+    #[clap(
+        long,
+        help = "Update outputs.*.requires using existing OSTree outputs without rebuilding"
+    )]
     update_outputs_requires_only: bool,
 
     #[clap(long, help = "Validate build reproducibility")]
     validate_reproducibility: bool,
 
-    #[clap(long, help = "Update the manifest checksum when build outputs differ from what is recorded")]
+    #[clap(
+        long,
+        help = "Update the manifest checksum when build outputs differ from what is recorded"
+    )]
     update_checksum: bool,
 
-    #[clap(long, help = "Rewrite OSTree output/bundle metadata without rebuilding (package manifests only)")]
+    #[clap(
+        long,
+        help = "Rewrite OSTree output/bundle metadata without rebuilding (package manifests only)"
+    )]
     refresh_ostree_metadata: bool,
 
     #[clap(long, help = "Build only the specified manifest without dependencies")]
     single: bool,
 
-    #[clap(long, help = "Show what would be built without actually building (dry run)")]
+    #[clap(
+        long,
+        help = "Show what would be built without actually building (dry run)"
+    )]
     dry_run: bool,
 
-    #[clap(short = 'j', long, help = "Maximum number of parallel build jobs (default: number of CPUs)")]
+    #[clap(
+        short = 'j',
+        long,
+        help = "Maximum number of parallel build jobs (default: number of CPUs)"
+    )]
     jobs: Option<usize>,
 
     #[clap(long, help = "Show dependency paths for all packages")]
@@ -86,25 +118,42 @@ struct Cli {
     #[clap(long, help = "Force rebuild even if package is already built")]
     force: bool,
 
-    #[clap(long, help = "Add checksums to manifests missing them (from OSTree or by building)")]
+    #[clap(
+        long,
+        help = "Add checksums to manifests missing them (from OSTree or by building)"
+    )]
     add_checksums: bool,
 
-    #[clap(long, help = "Trace which packages pull in a specific dependency (e.g. 'bootstrap/phase1')")]
+    #[clap(
+        long,
+        help = "Trace which packages pull in a specific dependency (e.g. 'bootstrap/phase1')"
+    )]
     trace_dependency: Option<String>,
 
-    #[clap(long, help = "Specify build directory (default: ./build_rootfs_{slug}_{flavor})")]
+    #[clap(
+        long,
+        help = "Specify build directory (default: ./build_rootfs_{slug}_{namespace})"
+    )]
     build_dir: Option<String>,
 
-    #[clap(long, help = "Expand dependencies to include all transitive deps, ordered by depth")]
+    #[clap(
+        long,
+        help = "Expand dependencies to include all transitive deps, ordered by depth"
+    )]
     hydrate_dependencies: bool,
 
-    #[clap(long, help = "Include transitive runtime deps (requires) from manifest dependencies")]
+    #[clap(
+        long,
+        help = "Include transitive runtime deps (requires) from manifest dependencies"
+    )]
     transitive_requires: bool,
 
-    #[clap(long, help = "Allow bootstrap packages in requires (normally rejected)")]
+    #[clap(
+        long,
+        help = "Allow bootstrap packages in requires (normally rejected)"
+    )]
     allow_bootstrap_requires: bool,
 }
-
 
 pub struct Opts {
     repo_path: String,
@@ -127,19 +176,24 @@ pub struct Opts {
 fn main() -> io::Result<()> {
     let cli: Cli = Cli::parse();
 
-    let repo_path = cli.repo_path.ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidInput, "REPO argument required")
-    })?;
-    let manifest_file = cli.manifest_file.ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidInput, "MANIFEST argument required")
-    })?;
+    let repo_path = cli
+        .repo_path
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "REPO argument required"))?;
+    let manifest_file = cli
+        .manifest_file
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "MANIFEST argument required"))?;
 
     // configure rayon thread pool if jobs specified
     if let Some(num_jobs) = cli.jobs {
         rayon::ThreadPoolBuilder::new()
             .num_threads(num_jobs)
             .build_global()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to configure thread pool: {}", e)))?;
+            .map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Failed to configure thread pool: {}", e),
+                )
+            })?;
     }
 
     let manifest_path = Path::new(&manifest_file);
@@ -171,7 +225,17 @@ fn main() -> io::Result<()> {
         build_single(&opts)
     } else {
         // default: build with full dependency resolution
-        build_with_dependencies(&repo_path, manifest_path, &manifest_dirs, &opts, cli.dry_run, cli.add_checksums, cli.show_dep_paths, cli.force, cli.trace_dependency.as_deref())
+        build_with_dependencies(
+            &repo_path,
+            manifest_path,
+            &manifest_dirs,
+            &opts,
+            cli.dry_run,
+            cli.add_checksums,
+            cli.show_dep_paths,
+            cli.force,
+            cli.trace_dependency.as_deref(),
+        )
     }
 }
 
@@ -197,10 +261,7 @@ fn hydrate_dependencies(repo_path: &str, manifest_file: &str) -> io::Result<()> 
         .into_iter()
         .map(|commit| {
             // extract name from commit path like x86_64/zlib/1.3.1/sys/libs/bundles/dev
-            let name = commit
-                .split('/')
-                .nth(1)
-                .map(|s| s.to_string());
+            let name = commit.split('/').nth(1).map(|s| s.to_string());
             Dependency { commit, name }
         })
         .collect();
@@ -218,7 +279,11 @@ fn hydrate_dependencies(repo_path: &str, manifest_file: &str) -> io::Result<()> 
             dep_start = Some(i);
         } else if dep_start.is_some() && dep_end.is_none() {
             // check if this is a new top-level key (no indentation)
-            if !line.is_empty() && !line.starts_with(' ') && !line.starts_with('\t') && !line.starts_with('-') {
+            if !line.is_empty()
+                && !line.starts_with(' ')
+                && !line.starts_with('\t')
+                && !line.starts_with('-')
+            {
                 dep_end = Some(i);
                 break;
             }
@@ -226,7 +291,10 @@ fn hydrate_dependencies(repo_path: &str, manifest_file: &str) -> io::Result<()> 
     }
 
     let dep_start = dep_start.ok_or_else(|| {
-        io::Error::new(io::ErrorKind::NotFound, "No dependencies section found in manifest")
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "No dependencies section found in manifest",
+        )
     })?;
     let dep_end = dep_end.unwrap_or(lines.len());
 
@@ -257,7 +325,11 @@ fn hydrate_dependencies(repo_path: &str, manifest_file: &str) -> io::Result<()> 
 
     fs::write(manifest_file, output)?;
 
-    println!("Hydrated {} dependencies (was {})", hydrated_deps.len(), dependencies.len());
+    println!(
+        "Hydrated {} dependencies (was {})",
+        hydrated_deps.len(),
+        dependencies.len()
+    );
 
     Ok(())
 }
@@ -278,7 +350,10 @@ fn build_single(opts: &Opts) -> io::Result<()> {
                 "--refresh-ostree-metadata only applies to package manifests",
             ));
         }
-        if opts.update_outputs_requires || opts.update_outputs_requires_only || opts.validate_reproducibility {
+        if opts.update_outputs_requires
+            || opts.update_outputs_requires_only
+            || opts.validate_reproducibility
+        {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "--refresh-ostree-metadata cannot be combined with build/update flags",
@@ -293,9 +368,11 @@ fn build_single(opts: &Opts) -> io::Result<()> {
             } else {
                 println!("Building package: {}", manifest.package.slug);
                 let build_dir = opts.build_dir.clone().unwrap_or_else(|| {
-                    format!("./build_rootfs_{}_{}",
+                    format!(
+                        "./build_rootfs_{}_{}",
                         manifest.package.slug.replace("/", "_"),
-                        manifest.package.flavor.replace("/", "_"))
+                        manifest.package.namespace.replace("/", "_")
+                    )
                 });
                 build_package_manifest_with_dir(opts, &mut manifest, &build_dir)
             }
@@ -303,8 +380,10 @@ fn build_single(opts: &Opts) -> io::Result<()> {
         ManifestData::System(manifest) => {
             println!("Building system: {}", manifest.system.slug);
             let build_dir = opts.build_dir.clone().unwrap_or_else(|| {
-                format!("./build_rootfs_{}_system",
-                    manifest.system.slug.replace("/", "_"))
+                format!(
+                    "./build_rootfs_{}_system",
+                    manifest.system.slug.replace("/", "_")
+                )
             });
             system::build_system_manifest_with_dir(opts, &manifest, &build_dir)
         }
@@ -318,7 +397,10 @@ fn package_already_built(manifest: &Manifest, repo_path: &str) -> io::Result<boo
     for category in manifest.outputs.keys() {
         let branch_name = format!(
             "x86_64/{}/{}/{}/outputs/{}",
-            manifest.package.slug, manifest.package.version, manifest.package.flavor, category
+            manifest.package.namespace_path(),
+            manifest.package.slug,
+            manifest.package.version,
+            category
         );
 
         let output = Command::new("ostree")
@@ -336,7 +418,11 @@ fn package_already_built(manifest: &Manifest, repo_path: &str) -> io::Result<boo
     Ok(false)
 }
 
-fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_dir: &str) -> io::Result<()> {
+fn build_package_manifest_with_dir(
+    opts: &Opts,
+    manifest: &mut Manifest,
+    base_dir: &str,
+) -> io::Result<()> {
     let download_dir = "./inputs_cache";
     fs::create_dir_all(download_dir)?;
 
@@ -344,14 +430,20 @@ fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_di
         resolve_dependency_closure(&manifest.dependencies, &opts.repo_path)?
     } else {
         // just use direct commits from dependencies, no transitive resolution
-        manifest.dependencies.iter().map(|d| d.commit.clone()).collect()
+        manifest
+            .dependencies
+            .iter()
+            .map(|d| d.commit.clone())
+            .collect()
     };
     let wants_update_outputs = opts.update_outputs_requires || opts.update_outputs_requires_only;
     let runtime_scanner = RuntimeScanner::new(&opts.repo_path, &dependency_commits)
         .with_allow_missing_files(opts.allow_missing_runtime_files);
 
     // check if package is already built and we can skip rebuilding
-    let can_skip_rebuild = !opts.force && opts.update_outputs_requires && package_already_built(manifest, &opts.repo_path)?;
+    let can_skip_rebuild = !opts.force
+        && opts.update_outputs_requires
+        && package_already_built(manifest, &opts.repo_path)?;
 
     if opts.update_outputs_requires_only || can_skip_rebuild {
         if can_skip_rebuild {
@@ -396,11 +488,11 @@ fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_di
 
     let package_name = &manifest.package.name;
     let package_version = &manifest.package.version;
-    let package_flavor = &manifest.package.flavor;
+    let package_namespace = &manifest.package.namespace;
 
     println!(
-        "Building {} {} for flavor {}",
-        package_name, package_version, package_flavor
+        "Building {} {} in namespace {}",
+        package_name, package_version, package_namespace
     );
 
     let mut env_vars = HashMap::new();
@@ -463,7 +555,12 @@ fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_di
         Path::new(&opts.manifest_file),
     )?;
 
-    create_and_commit_bundles(manifest, base_dir, &opts.repo_path, Path::new(&opts.manifest_file))?;
+    create_and_commit_bundles(
+        manifest,
+        base_dir,
+        &opts.repo_path,
+        Path::new(&opts.manifest_file),
+    )?;
 
     println!("Build, packaging, and commit to OSTree completed for all outputs.");
 
@@ -526,7 +623,12 @@ fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_di
             opts.runtime_deps_verbose,
             Path::new(&opts.manifest_file),
         )?;
-        create_and_commit_bundles(manifest, base_dir, &opts.repo_path, Path::new(&opts.manifest_file))?;
+        create_and_commit_bundles(
+            manifest,
+            base_dir,
+            &opts.repo_path,
+            Path::new(&opts.manifest_file),
+        )?;
 
         let second_checksum = calculate_output_checksum(&output_dir)?;
         println!("Second build output checksum: {}", second_checksum);
@@ -547,10 +649,14 @@ fn build_package_manifest_with_dir(opts: &Opts, manifest: &mut Manifest, base_di
     Ok(())
 }
 
-fn refresh_package_metadata(repo_path: &str, manifest: &Manifest, manifest_path: &Path) -> io::Result<()> {
+fn refresh_package_metadata(
+    repo_path: &str,
+    manifest: &Manifest,
+    manifest_path: &Path,
+) -> io::Result<()> {
     println!(
         "Refreshing OSTree metadata for {}/{} ({})",
-        manifest.package.slug, manifest.package.version, manifest.package.flavor
+        manifest.package.slug, manifest.package.version, manifest.package.namespace
     );
     let manifest_hash = compute_manifest_hash(manifest_path)?;
     refresh_output_branches(repo_path, manifest, &manifest_hash)?;
@@ -559,14 +665,21 @@ fn refresh_package_metadata(repo_path: &str, manifest: &Manifest, manifest_path:
     Ok(())
 }
 
-fn refresh_output_branches(repo_path: &str, manifest: &Manifest, manifest_hash: &str) -> io::Result<()> {
+fn refresh_output_branches(
+    repo_path: &str,
+    manifest: &Manifest,
+    manifest_hash: &str,
+) -> io::Result<()> {
     for (category, spec) in &manifest.outputs {
         if category == "discard" {
             continue;
         }
         let branch_name = format!(
             "x86_64/{}/{}/{}/outputs/{}",
-            manifest.package.slug, manifest.package.version, manifest.package.flavor, category
+            manifest.package.namespace_path(),
+            manifest.package.slug,
+            manifest.package.version,
+            category
         );
         ensure_branch_exists(repo_path, &branch_name)?;
         let metadata = output_branch_metadata(manifest, spec, manifest_hash)?;
@@ -575,11 +688,18 @@ fn refresh_output_branches(repo_path: &str, manifest: &Manifest, manifest_hash: 
     Ok(())
 }
 
-fn refresh_bundle_branches(repo_path: &str, manifest: &Manifest, manifest_hash: &str) -> io::Result<()> {
+fn refresh_bundle_branches(
+    repo_path: &str,
+    manifest: &Manifest,
+    manifest_hash: &str,
+) -> io::Result<()> {
     for (bundle_name, bundle) in &manifest.bundles {
         let branch_name = format!(
             "x86_64/{}/{}/{}/bundles/{}",
-            manifest.package.slug, manifest.package.version, manifest.package.flavor, bundle_name
+            manifest.package.namespace_path(),
+            manifest.package.slug,
+            manifest.package.version,
+            bundle_name
         );
         ensure_branch_exists(repo_path, &branch_name)?;
         let metadata = bundle_branch_metadata(manifest, bundle, manifest_hash)?;
@@ -588,59 +708,62 @@ fn refresh_bundle_branches(repo_path: &str, manifest: &Manifest, manifest_hash: 
     Ok(())
 }
 
-
-// parse commit ref to extract slug, version, and flavor
-// format: x86_64/{slug}/{version}/{flavor}/outputs/{output} or .../bundles/{bundle}
+// parse commit ref to extract slug, version, and namespace
+// format: x86_64/{namespace}/{slug}/{version}/outputs/{output} or .../bundles/{bundle}
 
 // find manifest file for a given commit reference
-fn find_manifest_for_commit(
-    commit: &str,
-    manifest_dirs: &[PathBuf],
-) -> io::Result<PathBuf> {
-    // parse commit: x86_64/{slug}/{version}/{flavor}/...
-    // flavor can be multi-part like "bootstrap/phase3"
+fn find_manifest_for_commit(commit: &str, manifest_dirs: &[PathBuf]) -> io::Result<PathBuf> {
+    // parse commit: x86_64/{namespace}/{slug}/{version}/...
+    // namespace can be multi-part like "pkg/bootstrap/phase3"
     let parts: Vec<&str> = commit.split('/').collect();
-    if parts.len() < 4 {
+    let boundary = parts
+        .iter()
+        .position(|part| *part == "outputs" || *part == "bundles")
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Invalid commit reference format: {}", commit),
+            )
+        })?;
+
+    if boundary < 3 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             format!("Invalid commit reference format: {}", commit),
         ));
     }
 
-    let slug = parts[1];
-    let _version = parts[2];
-    // flavor is everything from parts[3] onwards until "outputs" or "bundles"
-    let mut flavor_parts = vec![];
-    for &part in &parts[3..] {
-        if part == "outputs" || part == "bundles" {
-            break;
-        }
-        flavor_parts.push(part);
-    }
-    let flavor = flavor_parts.join("/");
+    let slug = parts[boundary - 2];
+    let _version = parts[boundary - 1];
+    // namespace is everything after arch and before slug/version
+    let namespace = parts[1..boundary - 2].join("/");
 
     // search in manifest directories
     for base_dir in manifest_dirs {
-        let flavor_path = base_dir.join(&flavor);
-
-        // try direct path: {flavor}/{slug}.yaml
-        let direct_path = flavor_path.join(format!("{}.yaml", slug));
-        if direct_path.exists() {
-            return Ok(direct_path);
+        let mut namespace_paths = vec![base_dir.join(&namespace)];
+        if namespace.starts_with("pkg/") && base_dir.ends_with("pkg") {
+            namespace_paths.push(base_dir.join(namespace.trim_start_matches("pkg/")));
         }
 
-        // try with -slug suffix: {flavor}/*-{slug}.yaml
-        if flavor_path.exists() && flavor_path.is_dir() {
-            if let Ok(entries) = fs::read_dir(&flavor_path) {
-                for entry in entries {
-                    if let Ok(entry) = entry {
-                        let path = entry.path();
-                        if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
-                            let filename = path.file_stem()
-                                .and_then(|s| s.to_str())
-                                .unwrap_or("");
-                            if filename.ends_with(&format!("-{}", slug)) {
-                                return Ok(path);
+        for namespace_path in namespace_paths {
+            // try direct path: {namespace}/{slug}.yaml
+            let direct_path = namespace_path.join(format!("{}.yaml", slug));
+            if direct_path.exists() {
+                return Ok(direct_path);
+            }
+
+            // try with -slug suffix: {namespace}/*-{slug}.yaml
+            if namespace_path.exists() && namespace_path.is_dir() {
+                if let Ok(entries) = fs::read_dir(&namespace_path) {
+                    for entry in entries {
+                        if let Ok(entry) = entry {
+                            let path = entry.path();
+                            if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+                                let filename =
+                                    path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                                if filename.ends_with(&format!("-{}", slug)) {
+                                    return Ok(path);
+                                }
                             }
                         }
                     }
@@ -651,7 +774,10 @@ fn find_manifest_for_commit(
 
     Err(io::Error::new(
         io::ErrorKind::NotFound,
-        format!("Could not find manifest for commit {} (slug: {}, flavor: {})", commit, slug, flavor),
+        format!(
+            "Could not find manifest for commit {} (slug: {}, namespace: {})",
+            commit, slug, namespace
+        ),
     ))
 }
 
@@ -668,14 +794,17 @@ fn check_if_built(repo_path: &str, manifest: &Manifest, manifest_path: &Path) ->
     let arch = "x86_64"; // TODO: make configurable
     let slug = &manifest.package.slug;
     let version = &manifest.package.version;
-    let flavor = &manifest.package.flavor;
+    let namespace = manifest.package.namespace_path();
 
     // compute current manifest hash
     let current_hash = compute_manifest_hash(manifest_path)?;
 
     // check all outputs
     for (output_name, _spec) in &manifest.outputs {
-        let branch = format!("{}/{}/{}/{}/outputs/{}", arch, slug, version, flavor, output_name);
+        let branch = format!(
+            "{}/{}/{}/{}/outputs/{}",
+            arch, namespace, slug, version, output_name
+        );
 
         // check if branch exists
         if ensure_branch_exists(repo_path, &branch).is_err() {
@@ -686,7 +815,10 @@ fn check_if_built(repo_path: &str, manifest: &Manifest, manifest_path: &Path) ->
         match get_branch_metadata(repo_path, &branch, "nex.manifest.hash") {
             Ok(stored_hash) => {
                 if stored_hash != current_hash {
-                    println!("  Manifest {} has changed (hash mismatch), rebuilding", manifest_path.display());
+                    println!(
+                        "  Manifest {} has changed (hash mismatch), rebuilding",
+                        manifest_path.display()
+                    );
                     return Ok(false);
                 }
             }
@@ -720,9 +852,7 @@ fn collect_dependencies_recursive(
     let manifest_data = load_manifest(manifest_path.to_str().unwrap())?;
 
     let (is_system, slug, dependencies) = match manifest_data {
-        ManifestData::Package(ref m) => {
-            (false, m.package.slug.clone(), m.dependencies.clone())
-        }
+        ManifestData::Package(ref m) => (false, m.package.slug.clone(), m.dependencies.clone()),
         ManifestData::System(ref s) => {
             // for system manifests, combine dependencies and packages into one list
             let mut all_deps = s.dependencies.clone();
@@ -752,9 +882,9 @@ fn collect_dependencies_recursive(
     // process dependencies
     for dep in &dependencies {
         // check if dependency is already in OSTree (with caching)
-        let in_ostree = ostree_cache.entry(dep.commit.clone()).or_insert_with(|| {
-            ensure_branch_exists(repo_path, &dep.commit).is_ok()
-        });
+        let in_ostree = ostree_cache
+            .entry(dep.commit.clone())
+            .or_insert_with(|| ensure_branch_exists(repo_path, &dep.commit).is_ok());
 
         if *in_ostree {
             println!("  Dependency {} already in OSTree, skipping", dep.commit);
@@ -764,7 +894,10 @@ fn collect_dependencies_recursive(
         // find manifest for this dependency
         match find_manifest_for_commit(&dep.commit, manifest_dirs) {
             Ok(dep_manifest_path) => {
-                println!("  Found dependency manifest: {}", dep_manifest_path.display());
+                println!(
+                    "  Found dependency manifest: {}",
+                    dep_manifest_path.display()
+                );
 
                 // recurse
                 let dep_node = collect_dependencies_recursive(
@@ -785,7 +918,10 @@ fn collect_dependencies_recursive(
                 }
             }
             Err(e) => {
-                eprintln!("  Warning: Could not find manifest for dependency {}: {}", dep.commit, e);
+                eprintln!(
+                    "  Warning: Could not find manifest for dependency {}: {}",
+                    dep.commit, e
+                );
                 // continue anyway - might be a bootstrap dependency that's already built
             }
         }
@@ -831,10 +967,12 @@ fn show_parallel_execution_plan(
             break;
         }
 
-        let wave_names: Vec<String> = wave.iter()
+        let wave_names: Vec<String> = wave
+            .iter()
             .map(|&node_idx| {
                 let path = &graph[node_idx];
-                let filename = path.file_name()
+                let filename = path
+                    .file_name()
                     .and_then(|f| f.to_str())
                     .unwrap_or("unknown");
                 filename.trim_end_matches(".yaml").to_string()
@@ -849,7 +987,11 @@ fn show_parallel_execution_plan(
                 wave_names.join(", ")
             );
         } else {
-            println!("\n  Wave {}: {} package(s) in parallel", wave_num, wave.len());
+            println!(
+                "\n  Wave {}: {} package(s) in parallel",
+                wave_num,
+                wave.len()
+            );
             for name in &wave_names {
                 println!("    - {}", name);
             }
@@ -921,14 +1063,17 @@ fn build_packages_parallel(
 
         if has_bootstrap {
             // find the first bootstrap package and build only that one
-            let bootstrap_idx = wave.iter().position(|&node_idx| {
-                let path = &graph[node_idx];
-                if let Ok(manifest_data) = load_manifest(path.to_str().unwrap()) {
-                    matches!(manifest_data, ManifestData::Package(m) if m.package.bootstrap)
-                } else {
-                    false
-                }
-            }).unwrap();
+            let bootstrap_idx = wave
+                .iter()
+                .position(|&node_idx| {
+                    let path = &graph[node_idx];
+                    if let Ok(manifest_data) = load_manifest(path.to_str().unwrap()) {
+                        matches!(manifest_data, ManifestData::Package(m) if m.package.bootstrap)
+                    } else {
+                        false
+                    }
+                })
+                .unwrap();
             wave = vec![wave[bootstrap_idx]];
         }
 
@@ -957,9 +1102,11 @@ fn build_packages_parallel(
                         let build_dir = if manifest.package.bootstrap {
                             "./build_rootfs".to_string()
                         } else {
-                            format!("./build_rootfs_{}_{}",
+                            format!(
+                                "./build_rootfs_{}_{}",
                                 manifest.package.slug.replace("/", "_"),
-                                manifest.package.flavor.replace("/", "_"))
+                                manifest.package.namespace.replace("/", "_")
+                            )
                         };
 
                         // create opts for this build
@@ -981,11 +1128,16 @@ fn build_packages_parallel(
                             allow_bootstrap_requires: false,
                         };
 
-                        println!("[{}/{}] Building: {}", build_num, total, manifest.package.slug);
+                        println!(
+                            "[{}/{}] Building: {}",
+                            build_num, total, manifest.package.slug
+                        );
 
                         // build the package
                         let slug = manifest.package.slug.clone();
-                        if let Err(e) = build_package_manifest_with_dir(&build_opts, &mut manifest, &build_dir) {
+                        if let Err(e) =
+                            build_package_manifest_with_dir(&build_opts, &mut manifest, &build_dir)
+                        {
                             return Err(format!("Failed to build {}: {}", slug, e));
                         }
 
@@ -1000,9 +1152,11 @@ fn build_packages_parallel(
                         Ok(slug)
                     }
                     ManifestData::System(system_manifest) => {
-                        let build_dir = format!("./build_rootfs_{}_{}",
+                        let build_dir = format!(
+                            "./build_rootfs_{}_{}",
                             system_manifest.system.slug.replace("/", "_"),
-                            "system");
+                            "system"
+                        );
 
                         let build_opts = Opts {
                             repo_path: opts.repo_path.clone(),
@@ -1022,11 +1176,18 @@ fn build_packages_parallel(
                             allow_bootstrap_requires: false,
                         };
 
-                        println!("[{}/{}] Building system: {}", build_num, total, system_manifest.system.slug);
+                        println!(
+                            "[{}/{}] Building system: {}",
+                            build_num, total, system_manifest.system.slug
+                        );
 
                         // build the system using the legacy builder since it handles all the dependency resolution
                         let slug = system_manifest.system.slug.clone();
-                        if let Err(e) = system::build_system_manifest_with_dir(&build_opts, &system_manifest, &build_dir) {
+                        if let Err(e) = system::build_system_manifest_with_dir(
+                            &build_opts,
+                            &system_manifest,
+                            &build_dir,
+                        ) {
                             return Err(format!("Failed to build system {}: {}", slug, e));
                         }
 
@@ -1073,7 +1234,9 @@ fn show_dependency_paths(
 ) {
     use petgraph::visit::Dfs;
 
-    let root_node = manifest_map.get(root_path).expect("Root manifest should be in map");
+    let root_node = manifest_map
+        .get(root_path)
+        .expect("Root manifest should be in map");
 
     // for each node in the graph, show the path from root to that node
     for (path, &node) in manifest_map.iter() {
@@ -1128,9 +1291,9 @@ fn add_missing_checksums_to_manifests(
     repo_path: &str,
     opts: &Opts,
 ) -> io::Result<()> {
-    use crate::ostree::read_checksum_from_commit;
     use crate::manifest::update::update_manifest_checksum_field;
     use crate::manifest::ManifestKind;
+    use crate::ostree::read_checksum_from_commit;
 
     for &node_idx in build_order {
         let manifest_path = &graph[node_idx];
@@ -1149,9 +1312,9 @@ fn add_missing_checksums_to_manifests(
                 if let Some((bundle_name, _)) = manifest.bundles.iter().next() {
                     let commit_ref = format!(
                         "x86_64/{}/{}/{}/bundles/{}",
+                        manifest.package.namespace_path(),
                         manifest.package.slug,
                         manifest.package.version,
-                        manifest.package.flavor,
                         bundle_name
                     );
 
@@ -1217,9 +1380,7 @@ fn trace_dependency_chains(
     // load the root manifest
     let manifest_data = load_manifest(manifest_path.to_str().unwrap())?;
     let (root_slug, root_deps) = match manifest_data {
-        ManifestData::Package(ref m) => {
-            (m.package.slug.clone(), m.dependencies.clone())
-        }
+        ManifestData::Package(ref m) => (m.package.slug.clone(), m.dependencies.clone()),
         ManifestData::System(ref s) => {
             let mut all_deps = s.dependencies.clone();
             all_deps.extend(system::dependencies_from_system_packages(&s.packages));
@@ -1254,8 +1415,8 @@ fn trace_commit_recursive(
     let matches_pattern = commit.contains(pattern);
 
     // extract package name from commit for display
-    let pkg_name = if let Some((slug, version, flavor)) = parse_commit_ref(commit) {
-        format!("{}/{}/{}", slug, version, flavor)
+    let pkg_name = if let Some((slug, version, namespace)) = parse_commit_ref(commit) {
+        format!("{}/{}/{}", namespace, slug, version)
     } else {
         commit.to_string()
     };
@@ -1305,7 +1466,10 @@ fn build_with_dependencies(
     trace_dependency: Option<&str>,
 ) -> io::Result<()> {
     if dry_run {
-        println!("DRY RUN: Analyzing dependency graph for {}", manifest_path.display());
+        println!(
+            "DRY RUN: Analyzing dependency graph for {}",
+            manifest_path.display()
+        );
     } else {
         println!("Building dependency graph for {}", manifest_path.display());
     }
@@ -1343,7 +1507,10 @@ fn build_with_dependencies(
         return Ok(());
     }
 
-    println!("\nDependency graph has {} packages to build", valid_nodes.len());
+    println!(
+        "\nDependency graph has {} packages to build",
+        valid_nodes.len()
+    );
 
     // show dependency paths if requested
     if show_dep_paths {
@@ -1356,7 +1523,11 @@ fn build_with_dependencies(
         let node_path = &graph[cycle.node_id()];
         io::Error::new(
             io::ErrorKind::Other,
-            format!("Circular dependency detected at node {:?}: {}", cycle.node_id(), node_path.display()),
+            format!(
+                "Circular dependency detected at node {:?}: {}",
+                cycle.node_id(),
+                node_path.display()
+            ),
         )
     })?;
 
@@ -1402,29 +1573,11 @@ fn build_with_dependencies(
     Ok(())
 }
 
-
-
-
-
-
-
-
 impl fmt::Display for Package {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}/{}", self.flavor, self.slug)
+        write!(f, "{}/{}", self.namespace, self.slug)
     }
 }
-
-
-
-
-
-
-
-
-
-
-
 
 /// Verifies and commits outputs to OSTree branches based on the manifest.
 ///
@@ -1433,27 +1586,6 @@ impl fmt::Display for Package {
 /// OSTree branches. The function categorizes the output files, checks their existence,
 /// moves them to the appropriate output directories, and commits them to the OSTree
 /// repository.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 #[cfg(test)]
 mod tests {
@@ -1467,7 +1599,7 @@ package:
   schema: 1
   name: sample
   slug: sample
-  flavor: bootstrap/phase0
+  namespace: bootstrap/phase0
   version: "1.0"
 dependencies: []
 sources: []

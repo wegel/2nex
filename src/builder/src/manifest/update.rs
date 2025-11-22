@@ -1,12 +1,15 @@
+use serde_yaml::{Mapping, Value};
 use std::fs;
 use std::io;
 use std::mem;
-use serde_yaml::{Mapping, Value};
 
 use super::types::*;
 use crate::runtime::scanner::RuntimeScanResult;
 
-pub fn update_manifest_outputs(manifest_path: &str, suggestions: &RuntimeScanResult) -> io::Result<()> {
+pub fn update_manifest_outputs(
+    manifest_path: &str,
+    suggestions: &RuntimeScanResult,
+) -> io::Result<()> {
     let contents = fs::read_to_string(manifest_path)?;
     let mut doc: Value = serde_yaml::from_str(&contents)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
@@ -324,4 +327,3 @@ pub fn apply_runtime_requires(manifest: &mut Manifest, suggestions: &RuntimeScan
         spec.requires = new_requires;
     }
 }
-

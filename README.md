@@ -20,17 +20,29 @@ So I present 2nex. Currently, it's only a proof-of-concept sandbox to make a ful
 
 ## How it works
 
-Packages are described in a yaml Manifest (see [manifests](manifests)). The Manifest lists the sources, dependencies (in the form of other packages), and build instructions. The Manifest includes the checksum of the result of the build; we thus can know that the result of the build is what we expect, and is reproducible. The [builder](src/builder) is used to build the Manifest, and the bundles are then commited to an ostree repository.
+Packages are described in a yaml Manifest (see [pkg](pkg)). The Manifest lists the sources, dependencies (in the form of other packages), and build instructions. The Manifest includes the checksum of the result of the build; we thus can know that the result of the build is what we expect, and is reproducible. The [builder](src/builder) is used to build the Manifest, and the bundles are then commited to an ostree repository.
 
 There are two types of manifests:
 
 - **Package manifests**: Build a single piece of software (e.g., zlib, coreutils). They specify sources, build-time dependencies, and produce outputs that get committed to OSTree. The runtime dependency scanner automatically detects what each output actually needs.
 
-- **System manifests**: Assemble packages (including their transitive runtime dependencies) into a file structure. Can specify build-time only `dependencies` that are available during a configure-time build script to modify the resulting filesystem. The output could be a bootable system or just a configured rootfs.
+- **Assembly manifests**: Assemble packages (including their transitive runtime dependencies) into a file structure. Can specify build-time only `dependencies` that are available during a configure-time build script to modify the resulting filesystem. The output could be a bootable system or just a configured rootfs.
+
+Package manifests live under `pkg/`, while assembly manifests are in `asm/`.
 
 ## The builder
 
 The builder is a rust program that reads the Manifest, builds and verifies it, and then commits the result to an ostree repository. It controls the build environment for reproducibility (sandboxing, timestamp clamping, etc).
+
+## Manifest pinning
+
+Every dependency listed in a manifest records a `manifest_ref`, which is simply the Git blob SHA of the dependency's manifest at the moment you explicitly promoted it. The builder never trusts whatever happens to be on disk: when a dependency has a `manifest_ref` it calls `git cat-file -p <sha>`, writes the blob into a cache, and resolves the dependency graph from that content. If the referenced outputs already exist in OSTree, the builder compares the cached manifest's hash to `nex.manifest.hash` on the OSTree commits and reuses them bit-for-bit. If they are missing or stale, it builds from the cached manifest content and publishes new commits before continuing.
+
+When a dependency is missing `manifest_ref` it is considered “floating” and the builder will fall back to the working tree copy of the manifest (with a loud log message). This escape hatch is handy while iterating locally, but CI should reject such manifests because the final pin is what keeps rebuilds reproducible long after the local file has changed.
+
+Use `nex link path/to/manifest.yaml` to update every dependency in that manifest to the current working tree versions. The subcommand hashes each dependency's manifest (`git hash-object -w …` ensures the blob is stored) and rewrites the `dependencies:` block with the new `manifest_ref` entries. This explicit promotion step lets you update libraries independently and only switch consumers over when you're ready.
+
+Every package branch now lives under `x86_64/pkg/<namespace-path>/<slug>/<version>/{outputs,bundles}/…`, so the directory layout in `pkg/` matches the strings you see in manifests and OSTree metadata.
 
 ## Current Status
 
@@ -38,7 +50,7 @@ The builder is a rust program that reads the Manifest, builds and verifies it, a
 
 **Packages**: ~50 packages in categories (sys/libs, sys/apps, app/*, dev/*, net/*). Runtime dependency scanner auto-detects what each package needs.
 
-**System manifests**: Working. Minimal systems (14MB) and more complex ones (podman). No bootstrap deps leak into production.
+**Assemblies**: Working. Minimal images (14MB) and more complex ones (podman). No bootstrap deps leak into production.
 
 **Kernel + initramfs**: Built as reproducible packages. Kernel is EFI-enabled.
 
@@ -52,8 +64,8 @@ The builder is a rust program that reads the Manifest, builds and verifies it, a
 ## TODOs
 
 **Next up**:
-- Content-addressable manifest refs (blob SHAs for reproducible builds across commits)
-- Re-organize manifests hierarchy
+- Enforce the new pkg/ taxonomy everywhere (CI checks for misplaced manifests)
+- Harden CI checks so floating `manifest_ref` entries are rejected
 
 **Custom EFI boot manager**:
 - Boot manager that scans OSTree commits and boots selected kernel

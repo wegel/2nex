@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "directory",
         type=Path,
-        help="Directory containing numbered manifests (e.g., manifests/base)",
+        help="Directory containing numbered manifests (e.g., pkg/apps/containers)",
     )
     action_group = parser.add_mutually_exclusive_group(required=True)
     action_group.add_argument(

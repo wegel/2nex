@@ -83,9 +83,9 @@ except ImportError as exc:
     sys.stderr.write(f"Failed to import PyYAML: {exc}\n")
     sys.exit(1)
 
-manifest_dir = Path('manifests')
+manifest_dir = Path('pkg')
 if not manifest_dir.exists():
-    sys.stderr.write('manifests/ directory not found\n')
+    sys.stderr.write('pkg/ directory not found\n')
     sys.exit(1)
 
 paths = sorted(manifest_dir.rglob('*.yaml'))
@@ -101,8 +101,8 @@ for path in paths:
     if not isinstance(pkg, dict):
         continue
 
-    flavor = pkg.get('flavor')
-    if isinstance(flavor, str) and flavor.startswith('bootstrap/'):
+    namespace = pkg.get('namespace') or pkg.get('flavor')
+    if isinstance(namespace, str) and namespace.startswith('bootstrap/'):
         continue
 
     if pkg.get('bootstrap') is True:

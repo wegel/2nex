@@ -1,0 +1,68 @@
+system:
+  schema: 1
+  name: "Bootable System with systemd"
+  slug: "bootable-systemd"
+  version: "0.0.1"
+  description: "Minimal bootable system with systemd init"
+
+dependencies:
+  - name: findutils
+    commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+    manifest_ref: 99cb67d197639a1eb32bf48c04aa1a1450712bc2
+packages:
+- commit: x86_64/pkg/core/init/systemd/257.5/outputs/bin
+  name: systemd-bin
+- commit: x86_64/pkg/core/init/systemd/257.5/outputs/lib
+  name: systemd-lib
+- commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
+  name: coreutils-bin
+- commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/bin
+  name: util-linux-bin
+- commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
+  name: bash-bin
+- commit: x86_64/pkg/core/userland/shadow/4.15.1/outputs/bin
+  name: shadow-bin
+- commit: x86_64/pkg/core/userland/shadow/4.15.1/outputs/conf
+  name: shadow-conf
+
+build:
+  script: |
+    # create minimal /etc/passwd and /etc/group with systemd users
+    mkdir -p /target/etc
+
+    cat > /target/etc/passwd << 'EOF'
+    root:x:0:0:root:/root:/bin/bash
+    systemd-network:x:192:192:systemd Network Management:/:/usr/bin/nologin
+    systemd-resolve:x:193:193:systemd Resolver:/:/usr/bin/nologin
+    systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/bin/nologin
+    EOF
+
+    cat > /target/etc/group << 'EOF'
+    root:x:0:
+    systemd-network:x:192:
+    systemd-resolve:x:193:
+    systemd-timesync:x:194:
+    systemd-journal:x:190:
+    EOF
+
+    # create /etc/shadow with blank password for root user
+    cat > /target/etc/shadow << 'EOF'
+    root::19735:0:99999:7:::
+    systemd-network:!*:19735::::::
+    systemd-resolve:!*:19735::::::
+    systemd-timesync:!*:19735::::::
+    EOF
+    chmod 600 /target/etc/shadow
+
+    # create mount points for essential filesystems
+    mkdir -p /target/{proc,sys,dev,run,tmp}
+
+    # create minimal systemd directories
+    mkdir -p /target/etc/systemd/system
+    mkdir -p /target/var/log/journal
+    mkdir -p /target/var/lib/systemd
+
+    # symlink init to systemd
+    ln -sf /usr/lib/systemd/systemd /target/init
+
+    find /target -exec touch -d "2024-01-01T00:00:00+00:00" {} \;

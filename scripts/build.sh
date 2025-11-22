@@ -8,14 +8,15 @@ UPDATE_CHECKSUM="${UPDATE_CHECKSUM:-0}"
 
 for PHASE in ${PHASES}; do
   echo "Phase: $PHASE"
-  MANIFEST_DIR="manifests/${PHASE}"
+  MANIFEST_DIR="pkg/${PHASE}"
 
   for M in $(ls "${MANIFEST_DIR}"/*.yaml | sort -V); do
     # extract package info to check if already built
     SLUG=$(grep "slug:" "$M" | head -1 | awk '{print $2}' | sed "s/[\"']//g")
     VERSION=$(grep "version:" "$M" | head -1 | awk '{print $2}' | sed "s/[\"']//g")
-    FLAVOR=$(grep "flavor:" "$M" | head -1 | awk '{print $2}' | sed "s/[\"']//g")
+    NAMESPACE=$(grep "namespace:" "$M" | head -1 | awk '{print $2}' | sed "s/[\"']//g")
     CHECKSUM=$(grep -E "^[[:space:]]+checksum:" "$M" | head -1 | awk '{print $2}' | sed "s/[\"']//g")
+    REL_PATH="${NAMESPACE}/${SLUG}"
 
     # get the first bundle name from the manifest
     BUNDLE_NAME=$(awk '
@@ -31,7 +32,7 @@ for PHASE in ${PHASES}; do
     fi
 
     # check if the bundle already exists in ostree
-    BUNDLE_REF="x86_64/${SLUG}/${VERSION}/${FLAVOR}/bundles/${BUNDLE_NAME}"
+    BUNDLE_REF="x86_64/pkg/${REL_PATH}/${VERSION}/bundles/${BUNDLE_NAME}"
 
     FORCE_REBUILD=0
     if [ "$FORCE" = "1" ]; then

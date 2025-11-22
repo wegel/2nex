@@ -19,11 +19,23 @@ pub struct Package {
     pub name: String,
     pub slug: String,
     pub version: String,
-    pub flavor: String,
+    #[serde(alias = "flavor")]
+    pub namespace: String,
     pub checksum: Option<String>,
     pub stable_checksum: Option<bool>,
     #[serde(default)]
     pub bootstrap: bool,
+}
+
+impl Package {
+    /// Return the namespace path used for OSTree branches, ensuring it is rooted under `pkg/`.
+    pub fn namespace_path(&self) -> String {
+        if self.namespace.starts_with("pkg/") {
+            self.namespace.clone()
+        } else {
+            format!("pkg/{}", self.namespace)
+        }
+    }
 }
 
 #[derive(Copy, Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]

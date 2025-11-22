@@ -1,0 +1,120 @@
+package:
+  schema: 1
+  name: GPGME
+  slug: libgpgme
+  namespace: dev/libs
+  version: 1.23.2
+  description: GnuPG Made Easy - a library for making GnuPG easier to use
+  homepage: https://gnupg.org/software/gpgme/
+  checksum: 77f7513891d72feacf2250737ce605a4ec5850f58ecac7f3cc7a5034535fe111
+sources:
+- name: gpgme
+  url: https://gnupg.org/ftp/gcrypt/gpgme/gpgme-1.23.2.tar.bz2
+  sha256: 9499e8b1f33cccb6815527a1bc16049d35a6198a6c5fae0185f2bd561bce5224
+dependencies:
+- commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+  name: bash
+- commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+  name: coreutils
+- commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+  name: findutils
+- commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+  name: 2nex-utilities
+- commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+  name: gawk
+- commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+  name: grep
+- commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+  name: make
+- commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+  name: sed
+- commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+  name: tar
+- commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  name: binutils
+- commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
+  name: inetutils
+- commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+  name: glibc
+- commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+  name: gcc
+- commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+  name: acl
+- commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+  name: attr
+- commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
+  name: bzip2
+- commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+  name: gmp
+- commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+  name: libcap
+- commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+  name: mpfr
+- commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
+  name: zlib
+- commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  name: linux-headers
+- commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
+  name: mpc
+- commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+  name: ncurses
+- commit: x86_64/pkg/dev/libs/libgpg-error/1.51/bundles/dev
+  name: libgpg-error
+- commit: x86_64/pkg/dev/libs/libassuan/2.5.7/bundles/dev
+  name: libassuan
+build:
+  script: "tar --no-same-owner -xf ${SOURCE_gpgme} -C \"${WORK_DIR}\" --strip-components=1\n\
+    cd ${WORK_DIR}\n\n# Configure\n./configure --prefix=/usr \\\n            --disable-gpgsm-test\
+    \ \\\n            --disable-gpgconf-test \\\n            --disable-g13-test \\\
+    \n            --disable-gpg-test \\\n            --enable-languages=cl\n\n# Build\n\
+    make\n\n# Install\nmake DESTDIR=\"${OUT_DIR}\" install\n\n# Set consistent timestamps\
+    \ for reproducible builds\nfind \"${OUT_DIR}\" -exec touch -d '2024-01-01T00:00:00+00:00'\
+    \ {} \\;\nfind \"${OUT_DIR}\" ! -type d -exec strip-nondeterminism -T 1704067200\
+    \ --normalizers +all {} \\; || true\n2nex_strip_binaries ${OUT_DIR}\n"
+bundles:
+  full:
+  - bin
+  - lib
+  - dev
+  - misc
+  - info
+  dev:
+  - bin
+  - lib
+  - dev
+outputs:
+  lib:
+    files:
+    - /usr/lib/libgpgme.so
+    - /usr/lib/libgpgme.so.11
+    - /usr/lib/libgpgme.so.11.32.1
+    requires:
+    - x86_64/pkg/libs/system/glibc/2.39/outputs/lib
+    - x86_64/pkg/dev/libs/libassuan/2.5.7/outputs/lib
+    - x86_64/pkg/dev/libs/libgpg-error/1.51/outputs/lib
+  bin:
+    files:
+    - /usr/bin/gpgme-json
+    - /usr/bin/gpgme-tool
+    requires:
+    - x86_64/pkg/libs/system/glibc/2.39/outputs/lib
+    - x86_64/pkg/dev/libs/libassuan/2.5.7/outputs/lib
+    - x86_64/pkg/dev/libs/libgpg-error/1.51/outputs/lib
+  misc:
+    files:
+    - /usr/share/aclocal/gpgme.m4
+    - /usr/share/common-lisp/source/gpgme/gpgme-grovel.lisp
+    - /usr/share/common-lisp/source/gpgme/gpgme-package.lisp
+    - /usr/share/common-lisp/source/gpgme/gpgme.asd
+    - /usr/share/common-lisp/source/gpgme/gpgme.lisp
+  dev:
+    files:
+    - /usr/include/gpgme.h
+    - /usr/lib/libgpgme.la
+    - /usr/lib/pkgconfig/gpgme-glib.pc
+    - /usr/lib/pkgconfig/gpgme.pc
+  info:
+    files:
+    - /usr/share/info/gpgme.info
+    - /usr/share/info/gpgme.info-1
+    - /usr/share/info/gpgme.info-2

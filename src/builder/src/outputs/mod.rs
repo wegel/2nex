@@ -1,9 +1,9 @@
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 use walkdir::WalkDir;
 
@@ -68,7 +68,10 @@ pub fn commit_bundle(
     for output in &bundle.includes {
         let branch_name = format!(
             "x86_64/{}/{}/{}/outputs/{}",
-            manifest.package.slug, manifest.package.version, manifest.package.flavor, output
+            manifest.package.namespace_path(),
+            manifest.package.slug,
+            manifest.package.version,
+            output
         );
         checkout_ostree_into(repo_path, &branch_name, temp_dir_path, true, false)?;
         output_commits.push(branch_name);
@@ -76,7 +79,10 @@ pub fn commit_bundle(
 
     let bundle_branch = format!(
         "x86_64/{}/{}/{}/bundles/{}",
-        manifest.package.slug, manifest.package.version, manifest.package.flavor, bundle_name
+        manifest.package.namespace_path(),
+        manifest.package.slug,
+        manifest.package.version,
+        bundle_name
     );
 
     let mut metadata = bundle_branch_metadata(manifest, bundle, manifest_hash)?;
@@ -385,4 +391,3 @@ pub fn print_outputs(
         }
     }
 }
-

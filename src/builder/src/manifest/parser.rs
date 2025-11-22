@@ -1,6 +1,6 @@
+use serde_yaml::Value;
 use std::fs;
 use std::io;
-use serde_yaml::Value;
 
 use super::types::*;
 

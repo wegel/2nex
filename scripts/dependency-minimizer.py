@@ -8,22 +8,22 @@ It also automatically removes duplicate dependencies based on their commit.
 
 Examples:
     # Full minimization with deduplication
-    python3 dependency-minimizer.py manifests/base/24-podman.yaml
+    python3 dependency-minimizer.py pkg/apps/containers/podman.yaml
 
     # Only deduplicate dependencies by commit without testing
-    python3 dependency-minimizer.py manifests/base/24-podman.yaml --only-deduplicate
+    python3 dependency-minimizer.py pkg/apps/containers/podman.yaml --only-deduplicate
 
     # Minimization without deduplication
-    python3 dependency-minimizer.py manifests/base/24-podman.yaml --skip-deduplication
+    python3 dependency-minimizer.py pkg/apps/containers/podman.yaml --skip-deduplication
     
     # Overwrite the original file with minimized dependencies
-    python3 dependency-minimizer.py manifests/base/24-podman.yaml --overwrite
+    python3 dependency-minimizer.py pkg/apps/containers/podman.yaml --overwrite
     
     # Ignore specific dependencies during minimization
-    python3 dependency-minimizer.py manifests/base/24-podman.yaml --ignore gmp glibc gcc
+    python3 dependency-minimizer.py pkg/apps/containers/podman.yaml --ignore gmp glibc gcc
     
     # Specify custom builder path and output file
-    python3 dependency-minimizer.py manifests/base/24-podman.yaml --builder ./nex --output podman-minimal.yaml
+    python3 dependency-minimizer.py pkg/apps/containers/podman.yaml --builder ./nex --output podman-minimal.yaml
 """
 
 import argparse

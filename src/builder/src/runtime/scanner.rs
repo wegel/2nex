@@ -370,7 +370,7 @@ fn phase_priority(commit: &str) -> u32 {
     } else if commit.contains("/bootstrap/phase1/") {
         1
     } else {
-        // non-bootstrap packages (e.g., kernel flavor) have highest priority
+        // non-bootstrap packages (e.g., kernel namespace) have highest priority
         100
     }
 }
@@ -641,14 +641,14 @@ mod tests {
     fn provider_index_resolves_full_and_basename_matches() {
         let mut index = ProviderIndex::default();
         index.add_entry(
-            "x86_64/python/3.12/base/bundles/dev",
+            "x86_64/pkg/base/python/3.12/bundles/dev",
             "/usr/bin/python3".to_string(),
         );
         let basename_matches = resolve_requirement(&index, "python3");
         assert_eq!(basename_matches.len(), 1);
         assert_eq!(
             basename_matches[0].commit,
-            "x86_64/python/3.12/base/bundles/dev"
+            "x86_64/pkg/base/python/3.12/bundles/dev"
         );
         assert_eq!(basename_matches[0].path, "/usr/bin/python3");
 
@@ -656,7 +656,7 @@ mod tests {
         assert_eq!(path_matches.len(), 1);
         assert_eq!(
             path_matches[0].commit,
-            "x86_64/python/3.12/base/bundles/dev"
+            "x86_64/pkg/base/python/3.12/bundles/dev"
         );
     }
 

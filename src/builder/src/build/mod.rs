@@ -44,7 +44,11 @@ pub fn append_checksum_file(package: &Package, checksum: &str, file_path: &Path)
     Ok(())
 }
 
-pub fn stage_existing_outputs(manifest: &Manifest, base_dir: &str, repo_path: &str) -> io::Result<()> {
+pub fn stage_existing_outputs(
+    manifest: &Manifest,
+    base_dir: &str,
+    repo_path: &str,
+) -> io::Result<()> {
     let base_path = Path::new(base_dir);
     if base_path.exists() {
         fs::remove_dir_all(base_path)?;
@@ -55,7 +59,10 @@ pub fn stage_existing_outputs(manifest: &Manifest, base_dir: &str, repo_path: &s
     for category in manifest.outputs.keys() {
         let branch_name = format!(
             "x86_64/{}/{}/{}/outputs/{}",
-            manifest.package.slug, manifest.package.version, manifest.package.flavor, category
+            manifest.package.namespace_path(),
+            manifest.package.slug,
+            manifest.package.version,
+            category
         );
         println!(
             "Checking out existing outputs from {} into {}",
@@ -476,7 +483,10 @@ pub fn verify_and_commit_outputs(
 
         let branch_name = format!(
             "x86_64/{}/{}/{}/outputs/{}",
-            manifest.package.slug, manifest.package.version, manifest.package.flavor, output_type
+            manifest.package.namespace_path(),
+            manifest.package.slug,
+            manifest.package.version,
+            output_type
         );
 
         for file_path in &spec.files {
@@ -561,4 +571,3 @@ pub fn create_and_commit_bundles(
 
     Ok(())
 }
-

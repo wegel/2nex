@@ -10,7 +10,9 @@ pub fn ensure_branch_exists(repo_path: &str, branch: &str) -> io::Result<()> {
         .arg(repo_path)
         .arg(branch)
         .output()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e)))?;
+        .map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e))
+        })?;
 
     if !output.status.success() {
         return Err(io::Error::new(
@@ -27,18 +29,33 @@ pub fn ensure_branch_exists(repo_path: &str, branch: &str) -> io::Result<()> {
     Ok(())
 }
 
-/// Parse an OSTree commit reference into (slug, version, flavor)
+/// Parse an OSTree commit reference into (slug, version, namespace)
 pub fn parse_commit_ref(commit: &str) -> Option<(String, String, String)> {
-    // format: x86_64/{slug}/{version}/{flavor}/...
+    // format: x86_64/{namespace}/{slug}/{version}/...
     let parts: Vec<&str> = commit.split('/').collect();
-    if parts.len() >= 4 {
-        let slug = parts[1].to_string();
-        let version = parts[2].to_string();
-        let flavor = parts[3].to_string();
-        Some((slug, version, flavor))
-    } else {
-        None
+    if parts.len() < 4 {
+        return None;
     }
+
+    let boundary = parts
+        .iter()
+        .position(|part| *part == "outputs" || *part == "bundles")
+        .unwrap_or(parts.len());
+
+    if boundary < 3 {
+        return None;
+    }
+
+    let slug_idx = boundary.saturating_sub(2);
+    let version_idx = boundary.saturating_sub(1);
+    if slug_idx >= parts.len() || version_idx >= parts.len() || slug_idx < 1 {
+        return None;
+    }
+
+    let slug = parts[slug_idx].to_string();
+    let version = parts[version_idx].to_string();
+    let namespace = parts[1..slug_idx].join("/");
+    Some((slug, version, namespace))
 }
 
 /// Checkout an OSTree commit into a directory
@@ -70,9 +87,12 @@ pub fn checkout_ostree_into(
     command.arg(commit);
     command.arg(dest);
 
-    let output = command
-        .output()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree checkout: {}", e)))?;
+    let output = command.output().map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to run ostree checkout: {}", e),
+        )
+    })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -92,7 +112,11 @@ pub fn commit_to_ostree(
     tree_path: &Path,
     metadata: &[(String, String)],
 ) -> io::Result<()> {
-    println!("Committing {} to OSTree branch {}", tree_path.display(), branch);
+    println!(
+        "Committing {} to OSTree branch {}",
+        tree_path.display(),
+        branch
+    );
 
     let mut command = Command::new("unshare");
     command.args(&["--map-root-user", "--user", "--"]);
@@ -110,9 +134,12 @@ pub fn commit_to_ostree(
 
     command.arg(tree_path.to_str().unwrap());
 
-    let output = command
-        .output()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree commit: {}", e)))?;
+    let output = command.output().map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to run ostree commit: {}", e),
+        )
+    })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -144,9 +171,9 @@ pub fn rewrite_branch_metadata(
         command.arg(format!("--add-metadata-string={}={}", key, value));
     }
 
-    let output = command
-        .output()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e)))?;
+    let output = command.output().map_err(|e| {
+        io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e))
+    })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -169,7 +196,9 @@ pub fn get_branch_metadata(repo_path: &str, branch: &str, key: &str) -> io::Resu
         .arg(key)
         .arg(branch)
         .output()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e)))?;
+        .map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e))
+        })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -189,8 +218,12 @@ pub fn encode_metadata_list(values: &[String]) -> io::Result<Option<String>> {
     if values.is_empty() {
         return Ok(None);
     }
-    let json = serde_json::to_string(values)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to encode metadata: {}", e)))?;
+    let json = serde_json::to_string(values).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("Failed to encode metadata: {}", e),
+        )
+    })?;
     Ok(Some(json))
 }
 
@@ -204,7 +237,9 @@ pub fn read_metadata_list(repo_path: &str, commit: &str, key: &str) -> io::Resul
         .arg(key)
         .arg(commit)
         .output()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e)))?;
+        .map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e))
+        })?;
 
     if !output.status.success() {
         return Ok(Vec::new());
@@ -224,11 +259,15 @@ pub fn parse_metadata_list_output(raw: &[u8]) -> io::Result<Vec<String>> {
 
     // ostree wraps the JSON in single quotes, strip them
     if trimmed.starts_with('\'') && trimmed.ends_with('\'') {
-        trimmed = &trimmed[1..trimmed.len()-1];
+        trimmed = &trimmed[1..trimmed.len() - 1];
     }
 
-    let parsed: Vec<String> = serde_json::from_str(trimmed)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Failed to parse metadata: {}", e)))?;
+    let parsed: Vec<String> = serde_json::from_str(trimmed).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Failed to parse metadata: {}", e),
+        )
+    })?;
 
     Ok(parsed)
 }
@@ -279,7 +318,9 @@ pub fn read_checksum_from_commit(repo_path: &str, commit: &str) -> io::Result<St
         .arg("nex.build.checksum")
         .arg(commit)
         .output()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e)))?;
+        .map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e))
+        })?;
 
     if !output.status.success() {
         return Err(io::Error::new(
@@ -293,7 +334,7 @@ pub fn read_checksum_from_commit(repo_path: &str, commit: &str) -> io::Result<St
 
     // ostree wraps strings in single quotes, strip them
     if trimmed.starts_with('\'') && trimmed.ends_with('\'') {
-        Ok(trimmed[1..trimmed.len()-1].to_string())
+        Ok(trimmed[1..trimmed.len() - 1].to_string())
     } else {
         Ok(trimmed.to_string())
     }
