@@ -1,8 +1,44 @@
 use serde_yaml::Value;
 use std::fs;
 use std::io;
+use std::path::Path;
 
 use super::types::*;
+
+/// Load manifest from a ManifestSource (path or blob)
+pub fn load_manifest_from_source(source: &ManifestSource) -> io::Result<ManifestData> {
+    match source {
+        ManifestSource::Path(path) => load_manifest(path.to_str().unwrap()),
+        ManifestSource::Blob { sha, path } => {
+            // find git repo root
+            let git_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let content = crate::utils::fetch_git_blob(&git_root, sha).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("failed to fetch blob {} for {}: {}", sha, path.display(), e),
+                )
+            })?;
+            load_manifest_from_str(&content)
+        }
+    }
+}
+
+/// Compute manifest hash from a ManifestSource
+pub fn compute_manifest_hash_from_source(source: &ManifestSource) -> io::Result<String> {
+    use sha2::{Digest, Sha256};
+
+    let content = match source {
+        ManifestSource::Path(path) => fs::read(path)?,
+        ManifestSource::Blob { sha, .. } => {
+            let git_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            crate::utils::fetch_git_blob(&git_root, sha)?.into_bytes()
+        }
+    };
+
+    let mut hasher = Sha256::new();
+    hasher.update(&content);
+    Ok(format!("{:x}", hasher.finalize()))
+}
 
 pub fn detect_manifest_kind(doc: &Value) -> ManifestKind {
     if let Some(kind) = doc.get("kind").and_then(|v| v.as_str()) {
@@ -35,7 +71,12 @@ pub fn validate_system_manifest(manifest: &SystemManifest) -> io::Result<()> {
 
 pub fn load_manifest(file_path: &str) -> io::Result<ManifestData> {
     let manifest_str = fs::read_to_string(file_path)?;
-    let doc: Value = serde_yaml::from_str(&manifest_str)
+    load_manifest_from_str(&manifest_str)
+}
+
+/// Load manifest from string content (for blob-ref mode)
+pub fn load_manifest_from_str(manifest_str: &str) -> io::Result<ManifestData> {
+    let doc: Value = serde_yaml::from_str(manifest_str)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     match detect_manifest_kind(&doc) {
         ManifestKind::Package => {

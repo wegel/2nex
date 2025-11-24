@@ -34,7 +34,10 @@ use runtime::scanner::{RuntimeScanResult, RuntimeScanner};
 #[derive(Parser)]
 #[clap(version = "1.0", author = "Your Name")]
 struct Cli {
-    // positional args
+    #[clap(subcommand)]
+    command: Option<Command>,
+
+    // positional args (for default build mode)
     #[clap(value_name = "REPO")]
     repo_path: Option<String>,
     #[clap(value_name = "MANIFEST")]
@@ -155,6 +158,15 @@ struct Cli {
     allow_bootstrap_requires: bool,
 }
 
+#[derive(clap::Subcommand)]
+enum Command {
+    /// Pin dependencies to their current git blob SHAs
+    Link {
+        /// The manifest file to process
+        manifest: String,
+    },
+}
+
 pub struct Opts {
     repo_path: String,
     manifest_file: String,
@@ -175,6 +187,13 @@ pub struct Opts {
 
 fn main() -> io::Result<()> {
     let cli: Cli = Cli::parse();
+
+    // handle subcommands
+    if let Some(command) = cli.command {
+        return match command {
+            Command::Link { manifest } => link_manifest_dependencies(&manifest),
+        };
+    }
 
     let repo_path = cli
         .repo_path
@@ -262,7 +281,11 @@ fn hydrate_dependencies(repo_path: &str, manifest_file: &str) -> io::Result<()> 
         .map(|commit| {
             // extract name from commit path like x86_64/zlib/1.3.1/sys/libs/bundles/dev
             let name = commit.split('/').nth(1).map(|s| s.to_string());
-            Dependency { commit, name }
+            Dependency {
+                commit,
+                name,
+                manifest_ref: None,
+            }
         })
         .collect();
 
@@ -426,15 +449,25 @@ fn build_package_manifest_with_dir(
     let download_dir = "./inputs_cache";
     fs::create_dir_all(download_dir)?;
 
+    // resolve dependencies to specific commit IDs when they have manifest_ref
+    let resolved_commits = resolve_dependency_commits(&manifest.dependencies, &opts.repo_path)?;
+
     let dependency_commits = if opts.transitive_requires {
-        resolve_dependency_closure(&manifest.dependencies, &opts.repo_path)?
-    } else {
-        // just use direct commits from dependencies, no transitive resolution
-        manifest
+        // create temporary deps with resolved commits for closure resolution
+        let resolved_deps: Vec<Dependency> = manifest
             .dependencies
             .iter()
-            .map(|d| d.commit.clone())
-            .collect()
+            .zip(resolved_commits.iter())
+            .map(|(dep, resolved)| Dependency {
+                commit: resolved.clone(),
+                name: dep.name.clone(),
+                manifest_ref: dep.manifest_ref.clone(),
+            })
+            .collect();
+        resolve_dependency_closure(&resolved_deps, &opts.repo_path)?
+    } else {
+        // use resolved commits directly
+        resolved_commits
     };
     let wants_update_outputs = opts.update_outputs_requires || opts.update_outputs_requires_only;
     let runtime_scanner = RuntimeScanner::new(&opts.repo_path, &dependency_commits)
@@ -789,8 +822,60 @@ fn compute_manifest_hash(manifest_path: &Path) -> io::Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
+/// Resolve dependencies to specific commit IDs when they have manifest_ref.
+/// Returns a list of (commit_ref_or_id, original_branch) pairs.
+fn resolve_dependency_commits(
+    dependencies: &[Dependency],
+    repo_path: &str,
+) -> io::Result<Vec<String>> {
+    let git_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let mut resolved = Vec::new();
+
+    for dep in dependencies {
+        if let Some(ref blob_sha) = dep.manifest_ref {
+            // fetch blob content and compute its hash
+            match crate::utils::fetch_git_blob(&git_root, blob_sha) {
+                Ok(content) => {
+                    let content_hash = format!("{:x}", Sha256::digest(content.as_bytes()));
+
+                    // search OSTree history for matching build
+                    match find_commit_by_manifest_hash(repo_path, &dep.commit, &content_hash) {
+                        Ok(Some(commit_id)) => {
+                            // use the specific commit ID instead of branch name
+                            resolved.push(commit_id);
+                            continue;
+                        }
+                        Ok(None) => {
+                            // fall back to branch name
+                            eprintln!(
+                                "Warning: no matching commit found for {} with manifest_ref {}",
+                                dep.commit, blob_sha
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("Warning: failed to search history for {}: {}", dep.commit, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Warning: failed to fetch blob {} for {}: {}", blob_sha, dep.commit, e);
+                }
+            }
+        }
+        // no manifest_ref or resolution failed - use branch name
+        resolved.push(dep.commit.clone());
+    }
+
+    Ok(resolved)
+}
+
 // check if all outputs of a manifest are already built in OSTree with current manifest hash
-fn check_if_built(repo_path: &str, manifest: &Manifest, manifest_path: &Path) -> io::Result<bool> {
+// returns Some(commit_id) if found, None if not built or hash mismatch
+fn check_if_built(
+    repo_path: &str,
+    manifest: &Manifest,
+    manifest_path: &Path,
+) -> io::Result<Option<String>> {
     let arch = "x86_64"; // TODO: make configurable
     let slug = &manifest.package.slug;
     let version = &manifest.package.version;
@@ -799,7 +884,9 @@ fn check_if_built(repo_path: &str, manifest: &Manifest, manifest_path: &Path) ->
     // compute current manifest hash
     let current_hash = compute_manifest_hash(manifest_path)?;
 
-    // check all outputs
+    // check all outputs - we'll use the first output to find the commit
+    let mut found_commit: Option<String> = None;
+
     for (output_name, _spec) in &manifest.outputs {
         let branch = format!(
             "{}/{}/{}/{}/outputs/{}",
@@ -808,48 +895,49 @@ fn check_if_built(repo_path: &str, manifest: &Manifest, manifest_path: &Path) ->
 
         // check if branch exists
         if ensure_branch_exists(repo_path, &branch).is_err() {
-            return Ok(false);
+            return Ok(None);
         }
 
-        // check if manifest hash matches
-        match get_branch_metadata(repo_path, &branch, "nex.manifest.hash") {
-            Ok(stored_hash) => {
-                if stored_hash != current_hash {
-                    println!(
-                        "  Manifest {} has changed (hash mismatch), rebuilding",
-                        manifest_path.display()
-                    );
-                    return Ok(false);
+        // try to find commit by manifest hash using history search
+        match find_commit_by_manifest_hash(repo_path, &branch, &current_hash)? {
+            Some(commit_id) => {
+                if found_commit.is_none() {
+                    found_commit = Some(commit_id);
                 }
             }
-            Err(_) => {
-                // old commit without manifest hash metadata - rebuild to add it
-                println!("  No manifest hash found in commit, rebuilding to add metadata");
-                return Ok(false);
+            None => {
+                // no commit found with matching hash
+                println!(
+                    "  Manifest {} has changed or no matching commit in history, rebuilding",
+                    manifest_path.display()
+                );
+                return Ok(None);
             }
         }
     }
 
-    Ok(true)
+    Ok(found_commit)
 }
 
 // recursively collect dependencies and build graph
 fn collect_dependencies_recursive(
-    manifest_path: &Path,
+    manifest_source: &ManifestSource,
     repo_path: &str,
     manifest_dirs: &[PathBuf],
-    graph: &mut DiGraph<PathBuf, ()>,
+    graph: &mut DiGraph<ManifestSource, ()>,
     manifest_map: &mut HashMap<PathBuf, NodeIndex>,
     force: bool,
     ostree_cache: &mut HashMap<String, bool>,
 ) -> io::Result<NodeIndex> {
+    let manifest_path = manifest_source.path();
+
     // check if already processed
     if let Some(&node) = manifest_map.get(manifest_path) {
         return Ok(node);
     }
 
-    // load manifest
-    let manifest_data = load_manifest(manifest_path.to_str().unwrap())?;
+    // load manifest from source (path or blob)
+    let manifest_data = load_manifest_from_source(manifest_source)?;
 
     let (is_system, slug, dependencies) = match manifest_data {
         ManifestData::Package(ref m) => (false, m.package.slug.clone(), m.dependencies.clone()),
@@ -864,9 +952,9 @@ fn collect_dependencies_recursive(
     // for package manifests, check if already built (unless force is true)
     if !is_system && !force {
         if let ManifestData::Package(ref manifest) = manifest_data {
-            if check_if_built(repo_path, manifest, manifest_path)? {
+            if check_if_built(repo_path, manifest, manifest_path)?.is_some() {
                 println!("Package {} already built, skipping", manifest.package.slug);
-                let node = graph.add_node(PathBuf::new()); // empty path = skip
+                let node = graph.add_node(ManifestSource::Path(PathBuf::new())); // empty = skip
                 manifest_map.insert(manifest_path.to_path_buf(), node);
                 return Ok(node);
             }
@@ -874,34 +962,96 @@ fn collect_dependencies_recursive(
     }
 
     // add this manifest to graph
-    let node = graph.add_node(manifest_path.to_path_buf());
+    let node = graph.add_node(manifest_source.clone());
     manifest_map.insert(manifest_path.to_path_buf(), node);
 
     println!("Processing dependencies for {}", slug);
 
+    // find git repo root for blob fetching
+    let git_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
     // process dependencies
     for dep in &dependencies {
-        // check if dependency is already in OSTree (with caching)
-        let in_ostree = ostree_cache
-            .entry(dep.commit.clone())
-            .or_insert_with(|| ensure_branch_exists(repo_path, &dep.commit).is_ok());
+        // if manifest_ref is set, use content-addressable resolution
+        if let Some(ref blob_sha) = dep.manifest_ref {
+            // fetch blob content and compute its hash
+            match crate::utils::fetch_git_blob(&git_root, blob_sha) {
+                Ok(content) => {
+                    use sha2::{Digest, Sha256};
+                    let content_hash = format!("{:x}", Sha256::digest(content.as_bytes()));
 
-        if *in_ostree {
-            println!("  Dependency {} already in OSTree, skipping", dep.commit);
-            continue;
+                    // search OSTree history for matching build
+                    match find_commit_by_manifest_hash(repo_path, &dep.commit, &content_hash) {
+                        Ok(Some(commit_id)) => {
+                            println!(
+                                "  [{}] {} skipping",
+                                &commit_id[..12],
+                                dep.commit
+                            );
+                            continue;
+                        }
+                        Ok(None) => {
+                            println!(
+                                "  [needs build] {} (pinned to {})",
+                                dep.commit,
+                                &blob_sha[..12]
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("  Warning: failed to search history for {}: {}", dep.commit, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "  Warning: failed to fetch blob {} for {}: {}",
+                        blob_sha, dep.commit, e
+                    );
+                }
+            }
+        } else {
+            // no manifest_ref - use floating mode (check if branch exists at HEAD)
+            let in_ostree = ostree_cache
+                .entry(dep.commit.clone())
+                .or_insert_with(|| ensure_branch_exists(repo_path, &dep.commit).is_ok());
+
+            if *in_ostree {
+                println!("  [floating] {} skipping", dep.commit);
+                continue;
+            }
         }
 
         // find manifest for this dependency
         match find_manifest_for_commit(&dep.commit, manifest_dirs) {
             Ok(dep_manifest_path) => {
+                // check if already processed before printing
+                if manifest_map.contains_key(&dep_manifest_path) {
+                    // already processed, just get the node for edge creation
+                    let dep_node = manifest_map[&dep_manifest_path];
+                    if !graph[dep_node].is_empty() {
+                        graph.add_edge(dep_node, node, ());
+                    }
+                    continue;
+                }
+
                 println!(
                     "  Found dependency manifest: {}",
                     dep_manifest_path.display()
                 );
 
+                // create ManifestSource based on whether manifest_ref is present
+                let dep_source = if let Some(ref blob_sha) = dep.manifest_ref {
+                    ManifestSource::Blob {
+                        sha: blob_sha.clone(),
+                        path: dep_manifest_path,
+                    }
+                } else {
+                    ManifestSource::Path(dep_manifest_path)
+                };
+
                 // recurse
                 let dep_node = collect_dependencies_recursive(
-                    &dep_manifest_path,
+                    &dep_source,
                     repo_path,
                     manifest_dirs,
                     graph,
@@ -912,8 +1062,8 @@ fn collect_dependencies_recursive(
 
                 // add edge: dep must be built before current
                 // edge direction: dep_node -> node (dep comes before dependent)
-                // only add edge if dep_node is a real node (not empty path marker)
-                if graph[dep_node] != PathBuf::new() {
+                // only add edge if dep_node is a real node (not empty marker)
+                if !graph[dep_node].is_empty() {
                     graph.add_edge(dep_node, node, ());
                 }
             }
@@ -932,7 +1082,7 @@ fn collect_dependencies_recursive(
 
 // show how packages would be built in parallel waves
 fn show_parallel_execution_plan(
-    graph: &DiGraph<PathBuf, ()>,
+    graph: &DiGraph<ManifestSource, ()>,
     build_order: &[NodeIndex],
     compact: bool,
 ) {
@@ -940,7 +1090,7 @@ fn show_parallel_execution_plan(
     for &node in build_order {
         let deps: Vec<NodeIndex> = graph
             .neighbors_directed(node, petgraph::Direction::Incoming)
-            .filter(|&dep| graph[dep] != PathBuf::new())
+            .filter(|&dep| !graph[dep].is_empty())
             .collect();
         dependencies.insert(node, deps);
     }
@@ -970,7 +1120,7 @@ fn show_parallel_execution_plan(
         let wave_names: Vec<String> = wave
             .iter()
             .map(|&node_idx| {
-                let path = &graph[node_idx];
+                let path = graph[node_idx].path();
                 let filename = path
                     .file_name()
                     .and_then(|f| f.to_str())
@@ -1009,7 +1159,7 @@ fn show_parallel_execution_plan(
 
 // build a manifest and all its missing dependencies in parallel
 fn build_packages_parallel(
-    graph: &DiGraph<PathBuf, ()>,
+    graph: &DiGraph<ManifestSource, ()>,
     build_order: &[NodeIndex],
     opts: &Opts,
 ) -> io::Result<()> {
@@ -1022,7 +1172,7 @@ fn build_packages_parallel(
     for &node in build_order {
         let deps: Vec<NodeIndex> = graph
             .neighbors_directed(node, petgraph::Direction::Incoming)
-            .filter(|&dep| graph[dep] != PathBuf::new())
+            .filter(|&dep| !graph[dep].is_empty())
             .collect();
         dependencies.insert(node, deps);
     }
@@ -1053,8 +1203,8 @@ fn build_packages_parallel(
         // bootstrap packages must build sequentially (they share ./build_rootfs directory)
         // if this wave contains bootstrap packages, only build one at a time
         let has_bootstrap = wave.iter().any(|&node_idx| {
-            let path = &graph[node_idx];
-            if let Ok(manifest_data) = load_manifest(path.to_str().unwrap()) {
+            let source = &graph[node_idx];
+            if let Ok(manifest_data) = load_manifest_from_source(source) {
                 matches!(manifest_data, ManifestData::Package(m) if m.package.bootstrap)
             } else {
                 false
@@ -1066,8 +1216,8 @@ fn build_packages_parallel(
             let bootstrap_idx = wave
                 .iter()
                 .position(|&node_idx| {
-                    let path = &graph[node_idx];
-                    if let Ok(manifest_data) = load_manifest(path.to_str().unwrap()) {
+                    let source = &graph[node_idx];
+                    if let Ok(manifest_data) = load_manifest_from_source(source) {
                         matches!(manifest_data, ManifestData::Package(m) if m.package.bootstrap)
                     } else {
                         false
@@ -1083,15 +1233,16 @@ fn build_packages_parallel(
         let results: Vec<Result<String, String>> = wave
             .par_iter()
             .map(|&node_idx| {
-                let path = &graph[node_idx];
+                let source = &graph[node_idx];
+                let path = source.path();
                 let build_num = {
                     let mut counter = build_counter.lock().unwrap();
                     *counter += 1;
                     *counter
                 };
 
-                // load manifest
-                let manifest_data = match load_manifest(path.to_str().unwrap()) {
+                // load manifest from source (path or blob)
+                let manifest_data = match load_manifest_from_source(source) {
                     Ok(data) => data,
                     Err(e) => return Err(format!("Failed to load {}: {}", path.display(), e)),
                 };
@@ -1228,7 +1379,7 @@ fn build_packages_parallel(
 }
 
 fn show_dependency_paths(
-    graph: &DiGraph<PathBuf, ()>,
+    graph: &DiGraph<ManifestSource, ()>,
     manifest_map: &HashMap<PathBuf, NodeIndex>,
     root_path: &Path,
 ) {
@@ -1263,7 +1414,7 @@ fn show_dependency_paths(
                 // print path
                 print!("  ");
                 for (i, &n) in path_nodes.iter().enumerate() {
-                    let p = &graph[n];
+                    let p = graph[n].path();
                     if i > 0 {
                         print!(" → ");
                     }
@@ -1287,7 +1438,7 @@ fn show_dependency_paths(
 
 fn add_missing_checksums_to_manifests(
     build_order: &[NodeIndex],
-    graph: &DiGraph<PathBuf, ()>,
+    graph: &DiGraph<ManifestSource, ()>,
     repo_path: &str,
     opts: &Opts,
 ) -> io::Result<()> {
@@ -1296,8 +1447,9 @@ fn add_missing_checksums_to_manifests(
     use crate::ostree::read_checksum_from_commit;
 
     for &node_idx in build_order {
-        let manifest_path = &graph[node_idx];
-        let manifest_data = load_manifest(manifest_path.to_str().unwrap())?;
+        let source = &graph[node_idx];
+        let manifest_path = source.path();
+        let manifest_data = load_manifest_from_source(source)?;
 
         match manifest_data {
             ManifestData::Package(manifest) => {
@@ -1480,8 +1632,9 @@ fn build_with_dependencies(
 
     // collect all dependencies recursively
     // when add_checksums or update_outputs_requires is true, treat it like force to include already-built packages
+    let root_source = ManifestSource::Path(manifest_path.to_path_buf());
     collect_dependencies_recursive(
-        manifest_path,
+        &root_source,
         repo_path,
         manifest_dirs,
         &mut graph,
@@ -1496,10 +1649,10 @@ fn build_with_dependencies(
         return Ok(());
     }
 
-    // filter out empty path markers (already-built packages)
+    // filter out empty markers (already-built packages)
     let valid_nodes: Vec<NodeIndex> = graph
         .node_indices()
-        .filter(|&idx| graph[idx] != PathBuf::new())
+        .filter(|&idx| !graph[idx].is_empty())
         .collect();
 
     if valid_nodes.is_empty() {
@@ -1520,13 +1673,13 @@ fn build_with_dependencies(
 
     // topological sort to get build order
     let build_order = toposort(&graph, None).map_err(|cycle| {
-        let node_path = &graph[cycle.node_id()];
+        let node_source = &graph[cycle.node_id()];
         io::Error::new(
             io::ErrorKind::Other,
             format!(
                 "Circular dependency detected at node {:?}: {}",
                 cycle.node_id(),
-                node_path.display()
+                node_source.path().display()
             ),
         )
     })?;
@@ -1534,7 +1687,7 @@ fn build_with_dependencies(
     // filter build order to only include valid nodes
     let build_order: Vec<NodeIndex> = build_order
         .into_iter()
-        .filter(|&idx| graph[idx] != PathBuf::new())
+        .filter(|&idx| !graph[idx].is_empty())
         .collect();
 
     // if add_checksums mode, process manifests to add missing checksums
@@ -1555,8 +1708,8 @@ fn build_with_dependencies(
 
     println!("\nBuild order:");
     for (i, &node_idx) in build_order.iter().enumerate() {
-        let path = &graph[node_idx];
-        println!("  {}. {}", i + 1, path.display());
+        let source = &graph[node_idx];
+        println!("  {}. {}", i + 1, source.path().display());
     }
 
     println!("\nParallel execution plan:");
@@ -1577,6 +1730,95 @@ impl fmt::Display for Package {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}/{}", self.namespace, self.slug)
     }
+}
+
+/// Pin all dependencies in a manifest to their current git blob SHAs.
+fn link_manifest_dependencies(manifest_file: &str) -> io::Result<()> {
+    use crate::utils::hash_file_content;
+
+    // load manifest
+    let manifest_data = load_manifest(manifest_file)?;
+
+    let (is_system, dependencies, packages) = match &manifest_data {
+        ManifestData::Package(m) => (false, m.dependencies.clone(), Vec::new()),
+        ManifestData::System(s) => (true, s.dependencies.clone(), s.packages.clone()),
+    };
+
+    if is_system {
+        println!("Linking system manifest: {}", manifest_file);
+    } else {
+        println!("Linking package manifest: {}", manifest_file);
+    }
+
+    // use current directory as manifest search path
+    let manifest_dirs = vec![PathBuf::from(".")];
+
+    // read original file content
+    let original_content = fs::read_to_string(manifest_file)?;
+
+    // process dependencies
+    let mut updated_content = original_content.clone();
+    let mut linked_count = 0;
+
+    for dep in &dependencies {
+        // find the manifest file using existing resolver
+        match find_manifest_for_commit(&dep.commit, &manifest_dirs) {
+            Ok(manifest_path) => {
+                // calculate git blob SHA
+                let blob_sha = hash_file_content(&manifest_path)?;
+                println!("  {} -> {}", manifest_path.display(), blob_sha);
+
+                // update the content to add manifest_ref
+                // find the dependency entry and add manifest_ref after commit
+                let commit_pattern = format!("commit: {}", dep.commit);
+                if let Some(pos) = updated_content.find(&commit_pattern) {
+                    // check if manifest_ref already exists for this entry
+                    let after_commit = pos + commit_pattern.len();
+                    let next_section = updated_content[after_commit..]
+                        .find("\n  - ")
+                        .or_else(|| updated_content[after_commit..].find("\nsources:"))
+                        .or_else(|| updated_content[after_commit..].find("\npackages:"))
+                        .unwrap_or(updated_content.len() - after_commit);
+
+                    let entry_section = &updated_content[pos..after_commit + next_section];
+                    if !entry_section.contains("manifest_ref:") {
+                        // insert manifest_ref after commit line
+                        let insert_pos = after_commit;
+                        let insertion = format!("\n    manifest_ref: {}", blob_sha);
+                        updated_content.insert_str(insert_pos, &insertion);
+                        linked_count += 1;
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("  Warning: {}: {}", dep.commit, e);
+            }
+        }
+    }
+
+    // process packages (for system manifests)
+    for pkg in &packages {
+        match find_manifest_for_commit(&pkg.commit, &manifest_dirs) {
+            Ok(manifest_path) => {
+                let blob_sha = hash_file_content(&manifest_path)?;
+                println!("  {} -> {}", manifest_path.display(), blob_sha);
+                // for packages, we'd need to add manifest_ref support to SystemPackage
+            }
+            Err(e) => {
+                eprintln!("  Warning: {}: {}", pkg.commit, e);
+            }
+        }
+    }
+
+    // write updated content
+    if linked_count > 0 {
+        fs::write(manifest_file, updated_content)?;
+        println!("\nLinked {} dependencies in {}", linked_count, manifest_file);
+    } else {
+        println!("\nNo dependencies to link or all already linked");
+    }
+
+    Ok(())
 }
 
 /// Verifies and commits outputs to OSTree branches based on the manifest.
@@ -1683,10 +1925,12 @@ outputs: {}
             Dependency {
                 commit: "pkg/A".into(),
                 name: None,
+                manifest_ref: None,
             },
             Dependency {
                 commit: "pkg/D".into(),
                 name: None,
+                manifest_ref: None,
             },
         ];
         let mut graph: HashMap<&str, Vec<&str>> = HashMap::new();
@@ -1718,6 +1962,7 @@ outputs: {}
         let deps = vec![Dependency {
             commit: "pkg/A".into(),
             name: None,
+            manifest_ref: None,
         }];
         let mut graph: HashMap<&str, Vec<&str>> = HashMap::new();
         graph.insert("pkg/A", vec!["pkg/B"]);

@@ -1,6 +1,34 @@
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
+
+/// Source for loading a manifest - either from disk or from a git blob
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ManifestSource {
+    /// Load from file path on disk (floating mode)
+    Path(PathBuf),
+    /// Load from git blob SHA (pinned mode), with path for identification
+    Blob { sha: String, path: PathBuf },
+}
+
+impl ManifestSource {
+    /// Get the path (for identification/display)
+    pub fn path(&self) -> &PathBuf {
+        match self {
+            ManifestSource::Path(p) => p,
+            ManifestSource::Blob { path, .. } => path,
+        }
+    }
+
+    /// Check if this is an empty marker (for skipped nodes)
+    pub fn is_empty(&self) -> bool {
+        match self {
+            ManifestSource::Path(p) => p == &PathBuf::new(),
+            ManifestSource::Blob { path, .. } => path == &PathBuf::new(),
+        }
+    }
+}
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Manifest {
@@ -92,6 +120,8 @@ pub struct Dependency {
     pub commit: String,
     #[serde(default)]
     pub name: Option<String>,
+    #[serde(default)]
+    pub manifest_ref: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

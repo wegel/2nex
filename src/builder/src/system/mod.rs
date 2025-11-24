@@ -179,6 +179,7 @@ pub fn dependencies_from_system_packages(packages: &[SystemPackage]) -> Vec<Depe
         .map(|pkg| Dependency {
             commit: pkg.commit.clone(),
             name: pkg.name.clone(),
+            manifest_ref: None,
         })
         .collect()
 }

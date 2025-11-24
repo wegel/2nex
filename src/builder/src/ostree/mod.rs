@@ -339,3 +339,56 @@ pub fn read_checksum_from_commit(repo_path: &str, commit: &str) -> io::Result<St
         Ok(trimmed.to_string())
     }
 }
+
+/// Find a commit in OSTree history by its manifest hash.
+/// Traverses the commit history of a branch looking for a commit with matching
+/// `nex.manifest.hash` metadata.
+pub fn find_commit_by_manifest_hash(
+    repo_path: &str,
+    branch: &str,
+    target_hash: &str,
+) -> io::Result<Option<String>> {
+    // get the commit history for the branch
+    let output = Command::new("ostree")
+        .arg("log")
+        .arg("--repo")
+        .arg(repo_path)
+        .arg(branch)
+        .output()
+        .map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("failed to run ostree log: {}", e))
+        })?;
+
+    if !output.status.success() {
+        // branch doesn't exist
+        return Ok(None);
+    }
+
+    let log_output = String::from_utf8_lossy(&output.stdout);
+
+    // parse commit IDs from log output
+    // ostree log format: "commit <commit_id>"
+    let commits: Vec<&str> = log_output
+        .lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+            if trimmed.starts_with("commit ") {
+                Some(trimmed.strip_prefix("commit ")?.trim())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // check each commit's manifest hash
+    for commit_id in commits {
+        match get_branch_metadata(repo_path, commit_id, "nex.manifest.hash") {
+            Ok(hash) if hash == target_hash => {
+                return Ok(Some(commit_id.to_string()));
+            }
+            _ => continue,
+        }
+    }
+
+    Ok(None)
+}
