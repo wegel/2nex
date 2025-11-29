@@ -103,9 +103,17 @@ pub fn run(args: &TestNativeArgs) -> io::Result<()> {
                 if let Ok(m) = meta {
                     if m.file_type().is_symlink() {
                         let target = std::fs::read_link(&path).unwrap_or_default();
-                        println!("  {} -> {}", path.file_name().unwrap().to_string_lossy(), target.display());
+                        println!(
+                            "  {} -> {}",
+                            path.file_name().unwrap().to_string_lossy(),
+                            target.display()
+                        );
                     } else {
-                        println!("  {} (file, {} bytes)", path.file_name().unwrap().to_string_lossy(), m.len());
+                        println!(
+                            "  {} (file, {} bytes)",
+                            path.file_name().unwrap().to_string_lossy(),
+                            m.len()
+                        );
                     }
                 }
             }

@@ -46,7 +46,10 @@ pub fn flatten_capsule_precomputed(
 
     // extract output type and name from commit
     let commit_parts: Vec<&str> = commit.split('/').collect();
-    let commit_type = commit_parts.get(commit_parts.len().saturating_sub(2)).copied().unwrap_or("");
+    let commit_type = commit_parts
+        .get(commit_parts.len().saturating_sub(2))
+        .copied()
+        .unwrap_or("");
     let commit_name = commit_parts.last().copied().unwrap_or("");
 
     // determine which outputs to process
@@ -204,11 +207,7 @@ fn resolve_transitive_deps(
                 if let Some(transitive_dep_name) = dep_manifest.resolution.get(&needed_file) {
                     // skip @self entries
                     if transitive_dep_name != "@self" {
-                        queue.push((
-                            needed_file,
-                            transitive_dep_name.clone(),
-                            dep_manifest,
-                        ));
+                        queue.push((needed_file, transitive_dep_name.clone(), dep_manifest));
                     }
                 }
             }
@@ -223,14 +222,17 @@ fn find_dependency_by_name<'a>(
     manifest: &'a crate::manifest::types::Manifest,
     name: &str,
 ) -> Option<&'a crate::manifest::types::Dependency> {
-    manifest.dependencies.iter().find(|d| d.name.as_deref() == Some(name))
+    manifest
+        .dependencies
+        .iter()
+        .find(|d| d.name.as_deref() == Some(name))
 }
 
 /// Derive the files commit for the current manifest (for @self libs).
 /// Uses {checksum}/files for stable checksums, {git_blob_sha}/files for bootstrap packages.
 fn derive_files_commit_for_manifest(manifest: &crate::manifest::types::Manifest) -> Option<String> {
-    let has_stable_checksum = manifest.package.checksum.is_some()
-        && manifest.package.stable_checksum.unwrap_or(true);
+    let has_stable_checksum =
+        manifest.package.checksum.is_some() && manifest.package.stable_checksum.unwrap_or(true);
 
     let address_hash = if has_stable_checksum {
         manifest.package.checksum.clone()?
@@ -256,7 +258,9 @@ fn derive_files_commit_for_dependency(
     // e.g., "x86_64/pkg/libs/system/glibc/2.39/outputs/lib" -> namespace="libs/system", slug="glibc", version="2.39"
     let parts: Vec<&str> = dep.commit.split('/').collect();
     let pkg_idx = parts.iter().position(|&p| p == "pkg")?;
-    let end_idx = parts.iter().position(|&p| p == "outputs" || p == "bundles")?;
+    let end_idx = parts
+        .iter()
+        .position(|&p| p == "outputs" || p == "bundles")?;
 
     if end_idx <= pkg_idx + 2 {
         return None;
@@ -291,7 +295,9 @@ fn find_manifest_for_dependency<'a>(
     // parse the dependency commit to extract package info
     let parts: Vec<&str> = dep.commit.split('/').collect();
     let pkg_idx = parts.iter().position(|&p| p == "pkg")?;
-    let end_idx = parts.iter().position(|&p| p == "outputs" || p == "bundles")?;
+    let end_idx = parts
+        .iter()
+        .position(|&p| p == "outputs" || p == "bundles")?;
 
     if end_idx <= pkg_idx + 2 {
         return None;
@@ -344,7 +350,9 @@ fn find_manifest_for_commit<'a>(
 ) -> Option<&'a crate::manifest::types::Manifest> {
     let parts: Vec<&str> = commit.split('/').collect();
     let pkg_idx = parts.iter().position(|&p| p == "pkg")?;
-    let end_idx = parts.iter().position(|&p| p == "outputs" || p == "bundles")?;
+    let end_idx = parts
+        .iter()
+        .position(|&p| p == "outputs" || p == "bundles")?;
 
     if end_idx <= pkg_idx + 2 {
         return None;

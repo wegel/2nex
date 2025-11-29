@@ -24,13 +24,19 @@ impl OstreeRepo {
         if !path.join("config").exists() {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
-                format!("not an OSTree repository: {} (missing config)", path.display()),
+                format!(
+                    "not an OSTree repository: {} (missing config)",
+                    path.display()
+                ),
             ));
         }
         if !path.join("objects").exists() {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
-                format!("not an OSTree repository: {} (missing objects)", path.display()),
+                format!(
+                    "not an OSTree repository: {} (missing objects)",
+                    path.display()
+                ),
             ));
         }
 
@@ -85,7 +91,9 @@ impl OstreeRepo {
         prefix: PathBuf,
         files: &mut Vec<String>,
     ) -> io::Result<()> {
-        let tree_data = self.objects.read_object(tree_checksum, ObjectType::DirTree)?;
+        let tree_data = self
+            .objects
+            .read_object(tree_checksum, ObjectType::DirTree)?;
         let dirtree = dirtree::parse_dirtree(&tree_data)?;
 
         for file in &dirtree.files {
@@ -123,7 +131,9 @@ impl OstreeRepo {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "empty path"));
         }
 
-        let tree_data = self.objects.read_object(tree_checksum, ObjectType::DirTree)?;
+        let tree_data = self
+            .objects
+            .read_object(tree_checksum, ObjectType::DirTree)?;
         let dirtree = dirtree::parse_dirtree(&tree_data)?;
 
         if parts.len() == 1 {

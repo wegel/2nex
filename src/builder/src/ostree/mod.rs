@@ -330,7 +330,10 @@ pub fn find_commit_by_manifest_hash(
         .arg(branch)
         .output()
         .map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("failed to run ostree log: {}", e))
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("failed to run ostree log: {}", e),
+            )
         })?;
 
     if !output.status.success() {

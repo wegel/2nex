@@ -10,9 +10,9 @@ use walkdir::WalkDir;
 use crate::build::*;
 use crate::deps::*;
 use crate::manifest::*;
-use crate::materializer::{flatten_capsule_precomputed, checkout_files};
 use crate::materializer::resolver::resolve_runtime_deps_precomputed;
 use crate::materializer::types::MaterializeRequest;
+use crate::materializer::{checkout_files, flatten_capsule_precomputed};
 use crate::ostree::*;
 use crate::outputs::calculate_output_checksum;
 use crate::BuildOpts;
@@ -44,14 +44,18 @@ pub fn build_system_manifest_with_dir(
     layer_commits_into_rootfs(base_dir, &opts.repo_path, &package_commits)?;
 
     // get original package commits (not expanded) for materialize
-    let original_package_commits: Vec<String> = manifest.packages.iter()
-        .map(|p| p.commit.clone())
-        .collect();
+    let original_package_commits: Vec<String> =
+        manifest.packages.iter().map(|p| p.commit.clone()).collect();
 
     if manifest.system.nex_structure {
         materialize_nex_structure(base_dir, &opts.repo_path, &manifest.packages)?;
     } else {
-        materialize_system_packages(base_dir, &opts.repo_path, &original_package_commits, &manifest_index)?;
+        materialize_system_packages(
+            base_dir,
+            &opts.repo_path,
+            &original_package_commits,
+            &manifest_index,
+        )?;
     }
 
     let env_vars = build_system_env_vars(manifest, download_dir, base_dir, opts.bootstrap)?;
@@ -130,7 +134,12 @@ pub fn build_system_manifest_with_dir(
         if manifest.system.nex_structure {
             materialize_nex_structure(base_dir, &opts.repo_path, &manifest.packages)?;
         } else {
-            materialize_system_packages(base_dir, &opts.repo_path, &original_package_commits, &manifest_index)?;
+            materialize_system_packages(
+                base_dir,
+                &opts.repo_path,
+                &original_package_commits,
+                &manifest_index,
+            )?;
         }
 
         let env_vars = build_system_env_vars(manifest, download_dir, base_dir, opts.bootstrap)?;
@@ -224,7 +233,10 @@ pub fn materialize_system_packages(
     if closure.has_unresolved() {
         let mut msg = String::from("Unresolved runtime dependencies:\n");
         for (dep, reasons) in &closure.unresolved {
-            msg.push_str(&format!("  {} - run 'nex compute-deps' on the package\n", dep));
+            msg.push_str(&format!(
+                "  {} - run 'nex compute-deps' on the package\n",
+                dep
+            ));
             for reason in reasons {
                 msg.push_str(&format!("    needed by: {}\n", reason));
             }
@@ -370,11 +382,12 @@ pub fn materialize_nex_structure(
         }
 
         // use manifest hash to group outputs from the same build together
-        let manifest_hash = crate::ostree::get_commit_metadata(repo_path, &pkg.commit, "nex.manifest.hash")
-            .unwrap_or_else(|_| {
-                // fallback to commit hash if no manifest hash
-                crate::ostree::get_commit_id(repo_path, &pkg.commit).unwrap_or_default()
-            });
+        let manifest_hash =
+            crate::ostree::get_commit_metadata(repo_path, &pkg.commit, "nex.manifest.hash")
+                .unwrap_or_else(|_| {
+                    // fallback to commit hash if no manifest hash
+                    crate::ostree::get_commit_id(repo_path, &pkg.commit).unwrap_or_default()
+                });
         let short_hash = &manifest_hash[..8.min(manifest_hash.len())];
 
         // check if we've already processed this package
@@ -535,7 +548,11 @@ fn create_file_symlinks_recursive(
             // files and symlinks become absolute symlinks to /nex/pkg/
             let target_path = format!(
                 "/nex/pkg/{}/{}/{}/{}/{}/{}",
-                namespace, slug, version, checksum, relative_base,
+                namespace,
+                slug,
+                version,
+                checksum,
+                relative_base,
                 rel_path.display()
             );
 
@@ -638,11 +655,7 @@ fn install_nex_ld_shim(repo_path: &str, lib64_dir: &Path) -> io::Result<()> {
 
 /// Create FHS compatibility symlinks in the target directory.
 fn create_target_fhs_symlinks(target_dir: &Path) -> io::Result<()> {
-    let symlinks = [
-        ("bin", "usr/bin"),
-        ("sbin", "usr/bin"),
-        ("lib", "usr/lib"),
-    ];
+    let symlinks = [("bin", "usr/bin"), ("sbin", "usr/bin"), ("lib", "usr/lib")];
 
     for (link_name, target) in &symlinks {
         let link_path = target_dir.join(link_name);
@@ -698,7 +711,10 @@ fn deploy_manifests_to_nex_db(target_dir: &Path) -> io::Result<()> {
 
         if entry.file_type().is_dir() {
             fs::create_dir_all(&dst_path)?;
-        } else if src_path.extension().map_or(false, |ext| ext == "yaml" || ext == "yml") {
+        } else if src_path
+            .extension()
+            .map_or(false, |ext| ext == "yaml" || ext == "yml")
+        {
             if let Some(parent) = dst_path.parent() {
                 fs::create_dir_all(parent)?;
             }
@@ -714,7 +730,11 @@ fn deploy_manifests_to_nex_db(target_dir: &Path) -> io::Result<()> {
 /// Flatten runtime dependencies into each package's lib/ directory.
 /// This creates self-contained "capsules" that nex-ld-shim can use.
 /// Uses precomputed deps from manifests - no ELF scanning at install time.
-fn flatten_package_dependencies(repo_path: &str, nex_pkg_dir: &Path, manifest_dir: &Path) -> io::Result<()> {
+fn flatten_package_dependencies(
+    repo_path: &str,
+    nex_pkg_dir: &Path,
+    manifest_dir: &Path,
+) -> io::Result<()> {
     println!("Flattening runtime dependencies into package capsules...");
 
     // load manifest index for precomputed deps
@@ -723,10 +743,7 @@ fn flatten_package_dependencies(repo_path: &str, nex_pkg_dir: &Path, manifest_di
 
     // iterate all package directories under nex/pkg/
     // look for directories with .nex-app-root (the package capsules)
-    for entry in WalkDir::new(nex_pkg_dir)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
+    for entry in WalkDir::new(nex_pkg_dir).into_iter().filter_map(|e| e.ok()) {
         if !entry.file_type().is_dir() {
             continue;
         }
@@ -751,7 +768,8 @@ fn flatten_package_dependencies(repo_path: &str, nex_pkg_dir: &Path, manifest_di
         }
 
         // use precomputed deps from manifest
-        let flattened_count = flatten_capsule_precomputed(repo_path, pkg_dir, &commit, &manifest_index)?;
+        let flattened_count =
+            flatten_capsule_precomputed(repo_path, pkg_dir, &commit, &manifest_index)?;
 
         if flattened_count > 0 {
             let rel_path = pkg_dir.strip_prefix(nex_pkg_dir).unwrap_or(pkg_dir);

@@ -47,10 +47,7 @@ impl ManifestIndex {
 
         let mut index = Self::new();
 
-        for entry in WalkDir::new(pkg_dir)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
+        for entry in WalkDir::new(pkg_dir).into_iter().filter_map(|e| e.ok()) {
             let path = entry.path();
             if !path.is_file() {
                 continue;

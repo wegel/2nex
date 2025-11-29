@@ -10,7 +10,8 @@ pub fn load_manifest_from_source(source: &ManifestSource) -> io::Result<Manifest
         ManifestSource::Path(path) => load_manifest(path.to_str().unwrap()),
         ManifestSource::Blob { sha, path } => {
             // find git repo root
-            let git_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let git_root =
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
             let content = crate::utils::fetch_git_blob(&git_root, sha).map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::NotFound,
@@ -29,7 +30,8 @@ pub fn compute_manifest_hash_from_source(source: &ManifestSource) -> io::Result<
     let content = match source {
         ManifestSource::Path(path) => fs::read(path)?,
         ManifestSource::Blob { sha, .. } => {
-            let git_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let git_root =
+                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
             crate::utils::fetch_git_blob(&git_root, sha)?.into_bytes()
         }
     };

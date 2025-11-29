@@ -55,7 +55,12 @@ impl ObjectStore {
         fs::read(&path).map_err(|e| {
             io::Error::new(
                 e.kind(),
-                format!("failed to read {} object {}: {}", obj_type.extension(), checksum, e),
+                format!(
+                    "failed to read {} object {}: {}",
+                    obj_type.extension(),
+                    checksum,
+                    e
+                ),
             )
         })
     }

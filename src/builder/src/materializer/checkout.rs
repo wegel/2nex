@@ -37,7 +37,9 @@ fn diff_paths(target: &Path, base: &Path) -> Option<PathBuf> {
     }
 
     // count remaining base components (need to go up)
-    let ups = base_components.filter(|c| matches!(c, Component::Normal(_))).count();
+    let ups = base_components
+        .filter(|c| matches!(c, Component::Normal(_)))
+        .count();
 
     let mut result = PathBuf::new();
     for _ in 0..ups {
@@ -70,7 +72,9 @@ pub fn checkout_closure(
 
     match config.mode {
         MaterializeMode::Flat => checkout_flat(config, closure, &mut result)?,
-        MaterializeMode::Nex => checkout_nex(config, closure, &mut result, manifest_index.as_ref())?,
+        MaterializeMode::Nex => {
+            checkout_nex(config, closure, &mut result, manifest_index.as_ref())?
+        }
     }
 
     Ok(result)
@@ -141,7 +145,10 @@ fn checkout_nex(
 
     for commit in closure.all_commits() {
         let pkg_id = get_package_id(&config.repo_path, commit)?;
-        packages.entry(pkg_id.clone()).or_default().push(commit.clone());
+        packages
+            .entry(pkg_id.clone())
+            .or_default()
+            .push(commit.clone());
         if closure.is_root(commit) {
             root_packages.insert(pkg_id);
         }
@@ -197,7 +204,14 @@ fn checkout_nex(
     }
 
     // create symlink forest in env (only for root packages)
-    create_symlink_forest_split(config, &physical_nex_pkg, &physical_nex_env, &packages, &root_packages, result)?;
+    create_symlink_forest_split(
+        config,
+        &physical_nex_pkg,
+        &physical_nex_env,
+        &packages,
+        &root_packages,
+        result,
+    )?;
 
     Ok(())
 }
@@ -283,10 +297,7 @@ fn create_symlink_forest_split(
 
         for subdir in &link_dirs {
             // check for usr/<dir> first, then top-level <dir>
-            let src_paths = [
-                pkg_dir.join("usr").join(subdir),
-                pkg_dir.join(subdir),
-            ];
+            let src_paths = [pkg_dir.join("usr").join(subdir), pkg_dir.join(subdir)];
 
             for src in &src_paths {
                 if !src.exists() {
@@ -353,8 +364,8 @@ fn create_symlinks_split(
             }
 
             // calculate relative path - this will work from the logical view
-            let relative_target = diff_paths(&path, logical_env_dir)
-                .unwrap_or_else(|| path.clone());
+            let relative_target =
+                diff_paths(&path, logical_env_dir).unwrap_or_else(|| path.clone());
 
             // write symlink to physical location
             std::os::unix::fs::symlink(&relative_target, &physical_target)?;
@@ -410,7 +421,9 @@ fn parse_package_path_from_ref(ref_str: &str) -> io::Result<String> {
     // find "pkg" and extract everything between "pkg" and "outputs"/"bundles"
     if let Some(pkg_idx) = parts.iter().position(|&p| p == "pkg") {
         // find "outputs" or "bundles"
-        let end_idx = parts.iter().position(|&p| p == "outputs" || p == "bundles")
+        let end_idx = parts
+            .iter()
+            .position(|&p| p == "outputs" || p == "bundles")
             .unwrap_or(parts.len());
 
         if end_idx > pkg_idx + 1 {
@@ -428,7 +441,10 @@ fn get_package_id(repo_path: &str, commit: &str) -> io::Result<PackageId> {
     let manifest_hash = get_manifest_hash(repo_path, commit)?;
     let path = get_package_path(repo_path, commit)?;
 
-    Ok(PackageId { path, manifest_hash })
+    Ok(PackageId {
+        path,
+        manifest_hash,
+    })
 }
 
 /// Checkout specific files from a commit to a target directory.

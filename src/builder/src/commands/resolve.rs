@@ -19,7 +19,6 @@ pub struct ResolveArgs {
     #[clap(long, short)]
     pub verbose: bool,
 
-
     /// Look up providers for a specific library (e.g., "libc.so.6")
     #[clap(long)]
     pub lookup: Option<String>,

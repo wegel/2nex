@@ -10,10 +10,7 @@ use tempfile::TempDir;
 
 /// helper to run git commands
 fn git(dir: &Path, args: &[&str]) -> io::Result<String> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()?;
+    let output = Command::new("git").args(args).current_dir(dir).output()?;
 
     if !output.status.success() {
         return Err(io::Error::new(
@@ -292,7 +289,8 @@ bundles: {}
     // verify we can fetch the blob content
     let fetched = git(temp_path, &["cat-file", "-p", &blob_sha])?;
     assert_eq!(
-        fetched, manifest_content.trim(),
+        fetched,
+        manifest_content.trim(),
         "fetched content should match original"
     );
 

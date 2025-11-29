@@ -15,11 +15,11 @@ use std::path::{Path, PathBuf};
 use goblin::Object;
 use tempfile::TempDir;
 
-use crate::manifest::types::FileEntry;
 use crate::manifest::parser::load_manifest_from_source;
+use crate::manifest::types::FileEntry;
 use crate::manifest::types::ManifestSource;
-use crate::ostree_native::OstreeRepo;
 use crate::ostree::commit_to_ostree;
+use crate::ostree_native::OstreeRepo;
 use crate::repo::resolve_repo_path;
 use crate::utils::hash_file_content;
 
@@ -53,7 +53,8 @@ pub fn run(args: &ComputeDepsArgs) -> io::Result<()> {
         ));
     }
 
-    let manifest_data = load_manifest_from_source(&ManifestSource::Path(manifest_path.to_path_buf()))?;
+    let manifest_data =
+        load_manifest_from_source(&ManifestSource::Path(manifest_path.to_path_buf()))?;
     let manifest = match manifest_data {
         crate::manifest::types::ManifestData::Package(m) => m,
         crate::manifest::types::ManifestData::System(_) => {
@@ -64,7 +65,13 @@ pub fn run(args: &ComputeDepsArgs) -> io::Result<()> {
         }
     };
 
-    compute_deps_for_manifest(&manifest, &repo_path, manifest_path, args.verbose, args.dry_run)?;
+    compute_deps_for_manifest(
+        &manifest,
+        &repo_path,
+        manifest_path,
+        args.verbose,
+        args.dry_run,
+    )?;
 
     // refresh OSTree metadata if not dry-run (manifest was updated)
     if !args.dry_run {
@@ -87,10 +94,17 @@ pub fn compute_deps_for_manifest(
     verbose: bool,
     dry_run: bool,
 ) -> io::Result<()> {
-    println!("Computing dependencies for {}/{}...", manifest.package.namespace, manifest.package.slug);
+    println!(
+        "Computing dependencies for {}/{}...",
+        manifest.package.namespace, manifest.package.slug
+    );
 
     // collect build dependencies from manifest (these are what we resolve against)
-    let dep_commits: Vec<String> = manifest.dependencies.iter().map(|d| d.commit.clone()).collect();
+    let dep_commits: Vec<String> = manifest
+        .dependencies
+        .iter()
+        .map(|d| d.commit.clone())
+        .collect();
     if verbose {
         println!("  Build dependencies: {} commits", dep_commits.len());
     }
@@ -105,23 +119,31 @@ pub fn compute_deps_for_manifest(
         let provider_key = extract_provider_key(&dep.commit);
         if let Some(name) = &dep.name {
             provider_key_to_dep_name.insert(provider_key.clone(), name.clone());
-            dep_name_to_providers.entry(name.clone()).or_default().insert(provider_key);
+            dep_name_to_providers
+                .entry(name.clone())
+                .or_default()
+                .insert(provider_key);
         } else {
             // dependency without a name - error out
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("Dependency {} has no name field. All dependencies must have unique names.", dep.commit),
+                format!(
+                    "Dependency {} has no name field. All dependencies must have unique names.",
+                    dep.commit
+                ),
             ));
         }
     }
 
     // validate: same name should only map to ONE provider_key (package)
     // multiple commits from the same package sharing a name is OK
-    let conflicts: Vec<_> = dep_name_to_providers.iter()
+    let conflicts: Vec<_> = dep_name_to_providers
+        .iter()
         .filter(|(_, providers)| providers.len() > 1)
         .collect();
     if !conflicts.is_empty() {
-        let mut err_msg = String::from("Dependency name conflicts (same name used for different packages):\n");
+        let mut err_msg =
+            String::from("Dependency name conflicts (same name used for different packages):\n");
         for (name, providers) in conflicts {
             err_msg.push_str(&format!("  '{}' maps to:\n", name));
             for provider in providers {
@@ -132,7 +154,10 @@ pub fn compute_deps_for_manifest(
     }
 
     if verbose {
-        println!("  Provider key mappings: {}", provider_key_to_dep_name.len());
+        println!(
+            "  Provider key mappings: {}",
+            provider_key_to_dep_name.len()
+        );
     }
 
     // find the outputs for this package in OSTree
@@ -150,16 +175,17 @@ pub fn compute_deps_for_manifest(
     if all_refs.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
-            format!("No outputs found for package. Build it first. Looked for: {}", output_prefix),
+            format!(
+                "No outputs found for package. Build it first. Looked for: {}",
+                output_prefix
+            ),
         ));
     }
 
     // build provider key for this package (used for internal library resolution)
     let self_provider_key = format!(
         "{}/{}/{}",
-        manifest.package.namespace,
-        manifest.package.slug,
-        manifest.package.version
+        manifest.package.namespace, manifest.package.slug, manifest.package.version
     );
 
     // build provider lookup from dependencies + self outputs (for internal libs)
@@ -195,7 +221,8 @@ pub fn compute_deps_for_manifest(
         repo.checkout(output_ref, temp.path(), true)?;
 
         // get files from manifest for this output (if exists)
-        let manifest_files: Vec<String> = manifest.outputs
+        let manifest_files: Vec<String> = manifest
+            .outputs
             .get(output_name)
             .map(|spec| spec.files.iter().map(|f| f.path.clone()).collect())
             .unwrap_or_default();
@@ -236,7 +263,8 @@ pub fn compute_deps_for_manifest(
             // resolve each needed library
             let mut needs: Vec<String> = Vec::new();
             for lib_name in &needed {
-                if let Some((provider_key, lib_path, _files_commit)) = provider_lookup.get(lib_name) {
+                if let Some((provider_key, lib_path, _files_commit)) = provider_lookup.get(lib_name)
+                {
                     needs.push(lib_path.clone());
 
                     // resolve provider_key to dependency name (or @self for internal libs)
@@ -246,12 +274,17 @@ pub fn compute_deps_for_manifest(
                         dep_name.clone()
                     } else {
                         // unresolved provider - shouldn't happen if deps are correct
-                        println!("    Warning: no dependency found for provider {}", provider_key);
+                        println!(
+                            "    Warning: no dependency found for provider {}",
+                            provider_key
+                        );
                         provider_key.clone()
                     };
 
                     // add to resolution map (file_path -> dep_name or @self)
-                    resolution.entry(lib_path.clone()).or_insert(resolution_value.clone());
+                    resolution
+                        .entry(lib_path.clone())
+                        .or_insert(resolution_value.clone());
 
                     if verbose {
                         println!("      {} -> {} ({})", lib_name, resolution_value, lib_path);
@@ -289,11 +322,14 @@ pub fn compute_deps_for_manifest(
 
     // create files commit for this package (union of all outputs)
     println!();
-    println!("Creating files commit for {}/{}...", manifest.package.namespace, manifest.package.slug);
+    println!(
+        "Creating files commit for {}/{}...",
+        manifest.package.namespace, manifest.package.slug
+    );
 
     // determine address hash: use checksum if stable, else use manifest git blob SHA
-    let has_stable_checksum = manifest.package.checksum.is_some()
-        && manifest.package.stable_checksum.unwrap_or(true);
+    let has_stable_checksum =
+        manifest.package.checksum.is_some() && manifest.package.stable_checksum.unwrap_or(true);
 
     let address_hash = if has_stable_checksum {
         manifest.package.checksum.clone().unwrap()
@@ -339,7 +375,10 @@ fn build_provider_lookup(
     let mut packages: HashMap<String, Vec<String>> = HashMap::new();
     for commit in dep_commits {
         let provider_key = extract_provider_key(commit);
-        packages.entry(provider_key).or_default().push(commit.clone());
+        packages
+            .entry(provider_key)
+            .or_default()
+            .push(commit.clone());
     }
 
     // find or create files commit for each package
@@ -353,7 +392,10 @@ fn build_provider_lookup(
     // process in REVERSE order - last dep wins (matches --union checkout behavior)
     for commit in dep_commits.iter().rev() {
         let provider_key = extract_provider_key(commit);
-        let files_commit = files_commits.get(&provider_key).cloned().unwrap_or_else(|| commit.clone());
+        let files_commit = files_commits
+            .get(&provider_key)
+            .cloned()
+            .unwrap_or_else(|| commit.clone());
 
         // list files in this commit
         let files = match repo.ls(commit) {
@@ -386,7 +428,11 @@ fn build_provider_lookup(
             if let Some(basename) = Path::new(&file_path).file_name().and_then(|n| n.to_str()) {
                 // reverse order: don't overwrite existing entries (earlier in reverse = later in original)
                 lookup.entry(basename.to_string()).or_insert_with(|| {
-                    (provider_key.clone(), file_path.clone(), files_commit.clone())
+                    (
+                        provider_key.clone(),
+                        file_path.clone(),
+                        files_commit.clone(),
+                    )
                 });
             }
         }
@@ -394,14 +440,18 @@ fn build_provider_lookup(
 
     // index current package's own outputs (highest priority - overwrites deps)
     // this allows internal libraries like libsystemd-shared-257.so to be resolved
-    let self_files_commit = find_or_create_files_commit(repo_path, self_provider_key, self_output_refs, verbose)?;
+    let self_files_commit =
+        find_or_create_files_commit(repo_path, self_provider_key, self_output_refs, verbose)?;
 
     for output_ref in self_output_refs {
         let files = match repo.ls(output_ref) {
             Ok(f) => f,
             Err(e) => {
                 if verbose {
-                    println!("    Warning: Could not list self output {}: {}", output_ref, e);
+                    println!(
+                        "    Warning: Could not list self output {}: {}",
+                        output_ref, e
+                    );
                 }
                 continue;
             }
@@ -426,7 +476,11 @@ fn build_provider_lookup(
                 // self libs have highest priority - overwrite any dep entries
                 lookup.insert(
                     basename.to_string(),
-                    (self_provider_key.to_string(), file_path, self_files_commit.clone()),
+                    (
+                        self_provider_key.to_string(),
+                        file_path,
+                        self_files_commit.clone(),
+                    ),
                 );
             }
         }
@@ -460,7 +514,9 @@ fn find_or_create_files_commit(
     let manifest_path_str = format!("pkg/{}/{}.yaml", namespace_path, slug);
     let manifest_path = PathBuf::from(&manifest_path_str);
 
-    if let Ok(manifest_data) = load_manifest_from_source(&ManifestSource::Path(manifest_path.clone())) {
+    if let Ok(manifest_data) =
+        load_manifest_from_source(&ManifestSource::Path(manifest_path.clone()))
+    {
         if let crate::manifest::types::ManifestData::Package(dep_manifest) = manifest_data {
             // determine address hash: use checksum if stable, else use manifest git blob SHA
             let has_stable_checksum = dep_manifest.package.checksum.is_some()
@@ -486,14 +542,28 @@ fn find_or_create_files_commit(
             }
 
             // doesn't exist yet - create it
-            let output_prefix = format!("x86_64/pkg/{}/{}/{}/outputs/", namespace_path, slug, version);
+            let output_prefix = format!(
+                "x86_64/pkg/{}/{}/{}/outputs/",
+                namespace_path, slug, version
+            );
             let output_refs = repo.refs(Some(&output_prefix))?;
 
             if !output_refs.is_empty() {
                 if verbose {
-                    println!("    Creating files commit for {} ({} outputs)", provider_key, output_refs.len());
+                    println!(
+                        "    Creating files commit for {} ({} outputs)",
+                        provider_key,
+                        output_refs.len()
+                    );
                 }
-                return create_files_commit(repo_path, &output_refs, &address_hash, &namespace_path, slug, version);
+                return create_files_commit(
+                    repo_path,
+                    &output_refs,
+                    &address_hash,
+                    &namespace_path,
+                    slug,
+                    version,
+                );
             }
         }
     }
@@ -513,19 +583,22 @@ fn extract_provider_key(commit: &str) -> String {
     let pkg_idx = parts.iter().position(|&p| p == "pkg");
 
     // find "outputs" or "bundles" index
-    let end_idx = parts.iter().position(|&p| p == "outputs" || p == "bundles" || p == "files");
+    let end_idx = parts
+        .iter()
+        .position(|&p| p == "outputs" || p == "bundles" || p == "files");
 
     match (pkg_idx, end_idx) {
-        (Some(start), Some(end)) if end > start + 1 => {
-            parts[start + 1..end].join("/")
-        }
+        (Some(start), Some(end)) if end > start + 1 => parts[start + 1..end].join("/"),
         _ => commit.to_string(),
     }
 }
 
 /// Check if a path looks like a library file.
 fn is_library_path(path: &str) -> bool {
-    path.contains("/lib/") || path.contains("/lib64/") || path.ends_with(".so") || path.contains(".so.")
+    path.contains("/lib/")
+        || path.contains("/lib64/")
+        || path.ends_with(".so")
+        || path.contains(".so.")
 }
 
 /// Create a `{hash}/files` commit containing the union of all outputs.
@@ -560,8 +633,14 @@ fn create_files_commit(
     // keep package info in metadata for debugging/back-links
     let metadata = vec![
         ("nex.address_hash".to_string(), address_hash.to_string()),
-        ("nex.package".to_string(), format!("{}/{}/{}", namespace_path, slug, version)),
-        ("nex.output_count".to_string(), output_refs.len().to_string()),
+        (
+            "nex.package".to_string(),
+            format!("{}/{}/{}", namespace_path, slug, version),
+        ),
+        (
+            "nex.output_count".to_string(),
+            output_refs.len().to_string(),
+        ),
     ];
 
     commit_to_ostree(repo_path, &files_ref, &union_dir, &metadata)?;
@@ -657,7 +736,9 @@ fn update_manifest_file(
         if let serde_yaml::Value::Mapping(outputs_map) = outputs {
             for (_output_key, output_value) in outputs_map.iter_mut() {
                 if let serde_yaml::Value::Mapping(output_map) = output_value {
-                    if let Some(serde_yaml::Value::Sequence(files)) = output_map.get_mut(&serde_yaml::Value::String("files".to_string())) {
+                    if let Some(serde_yaml::Value::Sequence(files)) =
+                        output_map.get_mut(&serde_yaml::Value::String("files".to_string()))
+                    {
                         for file_entry in files.iter_mut() {
                             if let serde_yaml::Value::Mapping(file_map) = file_entry {
                                 // get the path of this file
@@ -670,8 +751,11 @@ fn update_manifest_file(
                                     // look up the computed needs for this file
                                     if let Some(needs) = needs_lookup.get(&path) {
                                         // remove old needs/deps
-                                        file_map.remove(&serde_yaml::Value::String("needs".to_string()));
-                                        file_map.remove(&serde_yaml::Value::String("deps".to_string()));
+                                        file_map.remove(&serde_yaml::Value::String(
+                                            "needs".to_string(),
+                                        ));
+                                        file_map
+                                            .remove(&serde_yaml::Value::String("deps".to_string()));
 
                                         // add new needs if non-empty
                                         if !needs.is_empty() {
@@ -712,7 +796,9 @@ fn update_manifest_file(
     }
 
     // remove providers if present (no longer used)
-    doc.as_mapping_mut().unwrap().remove(&serde_yaml::Value::String("providers".to_string()));
+    doc.as_mapping_mut()
+        .unwrap()
+        .remove(&serde_yaml::Value::String("providers".to_string()));
 
     // write back with blank line before resolution section
     let yaml_content = serde_yaml::to_string(&doc)

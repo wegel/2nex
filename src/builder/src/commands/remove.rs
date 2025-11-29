@@ -48,12 +48,15 @@ pub fn run(args: &RemoveArgs) -> io::Result<()> {
     let (namespace, slug) = parse_package_query(&args.package, &state)?;
     let pkg_key = format!("{}/{}", namespace, slug);
 
-    let pkg_state = state.get_package(&namespace, &slug).ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("Package {} not installed", pkg_key),
-        )
-    })?.clone();
+    let pkg_state = state
+        .get_package(&namespace, &slug)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("Package {} not installed", pkg_key),
+            )
+        })?
+        .clone();
 
     if args.all {
         // remove all versions
@@ -80,7 +83,11 @@ pub fn run(args: &RemoveArgs) -> io::Result<()> {
         let key = format!("{}/{}", namespace, slug);
         state.packages.remove(&key);
 
-        println!("Removed {} ({} version(s))", pkg_key, pkg_state.versions.len());
+        println!(
+            "Removed {} ({} version(s))",
+            pkg_key,
+            pkg_state.versions.len()
+        );
     } else {
         // remove specific version
         let target_version = if let Some(v) = &args.version {
@@ -90,7 +97,10 @@ pub fn run(args: &RemoveArgs) -> io::Result<()> {
             pkg_state.current.clone().ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::NotFound,
-                    format!("No current version for {}. Use --version to specify.", pkg_key),
+                    format!(
+                        "No current version for {}. Use --version to specify.",
+                        pkg_key
+                    ),
                 )
             })?
         };
@@ -101,12 +111,16 @@ pub fn run(args: &RemoveArgs) -> io::Result<()> {
         println!("Removing {}/{} {}...", namespace, slug, target_version);
 
         // get version info before removing
-        let version_info = pkg_state.versions.get(&target_version).ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("Version {} not found", target_version),
-            )
-        })?.clone();
+        let version_info = pkg_state
+            .versions
+            .get(&target_version)
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!("Version {} not found", target_version),
+                )
+            })?
+            .clone();
 
         // remove from state first (this handles switching current if needed)
         let removed_info = state.record_remove(&namespace, &slug, &version, &checksum);
@@ -143,7 +157,10 @@ pub fn run(args: &RemoveArgs) -> io::Result<()> {
         remove_package_dir(&pkg_dir)?;
 
         // clean up empty parent directories
-        cleanup_empty_dirs(&format!("{}/{}/{}/{}", NEX_PKG_DIR, namespace, slug, version))?;
+        cleanup_empty_dirs(&format!(
+            "{}/{}/{}/{}",
+            NEX_PKG_DIR, namespace, slug, version
+        ))?;
         cleanup_empty_dirs(&format!("{}/{}/{}", NEX_PKG_DIR, namespace, slug))?;
 
         if removed_info.is_some() {
@@ -187,7 +204,11 @@ fn parse_package_query(query: &str, state: &InstalledState) -> io::Result<(Strin
             format!(
                 "Ambiguous package '{}'. Matches: {}",
                 query,
-                matches.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+                matches
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ),
         )),
     }
@@ -223,7 +244,11 @@ fn find_version(query: &str, pkg_state: &super::state::PackageState) -> io::Resu
             format!(
                 "Ambiguous version '{}'. Matches: {}",
                 query,
-                matches.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+                matches
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ),
         )),
     }

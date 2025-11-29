@@ -86,7 +86,13 @@ impl InstalledState {
     }
 
     /// Check if a specific version is installed
-    pub fn is_version_installed(&self, namespace: &str, slug: &str, version: &str, checksum: &str) -> bool {
+    pub fn is_version_installed(
+        &self,
+        namespace: &str,
+        slug: &str,
+        version: &str,
+        checksum: &str,
+    ) -> bool {
         let key = format!("{}/{}", namespace, slug);
         let version_key = format!("{}/{}", version, checksum);
 
@@ -99,9 +105,7 @@ impl InstalledState {
     /// Get the current version for a package
     pub fn get_current_version(&self, namespace: &str, slug: &str) -> Option<&str> {
         let key = format!("{}/{}", namespace, slug);
-        self.packages
-            .get(&key)
-            .and_then(|p| p.current.as_deref())
+        self.packages.get(&key).and_then(|p| p.current.as_deref())
     }
 
     /// Record a newly installed version
@@ -133,7 +137,13 @@ impl InstalledState {
     }
 
     /// Remove a version from tracking
-    pub fn record_remove(&mut self, namespace: &str, slug: &str, version: &str, checksum: &str) -> Option<VersionInfo> {
+    pub fn record_remove(
+        &mut self,
+        namespace: &str,
+        slug: &str,
+        version: &str,
+        checksum: &str,
+    ) -> Option<VersionInfo> {
         let key = format!("{}/{}", namespace, slug);
         let version_key = format!("{}/{}", version, checksum);
 
@@ -154,12 +164,21 @@ impl InstalledState {
     }
 
     /// Switch the current version for a package
-    pub fn switch_current(&mut self, namespace: &str, slug: &str, version: &str, checksum: &str) -> io::Result<()> {
+    pub fn switch_current(
+        &mut self,
+        namespace: &str,
+        slug: &str,
+        version: &str,
+        checksum: &str,
+    ) -> io::Result<()> {
         let key = format!("{}/{}", namespace, slug);
         let version_key = format!("{}/{}", version, checksum);
 
         let pkg = self.packages.get_mut(&key).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::NotFound, format!("Package {} not installed", key))
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("Package {} not installed", key),
+            )
         })?;
 
         if !pkg.versions.contains_key(&version_key) {
@@ -175,10 +194,7 @@ impl InstalledState {
 
     /// List all installed packages
     pub fn list_packages(&self) -> Vec<(&str, &PackageState)> {
-        self.packages
-            .iter()
-            .map(|(k, v)| (k.as_str(), v))
-            .collect()
+        self.packages.iter().map(|(k, v)| (k.as_str(), v)).collect()
     }
 
     /// Get count of installed versions for a package
@@ -209,14 +225,20 @@ mod tests {
         let mut state = InstalledState::default();
 
         state.record_install(
-            "cli/shells", "bash", "5.2.21", "a19536f4",
+            "cli/shells",
+            "bash",
+            "5.2.21",
+            "a19536f4",
             vec!["bash".to_string(), "sh".to_string()],
             "x86_64/pkg/cli/shells/bash/5.2.21/deploy/a19536f4",
             true,
         );
 
         assert!(state.is_version_installed("cli/shells", "bash", "5.2.21", "a19536f4"));
-        assert_eq!(state.get_current_version("cli/shells", "bash"), Some("5.2.21/a19536f4"));
+        assert_eq!(
+            state.get_current_version("cli/shells", "bash"),
+            Some("5.2.21/a19536f4")
+        );
         assert_eq!(state.version_count("cli/shells", "bash"), 1);
     }
 
@@ -226,7 +248,10 @@ mod tests {
 
         // install first version
         state.record_install(
-            "cli/shells", "bash", "5.2.21", "a19536f4",
+            "cli/shells",
+            "bash",
+            "5.2.21",
+            "a19536f4",
             vec!["bash".to_string()],
             "ref1",
             true,
@@ -234,7 +259,10 @@ mod tests {
 
         // install second version (don't set as current)
         state.record_install(
-            "cli/shells", "bash", "5.3.0", "b2c3d4e5",
+            "cli/shells",
+            "bash",
+            "5.3.0",
+            "b2c3d4e5",
             vec!["bash".to_string()],
             "ref2",
             false,
@@ -242,6 +270,9 @@ mod tests {
 
         assert_eq!(state.version_count("cli/shells", "bash"), 2);
         // current should still be the first version
-        assert_eq!(state.get_current_version("cli/shells", "bash"), Some("5.2.21/a19536f4"));
+        assert_eq!(
+            state.get_current_version("cli/shells", "bash"),
+            Some("5.2.21/a19536f4")
+        );
     }
 }

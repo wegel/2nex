@@ -27,10 +27,7 @@ pub fn run(args: &SearchArgs) -> io::Result<()> {
         .output()?;
 
     if !output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Failed to list refs",
-        ));
+        return Err(io::Error::new(io::ErrorKind::Other, "Failed to list refs"));
     }
 
     let refs = String::from_utf8_lossy(&output.stdout);
@@ -101,7 +98,11 @@ pub fn run(args: &SearchArgs) -> io::Result<()> {
     if results.is_empty() {
         println!("No packages found matching '{}'", args.query);
     } else {
-        println!("Found {} package(s) matching '{}':", results.len(), args.query);
+        println!(
+            "Found {} package(s) matching '{}':",
+            results.len(),
+            args.query
+        );
         println!();
         for r in &results {
             println!("  {}/{} {}", r.namespace, r.slug, r.version);

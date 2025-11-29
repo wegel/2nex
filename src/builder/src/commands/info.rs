@@ -136,7 +136,10 @@ fn show_dependency_tree(_repo: &str, refs: &[String]) -> io::Result<()> {
     };
 
     let pkg_key = extract_package_key(dep_ref);
-    println!("Dependencies for {} (from manifest needs/resolution):", pkg_key);
+    println!(
+        "Dependencies for {} (from manifest needs/resolution):",
+        pkg_key
+    );
 
     // load manifest index and show deps from manifest
     let manifest_index = match ManifestIndex::load("pkg") {
@@ -194,7 +197,11 @@ fn print_manifest_deps(
 
     for dep_name in dep_names {
         // find the dependency commit to get namespace/slug
-        let dep = match manifest.dependencies.iter().find(|d| d.name.as_deref() == Some(dep_name)) {
+        let dep = match manifest
+            .dependencies
+            .iter()
+            .find(|d| d.name.as_deref() == Some(dep_name))
+        {
             Some(d) => d,
             None => {
                 println!("{}{} (not in dependencies list)", indent, dep_name);
@@ -214,7 +221,10 @@ fn print_manifest_deps(
                 let slug = parts[slug_idx];
                 let version = parts[end_idx - 1];
 
-                println!("{}{} ({}/{}/{})", indent, dep_name, namespace, slug, version);
+                println!(
+                    "{}{} ({}/{}/{})",
+                    indent, dep_name, namespace, slug, version
+                );
 
                 // avoid cycles
                 let key = format!("{}/{}", namespace, slug);
@@ -241,10 +251,7 @@ fn find_matching_refs(repo: &str, query: &str, version: Option<&str>) -> io::Res
         .output()?;
 
     if !output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Failed to list refs",
-        ));
+        return Err(io::Error::new(io::ErrorKind::Other, "Failed to list refs"));
     }
 
     let refs = String::from_utf8_lossy(&output.stdout);
@@ -328,13 +335,18 @@ fn extract_package_key(ref_path: &str) -> String {
 
 fn show_ref_metadata(repo: &str, ref_path: &str) -> io::Result<()> {
     // try to read common metadata keys (old requires/deploy/bundle metadata removed)
-    let metadata_keys = [
-        "nex.manifest.hash",
-    ];
+    let metadata_keys = ["nex.manifest.hash"];
 
     for key in &metadata_keys {
         let output = Command::new("ostree")
-            .args(["show", "--repo", repo, "--print-metadata-key", key, ref_path])
+            .args([
+                "show",
+                "--repo",
+                repo,
+                "--print-metadata-key",
+                key,
+                ref_path,
+            ])
             .output()?;
 
         if output.status.success() {

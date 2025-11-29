@@ -11,9 +11,7 @@ pub struct StatusArgs {
 
 pub fn run(args: &StatusArgs) -> io::Result<()> {
     // try ostree admin status first
-    let output = Command::new("ostree")
-        .args(["admin", "status"])
-        .output();
+    let output = Command::new("ostree").args(["admin", "status"]).output();
 
     match output {
         Ok(out) if out.status.success() => {
@@ -36,7 +34,10 @@ pub fn run(args: &StatusArgs) -> io::Result<()> {
                     for (key, pkg) in &state.packages {
                         let version_count = pkg.versions.len();
                         let current = pkg.current.as_deref().unwrap_or("(none)");
-                        println!("  {} - current: {}, versions: {}", key, current, version_count);
+                        println!(
+                            "  {} - current: {}, versions: {}",
+                            key, current, version_count
+                        );
                     }
                 }
             }
@@ -69,7 +70,11 @@ fn print_ostree_status(status: &str, verbose: bool) {
             let parts: Vec<&str> = line.split_whitespace().collect();
 
             let marker = if is_current {
-                if is_staged { "→" } else { "*" }
+                if is_staged {
+                    "→"
+                } else {
+                    "*"
+                }
             } else {
                 " "
             };
@@ -92,7 +97,10 @@ fn print_ostree_status(status: &str, verbose: bool) {
                     "unknown"
                 };
 
-                println!("{} {} {}{}", marker, deployment_num, deployment_id, status_str);
+                println!(
+                    "{} {} {}{}",
+                    marker, deployment_num, deployment_id, status_str
+                );
 
                 if verbose {
                     println!("    OS: {}", os_name);

@@ -15,9 +15,7 @@ pub struct RollbackArgs {
 
 pub fn run(args: &RollbackArgs) -> io::Result<()> {
     // check if we're on an OSTree system
-    let output = Command::new("ostree")
-        .args(["admin", "status"])
-        .output();
+    let output = Command::new("ostree").args(["admin", "status"]).output();
 
     let status_output = match output {
         Ok(out) if out.status.success() => String::from_utf8_lossy(&out.stdout).to_string(),
@@ -62,7 +60,10 @@ pub fn run(args: &RollbackArgs) -> io::Result<()> {
     println!();
 
     if !args.yes {
-        println!("This will set deployment {} as the default boot target.", target_index);
+        println!(
+            "This will set deployment {} as the default boot target.",
+            target_index
+        );
         println!("The system will boot into this deployment on next reboot.");
         println!();
         print!("Continue? [y/N] ");
@@ -133,9 +134,7 @@ fn parse_deployments(status: &str) -> Vec<Deployment> {
             continue;
         };
 
-        deployments.push(Deployment {
-            id: id.to_string(),
-        });
+        deployments.push(Deployment { id: id.to_string() });
     }
 
     deployments

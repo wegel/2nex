@@ -34,8 +34,7 @@ pub use checkout::{checkout_closure, checkout_files};
 pub use flatten::flatten_capsule_precomputed;
 pub use resolver::resolve_runtime_deps_precomputed;
 pub use types::{
-    MaterializeConfig, MaterializeMode, MaterializeRequest, MaterializeResult,
-    RuntimeClosure,
+    MaterializeConfig, MaterializeMode, MaterializeRequest, MaterializeResult, RuntimeClosure,
 };
 
 use std::io;
@@ -103,7 +102,10 @@ pub fn materialize(
 
     // report unresolved dependencies
     if closure.has_unresolved() {
-        println!("  Warning: {} unresolved dependencies:", closure.unresolved.len());
+        println!(
+            "  Warning: {} unresolved dependencies:",
+            closure.unresolved.len()
+        );
         for (req, reasons) in &closure.unresolved {
             println!("    - {}", req);
             for reason in reasons.iter().take(3) {

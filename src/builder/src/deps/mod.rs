@@ -80,7 +80,10 @@ fn visit_commit(
 ///
 /// parses the commit ref to find the manifest, then collects all `needs` entries
 /// from the relevant outputs and resolves them through the `resolution` map.
-fn fetch_deps_from_manifest(commit: &str, manifest_index: &ManifestIndex) -> io::Result<Vec<String>> {
+fn fetch_deps_from_manifest(
+    commit: &str,
+    manifest_index: &ManifestIndex,
+) -> io::Result<Vec<String>> {
     // parse commit: x86_64/pkg/namespace/slug/version/outputs/name or .../bundles/name
     let parts: Vec<&str> = commit.split('/').collect();
 
@@ -169,7 +172,11 @@ fn fetch_deps_from_manifest(commit: &str, manifest_index: &ManifestIndex) -> io:
                 }
 
                 // find the dependency commit from the manifest's dependencies
-                let dep_commit = match manifest.dependencies.iter().find(|d| d.name.as_deref() == Some(dep_name)) {
+                let dep_commit = match manifest
+                    .dependencies
+                    .iter()
+                    .find(|d| d.name.as_deref() == Some(dep_name))
+                {
                     Some(d) => d.commit.clone(),
                     None => {
                         return Err(io::Error::new(

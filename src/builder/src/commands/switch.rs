@@ -56,7 +56,10 @@ pub fn run(args: &SwitchArgs) -> io::Result<()> {
 
     // check if already current
     if pkg_state.current.as_deref() == Some(&target_version) {
-        println!("{} {} is already the current version", pkg_key, target_version);
+        println!(
+            "{} {} is already the current version",
+            pkg_key, target_version
+        );
         return Ok(());
     }
 
@@ -81,7 +84,10 @@ pub fn run(args: &SwitchArgs) -> io::Result<()> {
         ));
     }
 
-    println!("Switching {}/{} to version {}", namespace, slug, target_version);
+    println!(
+        "Switching {}/{} to version {}",
+        namespace, slug, target_version
+    );
 
     // update symlinks for each binary
     for binary in &version_info.provides {
@@ -147,7 +153,11 @@ fn parse_package_query(query: &str, state: &InstalledState) -> io::Result<(Strin
             format!(
                 "Ambiguous package '{}'. Matches: {}",
                 query,
-                matches.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+                matches
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ),
         )),
     }
@@ -185,7 +195,11 @@ fn find_version(query: &str, pkg_state: &super::state::PackageState) -> io::Resu
             format!(
                 "Ambiguous version '{}'. Matches: {}",
                 query,
-                matches.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+                matches
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ),
         )),
     }

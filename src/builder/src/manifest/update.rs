@@ -240,10 +240,7 @@ pub fn write_auto_outputs_to_manifest(
             .iter()
             .map(|f| {
                 let mut file_map = Mapping::new();
-                file_map.insert(
-                    Value::String("path".to_string()),
-                    Value::String(f.clone()),
-                );
+                file_map.insert(Value::String("path".to_string()), Value::String(f.clone()));
                 Value::Mapping(file_map)
             })
             .collect();

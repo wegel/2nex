@@ -42,7 +42,10 @@ pub fn run(args: &CommitArgs) -> io::Result<()> {
         return Ok(());
     }
 
-    let message = args.message.clone().unwrap_or_else(|| "Package changes".to_string());
+    let message = args
+        .message
+        .clone()
+        .unwrap_or_else(|| "Package changes".to_string());
     println!("Committing changes: {}", message);
 
     // check if we're on an OSTree system
@@ -125,7 +128,8 @@ fn create_ostree_deployment(message: &str) -> io::Result<()> {
     let status = Command::new("ostree")
         .args([
             "checkout",
-            "--repo", OSTREE_REPO,
+            "--repo",
+            OSTREE_REPO,
             "--user-mode",
             &current_ref,
             &staging_dir,
@@ -163,9 +167,12 @@ fn create_ostree_deployment(message: &str) -> io::Result<()> {
     let status = Command::new("ostree")
         .args([
             "commit",
-            "--repo", OSTREE_REPO,
-            "--branch", &new_ref,
-            "--subject", message,
+            "--repo",
+            OSTREE_REPO,
+            "--branch",
+            &new_ref,
+            "--subject",
+            message,
             &staging_dir,
         ])
         .status()?;
@@ -180,11 +187,7 @@ fn create_ostree_deployment(message: &str) -> io::Result<()> {
     // deploy the new ref
     println!("  Deploying {}...", new_ref);
     let status = Command::new("ostree")
-        .args([
-            "admin", "deploy",
-            "--os=2nex",
-            &new_ref,
-        ])
+        .args(["admin", "deploy", "--os=2nex", &new_ref])
         .status()?;
 
     if !status.success() {
@@ -202,9 +205,7 @@ fn create_ostree_deployment(message: &str) -> io::Result<()> {
 
 fn get_current_deployment_ref() -> io::Result<String> {
     // try to get from ostree admin status
-    let output = Command::new("ostree")
-        .args(["admin", "status"])
-        .output()?;
+    let output = Command::new("ostree").args(["admin", "status"]).output()?;
 
     if output.status.success() {
         let status = String::from_utf8_lossy(&output.stdout);

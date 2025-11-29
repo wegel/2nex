@@ -127,7 +127,11 @@ fn checkout_file(objects: &ObjectStore, checksum: &str, dest: &Path) -> io::Resu
     } else {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("unsupported file type {:o} for {}", file_type, src_path.display()),
+            format!(
+                "unsupported file type {:o} for {}",
+                file_type,
+                src_path.display()
+            ),
         ));
     }
 
@@ -160,14 +164,22 @@ fn read_ostreemeta_mode(path: &Path) -> io::Result<u32> {
         let err = io::Error::last_os_error();
         return Err(io::Error::new(
             err.kind(),
-            format!("failed to read user.ostreemeta from {}: {}", path.display(), err),
+            format!(
+                "failed to read user.ostreemeta from {}: {}",
+                path.display(),
+                err
+            ),
         ));
     }
 
     if result < 12 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("user.ostreemeta too short ({} bytes) on {}", result, path.display()),
+            format!(
+                "user.ostreemeta too short ({} bytes) on {}",
+                result,
+                path.display()
+            ),
         ));
     }
 
@@ -175,4 +187,3 @@ fn read_ostreemeta_mode(path: &Path) -> io::Result<u32> {
     let mode = u32::from_be_bytes([buf[8], buf[9], buf[10], buf[11]]);
     Ok(mode)
 }
-

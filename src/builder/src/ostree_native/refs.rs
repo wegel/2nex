@@ -46,7 +46,10 @@ fn walk_refs_dir(
 pub fn resolve_ref(repo_path: &Path, ref_name: &str) -> io::Result<String> {
     let ref_path = repo_path.join("refs/heads").join(ref_name);
     let content = fs::read_to_string(&ref_path).map_err(|e| {
-        io::Error::new(e.kind(), format!("failed to resolve ref '{}': {}", ref_name, e))
+        io::Error::new(
+            e.kind(),
+            format!("failed to resolve ref '{}': {}", ref_name, e),
+        )
     })?;
     Ok(content.trim().to_string())
 }

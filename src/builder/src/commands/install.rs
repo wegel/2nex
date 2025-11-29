@@ -6,9 +6,7 @@ use std::path::Path;
 
 use super::stage::{is_staged, mount_nex_overlays, staging_upper_dir};
 use super::state::InstalledState;
-use crate::materializer::{
-    materialize, MaterializeConfig, MaterializeMode, MaterializeRequest,
-};
+use crate::materializer::{materialize, MaterializeConfig, MaterializeMode, MaterializeRequest};
 use crate::ostree_native::OstreeRepo;
 use crate::repo::{detect_manifest_dir, resolve_repo_path};
 
@@ -77,8 +75,16 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     let pkg_info = parse_package_ref(&repo_path, &package_ref)?;
 
     // check if this exact version is already installed
-    if state.is_version_installed(&pkg_info.namespace, &pkg_info.slug, &pkg_info.version, &pkg_info.checksum) {
-        println!("  Version {}/{} already installed", pkg_info.version, pkg_info.checksum);
+    if state.is_version_installed(
+        &pkg_info.namespace,
+        &pkg_info.slug,
+        &pkg_info.version,
+        &pkg_info.checksum,
+    ) {
+        println!(
+            "  Version {}/{} already installed",
+            pkg_info.version, pkg_info.checksum
+        );
 
         // check if it's the current version
         let current = state.get_current_version(&pkg_info.namespace, &pkg_info.slug);
@@ -168,13 +174,21 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
             symlink(&relative_target, &dst)?;
             println!("  Linked {} -> {}", binary, relative_target);
         }
-        println!("Installed {}/{} {} (set as current)", pkg_info.namespace, pkg_info.slug, pkg_info.version);
+        println!(
+            "Installed {}/{} {} (set as current)",
+            pkg_info.namespace, pkg_info.slug, pkg_info.version
+        );
     } else if has_existing_version {
         println!("  Installed alongside existing version(s)");
-        println!("  Symlinks preserved. Use 'nex switch {}/{} {}' to activate this version.",
-                 pkg_info.namespace, pkg_info.slug, pkg_info.version);
+        println!(
+            "  Symlinks preserved. Use 'nex switch {}/{} {}' to activate this version.",
+            pkg_info.namespace, pkg_info.slug, pkg_info.version
+        );
     } else {
-        println!("Installed {}/{} {}", pkg_info.namespace, pkg_info.slug, pkg_info.version);
+        println!(
+            "Installed {}/{} {}",
+            pkg_info.namespace, pkg_info.slug, pkg_info.version
+        );
     }
 
     // record the install in state

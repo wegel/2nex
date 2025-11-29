@@ -1,7 +1,7 @@
 .PHONY: all builder init build clean
 
 # repository location (can be overridden)
-REPO ?= bootstrap_store
+REPO ?= .nex/repo
 
 # default target
 all: builder init build
@@ -14,10 +14,12 @@ builder:
 # initialize the ostree repository
 init:
 	@echo "Initializing OSTree repository at $(REPO)..."
+	@mkdir -p $(dir $(REPO))
 	ostree --repo=$(REPO) init --mode=bare-user
 
 # legacy target for compatibility
-bootstrap_store: init
+bootstrap_store:
+	$(MAKE) init REPO=bootstrap_store
 
 # build all bootstrap phases
 build:
@@ -29,7 +31,7 @@ build:
 				echo "Building: $$M"; \
 				B=""; \
 				[ $$PHASE -lt 2 ] && B="--bootstrap"; \
-				if ! src/builder/target/debug/nex $$B $(REPO) $$M > /tmp/build_log 2>&1; then \
+				if ! src/builder/target/debug/nex build --repo $(REPO) $$B $$M > /tmp/build_log 2>&1; then \
 					cat /tmp/build_log; \
 					echo "Failed $$M"; \
 					exit 1; \

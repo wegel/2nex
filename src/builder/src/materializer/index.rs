@@ -41,6 +41,9 @@ mod tests {
             phase_priority("x86_64/pkg/base/glibc/2.40/bootstrap/phase3/outputs/lib"),
             3
         );
-        assert_eq!(phase_priority("x86_64/pkg/kernel/linux/6.12/outputs/bin"), 100);
+        assert_eq!(
+            phase_priority("x86_64/pkg/kernel/linux/6.12/outputs/bin"),
+            100
+        );
     }
 }

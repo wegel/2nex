@@ -33,7 +33,11 @@ use manifest::*;
 use ostree::*;
 use outputs::*;
 #[derive(Parser)]
-#[clap(name = "nex", version = "1.0", about = "2nex package builder and manager")]
+#[clap(
+    name = "nex",
+    version = "1.0",
+    about = "2nex package builder and manager"
+)]
 struct Cli {
     #[clap(subcommand)]
     command: Command,
@@ -348,10 +352,7 @@ fn build_package_manifest_with_dir(
     if opts.generate_outputs {
         let out_dir = Path::new(base_dir).join("2nex/out");
         let categorized = categorize_files(&out_dir);
-        crate::manifest::update::write_auto_outputs_to_manifest(
-            &opts.manifest_file,
-            &categorized,
-        )?;
+        crate::manifest::update::write_auto_outputs_to_manifest(&opts.manifest_file, &categorized)?;
 
         // reload the manifest to pick up the new outputs
         let reloaded = load_manifest(&opts.manifest_file)?;
@@ -395,7 +396,11 @@ fn build_package_manifest_with_dir(
                     )?;
                     manifest.package.checksum = Some(checksum.clone());
                     // refresh OSTree metadata with new manifest hash
-                    refresh_package_metadata(&opts.repo_path, manifest, Path::new(&opts.manifest_file))?;
+                    refresh_package_metadata(
+                        &opts.repo_path,
+                        manifest,
+                        Path::new(&opts.manifest_file),
+                    )?;
                 } else {
                     eprintln!(
                         "Checksum mismatch. Expected: {}, Calculated: {}",
@@ -420,7 +425,11 @@ fn build_package_manifest_with_dir(
                 )?;
                 manifest.package.checksum = Some(checksum.clone());
                 // refresh OSTree metadata with new manifest hash
-                refresh_package_metadata(&opts.repo_path, manifest, Path::new(&opts.manifest_file))?;
+                refresh_package_metadata(
+                    &opts.repo_path,
+                    manifest,
+                    Path::new(&opts.manifest_file),
+                )?;
             }
         }
     }
@@ -647,12 +656,18 @@ fn resolve_dependency_commits(
                             );
                         }
                         Err(e) => {
-                            eprintln!("Warning: failed to search history for {}: {}", dep.commit, e);
+                            eprintln!(
+                                "Warning: failed to search history for {}: {}",
+                                dep.commit, e
+                            );
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("Warning: failed to fetch blob {} for {}: {}", blob_sha, dep.commit, e);
+                    eprintln!(
+                        "Warning: failed to fetch blob {} for {}: {}",
+                        blob_sha, dep.commit, e
+                    );
                 }
             }
         }
@@ -777,11 +792,7 @@ fn collect_dependencies_recursive(
                     // search OSTree history for matching build
                     match find_commit_by_manifest_hash(repo_path, &dep.commit, &content_hash) {
                         Ok(Some(commit_id)) => {
-                            println!(
-                                "  [{}] {} skipping",
-                                &commit_id[..12],
-                                dep.commit
-                            );
+                            println!("  [{}] {} skipping", &commit_id[..12], dep.commit);
                             continue;
                         }
                         Ok(None) => {
@@ -792,7 +803,10 @@ fn collect_dependencies_recursive(
                             );
                         }
                         Err(e) => {
-                            eprintln!("  Warning: failed to search history for {}: {}", dep.commit, e);
+                            eprintln!(
+                                "  Warning: failed to search history for {}: {}",
+                                dep.commit, e
+                            );
                         }
                     }
                 }
@@ -820,11 +834,17 @@ fn collect_dependencies_recursive(
                                 continue;
                             }
                             Ok(None) => {
-                                println!("  [floating/stale] {} manifest changed, rebuilding", dep.commit);
+                                println!(
+                                    "  [floating/stale] {} manifest changed, rebuilding",
+                                    dep.commit
+                                );
                                 // fall through to rebuild
                             }
                             Err(e) => {
-                                eprintln!("  Warning: failed to check manifest hash for {}: {}", dep.commit, e);
+                                eprintln!(
+                                    "  Warning: failed to check manifest hash for {}: {}",
+                                    dep.commit, e
+                                );
                                 // fall through to rebuild to be safe
                             }
                         }
@@ -1442,7 +1462,11 @@ fn get_manifest_deps(commit: &str, manifest_index: &manifest::ManifestIndex) -> 
         if dep_name == "@self" {
             continue;
         }
-        if let Some(dep) = manifest.dependencies.iter().find(|d| d.name.as_deref() == Some(dep_name)) {
+        if let Some(dep) = manifest
+            .dependencies
+            .iter()
+            .find(|d| d.name.as_deref() == Some(dep_name))
+        {
             if seen.insert(dep.commit.clone()) {
                 deps.push(dep.commit.clone());
             }
@@ -1659,7 +1683,10 @@ fn link_manifest_dependencies(manifest_file: &str) -> io::Result<()> {
     // write updated content
     if linked_count > 0 {
         fs::write(manifest_file, updated_content)?;
-        println!("\nLinked {} dependencies in {}", linked_count, manifest_file);
+        println!(
+            "\nLinked {} dependencies in {}",
+            linked_count, manifest_file
+        );
     } else {
         println!("\nNo dependencies to link or all already linked");
     }
@@ -1721,7 +1748,10 @@ outputs: {}
         let output = manifest.outputs.get("bin").unwrap();
         assert_eq!(output.files.len(), 1);
         assert_eq!(output.files[0].path, "/usr/bin/foo");
-        assert_eq!(output.files[0].needs, vec!["/usr/lib/libc.so.6".to_string()]);
+        assert_eq!(
+            output.files[0].needs,
+            vec!["/usr/lib/libc.so.6".to_string()]
+        );
     }
 
     #[test]

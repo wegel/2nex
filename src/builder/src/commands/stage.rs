@@ -113,10 +113,7 @@ pub fn mount_nex_overlays() -> io::Result<()> {
 }
 
 fn mount_overlay(lower: &str, upper: &str, work: &str, target: &str) -> io::Result<()> {
-    let options = format!(
-        "lowerdir={},upperdir={},workdir={}",
-        lower, upper, work
-    );
+    let options = format!("lowerdir={},upperdir={},workdir={}", lower, upper, work);
 
     let status = Command::new("mount")
         .args(["-t", "overlay", "overlay", "-o", &options, target])

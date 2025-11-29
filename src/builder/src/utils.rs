@@ -94,5 +94,4 @@ mod tests {
         assert_eq!(determine_category("/usr/share/doc/foo/readme"), "doc");
         assert_eq!(determine_category("/usr/bin/foo"), "bin");
     }
-
 }

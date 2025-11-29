@@ -52,7 +52,10 @@ pub fn resolve_runtime_deps_precomputed(
 
         // extract output name from commit (e.g., ".../outputs/bin" -> "bin", ".../bundles/full" -> "full")
         let commit_parts: Vec<&str> = commit.split('/').collect();
-        let commit_type = commit_parts.get(commit_parts.len().saturating_sub(2)).copied().unwrap_or("");
+        let commit_type = commit_parts
+            .get(commit_parts.len().saturating_sub(2))
+            .copied()
+            .unwrap_or("");
         let commit_name = commit_parts.last().copied().unwrap_or("");
 
         // determine which outputs to process
@@ -85,7 +88,10 @@ pub fn resolve_runtime_deps_precomputed(
                         None => {
                             closure.add_unresolved(
                                 needed_file,
-                                format!("{} needs {} (no resolution)", file_entry.path, needed_file),
+                                format!(
+                                    "{} needs {} (no resolution)",
+                                    file_entry.path, needed_file
+                                ),
                             );
                             continue;
                         }
@@ -102,29 +108,48 @@ pub fn resolve_runtime_deps_precomputed(
                         cached.clone()
                     } else {
                         // find dependency by name and derive commit
-                        match resolve_dependency_to_commit(&dep_name, manifest, manifest_index, &repo) {
+                        match resolve_dependency_to_commit(
+                            &dep_name,
+                            manifest,
+                            manifest_index,
+                            &repo,
+                        ) {
                             ResolveResult::Ok(c) => {
                                 dep_commit_cache.insert(cache_key, c.clone());
                                 c
                             }
                             ResolveResult::FilesCommitMissing { package, checksum } => {
                                 closure.add_unresolved(
-                                    &format!("{} (run: nex compute-deps pkg/{}.yaml)", package, package),
-                                    format!("{} needs {} - missing {}/files commit", file_entry.path, dep_name, &checksum[..12]),
+                                    &format!(
+                                        "{} (run: nex compute-deps pkg/{}.yaml)",
+                                        package, package
+                                    ),
+                                    format!(
+                                        "{} needs {} - missing {}/files commit",
+                                        file_entry.path,
+                                        dep_name,
+                                        &checksum[..12]
+                                    ),
                                 );
                                 continue;
                             }
                             ResolveResult::ManifestNotFound(pkg) => {
                                 closure.add_unresolved(
                                     &dep_name,
-                                    format!("{} needs {} - manifest not found for {}", file_entry.path, dep_name, pkg),
+                                    format!(
+                                        "{} needs {} - manifest not found for {}",
+                                        file_entry.path, dep_name, pkg
+                                    ),
                                 );
                                 continue;
                             }
                             ResolveResult::NotFound => {
                                 closure.add_unresolved(
                                     &dep_name,
-                                    format!("{} needs dependency {} (not found)", file_entry.path, dep_name),
+                                    format!(
+                                        "{} needs dependency {} (not found)",
+                                        file_entry.path, dep_name
+                                    ),
                                 );
                                 continue;
                             }
@@ -163,7 +188,10 @@ pub fn resolve_runtime_deps_precomputed(
 }
 
 /// Find the manifest that corresponds to an OSTree commit ref.
-fn find_manifest_for_commit<'a>(commit: &str, index: &'a ManifestIndex) -> Option<&'a crate::manifest::types::Manifest> {
+fn find_manifest_for_commit<'a>(
+    commit: &str,
+    index: &'a ManifestIndex,
+) -> Option<&'a crate::manifest::types::Manifest> {
     // parse commit: x86_64/pkg/namespace/slug/version/outputs/name
     let parts: Vec<&str> = commit.split('/').collect();
 
@@ -171,7 +199,9 @@ fn find_manifest_for_commit<'a>(commit: &str, index: &'a ManifestIndex) -> Optio
     let pkg_idx = parts.iter().position(|&p| p == "pkg")?;
 
     // find "outputs" or "bundles" position
-    let end_idx = parts.iter().position(|&p| p == "outputs" || p == "bundles")?;
+    let end_idx = parts
+        .iter()
+        .position(|&p| p == "outputs" || p == "bundles")?;
 
     if end_idx <= pkg_idx + 2 {
         return None;
@@ -213,8 +243,11 @@ fn resolve_dependency_to_commit(
     repo: &OstreeRepo,
 ) -> ResolveResult {
     // find the dependency by name in the source manifest
-    let dep = match source_manifest.dependencies.iter()
-        .find(|d| d.name.as_deref() == Some(dep_name)) {
+    let dep = match source_manifest
+        .dependencies
+        .iter()
+        .find(|d| d.name.as_deref() == Some(dep_name))
+    {
         Some(d) => d,
         None => return ResolveResult::NotFound,
     };
@@ -268,7 +301,7 @@ fn resolve_dependency_to_commit(
     // files commit doesn't exist - need to run compute-deps
     ResolveResult::FilesCommitMissing {
         package: package_path,
-        checksum: address_hash
+        checksum: address_hash,
     }
 }
 
