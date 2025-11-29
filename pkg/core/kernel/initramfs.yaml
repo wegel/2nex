@@ -1,0 +1,93 @@
+package:
+  schema: 1
+  name: Initramfs
+  slug: initramfs
+  namespace: core/kernel
+  version: 1.0.0
+  description: Minimal initramfs for early userspace boot
+  homepage: https://www.kernel.org/doc/html/latest/driver-api/early-userspace/
+  checksum: ec036d8c20a071ad4e9c948674cced7d00c7424131b1b8a2d3ac11e556c27541
+sources:
+- name: init
+  file: pkg/core/kernel/initramfs-init.sh
+  sha256: 3227489503b777cd4bc8b7b0b244d2201b31c1b0e255e3dd5be6126c0dd102e5
+dependencies:
+- name: phase3
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: busybox
+  commit: x86_64/pkg/core/embedded/busybox/1.36.1/outputs/bin
+- name: util_linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
+- name: cpio
+  commit: x86_64/pkg/cli/archive/cpio/2.15/bundles/dev
+build:
+  script: |
+    set -eux
+
+    INITRAMFS="${WORK_DIR}/initramfs"
+    mkdir -p "${INITRAMFS}"/{bin,sbin,etc,proc,sys,dev,mnt/root,run,tmp,lib64,usr}
+
+    # lib symlinks for dynamic linker
+    ln -s lib64 "${INITRAMFS}/lib"
+    ln -s ../lib64 "${INITRAMFS}/usr/lib"
+
+    # copy binaries
+    cp /usr/bin/busybox "${INITRAMFS}/bin/busybox"
+    cp /usr/bin/blkid "${INITRAMFS}/sbin/blkid"
+
+    # copy required libraries (explicit list for determinism)
+    # busybox needs: ld-linux, libc, libm, libresolv
+    # blkid needs: ld-linux, libc, libblkid
+    cp /usr/lib/ld-linux-x86-64.so.2 "${INITRAMFS}/lib64/"
+    cp /usr/lib/libc.so.6 "${INITRAMFS}/lib64/"
+    cp /usr/lib/libm.so.6 "${INITRAMFS}/lib64/"
+    cp /usr/lib/libresolv.so.2 "${INITRAMFS}/lib64/"
+    cp /usr/lib/libblkid.so.1 "${INITRAMFS}/lib64/"
+
+    # create essential busybox symlinks
+    for cmd in ash sh cat cp cut dd df echo grep kill ln ls mkdir mknod mount \
+               mv ps pwd rm rmdir sed sleep sync tar touch tr umount \
+               basename dirname readlink; do
+        ln -sf busybox "${INITRAMFS}/bin/$cmd"
+    done
+    for cmd in init switch_root pivot_root findfs; do
+        ln -sf ../bin/busybox "${INITRAMFS}/sbin/$cmd"
+    done
+
+    # copy init script
+    cp "/${SOURCE_init}" "${INITRAMFS}/init"
+    chmod +x "${INITRAMFS}/init"
+
+    # minimal etc files
+    echo "root:x:0:0:root:/root:/bin/sh" > "${INITRAMFS}/etc/passwd"
+    echo "root:x:0:" > "${INITRAMFS}/etc/group"
+
+    # set permissions first
+    chmod -R u=rwX,go=rX "${INITRAMFS}"
+    chmod +x "${INITRAMFS}/bin/busybox" "${INITRAMFS}/sbin/blkid" "${INITRAMFS}/init"
+
+    # touch LAST to normalize all timestamps (including symlinks with -h)
+    find "${INITRAMFS}" -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;
+
+    # create deterministic cpio archive (newc format for kernel)
+    mkdir -p "${OUT_DIR}/boot"
+    (cd "${INITRAMFS}" && find . -print0 | LC_ALL=C sort -z | cpio -o -H newc --quiet --reproducible --null --owner=0:0) > "${OUT_DIR}/boot/initramfs.cpio"
+
+    touch -d "2024-01-01T00:00:00+00:00" "${OUT_DIR}/boot/initramfs.cpio"
+outputs:
+  boot:
+    files:
+    - path: /boot/initramfs.cpio
+bundles:
+  full:
+  - boot

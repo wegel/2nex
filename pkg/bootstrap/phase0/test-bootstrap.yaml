@@ -1,0 +1,49 @@
+package:
+  schema: 1
+  name: Test Bootstrap Package
+  slug: test-bootstrap
+  namespace: bootstrap/phase0
+  bootstrap: true
+  version: 0.0.1
+  description: Minimal test package for debugging bootstrap builds
+  homepage: https://example.com
+  stable_checksum: false
+sources: []
+dependencies: null
+build:
+  script: |
+    echo "Starting test bootstrap build..."
+
+    mkdir -p ${OUT_DIR}/bootstrap/tools/bin
+    mkdir -p ${OUT_DIR}/bootstrap/usr/lib
+    mkdir -p ${OUT_DIR}/bootstrap/usr/bin
+
+    # create a simple test binary using host tools
+    echo '#!/bin/sh' > ${OUT_DIR}/bootstrap/tools/bin/test-tool
+    echo 'echo "Hello from test-tool"' >> ${OUT_DIR}/bootstrap/tools/bin/test-tool
+    chmod +x ${OUT_DIR}/bootstrap/tools/bin/test-tool
+
+    # create a simple library placeholder
+    echo "test library content" > ${OUT_DIR}/bootstrap/usr/lib/libtest.a
+
+    # create a simple binary placeholder
+    echo '#!/bin/sh' > ${OUT_DIR}/bootstrap/usr/bin/test-bin
+    echo 'echo "Hello from test-bin"' >> ${OUT_DIR}/bootstrap/usr/bin/test-bin
+    chmod +x ${OUT_DIR}/bootstrap/usr/bin/test-bin
+
+    # normalize timestamps
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+    echo "Test bootstrap build complete."
+bundles:
+  dev:
+  - temporary_tools
+  - dev
+outputs:
+  temporary_tools:
+    files:
+    - path: /bootstrap/tools/bin/test-tool
+  dev:
+    files:
+    - path: /bootstrap/usr/lib/libtest.a
+    - path: /bootstrap/usr/bin/test-bin

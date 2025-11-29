@@ -1,0 +1,192 @@
+system:
+  schema: 1
+  name: "Bootable System with systemd and nex"
+  slug: "bootable-systemd-nex"
+  version: "0.0.1"
+  description: "Bootable system with systemd init, nex package manager, and /nex/pkg structure"
+  nex_structure: true
+
+  checksum: 3b8fe00d0d79d42ea55f6eb9b5688415e340b7ed7586e1801017efb3256d4274
+dependencies:
+- name: 2nex-utilities
+  commit: x86_64/pkg/core/userland/2nex-utilities/0.0.1/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+# runtime libs needed by packages
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/lib
+- name: gcc-libs
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/outputs/lib
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/outputs/lib
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/outputs/lib
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/outputs/lib
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/outputs/lib
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/outputs/lib
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/outputs/lib
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/outputs/lib
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/outputs/lib
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/outputs/lib
+- name: libxcrypt
+  commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/outputs/lib
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/outputs/lib
+- name: util_linux-lib
+  commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/lib
+- name: nex-ld-shim
+  commit: x86_64/pkg/core/nex/nex-ld-shim/0.1.0/outputs/bin
+
+packages:
+# systemd - init system
+- commit: x86_64/pkg/core/init/systemd/257.5/outputs/bin
+  name: systemd-bin
+- commit: x86_64/pkg/core/init/systemd/257.5/outputs/lib
+  name: systemd-lib
+- commit: x86_64/pkg/core/init/systemd/257.5/outputs/conf
+  name: systemd-conf
+
+# dbus-broker - D-Bus message broker
+- commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/bin
+  name: dbus-broker-bin
+- commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/conf
+  name: dbus-broker-conf
+
+# bash - shell
+- commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
+  name: bash
+
+# coreutils - basic commands
+- commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
+  name: coreutils
+
+# util-linux - essential system utilities
+- commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/bin
+  name: util-linux
+
+# findutils - find, xargs
+- commit: x86_64/pkg/core/userland/findutils/4.9.0/outputs/bin
+  name: findutils
+
+# grep - pattern matching
+- commit: x86_64/pkg/cli/text/grep/3.11/outputs/bin
+  name: grep
+
+# sed - stream editor
+- commit: x86_64/pkg/cli/text/sed/4.9/outputs/bin
+  name: sed
+
+# shadow - user management
+- commit: x86_64/pkg/core/userland/shadow/4.15.1/outputs/bin
+  name: shadow
+
+# kmod - kernel module tools (modprobe, etc)
+- commit: x86_64/pkg/core/kernel/kmod/32/outputs/bin
+  name: kmod
+
+# kbd - keyboard and console utilities (loadkeys, setfont)
+- commit: x86_64/pkg/core/userland/kbd/2.9.0/bundles/full
+  name: kbd
+
+# nex - package manager
+- commit: x86_64/pkg/core/nex/nex/0.1.0/outputs/bin
+  name: nex
+
+# linux kernel - boot image with initramfs
+- commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/boot
+  name: linux-kernel
+- commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/fs-overlay
+  name: linux-overlay
+
+build:
+  script: |
+    mkdir -p /target/etc
+
+    cat > /target/etc/passwd << 'EOF'
+    root:x:0:0:root:/root:/bin/bash
+    systemd-network:x:192:192:systemd Network Management:/:/usr/sbin/nologin
+    systemd-resolve:x:193:193:systemd Resolver:/:/usr/sbin/nologin
+    systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/sbin/nologin
+    EOF
+
+    cat > /target/etc/group << 'EOF'
+    root:x:0:
+    systemd-network:x:192:
+    systemd-resolve:x:193:
+    systemd-timesync:x:194:
+    systemd-journal:x:190:
+    EOF
+
+    cat > /target/etc/shadow << 'EOF'
+    root::19735:0:99999:7:::
+    systemd-network:!*:19735::::::
+    systemd-resolve:!*:19735::::::
+    systemd-timesync:!*:19735::::::
+    EOF
+    chmod 600 /target/etc/shadow
+
+    mkdir -p /target/{proc,sys,dev,run,tmp,root}
+    mkdir -p /target/etc/systemd/system
+    mkdir -p /target/var/log/journal
+    mkdir -p /target/var/lib/systemd
+
+    # mount points for systemd virtual filesystems
+    mkdir -p /target/dev/hugepages
+    mkdir -p /target/dev/mqueue
+    mkdir -p /target/dev/shm
+    mkdir -p /target/sys/kernel/debug
+    mkdir -p /target/sys/kernel/tracing
+    mkdir -p /target/sys/kernel/config
+    mkdir -p /target/sys/fs/fuse/connections
+    mkdir -p /target/sys/fs/cgroup
+
+    # systemd needs these directories
+    mkdir -p /target/var/lib/systemd/random-seed
+    mkdir -p /target/var/lib/systemd/timers
+    mkdir -p /target/var/lib/systemd/coredump
+    mkdir -p /target/run/systemd
+
+    # fstab - empty but must exist for systemd-remount-fs
+    touch /target/etc/fstab
+
+    # mtab - symlink to /proc/self/mounts (required by mount command)
+    ln -sf /proc/self/mounts /target/etc/mtab
+
+    # empty sysctl.conf - prevents errors
+    touch /target/etc/sysctl.conf
+
+    # os-release - required by systemd
+    cat > /target/etc/os-release << 'EOF'
+    NAME="2nex"
+    PRETTY_NAME="2nex Linux"
+    ID=2nex
+    VERSION_ID=0.0.1
+    EOF
+    mkdir -p /target/usr/lib
+    ln -sf ../../etc/os-release /target/usr/lib/os-release
+
+    # link /usr/share to /nex/env/share for data files (dbus-1, keymaps, etc)
+    mkdir -p /target/usr/share
+    ln -sf ../../nex/env/share/dbus-1 /target/usr/share/dbus-1
+    ln -sf ../../nex/env/share/keymaps /target/usr/share/keymaps
+    ln -sf ../../nex/env/share/consolefonts /target/usr/share/consolefonts
+
+    # machine-id placeholder (systemd will initialize)
+    touch /target/etc/machine-id
+
+    ln -sf usr/bin/init /target/init
+
+    # fix ownership of setuid binaries - they must be owned by root
+    # (ostree checkout preserves build user uid, breaking setuid)
+    for bin in mount umount su newgrp chsh chfn passwd gpasswd; do
+      find /target/nex/pkg -name "$bin" -type f -perm -4000 -exec chown 0:0 {} \; 2>/dev/null
+    done
+
+    find /target -exec touch -d "2024-01-01T00:00:00+00:00" {} \;

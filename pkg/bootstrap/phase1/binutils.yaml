@@ -13,49 +13,65 @@ sources:
   url: https://ftp.gnu.org/gnu/binutils/binutils-2.42.tar.xz
   sha256: f6e4d41fd5fc778b06b7891457b3620da5ecea1006c6a4a41ae998109f85a800
 dependencies:
-  - name: bootstrap_tools
-    commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
-  - name: m4
-    commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
-  - name: ncurses
-    commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
-  - name: coreutils
-    commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
-  - name: diffutils
-    commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
-  - name: file
-    commit: x86_64/pkg/bootstrap/phase1/file/5.45/bundles/dev
-  - name: findutils
-    commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
-  - name: gawk
-    commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
-  - name: grep
-    commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
-  - name: gzip
-    commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
-  - name: make
-    commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
-  - name: patch
-    commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
-  - name: sed
-    commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
-  - name: tar
-    commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
-  - name: xz
-    commit: x86_64/pkg/bootstrap/phase1/xz/5.4.6/bundles/dev
-  - name: bzip2
-    commit: x86_64/pkg/bootstrap/phase1/bzip2/1.0.8/bundles/dev
+- name: bootstrap_tools
+  commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/bootstrap/phase1/file/5.45/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase1/xz/5.4.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/bootstrap/phase1/bzip2/1.0.8/bundles/dev
 build:
-  script: "# Build binutils\ntar --no-same-owner -xf ${SOURCE_binutils} -C \"${WORK_DIR}\"\
-    \ --strip-components=1\ncd \"${WORK_DIR}\" && mkdir -p build\n\nsed '6009s/$add_dir//'\
-    \ -i ltmain.sh\ncd build\n\n../configure                 \\\n  --prefix=/usr \
-    \             \\\n  --build=$(../config.guess) \\\n  --host=${TARGET}        \
-    \   \\\n  --disable-nls              \\\n  --enable-shared            \\\n  --enable-gprofng=no\
-    \        \\\n  --disable-werror           \\\n  --enable-64-bit-bfd        \\\n\
-    \  --enable-default-hash-style=gnu\n\nmake\nmake DESTDIR=${OUT_DIR} install\n\
-    rm -v ${OUT_DIR}/usr/lib/lib{bfd,ctf,ctf-nobfd,opcodes,sframe}.{a,la}\n\nrm -rf\
-    \ ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man\n\nfind \"${OUT_DIR}\" -exec\
-    \ touch -d \"2024-01-01T00:00:00+00:00\" {} \\;\n"
+  script: |
+    # Build binutils
+    tar --no-same-owner -xf ${SOURCE_binutils} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}" && mkdir -p build
+
+    sed '6009s/$add_dir//' -i ltmain.sh
+    cd build
+
+    ../configure                 \
+      --prefix=/usr              \
+      --build=$(../config.guess) \
+      --host=${TARGET}           \
+      --disable-nls              \
+      --enable-shared            \
+      --enable-gprofng=no        \
+      --disable-werror           \
+      --enable-64-bit-bfd        \
+      --enable-default-hash-style=gnu
+
+    make
+    make DESTDIR=${OUT_DIR} install
+    rm -v ${OUT_DIR}/usr/lib/lib{bfd,ctf,ctf-nobfd,opcodes,sframe}.{a,la}
+
+    rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 bundles:
   dev:
   - bin
@@ -64,151 +80,313 @@ bundles:
 outputs:
   lib:
     files:
-    - /usr/lib/bfd-plugins/libdep.so
-    - /usr/lib/libbfd-2.42.so
-    - /usr/lib/libbfd.so
-    - /usr/lib/libctf-nobfd.so
-    - /usr/lib/libctf-nobfd.so.0
-    - /usr/lib/libctf-nobfd.so.0.0.0
-    - /usr/lib/libctf.so
-    - /usr/lib/libctf.so.0
-    - /usr/lib/libctf.so.0.0.0
-    - /usr/lib/libopcodes-2.42.so
-    - /usr/lib/libopcodes.so
-    - /usr/lib/libsframe.so
-    - /usr/lib/libsframe.so.1
-    - /usr/lib/libsframe.so.1.0.0
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.x
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xbn
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xc
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xce
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xd
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xdc
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xdce
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xde
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xdw
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xdwe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xn
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xr
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xs
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xsc
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xsce
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xse
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xsw
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xswe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xu
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xw
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xwe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.x
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xbn
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xc
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xce
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xd
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xdc
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xdce
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xde
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xdw
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xdwe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xn
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xr
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xs
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xsc
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xsce
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xse
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xsw
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xswe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xu
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xw
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xwe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.x
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xbn
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xc
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xce
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xd
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xdc
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xdce
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xde
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xdw
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xdwe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xn
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xr
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xs
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xsc
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xsce
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xse
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xsw
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xswe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xu
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xw
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xwe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.x
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xbn
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xc
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xce
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xd
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xdc
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xdce
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xde
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xdw
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xdwe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xn
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xr
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xs
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xsc
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xsce
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xse
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xsw
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xswe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xu
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xw
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xwe
-    - /usr/x86_64-2nex-linux-gnu/lib/ldscripts/stamp
-    requires:
-    - x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
+    - path: /usr/lib/bfd-plugins/libdep.so
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/libbfd-2.42.so
+      needs:
+      - /usr/lib/libsframe.so.1
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/lib/libbfd.so
+      needs:
+      - /usr/lib/libsframe.so.1
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/lib/libctf-nobfd.so
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/libctf-nobfd.so.0
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/libctf-nobfd.so.0.0.0
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/libctf.so
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /usr/lib/libsframe.so.1
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/libctf.so.0
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /usr/lib/libsframe.so.1
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/libctf.so.0.0.0
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /usr/lib/libsframe.so.1
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/libopcodes-2.42.so
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /usr/lib/libsframe.so.1
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/libopcodes.so
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /usr/lib/libsframe.so.1
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/libsframe.so
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/libsframe.so.1
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/libsframe.so.1.0.0
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.x
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xbn
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xc
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xce
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xd
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xdc
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xdce
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xde
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xdw
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xdwe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xn
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xr
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xs
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xsc
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xsce
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xse
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xsw
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xswe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xu
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xw
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xwe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.x
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xbn
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xc
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xce
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xd
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xdc
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xdce
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xde
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xdw
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xdwe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xn
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xr
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xs
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xsc
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xsce
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xse
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xsw
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xswe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xu
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xw
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_i386.xwe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.x
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xbn
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xc
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xce
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xd
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xdc
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xdce
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xde
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xdw
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xdwe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xn
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xr
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xs
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xsc
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xsce
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xse
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xsw
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xswe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xu
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xw
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_iamcu.xwe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.x
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xbn
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xc
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xce
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xd
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xdc
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xdce
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xde
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xdw
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xdwe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xn
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xr
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xs
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xsc
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xsce
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xse
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xsw
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xswe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xu
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xw
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xwe
+    - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/stamp
   dev:
     files:
-    - /usr/include/ansidecl.h
-    - /usr/include/bfd.h
-    - /usr/include/bfdlink.h
-    - /usr/include/ctf-api.h
-    - /usr/include/ctf.h
-    - /usr/include/diagnostics.h
-    - /usr/include/dis-asm.h
-    - /usr/include/plugin-api.h
-    - /usr/include/sframe-api.h
-    - /usr/include/sframe.h
-    - /usr/include/symcat.h
+    - path: /usr/include/ansidecl.h
+    - path: /usr/include/bfd.h
+    - path: /usr/include/bfdlink.h
+    - path: /usr/include/ctf-api.h
+    - path: /usr/include/ctf.h
+    - path: /usr/include/diagnostics.h
+    - path: /usr/include/dis-asm.h
+    - path: /usr/include/plugin-api.h
+    - path: /usr/include/sframe-api.h
+    - path: /usr/include/sframe.h
+    - path: /usr/include/symcat.h
   bin:
     files:
-    - /usr/bin/addr2line
-    - /usr/bin/ar
-    - /usr/bin/as
-    - /usr/bin/c++filt
-    - /usr/bin/elfedit
-    - /usr/bin/gprof
-    - /usr/bin/ld
-    - /usr/bin/ld.bfd
-    - /usr/bin/nm
-    - /usr/bin/objcopy
-    - /usr/bin/objdump
-    - /usr/bin/ranlib
-    - /usr/bin/readelf
-    - /usr/bin/size
-    - /usr/bin/strings
-    - /usr/bin/strip
-    - /usr/x86_64-2nex-linux-gnu/bin/ar
-    - /usr/x86_64-2nex-linux-gnu/bin/as
-    - /usr/x86_64-2nex-linux-gnu/bin/ld
-    - /usr/x86_64-2nex-linux-gnu/bin/ld.bfd
-    - /usr/x86_64-2nex-linux-gnu/bin/nm
-    - /usr/x86_64-2nex-linux-gnu/bin/objcopy
-    - /usr/x86_64-2nex-linux-gnu/bin/objdump
-    - /usr/x86_64-2nex-linux-gnu/bin/ranlib
-    - /usr/x86_64-2nex-linux-gnu/bin/readelf
-    - /usr/x86_64-2nex-linux-gnu/bin/strip
-    requires:
-    - x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
+    - path: /usr/bin/addr2line
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/ar
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/as
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/c++filt
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/elfedit
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/gprof
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/ld
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /usr/lib/libctf.so.0
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/ld.bfd
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /usr/lib/libctf.so.0
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/nm
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/objcopy
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/objdump
+      needs:
+      - /usr/lib/libopcodes-2.42.so
+      - /usr/lib/libctf.so.0
+      - /usr/lib/libbfd-2.42.so
+      - /usr/lib/libsframe.so.1
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/ranlib
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/readelf
+      needs:
+      - /usr/lib/libctf-nobfd.so.0
+      - /usr/lib/libsframe.so.1
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/size
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/strings
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/strip
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/x86_64-2nex-linux-gnu/bin/ar
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/x86_64-2nex-linux-gnu/bin/as
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/x86_64-2nex-linux-gnu/bin/ld
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /usr/lib/libctf.so.0
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/x86_64-2nex-linux-gnu/bin/ld.bfd
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /usr/lib/libctf.so.0
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/x86_64-2nex-linux-gnu/bin/nm
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/x86_64-2nex-linux-gnu/bin/objcopy
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/x86_64-2nex-linux-gnu/bin/objdump
+      needs:
+      - /usr/lib/libopcodes-2.42.so
+      - /usr/lib/libctf.so.0
+      - /usr/lib/libbfd-2.42.so
+      - /usr/lib/libsframe.so.1
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/x86_64-2nex-linux-gnu/bin/ranlib
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/x86_64-2nex-linux-gnu/bin/readelf
+      needs:
+      - /usr/lib/libctf-nobfd.so.0
+      - /usr/lib/libsframe.so.1
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/x86_64-2nex-linux-gnu/bin/strip
+      needs:
+      - /usr/lib/libbfd-2.42.so
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+
+resolution:
+  /usr/lib/libsframe.so.1: '@self'
+  /usr/lib/libopcodes-2.42.so: '@self'
+  /usr/lib/libctf-nobfd.so.0: '@self'
+  /usr/lib/libbfd-2.42.so: '@self'
+  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools
+  /usr/lib/libctf.so.0: '@self'
+  /bootstrap/usr/lib/libc.so.6: bootstrap_tools

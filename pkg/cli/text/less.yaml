@@ -40,46 +40,33 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 - name: binutils
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/outputs/lib
 - name: gmp-bootstrap
   commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/outputs/lib
 - name: mpfr
   commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/outputs/lib
 - name: mpc
   commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/outputs/lib
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
-- name: glibc
-  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/lib
-- name: gcc
-  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/outputs/lib
-- name: ncurses
-  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
 - name: sed
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
 - name: grep
   commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
 build:
-  script: 'tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
-
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
     ./configure --prefix=/usr --sysconfdir=/etc
-
     make
-
     make DESTDIR=$OUT_DIR install
 
-
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-
     2nex_strip_binaries ${OUT_DIR}
-
-    '
 bundles:
   full:
   - bin
@@ -89,14 +76,26 @@ bundles:
 outputs:
   bin:
     files:
-    - /usr/bin/less
-    - /usr/bin/lessecho
-    - /usr/bin/lesskey
-    requires:
-    - x86_64/pkg/libs/system/glibc/2.39/outputs/lib
-    - x86_64/pkg/libs/system/ncurses/6.4-20230520/outputs/lib
+    - path: /usr/bin/less
+      needs:
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/lessecho
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/lesskey
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
   man:
     files:
-    - /usr/share/man/man1/less.1
-    - /usr/share/man/man1/lessecho.1
-    - /usr/share/man/man1/lesskey.1
+    - path: /usr/share/man/man1/less.1
+    - path: /usr/share/man/man1/lessecho.1
+    - path: /usr/share/man/man1/lesskey.1
+
+resolution:
+  /usr/lib/libncursesw.so.6: ncurses
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

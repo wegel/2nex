@@ -13,40 +13,49 @@ sources:
   url: https://github.com/tukaani-project/xz/releases/download/v5.4.6/xz-5.4.6.tar.xz
   sha256: b92d4e3a438affcf13362a1305cd9d94ed47ddda22e456a42791e630a5644f5c
 dependencies:
-  - name: bootstrap_tools
-    commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
-  - name: m4
-    commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
-  - name: ncurses
-    commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
-  - name: coreutils
-    commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
-  - name: diffutils
-    commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
-  - name: file
-    commit: x86_64/pkg/bootstrap/phase1/file/5.45/bundles/dev
-  - name: findutils
-    commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
-  - name: gawk
-    commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
-  - name: grep
-    commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
-  - name: gzip
-    commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
-  - name: make
-    commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
-  - name: patch
-    commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
-  - name: sed
-    commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
-  - name: tar
-    commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+- name: bootstrap_tools
+  commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/bootstrap/phase1/file/5.45/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
+- name: patch
+  commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
 build:
-  script: "tar --no-same-owner -xf ${SOURCE_xz} -C \"${WORK_DIR}\" --strip-components=1\n\
-    cd ${WORK_DIR}\n\n./configure --prefix=/usr --libdir=/usr/lib \\\n      --disable-static\
-    \ \\\n      --docdir=/usr/share/doc/xz-5.4.6\nmake\nmake check\n\nmake DESTDIR=${OUT_DIR}\
-    \ install\nrm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man\n\nfind \"\
-    ${OUT_DIR}\" -exec touch -d '2024-01-01T00:00:00+00:00' {} \\;\n"
+  script: |
+    tar --no-same-owner -xf ${SOURCE_xz} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --libdir=/usr/lib \
+          --disable-static \
+          --docdir=/usr/share/doc/xz-5.4.6
+    make
+    make check
+
+    make DESTDIR=${OUT_DIR} install
+    rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 bundles:
   dev:
   - lib
@@ -56,79 +65,122 @@ bundles:
 outputs:
   lib:
     files:
-    - /usr/lib/liblzma.so
-    - /usr/lib/liblzma.so.5
-    - /usr/lib/liblzma.so.5.4.6
-    requires:
-    - x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
+    - path: /usr/lib/liblzma.so
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/liblzma.so.5
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/liblzma.so.5.4.6
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
   bin:
     files:
-    - /usr/bin/lzcat
-    - /usr/bin/lzcmp
-    - /usr/bin/lzdiff
-    - /usr/bin/lzegrep
-    - /usr/bin/lzfgrep
-    - /usr/bin/lzgrep
-    - /usr/bin/lzless
-    - /usr/bin/lzma
-    - /usr/bin/lzmadec
-    - /usr/bin/lzmainfo
-    - /usr/bin/lzmore
-    - /usr/bin/unlzma
-    - /usr/bin/unxz
-    - /usr/bin/xz
-    - /usr/bin/xzcat
-    - /usr/bin/xzcmp
-    - /usr/bin/xzdec
-    - /usr/bin/xzdiff
-    - /usr/bin/xzegrep
-    - /usr/bin/xzfgrep
-    - /usr/bin/xzgrep
-    - /usr/bin/xzless
-    - /usr/bin/xzmore
-    requires:
-    - x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
+    - path: /usr/bin/lzcat
+      needs:
+      - /usr/lib/liblzma.so.5
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/lzcmp
+    - path: /usr/bin/lzdiff
+    - path: /usr/bin/lzegrep
+    - path: /usr/bin/lzfgrep
+    - path: /usr/bin/lzgrep
+    - path: /usr/bin/lzless
+    - path: /usr/bin/lzma
+      needs:
+      - /usr/lib/liblzma.so.5
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/lzmadec
+      needs:
+      - /usr/lib/liblzma.so.5
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/lzmainfo
+      needs:
+      - /usr/lib/liblzma.so.5
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/lzmore
+    - path: /usr/bin/unlzma
+      needs:
+      - /usr/lib/liblzma.so.5
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/unxz
+      needs:
+      - /usr/lib/liblzma.so.5
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/xz
+      needs:
+      - /usr/lib/liblzma.so.5
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/xzcat
+      needs:
+      - /usr/lib/liblzma.so.5
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/xzcmp
+    - path: /usr/bin/xzdec
+      needs:
+      - /usr/lib/liblzma.so.5
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/xzdiff
+    - path: /usr/bin/xzegrep
+    - path: /usr/bin/xzfgrep
+    - path: /usr/bin/xzgrep
+    - path: /usr/bin/xzless
+    - path: /usr/bin/xzmore
   locale:
     files:
-    - /usr/share/locale/ca/LC_MESSAGES/xz.mo
-    - /usr/share/locale/cs/LC_MESSAGES/xz.mo
-    - /usr/share/locale/da/LC_MESSAGES/xz.mo
-    - /usr/share/locale/de/LC_MESSAGES/xz.mo
-    - /usr/share/locale/eo/LC_MESSAGES/xz.mo
-    - /usr/share/locale/es/LC_MESSAGES/xz.mo
-    - /usr/share/locale/fi/LC_MESSAGES/xz.mo
-    - /usr/share/locale/fr/LC_MESSAGES/xz.mo
-    - /usr/share/locale/hr/LC_MESSAGES/xz.mo
-    - /usr/share/locale/hu/LC_MESSAGES/xz.mo
-    - /usr/share/locale/it/LC_MESSAGES/xz.mo
-    - /usr/share/locale/ko/LC_MESSAGES/xz.mo
-    - /usr/share/locale/pl/LC_MESSAGES/xz.mo
-    - /usr/share/locale/pt/LC_MESSAGES/xz.mo
-    - /usr/share/locale/pt_BR/LC_MESSAGES/xz.mo
-    - /usr/share/locale/ro/LC_MESSAGES/xz.mo
-    - /usr/share/locale/sr/LC_MESSAGES/xz.mo
-    - /usr/share/locale/sv/LC_MESSAGES/xz.mo
-    - /usr/share/locale/tr/LC_MESSAGES/xz.mo
-    - /usr/share/locale/uk/LC_MESSAGES/xz.mo
-    - /usr/share/locale/vi/LC_MESSAGES/xz.mo
-    - /usr/share/locale/zh_CN/LC_MESSAGES/xz.mo
-    - /usr/share/locale/zh_TW/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/xz.mo
   dev:
     files:
-    - /usr/include/lzma.h
-    - /usr/include/lzma/base.h
-    - /usr/include/lzma/bcj.h
-    - /usr/include/lzma/block.h
-    - /usr/include/lzma/check.h
-    - /usr/include/lzma/container.h
-    - /usr/include/lzma/delta.h
-    - /usr/include/lzma/filter.h
-    - /usr/include/lzma/hardware.h
-    - /usr/include/lzma/index.h
-    - /usr/include/lzma/index_hash.h
-    - /usr/include/lzma/lzma12.h
-    - /usr/include/lzma/stream_flags.h
-    - /usr/include/lzma/version.h
-    - /usr/include/lzma/vli.h
-    - /usr/lib/liblzma.la
-    - /usr/lib/pkgconfig/liblzma.pc
+    - path: /usr/include/lzma.h
+    - path: /usr/include/lzma/base.h
+    - path: /usr/include/lzma/bcj.h
+    - path: /usr/include/lzma/block.h
+    - path: /usr/include/lzma/check.h
+    - path: /usr/include/lzma/container.h
+    - path: /usr/include/lzma/delta.h
+    - path: /usr/include/lzma/filter.h
+    - path: /usr/include/lzma/hardware.h
+    - path: /usr/include/lzma/index.h
+    - path: /usr/include/lzma/index_hash.h
+    - path: /usr/include/lzma/lzma12.h
+    - path: /usr/include/lzma/stream_flags.h
+    - path: /usr/include/lzma/version.h
+    - path: /usr/include/lzma/vli.h
+    - path: /usr/lib/liblzma.la
+    - path: /usr/lib/pkgconfig/liblzma.pc
+
+resolution:
+  /usr/lib/liblzma.so.5: '@self'
+  /bootstrap/usr/lib/libc.so.6: bootstrap_tools
+  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools

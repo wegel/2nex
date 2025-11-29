@@ -1,0 +1,1030 @@
+package:
+  schema: 1
+  name: Systemd with D-Bus
+  slug: systemd-with-dbus
+  namespace: core/init
+  version: '257.5'
+  description: Systemd init system bundled with dbus-broker
+  homepage: https://www.freedesktop.org/wiki/Software/systemd/
+  checksum: 349cdfe7befc59e1a3d2183e6f4be993fd61bbfe45c724b0c20f5a5e7824f1cf
+sources: []
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: dbus-broker
+  commit: x86_64/pkg/core/ipc/dbus-broker/37/bundles/full
+build:
+  script: |2
+
+    set -x
+    mkdir -p ${OUT_DIR}/usr/bin
+    mkdir -p ${OUT_DIR}/usr/lib/systemd
+    mkdir -p ${OUT_DIR}/usr/include
+    mkdir -p ${OUT_DIR}/usr/share
+
+    # systemd binaries
+    for bin in systemctl journalctl hostnamectl localectl loginctl machinectl \
+               networkctl oomctl portablectl resolvectl bootctl busctl coredumpctl \
+               kernel-install timedatectl udevadm ukify varlinkctl; do
+      cp -a /usr/bin/$bin ${OUT_DIR}/usr/bin/ 2>/dev/null || true
+    done
+    # systemd-* prefixed binaries
+    cp -a /usr/bin/systemd-* ${OUT_DIR}/usr/bin/
+    # symlinks
+    for link in halt init poweroff reboot runlevel shutdown run0 mount.ddi resolvconf; do
+      cp -a /usr/bin/$link ${OUT_DIR}/usr/bin/ 2>/dev/null || true
+    done
+
+    # dbus-broker binaries
+    cp -a /usr/bin/dbus-broker ${OUT_DIR}/usr/bin/
+    cp -a /usr/bin/dbus-broker-launch ${OUT_DIR}/usr/bin/
+
+    # systemd libraries
+    cp -a /usr/lib/libsystemd* ${OUT_DIR}/usr/lib/
+    cp -a /usr/lib/libudev* ${OUT_DIR}/usr/lib/
+    cp -a /usr/lib/libnss_myhostname* ${OUT_DIR}/usr/lib/
+    cp -a /usr/lib/libnss_mymachines* ${OUT_DIR}/usr/lib/
+    cp -a /usr/lib/libnss_resolve* ${OUT_DIR}/usr/lib/
+    cp -a /usr/lib/libnss_systemd* ${OUT_DIR}/usr/lib/
+
+    # systemd runtime directories (copy contents, not dir itself - avoids nesting)
+    cp -a /usr/lib/systemd/. ${OUT_DIR}/usr/lib/systemd/
+    cp -a /usr/lib/udev ${OUT_DIR}/usr/lib/
+    cp -a /usr/lib/tmpfiles.d ${OUT_DIR}/usr/lib/
+    cp -a /usr/lib/sysctl.d ${OUT_DIR}/usr/lib/
+    cp -a /usr/lib/modprobe.d ${OUT_DIR}/usr/lib/
+    cp -a /usr/lib/kernel ${OUT_DIR}/usr/lib/
+    cp -a /usr/lib/pam.d ${OUT_DIR}/usr/lib/
+
+    # pkgconfig files
+    mkdir -p ${OUT_DIR}/usr/lib/pkgconfig
+    mkdir -p ${OUT_DIR}/usr/share/pkgconfig
+    cp -a /usr/lib/pkgconfig/libsystemd.pc ${OUT_DIR}/usr/lib/pkgconfig/ 2>/dev/null || true
+    cp -a /usr/lib/pkgconfig/libudev.pc ${OUT_DIR}/usr/lib/pkgconfig/ 2>/dev/null || true
+    cp -a /usr/share/pkgconfig/systemd.pc ${OUT_DIR}/usr/share/pkgconfig/ 2>/dev/null || true
+    cp -a /usr/share/pkgconfig/udev.pc ${OUT_DIR}/usr/share/pkgconfig/ 2>/dev/null || true
+
+    # includes (for dev output)
+    cp -a /usr/include/systemd ${OUT_DIR}/usr/include/
+    cp -a /usr/include/libudev.h ${OUT_DIR}/usr/include/
+
+    # dbus directories
+    cp -a /usr/share/dbus-1 ${OUT_DIR}/usr/share/ 2>/dev/null || true
+
+    # create D-Bus system configuration file (required by dbus-broker)
+    mkdir -p ${OUT_DIR}/usr/share/dbus-1
+    cat > ${OUT_DIR}/usr/share/dbus-1/system.conf << 'DBUS_CONF'
+    <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+     "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+    <busconfig>
+      <type>system</type>
+      <user>root</user>
+      <auth>EXTERNAL</auth>
+      <listen>unix:path=/run/dbus/system_bus_socket</listen>
+      <policy context="default">
+        <allow user="*"/>
+        <allow own="*"/>
+        <allow send_type="method_call"/>
+        <allow send_type="signal"/>
+        <allow receive_type="method_call"/>
+        <allow receive_type="signal"/>
+      </policy>
+      <includedir>/usr/share/dbus-1/system.d</includedir>
+      <includedir>/etc/dbus-1/system.d</includedir>
+    </busconfig>
+    DBUS_CONF
+
+    # /usr/sbin symlink
+    ln -sf bin ${OUT_DIR}/usr/sbin 2>/dev/null || true
+
+    # enable dbus-broker as the system D-Bus implementation
+    ln -sf dbus-broker.service ${OUT_DIR}/usr/lib/systemd/system/dbus.service
+
+    # create dbus.socket (required for socket activation of dbus-broker)
+    cat > ${OUT_DIR}/usr/lib/systemd/system/dbus.socket << 'SOCKET'
+    [Unit]
+    Description=D-Bus System Message Bus Socket
+
+    [Socket]
+    ListenStream=/run/dbus/system_bus_socket
+
+    [Install]
+    WantedBy=sockets.target
+    SOCKET
+
+    # enable dbus.socket in sockets.target.wants
+    mkdir -p ${OUT_DIR}/usr/lib/systemd/system/sockets.target.wants
+    ln -sf ../dbus.socket ${OUT_DIR}/usr/lib/systemd/system/sockets.target.wants/dbus.socket
+
+    # ensure consistent timestamps
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+bundles:
+  full:
+  - bin
+  - lib
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/bootctl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/busctl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/coredumpctl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/dbus-broker
+    - path: /usr/bin/dbus-broker-launch
+      needs:
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/bin/halt
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/hostnamectl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/journalctl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/kernel-install
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/localectl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/loginctl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/machinectl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/mount.ddi
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/networkctl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/oomctl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/portablectl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/poweroff
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/reboot
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/resolvconf
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/resolvectl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/run0
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/runlevel
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/shutdown
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemctl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-ac-power
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-ask-password
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-cat
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-cgls
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-cgtop
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-confext
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-creds
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-delta
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-detect-virt
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-dissect
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-escape
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-hwdb
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-id128
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-inhibit
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-machine-id-setup
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-mount
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-notify
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-nspawn
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-path
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-repart
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-resolve
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-run
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-socket-activate
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-stdio-bridge
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-sysext
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-tmpfiles
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-tty-ask-password-agent
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-umount
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/systemd-vpick
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/timedatectl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/udevadm
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/bin/ukify
+    - path: /usr/bin/varlinkctl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+  dev:
+    files:
+    - path: /usr/include/libudev.h
+    - path: /usr/include/systemd/_sd-common.h
+    - path: /usr/include/systemd/sd-bus-protocol.h
+    - path: /usr/include/systemd/sd-bus-vtable.h
+    - path: /usr/include/systemd/sd-bus.h
+    - path: /usr/include/systemd/sd-daemon.h
+    - path: /usr/include/systemd/sd-device.h
+    - path: /usr/include/systemd/sd-event.h
+    - path: /usr/include/systemd/sd-gpt.h
+    - path: /usr/include/systemd/sd-hwdb.h
+    - path: /usr/include/systemd/sd-id128.h
+    - path: /usr/include/systemd/sd-journal.h
+    - path: /usr/include/systemd/sd-json.h
+    - path: /usr/include/systemd/sd-login.h
+    - path: /usr/include/systemd/sd-messages.h
+    - path: /usr/include/systemd/sd-path.h
+    - path: /usr/include/systemd/sd-varlink-idl.h
+    - path: /usr/include/systemd/sd-varlink.h
+    - path: /usr/lib/pkgconfig/libsystemd.pc
+    - path: /usr/lib/pkgconfig/libudev.pc
+    - path: /usr/share/pkgconfig/systemd.pc
+    - path: /usr/share/pkgconfig/udev.pc
+  lib:
+    files:
+    - path: /usr/lib/kernel/install.conf
+    - path: /usr/lib/kernel/install.d/50-depmod.install
+    - path: /usr/lib/kernel/install.d/60-ukify.install
+    - path: /usr/lib/kernel/install.d/90-loaderentry.install
+    - path: /usr/lib/kernel/install.d/90-uki-copy.install
+    - path: /usr/lib/kernel/uki.conf
+    - path: /usr/lib/libnss_myhostname.so.2
+    - path: /usr/lib/libnss_mymachines.so.2
+    - path: /usr/lib/libnss_resolve.so.2
+    - path: /usr/lib/libnss_systemd.so.2
+    - path: /usr/lib/libsystemd.so
+    - path: /usr/lib/libsystemd.so.0
+    - path: /usr/lib/libsystemd.so.0.40.0
+    - path: /usr/lib/libudev.so
+    - path: /usr/lib/libudev.so.1
+    - path: /usr/lib/libudev.so.1.7.10
+    - path: /usr/lib/modprobe.d/README
+    - path: /usr/lib/modprobe.d/systemd.conf
+    - path: /usr/lib/pam.d/systemd-run0
+    - path: /usr/lib/pam.d/systemd-user
+    - path: /usr/lib/sysctl.d/50-coredump.conf
+    - path: /usr/lib/sysctl.d/50-default.conf
+    - path: /usr/lib/sysctl.d/50-pid-max.conf
+    - path: /usr/lib/sysctl.d/README
+    - path: /usr/lib/systemd/catalog/dbus-broker-launch.catalog
+    - path: /usr/lib/systemd/catalog/dbus-broker.catalog
+    - path: /usr/lib/systemd/catalog/systemd.be.catalog
+    - path: /usr/lib/systemd/catalog/systemd.be@latin.catalog
+    - path: /usr/lib/systemd/catalog/systemd.bg.catalog
+    - path: /usr/lib/systemd/catalog/systemd.catalog
+    - path: /usr/lib/systemd/catalog/systemd.da.catalog
+    - path: /usr/lib/systemd/catalog/systemd.de.catalog
+    - path: /usr/lib/systemd/catalog/systemd.fr.catalog
+    - path: /usr/lib/systemd/catalog/systemd.hr.catalog
+    - path: /usr/lib/systemd/catalog/systemd.hu.catalog
+    - path: /usr/lib/systemd/catalog/systemd.it.catalog
+    - path: /usr/lib/systemd/catalog/systemd.ko.catalog
+    - path: /usr/lib/systemd/catalog/systemd.pl.catalog
+    - path: /usr/lib/systemd/catalog/systemd.pt_BR.catalog
+    - path: /usr/lib/systemd/catalog/systemd.ru.catalog
+    - path: /usr/lib/systemd/catalog/systemd.sr.catalog
+    - path: /usr/lib/systemd/catalog/systemd.zh_CN.catalog
+    - path: /usr/lib/systemd/catalog/systemd.zh_TW.catalog
+    - path: /usr/lib/systemd/libsystemd-core-257.so
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/network/80-6rd-tunnel.link
+    - path: /usr/lib/systemd/network/80-6rd-tunnel.network
+    - path: /usr/lib/systemd/network/80-auto-link-local.network.example
+    - path: /usr/lib/systemd/network/80-container-host0-tun.network
+    - path: /usr/lib/systemd/network/80-container-host0.network
+    - path: /usr/lib/systemd/network/80-container-vb.link
+    - path: /usr/lib/systemd/network/80-container-vb.network
+    - path: /usr/lib/systemd/network/80-container-ve.link
+    - path: /usr/lib/systemd/network/80-container-ve.network
+    - path: /usr/lib/systemd/network/80-container-vz.link
+    - path: /usr/lib/systemd/network/80-container-vz.network
+    - path: /usr/lib/systemd/network/80-namespace-ns.link
+    - path: /usr/lib/systemd/network/80-namespace-ns.network
+    - path: /usr/lib/systemd/network/80-vm-vt.link
+    - path: /usr/lib/systemd/network/80-vm-vt.network
+    - path: /usr/lib/systemd/network/80-wifi-adhoc.network
+    - path: /usr/lib/systemd/network/80-wifi-ap.network.example
+    - path: /usr/lib/systemd/network/80-wifi-station.network.example
+    - path: /usr/lib/systemd/network/89-ethernet.network.example
+    - path: /usr/lib/systemd/network/99-default.link
+    - path: /usr/lib/systemd/ntp-units.d/80-systemd-timesync.list
+    - path: /usr/lib/systemd/portable/profile/default/service.conf
+    - path: /usr/lib/systemd/portable/profile/nonetwork/service.conf
+    - path: /usr/lib/systemd/portable/profile/strict/service.conf
+    - path: /usr/lib/systemd/portable/profile/trusted/service.conf
+    - path: /usr/lib/systemd/profile.d/70-systemd-shell-extra.sh
+    - path: /usr/lib/systemd/repart/definitions/confext.repart.d/10-root.conf
+    - path: /usr/lib/systemd/repart/definitions/confext.repart.d/20-root-verity.conf
+    - path: /usr/lib/systemd/repart/definitions/confext.repart.d/30-root-verity-sig.conf
+    - path: /usr/lib/systemd/repart/definitions/portable.repart.d/10-root.conf
+    - path: /usr/lib/systemd/repart/definitions/portable.repart.d/20-root-verity.conf
+    - path: /usr/lib/systemd/repart/definitions/portable.repart.d/30-root-verity-sig.conf
+    - path: /usr/lib/systemd/repart/definitions/sysext.repart.d/10-root.conf
+    - path: /usr/lib/systemd/repart/definitions/sysext.repart.d/20-root-verity.conf
+    - path: /usr/lib/systemd/repart/definitions/sysext.repart.d/30-root-verity-sig.conf
+    - path: /usr/lib/systemd/resolv.conf
+    - path: /usr/lib/systemd/ssh_config.d/20-systemd-ssh-proxy.conf
+    - path: /usr/lib/systemd/system-generators/systemd-debug-generator
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/system-generators/systemd-fstab-generator
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/system-generators/systemd-getty-generator
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/system-generators/systemd-gpt-auto-generator
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/system-generators/systemd-hibernate-resume-generator
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/system-generators/systemd-rc-local-generator
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/system-generators/systemd-run-generator
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/system-generators/systemd-ssh-generator
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/system-generators/systemd-system-update-generator
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/system-generators/systemd-sysv-generator
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/system-generators/systemd-tpm2-generator
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/system-preset/90-systemd.preset
+    - path: /usr/lib/systemd/system/autovt@.service
+    - path: /usr/lib/systemd/system/basic.target
+    - path: /usr/lib/systemd/system/blockdev@.target
+    - path: /usr/lib/systemd/system/bluetooth.target
+    - path: /usr/lib/systemd/system/boot-complete.target
+    - path: /usr/lib/systemd/system/capsule.slice
+    - path: /usr/lib/systemd/system/capsule@.service
+    - path: /usr/lib/systemd/system/console-getty.service
+    - path: /usr/lib/systemd/system/container-getty@.service
+    - path: /usr/lib/systemd/system/ctrl-alt-del.target
+    - path: /usr/lib/systemd/system/dbus-broker.service
+    - path: /usr/lib/systemd/system/dbus-org.freedesktop.hostname1.service
+    - path: /usr/lib/systemd/system/dbus-org.freedesktop.locale1.service
+    - path: /usr/lib/systemd/system/dbus-org.freedesktop.login1.service
+    - path: /usr/lib/systemd/system/dbus-org.freedesktop.machine1.service
+    - path: /usr/lib/systemd/system/dbus-org.freedesktop.portable1.service
+    - path: /usr/lib/systemd/system/dbus-org.freedesktop.timedate1.service
+    - path: /usr/lib/systemd/system/dbus.service
+    - path: /usr/lib/systemd/system/dbus.socket
+    - path: /usr/lib/systemd/system/debug-shell.service
+    - path: /usr/lib/systemd/system/default.target
+    - path: /usr/lib/systemd/system/dev-hugepages.mount
+    - path: /usr/lib/systemd/system/dev-mqueue.mount
+    - path: /usr/lib/systemd/system/emergency.service
+    - path: /usr/lib/systemd/system/emergency.target
+    - path: /usr/lib/systemd/system/exit.target
+    - path: /usr/lib/systemd/system/factory-reset.target
+    - path: /usr/lib/systemd/system/final.target
+    - path: /usr/lib/systemd/system/first-boot-complete.target
+    - path: /usr/lib/systemd/system/getty-pre.target
+    - path: /usr/lib/systemd/system/getty.target
+    - path: /usr/lib/systemd/system/getty@.service
+    - path: /usr/lib/systemd/system/graphical.target
+    - path: /usr/lib/systemd/system/graphical.target.wants/systemd-update-utmp-runlevel.service
+    - path: /usr/lib/systemd/system/halt.target
+    - path: /usr/lib/systemd/system/hibernate.target
+    - path: /usr/lib/systemd/system/hybrid-sleep.target
+    - path: /usr/lib/systemd/system/initrd-cleanup.service
+    - path: /usr/lib/systemd/system/initrd-fs.target
+    - path: /usr/lib/systemd/system/initrd-parse-etc.service
+    - path: /usr/lib/systemd/system/initrd-root-device.target
+    - path: /usr/lib/systemd/system/initrd-root-fs.target
+    - path: /usr/lib/systemd/system/initrd-root-fs.target.wants/systemd-repart.service
+    - path: /usr/lib/systemd/system/initrd-switch-root.service
+    - path: /usr/lib/systemd/system/initrd-switch-root.target
+    - path: /usr/lib/systemd/system/initrd-udevadm-cleanup-db.service
+    - path: /usr/lib/systemd/system/initrd-usr-fs.target
+    - path: /usr/lib/systemd/system/initrd.target
+    - path: /usr/lib/systemd/system/initrd.target.wants/systemd-battery-check.service
+    - path: /usr/lib/systemd/system/kexec.target
+    - path: /usr/lib/systemd/system/kmod-static-nodes.service
+    - path: /usr/lib/systemd/system/local-fs-pre.target
+    - path: /usr/lib/systemd/system/local-fs.target
+    - path: /usr/lib/systemd/system/local-fs.target.wants/tmp.mount
+    - path: /usr/lib/systemd/system/machine.slice
+    - path: /usr/lib/systemd/system/machines.target
+    - path: /usr/lib/systemd/system/machines.target.wants/var-lib-machines.mount
+    - path: /usr/lib/systemd/system/modprobe@.service
+    - path: /usr/lib/systemd/system/multi-user.target
+    - path: /usr/lib/systemd/system/multi-user.target.wants/getty.target
+    - path: /usr/lib/systemd/system/multi-user.target.wants/systemd-ask-password-wall.path
+    - path: /usr/lib/systemd/system/multi-user.target.wants/systemd-logind.service
+    - path: /usr/lib/systemd/system/multi-user.target.wants/systemd-update-utmp-runlevel.service
+    - path: /usr/lib/systemd/system/network-online.target
+    - path: /usr/lib/systemd/system/network-pre.target
+    - path: /usr/lib/systemd/system/network.target
+    - path: /usr/lib/systemd/system/nss-lookup.target
+    - path: /usr/lib/systemd/system/nss-user-lookup.target
+    - path: /usr/lib/systemd/system/paths.target
+    - path: /usr/lib/systemd/system/poweroff.target
+    - path: /usr/lib/systemd/system/printer.target
+    - path: /usr/lib/systemd/system/proc-sys-fs-binfmt_misc.automount
+    - path: /usr/lib/systemd/system/proc-sys-fs-binfmt_misc.mount
+    - path: /usr/lib/systemd/system/quotaon-root.service
+    - path: /usr/lib/systemd/system/quotaon@.service
+    - path: /usr/lib/systemd/system/rc-local.service
+    - path: /usr/lib/systemd/system/reboot.target
+    - path: /usr/lib/systemd/system/remote-fs-pre.target
+    - path: /usr/lib/systemd/system/remote-fs.target
+    - path: /usr/lib/systemd/system/remote-fs.target.wants/var-lib-machines.mount
+    - path: /usr/lib/systemd/system/rescue.service
+    - path: /usr/lib/systemd/system/rescue.target
+    - path: /usr/lib/systemd/system/rescue.target.wants/systemd-update-utmp-runlevel.service
+    - path: /usr/lib/systemd/system/rpcbind.target
+    - path: /usr/lib/systemd/system/runlevel0.target
+    - path: /usr/lib/systemd/system/runlevel1.target
+    - path: /usr/lib/systemd/system/runlevel2.target
+    - path: /usr/lib/systemd/system/runlevel3.target
+    - path: /usr/lib/systemd/system/runlevel4.target
+    - path: /usr/lib/systemd/system/runlevel5.target
+    - path: /usr/lib/systemd/system/runlevel6.target
+    - path: /usr/lib/systemd/system/serial-getty@.service
+    - path: /usr/lib/systemd/system/shutdown.target
+    - path: /usr/lib/systemd/system/sigpwr.target
+    - path: /usr/lib/systemd/system/sleep.target
+    - path: /usr/lib/systemd/system/slices.target
+    - path: /usr/lib/systemd/system/smartcard.target
+    - path: /usr/lib/systemd/system/sockets.target
+    - path: /usr/lib/systemd/system/sockets.target.wants/dbus.socket
+    - path: /usr/lib/systemd/system/sockets.target.wants/systemd-coredump.socket
+    - path: /usr/lib/systemd/system/sockets.target.wants/systemd-creds.socket
+    - path: /usr/lib/systemd/system/sockets.target.wants/systemd-hostnamed.socket
+    - path: /usr/lib/systemd/system/sockets.target.wants/systemd-initctl.socket
+    - path: /usr/lib/systemd/system/sockets.target.wants/systemd-journald-dev-log.socket
+    - path: /usr/lib/systemd/system/sockets.target.wants/systemd-journald.socket
+    - path: /usr/lib/systemd/system/sockets.target.wants/systemd-sysext.socket
+    - path: /usr/lib/systemd/system/sockets.target.wants/systemd-udevd-control.socket
+    - path: /usr/lib/systemd/system/sockets.target.wants/systemd-udevd-kernel.socket
+    - path: /usr/lib/systemd/system/soft-reboot.target
+    - path: /usr/lib/systemd/system/sound.target
+    - path: /usr/lib/systemd/system/ssh-access.target
+    - path: /usr/lib/systemd/system/storage-target-mode.target
+    - path: /usr/lib/systemd/system/suspend-then-hibernate.target
+    - path: /usr/lib/systemd/system/suspend.target
+    - path: /usr/lib/systemd/system/swap.target
+    - path: /usr/lib/systemd/system/sys-fs-fuse-connections.mount
+    - path: /usr/lib/systemd/system/sys-kernel-config.mount
+    - path: /usr/lib/systemd/system/sys-kernel-debug.mount
+    - path: /usr/lib/systemd/system/sys-kernel-tracing.mount
+    - path: /usr/lib/systemd/system/sysinit.target
+    - path: /usr/lib/systemd/system/sysinit.target.wants/dev-hugepages.mount
+    - path: /usr/lib/systemd/system/sysinit.target.wants/dev-mqueue.mount
+    - path: /usr/lib/systemd/system/sysinit.target.wants/kmod-static-nodes.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/proc-sys-fs-binfmt_misc.automount
+    - path: /usr/lib/systemd/system/sysinit.target.wants/sys-fs-fuse-connections.mount
+    - path: /usr/lib/systemd/system/sysinit.target.wants/sys-kernel-config.mount
+    - path: /usr/lib/systemd/system/sysinit.target.wants/sys-kernel-debug.mount
+    - path: /usr/lib/systemd/system/sysinit.target.wants/sys-kernel-tracing.mount
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-ask-password-console.path
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-binfmt.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-hibernate-clear.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-hwdb-update.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-journal-catalog-update.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-journal-flush.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-journald.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-machine-id-commit.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-modules-load.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-random-seed.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-repart.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-sysctl.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-tmpfiles-setup-dev-early.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-tmpfiles-setup-dev.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-tmpfiles-setup.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-udev-trigger.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-udevd.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-update-done.service
+    - path: /usr/lib/systemd/system/sysinit.target.wants/systemd-update-utmp.service
+    - path: /usr/lib/systemd/system/syslog.socket
+    - path: /usr/lib/systemd/system/system-update-cleanup.service
+    - path: /usr/lib/systemd/system/system-update-pre.target
+    - path: /usr/lib/systemd/system/system-update.target
+    - path: /usr/lib/systemd/system/systemd-ask-password-console.path
+    - path: /usr/lib/systemd/system/systemd-ask-password-console.service
+    - path: /usr/lib/systemd/system/systemd-ask-password-wall.path
+    - path: /usr/lib/systemd/system/systemd-ask-password-wall.service
+    - path: /usr/lib/systemd/system/systemd-backlight@.service
+    - path: /usr/lib/systemd/system/systemd-battery-check.service
+    - path: /usr/lib/systemd/system/systemd-binfmt.service
+    - path: /usr/lib/systemd/system/systemd-boot-check-no-failures.service
+    - path: /usr/lib/systemd/system/systemd-confext.service
+    - path: /usr/lib/systemd/system/systemd-coredump.socket
+    - path: /usr/lib/systemd/system/systemd-coredump@.service
+    - path: /usr/lib/systemd/system/systemd-creds.socket
+    - path: /usr/lib/systemd/system/systemd-creds@.service
+    - path: /usr/lib/systemd/system/systemd-exit.service
+    - path: /usr/lib/systemd/system/systemd-fsck-root.service
+    - path: /usr/lib/systemd/system/systemd-fsck@.service
+    - path: /usr/lib/systemd/system/systemd-growfs-root.service
+    - path: /usr/lib/systemd/system/systemd-growfs@.service
+    - path: /usr/lib/systemd/system/systemd-halt.service
+    - path: /usr/lib/systemd/system/systemd-hibernate-clear.service
+    - path: /usr/lib/systemd/system/systemd-hibernate-resume.service
+    - path: /usr/lib/systemd/system/systemd-hibernate.service
+    - path: /usr/lib/systemd/system/systemd-hostnamed.service
+    - path: /usr/lib/systemd/system/systemd-hostnamed.socket
+    - path: /usr/lib/systemd/system/systemd-hwdb-update.service
+    - path: /usr/lib/systemd/system/systemd-hybrid-sleep.service
+    - path: /usr/lib/systemd/system/systemd-initctl.service
+    - path: /usr/lib/systemd/system/systemd-initctl.socket
+    - path: /usr/lib/systemd/system/systemd-journal-catalog-update.service
+    - path: /usr/lib/systemd/system/systemd-journal-flush.service
+    - path: /usr/lib/systemd/system/systemd-journald-audit.socket
+    - path: /usr/lib/systemd/system/systemd-journald-dev-log.socket
+    - path: /usr/lib/systemd/system/systemd-journald-sync@.service
+    - path: /usr/lib/systemd/system/systemd-journald-varlink@.socket
+    - path: /usr/lib/systemd/system/systemd-journald.service
+    - path: /usr/lib/systemd/system/systemd-journald.socket
+    - path: /usr/lib/systemd/system/systemd-journald@.service
+    - path: /usr/lib/systemd/system/systemd-journald@.socket
+    - path: /usr/lib/systemd/system/systemd-kexec.service
+    - path: /usr/lib/systemd/system/systemd-localed.service
+    - path: /usr/lib/systemd/system/systemd-logind.service
+    - path: /usr/lib/systemd/system/systemd-machine-id-commit.service
+    - path: /usr/lib/systemd/system/systemd-machined.service
+    - path: /usr/lib/systemd/system/systemd-modules-load.service
+    - path: /usr/lib/systemd/system/systemd-mountfsd.service
+    - path: /usr/lib/systemd/system/systemd-mountfsd.socket
+    - path: /usr/lib/systemd/system/systemd-network-generator.service
+    - path: /usr/lib/systemd/system/systemd-networkd-persistent-storage.service
+    - path: /usr/lib/systemd/system/systemd-networkd-wait-online.service
+    - path: /usr/lib/systemd/system/systemd-networkd-wait-online@.service
+    - path: /usr/lib/systemd/system/systemd-networkd.service
+    - path: /usr/lib/systemd/system/systemd-networkd.socket
+    - path: /usr/lib/systemd/system/systemd-nspawn@.service
+    - path: /usr/lib/systemd/system/systemd-nsresourced.service
+    - path: /usr/lib/systemd/system/systemd-nsresourced.socket
+    - path: /usr/lib/systemd/system/systemd-oomd.service
+    - path: /usr/lib/systemd/system/systemd-oomd.socket
+    - path: /usr/lib/systemd/system/systemd-portabled.service
+    - path: /usr/lib/systemd/system/systemd-poweroff.service
+    - path: /usr/lib/systemd/system/systemd-pstore.service
+    - path: /usr/lib/systemd/system/systemd-quotacheck-root.service
+    - path: /usr/lib/systemd/system/systemd-quotacheck@.service
+    - path: /usr/lib/systemd/system/systemd-random-seed.service
+    - path: /usr/lib/systemd/system/systemd-reboot.service
+    - path: /usr/lib/systemd/system/systemd-remount-fs.service
+    - path: /usr/lib/systemd/system/systemd-repart.service
+    - path: /usr/lib/systemd/system/systemd-resolved.service
+    - path: /usr/lib/systemd/system/systemd-rfkill.service
+    - path: /usr/lib/systemd/system/systemd-rfkill.socket
+    - path: /usr/lib/systemd/system/systemd-soft-reboot.service
+    - path: /usr/lib/systemd/system/systemd-storagetm.service
+    - path: /usr/lib/systemd/system/systemd-suspend-then-hibernate.service
+    - path: /usr/lib/systemd/system/systemd-suspend.service
+    - path: /usr/lib/systemd/system/systemd-sysctl.service
+    - path: /usr/lib/systemd/system/systemd-sysext.service
+    - path: /usr/lib/systemd/system/systemd-sysext.socket
+    - path: /usr/lib/systemd/system/systemd-sysext@.service
+    - path: /usr/lib/systemd/system/systemd-sysupdate-reboot.service
+    - path: /usr/lib/systemd/system/systemd-sysupdate-reboot.timer
+    - path: /usr/lib/systemd/system/systemd-sysupdate.service
+    - path: /usr/lib/systemd/system/systemd-sysupdate.timer
+    - path: /usr/lib/systemd/system/systemd-time-wait-sync.service
+    - path: /usr/lib/systemd/system/systemd-timedated.service
+    - path: /usr/lib/systemd/system/systemd-timesyncd.service
+    - path: /usr/lib/systemd/system/systemd-tmpfiles-clean.service
+    - path: /usr/lib/systemd/system/systemd-tmpfiles-clean.timer
+    - path: /usr/lib/systemd/system/systemd-tmpfiles-setup-dev-early.service
+    - path: /usr/lib/systemd/system/systemd-tmpfiles-setup-dev.service
+    - path: /usr/lib/systemd/system/systemd-tmpfiles-setup.service
+    - path: /usr/lib/systemd/system/systemd-udev-load-credentials.service
+    - path: /usr/lib/systemd/system/systemd-udev-settle.service
+    - path: /usr/lib/systemd/system/systemd-udev-trigger.service
+    - path: /usr/lib/systemd/system/systemd-udevd-control.socket
+    - path: /usr/lib/systemd/system/systemd-udevd-kernel.socket
+    - path: /usr/lib/systemd/system/systemd-udevd.service
+    - path: /usr/lib/systemd/system/systemd-update-done.service
+    - path: /usr/lib/systemd/system/systemd-update-utmp-runlevel.service
+    - path: /usr/lib/systemd/system/systemd-update-utmp.service
+    - path: /usr/lib/systemd/system/systemd-vconsole-setup.service
+    - path: /usr/lib/systemd/system/systemd-volatile-root.service
+    - path: /usr/lib/systemd/system/time-set.target
+    - path: /usr/lib/systemd/system/time-sync.target
+    - path: /usr/lib/systemd/system/timers.target
+    - path: /usr/lib/systemd/system/timers.target.wants/systemd-tmpfiles-clean.timer
+    - path: /usr/lib/systemd/system/tmp.mount
+    - path: /usr/lib/systemd/system/tpm2.target
+    - path: /usr/lib/systemd/system/umount.target
+    - path: /usr/lib/systemd/system/usb-gadget.target
+    - path: /usr/lib/systemd/system/user-.slice.d/10-defaults.conf
+    - path: /usr/lib/systemd/system/user-runtime-dir@.service
+    - path: /usr/lib/systemd/system/user.slice
+    - path: /usr/lib/systemd/system/user@.service
+    - path: /usr/lib/systemd/system/user@.service.d/10-login-barrier.conf
+    - path: /usr/lib/systemd/system/user@0.service.d/10-login-barrier.conf
+    - path: /usr/lib/systemd/system/var-lib-machines.mount
+    - path: /usr/lib/systemd/systemd
+      needs:
+      - /usr/lib/systemd/libsystemd-core-257.so
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-backlight
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-battery-check
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-binfmt
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-boot-check-no-failures
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-cgroups-agent
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-coredump
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-executor
+      needs:
+      - /usr/lib/systemd/libsystemd-core-257.so
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-fsck
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-growfs
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-hibernate-resume
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-hostnamed
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-initctl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-journald
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-keyutil
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-localed
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-logind
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-machined
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-makefs
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-modules-load
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-mountfsd
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-mountwork
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-network-generator
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-networkd
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-networkd-wait-online
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-nsresourced
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-nsresourcework
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-oomd
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-portabled
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-pstore
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-quotacheck
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-random-seed
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-remount-fs
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-reply-password
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-resolved
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-rfkill
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-sbsign
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-shutdown
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-sleep
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-socket-proxyd
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-ssh-proxy
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-storagetm
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-sulogin-shell
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-sysctl
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-sysroot-fstab-check
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-sysupdate
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-time-wait-sync
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-timedated
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-timesyncd
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-update-done
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-update-utmp
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-user-runtime-dir
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-vconsole-setup
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-volatile-root
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/systemd-xdg-autostart-condition
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/user-environment-generators/30-systemd-environment-d-generator
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/user-generators/systemd-xdg-autostart-generator
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/user-preset/90-systemd.preset
+    - path: /usr/lib/systemd/user/app.slice
+    - path: /usr/lib/systemd/user/background.slice
+    - path: /usr/lib/systemd/user/basic.target
+    - path: /usr/lib/systemd/user/bluetooth.target
+    - path: /usr/lib/systemd/user/capsule@.target
+    - path: /usr/lib/systemd/user/dbus-broker.service
+    - path: /usr/lib/systemd/user/default.target
+    - path: /usr/lib/systemd/user/exit.target
+    - path: /usr/lib/systemd/user/graphical-session-pre.target
+    - path: /usr/lib/systemd/user/graphical-session.target
+    - path: /usr/lib/systemd/user/paths.target
+    - path: /usr/lib/systemd/user/printer.target
+    - path: /usr/lib/systemd/user/session.slice
+    - path: /usr/lib/systemd/user/shutdown.target
+    - path: /usr/lib/systemd/user/smartcard.target
+    - path: /usr/lib/systemd/user/sockets.target
+    - path: /usr/lib/systemd/user/sound.target
+    - path: /usr/lib/systemd/user/systemd-exit.service
+    - path: /usr/lib/systemd/user/systemd-tmpfiles-clean.service
+    - path: /usr/lib/systemd/user/systemd-tmpfiles-clean.timer
+    - path: /usr/lib/systemd/user/systemd-tmpfiles-setup.service
+    - path: /usr/lib/systemd/user/timers.target
+    - path: /usr/lib/systemd/user/xdg-desktop-autostart.target
+    - path: /usr/lib/tmpfiles.d/20-systemd-shell-extra.conf
+    - path: /usr/lib/tmpfiles.d/20-systemd-ssh-generator.conf
+    - path: /usr/lib/tmpfiles.d/20-systemd-stub.conf
+    - path: /usr/lib/tmpfiles.d/README
+    - path: /usr/lib/tmpfiles.d/credstore.conf
+    - path: /usr/lib/tmpfiles.d/etc.conf
+    - path: /usr/lib/tmpfiles.d/home.conf
+    - path: /usr/lib/tmpfiles.d/journal-nocow.conf
+    - path: /usr/lib/tmpfiles.d/legacy.conf
+    - path: /usr/lib/tmpfiles.d/portables.conf
+    - path: /usr/lib/tmpfiles.d/provision.conf
+    - path: /usr/lib/tmpfiles.d/static-nodes-permissions.conf
+    - path: /usr/lib/tmpfiles.d/systemd-network.conf
+    - path: /usr/lib/tmpfiles.d/systemd-nspawn.conf
+    - path: /usr/lib/tmpfiles.d/systemd-pstore.conf
+    - path: /usr/lib/tmpfiles.d/systemd-resolve.conf
+    - path: /usr/lib/tmpfiles.d/systemd-tmp.conf
+    - path: /usr/lib/tmpfiles.d/systemd.conf
+    - path: /usr/lib/tmpfiles.d/tmp.conf
+    - path: /usr/lib/tmpfiles.d/var.conf
+    - path: /usr/lib/tmpfiles.d/x11.conf
+    - path: /usr/lib/udev/ata_id
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/udev/cdrom_id
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/udev/dmi_memory_id
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/udev/fido_id
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/udev/hwdb.d/20-OUI.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-acpi-vendor.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-bluetooth-vendor-product.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-dmi-id.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-net-ifname.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-pci-classes.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-pci-vendor-model.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-sdio-classes.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-sdio-vendor-model.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-usb-classes.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-usb-vendor-model.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-vmbus-class.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-autosuspend-chromiumos.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-autosuspend-fingerprint-reader.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-autosuspend.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-evdev.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-input-id.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-keyboard.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-seat.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-sensor.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-analyzers.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-av-production.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-cameras.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-hardware-wallets.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-joystick.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-mouse.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-pda.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-pointingstick.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-sound-card.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-touchpad.hwdb
+    - path: /usr/lib/udev/hwdb.d/80-ieee1394-unit-function.hwdb
+    - path: /usr/lib/udev/hwdb.d/README
+    - path: /usr/lib/udev/iocost
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/udev/mtd_probe
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/udev/rules.d/50-udev-default.rules
+    - path: /usr/lib/udev/rules.d/60-autosuspend.rules
+    - path: /usr/lib/udev/rules.d/60-block.rules
+    - path: /usr/lib/udev/rules.d/60-cdrom_id.rules
+    - path: /usr/lib/udev/rules.d/60-dmi-id.rules
+    - path: /usr/lib/udev/rules.d/60-drm.rules
+    - path: /usr/lib/udev/rules.d/60-evdev.rules
+    - path: /usr/lib/udev/rules.d/60-fido-id.rules
+    - path: /usr/lib/udev/rules.d/60-infiniband.rules
+    - path: /usr/lib/udev/rules.d/60-input-id.rules
+    - path: /usr/lib/udev/rules.d/60-persistent-alsa.rules
+    - path: /usr/lib/udev/rules.d/60-persistent-input.rules
+    - path: /usr/lib/udev/rules.d/60-persistent-storage-mtd.rules
+    - path: /usr/lib/udev/rules.d/60-persistent-storage-tape.rules
+    - path: /usr/lib/udev/rules.d/60-persistent-storage.rules
+    - path: /usr/lib/udev/rules.d/60-persistent-v4l.rules
+    - path: /usr/lib/udev/rules.d/60-sensor.rules
+    - path: /usr/lib/udev/rules.d/60-serial.rules
+    - path: /usr/lib/udev/rules.d/64-btrfs.rules
+    - path: /usr/lib/udev/rules.d/70-camera.rules
+    - path: /usr/lib/udev/rules.d/70-joystick.rules
+    - path: /usr/lib/udev/rules.d/70-memory.rules
+    - path: /usr/lib/udev/rules.d/70-mouse.rules
+    - path: /usr/lib/udev/rules.d/70-power-switch.rules
+    - path: /usr/lib/udev/rules.d/70-touchpad.rules
+    - path: /usr/lib/udev/rules.d/70-uaccess.rules
+    - path: /usr/lib/udev/rules.d/71-seat.rules
+    - path: /usr/lib/udev/rules.d/73-seat-late.rules
+    - path: /usr/lib/udev/rules.d/75-net-description.rules
+    - path: /usr/lib/udev/rules.d/75-probe_mtd.rules
+    - path: /usr/lib/udev/rules.d/78-sound-card.rules
+    - path: /usr/lib/udev/rules.d/80-drivers.rules
+    - path: /usr/lib/udev/rules.d/80-net-setup-link.rules
+    - path: /usr/lib/udev/rules.d/81-net-dhcp.rules
+    - path: /usr/lib/udev/rules.d/90-iocost.rules
+    - path: /usr/lib/udev/rules.d/90-vconsole.rules
+    - path: /usr/lib/udev/rules.d/99-systemd.rules
+    - path: /usr/lib/udev/rules.d/README
+    - path: /usr/lib/udev/scsi_id
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/udev/v4l_id
+      needs:
+      - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/share/dbus-1/system.conf
+  misc:
+    files: []
+
+resolution:
+  /usr/lib/systemd/libsystemd-shared-257.so: '@self'
+  /usr/lib/libsystemd.so.0: '@self'
+  /usr/lib/systemd/libsystemd-core-257.so: '@self'

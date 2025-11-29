@@ -12,61 +12,56 @@ sources:
   url: https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-2.69.tar.xz
   sha256: f311f8f3dad84699d0566d1d6f7ec943a9298b28f714cae3c931dfd57492d7eb
 dependencies:
-  - name: bootstrap_tools
-    commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
-  - name: gcc
-    commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/outputs/lib
-  - name: bash
-    commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
-  - name: coreutils
-    commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
-  - name: diffutils
-    commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
-  - name: findutils
-    commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
-  - name: 2nex-utilities-bootstrap
-    commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
-  - name: grep
-    commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
-  - name: make
-    commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
-  - name: sed
-    commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
-  - name: tar
-    commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
-  - name: glibc
-    commit: x86_64/pkg/libs/system/glibc/2.39/outputs/lib
-  - name: gcc
-    commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
-  - name: xz
-    commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
-  - name: bzip2
-    commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/outputs/lib
-  - name: zlib
-    commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/outputs/lib
-  - name: file
-    commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
-  - name: binutils
-    commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-  - name: glibc
-    commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: bootstrap_tools
+  commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities-bootstrap
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/outputs/lib
+- name: zlib
+  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/outputs/lib
+- name: file
+  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: mpc
+  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/outputs/lib
+- name: mpfr
+  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+- name: gmp-bootstrap
+  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
 build:
-  script: 'tar --no-same-owner -xf ${SOURCE_libcap} -C "${WORK_DIR}" --strip-components=1
-
+  script: |
+    tar --no-same-owner -xf ${SOURCE_libcap} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
     sed -i "/install -m.*STA/d" libcap/Makefile
+    make DESTDIR=${OUT_DIR} prefix=/usr lib=lib sbindir=bin DYNAMIC=yes DYNAMIC=yes KERNEL_HEADERS=/usr/include install
 
-    make DESTDIR=${OUT_DIR} prefix=/usr lib=lib sbindir=bin DYNAMIC=yes DYNAMIC=yes
-    KERNEL_HEADERS=/usr/include install
-
-
-    find "${OUT_DIR}" -exec touch -d ''2024-01-01T00:00:00+00:00'' {} \;
-
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
-
-    '
 bundles:
   full:
   - man
@@ -80,106 +75,144 @@ bundles:
 outputs:
   man:
     files:
-    - /usr/share/man/man1/capsh.1
-    - /usr/share/man/man3/__psx_syscall.3
-    - /usr/share/man/man3/cap_clear.3
-    - /usr/share/man/man3/cap_clear_flag.3
-    - /usr/share/man/man3/cap_compare.3
-    - /usr/share/man/man3/cap_copy_ext.3
-    - /usr/share/man/man3/cap_copy_int.3
-    - /usr/share/man/man3/cap_copy_int_check.3
-    - /usr/share/man/man3/cap_drop_bound.3
-    - /usr/share/man/man3/cap_dup.3
-    - /usr/share/man/man3/cap_fill.3
-    - /usr/share/man/man3/cap_fill_flag.3
-    - /usr/share/man/man3/cap_free.3
-    - /usr/share/man/man3/cap_from_name.3
-    - /usr/share/man/man3/cap_from_text.3
-    - /usr/share/man/man3/cap_func_launcher.3
-    - /usr/share/man/man3/cap_get_bound.3
-    - /usr/share/man/man3/cap_get_fd.3
-    - /usr/share/man/man3/cap_get_file.3
-    - /usr/share/man/man3/cap_get_flag.3
-    - /usr/share/man/man3/cap_get_mode.3
-    - /usr/share/man/man3/cap_get_nsowner.3
-    - /usr/share/man/man3/cap_get_pid.3
-    - /usr/share/man/man3/cap_get_proc.3
-    - /usr/share/man/man3/cap_get_secbits.3
-    - /usr/share/man/man3/cap_iab.3
-    - /usr/share/man/man3/cap_iab_compare.3
-    - /usr/share/man/man3/cap_iab_dup.3
-    - /usr/share/man/man3/cap_iab_fill.3
-    - /usr/share/man/man3/cap_iab_from_text.3
-    - /usr/share/man/man3/cap_iab_get_pid.3
-    - /usr/share/man/man3/cap_iab_get_proc.3
-    - /usr/share/man/man3/cap_iab_get_vector.3
-    - /usr/share/man/man3/cap_iab_init.3
-    - /usr/share/man/man3/cap_iab_set_proc.3
-    - /usr/share/man/man3/cap_iab_set_vector.3
-    - /usr/share/man/man3/cap_iab_to_text.3
-    - /usr/share/man/man3/cap_init.3
-    - /usr/share/man/man3/cap_launch.3
-    - /usr/share/man/man3/cap_launcher_callback.3
-    - /usr/share/man/man3/cap_launcher_set_chroot.3
-    - /usr/share/man/man3/cap_launcher_set_iab.3
-    - /usr/share/man/man3/cap_launcher_set_mode.3
-    - /usr/share/man/man3/cap_launcher_setgroups.3
-    - /usr/share/man/man3/cap_launcher_setuid.3
-    - /usr/share/man/man3/cap_max_bits.3
-    - /usr/share/man/man3/cap_mode.3
-    - /usr/share/man/man3/cap_mode_name.3
-    - /usr/share/man/man3/cap_new_launcher.3
-    - /usr/share/man/man3/cap_prctl.3
-    - /usr/share/man/man3/cap_prctlw.3
-    - /usr/share/man/man3/cap_proc_root.3
-    - /usr/share/man/man3/cap_set_fd.3
-    - /usr/share/man/man3/cap_set_file.3
-    - /usr/share/man/man3/cap_set_flag.3
-    - /usr/share/man/man3/cap_set_mode.3
-    - /usr/share/man/man3/cap_set_nsowner.3
-    - /usr/share/man/man3/cap_set_proc.3
-    - /usr/share/man/man3/cap_set_secbits.3
-    - /usr/share/man/man3/cap_set_syscall.3
-    - /usr/share/man/man3/cap_setgroups.3
-    - /usr/share/man/man3/cap_setuid.3
-    - /usr/share/man/man3/cap_size.3
-    - /usr/share/man/man3/cap_to_name.3
-    - /usr/share/man/man3/cap_to_text.3
-    - /usr/share/man/man3/capgetp.3
-    - /usr/share/man/man3/capsetp.3
-    - /usr/share/man/man3/libcap.3
-    - /usr/share/man/man3/libpsx.3
-    - /usr/share/man/man3/psx_load_syscalls.3
-    - /usr/share/man/man3/psx_set_sensitivity.3
-    - /usr/share/man/man3/psx_syscall.3
-    - /usr/share/man/man3/psx_syscall3.3
-    - /usr/share/man/man3/psx_syscall6.3
-    - /usr/share/man/man8/captree.8
-    - /usr/share/man/man8/getcap.8
-    - /usr/share/man/man8/getpcaps.8
-    - /usr/share/man/man8/setcap.8
+    - path: /usr/share/man/man1/capsh.1
+    - path: /usr/share/man/man3/__psx_syscall.3
+    - path: /usr/share/man/man3/cap_clear.3
+    - path: /usr/share/man/man3/cap_clear_flag.3
+    - path: /usr/share/man/man3/cap_compare.3
+    - path: /usr/share/man/man3/cap_copy_ext.3
+    - path: /usr/share/man/man3/cap_copy_int.3
+    - path: /usr/share/man/man3/cap_copy_int_check.3
+    - path: /usr/share/man/man3/cap_drop_bound.3
+    - path: /usr/share/man/man3/cap_dup.3
+    - path: /usr/share/man/man3/cap_fill.3
+    - path: /usr/share/man/man3/cap_fill_flag.3
+    - path: /usr/share/man/man3/cap_free.3
+    - path: /usr/share/man/man3/cap_from_name.3
+    - path: /usr/share/man/man3/cap_from_text.3
+    - path: /usr/share/man/man3/cap_func_launcher.3
+    - path: /usr/share/man/man3/cap_get_bound.3
+    - path: /usr/share/man/man3/cap_get_fd.3
+    - path: /usr/share/man/man3/cap_get_file.3
+    - path: /usr/share/man/man3/cap_get_flag.3
+    - path: /usr/share/man/man3/cap_get_mode.3
+    - path: /usr/share/man/man3/cap_get_nsowner.3
+    - path: /usr/share/man/man3/cap_get_pid.3
+    - path: /usr/share/man/man3/cap_get_proc.3
+    - path: /usr/share/man/man3/cap_get_secbits.3
+    - path: /usr/share/man/man3/cap_iab.3
+    - path: /usr/share/man/man3/cap_iab_compare.3
+    - path: /usr/share/man/man3/cap_iab_dup.3
+    - path: /usr/share/man/man3/cap_iab_fill.3
+    - path: /usr/share/man/man3/cap_iab_from_text.3
+    - path: /usr/share/man/man3/cap_iab_get_pid.3
+    - path: /usr/share/man/man3/cap_iab_get_proc.3
+    - path: /usr/share/man/man3/cap_iab_get_vector.3
+    - path: /usr/share/man/man3/cap_iab_init.3
+    - path: /usr/share/man/man3/cap_iab_set_proc.3
+    - path: /usr/share/man/man3/cap_iab_set_vector.3
+    - path: /usr/share/man/man3/cap_iab_to_text.3
+    - path: /usr/share/man/man3/cap_init.3
+    - path: /usr/share/man/man3/cap_launch.3
+    - path: /usr/share/man/man3/cap_launcher_callback.3
+    - path: /usr/share/man/man3/cap_launcher_set_chroot.3
+    - path: /usr/share/man/man3/cap_launcher_set_iab.3
+    - path: /usr/share/man/man3/cap_launcher_set_mode.3
+    - path: /usr/share/man/man3/cap_launcher_setgroups.3
+    - path: /usr/share/man/man3/cap_launcher_setuid.3
+    - path: /usr/share/man/man3/cap_max_bits.3
+    - path: /usr/share/man/man3/cap_mode.3
+    - path: /usr/share/man/man3/cap_mode_name.3
+    - path: /usr/share/man/man3/cap_new_launcher.3
+    - path: /usr/share/man/man3/cap_prctl.3
+    - path: /usr/share/man/man3/cap_prctlw.3
+    - path: /usr/share/man/man3/cap_proc_root.3
+    - path: /usr/share/man/man3/cap_set_fd.3
+    - path: /usr/share/man/man3/cap_set_file.3
+    - path: /usr/share/man/man3/cap_set_flag.3
+    - path: /usr/share/man/man3/cap_set_mode.3
+    - path: /usr/share/man/man3/cap_set_nsowner.3
+    - path: /usr/share/man/man3/cap_set_proc.3
+    - path: /usr/share/man/man3/cap_set_secbits.3
+    - path: /usr/share/man/man3/cap_set_syscall.3
+    - path: /usr/share/man/man3/cap_setgroups.3
+    - path: /usr/share/man/man3/cap_setuid.3
+    - path: /usr/share/man/man3/cap_size.3
+    - path: /usr/share/man/man3/cap_to_name.3
+    - path: /usr/share/man/man3/cap_to_text.3
+    - path: /usr/share/man/man3/capgetp.3
+    - path: /usr/share/man/man3/capsetp.3
+    - path: /usr/share/man/man3/libcap.3
+    - path: /usr/share/man/man3/libpsx.3
+    - path: /usr/share/man/man3/psx_load_syscalls.3
+    - path: /usr/share/man/man3/psx_set_sensitivity.3
+    - path: /usr/share/man/man3/psx_syscall.3
+    - path: /usr/share/man/man3/psx_syscall3.3
+    - path: /usr/share/man/man3/psx_syscall6.3
+    - path: /usr/share/man/man8/captree.8
+    - path: /usr/share/man/man8/getcap.8
+    - path: /usr/share/man/man8/getpcaps.8
+    - path: /usr/share/man/man8/setcap.8
   bin:
     files:
-    - /usr/bin/capsh
-    - /usr/bin/getcap
-    - /usr/bin/getpcaps
-    - /usr/bin/setcap
-    requires:
-    - x86_64/pkg/libs/system/glibc/2.39/outputs/lib
+    - path: /usr/bin/capsh
+      needs:
+      - /usr/lib/libcap.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/getcap
+      needs:
+      - /usr/lib/libcap.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/getpcaps
+      needs:
+      - /usr/lib/libcap.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/setcap
+      needs:
+      - /usr/lib/libcap.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
   dev:
     files:
-    - /usr/include/sys/capability.h
-    - /usr/include/sys/psx_syscall.h
-    - /usr/lib/pkgconfig/libcap.pc
-    - /usr/lib/pkgconfig/libpsx.pc
+    - path: /usr/include/sys/capability.h
+    - path: /usr/include/sys/psx_syscall.h
+    - path: /usr/lib/pkgconfig/libcap.pc
+    - path: /usr/lib/pkgconfig/libpsx.pc
   lib:
     files:
-    - /usr/lib/libcap.so
-    - /usr/lib/libcap.so.2
-    - /usr/lib/libcap.so.2.69
-    - /usr/lib/libpsx.so
-    - /usr/lib/libpsx.so.2
-    - /usr/lib/libpsx.so.2.69
-    requires:
-    - x86_64/pkg/core/toolchain/gcc/13.2.0/outputs/lib
-    - x86_64/pkg/libs/system/glibc/2.39/outputs/lib
+    - path: /usr/lib/libcap.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/lib/libcap.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/lib/libcap.so.2.69
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/lib/libpsx.so
+      needs:
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/lib/libpsx.so.2
+      needs:
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/lib/libpsx.so.2.69
+      needs:
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+
+resolution:
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libcap.so.2: '@self'
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc

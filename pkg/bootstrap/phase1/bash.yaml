@@ -10,172 +10,260 @@ package:
   stable_checksum: false
   sha256: 621a75ff2ef12e03763b8df92d8268f253708db8ee9f6deb240cc02129eeae3e
 dependencies:
-  - name: bootstrap_tools
-    commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
-  - name: m4
-    commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
-  - name: ncurses
-    commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
+- name: bootstrap_tools
+  commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
 sources:
 - name: bash
   url: https://ftp.gnu.org/gnu/bash/bash-5.2.21.tar.gz
   sha256: c8e31bdc59b69aaffc5b36509905ba3e5cbb12747091d27b4b977f078560d5b8
 build:
-  script: "tar --no-same-owner -xf ${SOURCE_bash} -C \"${WORK_DIR}\" --strip-components=1\n\
-    cd ${WORK_DIR}\n\n# add flags to handle old K&R C code in bash build tools with\
-    \ modern GCC\nexport CFLAGS=\"$CFLAGS -Wno-error=implicit-function-declaration\
-    \ -Wno-error=incompatible-pointer-types\"\n\n./configure --prefix=/usr       \
-    \               \\\n            --build=$(sh support/config.guess) \\\n      \
-    \      --host=${TARGET}                   \\\n            --without-bash-malloc\n\
-    \n# bash uses CFLAGS_FOR_BUILD for host compiler when building tools like mkbuiltins\n\
-    # use -std=gnu89 for old C89 standard that allows K&R function declarations\n\
-    make CFLAGS_FOR_BUILD=\"-g -DCROSS_COMPILING -std=gnu89\"\nmake DESTDIR=${OUT_DIR}\
-    \ install\nln -sv bash ${OUT_DIR}/usr/bin/sh\n\nrm -rf ${OUT_DIR}/usr/share/man\
-    \ ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/doc\n"
+  script: |
+    tar --no-same-owner -xf ${SOURCE_bash} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    # add flags to handle old K&R C code in bash build tools with modern GCC
+    export CFLAGS="$CFLAGS -Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types"
+
+    ./configure --prefix=/usr                      \
+                --build=$(sh support/config.guess) \
+                --host=${TARGET}                   \
+                --without-bash-malloc
+
+    # bash uses CFLAGS_FOR_BUILD for host compiler when building tools like mkbuiltins
+    # use -std=gnu89 for old C89 standard that allows K&R function declarations
+    make CFLAGS_FOR_BUILD="-g -DCROSS_COMPILING -std=gnu89"
+    make DESTDIR=${OUT_DIR} install
+    ln -sv bash ${OUT_DIR}/usr/bin/sh
+
+    rm -rf ${OUT_DIR}/usr/share/man ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/doc
 bundles:
   dev:
   - dev
 outputs:
   dev:
     files:
-    - /usr/include/bash/alias.h
-    - /usr/include/bash/array.h
-    - /usr/include/bash/arrayfunc.h
-    - /usr/include/bash/assoc.h
-    - /usr/include/bash/bashansi.h
-    - /usr/include/bash/bashintl.h
-    - /usr/include/bash/bashjmp.h
-    - /usr/include/bash/bashtypes.h
-    - /usr/include/bash/builtins.h
-    - /usr/include/bash/builtins/bashgetopt.h
-    - /usr/include/bash/builtins/builtext.h
-    - /usr/include/bash/builtins/common.h
-    - /usr/include/bash/builtins/getopt.h
-    - /usr/include/bash/command.h
-    - /usr/include/bash/config-bot.h
-    - /usr/include/bash/config-top.h
-    - /usr/include/bash/config.h
-    - /usr/include/bash/conftypes.h
-    - /usr/include/bash/dispose_cmd.h
-    - /usr/include/bash/error.h
-    - /usr/include/bash/execute_cmd.h
-    - /usr/include/bash/externs.h
-    - /usr/include/bash/general.h
-    - /usr/include/bash/hashlib.h
-    - /usr/include/bash/include/ansi_stdlib.h
-    - /usr/include/bash/include/chartypes.h
-    - /usr/include/bash/include/filecntl.h
-    - /usr/include/bash/include/gettext.h
-    - /usr/include/bash/include/maxpath.h
-    - /usr/include/bash/include/memalloc.h
-    - /usr/include/bash/include/ocache.h
-    - /usr/include/bash/include/posixdir.h
-    - /usr/include/bash/include/posixjmp.h
-    - /usr/include/bash/include/posixstat.h
-    - /usr/include/bash/include/posixtime.h
-    - /usr/include/bash/include/posixwait.h
-    - /usr/include/bash/include/shmbchar.h
-    - /usr/include/bash/include/shmbutil.h
-    - /usr/include/bash/include/shtty.h
-    - /usr/include/bash/include/stat-time.h
-    - /usr/include/bash/include/stdc.h
-    - /usr/include/bash/include/systimes.h
-    - /usr/include/bash/include/typemax.h
-    - /usr/include/bash/include/unionwait.h
-    - /usr/include/bash/jobs.h
-    - /usr/include/bash/make_cmd.h
-    - /usr/include/bash/pathnames.h
-    - /usr/include/bash/quit.h
-    - /usr/include/bash/shell.h
-    - /usr/include/bash/sig.h
-    - /usr/include/bash/siglist.h
-    - /usr/include/bash/signames.h
-    - /usr/include/bash/subst.h
-    - /usr/include/bash/syntax.h
-    - /usr/include/bash/unwind_prot.h
-    - /usr/include/bash/variables.h
-    - /usr/include/bash/version.h
-    - /usr/include/bash/xmalloc.h
-    - /usr/include/bash/y.tab.h
-    - /usr/lib/pkgconfig/bash.pc
-    - /usr/lib/bash/Makefile.inc
-    - /usr/lib/bash/Makefile.sample
-    - /usr/lib/bash/accept
-    - /usr/lib/bash/basename
-    - /usr/lib/bash/csv
-    - /usr/lib/bash/cut
-    - /usr/lib/bash/dirname
-    - /usr/lib/bash/dsv
-    - /usr/lib/bash/fdflags
-    - /usr/lib/bash/finfo
-    - /usr/lib/bash/getconf
-    - /usr/lib/bash/head
-    - /usr/lib/bash/id
-    - /usr/lib/bash/ln
-    - /usr/lib/bash/loadables.h
-    - /usr/lib/bash/logname
-    - /usr/lib/bash/mkdir
-    - /usr/lib/bash/mkfifo
-    - /usr/lib/bash/mktemp
-    - /usr/lib/bash/mypid
-    - /usr/lib/bash/pathchk
-    - /usr/lib/bash/print
-    - /usr/lib/bash/printenv
-    - /usr/lib/bash/push
-    - /usr/lib/bash/realpath
-    - /usr/lib/bash/rm
-    - /usr/lib/bash/rmdir
-    - /usr/lib/bash/seq
-    - /usr/lib/bash/setpgid
-    - /usr/lib/bash/sleep
-    - /usr/lib/bash/stat
-    - /usr/lib/bash/strftime
-    - /usr/lib/bash/sync
-    - /usr/lib/bash/tee
-    - /usr/lib/bash/truefalse
-    - /usr/lib/bash/tty
-    - /usr/lib/bash/uname
-    - /usr/lib/bash/unlink
-    - /usr/lib/bash/whoami
-    - /usr/bin/bash
-    - /usr/bin/bashbug
-    - /usr/bin/sh
-    - /usr/share/locale/af/LC_MESSAGES/bash.mo
-    - /usr/share/locale/bg/LC_MESSAGES/bash.mo
-    - /usr/share/locale/ca/LC_MESSAGES/bash.mo
-    - /usr/share/locale/cs/LC_MESSAGES/bash.mo
-    - /usr/share/locale/da/LC_MESSAGES/bash.mo
-    - /usr/share/locale/de/LC_MESSAGES/bash.mo
-    - /usr/share/locale/el/LC_MESSAGES/bash.mo
-    - /usr/share/locale/en@boldquot/LC_MESSAGES/bash.mo
-    - /usr/share/locale/en@quot/LC_MESSAGES/bash.mo
-    - /usr/share/locale/eo/LC_MESSAGES/bash.mo
-    - /usr/share/locale/es/LC_MESSAGES/bash.mo
-    - /usr/share/locale/et/LC_MESSAGES/bash.mo
-    - /usr/share/locale/fi/LC_MESSAGES/bash.mo
-    - /usr/share/locale/fr/LC_MESSAGES/bash.mo
-    - /usr/share/locale/ga/LC_MESSAGES/bash.mo
-    - /usr/share/locale/gl/LC_MESSAGES/bash.mo
-    - /usr/share/locale/hr/LC_MESSAGES/bash.mo
-    - /usr/share/locale/hu/LC_MESSAGES/bash.mo
-    - /usr/share/locale/id/LC_MESSAGES/bash.mo
-    - /usr/share/locale/it/LC_MESSAGES/bash.mo
-    - /usr/share/locale/ja/LC_MESSAGES/bash.mo
-    - /usr/share/locale/ko/LC_MESSAGES/bash.mo
-    - /usr/share/locale/lt/LC_MESSAGES/bash.mo
-    - /usr/share/locale/nb/LC_MESSAGES/bash.mo
-    - /usr/share/locale/nl/LC_MESSAGES/bash.mo
-    - /usr/share/locale/pl/LC_MESSAGES/bash.mo
-    - /usr/share/locale/pt/LC_MESSAGES/bash.mo
-    - /usr/share/locale/pt_BR/LC_MESSAGES/bash.mo
-    - /usr/share/locale/ro/LC_MESSAGES/bash.mo
-    - /usr/share/locale/ru/LC_MESSAGES/bash.mo
-    - /usr/share/locale/sk/LC_MESSAGES/bash.mo
-    - /usr/share/locale/sl/LC_MESSAGES/bash.mo
-    - /usr/share/locale/sr/LC_MESSAGES/bash.mo
-    - /usr/share/locale/sv/LC_MESSAGES/bash.mo
-    - /usr/share/locale/tr/LC_MESSAGES/bash.mo
-    - /usr/share/locale/uk/LC_MESSAGES/bash.mo
-    - /usr/share/locale/vi/LC_MESSAGES/bash.mo
-    - /usr/share/locale/zh_CN/LC_MESSAGES/bash.mo
-    - /usr/share/locale/zh_TW/LC_MESSAGES/bash.mo
+    - path: /usr/include/bash/alias.h
+    - path: /usr/include/bash/array.h
+    - path: /usr/include/bash/arrayfunc.h
+    - path: /usr/include/bash/assoc.h
+    - path: /usr/include/bash/bashansi.h
+    - path: /usr/include/bash/bashintl.h
+    - path: /usr/include/bash/bashjmp.h
+    - path: /usr/include/bash/bashtypes.h
+    - path: /usr/include/bash/builtins.h
+    - path: /usr/include/bash/builtins/bashgetopt.h
+    - path: /usr/include/bash/builtins/builtext.h
+    - path: /usr/include/bash/builtins/common.h
+    - path: /usr/include/bash/builtins/getopt.h
+    - path: /usr/include/bash/command.h
+    - path: /usr/include/bash/config-bot.h
+    - path: /usr/include/bash/config-top.h
+    - path: /usr/include/bash/config.h
+    - path: /usr/include/bash/conftypes.h
+    - path: /usr/include/bash/dispose_cmd.h
+    - path: /usr/include/bash/error.h
+    - path: /usr/include/bash/execute_cmd.h
+    - path: /usr/include/bash/externs.h
+    - path: /usr/include/bash/general.h
+    - path: /usr/include/bash/hashlib.h
+    - path: /usr/include/bash/include/ansi_stdlib.h
+    - path: /usr/include/bash/include/chartypes.h
+    - path: /usr/include/bash/include/filecntl.h
+    - path: /usr/include/bash/include/gettext.h
+    - path: /usr/include/bash/include/maxpath.h
+    - path: /usr/include/bash/include/memalloc.h
+    - path: /usr/include/bash/include/ocache.h
+    - path: /usr/include/bash/include/posixdir.h
+    - path: /usr/include/bash/include/posixjmp.h
+    - path: /usr/include/bash/include/posixstat.h
+    - path: /usr/include/bash/include/posixtime.h
+    - path: /usr/include/bash/include/posixwait.h
+    - path: /usr/include/bash/include/shmbchar.h
+    - path: /usr/include/bash/include/shmbutil.h
+    - path: /usr/include/bash/include/shtty.h
+    - path: /usr/include/bash/include/stat-time.h
+    - path: /usr/include/bash/include/stdc.h
+    - path: /usr/include/bash/include/systimes.h
+    - path: /usr/include/bash/include/typemax.h
+    - path: /usr/include/bash/include/unionwait.h
+    - path: /usr/include/bash/jobs.h
+    - path: /usr/include/bash/make_cmd.h
+    - path: /usr/include/bash/pathnames.h
+    - path: /usr/include/bash/quit.h
+    - path: /usr/include/bash/shell.h
+    - path: /usr/include/bash/sig.h
+    - path: /usr/include/bash/siglist.h
+    - path: /usr/include/bash/signames.h
+    - path: /usr/include/bash/subst.h
+    - path: /usr/include/bash/syntax.h
+    - path: /usr/include/bash/unwind_prot.h
+    - path: /usr/include/bash/variables.h
+    - path: /usr/include/bash/version.h
+    - path: /usr/include/bash/xmalloc.h
+    - path: /usr/include/bash/y.tab.h
+    - path: /usr/lib/pkgconfig/bash.pc
+    - path: /usr/lib/bash/Makefile.inc
+    - path: /usr/lib/bash/Makefile.sample
+    - path: /usr/lib/bash/accept
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/basename
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/csv
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/cut
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/dirname
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/dsv
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/fdflags
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/finfo
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/getconf
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/head
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/id
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/ln
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/loadables.h
+    - path: /usr/lib/bash/logname
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/mkdir
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/mkfifo
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/mktemp
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/mypid
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/pathchk
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/print
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/printenv
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/push
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/realpath
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/rm
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/rmdir
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/seq
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/setpgid
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/sleep
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/stat
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/strftime
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/sync
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/tee
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/truefalse
+    - path: /usr/lib/bash/tty
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/uname
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/unlink
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/lib/bash/whoami
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/bin/bash
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/bashbug
+    - path: /usr/bin/sh
+      needs:
+      - /bootstrap/usr/lib/libc.so.6
+      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/share/locale/af/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/bg/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/en@boldquot/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/en@quot/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/et/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ga/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/lt/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/sl/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/bash.mo
+
+resolution:
+  /bootstrap/usr/lib/libc.so.6: bootstrap_tools
+  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools

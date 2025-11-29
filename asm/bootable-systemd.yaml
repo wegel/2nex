@@ -5,10 +5,10 @@ system:
   version: "0.0.1"
   description: "Minimal bootable system with systemd init"
 
+  checksum: 67d49ec811a4e4e08b5dc6c76d413529e6ad2b84b4eac0e6d6954005b9e91e3d
 dependencies:
   - name: findutils
-    commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-    manifest_ref: 99cb67d197639a1eb32bf48c04aa1a1450712bc2
+    commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev 
 packages:
 - commit: x86_64/pkg/core/init/systemd/257.5/outputs/bin
   name: systemd-bin
@@ -24,14 +24,20 @@ packages:
   name: shadow-bin
 - commit: x86_64/pkg/core/userland/shadow/4.15.1/outputs/conf
   name: shadow-conf
+- commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/bin
+  name: dbus-broker-bin
+- commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/conf
+  name: dbus-broker-conf
 
 build:
   script: |
     # create minimal /etc/passwd and /etc/group with systemd users
     mkdir -p /target/etc
 
+    mkdir -p /target/root
+
     cat > /target/etc/passwd << 'EOF'
-    root:x:0:0:root:/root:/bin/bash
+    root:x:0:0:root:/root:/usr/bin/bash
     systemd-network:x:192:192:systemd Network Management:/:/usr/bin/nologin
     systemd-resolve:x:193:193:systemd Resolver:/:/usr/bin/nologin
     systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/bin/nologin
@@ -54,6 +60,17 @@ build:
     EOF
     chmod 600 /target/etc/shadow
 
+    # nsswitch.conf tells glibc how to look up users/groups
+    cat > /target/etc/nsswitch.conf << 'EOF'
+    passwd:     files
+    group:      files
+    shadow:     files
+    hosts:      files dns
+    networks:   files
+    protocols:  files
+    services:   files
+    EOF
+
     # create mount points for essential filesystems
     mkdir -p /target/{proc,sys,dev,run,tmp}
 
@@ -61,6 +78,13 @@ build:
     mkdir -p /target/etc/systemd/system
     mkdir -p /target/var/log/journal
     mkdir -p /target/var/lib/systemd
+
+    # minimal shell profile
+    cat > /target/etc/profile << 'EOF'
+    export PS1='# '
+    export TERM=linux
+    echo "=== /etc/profile loaded ===" >&2
+    EOF
 
     # symlink init to systemd
     ln -sf /usr/lib/systemd/systemd /target/init
