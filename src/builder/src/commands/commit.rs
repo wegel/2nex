@@ -7,8 +7,8 @@ use std::process::Command;
 use super::stage::{cleanup_staging, is_staged};
 
 const STAGING_STATE_DIR: &str = "/run/nex/staging";
-const OSTREE_REPO: &str = "/ostree/repo";
-const OSTREE_DEPLOY_DIR: &str = "/ostree/deploy/2nex";
+const NEX_REPO: &str = "/nex/repo";
+const NEX_DEPLOY_DIR: &str = "/nex/deploy/2nex";
 
 #[derive(Args)]
 pub struct CommitArgs {
@@ -48,8 +48,8 @@ pub fn run(args: &CommitArgs) -> io::Result<()> {
         .unwrap_or_else(|| "Package changes".to_string());
     println!("Committing changes: {}", message);
 
-    // check if we're on an OSTree system
-    if !Path::new(OSTREE_REPO).exists() {
+    // check if we're on a nex system with repo
+    if !Path::new(NEX_REPO).exists() {
         // not an OSTree system - just merge the overlay and exit staging
         println!("Not an OSTree system. Merging overlay changes directly...");
         merge_overlay_changes()?;
@@ -129,7 +129,7 @@ fn create_ostree_deployment(message: &str) -> io::Result<()> {
         .args([
             "checkout",
             "--repo",
-            OSTREE_REPO,
+            NEX_REPO,
             "--user-mode",
             &current_ref,
             &staging_dir,
@@ -168,7 +168,7 @@ fn create_ostree_deployment(message: &str) -> io::Result<()> {
         .args([
             "commit",
             "--repo",
-            OSTREE_REPO,
+            NEX_REPO,
             "--branch",
             &new_ref,
             "--subject",
@@ -222,7 +222,7 @@ fn get_current_deployment_ref() -> io::Result<String> {
     }
 
     // fallback: try to read from deploy directory
-    let deploy_dir = Path::new(OSTREE_DEPLOY_DIR).join("deploy");
+    let deploy_dir = Path::new(NEX_DEPLOY_DIR).join("deploy");
     if deploy_dir.exists() {
         if let Ok(entries) = fs::read_dir(&deploy_dir) {
             for entry in entries.flatten() {

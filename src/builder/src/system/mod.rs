@@ -329,12 +329,6 @@ pub fn materialize_nex_structure(
     let nex_pkg_dir = target_dir.join("nex/pkg");
     fs::create_dir_all(&nex_pkg_dir)?;
 
-    // create /nex/repo symlink to /ostree/repo for runtime package management
-    let nex_repo_symlink = target_dir.join("nex/repo");
-    if !nex_repo_symlink.exists() {
-        symlink("/ostree/repo", &nex_repo_symlink)?;
-    }
-
     // deploy manifests to /nex/db for runtime package resolution
     deploy_manifests_to_nex_db(&target_dir)?;
 

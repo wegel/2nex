@@ -6,7 +6,7 @@ use alloc::vec::Vec;
 use crate::ext4::Ext4Fs;
 use crate::BootError;
 
-const OSTREE_DEPLOY_DIR: &str = "/ostree/deploy";
+const NEX_DEPLOY_DIR: &str = "/nex/deploy";
 const DEFAULT_STATEROOT: &str = "2nex";
 
 /// represents a discovered OSTree deployment
@@ -23,7 +23,7 @@ pub struct Deployment {
 
 /// find the default (most recent) OSTree deployment
 pub fn find_default_deployment(fs: &Ext4Fs) -> Result<Deployment, BootError> {
-    let deploy_dir = alloc::format!("{}/{}/deploy", OSTREE_DEPLOY_DIR, DEFAULT_STATEROOT);
+    let deploy_dir = alloc::format!("{}/{}/deploy", NEX_DEPLOY_DIR, DEFAULT_STATEROOT);
 
     log::debug!("ostree: scanning {}", deploy_dir);
 

@@ -89,22 +89,22 @@ if [ -z "$SYSTEM_CHECKSUM" ]; then
     SYSTEM_CHECKSUM=$(ostree rev-parse --repo="$REPO" "$SYSTEM_REF")
 fi
 
-DEPLOY_PATH="ostree/deploy/2nex/deploy/${SYSTEM_CHECKSUM}.0"
+DEPLOY_PATH="nex/deploy/2nex/deploy/${SYSTEM_CHECKSUM}.0"
 DEPLOY_DIR="$ROOT_CONTENT/$DEPLOY_PATH"
 
 log "Extracting $SYSTEM_REF..."
 mkdir -p "$(dirname "$DEPLOY_DIR")"
 unshare --map-root-user ostree checkout --repo="$REPO" "$SYSTEM_REF" "$DEPLOY_DIR"
 
-mkdir -p "$ROOT_CONTENT/ostree/deploy/2nex/var"
+mkdir -p "$ROOT_CONTENT/nex/deploy/2nex/var"
 
-# create ostree repo and populate with full bootstrap_store
-log "Creating ostree repo structure..."
-mkdir -p "$ROOT_CONTENT/ostree/repo"
-ostree init --repo="$ROOT_CONTENT/ostree/repo" --mode=bare-user 2>/dev/null || true
+# create nex repo and populate with full bootstrap_store
+log "Creating nex repo structure..."
+mkdir -p "$ROOT_CONTENT/nex/repo"
+ostree init --repo="$ROOT_CONTENT/nex/repo" --mode=bare-user 2>/dev/null || true
 
 log "Copying bootstrap_store to disk (this may take a while)..."
-ostree pull-local --repo="$ROOT_CONTENT/ostree/repo" "$REPO"
+ostree pull-local --repo="$ROOT_CONTENT/nex/repo" "$REPO"
 
 # create root-level symlinks to the deployment (OSTree-style)
 # these are needed because binaries have PT_INTERP=/lib64/ld-linux-x86-64.so.2
@@ -114,9 +114,13 @@ ln -sf "$DEPLOY_PATH/lib" "$ROOT_CONTENT/lib"
 ln -sf "$DEPLOY_PATH/lib64" "$ROOT_CONTENT/lib64"
 ln -sf "$DEPLOY_PATH/bin" "$ROOT_CONTENT/bin"
 ln -sf "$DEPLOY_PATH/sbin" "$ROOT_CONTENT/sbin"
-ln -sf "$DEPLOY_PATH/nex" "$ROOT_CONTENT/nex"
 ln -sf "$DEPLOY_PATH/etc" "$ROOT_CONTENT/etc"
 ln -sf "usr/bin/init" "$ROOT_CONTENT/init"
+
+# symlink /nex/pkg and /nex/db from deployment into the root /nex directory
+# (we don't symlink /nex itself because /nex/repo and /nex/deploy are real directories)
+ln -sfn "/$DEPLOY_PATH/nex/pkg" "$ROOT_CONTENT/nex/pkg"
+ln -sfn "/$DEPLOY_PATH/nex/db" "$ROOT_CONTENT/nex/db"
 
 log "Deployment structure:"
 ls -la "$DEPLOY_DIR/" | head -15

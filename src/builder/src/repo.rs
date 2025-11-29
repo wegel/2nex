@@ -7,19 +7,15 @@ use std::process::Command;
 use nix::unistd::Uid;
 
 /// detect the appropriate OSTree repo path based on environment.
-/// checks in order: .nex/repo (local) -> /nex/repo (runtime) -> /ostree/repo (runtime fallback)
+/// checks in order: .nex/repo (local build-time) -> /nex/repo (runtime)
 pub fn detect_repo_path() -> String {
-    // build-time: local .nex/repo takes priority (avoid using system's /ostree/repo)
+    // build-time: local .nex/repo takes priority
     if Path::new(".nex/repo").exists() {
         return ".nex/repo".to_string();
     }
-    // runtime: VM has /nex/repo (symlink to /ostree/repo)
+    // runtime: system has repo at /nex/repo
     if Path::new("/nex/repo").exists() {
         return "/nex/repo".to_string();
-    }
-    // runtime fallback: traditional ostree location
-    if Path::new("/ostree/repo").exists() {
-        return "/ostree/repo".to_string();
     }
     // default for new builds
     ".nex/repo".to_string()
