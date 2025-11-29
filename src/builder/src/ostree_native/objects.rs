@@ -24,17 +24,27 @@ impl ObjectType {
     }
 }
 
-/// access to OSTree object store.
+/// access to OSTree object store with optional fallback directories.
 pub struct ObjectStore {
     objects_dir: PathBuf,
+    fallback_dirs: Vec<PathBuf>,
 }
 
 impl ObjectStore {
     pub fn new(objects_dir: PathBuf) -> Self {
-        Self { objects_dir }
+        Self {
+            objects_dir,
+            fallback_dirs: vec![],
+        }
     }
 
-    /// get path to an object file.
+    /// add a fallback directory to search for objects.
+    pub fn with_fallback(mut self, fallback: PathBuf) -> Self {
+        self.fallback_dirs.push(fallback);
+        self
+    }
+
+    /// get path to an object file in primary store (for writes).
     /// checksum format: 64 hex chars (sha256)
     /// returns: objects/{first2}/{rest}.{type}
     pub fn object_path(&self, checksum: &str, obj_type: ObjectType) -> PathBuf {
@@ -44,14 +54,47 @@ impl ObjectStore {
             .join(format!("{}.{}", rest, obj_type.extension()))
     }
 
-    /// check if an object exists.
+    /// find object in primary or fallback stores (for reads).
+    /// returns the path to the object if found in any store.
+    pub fn find_object(&self, checksum: &str, obj_type: ObjectType) -> Option<PathBuf> {
+        let (prefix, rest) = checksum.split_at(2);
+        let filename = format!("{}.{}", rest, obj_type.extension());
+
+        // check primary first
+        let primary = self.objects_dir.join(prefix).join(&filename);
+        if primary.exists() {
+            return Some(primary);
+        }
+
+        // then fallbacks
+        for fallback in &self.fallback_dirs {
+            let path = fallback.join(prefix).join(&filename);
+            if path.exists() {
+                return Some(path);
+            }
+        }
+
+        None
+    }
+
+    /// check if an object exists in primary store.
     pub fn exists(&self, checksum: &str, obj_type: ObjectType) -> bool {
         self.object_path(checksum, obj_type).exists()
     }
 
-    /// read object raw bytes.
+    /// check if an object exists in primary or any fallback store.
+    pub fn exists_any(&self, checksum: &str, obj_type: ObjectType) -> bool {
+        self.find_object(checksum, obj_type).is_some()
+    }
+
+    /// read object raw bytes from primary or fallback stores.
     pub fn read_object(&self, checksum: &str, obj_type: ObjectType) -> io::Result<Vec<u8>> {
-        let path = self.object_path(checksum, obj_type);
+        let path = self.find_object(checksum, obj_type).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("object not found: {} ({})", checksum, obj_type.extension()),
+            )
+        })?;
         fs::read(&path).map_err(|e| {
             io::Error::new(
                 e.kind(),

@@ -54,6 +54,12 @@ pub struct MaterializeConfig {
     pub resolve_deps: bool,
     /// Path to manifest database for manifest-based resolution (e.g., /nex/db/pkg)
     pub manifest_db_path: Option<PathBuf>,
+    /// Fallback OSTree repo for object/ref lookups (e.g., system repo for user installs)
+    pub fallback_repo_path: Option<PathBuf>,
+    /// Override for package directory (default: target_dir/nex/pkg)
+    pub pkg_dir_override: Option<PathBuf>,
+    /// Override for environment directory (default: target_dir/nex/env)
+    pub env_dir_override: Option<PathBuf>,
 }
 
 impl Default for MaterializeConfig {
@@ -66,6 +72,9 @@ impl Default for MaterializeConfig {
             db_path: None,
             resolve_deps: true,
             manifest_db_path: None,
+            fallback_repo_path: None,
+            pkg_dir_override: None,
+            env_dir_override: None,
         }
     }
 }

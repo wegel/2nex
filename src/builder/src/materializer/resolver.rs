@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::manifest::ManifestIndex;
 use crate::ostree_native::OstreeRepo;
@@ -19,6 +19,7 @@ pub fn resolve_runtime_deps_precomputed(
     repo_path: &str,
     requests: &[MaterializeRequest],
     manifest_index: &ManifestIndex,
+    fallback_repo: Option<&Path>,
 ) -> io::Result<RuntimeClosure> {
     let mut closure = RuntimeClosure::default();
     let mut visited: HashSet<String> = HashSet::new();
@@ -26,7 +27,7 @@ pub fn resolve_runtime_deps_precomputed(
     // cache: (manifest_ptr, dep_name) -> resolved_commit
     let mut dep_commit_cache: HashMap<(usize, String), String> = HashMap::new();
 
-    let repo = OstreeRepo::open(repo_path)?;
+    let repo = OstreeRepo::open_with_fallback(repo_path, fallback_repo)?;
 
     // seed with initial requests (mark as roots)
     for req in requests {

@@ -83,7 +83,13 @@ fn checkout_tree(
 /// checkout a single file using hardlinks (zero-copy).
 /// in bare-user mode, file metadata is stored in user.ostreemeta xattr.
 fn checkout_file(objects: &ObjectStore, checksum: &str, dest: &Path) -> io::Result<()> {
-    let src_path = objects.object_path(checksum, ObjectType::File);
+    // use fallback-aware lookup to find object in primary or fallback stores
+    let src_path = objects.find_object(checksum, ObjectType::File).ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("file object not found: {}", checksum),
+        )
+    })?;
 
     // read file mode from user.ostreemeta xattr
     let mode = read_ostreemeta_mode(&src_path)?;

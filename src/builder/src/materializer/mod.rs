@@ -88,7 +88,12 @@ pub fn materialize(
     // resolve runtime dependencies using precomputed deps from manifests
     let closure = if config.resolve_deps {
         println!("  Resolving runtime dependencies (precomputed)...");
-        resolve_runtime_deps_precomputed(&config.repo_path, requests, &manifest_index)?
+        resolve_runtime_deps_precomputed(
+            &config.repo_path,
+            requests,
+            &manifest_index,
+            config.fallback_repo_path.as_deref(),
+        )?
     } else {
         // no resolution - just use the initial commits
         let mut closure = RuntimeClosure::default();

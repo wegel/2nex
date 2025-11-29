@@ -8,10 +8,7 @@ use super::stage::{is_staged, mount_nex_overlays, staging_upper_dir};
 use super::state::InstalledState;
 use crate::materializer::{materialize, MaterializeConfig, MaterializeMode, MaterializeRequest};
 use crate::ostree_native::OstreeRepo;
-use crate::repo::{detect_manifest_dir, resolve_repo_path};
-
-const NEX_PKG_DIR: &str = "/nex/pkg";
-const USR_BIN_DIR: &str = "/usr/bin";
+use crate::repo::{detect_context, detect_manifest_dir, ensure_user_dirs, resolve_repo_path};
 
 #[derive(Args)]
 pub struct InstallArgs {
@@ -45,34 +42,69 @@ pub struct InstallArgs {
     /// Show what would be installed without actually installing
     #[clap(long)]
     pub dry_run: bool,
+
+    /// Install to the system-wide location (requires root)
+    /// Without this flag, packages are installed to the user's local environment
+    #[clap(long)]
+    pub system: bool,
 }
 
 pub fn run(args: &InstallArgs) -> io::Result<()> {
-    let repo_path = resolve_repo_path(args.repo.as_deref())?;
+    // detect context: user install vs system install
+    let ctx = detect_context(args.system)?;
 
-    // check staging mode unless --commit or --no-stage-check
-    if !args.commit && !args.no_stage_check && !is_staged() {
-        return Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "Not in staging mode. Use 'nex stage' first, or use 'nex install --commit <pkg>' for atomic install.",
-        ));
+    // for user installs, ensure user directories exist
+    if !ctx.is_system && !ctx.repo_path.exists() {
+        ensure_user_dirs(&ctx)?;
+        println!(
+            "Created user environment at {}",
+            ctx.repo_path.parent().unwrap_or(&ctx.repo_path).display()
+        );
     }
 
-    // if --commit, enter staging mode first
-    if args.commit && !is_staged() {
-        println!("Entering staging mode for atomic install...");
-        super::stage::run(&super::stage::StageArgs { force: false })?;
+    // use explicit repo path if provided, otherwise use context-determined path
+    let repo_path = if let Some(ref r) = args.repo {
+        resolve_repo_path(Some(r))?
+    } else {
+        ctx.repo_path.to_string_lossy().to_string()
+    };
+
+    // system installs require staging mode (unless build-time or --no-stage-check)
+    if ctx.is_system && ctx.needs_staging {
+        // check staging mode unless --commit or --no-stage-check
+        if !args.commit && !args.no_stage_check && !is_staged() {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "Not in staging mode. Use 'nex stage' first, or use 'nex install --commit <pkg>' for atomic install.",
+            ));
+        }
+
+        // if --commit, enter staging mode first
+        if args.commit && !is_staged() {
+            println!("Entering staging mode for atomic install...");
+            super::stage::run(&super::stage::StageArgs { force: false })?;
+        }
     }
 
     // load current state
     let mut state = InstalledState::load().unwrap_or_default();
 
     // find the bundle or output ref for the package
-    let package_ref = find_package_ref(&repo_path, &args.package, args.version.as_deref())?;
+    // for user installs, we look in the system repo via fallback
+    let package_ref = find_package_ref_with_fallback(
+        &repo_path,
+        ctx.fallback_repo.as_deref(),
+        &args.package,
+        args.version.as_deref(),
+    )?;
     println!("Installing {}...", package_ref);
 
     // parse the ref to get package info
-    let pkg_info = parse_package_ref(&repo_path, &package_ref)?;
+    let pkg_info = parse_package_ref_with_fallback(
+        &repo_path,
+        ctx.fallback_repo.as_deref(),
+        &package_ref,
+    )?;
 
     // check if this exact version is already installed
     if state.is_version_installed(
@@ -103,16 +135,32 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     let existing_version_count = state.version_count(&pkg_info.namespace, &pkg_info.slug);
     let has_existing_version = existing_version_count > 0;
 
-    // determine target directory and mode
-    let (target_dir, mode) = if args.flat {
-        ("/".to_string(), MaterializeMode::Flat)
+    // determine target directory and mode based on context
+    let (target_dir, nex_pkg_dir, nex_env_dir, mode, pkg_override, env_override) = if args.flat {
+        ("/".to_string(), "/nex/pkg".to_string(), "/nex/env".to_string(), MaterializeMode::Flat, None, None)
+    } else if ctx.is_system {
+        ("/".to_string(), "/nex/pkg".to_string(), "/nex/env".to_string(), MaterializeMode::Nex, None, None)
     } else {
-        ("/".to_string(), MaterializeMode::Nex)
+        // user install: override pkg/env directories to user's paths
+        (
+            "/".to_string(),
+            ctx.pkg_path.to_string_lossy().to_string(),
+            ctx.env_path.to_string_lossy().to_string(),
+            MaterializeMode::Nex,
+            Some(ctx.pkg_path.clone()),
+            Some(ctx.env_path.clone()),
+        )
     };
 
     // materialize the package and its dependencies
-    // when staged, write to overlay upper dir (bypasses OverlayFS device boundary for hardlinks)
-    let physical_root = staging_upper_dir().map(Into::into);
+    // system installs when staged write to overlay upper dir (bypasses OverlayFS device boundary)
+    // user installs write directly to user's directories (no staging needed)
+    let physical_root = if ctx.needs_staging && is_staged() {
+        staging_upper_dir().map(Into::into)
+    } else {
+        None
+    };
+
     let config = MaterializeConfig {
         repo_path: repo_path.clone(),
         target_dir: target_dir.into(),
@@ -120,6 +168,9 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
         mode,
         resolve_deps: !args.no_deps,
         manifest_db_path: detect_manifest_dir().map(Into::into),
+        fallback_repo_path: ctx.fallback_repo.clone(),
+        pkg_dir_override: pkg_override,
+        env_dir_override: env_override,
         ..Default::default()
     };
 
@@ -129,8 +180,10 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
 
     let result = materialize(&config, &requests)?;
 
-    // mount /nex/pkg and /nex/env overlays now that checkout is complete
-    mount_nex_overlays()?;
+    // system installs: mount overlays after checkout
+    if ctx.is_system && ctx.needs_staging && is_staged() {
+        mount_nex_overlays()?;
+    }
 
     // report results
     if result.closure.has_unresolved() {
@@ -142,10 +195,9 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
 
     // get binaries provided by this package (from the checkout)
     let binaries = if mode == MaterializeMode::Nex {
-        // in nex mode, get binaries from /nex/pkg/<ns>/<slug>/<ver>/<hash>/usr/bin
         let pkg_dir = format!(
             "{}/{}/{}/{}/{}",
-            NEX_PKG_DIR, pkg_info.namespace, pkg_info.slug, pkg_info.version, pkg_info.checksum
+            nex_pkg_dir, pkg_info.namespace, pkg_info.slug, pkg_info.version, pkg_info.checksum
         );
         get_binaries_from_dir(&pkg_dir)?
     } else {
@@ -156,18 +208,31 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     let should_create_symlinks = !has_existing_version && mode == MaterializeMode::Nex;
 
     if should_create_symlinks && !binaries.is_empty() {
+        // symlink to env/default/bin for user installs, /usr/bin for system installs
+        let bin_dir = if ctx.is_system {
+            "/usr/bin".to_string()
+        } else {
+            format!("{}/default/bin", nex_env_dir)
+        };
+        fs::create_dir_all(&bin_dir)?;
+
         for binary in &binaries {
-            let dst = format!("{}/{}", USR_BIN_DIR, binary);
-            // relative symlink: from /usr/bin/, ../../ reaches /, then nex/pkg/...
-            let relative_target = format!(
-                "../../nex/pkg/{}/{}/{}/{}/usr/bin/{}",
-                pkg_info.namespace, pkg_info.slug, pkg_info.version, pkg_info.checksum, binary
-            );
+            let dst = format!("{}/{}", bin_dir, binary);
+            // calculate relative symlink target
+            let relative_target = if ctx.is_system {
+                format!(
+                    "../../nex/pkg/{}/{}/{}/{}/usr/bin/{}",
+                    pkg_info.namespace, pkg_info.slug, pkg_info.version, pkg_info.checksum, binary
+                )
+            } else {
+                // from env/default/bin to pkg/<ns>/<slug>/<ver>/<hash>/usr/bin
+                format!(
+                    "../../../pkg/{}/{}/{}/{}/usr/bin/{}",
+                    pkg_info.namespace, pkg_info.slug, pkg_info.version, pkg_info.checksum, binary
+                )
+            };
 
-            // ensure /usr/bin exists
-            fs::create_dir_all(USR_BIN_DIR)?;
-
-            // remove existing symlink if present (could be from different package)
+            // remove existing symlink if present
             if Path::new(&dst).exists() || Path::new(&dst).is_symlink() {
                 fs::remove_file(&dst)?;
             }
@@ -205,8 +270,8 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     // save state
     state.save()?;
 
-    // if --commit, commit the changes
-    if args.commit {
+    // if --commit (system install only), commit the changes
+    if args.commit && ctx.is_system {
         println!("\nCommitting changes...");
         super::commit::run(&super::commit::CommitArgs {
             message: Some(format!("Install {}/{}", pkg_info.slug, pkg_info.version)),
@@ -223,8 +288,13 @@ struct PackageInfo {
     checksum: String,
 }
 
-fn find_package_ref(repo: &str, query: &str, version: Option<&str>) -> io::Result<String> {
-    let ostree_repo = OstreeRepo::open(repo)?;
+fn find_package_ref_with_fallback(
+    repo: &str,
+    fallback: Option<&Path>,
+    query: &str,
+    version: Option<&str>,
+) -> io::Result<String> {
+    let ostree_repo = OstreeRepo::open_with_fallback(repo, fallback)?;
     let all_refs = ostree_repo.refs(None)?;
     let query_parts: Vec<&str> = query.split('/').collect();
 
@@ -286,7 +356,11 @@ fn find_package_ref(repo: &str, query: &str, version: Option<&str>) -> io::Resul
     ))
 }
 
-fn parse_package_ref(repo: &str, ref_path: &str) -> io::Result<PackageInfo> {
+fn parse_package_ref_with_fallback(
+    repo: &str,
+    fallback: Option<&Path>,
+    ref_path: &str,
+) -> io::Result<PackageInfo> {
     let parts: Vec<&str> = ref_path.split('/').collect();
     let boundary = parts
         .iter()
@@ -301,7 +375,7 @@ fn parse_package_ref(repo: &str, ref_path: &str) -> io::Result<PackageInfo> {
     }
 
     // get commit hash for checksum
-    let checksum = get_commit_short_hash(repo, ref_path)?;
+    let checksum = get_commit_short_hash_with_fallback(repo, fallback, ref_path)?;
 
     Ok(PackageInfo {
         namespace: parts[2..boundary - 2].join("/"),
@@ -311,9 +385,13 @@ fn parse_package_ref(repo: &str, ref_path: &str) -> io::Result<PackageInfo> {
     })
 }
 
-fn get_commit_short_hash(repo: &str, ref_path: &str) -> io::Result<String> {
+fn get_commit_short_hash_with_fallback(
+    repo: &str,
+    fallback: Option<&Path>,
+    ref_path: &str,
+) -> io::Result<String> {
     // use manifest hash (shared by all outputs of a build) - must match checkout.rs
-    let ostree_repo = OstreeRepo::open(repo)?;
+    let ostree_repo = OstreeRepo::open_with_fallback(repo, fallback)?;
 
     // try to get manifest hash from metadata first
     if let Ok(Some(manifest_hash)) = ostree_repo.get_metadata(ref_path, "nex.manifest.hash") {

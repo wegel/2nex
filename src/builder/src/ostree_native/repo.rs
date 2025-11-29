@@ -9,15 +9,24 @@ use super::dirtree;
 use super::objects::{ObjectStore, ObjectType};
 use super::refs;
 
-/// native OSTree bare-user repository access.
+/// native OSTree bare-user repository access with optional fallback.
 pub struct OstreeRepo {
     pub path: PathBuf,
     pub objects: ObjectStore,
+    fallback_path: Option<PathBuf>,
 }
 
 impl OstreeRepo {
     /// open an existing OSTree repository.
     pub fn open(path: impl AsRef<Path>) -> io::Result<Self> {
+        Self::open_with_fallback(path, None)
+    }
+
+    /// open a repository with fallback to another repo for objects and refs.
+    pub fn open_with_fallback(
+        path: impl AsRef<Path>,
+        fallback: Option<&Path>,
+    ) -> io::Result<Self> {
         let path = path.as_ref().to_path_buf();
 
         // verify it's a valid ostree repo
@@ -40,29 +49,61 @@ impl OstreeRepo {
             ));
         }
 
-        let objects = ObjectStore::new(path.join("objects"));
-        Ok(Self { path, objects })
+        let mut objects = ObjectStore::new(path.join("objects"));
+        let fallback_path = if let Some(fb) = fallback {
+            objects = objects.with_fallback(fb.join("objects"));
+            Some(fb.to_path_buf())
+        } else {
+            None
+        };
+
+        Ok(Self {
+            path,
+            objects,
+            fallback_path,
+        })
     }
 
     /// list all refs, optionally filtered by pattern.
+    /// includes refs from fallback repo if configured.
     pub fn refs(&self, pattern: Option<&str>) -> io::Result<Vec<String>> {
-        refs::list_refs(&self.path, pattern)
+        let mut all_refs = refs::list_refs(&self.path, pattern)?;
+
+        // include fallback refs
+        if let Some(ref fallback) = self.fallback_path {
+            for r in refs::list_refs(fallback, pattern)? {
+                if !all_refs.contains(&r) {
+                    all_refs.push(r);
+                }
+            }
+        }
+
+        Ok(all_refs)
     }
 
     /// resolve a ref to its commit checksum.
+    /// checks fallback repo if not found in primary.
     pub fn resolve_ref(&self, ref_name: &str) -> io::Result<String> {
-        refs::resolve_ref(&self.path, ref_name)
+        match refs::resolve_ref(&self.path, ref_name) {
+            Ok(checksum) => Ok(checksum),
+            Err(_) if self.fallback_path.is_some() => {
+                refs::resolve_ref(self.fallback_path.as_ref().unwrap(), ref_name)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// checkout a commit to target directory.
     pub fn checkout(&self, commit: &str, target: &Path, union: bool) -> io::Result<()> {
+        // resolve ref here (with fallback support) before calling low-level checkout
+        let checksum = self.resolve_ref(commit)?;
         let options = CheckoutOptions { union };
-        checkout::checkout(&self.path, &self.objects, commit, target, &options)
+        checkout::checkout(&self.path, &self.objects, &checksum, target, &options)
     }
 
     /// get commit metadata.
     pub fn get_commit_info(&self, commit: &str) -> io::Result<CommitInfo> {
-        let checksum = refs::resolve_ref_or_checksum(&self.path, commit)?;
+        let checksum = self.resolve_ref(commit)?;
         let data = self.objects.read_object(&checksum, ObjectType::Commit)?;
         commit::parse_commit(&data)
     }
@@ -75,7 +116,7 @@ impl OstreeRepo {
 
     /// list files in a commit (recursive directory listing).
     pub fn ls(&self, commit: &str) -> io::Result<Vec<String>> {
-        let checksum = refs::resolve_ref_or_checksum(&self.path, commit)?;
+        let checksum = self.resolve_ref(commit)?;
         let commit_data = self.objects.read_object(&checksum, ObjectType::Commit)?;
         let commit_info = commit::parse_commit(&commit_data)?;
 
@@ -114,7 +155,7 @@ impl OstreeRepo {
 
     /// read a file from a commit.
     pub fn cat(&self, commit: &str, path: &str) -> io::Result<Vec<u8>> {
-        let checksum = refs::resolve_ref_or_checksum(&self.path, commit)?;
+        let checksum = self.resolve_ref(commit)?;
         let commit_data = self.objects.read_object(&checksum, ObjectType::Commit)?;
         let commit_info = commit::parse_commit(&commit_data)?;
 

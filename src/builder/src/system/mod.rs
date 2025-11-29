@@ -227,7 +227,7 @@ pub fn materialize_system_packages(
         .map(|c| MaterializeRequest::Output { commit: c.clone() })
         .collect();
 
-    let closure = resolve_runtime_deps_precomputed(repo_path, &requests, manifest_index)?;
+    let closure = resolve_runtime_deps_precomputed(repo_path, &requests, manifest_index, None)?;
 
     // error if there are unresolved dependencies (missing /files commits)
     if closure.has_unresolved() {
@@ -250,7 +250,7 @@ pub fn materialize_system_packages(
             // file-level checkout: only extract specific files from {checksum}/files commit
             let files_vec: Vec<String> = files.iter().cloned().collect();
             println!("  Checking out {} file(s) from {}", files_vec.len(), commit);
-            checkout_files(repo_path, commit, &files_vec, &target_dir)?;
+            checkout_files(repo_path, commit, &files_vec, &target_dir, None)?;
         } else {
             // full checkout for root commits
             checkout_ostree_into(repo_path, commit, &target_dir, true, false)?;
@@ -763,7 +763,7 @@ fn flatten_package_dependencies(
 
         // use precomputed deps from manifest
         let flattened_count =
-            flatten_capsule_precomputed(repo_path, pkg_dir, &commit, &manifest_index)?;
+            flatten_capsule_precomputed(repo_path, pkg_dir, &commit, &manifest_index, None)?;
 
         if flattened_count > 0 {
             let rel_path = pkg_dir.strip_prefix(nex_pkg_dir).unwrap_or(pkg_dir);

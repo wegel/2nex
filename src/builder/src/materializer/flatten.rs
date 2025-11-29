@@ -31,6 +31,7 @@ pub fn flatten_capsule_precomputed(
     pkg_dir: &Path,
     commit: &str,
     manifest_index: &ManifestIndex,
+    fallback_repo: Option<&Path>,
 ) -> io::Result<usize> {
     // find manifest for this commit
     let manifest = match find_manifest_for_commit(commit, manifest_index) {
@@ -122,7 +123,13 @@ pub fn flatten_capsule_precomputed(
     // flatten @self libs from own package's files commit
     if let Some(ref self_commit) = self_files_commit {
         for lib_path in &self_libs {
-            if flatten_library_from_commit(repo_path, self_commit, lib_path, &pkg_lib_dir)? {
+            if flatten_library_from_commit(
+                repo_path,
+                self_commit,
+                lib_path,
+                &pkg_lib_dir,
+                fallback_repo,
+            )? {
                 flattened_count += 1;
             }
         }
@@ -132,7 +139,13 @@ pub fn flatten_capsule_precomputed(
     if !external_deps.is_empty() {
         let all_deps = resolve_transitive_deps(&external_deps, manifest, manifest_index);
         for (file_path, _provider_key, provider_commit) in all_deps {
-            if flatten_library_from_commit(repo_path, &provider_commit, &file_path, &pkg_lib_dir)? {
+            if flatten_library_from_commit(
+                repo_path,
+                &provider_commit,
+                &file_path,
+                &pkg_lib_dir,
+                fallback_repo,
+            )? {
                 flattened_count += 1;
             }
         }
@@ -377,6 +390,7 @@ fn flatten_library_from_commit(
     commit: &str,
     lib_path: &str,
     pkg_lib_dir: &Path,
+    fallback_repo: Option<&Path>,
 ) -> io::Result<bool> {
     let basename = Path::new(lib_path)
         .file_name()
@@ -399,7 +413,7 @@ fn flatten_library_from_commit(
     let temp = TempDir::new_in(temp_parent)?;
     let checkout_dir = temp.path().join("checkout");
 
-    let repo = OstreeRepo::open(repo_path)?;
+    let repo = OstreeRepo::open_with_fallback(repo_path, fallback_repo)?;
     repo.checkout(commit, &checkout_dir, true)?;
 
     let src = checkout_dir.join(lib_path.trim_start_matches('/'));

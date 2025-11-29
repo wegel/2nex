@@ -83,7 +83,7 @@ pub fn run(args: &ResolveArgs) -> io::Result<()> {
         commit: package_ref.clone(),
     }];
 
-    let closure = resolve_runtime_deps_precomputed(&repo_path, &requests, &manifest_index)?;
+    let closure = resolve_runtime_deps_precomputed(&repo_path, &requests, &manifest_index, None)?;
 
     // print results
     println!("Runtime closure: {} commit(s)", closure.commits.len());
