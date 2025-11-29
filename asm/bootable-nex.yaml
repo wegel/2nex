@@ -1,11 +1,11 @@
 system:
   schema: 1
-  name: "Bootable Minimal System"
-  slug: "bootable-minimal"
+  name: "Bootable Nex System"
+  slug: "bootable-nex"
   version: "0.0.1"
-  description: "Minimal bootable system with basic userland"
+  description: "Bootable system using /nex/pkg/ structure with nex-ld-shim"
+  nex_structure: true
 
-  checksum: e01046b98f8be61ba5a9dc9ed0bb625c0a671cce8534167087bda783268a25b4
 dependencies:
 - commit: x86_64/pkg/core/userland/2nex-utilities/0.0.1/bundles/dev
   name: 2nex-utilities
@@ -13,16 +13,25 @@ dependencies:
   name: findutils
 
 packages:
-- commit: x86_64/pkg/libs/system/glibc/2.39/outputs/lib
-  name: glibc-lib
+# bash - shell
 - commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
-  name: bash-bin
+  name: bash
+
+# coreutils - basic commands
 - commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
-  name: coreutils-bin
-- commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/bin
-  name: util-linux-bin
-- commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/lib
-  name: util-linux-lib
+  name: coreutils
+
+# findutils - find, xargs, locate
+- commit: x86_64/pkg/core/userland/findutils/4.9.0/outputs/bin
+  name: findutils
+
+# sed - stream editor
+- commit: x86_64/pkg/cli/text/sed/4.9/outputs/bin
+  name: sed
+
+# grep - pattern matching
+- commit: x86_64/pkg/cli/text/grep/3.11/outputs/bin
+  name: grep
 
 build:
   script: |
@@ -38,7 +47,7 @@ build:
     EOF
 
     # create mount points for essential filesystems
-    mkdir -p /target/{proc,sys,dev,run}
+    mkdir -p /target/{proc,sys,dev,run,root}
 
     # create a simple init script
     cat > /target/init << 'EOF'
@@ -46,24 +55,24 @@ build:
 
     mount -t proc proc /proc
     mount -t sysfs sysfs /sys
-    mount -t devtmpfs devtmpfs /dev
     mount -t tmpfs tmpfs /run
 
-    echo "=== 2nex bootable-minimal started ==="
+    echo "=== 2nex bootable-nex started ==="
     echo "System info:"
     uname -a
     echo ""
-    echo "Mounted filesystems:"
-    mount
+    echo "Package structure:"
+    ls -la /nex/pkg/
     echo ""
-    echo "Starting shell on /dev/console..."
+    echo "Symlinks in /usr/bin:"
+    ls -la /usr/bin/ | head -20
+    echo ""
+    echo "Testing bash from /nex structure..."
+    /usr/bin/bash --version
+    echo ""
+    echo "Starting shell..."
 
-    # run shell on console, loop forever on exit
-    while true; do
-        setsid /usr/bin/bash </dev/console >/dev/console 2>&1 || true
-        echo "Shell exited, restarting..."
-        sleep 1
-    done
+    exec /usr/bin/bash
     EOF
 
     chmod +x /target/init
