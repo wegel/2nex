@@ -9,7 +9,6 @@ use walkdir::WalkDir;
 use crate::manifest::*;
 use crate::ostree::*;
 use crate::outputs::*;
-use crate::runtime::scanner::RuntimeScanResult;
 
 pub fn append_checksum_file(package: &Package, checksum: &str, file_path: &Path) -> io::Result<()> {
     // Step 1: Calculate the maximum width of the first column
@@ -444,8 +443,6 @@ pub fn verify_and_commit_outputs(
     manifest: &Manifest,
     base_dir: &str,
     repo_path: &str,
-    runtime_suggestions: Option<&RuntimeScanResult>,
-    verbose_reasons: bool,
     manifest_path: &Path,
 ) -> io::Result<()> {
     println!("Verifying and committing outputs to OSTree branches");
@@ -474,10 +471,15 @@ pub fn verify_and_commit_outputs(
 
     let outputs = categorize_files(&out_dir);
     println!("Suggested manifest outputs:");
-    print_outputs(&outputs, runtime_suggestions, verbose_reasons);
+    print_outputs(&outputs);
 
     for (output_type, spec) in output_specs {
         if output_type == "discard" {
+            continue;
+        }
+
+        // skip outputs with no files
+        if spec.files.is_empty() {
             continue;
         }
 
@@ -489,8 +491,8 @@ pub fn verify_and_commit_outputs(
             output_type
         );
 
-        for file_path in &spec.files {
-            let source_path = out_dir.join(file_path.trim_start_matches('/'));
+        for file_entry in &spec.files {
+            let source_path = out_dir.join(file_entry.path.trim_start_matches('/'));
             if !source_path.is_symlink() && !source_path.exists() {
                 return Err(io::Error::new(
                     io::ErrorKind::NotFound,
@@ -531,7 +533,7 @@ pub fn verify_and_commit_outputs(
                 )?;
             }
 
-            accounted_files.push(file_path.trim_start_matches('/').to_string());
+            accounted_files.push(file_entry.path.trim_start_matches('/').to_string());
         }
 
         let commit_output_dir = out_dir.join(output_type);

@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::{Arc, Mutex};
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 
@@ -15,11 +15,14 @@ use petgraph::algo::toposort;
 use petgraph::graph::{DiGraph, NodeIndex};
 
 pub mod build;
+pub mod commands;
 pub mod deps;
 pub mod manifest;
+pub mod materializer;
 pub mod ostree;
+pub mod ostree_native;
 pub mod outputs;
-pub mod runtime;
+pub mod repo;
 pub mod system;
 
 mod utils;
@@ -29,181 +32,97 @@ use deps::*;
 use manifest::*;
 use ostree::*;
 use outputs::*;
-use runtime::scanner::{RuntimeScanResult, RuntimeScanner};
-
 #[derive(Parser)]
-#[clap(version = "1.0", author = "Your Name")]
+#[clap(name = "nex", version = "1.0", about = "2nex package builder and manager")]
 struct Cli {
     #[clap(subcommand)]
-    command: Option<Command>,
-
-    // positional args (for default build mode)
-    #[clap(value_name = "REPO")]
-    repo_path: Option<String>,
-    #[clap(value_name = "MANIFEST")]
-    manifest_file: Option<String>,
-
-    // graph builder flags (default mode)
-    #[clap(
-        long,
-        default_value = ".",
-        help = "Base directory for searching manifests"
-    )]
-    manifest_dir: String,
-
-    #[clap(
-        long,
-        help = "Run the build script on the host's filesystem (for bootstrapping)"
-    )]
-    bootstrap: bool,
-
-    #[clap(long, help = "Skip runtime dependency scanning")]
-    skip_runtime_deps: bool,
-
-    #[clap(
-        long,
-        help = "Include per-reference explanations in runtime dependency output"
-    )]
-    runtime_deps_verbose: bool,
-
-    #[clap(
-        long,
-        help = "Treat missing files during runtime dependency scanning as warnings"
-    )]
-    allow_missing_runtime_files: bool,
-
-    #[clap(
-        long,
-        help = "Rewrite outputs.*.requires based on the runtime dependency scanner"
-    )]
-    update_outputs_requires: bool,
-
-    #[clap(
-        long,
-        help = "Update outputs.*.requires using existing OSTree outputs without rebuilding"
-    )]
-    update_outputs_requires_only: bool,
-
-    #[clap(long, help = "Validate build reproducibility")]
-    validate_reproducibility: bool,
-
-    #[clap(
-        long,
-        help = "Update the manifest checksum when build outputs differ from what is recorded"
-    )]
-    update_checksum: bool,
-
-    #[clap(
-        long,
-        help = "Rewrite OSTree output/bundle metadata without rebuilding (package manifests only)"
-    )]
-    refresh_ostree_metadata: bool,
-
-    #[clap(long, help = "Build only the specified manifest without dependencies")]
-    single: bool,
-
-    #[clap(
-        long,
-        help = "Show what would be built without actually building (dry run)"
-    )]
-    dry_run: bool,
-
-    #[clap(
-        short = 'j',
-        long,
-        help = "Maximum number of parallel build jobs (default: number of CPUs)"
-    )]
-    jobs: Option<usize>,
-
-    #[clap(long, help = "Show dependency paths for all packages")]
-    show_dep_paths: bool,
-
-    #[clap(long, help = "Force rebuild even if package is already built")]
-    force: bool,
-
-    #[clap(
-        long,
-        help = "Add checksums to manifests missing them (from OSTree or by building)"
-    )]
-    add_checksums: bool,
-
-    #[clap(
-        long,
-        help = "Trace which packages pull in a specific dependency (e.g. 'bootstrap/phase1')"
-    )]
-    trace_dependency: Option<String>,
-
-    #[clap(
-        long,
-        help = "Specify build directory (default: ./build_rootfs_{slug}_{namespace})"
-    )]
-    build_dir: Option<String>,
-
-    #[clap(
-        long,
-        help = "Expand dependencies to include all transitive deps, ordered by depth"
-    )]
-    hydrate_dependencies: bool,
-
-    #[clap(
-        long,
-        help = "Include transitive runtime deps (requires) from manifest dependencies"
-    )]
-    transitive_requires: bool,
-
-    #[clap(
-        long,
-        help = "Allow bootstrap packages in requires (normally rejected)"
-    )]
-    allow_bootstrap_requires: bool,
+    command: Command,
 }
 
-#[derive(clap::Subcommand)]
+#[derive(Subcommand)]
 enum Command {
+    /// Build packages from manifests
+    Build(commands::build::BuildArgs),
+
+    /// List packages in the OSTree repository
+    List(commands::list::ListArgs),
+
+    /// Show information about a package
+    Info(commands::info::InfoArgs),
+
+    /// Search for packages
+    Search(commands::search::SearchArgs),
+
     /// Pin dependencies to their current git blob SHAs
-    Link {
-        /// The manifest file to process
-        manifest: String,
-    },
+    Link(commands::link::LinkArgs),
+
+    /// Enter staging mode (create overlay for transactional changes)
+    Stage(commands::stage::StageArgs),
+
+    /// Discard staged changes and exit staging mode
+    Discard(commands::discard::DiscardArgs),
+
+    /// Install a package (requires staging mode or --commit)
+    Install(commands::install::InstallArgs),
+
+    /// Remove a package (requires staging mode)
+    Remove(commands::remove::RemoveArgs),
+
+    /// Switch the active version of a package
+    Switch(commands::switch::SwitchArgs),
+
+    /// Commit staged changes as a new OSTree deployment
+    Commit(commands::commit::CommitArgs),
+
+    /// Show current and previous deployments
+    Status(commands::status::StatusArgs),
+
+    /// Rollback to a previous deployment
+    Rollback(commands::rollback::RollbackArgs),
+
+    /// Test native OSTree implementation (hidden)
+    #[clap(hide = true)]
+    TestNative(commands::test_native::TestNativeArgs),
+
+    /// Resolve and show runtime dependencies for a package
+    Resolve(commands::resolve::ResolveArgs),
+
+    /// Compute and store runtime dependencies in manifest
+    ComputeDeps(commands::compute_deps::ComputeDepsArgs),
 }
 
-pub struct Opts {
-    repo_path: String,
-    manifest_file: String,
-    validate_reproducibility: bool,
-    update_checksum: bool,
-    bootstrap: bool,
-    skip_runtime_deps: bool,
-    runtime_deps_verbose: bool,
-    allow_missing_runtime_files: bool,
-    update_outputs_requires: bool,
-    update_outputs_requires_only: bool,
-    refresh_ostree_metadata: bool,
-    force: bool,
-    build_dir: Option<String>,
-    transitive_requires: bool,
-    allow_bootstrap_requires: bool,
-}
+// re-export BuildOpts for internal use
+pub use commands::build::BuildOpts;
 
 fn main() -> io::Result<()> {
     let cli: Cli = Cli::parse();
 
-    // handle subcommands
-    if let Some(command) = cli.command {
-        return match command {
-            Command::Link { manifest } => link_manifest_dependencies(&manifest),
-        };
+    match cli.command {
+        Command::Build(args) => run_build(&args),
+        Command::List(args) => commands::list::run(&args),
+        Command::Info(args) => commands::info::run(&args),
+        Command::Search(args) => commands::search::run(&args),
+        Command::Link(args) => link_manifest_dependencies(&args.manifest),
+        Command::Stage(args) => commands::stage::run(&args),
+        Command::Discard(args) => commands::discard::run(&args),
+        Command::Install(args) => commands::install::run(&args),
+        Command::Remove(args) => commands::remove::run(&args),
+        Command::Switch(args) => commands::switch::run(&args),
+        Command::Commit(args) => commands::commit::run(&args),
+        Command::Status(args) => commands::status::run(&args),
+        Command::Rollback(args) => commands::rollback::run(&args),
+        Command::TestNative(args) => commands::test_native::run(&args),
+        Command::Resolve(args) => commands::resolve::run(&args),
+        Command::ComputeDeps(args) => commands::compute_deps::run(&args),
     }
+}
 
-    let repo_path = cli
-        .repo_path
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "REPO argument required"))?;
-    let manifest_file = cli
-        .manifest_file
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "MANIFEST argument required"))?;
+fn run_build(args: &commands::build::BuildArgs) -> io::Result<()> {
+    // validate repo exists early
+    let repo_path = repo::resolve_repo_path(args.repo.as_deref())?;
 
     // configure rayon thread pool if jobs specified
-    if let Some(num_jobs) = cli.jobs {
+    if let Some(num_jobs) = args.jobs {
         rayon::ThreadPoolBuilder::new()
             .num_threads(num_jobs)
             .build_global()
@@ -215,31 +134,14 @@ fn main() -> io::Result<()> {
             })?;
     }
 
-    let manifest_path = Path::new(&manifest_file);
-    let manifest_dirs = vec![PathBuf::from(&cli.manifest_dir)];
+    let manifest_path = Path::new(&args.manifest);
+    let manifest_dirs = vec![PathBuf::from(&args.manifest_dir)];
+    let opts = BuildOpts::from_args(args, repo_path.clone());
 
-    let opts = Opts {
-        repo_path: repo_path.clone(),
-        manifest_file: manifest_file.clone(),
-        validate_reproducibility: cli.validate_reproducibility,
-        update_checksum: cli.update_checksum,
-        bootstrap: cli.bootstrap,
-        skip_runtime_deps: cli.skip_runtime_deps,
-        runtime_deps_verbose: cli.runtime_deps_verbose,
-        allow_missing_runtime_files: cli.allow_missing_runtime_files,
-        update_outputs_requires: cli.update_outputs_requires,
-        update_outputs_requires_only: cli.update_outputs_requires_only,
-        refresh_ostree_metadata: cli.refresh_ostree_metadata,
-        force: cli.force,
-        build_dir: cli.build_dir,
-        transitive_requires: cli.transitive_requires,
-        allow_bootstrap_requires: cli.allow_bootstrap_requires,
-    };
-
-    if cli.hydrate_dependencies {
+    if args.hydrate_dependencies {
         // hydrate mode: expand dependencies to include all transitive deps
-        hydrate_dependencies(&repo_path, &manifest_file)
-    } else if cli.single {
+        hydrate_dependencies(&repo_path, &args.manifest)
+    } else if args.single {
         // single mode: build only the specified manifest without dependencies
         build_single(&opts)
     } else {
@@ -249,16 +151,16 @@ fn main() -> io::Result<()> {
             manifest_path,
             &manifest_dirs,
             &opts,
-            cli.dry_run,
-            cli.add_checksums,
-            cli.show_dep_paths,
-            cli.force,
-            cli.trace_dependency.as_deref(),
+            args.dry_run,
+            args.add_checksums,
+            args.show_dep_paths,
+            args.force,
+            args.trace_dependency.as_deref(),
         )
     }
 }
 
-fn hydrate_dependencies(repo_path: &str, manifest_file: &str) -> io::Result<()> {
+fn hydrate_dependencies(_repo_path: &str, manifest_file: &str) -> io::Result<()> {
     // load manifest to get dependencies
     let manifest_data = load_manifest(manifest_file)?;
 
@@ -272,8 +174,11 @@ fn hydrate_dependencies(repo_path: &str, manifest_file: &str) -> io::Result<()> 
         }
     };
 
+    // load manifest index for dependency resolution
+    let manifest_index = manifest::ManifestIndex::load("pkg")?;
+
     // resolve all transitive dependencies (already in topological order, deepest first)
-    let all_commits = resolve_dependency_closure(dependencies, repo_path)?;
+    let all_commits = resolve_dependency_closure(dependencies, &manifest_index)?;
 
     // convert commits to Dependency entries
     let hydrated_deps: Vec<Dependency> = all_commits
@@ -357,11 +262,11 @@ fn hydrate_dependencies(repo_path: &str, manifest_file: &str) -> io::Result<()> 
     Ok(())
 }
 
-fn build_package_manifest(opts: &Opts, manifest: &mut Manifest) -> io::Result<()> {
+fn build_package_manifest(opts: &BuildOpts, manifest: &mut Manifest) -> io::Result<()> {
     build_package_manifest_with_dir(opts, manifest, "./build_rootfs")
 }
 
-fn build_single(opts: &Opts) -> io::Result<()> {
+fn build_single(opts: &BuildOpts) -> io::Result<()> {
     // load the manifest
     let manifest_data = load_manifest(&opts.manifest_file)?;
 
@@ -373,13 +278,10 @@ fn build_single(opts: &Opts) -> io::Result<()> {
                 "--refresh-ostree-metadata only applies to package manifests",
             ));
         }
-        if opts.update_outputs_requires
-            || opts.update_outputs_requires_only
-            || opts.validate_reproducibility
-        {
+        if opts.validate_reproducibility {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "--refresh-ostree-metadata cannot be combined with build/update flags",
+                "--refresh-ostree-metadata cannot be combined with --validate-reproducibility",
             ));
         }
     }
@@ -413,36 +315,8 @@ fn build_single(opts: &Opts) -> io::Result<()> {
     }
 }
 
-fn package_already_built(manifest: &Manifest, repo_path: &str) -> io::Result<bool> {
-    use std::process::Command;
-
-    // check if at least one output exists in ostree
-    for category in manifest.outputs.keys() {
-        let branch_name = format!(
-            "x86_64/{}/{}/{}/outputs/{}",
-            manifest.package.namespace_path(),
-            manifest.package.slug,
-            manifest.package.version,
-            category
-        );
-
-        let output = Command::new("ostree")
-            .arg("refs")
-            .arg("--repo")
-            .arg(repo_path)
-            .arg(&branch_name)
-            .output()?;
-
-        if output.status.success() && !output.stdout.is_empty() {
-            return Ok(true);
-        }
-    }
-
-    Ok(false)
-}
-
 fn build_package_manifest_with_dir(
-    opts: &Opts,
+    opts: &BuildOpts,
     manifest: &mut Manifest,
     base_dir: &str,
 ) -> io::Result<()> {
@@ -450,71 +324,7 @@ fn build_package_manifest_with_dir(
     fs::create_dir_all(download_dir)?;
 
     // resolve dependencies to specific commit IDs when they have manifest_ref
-    let resolved_commits = resolve_dependency_commits(&manifest.dependencies, &opts.repo_path)?;
-
-    let dependency_commits = if opts.transitive_requires {
-        // create temporary deps with resolved commits for closure resolution
-        let resolved_deps: Vec<Dependency> = manifest
-            .dependencies
-            .iter()
-            .zip(resolved_commits.iter())
-            .map(|(dep, resolved)| Dependency {
-                commit: resolved.clone(),
-                name: dep.name.clone(),
-                manifest_ref: dep.manifest_ref.clone(),
-            })
-            .collect();
-        resolve_dependency_closure(&resolved_deps, &opts.repo_path)?
-    } else {
-        // use resolved commits directly
-        resolved_commits
-    };
-    let wants_update_outputs = opts.update_outputs_requires || opts.update_outputs_requires_only;
-    let runtime_scanner = RuntimeScanner::new(&opts.repo_path, &dependency_commits)
-        .with_allow_missing_files(opts.allow_missing_runtime_files);
-
-    // check if package is already built and we can skip rebuilding
-    let can_skip_rebuild = !opts.force
-        && opts.update_outputs_requires
-        && package_already_built(manifest, &opts.repo_path)?;
-
-    if opts.update_outputs_requires_only || can_skip_rebuild {
-        if can_skip_rebuild {
-            println!("Package already built, updating requires without rebuilding");
-        }
-        stage_existing_outputs(manifest, base_dir, &opts.repo_path)?;
-        let runtime_result = runtime_scanner.scan(
-            &manifest.package.name,
-            &manifest.package.version,
-            base_dir,
-            manifest,
-            opts.runtime_deps_verbose,
-        )?;
-        // check for bootstrap requires unless allowed
-        if !opts.allow_bootstrap_requires {
-            let bootstrap_requires: Vec<String> = runtime_result
-                .all_resolved_commits()
-                .filter(|commit| commit.contains("/bootstrap/"))
-                .cloned()
-                .collect();
-            if !bootstrap_requires.is_empty() {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!(
-                        "Bootstrap requires detected (use --allow-bootstrap-requires to override):\n  {}",
-                        bootstrap_requires.join("\n  ")
-                    ),
-                ));
-            }
-        }
-        update_manifest_outputs(&opts.manifest_file, &runtime_result)?;
-        apply_runtime_requires(manifest, &runtime_result);
-        println!(
-            "Updated outputs.requires for {} without rebuilding",
-            opts.manifest_file
-        );
-        return Ok(());
-    }
+    let dependency_commits = resolve_dependency_commits(&manifest.dependencies, &opts.repo_path)?;
 
     setup_composite_rootfs(base_dir, &opts.repo_path, &dependency_commits)?;
     let input_env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
@@ -534,57 +344,26 @@ fn build_package_manifest_with_dir(
 
     run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
 
-    let need_runtime_scan = !opts.skip_runtime_deps || wants_update_outputs;
-    let runtime_analysis: Option<RuntimeScanResult> = if need_runtime_scan {
-        Some(runtime_scanner.scan(
-            &manifest.package.name,
-            &manifest.package.version,
-            base_dir,
-            manifest,
-            opts.runtime_deps_verbose,
-        )?)
-    } else {
-        None
-    };
+    // if generate_outputs is enabled, write auto-detected outputs to manifest
+    if opts.generate_outputs {
+        let out_dir = Path::new(base_dir).join("2nex/out");
+        let categorized = categorize_files(&out_dir);
+        crate::manifest::update::write_auto_outputs_to_manifest(
+            &opts.manifest_file,
+            &categorized,
+        )?;
 
-    if wants_update_outputs {
-        if let Some(result) = runtime_analysis.as_ref() {
-            // check for bootstrap requires unless allowed
-            if !opts.allow_bootstrap_requires {
-                let bootstrap_requires: Vec<String> = result
-                    .all_resolved_commits()
-                    .filter(|commit| commit.contains("/bootstrap/"))
-                    .cloned()
-                    .collect();
-                if !bootstrap_requires.is_empty() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!(
-                            "Bootstrap requires detected (use --allow-bootstrap-requires to override):\n  {}",
-                            bootstrap_requires.join("\n  ")
-                        ),
-                    ));
-                }
-            }
-            update_manifest_outputs(&opts.manifest_file, result)?;
-            apply_runtime_requires(manifest, result);
-        } else {
-            println!("Skipping output requires update because runtime scanning was disabled.");
+        // reload the manifest to pick up the new outputs
+        let reloaded = load_manifest(&opts.manifest_file)?;
+        if let ManifestData::Package(reloaded_manifest) = reloaded {
+            *manifest = reloaded_manifest;
         }
     }
-
-    let runtime_suggestions: Option<&RuntimeScanResult> = if opts.skip_runtime_deps {
-        None
-    } else {
-        runtime_analysis.as_ref()
-    };
 
     verify_and_commit_outputs(
         manifest,
         base_dir,
         &opts.repo_path,
-        runtime_suggestions,
-        opts.runtime_deps_verbose,
         Path::new(&opts.manifest_file),
     )?;
 
@@ -615,6 +394,8 @@ fn build_package_manifest_with_dir(
                         &checksum,
                     )?;
                     manifest.package.checksum = Some(checksum.clone());
+                    // refresh OSTree metadata with new manifest hash
+                    refresh_package_metadata(&opts.repo_path, manifest, Path::new(&opts.manifest_file))?;
                 } else {
                     eprintln!(
                         "Checksum mismatch. Expected: {}, Calculated: {}",
@@ -638,8 +419,23 @@ fn build_package_manifest_with_dir(
                     &checksum,
                 )?;
                 manifest.package.checksum = Some(checksum.clone());
+                // refresh OSTree metadata with new manifest hash
+                refresh_package_metadata(&opts.repo_path, manifest, Path::new(&opts.manifest_file))?;
             }
         }
+    }
+
+    // compute runtime dependencies and create files commit (opt-in, modifies manifest)
+    if opts.compute_deps {
+        commands::compute_deps::compute_deps_for_manifest(
+            manifest,
+            &opts.repo_path,
+            Path::new(&opts.manifest_file),
+            opts.runtime_deps_verbose,
+            false, // never dry_run during build
+        )?;
+        // refresh OSTree metadata since compute_deps modified the manifest
+        refresh_package_metadata(&opts.repo_path, manifest, Path::new(&opts.manifest_file))?;
     }
 
     if opts.validate_reproducibility {
@@ -652,8 +448,6 @@ fn build_package_manifest_with_dir(
             manifest,
             base_dir,
             &opts.repo_path,
-            runtime_suggestions,
-            opts.runtime_deps_verbose,
             Path::new(&opts.manifest_file),
         )?;
         create_and_commit_bundles(
@@ -1010,14 +804,37 @@ fn collect_dependencies_recursive(
                 }
             }
         } else {
-            // no manifest_ref - use floating mode (check if branch exists at HEAD)
-            let in_ostree = ostree_cache
+            // no manifest_ref - floating mode: check if branch exists AND manifest hash matches
+            let branch_exists = ostree_cache
                 .entry(dep.commit.clone())
                 .or_insert_with(|| ensure_branch_exists(repo_path, &dep.commit).is_ok());
 
-            if *in_ostree {
-                println!("  [floating] {} skipping", dep.commit);
-                continue;
+            if *branch_exists {
+                // branch exists, now check if manifest hash matches
+                match find_manifest_for_commit(&dep.commit, manifest_dirs) {
+                    Ok(dep_manifest_path) => {
+                        let manifest_hash = compute_manifest_hash(&dep_manifest_path)?;
+                        match find_commit_by_manifest_hash(repo_path, &dep.commit, &manifest_hash) {
+                            Ok(Some(_)) => {
+                                println!("  [floating] {} skipping", dep.commit);
+                                continue;
+                            }
+                            Ok(None) => {
+                                println!("  [floating/stale] {} manifest changed, rebuilding", dep.commit);
+                                // fall through to rebuild
+                            }
+                            Err(e) => {
+                                eprintln!("  Warning: failed to check manifest hash for {}: {}", dep.commit, e);
+                                // fall through to rebuild to be safe
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        // can't find manifest, assume it's a pre-built dep and skip
+                        println!("  [floating] {} skipping (no manifest found)", dep.commit);
+                        continue;
+                    }
+                }
             }
         }
 
@@ -1161,7 +978,7 @@ fn show_parallel_execution_plan(
 fn build_packages_parallel(
     graph: &DiGraph<ManifestSource, ()>,
     build_order: &[NodeIndex],
-    opts: &Opts,
+    opts: &BuildOpts,
 ) -> io::Result<()> {
     let total = build_order.len();
     let completed = Arc::new(Mutex::new(HashSet::new()));
@@ -1261,22 +1078,18 @@ fn build_packages_parallel(
                         };
 
                         // create opts for this build
-                        let build_opts = Opts {
+                        let build_opts = BuildOpts {
                             repo_path: opts.repo_path.clone(),
                             manifest_file: path.to_str().unwrap().to_string(),
                             validate_reproducibility: opts.validate_reproducibility,
                             update_checksum: opts.update_checksum,
                             bootstrap: manifest.package.bootstrap,
-                            skip_runtime_deps: opts.skip_runtime_deps,
+                            compute_deps: opts.compute_deps,
                             runtime_deps_verbose: opts.runtime_deps_verbose,
-                            allow_missing_runtime_files: opts.allow_missing_runtime_files,
-                            update_outputs_requires: opts.update_outputs_requires,
-                            update_outputs_requires_only: opts.update_outputs_requires_only,
                             refresh_ostree_metadata: opts.refresh_ostree_metadata,
                             force: opts.force,
                             build_dir: None,
-                            transitive_requires: true,
-                            allow_bootstrap_requires: false,
+                            generate_outputs: opts.generate_outputs,
                         };
 
                         println!(
@@ -1309,22 +1122,18 @@ fn build_packages_parallel(
                             "system"
                         );
 
-                        let build_opts = Opts {
+                        let build_opts = BuildOpts {
                             repo_path: opts.repo_path.clone(),
                             manifest_file: path.to_str().unwrap().to_string(),
                             validate_reproducibility: opts.validate_reproducibility,
                             update_checksum: opts.update_checksum,
                             bootstrap: opts.bootstrap,
-                            skip_runtime_deps: opts.skip_runtime_deps,
+                            compute_deps: opts.compute_deps,
                             runtime_deps_verbose: opts.runtime_deps_verbose,
-                            allow_missing_runtime_files: opts.allow_missing_runtime_files,
-                            update_outputs_requires: opts.update_outputs_requires,
-                            update_outputs_requires_only: opts.update_outputs_requires_only,
                             refresh_ostree_metadata: opts.refresh_ostree_metadata,
                             force: opts.force,
                             build_dir: None,
-                            transitive_requires: true,
-                            allow_bootstrap_requires: false,
+                            generate_outputs: opts.generate_outputs,
                         };
 
                         println!(
@@ -1440,7 +1249,7 @@ fn add_missing_checksums_to_manifests(
     build_order: &[NodeIndex],
     graph: &DiGraph<ManifestSource, ()>,
     repo_path: &str,
-    opts: &Opts,
+    opts: &BuildOpts,
 ) -> io::Result<()> {
     use crate::manifest::update::update_manifest_checksum_field;
     use crate::manifest::ManifestKind;
@@ -1488,22 +1297,18 @@ fn add_missing_checksums_to_manifests(
 
                 // build to get checksum
                 let mut manifest_copy = manifest.clone();
-                let build_opts = Opts {
+                let build_opts = BuildOpts {
                     repo_path: repo_path.to_string(),
                     manifest_file: manifest_path.to_str().unwrap().to_string(),
                     validate_reproducibility: false,
                     update_checksum: true, // enable checksum updating
                     bootstrap: manifest.package.bootstrap,
-                    skip_runtime_deps: opts.skip_runtime_deps,
+                    compute_deps: opts.compute_deps,
                     runtime_deps_verbose: opts.runtime_deps_verbose,
-                    allow_missing_runtime_files: opts.allow_missing_runtime_files,
-                    update_outputs_requires: opts.update_outputs_requires,
-                    update_outputs_requires_only: false,
                     refresh_ostree_metadata: false,
                     force: false,
                     build_dir: None,
-                    transitive_requires: true,
-                    allow_bootstrap_requires: false,
+                    generate_outputs: false, // don't auto-generate outputs when adding checksums
                 };
 
                 build_package_manifest(&build_opts, &mut manifest_copy)?;
@@ -1519,15 +1324,19 @@ fn add_missing_checksums_to_manifests(
     Ok(())
 }
 
-/// Trace and display dependency chains that include a specific pattern
+/// Trace and display dependency chains that include a specific pattern.
+/// Uses manifest-based dependency resolution.
 fn trace_dependency_chains(
-    repo_path: &str,
+    _repo_path: &str,
     manifest_path: &Path,
     _manifest_dirs: &[PathBuf],
     pattern: &str,
 ) -> io::Result<()> {
     println!("Tracing dependencies matching pattern: '{}'", pattern);
     println!("Starting from: {}\n", manifest_path.display());
+
+    // load manifest index for dependency resolution
+    let manifest_index = manifest::ManifestIndex::load("pkg")?;
 
     // load the root manifest
     let manifest_data = load_manifest(manifest_path.to_str().unwrap())?;
@@ -1544,7 +1353,7 @@ fn trace_dependency_chains(
     let mut found_matches = false;
     for dep in &root_deps {
         let mut chain = vec![root_slug.clone()];
-        if trace_commit_recursive(repo_path, &dep.commit, pattern, &mut chain)? {
+        if trace_commit_recursive(&dep.commit, pattern, &mut chain, &manifest_index)? {
             found_matches = true;
         }
     }
@@ -1556,12 +1365,13 @@ fn trace_dependency_chains(
     Ok(())
 }
 
-/// Recursively trace a commit and its dependencies for a pattern
+/// Recursively trace a commit and its dependencies for a pattern.
+/// Uses manifest-based dependency resolution via needs/resolution.
 fn trace_commit_recursive(
-    repo_path: &str,
     commit: &str,
     pattern: &str,
     chain: &mut Vec<String>,
+    manifest_index: &manifest::ManifestIndex,
 ) -> io::Result<bool> {
     // check if this commit matches the pattern
     let matches_pattern = commit.contains(pattern);
@@ -1584,20 +1394,13 @@ fn trace_commit_recursive(
         return Ok(true);
     }
 
-    // fetch runtime dependencies from OSTree
-    let requires = match fetch_requires_from_repo(repo_path, commit) {
-        Ok(reqs) => reqs,
-        Err(_) => {
-            // commit might not exist in repo yet, skip it
-            chain.pop();
-            return Ok(false);
-        }
-    };
+    // get runtime dependencies from manifest (using same logic as deps/mod.rs)
+    let deps = get_manifest_deps(commit, manifest_index);
 
     // recursively check each dependency
     let mut found_in_subtree = false;
-    for req in &requires {
-        if trace_commit_recursive(repo_path, req, pattern, chain)? {
+    for dep_commit in &deps {
+        if trace_commit_recursive(dep_commit, pattern, chain, manifest_index)? {
             found_in_subtree = true;
         }
     }
@@ -1606,11 +1409,54 @@ fn trace_commit_recursive(
     Ok(found_in_subtree)
 }
 
+/// Get runtime dependencies for a commit from its manifest.
+fn get_manifest_deps(commit: &str, manifest_index: &manifest::ManifestIndex) -> Vec<String> {
+    // parse commit to get namespace/slug
+    let parts: Vec<&str> = commit.split('/').collect();
+    let pkg_idx = match parts.iter().position(|&p| p == "pkg") {
+        Some(idx) => idx,
+        None => return Vec::new(),
+    };
+    let end_idx = match parts.iter().position(|&p| p == "outputs" || p == "bundles") {
+        Some(idx) => idx,
+        None => return Vec::new(),
+    };
+    if end_idx <= pkg_idx + 2 {
+        return Vec::new();
+    }
+
+    let slug_idx = end_idx - 2;
+    let namespace = parts[pkg_idx + 1..slug_idx].join("/");
+    let slug = parts[slug_idx];
+
+    let manifest = match manifest_index.get_manifest(&namespace, slug) {
+        Some(m) => m,
+        None => return Vec::new(),
+    };
+
+    // collect unique dep commits from resolution map
+    let mut deps = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+
+    for dep_name in manifest.resolution.values() {
+        if dep_name == "@self" {
+            continue;
+        }
+        if let Some(dep) = manifest.dependencies.iter().find(|d| d.name.as_deref() == Some(dep_name)) {
+            if seen.insert(dep.commit.clone()) {
+                deps.push(dep.commit.clone());
+            }
+        }
+    }
+
+    deps
+}
+
 fn build_with_dependencies(
     repo_path: &str,
     manifest_path: &Path,
     manifest_dirs: &[PathBuf],
-    opts: &Opts,
+    opts: &BuildOpts,
     dry_run: bool,
     add_checksums: bool,
     show_dep_paths: bool,
@@ -1631,7 +1477,7 @@ fn build_with_dependencies(
     let mut ostree_cache = HashMap::new();
 
     // collect all dependencies recursively
-    // when add_checksums or update_outputs_requires is true, treat it like force to include already-built packages
+    // when add_checksums is true, treat it like force to include already-built packages
     let root_source = ManifestSource::Path(manifest_path.to_path_buf());
     collect_dependencies_recursive(
         &root_source,
@@ -1639,7 +1485,7 @@ fn build_with_dependencies(
         manifest_dirs,
         &mut graph,
         &mut manifest_map,
-        force || add_checksums || opts.update_outputs_requires,
+        force || add_checksums,
         &mut ostree_cache,
     )?;
 
@@ -1832,7 +1678,6 @@ fn link_manifest_dependencies(manifest_file: &str) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::{HashMap, HashSet};
     use tempfile::NamedTempFile;
 
     fn base_manifest() -> &'static str {
@@ -1852,62 +1697,35 @@ outputs: {}
     }
 
     #[test]
-    fn parses_detailed_bundle_with_metadata() {
+    fn parses_bundle_with_includes() {
         let yaml = format!(
-            "{base}bundles:\n  dev:\n    includes:\n      - bin\n      - lib\n    requires:\n      - x86_64/foo/1.0/outputs/lib\n    suggests:\n      - x86_64/bar/2.0/bundles/dev\n",
+            "{base}bundles:\n  dev:\n    includes:\n      - bin\n      - lib\n",
             base = base_manifest()
         );
         let manifest: Manifest = serde_yaml::from_str(&yaml).unwrap();
         let bundle = manifest.bundles.get("dev").unwrap();
         assert_eq!(bundle.includes, vec!["bin".to_string(), "lib".to_string()]);
-        assert_eq!(
-            bundle.requires,
-            vec!["x86_64/foo/1.0/outputs/lib".to_string()]
-        );
-        assert_eq!(
-            bundle.suggests,
-            vec!["x86_64/bar/2.0/bundles/dev".to_string()]
-        );
     }
 
     #[test]
-    fn parses_detailed_output_with_metadata() {
+    fn parses_output_with_files_and_needs() {
         let yaml = format!(
             "{}\nbundles:\n  dev:\n    includes:\n      - bin",
             base_manifest().replacen(
                 "outputs: {}",
-                "outputs:\n  bin:\n    files:\n      - /usr/bin/foo\n    requires:\n      - x86_64/libfoo/1.0/outputs/lib\n    suggests:\n      - x86_64/foo-doc/1.0/outputs/doc",
+                "outputs:\n  bin:\n    files:\n      - path: /usr/bin/foo\n        needs:\n          - /usr/lib/libc.so.6",
                 1,
             )
         );
         let manifest: Manifest = serde_yaml::from_str(&yaml).unwrap();
         let output = manifest.outputs.get("bin").unwrap();
-        assert_eq!(output.files, vec!["/usr/bin/foo".to_string()]);
-        assert_eq!(
-            output.requires,
-            vec!["x86_64/libfoo/1.0/outputs/lib".to_string()]
-        );
-        assert_eq!(
-            output.suggests,
-            vec!["x86_64/foo-doc/1.0/outputs/doc".to_string()]
-        );
+        assert_eq!(output.files.len(), 1);
+        assert_eq!(output.files[0].path, "/usr/bin/foo");
+        assert_eq!(output.files[0].needs, vec!["/usr/lib/libc.so.6".to_string()]);
     }
 
     #[test]
-    fn parses_legacy_output_format() {
-        let yaml = format!(
-            "{}\nbundles:\n  dev:\n    includes:\n      - bin",
-            base_manifest().replacen("outputs: {}", "outputs:\n  bin:\n    - /usr/bin/foo", 1)
-        );
-        let manifest: Manifest = serde_yaml::from_str(&yaml).unwrap();
-        let output = manifest.outputs.get("bin").unwrap();
-        assert_eq!(output.files, vec!["/usr/bin/foo".to_string()]);
-        assert!(output.requires.is_empty());
-        assert!(output.suggests.is_empty());
-    }
-
-    #[test]
-    fn parses_legacy_bundle_format() {
+    fn parses_simple_bundle_format() {
         let yaml = format!(
             "{base}bundles:\n  dev:\n    - bin\n    - lib\n",
             base = base_manifest()
@@ -1915,75 +1733,10 @@ outputs: {}
         let manifest: Manifest = serde_yaml::from_str(&yaml).unwrap();
         let bundle = manifest.bundles.get("dev").unwrap();
         assert_eq!(bundle.includes, vec!["bin".to_string(), "lib".to_string()]);
-        assert!(bundle.requires.is_empty());
-        assert!(bundle.suggests.is_empty());
     }
 
-    #[test]
-    fn closure_resolution_collects_all_commits() {
-        let deps = vec![
-            Dependency {
-                commit: "pkg/A".into(),
-                name: None,
-                manifest_ref: None,
-            },
-            Dependency {
-                commit: "pkg/D".into(),
-                name: None,
-                manifest_ref: None,
-            },
-        ];
-        let mut graph: HashMap<&str, Vec<&str>> = HashMap::new();
-        graph.insert("pkg/A", vec!["pkg/B", "pkg/C"]);
-        graph.insert("pkg/B", vec!["pkg/C"]);
-        graph.insert("pkg/C", vec!["pkg/D"]);
-        graph.insert("pkg/D", vec![]);
-
-        let result = resolve_dependency_closure_with_fetch(&deps, |commit| {
-            Ok(graph
-                .get(commit)
-                .cloned()
-                .unwrap_or_default()
-                .iter()
-                .map(|s| s.to_string())
-                .collect())
-        })
-        .unwrap();
-        let expected: HashSet<String> = ["pkg/A", "pkg/B", "pkg/C", "pkg/D"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        let actual: HashSet<String> = result.into_iter().collect();
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn closure_resolution_errors_on_cycle() {
-        let deps = vec![Dependency {
-            commit: "pkg/A".into(),
-            name: None,
-            manifest_ref: None,
-        }];
-        let mut graph: HashMap<&str, Vec<&str>> = HashMap::new();
-        graph.insert("pkg/A", vec!["pkg/B"]);
-        graph.insert("pkg/B", vec!["pkg/A"]);
-
-        let err = resolve_dependency_closure_with_fetch(&deps, |commit| {
-            Ok(graph
-                .get(commit)
-                .cloned()
-                .unwrap_or_default()
-                .iter()
-                .map(|s| s.to_string())
-                .collect())
-        })
-        .expect_err("expected cycle to be detected");
-        assert!(
-            err.to_string().contains("pkg/A -> pkg/B -> pkg/A"),
-            "unexpected error message: {}",
-            err
-        );
-    }
+    // note: old closure_resolution tests removed - now uses manifest-based resolution
+    // which requires actual manifest files, not mock fetch functions
 
     #[test]
     fn detects_system_manifest_kind() {

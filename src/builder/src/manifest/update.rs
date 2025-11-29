@@ -4,75 +4,6 @@ use std::io;
 use std::mem;
 
 use super::types::*;
-use crate::runtime::scanner::RuntimeScanResult;
-
-pub fn update_manifest_outputs(
-    manifest_path: &str,
-    suggestions: &RuntimeScanResult,
-) -> io::Result<()> {
-    let contents = fs::read_to_string(manifest_path)?;
-    let mut doc: Value = serde_yaml::from_str(&contents)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-    let outputs_value = doc.get_mut("outputs").ok_or_else(|| {
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            "Manifest missing outputs section",
-        )
-    })?;
-    let outputs_map = outputs_value
-        .as_mapping_mut()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "outputs is not a mapping"))?;
-
-    let mut changed = false;
-
-    for (key, value) in outputs_map.iter_mut() {
-        let category = match key.as_str() {
-            Some(s) => s.to_string(),
-            None => continue,
-        };
-
-        let new_requires: Vec<String> = suggestions
-            .category_resolved(&category)
-            .map(|commits| commits.keys().cloned().collect())
-            .unwrap_or_default();
-
-        let (mapping, converted) = ensure_output_mapping(value)?;
-        if converted {
-            changed = true;
-        }
-        if update_requires_field(mapping, &new_requires) {
-            changed = true;
-        }
-        normalize_output_keys(mapping);
-    }
-
-    if !changed {
-        println!(
-            "No outputs.requires changes were necessary for {}",
-            manifest_path
-        );
-        return Ok(());
-    }
-
-    let outputs_block = serialize_outputs_section(outputs_value)?;
-    let (start, end) = locate_outputs_block(&contents)?;
-    let mut new_contents = String::new();
-    new_contents.push_str(&contents[..start]);
-    new_contents.push_str(&outputs_block);
-    if !outputs_block.ends_with('\n')
-        && (end >= contents.len() || contents[start..end].contains('\n'))
-    {
-        new_contents.push('\n');
-    }
-    new_contents.push_str(&contents[end..]);
-    fs::write(manifest_path, new_contents)?;
-    println!(
-        "Updated outputs.requires entries based on runtime scan in {}",
-        manifest_path
-    );
-
-    Ok(())
-}
 
 pub fn update_manifest_checksum_field(
     manifest_path: &str,
@@ -192,42 +123,10 @@ pub fn ensure_output_mapping(value: &mut Value) -> io::Result<(&mut Mapping, boo
     }
 }
 
-pub fn update_requires_field(mapping: &mut Mapping, new_values: &[String]) -> bool {
-    let key = Value::String("requires".to_string());
-    let current: Vec<String> = mapping
-        .get(&key)
-        .and_then(|v| v.as_sequence())
-        .map(|seq| {
-            seq.iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    if new_values.is_empty() {
-        if mapping.remove(&key).is_some() && !current.is_empty() {
-            return true;
-        }
-        return false;
-    }
-
-    if current == new_values {
-        return false;
-    }
-
-    let seq = Value::Sequence(
-        new_values
-            .iter()
-            .map(|val| Value::String(val.clone()))
-            .collect(),
-    );
-    mapping.insert(key, seq);
-    true
-}
-
 pub fn normalize_output_keys(mapping: &mut Mapping) {
     let mut entries: Vec<(Value, Value)> = Vec::new();
-    for key in ["files", "requires", "suggests"] {
+    // preserve key ordering: files first, then everything else
+    for key in ["files"] {
         let key_value = Value::String(key.to_string());
         if let Some(value) = mapping.remove(&key_value) {
             entries.push((Value::String(key.to_string()), value));
@@ -318,12 +217,68 @@ pub fn locate_outputs_block(contents: &str) -> io::Result<(usize, usize)> {
     }
 }
 
-pub fn apply_runtime_requires(manifest: &mut Manifest, suggestions: &RuntimeScanResult) {
-    for (category, spec) in manifest.outputs.iter_mut() {
-        let new_requires: Vec<String> = suggestions
-            .category_resolved(category)
-            .map(|commits| commits.keys().cloned().collect())
-            .unwrap_or_default();
-        spec.requires = new_requires;
+/// Write auto-detected outputs to manifest, replacing the outputs section.
+pub fn write_auto_outputs_to_manifest(
+    manifest_path: &str,
+    categorized: &std::collections::HashMap<String, Vec<String>>,
+) -> io::Result<()> {
+    let contents = fs::read_to_string(manifest_path)?;
+
+    // build the outputs Value from categorized files
+    let mut outputs_mapping = Mapping::new();
+
+    // sort categories for deterministic output
+    let mut categories: Vec<&String> = categorized.keys().collect();
+    categories.sort();
+
+    for category in categories {
+        let files = categorized.get(category).unwrap();
+        let mut output_mapping = Mapping::new();
+
+        // files list - each file is an object with path field (new format)
+        let files_seq: Vec<Value> = files
+            .iter()
+            .map(|f| {
+                let mut file_map = Mapping::new();
+                file_map.insert(
+                    Value::String("path".to_string()),
+                    Value::String(f.clone()),
+                );
+                Value::Mapping(file_map)
+            })
+            .collect();
+        output_mapping.insert(
+            Value::String("files".to_string()),
+            Value::Sequence(files_seq),
+        );
+
+        outputs_mapping.insert(
+            Value::String(category.clone()),
+            Value::Mapping(output_mapping),
+        );
     }
+
+    let outputs_value = Value::Mapping(outputs_mapping);
+    let outputs_block = serialize_outputs_section(&outputs_value)?;
+
+    // locate and replace outputs section
+    let (start, end) = locate_outputs_block(&contents)?;
+    let mut new_contents = String::new();
+    new_contents.push_str(&contents[..start]);
+    new_contents.push_str(&outputs_block);
+    if !outputs_block.ends_with('\n')
+        && (end >= contents.len() || contents[start..end].contains('\n'))
+    {
+        new_contents.push('\n');
+    }
+    new_contents.push_str(&contents[end..]);
+
+    fs::write(manifest_path, new_contents)?;
+    println!(
+        "Auto-detected {} output categories written to {}",
+        categorized.len(),
+        manifest_path
+    );
+
+    Ok(())
 }

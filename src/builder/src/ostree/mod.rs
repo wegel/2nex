@@ -29,6 +29,57 @@ pub fn ensure_branch_exists(repo_path: &str, branch: &str) -> io::Result<()> {
     Ok(())
 }
 
+/// Get the commit ID (hash) for a branch
+pub fn get_commit_id(repo_path: &str, branch: &str) -> io::Result<String> {
+    let output = Command::new("ostree")
+        .arg("rev-parse")
+        .arg("--repo")
+        .arg(repo_path)
+        .arg(branch)
+        .output()
+        .map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e))
+        })?;
+
+    if !output.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Branch {} not found", branch),
+        ));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Get a metadata value from an OSTree commit
+pub fn get_commit_metadata(repo_path: &str, commit: &str, key: &str) -> io::Result<String> {
+    let output = Command::new("ostree")
+        .arg("show")
+        .arg("--repo")
+        .arg(repo_path)
+        .arg(format!("--print-metadata-key={}", key))
+        .arg(commit)
+        .output()
+        .map_err(|e| {
+            io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e))
+        })?;
+
+    if !output.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Metadata key {} not found for {}", key, commit),
+        ));
+    }
+
+    // ostree returns quoted strings, remove the quotes
+    let value = String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .trim_matches('\'')
+        .to_string();
+
+    Ok(value)
+}
+
 /// Parse an OSTree commit reference into (slug, version, namespace)
 pub fn parse_commit_ref(commit: &str) -> Option<(String, String, String)> {
     // format: x86_64/{namespace}/{slug}/{version}/...
@@ -78,6 +129,8 @@ pub fn checkout_ostree_into(
     command.arg("ostree");
     command.arg("checkout");
     command.arg("--repo").arg(repo_path);
+    // prevent libostree from trying to interact with host's sysroot on ostree-deployed systems
+    command.env("OSTREE_SYSROOT", "/nonexistent");
     if union {
         command.arg("--union");
     }
@@ -126,6 +179,8 @@ pub fn commit_to_ostree(
     command.arg("--branch").arg(branch);
     command.arg("--no-xattrs");
     command.arg("--no-bindings");
+    // prevent libostree from trying to interact with host's sysroot on ostree-deployed systems
+    command.env("OSTREE_SYSROOT", "/nonexistent");
 
     for (key, value) in metadata {
         command.arg("--add-metadata-string");
@@ -225,87 +280,6 @@ pub fn encode_metadata_list(values: &[String]) -> io::Result<Option<String>> {
         )
     })?;
     Ok(Some(json))
-}
-
-/// Read a metadata list from an OSTree commit
-pub fn read_metadata_list(repo_path: &str, commit: &str, key: &str) -> io::Result<Vec<String>> {
-    let output = Command::new("ostree")
-        .arg("show")
-        .arg("--repo")
-        .arg(repo_path)
-        .arg("--print-metadata-key")
-        .arg(key)
-        .arg(commit)
-        .output()
-        .map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("Failed to run ostree: {}", e))
-        })?;
-
-    if !output.status.success() {
-        return Ok(Vec::new());
-    }
-
-    parse_metadata_list_output(&output.stdout)
-}
-
-/// Parse OSTree metadata list output
-pub fn parse_metadata_list_output(raw: &[u8]) -> io::Result<Vec<String>> {
-    let text = String::from_utf8_lossy(raw);
-    let mut trimmed = text.trim();
-
-    if trimmed.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    // ostree wraps the JSON in single quotes, strip them
-    if trimmed.starts_with('\'') && trimmed.ends_with('\'') {
-        trimmed = &trimmed[1..trimmed.len() - 1];
-    }
-
-    let parsed: Vec<String> = serde_json::from_str(trimmed).map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("Failed to parse metadata: {}", e),
-        )
-    })?;
-
-    Ok(parsed)
-}
-
-/// Fetch requires metadata from OSTree repository
-pub fn fetch_requires_from_repo(repo_path: &str, commit: &str) -> io::Result<Vec<String>> {
-    // try output requires first (for output commits), then bundle requires (for bundle commits)
-    let output_requires = read_metadata_list(repo_path, commit, "nex.output.requires")?;
-    if !output_requires.is_empty() {
-        return Ok(output_requires);
-    }
-
-    // try explicit bundle requires
-    let bundle_requires = read_metadata_list(repo_path, commit, "nex.bundle.requires")?;
-    if !bundle_requires.is_empty() {
-        return Ok(bundle_requires);
-    }
-
-    // if no explicit bundle requires, compute them dynamically from included outputs
-    let bundle_outputs = read_metadata_list(repo_path, commit, "nex.bundle.outputs")?;
-    if !bundle_outputs.is_empty() {
-        // this is a bundle without explicit requires - compute them from outputs
-        let mut all_requires = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-
-        for output_commit in bundle_outputs {
-            let output_reqs = read_metadata_list(repo_path, &output_commit, "nex.output.requires")?;
-            for req in output_reqs {
-                if seen.insert(req.clone()) {
-                    all_requires.push(req);
-                }
-            }
-        }
-
-        return Ok(all_requires);
-    }
-
-    Ok(Vec::new())
 }
 
 /// Read build checksum from an OSTree commit

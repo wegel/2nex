@@ -40,6 +40,10 @@ pub struct Manifest {
     pub outputs: HashMap<String, OutputSpec>,
     #[serde(deserialize_with = "deserialize_bundles")]
     pub bundles: HashMap<String, Bundle>,
+    /// resolution map: file_path (e.g., "/usr/lib/libc.so.6") -> dependency_name (e.g., "glibc")
+    /// internal libraries use "@self" as the value
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub resolution: HashMap<String, String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -87,6 +91,9 @@ pub struct SystemMeta {
     pub checksum: Option<String>,
     #[serde(default)]
     pub stable_checksum: Option<bool>,
+    /// when true, packages are installed to /nex/pkg/ with symlink forest in /usr/bin/
+    #[serde(default)]
+    pub nex_structure: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -141,10 +148,6 @@ pub struct Build {
 pub struct Bundle {
     #[serde(default)]
     pub includes: Vec<String>,
-    #[serde(default)]
-    pub requires: Vec<String>,
-    #[serde(default)]
-    pub suggests: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -157,11 +160,7 @@ enum BundleDef {
 impl From<BundleDef> for Bundle {
     fn from(def: BundleDef) -> Self {
         match def {
-            BundleDef::Simple(includes) => Bundle {
-                includes,
-                requires: Vec::new(),
-                suggests: Vec::new(),
-            },
+            BundleDef::Simple(includes) => Bundle { includes },
             BundleDef::Detailed(bundle) => bundle,
         }
     }
@@ -175,40 +174,29 @@ where
     Ok(raw.into_iter().map(|(k, v)| (k, v.into())).collect())
 }
 
+/// File entry with optional dependencies
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FileEntry {
+    /// file path in this output
+    pub path: String,
+    /// runtime dependency file paths (empty for scripts, static binaries)
+    /// these are resolved via the manifest's `resolution` map
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub needs: Vec<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OutputSpec {
+    /// file entries with per-file dependencies
     #[serde(default)]
-    pub files: Vec<String>,
-    #[serde(default)]
-    pub requires: Vec<String>,
-    #[serde(default)]
-    pub suggests: Vec<String>,
+    pub files: Vec<FileEntry>,
 }
 
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum OutputDef {
-    Simple(Vec<String>),
-    Detailed(OutputSpec),
-}
-
-impl From<OutputDef> for OutputSpec {
-    fn from(def: OutputDef) -> Self {
-        match def {
-            OutputDef::Simple(files) => OutputSpec {
-                files,
-                requires: Vec::new(),
-                suggests: Vec::new(),
-            },
-            OutputDef::Detailed(spec) => spec,
-        }
-    }
-}
+// note: no backwards compatibility - OutputSpec is the only format now
 
 fn deserialize_outputs<'de, D>(deserializer: D) -> Result<HashMap<String, OutputSpec>, D::Error>
 where
     D: Deserializer<'de>,
 {
-    let raw: HashMap<String, OutputDef> = HashMap::deserialize(deserializer)?;
-    Ok(raw.into_iter().map(|(k, v)| (k, v.into())).collect())
+    HashMap::deserialize(deserializer)
 }

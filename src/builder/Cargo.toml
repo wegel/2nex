@@ -18,7 +18,20 @@ url = "2.5.2"
 goblin = "0.9.0"
 petgraph = "0.6"
 rayon = "1.10"
+gvariant = "0.5"
 
-[dependencies.ostree]
-version = "0.19.1"
-features = ["v2021_1"]
+# ostree crate removed - we use CLI wrappers instead for static linking
+# [dependencies.ostree]
+# version = "0.19.1"
+# features = ["v2021_1"]
+
+[profile.release]
+opt-level = "z"     # optimize for size
+lto = true          # link-time optimization
+codegen-units = 1   # single codegen unit for better optimization
+strip = true        # strip symbols
+panic = "abort"     # smaller panic handling
+
+[profile.release-deploy]
+inherits = "release"
+# for deployment builds - same as release but explicit

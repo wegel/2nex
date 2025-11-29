@@ -1,7 +1,6 @@
 use serde_yaml::Value;
 use std::fs;
 use std::io;
-use std::path::Path;
 
 use super::types::*;
 

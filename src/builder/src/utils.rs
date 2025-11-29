@@ -40,53 +40,6 @@ pub fn determine_category(file_path: &str) -> String {
     }
 }
 
-/// Extracts the manifest prefix (namespace/slug/version) from a bundle or output
-/// branch reference. This is used by the runtime scanner when it has to resolve
-/// canonical dependency paths from arbitrary OSTree refs.
-pub fn manifest_prefix(commit: &str) -> Option<String> {
-    if let Some(idx) = commit.find("/bundles/") {
-        Some(commit[..idx].to_string())
-    } else if let Some(idx) = commit.find("/outputs/") {
-        Some(commit[..idx].to_string())
-    } else {
-        None
-    }
-}
-
-/// Infer the manifest file path from an OSTree commit reference.
-/// Example: "x86_64/pkg/libs/openssl/3.0/bundles/dev" -> "pkg/libs/openssl.yaml"
-pub fn infer_manifest_path(commit_ref: &str) -> Option<String> {
-    let parts: Vec<&str> = commit_ref.split('/').collect();
-    if parts.len() < 4 {
-        return None;
-    }
-
-    // find the boundary (outputs or bundles)
-    let boundary = parts
-        .iter()
-        .position(|part| *part == "outputs" || *part == "bundles")
-        .unwrap_or(parts.len());
-
-    if boundary < 3 {
-        return None;
-    }
-
-    // extract namespace and slug
-    // format: arch/{namespace...}/{slug}/{version}/...
-    let slug_idx = boundary.saturating_sub(2);
-    if slug_idx < 1 {
-        return None;
-    }
-
-    let namespace = parts[1..slug_idx].join("/");
-    let slug = parts[slug_idx];
-
-    // convert slug with hyphens to underscores for filename matching
-    let slug_underscore = slug.replace("-", "_");
-
-    Some(format!("{}/{}.yaml", namespace, slug_underscore))
-}
-
 /// Fetch content from a git blob by its SHA.
 pub fn fetch_git_blob(repo_root: &Path, sha: &str) -> io::Result<String> {
     let output = Command::new("git")
@@ -142,16 +95,4 @@ mod tests {
         assert_eq!(determine_category("/usr/bin/foo"), "bin");
     }
 
-    #[test]
-    fn manifest_prefix_extracts_base_path() {
-        assert_eq!(
-            manifest_prefix("x86_64/pkg/base/foo/1.0/bundles/dev"),
-            Some("x86_64/pkg/base/foo/1.0".to_string())
-        );
-        assert_eq!(
-            manifest_prefix("x86_64/pkg/base/foo/1.0/outputs/lib"),
-            Some("x86_64/pkg/base/foo/1.0".to_string())
-        );
-        assert_eq!(manifest_prefix("x86_64/pkg/base/foo/1.0"), None);
-    }
 }

@@ -1,6 +1,5 @@
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::env;
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
@@ -9,43 +8,30 @@ use walkdir::WalkDir;
 
 use crate::manifest::*;
 use crate::ostree::*;
-use crate::runtime::scanner::RuntimeScanResult;
 use crate::utils::determine_category;
 
 pub fn output_branch_metadata(
     manifest: &Manifest,
-    spec: &OutputSpec,
+    _spec: &OutputSpec,
     manifest_hash: &str,
 ) -> io::Result<Vec<(String, String)>> {
     let mut metadata = Vec::new();
     metadata.push(("nex.manifest.hash".to_string(), manifest_hash.to_string()));
     if let Some(checksum) = &manifest.package.checksum {
         metadata.push(("nex.build.checksum".to_string(), checksum.clone()));
-    }
-    if let Some(encoded) = encode_metadata_list(&spec.requires)? {
-        metadata.push(("nex.output.requires".to_string(), encoded));
-    }
-    if let Some(encoded) = encode_metadata_list(&spec.suggests)? {
-        metadata.push(("nex.output.suggests".to_string(), encoded));
     }
     Ok(metadata)
 }
 
 pub fn bundle_branch_metadata(
     manifest: &Manifest,
-    bundle: &Bundle,
+    _bundle: &Bundle,
     manifest_hash: &str,
 ) -> io::Result<Vec<(String, String)>> {
     let mut metadata = Vec::new();
     metadata.push(("nex.manifest.hash".to_string(), manifest_hash.to_string()));
     if let Some(checksum) = &manifest.package.checksum {
         metadata.push(("nex.build.checksum".to_string(), checksum.clone()));
-    }
-    if let Some(encoded) = encode_metadata_list(&bundle.requires)? {
-        metadata.push(("nex.bundle.requires".to_string(), encoded));
-    }
-    if let Some(encoded) = encode_metadata_list(&bundle.suggests)? {
-        metadata.push(("nex.bundle.suggests".to_string(), encoded));
     }
     Ok(metadata)
 }
@@ -100,7 +86,38 @@ pub fn commit_bundle(
 pub fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Result<PathBuf> {
     println!("Fetching and verifying input: {:?}", input_spec);
 
-    // First check if we have a symbolic link with the hash name
+    // for local files, verify directly from source - no caching
+    if let Some(file_path) = &input_spec.file {
+        println!("Verifying local file: {}", file_path);
+
+        let resolved_path = Path::new(file_path);
+        if !resolved_path.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("Local file not found: {}", file_path),
+            ));
+        }
+
+        let mut file = fs::File::open(&resolved_path)?;
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents)?;
+
+        let sha256_hash = hex::encode(Sha256::digest(&contents));
+        if sha256_hash != input_spec.sha256 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "SHA256 mismatch for local file '{}': expected {}, got {}",
+                    file_path, input_spec.sha256, sha256_hash
+                ),
+            ));
+        }
+
+        println!("Local file verified: {}", file_path);
+        return Ok(resolved_path.to_path_buf());
+    }
+
+    // for URL downloads, check cache first via hash symlink
     let hash_link_path = Path::new(download_dir).join(format!("sha256-{}", input_spec.sha256));
     if hash_link_path.exists() {
         // If the symbolic link exists, check that the target file also exists
@@ -203,82 +220,6 @@ pub fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Re
         }
 
         Ok(dst_path)
-    } else if let Some(file_path) = &input_spec.file {
-        println!("Fetching input from local file: {}", file_path);
-
-        let candidate_path = Path::new(file_path);
-        let mut resolved_path = if candidate_path.is_absolute() {
-            candidate_path.to_path_buf()
-        } else if candidate_path.exists() {
-            candidate_path.to_path_buf()
-        } else {
-            Path::new("./inputs_cache").join(candidate_path)
-        };
-        if !resolved_path.exists() {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("Local file not found: {}", file_path),
-            ));
-        }
-
-        let mut file = fs::File::open(&resolved_path)?;
-        let mut contents = Vec::new();
-        file.read_to_end(&mut contents)?;
-
-        let sha256_hash = hex::encode(Sha256::digest(&contents));
-        if sha256_hash != input_spec.sha256 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("SHA256 hash mismatch for local input: {}", sha256_hash),
-            ));
-        }
-
-        let download_dir_path = Path::new(download_dir);
-        let staged_path = {
-            let cwd = env::current_dir().expect("Failed to determine current directory");
-            let resolved_abs = if resolved_path.is_absolute() {
-                resolved_path.clone()
-            } else {
-                cwd.join(&resolved_path)
-            };
-            let download_abs = if download_dir_path.is_absolute() {
-                download_dir_path.to_path_buf()
-            } else {
-                cwd.join(download_dir_path)
-            };
-            if resolved_abs.starts_with(&download_abs) {
-                resolved_path.clone()
-            } else {
-                let file_name = resolved_path.file_name().ok_or_else(|| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "Local file must have a valid filename",
-                    )
-                })?;
-                let target_path = download_dir_path.join(file_name);
-                if !target_path.exists() {
-                    fs::copy(&resolved_path, &target_path)?;
-                }
-                target_path
-            }
-        };
-
-        resolved_path = staged_path;
-
-        // Create a symbolic link from the hash to the file
-        let hash_link_path = Path::new(download_dir).join(format!("sha256-{}", input_spec.sha256));
-        if !hash_link_path.exists() {
-            // Create relative path for the symlink to avoid including inputs_cache itself
-            let filename = resolved_path.file_name().unwrap();
-            println!(
-                "Creating hash symbolic link: {} -> {}",
-                hash_link_path.display(),
-                filename.to_string_lossy()
-            );
-            std::os::unix::fs::symlink(&filename, &hash_link_path)?;
-        }
-
-        Ok(resolved_path)
     } else {
         Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -350,11 +291,7 @@ pub fn categorize_files(rootfs_dir: &Path) -> HashMap<String, Vec<String>> {
     outputs
 }
 
-pub fn print_outputs(
-    outputs: &HashMap<String, Vec<String>>,
-    runtime_suggestions: Option<&RuntimeScanResult>,
-    verbose_reasons: bool,
-) {
+pub fn print_outputs(outputs: &HashMap<String, Vec<String>>) {
     println!("outputs:");
     let mut categories: Vec<_> = outputs.keys().collect();
     categories.sort();
@@ -364,30 +301,6 @@ pub fn print_outputs(
         println!("    files:");
         for file in files {
             println!("      - {}", file);
-        }
-        if let Some(suggestions) = runtime_suggestions {
-            if let Some(commits) = suggestions.category_resolved(category) {
-                println!("    requires:");
-                for (commit, reasons) in commits {
-                    println!("      - {}", commit);
-                    if verbose_reasons {
-                        for reason in reasons {
-                            println!("        # {}", reason);
-                        }
-                    }
-                }
-            }
-            if let Some(unresolved) = suggestions.category_unresolved(category) {
-                println!("    unresolved:");
-                for (req, reasons) in unresolved {
-                    println!("      - {}", req);
-                    if verbose_reasons {
-                        for reason in reasons {
-                            println!("        # {}", reason);
-                        }
-                    }
-                }
-            }
         }
     }
 }
