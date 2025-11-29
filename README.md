@@ -48,18 +48,23 @@ Every package branch now lives under `x86_64/pkg/<namespace-path>/<slug>/<versio
 
 **Bootstrap toolchain**: Complete. Three-phase bootstrap from any x64 GCC system. The whole thing is 100% reproducible.
 
-**Packages**: ~50 packages in categories (sys/libs, sys/apps, app/*, dev/*, net/*). Runtime dependency scanner auto-detects what each package needs.
+**Packages**: ~50 packages in categories (core/*, libs/*, cli/*, dev/*, net/*). Runtime dependency scanner auto-detects what each package needs.
 
-**Assemblies**: Working. Minimal images (14MB) and more complex ones (podman). No bootstrap deps leak into production.
+**Assemblies**: Working. Bootable systemd system (~58MB) boots to login prompt with agetty. File-level dependency resolution pulls only the specific files each package needs, not entire dependency trees.
 
-**Kernel + initramfs**: Built as reproducible packages. Kernel is EFI-enabled.
+**Bootable systems**:
+- `bootable-systemd`: Minimal systemd-based system (~58MB) with bash, coreutils, util-linux, shadow, dbus-broker. Boots in QEMU with serial console login via agetty.
+- `bootable-minimal`: Tiny system with just busybox and a shell script init. Good for testing.
+- `bootable-systemd-nex`: Full systemd system with custom EFI bootloader that scans OSTree deployments.
 
 **Builder features**:
 - Parallel graph-based builds with automatic dependency ordering
-- Runtime dependency scanning (`--update-outputs-requires`)
+- Runtime dependency scanning via `needs:` fields - tracks which specific files each binary requires
+- File-level materialization - only extracts needed files from `{checksum}/files` commits
+- `resolution:` mapping to resolve file paths to package names
 - Dependency tracing (`--trace-dependency "bootstrap/phase1"`)
 - Checksum verification
-- Dependency minimizer script
+- Hard errors on missing `/files` commits (run `nex compute-deps` to fix)
 
 ## TODOs
 
@@ -67,11 +72,9 @@ Every package branch now lives under `x86_64/pkg/<namespace-path>/<slug>/<versio
 - Enforce the new pkg/ taxonomy everywhere (CI checks for misplaced manifests)
 - Harden CI checks so floating `manifest_ref` entries are rejected
 
-**Custom EFI boot manager**:
-- Boot manager that scans OSTree commits and boots selected kernel
+**Bootloader improvements**:
 - Rollback support
-- QEMU test harness
-- OSTree-aware initramfs for root mounting
+- A/B deployment switching
 
 **Later**:
 - Deployment tooling for real hardware
