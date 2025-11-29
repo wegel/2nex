@@ -1,6 +1,6 @@
 //! Switch the active version of a package
 //!
-//! Updates symlinks in /usr/bin to point to a different installed version.
+//! Updates symlinks to point to a different installed version.
 
 use clap::Args;
 use std::fs;
@@ -10,9 +10,7 @@ use std::path::Path;
 
 use super::stage::is_staged;
 use super::state::InstalledState;
-
-const NEX_PKG_DIR: &str = "/nex/pkg";
-const USR_BIN_DIR: &str = "/usr/bin";
+use crate::repo::detect_context;
 
 #[derive(Args)]
 pub struct SwitchArgs {
@@ -25,19 +23,34 @@ pub struct SwitchArgs {
     /// Skip staging check
     #[clap(long, hide = true)]
     pub no_stage_check: bool,
+
+    /// Switch in system-wide installation (requires root)
+    #[clap(long)]
+    pub system: bool,
 }
 
 pub fn run(args: &SwitchArgs) -> io::Result<()> {
-    // check staging mode
-    if !args.no_stage_check && !is_staged() {
+    // detect context
+    let ctx = detect_context(args.system)?;
+
+    // check staging mode for system installs only
+    if ctx.is_system && ctx.needs_staging && !args.no_stage_check && !is_staged() {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
             "Not in staging mode. Use 'nex stage' first.",
         ));
     }
 
-    // load state
-    let mut state = InstalledState::load()?;
+    // load state (context-aware)
+    let mut state = InstalledState::load_for_context(&ctx)?;
+
+    // determine paths based on context
+    let nex_pkg_dir = ctx.pkg_path.to_string_lossy().to_string();
+    let bin_dir = if ctx.is_system {
+        "/usr/bin".to_string()
+    } else {
+        format!("{}/default/bin", ctx.env_path.display())
+    };
 
     // find the package
     let (namespace, slug) = parse_package_query(&args.package, &state)?;
@@ -74,7 +87,7 @@ pub fn run(args: &SwitchArgs) -> io::Result<()> {
     // build the package directory path
     let pkg_dir = format!(
         "{}/{}/{}/{}/{}",
-        NEX_PKG_DIR, namespace, slug, version, checksum
+        nex_pkg_dir, namespace, slug, version, checksum
     );
 
     if !Path::new(&pkg_dir).exists() {
@@ -92,12 +105,22 @@ pub fn run(args: &SwitchArgs) -> io::Result<()> {
     // update symlinks for each binary
     for binary in &version_info.provides {
         let src_path = format!("{}/usr/bin/{}", pkg_dir, binary);
-        let dst = format!("{}/{}", USR_BIN_DIR, binary);
-        // relative symlink: from /usr/bin/, ../../ reaches /, then nex/pkg/...
-        let relative_target = format!(
-            "../../nex/pkg/{}/{}/{}/{}/usr/bin/{}",
-            namespace, slug, version, checksum, binary
-        );
+        let dst = format!("{}/{}", bin_dir, binary);
+
+        // calculate relative symlink target based on context
+        let relative_target = if ctx.is_system {
+            // from /usr/bin/, ../../ reaches /, then nex/pkg/...
+            format!(
+                "../../nex/pkg/{}/{}/{}/{}/usr/bin/{}",
+                namespace, slug, version, checksum, binary
+            )
+        } else {
+            // from env/default/bin to pkg/<ns>/<slug>/<ver>/<hash>/usr/bin
+            format!(
+                "../../../pkg/{}/{}/{}/{}/usr/bin/{}",
+                namespace, slug, version, checksum, binary
+            )
+        };
 
         if Path::new(&src_path).exists() {
             // remove existing symlink
@@ -111,9 +134,9 @@ pub fn run(args: &SwitchArgs) -> io::Result<()> {
         }
     }
 
-    // update state
+    // update state (context-aware)
     state.switch_current(&namespace, &slug, &version, &checksum)?;
-    state.save()?;
+    state.save_for_context(&ctx)?;
 
     println!("Switched to {} {}", pkg_key, target_version);
 

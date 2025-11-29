@@ -8,6 +8,8 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+use crate::repo::NexContext;
+
 const NEX_VAR_DIR: &str = "/nex/var";
 const STATE_FILE: &str = "/nex/var/installed.json";
 
@@ -68,6 +70,47 @@ impl InstalledState {
         })?;
 
         fs::write(STATE_FILE, content)
+    }
+
+    /// Load state from a specific var directory
+    pub fn load_from(var_path: &Path) -> io::Result<Self> {
+        let path = var_path.join("installed.json");
+        if !path.exists() {
+            return Ok(Self::default());
+        }
+
+        let content = fs::read_to_string(&path)?;
+        serde_json::from_str(&content).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to parse state file: {}", e),
+            )
+        })
+    }
+
+    /// Save state to a specific var directory
+    pub fn save_to(&self, var_path: &Path) -> io::Result<()> {
+        fs::create_dir_all(var_path)?;
+
+        let path = var_path.join("installed.json");
+        let content = serde_json::to_string_pretty(self).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Failed to serialize state: {}", e),
+            )
+        })?;
+
+        fs::write(&path, content)
+    }
+
+    /// Load state using NexContext
+    pub fn load_for_context(ctx: &NexContext) -> io::Result<Self> {
+        Self::load_from(&ctx.var_path)
+    }
+
+    /// Save state using NexContext
+    pub fn save_for_context(&self, ctx: &NexContext) -> io::Result<()> {
+        self.save_to(&ctx.var_path)
     }
 
     /// Get package state by namespace/slug

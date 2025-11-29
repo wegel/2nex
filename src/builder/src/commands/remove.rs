@@ -10,9 +10,7 @@ use std::path::Path;
 
 use super::stage::is_staged;
 use super::state::InstalledState;
-
-const NEX_PKG_DIR: &str = "/nex/pkg";
-const USR_BIN_DIR: &str = "/usr/bin";
+use crate::repo::detect_context;
 
 #[derive(Args)]
 pub struct RemoveArgs {
@@ -30,19 +28,34 @@ pub struct RemoveArgs {
     /// Skip staging check
     #[clap(long, hide = true)]
     pub no_stage_check: bool,
+
+    /// Remove from system-wide installation (requires root)
+    #[clap(long)]
+    pub system: bool,
 }
 
 pub fn run(args: &RemoveArgs) -> io::Result<()> {
-    // check staging mode
-    if !args.no_stage_check && !is_staged() {
+    // detect context
+    let ctx = detect_context(args.system)?;
+
+    // check staging mode for system installs only
+    if ctx.is_system && ctx.needs_staging && !args.no_stage_check && !is_staged() {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
             "Not in staging mode. Use 'nex stage' first.",
         ));
     }
 
-    // load state
-    let mut state = InstalledState::load()?;
+    // load state (context-aware)
+    let mut state = InstalledState::load_for_context(&ctx)?;
+
+    // determine paths based on context
+    let nex_pkg_dir = ctx.pkg_path.to_string_lossy().to_string();
+    let bin_dir = if ctx.is_system {
+        "/usr/bin".to_string()
+    } else {
+        format!("{}/default/bin", ctx.env_path.display())
+    };
 
     // find the package
     let (namespace, slug) = parse_package_query(&args.package, &state)?;
@@ -65,7 +78,7 @@ pub fn run(args: &RemoveArgs) -> io::Result<()> {
         // remove symlinks first (from current version)
         if let Some(current) = &pkg_state.current {
             if let Some(info) = pkg_state.versions.get(current) {
-                remove_symlinks(&info.provides)?;
+                remove_symlinks(&info.provides, &bin_dir)?;
             }
         }
 
@@ -74,7 +87,7 @@ pub fn run(args: &RemoveArgs) -> io::Result<()> {
             let (version, checksum) = parse_version_key(version_key)?;
             let pkg_dir = format!(
                 "{}/{}/{}/{}/{}",
-                NEX_PKG_DIR, namespace, slug, version, checksum
+                nex_pkg_dir, namespace, slug, version, checksum
             );
             remove_package_dir(&pkg_dir)?;
         }
@@ -137,39 +150,39 @@ pub fn run(args: &RemoveArgs) -> io::Result<()> {
                         let (new_version, new_checksum) = parse_version_key(new_ver)?;
                         let new_pkg_dir = format!(
                             "{}/{}/{}/{}/{}",
-                            NEX_PKG_DIR, namespace, slug, new_version, new_checksum
+                            nex_pkg_dir, namespace, slug, new_version, new_checksum
                         );
-                        update_symlinks(&new_info.provides, &new_pkg_dir)?;
+                        update_symlinks(&new_info.provides, &new_pkg_dir, &bin_dir)?;
                     }
                 }
             } else {
                 // no versions left, remove symlinks
                 println!("  Removing symlinks (no versions remaining)");
-                remove_symlinks(&version_info.provides)?;
+                remove_symlinks(&version_info.provides, &bin_dir)?;
             }
         }
 
         // remove the package directory
         let pkg_dir = format!(
             "{}/{}/{}/{}/{}",
-            NEX_PKG_DIR, namespace, slug, version, checksum
+            nex_pkg_dir, namespace, slug, version, checksum
         );
         remove_package_dir(&pkg_dir)?;
 
         // clean up empty parent directories
         cleanup_empty_dirs(&format!(
             "{}/{}/{}/{}",
-            NEX_PKG_DIR, namespace, slug, version
+            nex_pkg_dir, namespace, slug, version
         ))?;
-        cleanup_empty_dirs(&format!("{}/{}/{}", NEX_PKG_DIR, namespace, slug))?;
+        cleanup_empty_dirs(&format!("{}/{}/{}", nex_pkg_dir, namespace, slug))?;
 
         if removed_info.is_some() {
             println!("Removed {}/{} {}", namespace, slug, target_version);
         }
     }
 
-    // save state
-    state.save()?;
+    // save state (context-aware)
+    state.save_for_context(&ctx)?;
 
     Ok(())
 }
@@ -267,9 +280,9 @@ fn parse_version_key(key: &str) -> io::Result<(String, String)> {
 }
 
 /// Remove symlinks for the given binaries
-fn remove_symlinks(binaries: &[String]) -> io::Result<()> {
+fn remove_symlinks(binaries: &[String], bin_dir: &str) -> io::Result<()> {
     for binary in binaries {
-        let dst = format!("{}/{}", USR_BIN_DIR, binary);
+        let dst = format!("{}/{}", bin_dir, binary);
         if Path::new(&dst).is_symlink() {
             fs::remove_file(&dst)?;
             println!("  Removed symlink {}", binary);
@@ -279,10 +292,10 @@ fn remove_symlinks(binaries: &[String]) -> io::Result<()> {
 }
 
 /// Update symlinks to point to a new package directory
-fn update_symlinks(binaries: &[String], pkg_dir: &str) -> io::Result<()> {
+fn update_symlinks(binaries: &[String], pkg_dir: &str, bin_dir: &str) -> io::Result<()> {
     for binary in binaries {
         let src = format!("{}/usr/bin/{}", pkg_dir, binary);
-        let dst = format!("{}/{}", USR_BIN_DIR, binary);
+        let dst = format!("{}/{}", bin_dir, binary);
 
         if Path::new(&src).exists() {
             if Path::new(&dst).exists() || Path::new(&dst).is_symlink() {

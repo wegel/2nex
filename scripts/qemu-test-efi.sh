@@ -122,6 +122,27 @@ ln -sf "usr/bin/init" "$ROOT_CONTENT/init"
 ln -sfn "/$DEPLOY_PATH/nex/pkg" "$ROOT_CONTENT/nex/pkg"
 ln -sfn "/$DEPLOY_PATH/nex/db" "$ROOT_CONTENT/nex/db"
 
+# copy manifests git repo for user builds (enables git worktrees)
+log "Copying manifests repo for user builds..."
+if [ -d "$ROOT_DIR/pkg" ]; then
+    mkdir -p "$ROOT_CONTENT/nex/manifests"
+    # copy pkg/ contents as a git repo (need .git for worktrees)
+    cp -a "$ROOT_DIR/pkg/." "$ROOT_CONTENT/nex/manifests/"
+    # if parent is a git repo, initialize manifests as a proper git repo
+    if [ -d "$ROOT_DIR/.git" ]; then
+        # create a standalone repo from the pkg/ subtree
+        (cd "$ROOT_CONTENT/nex/manifests" && \
+         git init -q && \
+         git add -A && \
+         git commit -q -m "Initial manifests" 2>/dev/null || true)
+    fi
+fi
+
+# create /nex/users directory with sticky bit for user environments
+log "Creating /nex/users directory..."
+mkdir -p "$ROOT_CONTENT/nex/users"
+chmod 1777 "$ROOT_CONTENT/nex/users"
+
 log "Deployment structure:"
 ls -la "$DEPLOY_DIR/" | head -15
 echo ""

@@ -2,13 +2,14 @@ use clap::Args;
 use std::fs;
 use std::io;
 use std::os::unix::fs::symlink;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use super::stage::{is_staged, mount_nex_overlays, staging_upper_dir};
 use super::state::InstalledState;
 use crate::materializer::{materialize, MaterializeConfig, MaterializeMode, MaterializeRequest};
 use crate::ostree_native::OstreeRepo;
-use crate::repo::{detect_context, detect_manifest_dir, ensure_user_dirs, resolve_repo_path};
+use crate::repo::{detect_context, detect_manifest_dir, ensure_user_dirs, resolve_repo_path, NexContext};
 
 #[derive(Args)]
 pub struct InstallArgs {
@@ -86,17 +87,40 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
         }
     }
 
-    // load current state
-    let mut state = InstalledState::load().unwrap_or_default();
+    // load current state (context-aware)
+    let mut state = InstalledState::load_for_context(&ctx).unwrap_or_default();
 
     // find the bundle or output ref for the package
     // for user installs, we look in the system repo via fallback
-    let package_ref = find_package_ref_with_fallback(
+    // if not found and in user context, try to auto-build
+    let package_ref = match find_package_ref_with_fallback(
         &repo_path,
         ctx.fallback_repo.as_deref(),
         &args.package,
         args.version.as_deref(),
-    )?;
+    ) {
+        Ok(r) => r,
+        Err(e) if e.kind() == io::ErrorKind::NotFound && !ctx.is_system => {
+            // package not found - try to auto-build in user context
+            println!(
+                "Package '{}' not found in repos, attempting build...",
+                args.package
+            );
+
+            let manifest_path =
+                find_manifest_for_package(&ctx, &args.package, args.version.as_deref())?;
+            build_package_to_user_repo(&ctx, &manifest_path)?;
+
+            // retry finding the package
+            find_package_ref_with_fallback(
+                &repo_path,
+                ctx.fallback_repo.as_deref(),
+                &args.package,
+                args.version.as_deref(),
+            )?
+        }
+        Err(e) => return Err(e),
+    };
     println!("Installing {}...", package_ref);
 
     // parse the ref to get package info
@@ -267,8 +291,8 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
         should_create_symlinks,
     );
 
-    // save state
-    state.save()?;
+    // save state (context-aware)
+    state.save_for_context(&ctx)?;
 
     // if --commit (system install only), commit the changes
     if args.commit && ctx.is_system {
@@ -427,4 +451,136 @@ fn get_binaries_from_dir(pkg_dir: &str) -> io::Result<Vec<String>> {
     }
 
     Ok(binaries)
+}
+
+/// find manifest file for a package query
+fn find_manifest_for_package(
+    ctx: &NexContext,
+    query: &str,
+    version: Option<&str>,
+) -> io::Result<PathBuf> {
+    // search order: user worktree -> /nex/db/pkg -> local pkg/
+    let search_paths: Vec<PathBuf> = [
+        ctx.manifests_path.clone(),
+        Some(PathBuf::from("/nex/db/pkg")),
+        Some(PathBuf::from("pkg")),
+    ]
+    .into_iter()
+    .flatten()
+    .filter(|p| p.exists())
+    .collect();
+
+    for base in &search_paths {
+        if let Some(found) = search_manifest_in_dir(base, query, version)? {
+            return Ok(found);
+        }
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        format!(
+            "No manifest found for '{}'. Add to your manifests worktree at {:?}.",
+            query,
+            ctx.manifests_path
+        ),
+    ))
+}
+
+/// search for manifest matching query in a directory
+fn search_manifest_in_dir(
+    base: &Path,
+    query: &str,
+    _version: Option<&str>,
+) -> io::Result<Option<PathBuf>> {
+    // query can be: "bash", "cli/shells/bash", full path, etc.
+    let parts: Vec<&str> = query.split('/').collect();
+    let slug = parts.last().unwrap_or(&query);
+
+    // walk the directory looking for yaml files
+    for entry in walkdir(base)? {
+        let path = entry?;
+        if !path.is_file() {
+            continue;
+        }
+
+        let ext = path.extension().and_then(|e| e.to_str());
+        if ext != Some("yaml") && ext != Some("yml") {
+            continue;
+        }
+
+        let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+
+        // match by slug (file stem matches query slug)
+        if file_stem == *slug {
+            return Ok(Some(path));
+        }
+
+        // also try matching the full path pattern
+        let rel_path = path.strip_prefix(base).unwrap_or(&path);
+        let rel_str = rel_path.to_string_lossy();
+        if rel_str.contains(query) {
+            return Ok(Some(path));
+        }
+    }
+
+    Ok(None)
+}
+
+/// recursively walk a directory yielding file paths
+fn walkdir(base: &Path) -> io::Result<Vec<io::Result<PathBuf>>> {
+    let mut results = Vec::new();
+    walkdir_inner(base, &mut results)?;
+    Ok(results)
+}
+
+fn walkdir_inner(dir: &Path, results: &mut Vec<io::Result<PathBuf>>) -> io::Result<()> {
+    if !dir.is_dir() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            walkdir_inner(&path, results)?;
+        } else {
+            results.push(Ok(path));
+        }
+    }
+
+    Ok(())
+}
+
+/// build a package and commit to user's repo
+fn build_package_to_user_repo(ctx: &NexContext, manifest_path: &Path) -> io::Result<()> {
+    println!("Building from manifest: {}", manifest_path.display());
+
+    // invoke nex build with user's repo path
+    let output = Command::new(std::env::current_exe()?)
+        .arg("build")
+        .arg("--single")
+        .arg("--repo")
+        .arg(&ctx.repo_path)
+        .arg(manifest_path)
+        .output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "Build failed:\nstdout: {}\nstderr: {}",
+                stdout, stderr
+            ),
+        ));
+    }
+
+    // print build output
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if !stdout.is_empty() {
+        print!("{}", stdout);
+    }
+
+    Ok(())
 }

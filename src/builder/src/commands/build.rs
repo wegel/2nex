@@ -9,6 +9,10 @@ pub struct BuildArgs {
     #[clap(long)]
     pub repo: Option<String>,
 
+    /// Build to system repo (requires root). Without this, builds go to user repo.
+    #[clap(long)]
+    pub system: bool,
+
     /// Base directory for searching manifests
     #[clap(long, default_value = ".")]
     pub manifest_dir: String,

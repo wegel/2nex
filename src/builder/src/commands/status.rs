@@ -2,46 +2,67 @@ use clap::Args;
 use std::io;
 use std::process::Command;
 
+use crate::repo::detect_context;
+
 #[derive(Args)]
 pub struct StatusArgs {
     /// Show detailed information about deployments
     #[clap(long, short = 'v')]
     pub verbose: bool,
+
+    /// Show system-wide status (requires root)
+    #[clap(long)]
+    pub system: bool,
 }
 
 pub fn run(args: &StatusArgs) -> io::Result<()> {
-    // try ostree admin status first
-    let output = Command::new("ostree").args(["admin", "status"]).output();
+    // detect context
+    let ctx = detect_context(args.system)?;
 
-    match output {
-        Ok(out) if out.status.success() => {
-            let status = String::from_utf8_lossy(&out.stdout);
-            print_ostree_status(&status, args.verbose);
-        }
-        _ => {
-            // not an OSTree system or ostree not available
-            println!("System deployments:");
-            println!("  (not an OSTree-managed system)");
-            println!();
-            println!("Package state is tracked in /nex/var/installed.json");
+    // try ostree admin status first (only for system context)
+    if ctx.is_system {
+        let output = Command::new("ostree").args(["admin", "status"]).output();
 
-            // try to show installed packages
-            if let Ok(state) = super::state::InstalledState::load() {
-                let count = state.packages.len();
-                if count > 0 {
-                    println!();
-                    println!("Installed packages: {}", count);
-                    for (key, pkg) in &state.packages {
-                        let version_count = pkg.versions.len();
-                        let current = pkg.current.as_deref().unwrap_or("(none)");
-                        println!(
-                            "  {} - current: {}, versions: {}",
-                            key, current, version_count
-                        );
-                    }
-                }
+        match output {
+            Ok(out) if out.status.success() => {
+                let status = String::from_utf8_lossy(&out.stdout);
+                print_ostree_status(&status, args.verbose);
+            }
+            _ => {
+                println!("System deployments:");
+                println!("  (not an OSTree-managed system)");
             }
         }
+        println!();
+    }
+
+    // show installed packages from context-aware state
+    let state_path = ctx.var_path.join("installed.json");
+    println!(
+        "Package state: {}",
+        state_path.display()
+    );
+
+    if let Ok(state) = super::state::InstalledState::load_for_context(&ctx) {
+        let count = state.packages.len();
+        if count > 0 {
+            println!();
+            println!("Installed packages: {}", count);
+            for (key, pkg) in &state.packages {
+                let version_count = pkg.versions.len();
+                let current = pkg.current.as_deref().unwrap_or("(none)");
+                println!(
+                    "  {} - current: {}, versions: {}",
+                    key, current, version_count
+                );
+            }
+        } else {
+            println!();
+            println!("No packages installed.");
+        }
+    } else {
+        println!();
+        println!("No packages installed.");
     }
 
     Ok(())

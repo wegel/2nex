@@ -122,8 +122,25 @@ fn main() -> io::Result<()> {
 }
 
 fn run_build(args: &commands::build::BuildArgs) -> io::Result<()> {
-    // validate repo exists early
-    let repo_path = repo::resolve_repo_path(args.repo.as_deref())?;
+    // determine repo path based on context
+    let repo_path = if let Some(ref r) = args.repo {
+        // explicit repo path provided
+        repo::resolve_repo_path(Some(r))?
+    } else if args.system || Path::new(".nex/repo").exists() {
+        // explicit --system flag or build-time context (local .nex/repo)
+        repo::resolve_repo_path(None)?
+    } else {
+        // user context: use user's repo
+        let ctx = repo::detect_context(false)?;
+        if !ctx.repo_path.exists() {
+            repo::ensure_user_dirs(&ctx)?;
+            eprintln!(
+                "Created user environment at {}",
+                ctx.repo_path.parent().unwrap_or(&ctx.repo_path).display()
+            );
+        }
+        ctx.repo_path.to_string_lossy().to_string()
+    };
 
     // configure rayon thread pool if jobs specified
     if let Some(num_jobs) = args.jobs {

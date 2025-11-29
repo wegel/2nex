@@ -99,6 +99,10 @@ pub struct NexContext {
     pub is_system: bool,
     /// whether staging mode is required
     pub needs_staging: bool,
+    /// state directory for InstalledState
+    pub var_path: PathBuf,
+    /// manifest worktree directory (for user builds)
+    pub manifests_path: Option<PathBuf>,
 }
 
 /// detect execution context based on user and flags.
@@ -118,6 +122,8 @@ pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
             fallback_repo: None,
             is_system: false,
             needs_staging: false,
+            var_path: PathBuf::from(".nex/var"),
+            manifests_path: None, // build-time uses local pkg/ directory
         });
     }
 
@@ -135,6 +141,8 @@ pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
             fallback_repo: None,
             is_system: true,
             needs_staging: true,
+            var_path: PathBuf::from("/nex/var"),
+            manifests_path: None, // system uses /nex/db/pkg
         });
     }
 
@@ -147,6 +155,8 @@ pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
         fallback_repo: Some(PathBuf::from("/nex/repo")),
         is_system: false,
         needs_staging: false,
+        var_path: user_base.join("var"),
+        manifests_path: Some(user_base.join("manifests")),
     })
 }
 
@@ -157,11 +167,17 @@ pub fn ensure_user_dirs(ctx: &NexContext) -> io::Result<()> {
     fs::create_dir_all(ctx.repo_path.join("refs/heads"))?;
     fs::create_dir_all(&ctx.pkg_path)?;
     fs::create_dir_all(ctx.env_path.join("default/bin"))?;
+    fs::create_dir_all(&ctx.var_path)?;
 
     // write minimal repo config if not exists
     let config_path = ctx.repo_path.join("config");
     if !config_path.exists() {
         fs::write(&config_path, "[core]\nrepo_version=1\nmode=bare-user\n")?;
+    }
+
+    // setup manifests worktree if needed
+    if let Some(ref manifests_path) = ctx.manifests_path {
+        setup_user_manifests_worktree(manifests_path)?;
     }
 
     // create ~/.nex convenience symlink
@@ -172,6 +188,49 @@ pub fn ensure_user_dirs(ctx: &NexContext) -> io::Result<()> {
                 let _ = symlink(parent, &symlink_path);
             }
         }
+    }
+
+    Ok(())
+}
+
+/// setup user's git worktree for manifests from /nex/manifests
+fn setup_user_manifests_worktree(manifests_path: &Path) -> io::Result<()> {
+    if manifests_path.exists() {
+        return Ok(());
+    }
+
+    let source_repo = PathBuf::from("/nex/manifests");
+    if !source_repo.exists() {
+        // no system manifest repo - user can manually set this up
+        eprintln!(
+            "Note: /nex/manifests not found. User manifests worktree not created."
+        );
+        return Ok(());
+    }
+
+    // create parent directory if needed
+    if let Some(parent) = manifests_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // create git worktree (detached from HEAD)
+    let output = Command::new("git")
+        .args(["worktree", "add", "--detach"])
+        .arg(manifests_path)
+        .arg("HEAD")
+        .current_dir(&source_repo)
+        .output()?;
+
+    if !output.status.success() {
+        eprintln!(
+            "Warning: Could not create manifest worktree: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    } else {
+        eprintln!(
+            "Created manifests worktree at {}",
+            manifests_path.display()
+        );
     }
 
     Ok(())
