@@ -42,8 +42,8 @@ pub fn build_system_manifest_with_dir(
     let package_dependency_specs = dependencies_from_system_packages(&manifest.packages);
     let package_commits = resolve_dependency_closure(&package_dependency_specs, &manifest_index)?;
 
-    setup_composite_rootfs(base_dir, &opts.repo_path, &dependency_commits)?;
-    layer_commits_into_rootfs(base_dir, &opts.repo_path, &package_commits)?;
+    setup_composite_rootfs(base_dir, &opts.repo_path, &opts.fallback_repos, &dependency_commits)?;
+    layer_commits_into_rootfs(base_dir, &opts.repo_path, &opts.fallback_repos, &package_commits)?;
 
     // get original package commits (not expanded) for materialize
     let original_package_commits: Vec<String> =
@@ -130,8 +130,8 @@ pub fn build_system_manifest_with_dir(
         println!("Validating build reproducibility by building the system a second time.");
         fs::remove_dir_all(base_dir)?;
 
-        setup_composite_rootfs(base_dir, &opts.repo_path, &dependency_commits)?;
-        layer_commits_into_rootfs(base_dir, &opts.repo_path, &package_commits)?;
+        setup_composite_rootfs(base_dir, &opts.repo_path, &opts.fallback_repos, &dependency_commits)?;
+        layer_commits_into_rootfs(base_dir, &opts.repo_path, &opts.fallback_repos, &package_commits)?;
 
         if manifest.system.nex_structure {
             materialize_nex_structure(base_dir, &opts.repo_path, &manifest.packages)?;

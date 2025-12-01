@@ -341,7 +341,7 @@ fn build_package_manifest_with_dir(
     // resolve dependencies to specific commit IDs when they have manifest_ref
     let dependency_commits = resolve_dependency_commits(&manifest.dependencies, &opts.repo_path)?;
 
-    setup_composite_rootfs(base_dir, &opts.repo_path, &dependency_commits)?;
+    setup_composite_rootfs(base_dir, &opts.repo_path, &opts.fallback_repos, &dependency_commits)?;
     let input_env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
 
     let package_name = &manifest.package.name;
@@ -464,7 +464,7 @@ fn build_package_manifest_with_dir(
     if opts.validate_reproducibility {
         println!("Validating build reproducibility by building the package a second time.");
         fs::remove_dir_all(base_dir)?;
-        setup_composite_rootfs(base_dir, &opts.repo_path, &dependency_commits)?;
+        setup_composite_rootfs(base_dir, &opts.repo_path, &opts.fallback_repos, &dependency_commits)?;
         handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
         run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
         verify_and_commit_outputs(
@@ -1197,6 +1197,7 @@ fn build_packages_parallel(
                             force: opts.force,
                             build_dir: None,
                             generate_outputs: opts.generate_outputs,
+                            fallback_repos: opts.fallback_repos.clone(),
                         };
 
                         println!(
@@ -1241,6 +1242,7 @@ fn build_packages_parallel(
                             force: opts.force,
                             build_dir: None,
                             generate_outputs: opts.generate_outputs,
+                            fallback_repos: opts.fallback_repos.clone(),
                         };
 
                         println!(
@@ -1416,6 +1418,7 @@ fn add_missing_checksums_to_manifests(
                     force: false,
                     build_dir: None,
                     generate_outputs: false, // don't auto-generate outputs when adding checksums
+                    fallback_repos: opts.fallback_repos.clone(),
                 };
 
                 build_package_manifest(&build_opts, &mut manifest_copy)?;

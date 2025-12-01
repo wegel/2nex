@@ -20,6 +20,10 @@ pub struct InstallArgs {
     #[clap(long)]
     pub repo: Option<String>,
 
+    /// Manifest directory (auto-detected if not specified)
+    #[clap(long)]
+    pub manifest_dir: Option<String>,
+
     /// Install specific version
     #[clap(long)]
     pub version: Option<String>,
@@ -70,6 +74,23 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
         ctx.repo_path.to_string_lossy().to_string()
     };
 
+    // use explicit manifest-dir if provided, otherwise use context-determined paths
+    let manifest_dirs = if let Some(ref m) = args.manifest_dir {
+        vec![PathBuf::from(m)]
+    } else if ctx.manifest_dirs.is_empty() {
+        // fallback: try common locations
+        let mut dirs = Vec::new();
+        if Path::new("/nex/db/pkg").exists() {
+            dirs.push(PathBuf::from("/nex/db/pkg"));
+        }
+        if dirs.is_empty() {
+            eprintln!("Warning: No manifest directories found. Use --manifest-dir to specify.");
+        }
+        dirs
+    } else {
+        ctx.manifest_dirs.clone()
+    };
+
     // system installs require staging mode (unless build-time or --no-stage-check)
     if ctx.is_system && ctx.needs_staging {
         // check staging mode unless --commit or --no-stage-check
@@ -109,7 +130,7 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
 
             let manifest_path =
                 find_manifest_for_package(&ctx, &args.package, args.version.as_deref())?;
-            build_package_to_user_repo(&ctx, &manifest_path)?;
+            build_package_to_user_repo(&repo_path, &ctx.fallback_repos, &manifest_dirs, &manifest_path)?;
 
             // retry finding the package
             find_package_ref_with_fallback(
@@ -191,7 +212,7 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
         physical_root,
         mode,
         resolve_deps: !args.no_deps,
-        manifest_db_paths: ctx.manifest_dirs.clone(),
+        manifest_db_paths: manifest_dirs.clone(),
         fallback_repo_paths: ctx.fallback_repos.clone(),
         pkg_dir_override: pkg_override,
         env_dir_override: env_override,
@@ -551,18 +572,58 @@ fn walkdir_inner(dir: &Path, results: &mut Vec<io::Result<PathBuf>>) -> io::Resu
     Ok(())
 }
 
-/// build a package and commit to user's repo
-fn build_package_to_user_repo(ctx: &NexContext, manifest_path: &Path) -> io::Result<()> {
+/// build a package and commit to repo
+fn build_package_to_user_repo(
+    repo_path: &str,
+    fallback_repos: &[PathBuf],
+    manifest_dirs: &[PathBuf],
+    manifest_path: &Path,
+) -> io::Result<()> {
     println!("Building from manifest: {}", manifest_path.display());
 
-    // invoke nex build with user's repo path
-    let output = Command::new(std::env::current_exe()?)
-        .arg("build")
+    // find nex binary path - can't use current_exe() because when running under
+    // nex-ld-shim, /proc/self/exe points to ld-linux, not to nex
+    let nex_path = std::env::args()
+        .next()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "argv[0] not available"))?;
+
+    // get manifest-dir from manifest_dirs or derive from manifest path
+    let manifest_dir = if let Some(first_dir) = manifest_dirs.first() {
+        // use parent of pkg/ from the manifest_dirs path
+        let dir_str = first_dir.to_string_lossy();
+        if dir_str.ends_with("/pkg") || dir_str.ends_with("\\pkg") {
+            first_dir.parent().map(|p| p.to_string_lossy().to_string())
+        } else {
+            Some(dir_str.to_string())
+        }
+    } else {
+        // fallback: extract from manifest path
+        let manifest_path_str = manifest_path.to_string_lossy().to_string();
+        manifest_path_str
+            .rfind("/pkg/")
+            .map(|idx| manifest_path_str[..idx].to_string())
+    };
+
+    // invoke nex build with repo path
+    let mut cmd = Command::new(&nex_path);
+    cmd.arg("build")
         .arg("--single")
         .arg("--repo")
-        .arg(&ctx.repo_path)
-        .arg(manifest_path)
-        .output()?;
+        .arg(repo_path);
+
+    // add fallback repos for dependency lookups
+    for fallback in fallback_repos {
+        cmd.arg("--fallback-repo").arg(fallback);
+    }
+
+    // add manifest-dir if we detected one
+    if let Some(ref dir) = manifest_dir {
+        if !dir.is_empty() {
+            cmd.arg("--manifest-dir").arg(dir);
+        }
+    }
+
+    let output = cmd.arg(manifest_path).output()?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

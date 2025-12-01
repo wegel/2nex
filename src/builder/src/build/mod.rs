@@ -8,7 +8,7 @@ use walkdir::WalkDir;
 
 use crate::manifest::*;
 use crate::outputs::*;
-use crate::store::{checkout_into, commit_tree};
+use crate::store::{checkout_into, checkout_into_with_fallbacks, commit_tree};
 
 pub fn append_checksum_file(package: &Package, checksum: &str, file_path: &Path) -> io::Result<()> {
     // Step 1: Calculate the maximum width of the first column
@@ -77,6 +77,7 @@ pub fn stage_existing_outputs(
 pub fn setup_composite_rootfs(
     base_dir: &str,
     repo_path: &str,
+    fallback_repos: &[String],
     dependency_commits: &[String],
 ) -> io::Result<()> {
     println!("Setting up composite rootfs at {}", base_dir);
@@ -99,7 +100,7 @@ pub fn setup_composite_rootfs(
     }
 
     for commit in dependency_commits {
-        checkout_into(repo_path, commit, Path::new(base_dir), true, false)?;
+        checkout_into_with_fallbacks(repo_path, fallback_repos, commit, Path::new(base_dir), true)?;
     }
 
     // create FHS compatibility symlinks (only if there are actual dependencies to checkout)
@@ -130,10 +131,11 @@ pub fn setup_composite_rootfs(
 pub fn layer_commits_into_rootfs(
     base_dir: &str,
     repo_path: &str,
+    fallback_repos: &[String],
     commits: &[String],
 ) -> io::Result<()> {
     for commit in commits {
-        checkout_into(repo_path, commit, Path::new(base_dir), true, false)?;
+        checkout_into_with_fallbacks(repo_path, fallback_repos, commit, Path::new(base_dir), true)?;
     }
     Ok(())
 }

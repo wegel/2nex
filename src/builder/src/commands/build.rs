@@ -80,6 +80,10 @@ pub struct BuildArgs {
     /// Generate outputs section from build results and write to manifest
     #[clap(long)]
     pub generate_outputs: bool,
+
+    /// Fallback repository for dependency lookups (can be specified multiple times)
+    #[clap(long = "fallback-repo", action = clap::ArgAction::Append)]
+    pub fallback_repos: Vec<String>,
 }
 
 /// Build options passed to build functions
@@ -95,6 +99,7 @@ pub struct BuildOpts {
     pub force: bool,
     pub build_dir: Option<String>,
     pub generate_outputs: bool,
+    pub fallback_repos: Vec<String>,
 }
 
 impl BuildOpts {
@@ -111,6 +116,7 @@ impl BuildOpts {
             force: args.force,
             build_dir: args.build_dir.clone(),
             generate_outputs: args.generate_outputs,
+            fallback_repos: args.fallback_repos.clone(),
         }
     }
 }
