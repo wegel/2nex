@@ -5,7 +5,7 @@ pub struct BuildArgs {
     /// Manifest file to build
     pub manifest: String,
 
-    /// OSTree repository path (default: .nex/repo)
+    /// Repository path (default: .nex/repo)
     #[clap(long)]
     pub repo: Option<String>,
 
@@ -37,9 +37,9 @@ pub struct BuildArgs {
     #[clap(long)]
     pub update_checksum: bool,
 
-    /// Rewrite OSTree output/bundle metadata without rebuilding (package manifests only)
+    /// Rewrite output/bundle metadata without rebuilding (package manifests only)
     #[clap(long)]
-    pub refresh_ostree_metadata: bool,
+    pub refresh_metadata: bool,
 
     /// Build only the specified manifest without dependencies
     #[clap(long)]
@@ -61,7 +61,7 @@ pub struct BuildArgs {
     #[clap(long)]
     pub force: bool,
 
-    /// Add checksums to manifests missing them (from OSTree or by building)
+    /// Add checksums to manifests missing them (from store or by building)
     #[clap(long)]
     pub add_checksums: bool,
 
@@ -91,7 +91,7 @@ pub struct BuildOpts {
     pub bootstrap: bool,
     pub compute_deps: bool,
     pub runtime_deps_verbose: bool,
-    pub refresh_ostree_metadata: bool,
+    pub refresh_metadata: bool,
     pub force: bool,
     pub build_dir: Option<String>,
     pub generate_outputs: bool,
@@ -107,7 +107,7 @@ impl BuildOpts {
             bootstrap: args.bootstrap,
             compute_deps: args.compute_deps,
             runtime_deps_verbose: args.runtime_deps_verbose,
-            refresh_ostree_metadata: args.refresh_ostree_metadata,
+            refresh_metadata: args.refresh_metadata,
             force: args.force,
             build_dir: args.build_dir.clone(),
             generate_outputs: args.generate_outputs,

@@ -3,15 +3,15 @@ use std::io;
 
 use crate::manifest::ManifestIndex;
 use crate::materializer::{resolve_runtime_deps_precomputed, MaterializeRequest};
-use crate::ostree_native::OstreeRepo;
 use crate::repo::{detect_manifest_dir, resolve_repo_path};
+use crate::store::Store;
 
 #[derive(Args)]
 pub struct ResolveArgs {
     /// Package to resolve (e.g., "bash", "cli/shells/bash", or full ref)
     pub package: String,
 
-    /// OSTree repository path (auto-detected if not specified)
+    /// Repository path (auto-detected if not specified)
     #[clap(long)]
     pub repo: Option<String>,
 
@@ -83,7 +83,7 @@ pub fn run(args: &ResolveArgs) -> io::Result<()> {
         commit: package_ref.clone(),
     }];
 
-    let closure = resolve_runtime_deps_precomputed(&repo_path, &requests, &manifest_index, None)?;
+    let closure = resolve_runtime_deps_precomputed(&repo_path, &requests, &manifest_index, &[])?;
 
     // print results
     println!("Runtime closure: {} commit(s)", closure.commits.len());
@@ -123,8 +123,8 @@ pub fn run(args: &ResolveArgs) -> io::Result<()> {
 }
 
 fn find_package_ref(repo: &str, query: &str) -> io::Result<String> {
-    let ostree_repo = OstreeRepo::open(repo)?;
-    let all_refs = ostree_repo.refs(None)?;
+    let store = Store::open(repo)?;
+    let all_refs = store.refs(None)?;
     let query_parts: Vec<&str> = query.split('/').collect();
 
     // prefer bundles/full, then bundles/*, then outputs/bin

@@ -1,7 +1,7 @@
 //! JIT Materializer for 2nex packages.
 //!
 //! This module handles Just-In-Time resolution and checkout of packages
-//! from OSTree. Instead of pre-computing runtime dependencies at build time,
+//! from the content store. Instead of pre-computing runtime dependencies at build time,
 //! dependencies are resolved by scanning ELF DT_NEEDED entries at materialization
 //! time.
 //!
@@ -61,8 +61,8 @@ pub fn materialize(
     let initial_commits: Vec<String> = requests.iter().map(|r| r.commit().to_string()).collect();
 
     // load manifest index (required for precomputed deps)
-    let manifest_index = if let Some(ref db_path) = config.manifest_db_path {
-        match ManifestIndex::load(db_path) {
+    let manifest_index = if !config.manifest_db_paths.is_empty() {
+        match ManifestIndex::load_layered(&config.manifest_db_paths) {
             Ok(index) => {
                 println!(
                     "  Loaded manifest index: {} manifests, {} files",
@@ -81,7 +81,7 @@ pub fn materialize(
     } else {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "manifest_db_path is required for precomputed dependency resolution",
+            "manifest_db_paths is required for precomputed dependency resolution",
         ));
     };
 
@@ -92,7 +92,7 @@ pub fn materialize(
             &config.repo_path,
             requests,
             &manifest_index,
-            config.fallback_repo_path.as_deref(),
+            &config.fallback_repo_paths,
         )?
     } else {
         // no resolution - just use the initial commits

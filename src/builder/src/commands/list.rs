@@ -1,14 +1,13 @@
 use clap::Args;
 use std::collections::HashMap;
 use std::io;
-use std::path::Path;
-use walkdir::WalkDir;
 
 use crate::repo::resolve_repo_path;
+use crate::store::Store;
 
 #[derive(Args)]
 pub struct ListArgs {
-    /// OSTree repository path (auto-detected if not specified)
+    /// Repository path (auto-detected if not specified)
     #[clap(long)]
     pub repo: Option<String>,
 
@@ -25,31 +24,10 @@ pub struct ListArgs {
     pub full: bool,
 }
 
-/// read refs directly from ostree repo (refs/heads/ directory tree)
-fn read_ostree_refs(repo_path: &str) -> io::Result<Vec<String>> {
-    let refs_dir = Path::new(repo_path).join("refs/heads");
-    if !refs_dir.exists() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("OSTree refs directory not found: {}", refs_dir.display()),
-        ));
-    }
-
-    let mut refs = Vec::new();
-    for entry in WalkDir::new(&refs_dir).into_iter().filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
-            if let Ok(rel_path) = entry.path().strip_prefix(&refs_dir) {
-                refs.push(rel_path.to_string_lossy().to_string());
-            }
-        }
-    }
-    refs.sort();
-    Ok(refs)
-}
-
 pub fn run(args: &ListArgs) -> io::Result<()> {
     let repo_path = resolve_repo_path(args.repo.as_deref())?;
-    let ref_list = read_ostree_refs(&repo_path)?;
+    let store = Store::open(&repo_path)?;
+    let ref_list = store.refs(None)?;
     let refs = ref_list.join("\n");
     let mut packages: HashMap<String, PackageInfo> = HashMap::new();
 

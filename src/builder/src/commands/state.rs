@@ -20,8 +20,8 @@ pub struct VersionInfo {
     pub installed_at: String,
     /// binaries provided by this package
     pub provides: Vec<String>,
-    /// the assembly/deploy ref in OSTree
-    pub ostree_ref: String,
+    /// the ref in the package store
+    pub store_ref: String,
 }
 
 /// State for a single package (can have multiple versions)
@@ -159,7 +159,7 @@ impl InstalledState {
         version: &str,
         checksum: &str,
         provides: Vec<String>,
-        ostree_ref: &str,
+        store_ref: &str,
         set_current: bool,
     ) {
         let pkg = self.get_or_create_package(namespace, slug);
@@ -170,7 +170,7 @@ impl InstalledState {
             VersionInfo {
                 installed_at: chrono_now(),
                 provides,
-                ostree_ref: ostree_ref.to_string(),
+                store_ref: store_ref.to_string(),
             },
         );
 

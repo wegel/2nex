@@ -7,8 +7,8 @@ use std::process::Command;
 use walkdir::WalkDir;
 
 use crate::manifest::*;
-use crate::ostree::*;
 use crate::outputs::*;
+use crate::store::{checkout_into, commit_tree};
 
 pub fn append_checksum_file(package: &Package, checksum: &str, file_path: &Path) -> io::Result<()> {
     // Step 1: Calculate the maximum width of the first column
@@ -68,7 +68,7 @@ pub fn stage_existing_outputs(
             branch_name,
             out_dir.display()
         );
-        checkout_ostree_into(repo_path, &branch_name, &out_dir, true, false)?;
+        checkout_into(repo_path, &branch_name, &out_dir, true, false)?;
     }
 
     Ok(())
@@ -99,7 +99,7 @@ pub fn setup_composite_rootfs(
     }
 
     for commit in dependency_commits {
-        checkout_ostree_into(repo_path, commit, Path::new(base_dir), true, false)?;
+        checkout_into(repo_path, commit, Path::new(base_dir), true, false)?;
     }
 
     // create FHS compatibility symlinks (only if there are actual dependencies to checkout)
@@ -133,7 +133,7 @@ pub fn layer_commits_into_rootfs(
     commits: &[String],
 ) -> io::Result<()> {
     for commit in commits {
-        checkout_ostree_into(repo_path, commit, Path::new(base_dir), true, false)?;
+        checkout_into(repo_path, commit, Path::new(base_dir), true, false)?;
     }
     Ok(())
 }
@@ -445,7 +445,7 @@ pub fn verify_and_commit_outputs(
     repo_path: &str,
     manifest_path: &Path,
 ) -> io::Result<()> {
-    println!("Verifying and committing outputs to OSTree branches");
+    println!("Verifying and committing outputs to store branches");
 
     // compute manifest hash once
     let manifest_hash = crate::compute_manifest_hash(manifest_path)?;
@@ -539,7 +539,7 @@ pub fn verify_and_commit_outputs(
         let commit_output_dir = out_dir.join(output_type);
 
         let metadata = output_branch_metadata(manifest, spec, &manifest_hash)?;
-        commit_to_ostree(repo_path, &branch_name, &commit_output_dir, &metadata)?;
+        commit_tree(repo_path, &branch_name, &commit_output_dir, &metadata)?;
     }
 
     let unaccounted_files: Vec<String> = all_out_files

@@ -1,17 +1,17 @@
 use clap::Args;
 use std::collections::HashSet;
 use std::io;
-use std::process::Command;
 
 use crate::manifest::ManifestIndex;
 use crate::repo::resolve_repo_path;
+use crate::store::Store;
 
 #[derive(Args)]
 pub struct InfoArgs {
-    /// Package reference (e.g., "bash", "cli/shells/bash", or full OSTree ref)
+    /// Package reference (e.g., "bash", "cli/shells/bash", or full store ref)
     pub package: String,
 
-    /// OSTree repository path (auto-detected if not specified)
+    /// Repository path (auto-detected if not specified)
     #[clap(long)]
     pub repo: Option<String>,
 
@@ -246,22 +246,15 @@ fn print_manifest_deps(
 }
 
 fn find_matching_refs(repo: &str, query: &str, version: Option<&str>) -> io::Result<Vec<String>> {
-    let output = Command::new("ostree")
-        .args(["refs", "--repo", repo])
-        .output()?;
-
-    if !output.status.success() {
-        return Err(io::Error::new(io::ErrorKind::Other, "Failed to list refs"));
-    }
-
-    let refs = String::from_utf8_lossy(&output.stdout);
+    let store = Store::open(repo)?;
+    let all_refs = store.refs(None)?;
     let mut matches: Vec<String> = vec![];
 
     // if query looks like a full ref, match exactly
     if query.starts_with("x86_64/") {
-        for line in refs.lines() {
-            if line == query || line.starts_with(&format!("{}/", query)) {
-                matches.push(line.to_string());
+        for ref_name in &all_refs {
+            if ref_name == query || ref_name.starts_with(&format!("{}/", query)) {
+                matches.push(ref_name.to_string());
             }
         }
         return Ok(matches);
@@ -270,8 +263,8 @@ fn find_matching_refs(repo: &str, query: &str, version: Option<&str>) -> io::Res
     // otherwise search by slug or namespace/slug
     let query_parts: Vec<&str> = query.split('/').collect();
 
-    for line in refs.lines() {
-        let parts: Vec<&str> = line.split('/').collect();
+    for ref_name in &all_refs {
+        let parts: Vec<&str> = ref_name.split('/').collect();
         if parts.len() < 6 || parts[0] != "x86_64" || parts[1] != "pkg" {
             continue;
         }
@@ -311,7 +304,7 @@ fn find_matching_refs(repo: &str, query: &str, version: Option<&str>) -> io::Res
         };
 
         if matched {
-            matches.push(line.to_string());
+            matches.push(ref_name.to_string());
         }
     }
 
@@ -334,24 +327,14 @@ fn extract_package_key(ref_path: &str) -> String {
 }
 
 fn show_ref_metadata(repo: &str, ref_path: &str) -> io::Result<()> {
-    // try to read common metadata keys (old requires/deploy/bundle metadata removed)
+    let store = Store::open(repo)?;
+
+    // try to read common metadata keys
     let metadata_keys = ["nex.manifest.hash"];
 
     for key in &metadata_keys {
-        let output = Command::new("ostree")
-            .args([
-                "show",
-                "--repo",
-                repo,
-                "--print-metadata-key",
-                key,
-                ref_path,
-            ])
-            .output()?;
-
-        if output.status.success() {
-            let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if !value.is_empty() && value != "''" {
+        if let Ok(Some(value)) = store.get_metadata(ref_path, key) {
+            if !value.is_empty() {
                 println!("    {}: {}", key.strip_prefix("nex.").unwrap_or(key), value);
             }
         }

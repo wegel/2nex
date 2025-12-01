@@ -1,12 +1,12 @@
 //! ManifestIndex: loads manifests from a directory and indexes file providers.
 //!
 //! This is the core of the Manifest-as-Database pattern for JIT resolution.
-//! Instead of scanning OSTree refs, we read the manifest files which declare
+//! Instead of scanning store refs, we read the manifest files which declare
 //! exactly what files each package provides.
 
 use std::collections::HashMap;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
 
@@ -15,7 +15,7 @@ use super::types::{Manifest, ManifestData, ManifestSource};
 
 /// Index of manifests for provider resolution.
 ///
-/// Maps library basenames (e.g., "libc.so.6") and full paths to the OSTree refs
+/// Maps library basenames (e.g., "libc.so.6") and full paths to the store refs
 /// that provide them, based on manifest `outputs` sections.
 #[derive(Debug, Default)]
 pub struct ManifestIndex {
@@ -73,6 +73,53 @@ impl ManifestIndex {
         Ok(index)
     }
 
+    /// Load manifests from multiple directories in priority order (first = highest).
+    ///
+    /// Directories are processed in order, with earlier directories taking precedence.
+    /// This enables layered search: user manifests -> system manifests.
+    pub fn load_layered(dirs: &[PathBuf]) -> io::Result<Self> {
+        let mut index = Self::new();
+
+        // process directories in order (first = highest priority)
+        for dir in dirs {
+            if !dir.exists() {
+                continue;
+            }
+
+            for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
+                let path = entry.path();
+                if !path.is_file() {
+                    continue;
+                }
+
+                let ext = path.extension().and_then(|e| e.to_str());
+                if ext != Some("yaml") && ext != Some("yml") {
+                    continue;
+                }
+
+                // try to parse as package manifest
+                match load_manifest_from_source(&ManifestSource::Path(path.to_path_buf())) {
+                    Ok(ManifestData::Package(manifest)) => {
+                        // only add if not already present (priority to earlier directories)
+                        let key = format!(
+                            "{}/{}",
+                            manifest.package.namespace, manifest.package.slug
+                        );
+                        if !index.manifests.contains_key(&key) {
+                            index.add_manifest(manifest);
+                        }
+                    }
+                    Ok(ManifestData::System(_)) | Err(_) => {
+                        // skip system manifests and files that aren't valid manifests
+                        continue;
+                    }
+                }
+            }
+        }
+
+        Ok(index)
+    }
+
     /// Add a manifest to the index, indexing its outputs.
     pub fn add_manifest(&mut self, manifest: Manifest) {
         let key = format!("{}/{}", manifest.package.namespace, manifest.package.slug);
@@ -80,7 +127,7 @@ impl ManifestIndex {
 
         // index each output's files
         for (output_name, output_spec) in &manifest.outputs {
-            // construct the OSTree ref for this output
+            // construct the store ref for this output
             let commit_ref = format!(
                 "{}/{}/{}/{}/outputs/{}",
                 arch,
@@ -114,7 +161,7 @@ impl ManifestIndex {
     /// Resolve a library name to its provider commit ref.
     ///
     /// Accepts either a basename (e.g., "libc.so.6") or full path ("/usr/lib/libc.so.6").
-    /// Returns the OSTree commit ref that provides the file.
+    /// Returns the store commit ref that provides the file.
     /// When multiple providers exist, prefers non-bootstrap packages over bootstrap.
     pub fn resolve(&self, name: &str) -> Option<&str> {
         // try full path first - but apply priority selection

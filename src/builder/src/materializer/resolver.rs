@@ -1,9 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::manifest::ManifestIndex;
-use crate::ostree_native::OstreeRepo;
+use crate::store::Store;
 use crate::utils::hash_file_content;
 
 use super::types::{MaterializeRequest, RuntimeClosure};
@@ -19,7 +19,7 @@ pub fn resolve_runtime_deps_precomputed(
     repo_path: &str,
     requests: &[MaterializeRequest],
     manifest_index: &ManifestIndex,
-    fallback_repo: Option<&Path>,
+    fallback_repos: &[PathBuf],
 ) -> io::Result<RuntimeClosure> {
     let mut closure = RuntimeClosure::default();
     let mut visited: HashSet<String> = HashSet::new();
@@ -27,7 +27,7 @@ pub fn resolve_runtime_deps_precomputed(
     // cache: (manifest_ptr, dep_name) -> resolved_commit
     let mut dep_commit_cache: HashMap<(usize, String), String> = HashMap::new();
 
-    let repo = OstreeRepo::open_with_fallback(repo_path, fallback_repo)?;
+    let store = Store::open_with_fallback_chain(repo_path, fallback_repos)?;
 
     // seed with initial requests (mark as roots)
     for req in requests {
@@ -113,7 +113,7 @@ pub fn resolve_runtime_deps_precomputed(
                             &dep_name,
                             manifest,
                             manifest_index,
-                            &repo,
+                            &store,
                         ) {
                             ResolveResult::Ok(c) => {
                                 dep_commit_cache.insert(cache_key, c.clone());
@@ -188,7 +188,7 @@ pub fn resolve_runtime_deps_precomputed(
     Ok(closure)
 }
 
-/// Find the manifest that corresponds to an OSTree commit ref.
+/// Find the manifest that corresponds to a store commit ref.
 fn find_manifest_for_commit<'a>(
     commit: &str,
     index: &'a ManifestIndex,
@@ -235,13 +235,13 @@ enum ResolveResult {
     FilesCommitMissing { package: String, checksum: String },
 }
 
-/// Resolve a dependency name to an OSTree commit ref.
+/// Resolve a dependency name to a commit ref.
 /// Uses {checksum}/files for stable checksums, {git_blob_sha}/files for bootstrap packages.
 fn resolve_dependency_to_commit(
     dep_name: &str,
     source_manifest: &crate::manifest::types::Manifest,
     manifest_index: &ManifestIndex,
-    repo: &OstreeRepo,
+    store: &Store,
 ) -> ResolveResult {
     // find the dependency by name in the source manifest
     let dep = match source_manifest
@@ -295,7 +295,7 @@ fn resolve_dependency_to_commit(
     };
 
     let files_ref = format!("{}/files", address_hash);
-    if repo.resolve_ref(&files_ref).is_ok() {
+    if store.resolve_ref(&files_ref).is_ok() {
         return ResolveResult::Ok(files_ref);
     }
 
@@ -308,6 +308,6 @@ fn resolve_dependency_to_commit(
 
 #[cfg(test)]
 mod tests {
-    // note: these tests require an actual OSTree repo, so they're integration tests
+    // note: these tests require an actual store, so they're integration tests
     // unit tests for the logic itself can be done with mocks
 }

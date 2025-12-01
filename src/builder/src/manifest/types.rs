@@ -60,7 +60,7 @@ pub struct Package {
 }
 
 impl Package {
-    /// Return the namespace path used for OSTree branches, ensuring it is rooted under `pkg/`.
+    /// Return the namespace path used for store branches, ensuring it is rooted under `pkg/`.
     pub fn namespace_path(&self) -> String {
         if self.namespace.starts_with("pkg/") {
             self.namespace.clone()

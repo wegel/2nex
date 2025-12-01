@@ -12,7 +12,7 @@ pub enum MaterializeRequest {
     Bundle { commit: String },
     /// Materialize a specific output category from a package
     Output { commit: String },
-    /// Materialize specific files from the OSTree store
+    /// Materialize specific files from the store
     Files { commit: String, paths: Vec<String> },
 }
 
@@ -39,7 +39,7 @@ pub enum MaterializeMode {
 /// Configuration for a materialization operation.
 #[derive(Clone, Debug)]
 pub struct MaterializeConfig {
-    /// OSTree repository path
+    /// content store repository path
     pub repo_path: String,
     /// Target directory for materialization (logical root, used for symlink targets)
     pub target_dir: PathBuf,
@@ -52,10 +52,10 @@ pub struct MaterializeConfig {
     pub db_path: Option<PathBuf>,
     /// Whether to resolve runtime dependencies transitively
     pub resolve_deps: bool,
-    /// Path to manifest database for manifest-based resolution (e.g., /nex/db/pkg)
-    pub manifest_db_path: Option<PathBuf>,
-    /// Fallback OSTree repo for object/ref lookups (e.g., system repo for user installs)
-    pub fallback_repo_path: Option<PathBuf>,
+    /// Manifest database paths for layered resolution (user -> system)
+    pub manifest_db_paths: Vec<PathBuf>,
+    /// Fallback stores for object/ref lookups (e.g., system repo for user installs)
+    pub fallback_repo_paths: Vec<PathBuf>,
     /// Override for package directory (default: target_dir/nex/pkg)
     pub pkg_dir_override: Option<PathBuf>,
     /// Override for environment directory (default: target_dir/nex/env)
@@ -71,8 +71,8 @@ impl Default for MaterializeConfig {
             mode: MaterializeMode::Flat,
             db_path: None,
             resolve_deps: true,
-            manifest_db_path: None,
-            fallback_repo_path: None,
+            manifest_db_paths: Vec::new(),
+            fallback_repo_paths: Vec::new(),
             pkg_dir_override: None,
             env_dir_override: None,
         }
@@ -192,7 +192,7 @@ impl MaterializeResult {
 /// Entry in the package database (manifest DB).
 #[derive(Clone, Debug)]
 pub struct PackageEntry {
-    /// OSTree commit reference
+    /// store commit reference
     pub commit: String,
     /// Short hash for display
     pub short_hash: String,

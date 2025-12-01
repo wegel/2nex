@@ -18,9 +18,8 @@ use tempfile::TempDir;
 use crate::manifest::parser::load_manifest_from_source;
 use crate::manifest::types::FileEntry;
 use crate::manifest::types::ManifestSource;
-use crate::ostree::commit_to_ostree;
-use crate::ostree_native::OstreeRepo;
 use crate::repo::resolve_repo_path;
+use crate::store::{rewrite_branch_metadata, Store};
 use crate::utils::hash_file_content;
 
 #[derive(Args)]
@@ -28,7 +27,7 @@ pub struct ComputeDepsArgs {
     /// Path to the package manifest (e.g., pkg/cli/shells/bash/bash.yaml)
     pub manifest: String,
 
-    /// OSTree repository path (auto-detected if not specified)
+    /// Repository path (auto-detected if not specified)
     #[clap(long)]
     pub repo: Option<String>,
 
@@ -73,7 +72,7 @@ pub fn run(args: &ComputeDepsArgs) -> io::Result<()> {
         args.dry_run,
     )?;
 
-    // refresh OSTree metadata if not dry-run (manifest was updated)
+    // refresh store metadata if not dry-run (manifest was updated)
     if !args.dry_run {
         crate::refresh_package_metadata(&repo_path, &manifest, manifest_path)?;
     }
@@ -82,7 +81,7 @@ pub fn run(args: &ComputeDepsArgs) -> io::Result<()> {
 }
 
 /// Compute and store runtime dependencies for a package manifest.
-/// This is called after outputs are committed to OSTree.
+/// This is called after outputs are committed to the store.
 /// - Scans ELF files for DT_NEEDED dependencies
 /// - Builds resolution map (file_path -> dependency_name)
 /// - Creates {hash}/files union commit
@@ -160,25 +159,38 @@ pub fn compute_deps_for_manifest(
         );
     }
 
-    // find the outputs for this package in OSTree
+    // build output refs from manifest (we know exactly what outputs exist)
     let arch = "x86_64";
-    let output_prefix = format!(
-        "{}/{}/{}/{}/outputs",
-        arch,
-        manifest.package.namespace_path(),
-        manifest.package.slug,
-        manifest.package.version
-    );
+    let store = Store::open(&repo_path)?;
 
-    let repo = OstreeRepo::open(&repo_path)?;
-    let all_refs = repo.refs(Some(&output_prefix))?;
+    let mut all_refs: Vec<String> = Vec::new();
+    for output_name in manifest.outputs.keys() {
+        let output_ref = format!(
+            "{}/{}/{}/{}/outputs/{}",
+            arch,
+            manifest.package.namespace_path(),
+            manifest.package.slug,
+            manifest.package.version,
+            output_name
+        );
+
+        // verify the output exists in the store
+        if !store.exists(&output_ref) {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "Output '{}' not found in store. Build the package first. Looked for: {}",
+                    output_name, output_ref
+                ),
+            ));
+        }
+        all_refs.push(output_ref);
+    }
+
     if all_refs.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
-            format!(
-                "No outputs found for package. Build it first. Looked for: {}",
-                output_prefix
-            ),
+            "No outputs defined in manifest",
         ));
     }
 
@@ -188,12 +200,17 @@ pub fn compute_deps_for_manifest(
         manifest.package.namespace, manifest.package.slug, manifest.package.version
     );
 
+    // derive manifest base directory from manifest_path
+    // e.g., /nex/db/pkg/dev/build/cmake.yaml -> /nex/db (parent of pkg/)
+    let manifest_base_dir = derive_manifest_base_dir(manifest_path);
+
     // build provider lookup from dependencies + self outputs (for internal libs)
     let provider_lookup = build_provider_lookup(
         repo_path,
         &dep_commits,
         &all_refs,
         &self_provider_key,
+        &manifest_base_dir,
         verbose,
     )?;
     if verbose {
@@ -214,11 +231,11 @@ pub fn compute_deps_for_manifest(
         println!("  Processing output: {}", output_name);
 
         // checkout the output to scan it
-        // create temp dir inside repo to stay on same filesystem (hardlinks)
-        let repo_tmp = PathBuf::from(repo_path).join("tmp");
-        fs::create_dir_all(&repo_tmp)?;
-        let temp = TempDir::new_in(&repo_tmp)?;
-        repo.checkout(output_ref, temp.path(), true)?;
+        // create temp dir inside store to stay on same filesystem (hardlinks)
+        let store_tmp = PathBuf::from(repo_path).join("tmp");
+        fs::create_dir_all(&store_tmp)?;
+        let temp = TempDir::new_in(&store_tmp)?;
+        store.checkout(output_ref, temp.path(), true)?;
 
         // get files from manifest for this output (if exists)
         let manifest_files: Vec<String> = manifest
@@ -320,34 +337,6 @@ pub fn compute_deps_for_manifest(
         return Ok(());
     }
 
-    // create files commit for this package (union of all outputs)
-    println!();
-    println!(
-        "Creating files commit for {}/{}...",
-        manifest.package.namespace, manifest.package.slug
-    );
-
-    // determine address hash: use checksum if stable, else use manifest git blob SHA
-    let has_stable_checksum =
-        manifest.package.checksum.is_some() && manifest.package.stable_checksum.unwrap_or(true);
-
-    let address_hash = if has_stable_checksum {
-        manifest.package.checksum.clone().unwrap()
-    } else {
-        // use manifest's git blob SHA (input-addressed for bootstrap packages)
-        hash_file_content(manifest_path)?
-    };
-
-    let files_commit = create_files_commit(
-        repo_path,
-        &all_refs,
-        &address_hash,
-        &manifest.package.namespace,
-        &manifest.package.slug,
-        &manifest.package.version,
-    )?;
-    println!("  Created: {}", files_commit);
-
     // update the manifest file
     update_manifest_file(manifest_path, &new_outputs, &resolution)?;
 
@@ -366,9 +355,10 @@ fn build_provider_lookup(
     dep_commits: &[String],
     self_output_refs: &[String],
     self_provider_key: &str,
+    manifest_base_dir: &str,
     verbose: bool,
 ) -> io::Result<HashMap<String, (String, String, String)>> {
-    let repo = OstreeRepo::open(repo_path)?;
+    let store = Store::open(repo_path)?;
     let mut lookup: HashMap<String, (String, String, String)> = HashMap::new();
 
     // group commits by package (provider_key) to find/create files commits
@@ -385,7 +375,8 @@ fn build_provider_lookup(
     let mut files_commits: HashMap<String, String> = HashMap::new();
     for (provider_key, commits) in &packages {
         // check if files commit already exists for this package
-        let files_commit = find_or_create_files_commit(repo_path, provider_key, commits, verbose)?;
+        let files_commit =
+            find_or_create_files_commit(repo_path, provider_key, commits, manifest_base_dir, verbose)?;
         files_commits.insert(provider_key.clone(), files_commit);
     }
 
@@ -398,7 +389,7 @@ fn build_provider_lookup(
             .unwrap_or_else(|| commit.clone());
 
         // list files in this commit
-        let files = match repo.ls(commit) {
+        let files = match store.ls(commit) {
             Ok(f) => f,
             Err(e) => {
                 if verbose {
@@ -441,10 +432,10 @@ fn build_provider_lookup(
     // index current package's own outputs (highest priority - overwrites deps)
     // this allows internal libraries like libsystemd-shared-257.so to be resolved
     let self_files_commit =
-        find_or_create_files_commit(repo_path, self_provider_key, self_output_refs, verbose)?;
+        find_or_create_files_commit(repo_path, self_provider_key, self_output_refs, manifest_base_dir, verbose)?;
 
     for output_ref in self_output_refs {
-        let files = match repo.ls(output_ref) {
+        let files = match store.ls(output_ref) {
             Ok(f) => f,
             Err(e) => {
                 if verbose {
@@ -495,6 +486,7 @@ fn find_or_create_files_commit(
     repo_path: &str,
     provider_key: &str,
     commits: &[String],
+    manifest_base_dir: &str,
     verbose: bool,
 ) -> io::Result<String> {
     // parse provider key to get package info
@@ -510,9 +502,12 @@ fn find_or_create_files_commit(
     let namespace_path = parts[..parts.len().saturating_sub(2)].join("/");
 
     // try to find the manifest and determine the address hash
-    // manifest path: pkg/{namespace_path}/{slug}.yaml
-    let manifest_path_str = format!("pkg/{}/{}.yaml", namespace_path, slug);
-    let manifest_path = PathBuf::from(&manifest_path_str);
+    // manifest path: {manifest_base_dir}/pkg/{namespace_path}/{slug}.yaml
+    let manifest_path = if manifest_base_dir.is_empty() {
+        PathBuf::from(format!("pkg/{}/{}.yaml", namespace_path, slug))
+    } else {
+        PathBuf::from(format!("{}/pkg/{}/{}.yaml", manifest_base_dir, namespace_path, slug))
+    };
 
     if let Ok(manifest_data) =
         load_manifest_from_source(&ManifestSource::Path(manifest_path.clone()))
@@ -531,22 +526,28 @@ fn find_or_create_files_commit(
 
             // content-addressed: {hash}/files
             let files_ref = format!("{}/files", address_hash);
-            let repo = OstreeRepo::open(repo_path)?;
+            let store = Store::open(repo_path)?;
 
             // check if it exists
-            if repo.resolve_ref(&files_ref).is_ok() {
+            if store.resolve_ref(&files_ref).is_ok() {
                 if verbose {
                     println!("    Using files commit: {}", files_ref);
                 }
                 return Ok(files_ref);
             }
 
-            // doesn't exist yet - create it
-            let output_prefix = format!(
-                "x86_64/pkg/{}/{}/{}/outputs/",
-                namespace_path, slug, version
-            );
-            let output_refs = repo.refs(Some(&output_prefix))?;
+            // doesn't exist yet - create it using outputs from manifest
+            let output_refs: Vec<String> = dep_manifest
+                .outputs
+                .keys()
+                .map(|output_name| {
+                    format!(
+                        "x86_64/pkg/{}/{}/{}/outputs/{}",
+                        namespace_path, slug, version, output_name
+                    )
+                })
+                .filter(|r| store.exists(r))
+                .collect();
 
             if !output_refs.is_empty() {
                 if verbose {
@@ -603,7 +604,9 @@ fn is_library_path(path: &str) -> bool {
 
 /// Create a `{hash}/files` commit containing the union of all outputs.
 /// The hash is provided by the caller (either package.checksum or manifest git blob SHA).
-/// Returns the OSTree ref for the files commit.
+/// Returns the store ref for the files commit.
+///
+/// Uses in-store union (no filesystem checkout) for efficiency.
 fn create_files_commit(
     repo_path: &str,
     output_refs: &[String],
@@ -612,25 +615,26 @@ fn create_files_commit(
     slug: &str,
     version: &str,
 ) -> io::Result<String> {
-    let repo = OstreeRepo::open(repo_path)?;
-
-    // create temp dir for the union checkout
-    let repo_tmp = PathBuf::from(repo_path).join("tmp");
-    fs::create_dir_all(&repo_tmp)?;
-    let temp = TempDir::new_in(&repo_tmp)?;
-    let union_dir = temp.path().join("files");
-    fs::create_dir_all(&union_dir)?;
-
-    // checkout each output with --union
-    for output_ref in output_refs {
-        repo.checkout(output_ref, &union_dir, true)?;
-    }
-
     // content-addressed: {hash}/files
     let files_ref = format!("{}/files", address_hash);
 
-    // commit the union directory
-    // keep package info in metadata for debugging/back-links
+    // use in-store union (no filesystem checkout)
+    let repo = zub::Repo::open(Path::new(repo_path))
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    let ref_strs: Vec<&str> = output_refs.iter().map(|s| s.as_str()).collect();
+    zub::ops::union_trees(
+        &repo,
+        &ref_strs,
+        &files_ref,
+        zub::ops::UnionOptions {
+            on_conflict: zub::ops::ConflictResolution::Last,
+            ..Default::default()
+        },
+    )
+    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    // attach metadata without changing the tree
     let metadata = vec![
         ("nex.address_hash".to_string(), address_hash.to_string()),
         (
@@ -643,7 +647,7 @@ fn create_files_commit(
         ),
     ];
 
-    commit_to_ostree(repo_path, &files_ref, &union_dir, &metadata)?;
+    rewrite_branch_metadata(repo_path, &files_ref, &metadata)?;
 
     Ok(files_ref)
 }
@@ -809,4 +813,25 @@ fn update_manifest_file(
     fs::write(manifest_path, new_content)?;
 
     Ok(())
+}
+
+/// Derive manifest base directory from a manifest path.
+/// e.g., /nex/db/pkg/dev/build/cmake.yaml -> /nex/db
+/// e.g., pkg/dev/build/cmake.yaml -> "" (empty, use relative paths)
+fn derive_manifest_base_dir(manifest_path: &Path) -> String {
+    let path_str = manifest_path.to_string_lossy();
+
+    // find "/pkg/" or "pkg/" in the path
+    if let Some(idx) = path_str.rfind("/pkg/") {
+        // return everything before /pkg/
+        return path_str[..idx].to_string();
+    }
+
+    // if path starts with "pkg/", return empty (use relative)
+    if path_str.starts_with("pkg/") {
+        return String::new();
+    }
+
+    // fallback: return empty (use relative paths)
+    String::new()
 }

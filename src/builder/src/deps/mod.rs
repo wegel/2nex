@@ -1,7 +1,7 @@
 //! dependency closure resolution using manifest-based `needs`/`resolution`.
 //!
 //! this module resolves transitive dependencies by reading precomputed dependency
-//! information from package manifests instead of OSTree metadata.
+//! information from package manifests instead of store metadata.
 
 use std::collections::HashSet;
 use std::io;

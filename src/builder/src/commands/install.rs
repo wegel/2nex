@@ -8,15 +8,15 @@ use std::process::Command;
 use super::stage::{is_staged, mount_nex_overlays, staging_upper_dir};
 use super::state::InstalledState;
 use crate::materializer::{materialize, MaterializeConfig, MaterializeMode, MaterializeRequest};
-use crate::ostree_native::OstreeRepo;
-use crate::repo::{detect_context, detect_manifest_dir, ensure_user_dirs, resolve_repo_path, NexContext};
+use crate::repo::{detect_context, ensure_user_dirs, resolve_repo_path, NexContext};
+use crate::store::Store;
 
 #[derive(Args)]
 pub struct InstallArgs {
     /// Package to install (e.g., "bash", "cli/shells/bash", or full ref)
     pub package: String,
 
-    /// OSTree repository path (auto-detected if not specified)
+    /// Repository path (auto-detected if not specified)
     #[clap(long)]
     pub repo: Option<String>,
 
@@ -95,7 +95,7 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     // if not found and in user context, try to auto-build
     let package_ref = match find_package_ref_with_fallback(
         &repo_path,
-        ctx.fallback_repo.as_deref(),
+        ctx.fallback_repo().map(|p| p.as_path()),
         &args.package,
         args.version.as_deref(),
     ) {
@@ -114,7 +114,7 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
             // retry finding the package
             find_package_ref_with_fallback(
                 &repo_path,
-                ctx.fallback_repo.as_deref(),
+                ctx.fallback_repo().map(|p| p.as_path()),
                 &args.package,
                 args.version.as_deref(),
             )?
@@ -126,7 +126,7 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     // parse the ref to get package info
     let pkg_info = parse_package_ref_with_fallback(
         &repo_path,
-        ctx.fallback_repo.as_deref(),
+        ctx.fallback_repo().map(|p| p.as_path()),
         &package_ref,
     )?;
 
@@ -191,8 +191,8 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
         physical_root,
         mode,
         resolve_deps: !args.no_deps,
-        manifest_db_path: detect_manifest_dir().map(Into::into),
-        fallback_repo_path: ctx.fallback_repo.clone(),
+        manifest_db_paths: ctx.manifest_dirs.clone(),
+        fallback_repo_paths: ctx.fallback_repos.clone(),
         pkg_dir_override: pkg_override,
         env_dir_override: env_override,
         ..Default::default()
@@ -318,8 +318,8 @@ fn find_package_ref_with_fallback(
     query: &str,
     version: Option<&str>,
 ) -> io::Result<String> {
-    let ostree_repo = OstreeRepo::open_with_fallback(repo, fallback)?;
-    let all_refs = ostree_repo.refs(None)?;
+    let store = Store::open_with_fallback(repo, fallback)?;
+    let all_refs = store.refs(None)?;
     let query_parts: Vec<&str> = query.split('/').collect();
 
     // prefer bundles/full, then bundles/*, then outputs/bin
@@ -415,15 +415,15 @@ fn get_commit_short_hash_with_fallback(
     ref_path: &str,
 ) -> io::Result<String> {
     // use manifest hash (shared by all outputs of a build) - must match checkout.rs
-    let ostree_repo = OstreeRepo::open_with_fallback(repo, fallback)?;
+    let store = Store::open_with_fallback(repo, fallback)?;
 
     // try to get manifest hash from metadata first
-    if let Ok(Some(manifest_hash)) = ostree_repo.get_metadata(ref_path, "nex.manifest.hash") {
+    if let Ok(Some(manifest_hash)) = store.get_metadata(ref_path, "nex.manifest.hash") {
         return Ok(manifest_hash[..8.min(manifest_hash.len())].to_string());
     }
 
     // fallback to commit ID if no manifest hash
-    match ostree_repo.resolve_ref(ref_path) {
+    match store.resolve_ref(ref_path) {
         Ok(id) => Ok(id[..8.min(id.len())].to_string()),
         Err(_) => {
             // fallback to hash of ref path

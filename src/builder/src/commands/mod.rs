@@ -14,4 +14,3 @@ pub mod stage;
 pub mod state;
 pub mod status;
 pub mod switch;
-pub mod test_native;

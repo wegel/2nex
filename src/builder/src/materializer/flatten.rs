@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
 use crate::manifest::ManifestIndex;
-use crate::ostree_native::OstreeRepo;
+use crate::store::Store;
 use crate::utils::hash_file_content;
 
 /// Flatten runtime dependencies for a single package capsule using precomputed deps.
@@ -31,7 +31,7 @@ pub fn flatten_capsule_precomputed(
     pkg_dir: &Path,
     commit: &str,
     manifest_index: &ManifestIndex,
-    fallback_repo: Option<&Path>,
+    fallback_repos: &[PathBuf],
 ) -> io::Result<usize> {
     // find manifest for this commit
     let manifest = match find_manifest_for_commit(commit, manifest_index) {
@@ -128,7 +128,7 @@ pub fn flatten_capsule_precomputed(
                 self_commit,
                 lib_path,
                 &pkg_lib_dir,
-                fallback_repo,
+                fallback_repos,
             )? {
                 flattened_count += 1;
             }
@@ -144,7 +144,7 @@ pub fn flatten_capsule_precomputed(
                 &provider_commit,
                 &file_path,
                 &pkg_lib_dir,
-                fallback_repo,
+                fallback_repos,
             )? {
                 flattened_count += 1;
             }
@@ -356,7 +356,7 @@ fn detect_outputs_in_capsule(
     present_outputs
 }
 
-/// Find the manifest that corresponds to an OSTree commit ref.
+/// Find the manifest that corresponds to a store commit ref.
 fn find_manifest_for_commit<'a>(
     commit: &str,
     index: &'a ManifestIndex,
@@ -384,13 +384,13 @@ fn find_manifest_for_commit<'a>(
     index.get_manifest(&namespace, slug)
 }
 
-/// Flatten a single library from an OSTree commit into a package's lib/ directory.
+/// Flatten a single library from a store commit into a package's lib/ directory.
 fn flatten_library_from_commit(
     repo_path: &str,
     commit: &str,
     lib_path: &str,
     pkg_lib_dir: &Path,
-    fallback_repo: Option<&Path>,
+    fallback_repos: &[PathBuf],
 ) -> io::Result<bool> {
     let basename = Path::new(lib_path)
         .file_name()
@@ -413,8 +413,8 @@ fn flatten_library_from_commit(
     let temp = TempDir::new_in(temp_parent)?;
     let checkout_dir = temp.path().join("checkout");
 
-    let repo = OstreeRepo::open_with_fallback(repo_path, fallback_repo)?;
-    repo.checkout(commit, &checkout_dir, true)?;
+    let store = Store::open_with_fallback_chain(repo_path, fallback_repos)?;
+    store.checkout(commit, &checkout_dir, true)?;
 
     let src = checkout_dir.join(lib_path.trim_start_matches('/'));
     if !src.exists() {

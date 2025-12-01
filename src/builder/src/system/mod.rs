@@ -13,8 +13,10 @@ use crate::manifest::*;
 use crate::materializer::resolver::resolve_runtime_deps_precomputed;
 use crate::materializer::types::MaterializeRequest;
 use crate::materializer::{checkout_files, flatten_capsule_precomputed};
-use crate::ostree::*;
 use crate::outputs::calculate_output_checksum;
+use crate::store::{
+    checkout_into, commit_tree, encode_metadata_list, export_path, get_commit_id, get_commit_metadata,
+};
 use crate::BuildOpts;
 
 pub fn build_system_manifest(opts: &BuildOpts, manifest: &SystemManifest) -> io::Result<()> {
@@ -227,7 +229,7 @@ pub fn materialize_system_packages(
         .map(|c| MaterializeRequest::Output { commit: c.clone() })
         .collect();
 
-    let closure = resolve_runtime_deps_precomputed(repo_path, &requests, manifest_index, None)?;
+    let closure = resolve_runtime_deps_precomputed(repo_path, &requests, manifest_index, &[])?;
 
     // error if there are unresolved dependencies (missing /files commits)
     if closure.has_unresolved() {
@@ -250,10 +252,10 @@ pub fn materialize_system_packages(
             // file-level checkout: only extract specific files from {checksum}/files commit
             let files_vec: Vec<String> = files.iter().cloned().collect();
             println!("  Checking out {} file(s) from {}", files_vec.len(), commit);
-            checkout_files(repo_path, commit, &files_vec, &target_dir, None)?;
+            checkout_files(repo_path, commit, &files_vec, &target_dir, &[])?;
         } else {
             // full checkout for root commits
-            checkout_ostree_into(repo_path, commit, &target_dir, true, false)?;
+            checkout_into(repo_path, commit, &target_dir, true, false)?;
         }
     }
 
@@ -304,7 +306,7 @@ pub fn commit_system_rootfs(
         metadata.push(("nex.system.dependencies".to_string(), encoded));
     }
 
-    commit_to_ostree(repo_path, &branch_name, &target_dir, &metadata)
+    commit_tree(repo_path, &branch_name, &target_dir, &metadata)
 }
 
 /// Materialize packages using the /nex/pkg/ structure with deploy bundles.
@@ -371,16 +373,16 @@ pub fn materialize_nex_structure(
                 "Installing kernel modules: {}/{}/{} (direct layer)",
                 namespace, slug, version
             );
-            checkout_ostree_into(repo_path, &pkg.commit, &target_dir, true, false)?;
+            checkout_into(repo_path, &pkg.commit, &target_dir, true, false)?;
             continue;
         }
 
         // use manifest hash to group outputs from the same build together
         let manifest_hash =
-            crate::ostree::get_commit_metadata(repo_path, &pkg.commit, "nex.manifest.hash")
+            get_commit_metadata(repo_path, &pkg.commit, "nex.manifest.hash")
                 .unwrap_or_else(|_| {
                     // fallback to commit hash if no manifest hash
-                    crate::ostree::get_commit_id(repo_path, &pkg.commit).unwrap_or_default()
+                    get_commit_id(repo_path, &pkg.commit).unwrap_or_default()
                 });
         let short_hash = &manifest_hash[..8.min(manifest_hash.len())];
 
@@ -407,14 +409,14 @@ pub fn materialize_nex_structure(
             .join(&version)
             .join(&checksum);
 
-        // create parent directories (ostree will create the final directory)
+        // create parent directories (checkout will create the final directory)
         if let Some(parent) = pkg_install_dir.parent() {
             fs::create_dir_all(parent)?;
         }
 
         // checkout package using --union to merge multiple outputs of the same package
         // this allows bin and lib outputs to coexist in the same directory
-        checkout_ostree_into(repo_path, &install_ref, &pkg_install_dir, true, false)?;
+        checkout_into(repo_path, &install_ref, &pkg_install_dir, true, false)?;
 
         // write .nex-app-root sentinel for nex-ld-shim to find the package root
         let sentinel_path = pkg_install_dir.join(".nex-app-root");
@@ -598,26 +600,16 @@ fn parse_package_commit(commit: &str) -> Option<(String, String, String)> {
 fn install_nex_ld_shim(repo_path: &str, lib64_dir: &Path) -> io::Result<()> {
     let shim_path = lib64_dir.join("ld-linux-x86-64.so.2");
 
-    // find packaged nex-ld-shim - prefer deploy, fall back to bundle or output
-    let output = std::process::Command::new("ostree")
-        .args(["refs", "--repo", repo_path])
-        .output()?;
-
-    if !output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Failed to list OSTree refs",
-        ));
-    }
-
-    let refs = String::from_utf8_lossy(&output.stdout);
+    // use Store to list refs
+    let store = crate::store::Store::open(repo_path)?;
+    let refs = store.refs(None)?;
 
     // try deploy first, then bundles/full, then outputs/bin
     let shim_ref = refs
-        .lines()
+        .iter()
         .find(|r| r.contains("nex-ld-shim") && r.contains("/deploy/"))
-        .or_else(|| refs.lines().find(|r| r.contains("nex-ld-shim") && r.contains("/bundles/")))
-        .or_else(|| refs.lines().find(|r| r.contains("nex-ld-shim") && r.contains("/outputs/")))
+        .or_else(|| refs.iter().find(|r| r.contains("nex-ld-shim") && r.contains("/bundles/")))
+        .or_else(|| refs.iter().find(|r| r.contains("nex-ld-shim") && r.contains("/outputs/")))
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
@@ -627,21 +619,14 @@ fn install_nex_ld_shim(repo_path: &str, lib64_dir: &Path) -> io::Result<()> {
 
     println!("Using packaged nex-ld-shim: {}", shim_ref);
 
-    // checkout to a subdir in temp
-    let temp_dir = tempfile::tempdir()?;
-    let checkout_path = temp_dir.path().join("shim");
-    crate::ostree::checkout_ostree_into(repo_path, shim_ref, &checkout_path, false, false)?;
-
-    // copy the shim binary to lib64
-    let src = checkout_path.join("usr/lib/nex-ld-shim");
-    if !src.exists() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("nex-ld-shim binary not found in deploy bundle at usr/lib/nex-ld-shim"),
-        ));
-    }
-
-    fs::copy(&src, &shim_path)?;
+    // export the shim binary directly from the store (no temp checkout)
+    export_path(
+        repo_path,
+        shim_ref,
+        "/usr/lib/nex-ld-shim",
+        &shim_path,
+        false, // copy to allow cross-device targets without hardlink issues
+    )?;
     println!("  Installed nex-ld-shim at /lib64/ld-linux-x86-64.so.2");
 
     Ok(())
@@ -677,7 +662,7 @@ fn create_target_fhs_symlinks(target_dir: &Path) -> io::Result<()> {
 ///
 /// This copies the entire pkg/ directory tree to the target system's /nex/db/pkg/,
 /// enabling the ManifestIndex to resolve package providers at runtime without
-/// needing to scan the OSTree repo.
+/// needing to scan the store.
 ///
 /// TODO: uncertain if this belongs in the nex CLI or should be done externally
 /// (e.g., by the system assembly tooling). For now it's here for convenience,
@@ -763,7 +748,7 @@ fn flatten_package_dependencies(
 
         // use precomputed deps from manifest
         let flattened_count =
-            flatten_capsule_precomputed(repo_path, pkg_dir, &commit, &manifest_index, None)?;
+            flatten_capsule_precomputed(repo_path, pkg_dir, &commit, &manifest_index, &[])?;
 
         if flattened_count > 0 {
             let rel_path = pkg_dir.strip_prefix(nex_pkg_dir).unwrap_or(pkg_dir);

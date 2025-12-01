@@ -3,7 +3,7 @@
 # tests the full boot chain with actual nex system
 #
 # usage: ./qemu-test-efi.sh [system-ref]
-#   system-ref: OSTree ref to boot (default: systems/bootable-systemd-nex/0.0.1)
+#   system-ref: zub ref to boot (default: systems/bootable-systemd-nex/0.0.1)
 #   examples:
 #     ./qemu-test-efi.sh
 #     ./qemu-test-efi.sh systems/bootable-minimal/0.0.1
@@ -28,8 +28,10 @@ error() { echo -e "${RED}ERROR:${NC} $1"; exit 1; }
 command -v mke2fs >/dev/null || error "mke2fs not found (install e2fsprogs)"
 command -v mcopy >/dev/null || error "mcopy not found (install mtools)"
 command -v qemu-system-x86_64 >/dev/null || error "qemu-system-x86_64 not found"
-ostree refs --repo="$REPO" | grep -q "$SYSTEM_REF" || \
-    error "$SYSTEM_REF not found. Build with: nex build bootstrap_store asm/bootable-systemd-nex.yaml"
+ZUB="$ROOT_DIR/src/zub/target/debug/zub"
+[ -f "$ZUB" ] || error "zub not found. Build with: cd src/zub && cargo build"
+$ZUB --repo="$REPO" refs | grep -q "$SYSTEM_REF" || \
+    error "$SYSTEM_REF not found. Build with: nex build asm/bootable-systemd-nex.yaml"
 
 # find OVMF firmware
 find_ovmf() {
@@ -52,7 +54,7 @@ mkdir -p "$ROOT_DIR/build"
 TMPDIR=$(mktemp -d "$ROOT_DIR/build/tmp.XXXXXX")
 trap "rm -rf $TMPDIR" EXIT
 
-# disk layout: 6GB (bootstrap_store is ~3.5GB, need room for ostree repo copy + deployment)
+# disk layout: 6GB (repo is ~3.5GB, need room for zub repo copy + deployment)
 DISK_SIZE_MB=6144
 ESP_SIZE_MB=64
 ROOT_SIZE_MB=$((DISK_SIZE_MB - ESP_SIZE_MB - 1))
@@ -83,10 +85,10 @@ ROOT_CONTENT="$TMPDIR/root"
 mkdir -p "$ROOT_CONTENT"
 
 # get the system's checksum for deployment path
-SYSTEM_CHECKSUM=$(ostree show --repo="$REPO" --print-metadata-key=nex.system.checksum "$SYSTEM_REF" 2>/dev/null | tr -d "'")
+SYSTEM_CHECKSUM=$($ZUB --repo="$REPO" show "$SYSTEM_REF" 2>/dev/null | grep "nex.system.checksum:" | awk '{print $2}')
 if [ -z "$SYSTEM_CHECKSUM" ]; then
-    # fallback: use commit checksum
-    SYSTEM_CHECKSUM=$(ostree rev-parse --repo="$REPO" "$SYSTEM_REF")
+    # fallback: use commit hash
+    SYSTEM_CHECKSUM=$($ZUB --repo="$REPO" rev-parse "$SYSTEM_REF")
 fi
 
 DEPLOY_PATH="nex/deploy/2nex/deploy/${SYSTEM_CHECKSUM}.0"
@@ -94,19 +96,15 @@ DEPLOY_DIR="$ROOT_CONTENT/$DEPLOY_PATH"
 
 log "Extracting $SYSTEM_REF..."
 mkdir -p "$(dirname "$DEPLOY_DIR")"
-unshare --map-root-user ostree checkout --repo="$REPO" "$SYSTEM_REF" "$DEPLOY_DIR"
+$ZUB --repo="$REPO" checkout "$SYSTEM_REF" "$DEPLOY_DIR"
 
 mkdir -p "$ROOT_CONTENT/nex/deploy/2nex/var"
 
-# create nex repo and populate with full bootstrap_store
-log "Creating nex repo structure..."
-mkdir -p "$ROOT_CONTENT/nex/repo"
-ostree init --repo="$ROOT_CONTENT/nex/repo" --mode=bare-user 2>/dev/null || true
+# copy zub repo to disk
+log "Copying repo to disk (this may take a while)..."
+cp -a "$REPO" "$ROOT_CONTENT/nex/repo"
 
-log "Copying bootstrap_store to disk (this may take a while)..."
-ostree pull-local --repo="$ROOT_CONTENT/nex/repo" "$REPO"
-
-# create root-level symlinks to the deployment (OSTree-style)
+# create root-level symlinks to the deployment
 # these are needed because binaries have PT_INTERP=/lib64/ld-linux-x86-64.so.2
 log "Creating root symlinks to deployment..."
 ln -sf "$DEPLOY_PATH/usr" "$ROOT_CONTENT/usr"
@@ -152,7 +150,7 @@ ls "$DEPLOY_DIR/nex/pkg/" 2>/dev/null | head -10 || echo "(none)"
 # create ext4 filesystem
 log "Creating ext4 filesystem..."
 ROOT_IMG="$TMPDIR/root.img"
-# -i 4096 = one inode per 4KB (vs default ~16KB) - needed for ostree's many small object files
+# -i 4096 = one inode per 4KB (vs default ~16KB) - needed for zub's many small object files
 mke2fs -t ext4 -d "$ROOT_CONTENT" -i 4096 "$ROOT_IMG" ${ROOT_SIZE_MB}M
 dd if="$ROOT_IMG" of="$OUTPUT" bs=1M seek=$ESP_SIZE_MB conv=notrunc status=none
 
@@ -168,16 +166,21 @@ QEMU_ARGS=(
     -enable-kvm
     -machine q35
     -cpu host
-    -m 2G
+    -m 8G
+    -smp $(nproc)
     -drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE"
 )
 [ -f "$OVMF_VARS" ] && QEMU_ARGS+=(-drive "if=pflash,format=raw,file=$OVMF_VARS")
 QEMU_ARGS+=(
     -drive "file=$OUTPUT,format=raw,if=virtio"
+    -netdev user,id=net0,hostfwd=tcp::2222-:22
+    -device virtio-net-pci,netdev=net0
     -serial mon:stdio
     -display none
     -no-reboot
 )
+
+log "Network: SSH available on localhost:2222 (ssh -p 2222 root@localhost)"
 
 echo "--- QEMU output (Ctrl-A X to exit) ---"
 echo ""

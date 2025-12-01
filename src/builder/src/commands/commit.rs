@@ -5,10 +5,10 @@ use std::path::Path;
 use std::process::Command;
 
 use super::stage::{cleanup_staging, is_staged};
+use crate::store;
 
 const STAGING_STATE_DIR: &str = "/run/nex/staging";
 const NEX_REPO: &str = "/nex/repo";
-const NEX_DEPLOY_DIR: &str = "/nex/deploy/2nex";
 
 #[derive(Args)]
 pub struct CommitArgs {
@@ -50,30 +50,27 @@ pub fn run(args: &CommitArgs) -> io::Result<()> {
 
     // check if we're on a nex system with repo
     if !Path::new(NEX_REPO).exists() {
-        // not an OSTree system - just merge the overlay and exit staging
-        println!("Not an OSTree system. Merging overlay changes directly...");
+        // no system repo - just merge the overlay and exit staging
+        println!("No system repo found. Merging overlay changes directly...");
         merge_overlay_changes()?;
         cleanup_staging()?;
-        println!("Changes applied. (Note: changes are not atomic without OSTree)");
+        println!("Changes applied.");
         return Ok(());
     }
 
-    // on an OSTree system, create a new deployment
-    create_ostree_deployment(&message)?;
+    // commit staged changes to a new deployment ref
+    create_deployment(&message)?;
 
     // cleanup staging
     cleanup_staging()?;
 
     println!("Deployment created successfully.");
-    println!("Reboot to activate the new deployment, or use 'ostree admin set-default' to switch.");
 
     Ok(())
 }
 
 fn merge_overlay_changes() -> io::Result<()> {
-    // for non-OSTree systems, we need to:
-    // 1. unmount the overlay
-    // 2. copy upper dir contents to the actual locations
+    // merge overlay upper dir contents to the actual locations
 
     let upper_nex = format!("{}/upper/nex", STAGING_STATE_DIR);
     let upper_usr_bin = format!("{}/upper/usr_bin", STAGING_STATE_DIR);
@@ -108,40 +105,17 @@ fn copy_dir_contents(src: &str, dst: &str) -> io::Result<()> {
     Ok(())
 }
 
-fn create_ostree_deployment(message: &str) -> io::Result<()> {
+fn create_deployment(message: &str) -> io::Result<()> {
     // get current deployment info
     let current_ref = get_current_deployment_ref()?;
     println!("  Current deployment: {}", current_ref);
-
-    // create a new commit with the overlay changes
-    // this is complex because we need to:
-    // 1. checkout current deployment
-    // 2. apply overlay changes
-    // 3. commit as new ref
-    // 4. deploy the new ref
 
     let staging_dir = format!("{}/commit_staging", STAGING_STATE_DIR);
     fs::create_dir_all(&staging_dir)?;
 
     // checkout current deployment
     println!("  Checking out current deployment...");
-    let status = Command::new("ostree")
-        .args([
-            "checkout",
-            "--repo",
-            NEX_REPO,
-            "--user-mode",
-            &current_ref,
-            &staging_dir,
-        ])
-        .status()?;
-
-    if !status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Failed to checkout current deployment",
-        ));
-    }
+    store::checkout_into(NEX_REPO, &current_ref, Path::new(&staging_dir), false, false)?;
 
     // apply overlay changes
     println!("  Applying staged changes...");
@@ -164,38 +138,14 @@ fn create_ostree_deployment(message: &str) -> io::Result<()> {
     println!("  Creating new commit...");
     let new_ref = format!("2nex/deployments/{}", timestamp_id());
 
-    let status = Command::new("ostree")
-        .args([
-            "commit",
-            "--repo",
-            NEX_REPO,
-            "--branch",
-            &new_ref,
-            "--subject",
-            message,
-            &staging_dir,
-        ])
-        .status()?;
+    let metadata = vec![
+        ("nex.deployment.message".to_string(), message.to_string()),
+        ("nex.deployment.parent".to_string(), current_ref),
+    ];
 
-    if !status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Failed to commit new deployment",
-        ));
-    }
+    store::commit_tree(NEX_REPO, &new_ref, Path::new(&staging_dir), &metadata)?;
 
-    // deploy the new ref
-    println!("  Deploying {}...", new_ref);
-    let status = Command::new("ostree")
-        .args(["admin", "deploy", "--os=2nex", &new_ref])
-        .status()?;
-
-    if !status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "Failed to deploy new commit. You may need to run as root.",
-        ));
-    }
+    println!("  Created deployment: {}", new_ref);
 
     // cleanup staging dir
     fs::remove_dir_all(&staging_dir)?;
@@ -204,34 +154,17 @@ fn create_ostree_deployment(message: &str) -> io::Result<()> {
 }
 
 fn get_current_deployment_ref() -> io::Result<String> {
-    // try to get from ostree admin status
-    let output = Command::new("ostree").args(["admin", "status"]).output()?;
+    // try to find the latest deployment ref
+    let store = store::Store::open(NEX_REPO)?;
+    let refs = store.refs(Some("2nex/deployments/"))?;
 
-    if output.status.success() {
-        let status = String::from_utf8_lossy(&output.stdout);
-        // parse the first deployment line
-        for line in status.lines() {
-            if line.contains("2nex") && !line.starts_with(' ') {
-                // format is typically: "* 2nex <checksum>.<serial> (staged)"
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    return Ok(parts[1].to_string());
-                }
-            }
-        }
+    if let Some(latest) = refs.iter().max() {
+        return Ok(latest.clone());
     }
 
-    // fallback: try to read from deploy directory
-    let deploy_dir = Path::new(NEX_DEPLOY_DIR).join("deploy");
-    if deploy_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&deploy_dir) {
-            for entry in entries.flatten() {
-                let name = entry.file_name().to_string_lossy().to_string();
-                if !name.starts_with('.') {
-                    return Ok(format!("2nex/deploy/{}", name));
-                }
-            }
-        }
+    // fallback: try 2nex/base
+    if store.exists("2nex/base") {
+        return Ok("2nex/base".to_string());
     }
 
     Err(io::Error::new(

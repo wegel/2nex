@@ -19,10 +19,9 @@ pub mod commands;
 pub mod deps;
 pub mod manifest;
 pub mod materializer;
-pub mod ostree;
-pub mod ostree_native;
 pub mod outputs;
 pub mod repo;
+pub mod store;
 pub mod system;
 
 mod utils;
@@ -30,8 +29,8 @@ mod utils;
 use build::*;
 use deps::*;
 use manifest::*;
-use ostree::*;
 use outputs::*;
+use store::*;
 #[derive(Parser)]
 #[clap(
     name = "nex",
@@ -48,7 +47,7 @@ enum Command {
     /// Build packages from manifests
     Build(commands::build::BuildArgs),
 
-    /// List packages in the OSTree repository
+    /// List packages in the repository
     List(commands::list::ListArgs),
 
     /// Show information about a package
@@ -75,18 +74,14 @@ enum Command {
     /// Switch the active version of a package
     Switch(commands::switch::SwitchArgs),
 
-    /// Commit staged changes as a new OSTree deployment
+    /// Commit staged changes
     Commit(commands::commit::CommitArgs),
 
     /// Show current and previous deployments
     Status(commands::status::StatusArgs),
 
-    /// Rollback to a previous deployment
+    /// Rollback to a previous version
     Rollback(commands::rollback::RollbackArgs),
-
-    /// Test native OSTree implementation (hidden)
-    #[clap(hide = true)]
-    TestNative(commands::test_native::TestNativeArgs),
 
     /// Resolve and show runtime dependencies for a package
     Resolve(commands::resolve::ResolveArgs),
@@ -115,7 +110,6 @@ fn main() -> io::Result<()> {
         Command::Commit(args) => commands::commit::run(&args),
         Command::Status(args) => commands::status::run(&args),
         Command::Rollback(args) => commands::rollback::run(&args),
-        Command::TestNative(args) => commands::test_native::run(&args),
         Command::Resolve(args) => commands::resolve::run(&args),
         Command::ComputeDeps(args) => commands::compute_deps::run(&args),
     }
@@ -291,25 +285,25 @@ fn build_single(opts: &BuildOpts) -> io::Result<()> {
     // load the manifest
     let manifest_data = load_manifest(&opts.manifest_file)?;
 
-    // validate flags for refresh_ostree_metadata
-    if opts.refresh_ostree_metadata {
+    // validate flags for refresh_metadata
+    if opts.refresh_metadata {
         if matches!(manifest_data, ManifestData::System(_)) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "--refresh-ostree-metadata only applies to package manifests",
+                "--refresh-metadata only applies to package manifests",
             ));
         }
         if opts.validate_reproducibility {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "--refresh-ostree-metadata cannot be combined with --validate-reproducibility",
+                "--refresh-metadata cannot be combined with --validate-reproducibility",
             ));
         }
     }
 
     match manifest_data {
         ManifestData::Package(mut manifest) => {
-            if opts.refresh_ostree_metadata {
+            if opts.refresh_metadata {
                 refresh_package_metadata(&opts.repo_path, &manifest, Path::new(&opts.manifest_file))
             } else {
                 println!("Building package: {}", manifest.package.slug);
@@ -392,7 +386,7 @@ fn build_package_manifest_with_dir(
         Path::new(&opts.manifest_file),
     )?;
 
-    println!("Build, packaging, and commit to OSTree completed for all outputs.");
+    println!("Build, packaging, and commit completed for all outputs.");
 
     let output_dir = Path::new(base_dir).join("2nex/out");
     let checksum = calculate_output_checksum(&output_dir)?;
@@ -412,7 +406,7 @@ fn build_package_manifest_with_dir(
                         &checksum,
                     )?;
                     manifest.package.checksum = Some(checksum.clone());
-                    // refresh OSTree metadata with new manifest hash
+                    // refresh store metadata with new manifest hash
                     refresh_package_metadata(
                         &opts.repo_path,
                         manifest,
@@ -441,7 +435,7 @@ fn build_package_manifest_with_dir(
                     &checksum,
                 )?;
                 manifest.package.checksum = Some(checksum.clone());
-                // refresh OSTree metadata with new manifest hash
+                // refresh store metadata with new manifest hash
                 refresh_package_metadata(
                     &opts.repo_path,
                     manifest,
@@ -451,7 +445,10 @@ fn build_package_manifest_with_dir(
         }
     }
 
-    // compute runtime dependencies and create files commit (opt-in, modifies manifest)
+    // create {hash}/files commit (union of all outputs) for dependency resolution
+    create_files_commit_for_package(manifest, &opts.repo_path, Path::new(&opts.manifest_file))?;
+
+    // compute runtime dependencies (opt-in, modifies manifest)
     if opts.compute_deps {
         commands::compute_deps::compute_deps_for_manifest(
             manifest,
@@ -460,7 +457,7 @@ fn build_package_manifest_with_dir(
             opts.runtime_deps_verbose,
             false, // never dry_run during build
         )?;
-        // refresh OSTree metadata since compute_deps modified the manifest
+        // refresh store metadata since compute_deps modified the manifest
         refresh_package_metadata(&opts.repo_path, manifest, Path::new(&opts.manifest_file))?;
     }
 
@@ -508,13 +505,86 @@ fn refresh_package_metadata(
     manifest_path: &Path,
 ) -> io::Result<()> {
     println!(
-        "Refreshing OSTree metadata for {}/{} ({})",
+        "Refreshing store metadata for {}/{} ({})",
         manifest.package.slug, manifest.package.version, manifest.package.namespace
     );
     let manifest_hash = compute_manifest_hash(manifest_path)?;
     refresh_output_branches(repo_path, manifest, &manifest_hash)?;
     refresh_bundle_branches(repo_path, manifest, &manifest_hash)?;
     println!("Finished refreshing metadata for {}", manifest.package.slug);
+    Ok(())
+}
+
+/// create {hash}/files commit as in-store union of all outputs.
+fn create_files_commit_for_package(
+    manifest: &Manifest,
+    repo_path: &str,
+    manifest_path: &Path,
+) -> io::Result<()> {
+    // determine address hash: checksum if stable, else manifest git blob SHA
+    let has_stable_checksum =
+        manifest.package.checksum.is_some() && manifest.package.stable_checksum.unwrap_or(true);
+
+    let address_hash = if has_stable_checksum {
+        manifest.package.checksum.clone().unwrap()
+    } else {
+        utils::hash_file_content(manifest_path)?
+    };
+
+    let files_ref = format!("{}/files", address_hash);
+
+    // build output refs
+    let output_refs: Vec<String> = manifest
+        .outputs
+        .keys()
+        .filter(|k| *k != "discard")
+        .map(|name| {
+            format!(
+                "x86_64/{}/{}/{}/outputs/{}",
+                manifest.package.namespace_path(),
+                manifest.package.slug,
+                manifest.package.version,
+                name
+            )
+        })
+        .collect();
+
+    if output_refs.is_empty() {
+        return Ok(());
+    }
+
+    println!("Creating files commit: {}", files_ref);
+
+    let repo = zub::Repo::open(Path::new(repo_path))
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    let ref_strs: Vec<&str> = output_refs.iter().map(|s| s.as_str()).collect();
+    zub::ops::union_trees(
+        &repo,
+        &ref_strs,
+        &files_ref,
+        zub::ops::UnionOptions {
+            on_conflict: zub::ops::ConflictResolution::Last,
+            ..Default::default()
+        },
+    )
+    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    // attach metadata
+    let metadata = vec![
+        ("nex.address_hash".to_string(), address_hash),
+        (
+            "nex.package".to_string(),
+            format!(
+                "{}/{}/{}",
+                manifest.package.namespace_path(),
+                manifest.package.slug,
+                manifest.package.version
+            ),
+        ),
+    ];
+    rewrite_branch_metadata(repo_path, &files_ref, &metadata)?;
+
     Ok(())
 }
 
@@ -658,7 +728,7 @@ fn resolve_dependency_commits(
                 Ok(content) => {
                     let content_hash = format!("{:x}", Sha256::digest(content.as_bytes()));
 
-                    // search OSTree history for matching build
+                    // search store history for matching build
                     match find_commit_by_manifest_hash(repo_path, &dep.commit, &content_hash) {
                         Ok(Some(commit_id)) => {
                             // use the specific commit ID instead of branch name
@@ -695,7 +765,7 @@ fn resolve_dependency_commits(
     Ok(resolved)
 }
 
-// check if all outputs of a manifest are already built in OSTree with current manifest hash
+// check if all outputs of a manifest are already built in the store with current manifest hash
 // returns Some(commit_id) if found, None if not built or hash mismatch
 fn check_if_built(
     repo_path: &str,
@@ -753,7 +823,7 @@ fn collect_dependencies_recursive(
     graph: &mut DiGraph<ManifestSource, ()>,
     manifest_map: &mut HashMap<PathBuf, NodeIndex>,
     force: bool,
-    ostree_cache: &mut HashMap<String, bool>,
+    ref_cache: &mut HashMap<String, bool>,
 ) -> io::Result<NodeIndex> {
     let manifest_path = manifest_source.path();
 
@@ -806,7 +876,7 @@ fn collect_dependencies_recursive(
                     use sha2::{Digest, Sha256};
                     let content_hash = format!("{:x}", Sha256::digest(content.as_bytes()));
 
-                    // search OSTree history for matching build
+                    // search store history for matching build
                     match find_commit_by_manifest_hash(repo_path, &dep.commit, &content_hash) {
                         Ok(Some(commit_id)) => {
                             println!("  [{}] {} skipping", &commit_id[..12], dep.commit);
@@ -836,7 +906,7 @@ fn collect_dependencies_recursive(
             }
         } else {
             // no manifest_ref - floating mode: check if branch exists AND manifest hash matches
-            let branch_exists = ostree_cache
+            let branch_exists = ref_cache
                 .entry(dep.commit.clone())
                 .or_insert_with(|| ensure_branch_exists(repo_path, &dep.commit).is_ok());
 
@@ -911,7 +981,7 @@ fn collect_dependencies_recursive(
                     graph,
                     manifest_map,
                     force,
-                    ostree_cache,
+                    ref_cache,
                 )?;
 
                 // add edge: dep must be built before current
@@ -1123,7 +1193,7 @@ fn build_packages_parallel(
                             bootstrap: manifest.package.bootstrap,
                             compute_deps: opts.compute_deps,
                             runtime_deps_verbose: opts.runtime_deps_verbose,
-                            refresh_ostree_metadata: opts.refresh_ostree_metadata,
+                            refresh_metadata: opts.refresh_metadata,
                             force: opts.force,
                             build_dir: None,
                             generate_outputs: opts.generate_outputs,
@@ -1167,7 +1237,7 @@ fn build_packages_parallel(
                             bootstrap: opts.bootstrap,
                             compute_deps: opts.compute_deps,
                             runtime_deps_verbose: opts.runtime_deps_verbose,
-                            refresh_ostree_metadata: opts.refresh_ostree_metadata,
+                            refresh_metadata: opts.refresh_metadata,
                             force: opts.force,
                             build_dir: None,
                             generate_outputs: opts.generate_outputs,
@@ -1290,7 +1360,7 @@ fn add_missing_checksums_to_manifests(
 ) -> io::Result<()> {
     use crate::manifest::update::update_manifest_checksum_field;
     use crate::manifest::ManifestKind;
-    use crate::ostree::read_checksum_from_commit;
+    use crate::store::get_branch_metadata;
 
     for &node_idx in build_order {
         let source = &graph[node_idx];
@@ -1306,7 +1376,7 @@ fn add_missing_checksums_to_manifests(
 
                 println!("Processing: {}", manifest.package.slug);
 
-                // try to get checksum from OSTree (check first bundle)
+                // try to get checksum from store (check first bundle)
                 if let Some((bundle_name, _)) = manifest.bundles.iter().next() {
                     let commit_ref = format!(
                         "x86_64/{}/{}/{}/bundles/{}",
@@ -1316,9 +1386,9 @@ fn add_missing_checksums_to_manifests(
                         bundle_name
                     );
 
-                    match read_checksum_from_commit(repo_path, &commit_ref) {
+                    match get_branch_metadata(repo_path, &commit_ref, "nex.output.checksum") {
                         Ok(checksum) => {
-                            println!("  Found checksum in OSTree: {}", checksum);
+                            println!("  Found checksum in store: {}", checksum);
                             update_manifest_checksum_field(
                                 manifest_path.to_str().unwrap(),
                                 ManifestKind::Package,
@@ -1327,7 +1397,7 @@ fn add_missing_checksums_to_manifests(
                             continue;
                         }
                         Err(_) => {
-                            println!("  Not found in OSTree, building to get checksum...");
+                            println!("  Not found in store, building to get checksum...");
                         }
                     }
                 }
@@ -1342,7 +1412,7 @@ fn add_missing_checksums_to_manifests(
                     bootstrap: manifest.package.bootstrap,
                     compute_deps: opts.compute_deps,
                     runtime_deps_verbose: opts.runtime_deps_verbose,
-                    refresh_ostree_metadata: false,
+                    refresh_metadata: false,
                     force: false,
                     build_dir: None,
                     generate_outputs: false, // don't auto-generate outputs when adding checksums
@@ -1515,7 +1585,7 @@ fn build_with_dependencies(
 
     let mut graph = DiGraph::new();
     let mut manifest_map = HashMap::new();
-    let mut ostree_cache = HashMap::new();
+    let mut ref_cache = HashMap::new();
 
     // collect all dependencies recursively
     // when add_checksums is true, treat it like force to include already-built packages
@@ -1527,7 +1597,7 @@ fn build_with_dependencies(
         &mut graph,
         &mut manifest_map,
         force || add_checksums,
-        &mut ostree_cache,
+        &mut ref_cache,
     )?;
 
     // if tracing dependencies, show all packages that pull in the traced pattern
@@ -1711,12 +1781,12 @@ fn link_manifest_dependencies(manifest_file: &str) -> io::Result<()> {
     Ok(())
 }
 
-/// Verifies and commits outputs to OSTree branches based on the manifest.
+/// Verifies and commits outputs to store branches based on the manifest.
 ///
 /// This function takes the manifest, base directory, and repository path as input.
 /// It verifies and commits the outputs specified in the manifest to the corresponding
-/// OSTree branches. The function categorizes the output files, checks their existence,
-/// moves them to the appropriate output directories, and commits them to the OSTree
+/// store branches. The function categorizes the output files, checks their existence,
+/// moves them to the appropriate output directories, and commits them to the
 /// repository.
 
 #[cfg(test)]

@@ -3,11 +3,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use tempfile::TempDir;
 use walkdir::WalkDir;
 
 use crate::manifest::*;
-use crate::ostree::*;
+use crate::store::{encode_metadata_list, rewrite_branch_metadata};
 use crate::utils::determine_category;
 
 pub fn output_branch_metadata(
@@ -45,9 +44,6 @@ pub fn commit_bundle(
 ) -> io::Result<()> {
     println!("Creating bundle: {}", bundle_name);
 
-    let temp_dir = TempDir::new()?;
-    let temp_dir_path = temp_dir.path();
-
     // collect output commit refs
     let mut output_commits = Vec::new();
 
@@ -59,7 +55,6 @@ pub fn commit_bundle(
             manifest.package.version,
             output
         );
-        checkout_ostree_into(repo_path, &branch_name, temp_dir_path, true, false)?;
         output_commits.push(branch_name);
     }
 
@@ -78,7 +73,25 @@ pub fn commit_bundle(
         metadata.push(("nex.bundle.outputs".to_string(), encoded));
     }
 
-    commit_to_ostree(repo_path, &bundle_branch, temp_dir_path, &metadata)?;
+    // Build bundle commit by merging output commits directly in the store.
+    // Use "last wins" semantics to match union checkouts during bundling.
+    let repo = zub::Repo::open(Path::new(repo_path))
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    let ref_strs: Vec<&str> = output_commits.iter().map(|s| s.as_str()).collect();
+    zub::ops::union_trees(
+        &repo,
+        &ref_strs,
+        &bundle_branch,
+        zub::ops::UnionOptions {
+            on_conflict: zub::ops::ConflictResolution::Last,
+            ..Default::default()
+        },
+    )
+    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    // Attach bundle metadata (manifest hash, outputs) without changing the tree.
+    rewrite_branch_metadata(repo_path, &bundle_branch, &metadata)?;
 
     Ok(())
 }

@@ -6,7 +6,7 @@ use std::path::{Component, Path, PathBuf};
 use tempfile::TempDir;
 
 use crate::manifest::ManifestIndex;
-use crate::ostree_native::OstreeRepo;
+use crate::store::Store;
 
 use super::flatten::flatten_capsule_precomputed;
 use super::types::{MaterializeConfig, MaterializeMode, MaterializeResult, RuntimeClosure};
@@ -61,8 +61,8 @@ pub fn checkout_closure(
 
     // load manifest index for flattening (only needed for Nex mode)
     let manifest_index = if config.mode == MaterializeMode::Nex {
-        if let Some(ref db_path) = config.manifest_db_path {
-            Some(ManifestIndex::load(db_path)?)
+        if !config.manifest_db_paths.is_empty() {
+            Some(ManifestIndex::load_layered(&config.manifest_db_paths)?)
         } else {
             None
         }
@@ -91,16 +91,15 @@ fn checkout_flat(
 
     // checkout each commit, union merging into target
     for commit in closure.all_commits() {
-        let fallback = config.fallback_repo_path.as_deref();
         if let Some(files) = closure.get_files(commit) {
             // file-level checkout: only extract specific files
             let files_vec: Vec<String> = files.iter().cloned().collect();
             println!("  Checking out {} file(s) from {}", files_vec.len(), commit);
-            checkout_files(&config.repo_path, commit, &files_vec, &config.target_dir, fallback)?;
+            checkout_files(&config.repo_path, commit, &files_vec, &config.target_dir, &config.fallback_repo_paths)?;
         } else {
             // full checkout for root commits
             println!("  Checking out {} (flat)", commit);
-            checkout_commit_flat(&config.repo_path, commit, &config.target_dir, fallback)?;
+            checkout_commit_flat(&config.repo_path, commit, &config.target_dir, &config.fallback_repo_paths)?;
         }
     }
 
@@ -112,10 +111,10 @@ fn checkout_commit_flat(
     repo_path: &str,
     commit: &str,
     target_dir: &Path,
-    fallback_repo: Option<&Path>,
+    fallback_repos: &[PathBuf],
 ) -> io::Result<()> {
-    let repo = OstreeRepo::open_with_fallback(repo_path, fallback_repo)?;
-    repo.checkout(commit, target_dir, true)
+    let store = Store::open_with_fallback_chain(repo_path, fallback_repos)?;
+    store.checkout(commit, target_dir, true)
 }
 
 /// Nex checkout: isolated package directories with symlink forests.
@@ -158,9 +157,8 @@ fn checkout_nex(
     // track which packages are roots (explicitly requested, not just deps)
     let mut root_packages: std::collections::HashSet<PackageId> = std::collections::HashSet::new();
 
-    let fallback = config.fallback_repo_path.as_deref();
     for commit in closure.all_commits() {
-        let pkg_id = get_package_id(&config.repo_path, commit, fallback)?;
+        let pkg_id = get_package_id(&config.repo_path, commit, &config.fallback_repo_paths)?;
         packages
             .entry(pkg_id.clone())
             .or_default()
@@ -197,9 +195,8 @@ fn checkout_nex(
         fs::create_dir_all(&physical_pkg_dir)?;
 
         // checkout each commit (output) into the physical directory using --union
-        let fallback = config.fallback_repo_path.as_deref();
         for commit in commits {
-            checkout_commit_flat(&config.repo_path, commit, &physical_pkg_dir, fallback)?;
+            checkout_commit_flat(&config.repo_path, commit, &physical_pkg_dir, &config.fallback_repo_paths)?;
         }
 
         // write .nex-app-root sentinel with all commits
@@ -217,7 +214,7 @@ fn checkout_nex(
             &packages,
             &root_packages,
             idx,
-            fallback,
+            &config.fallback_repo_paths,
         )?;
     }
 
@@ -243,7 +240,7 @@ fn flatten_all_capsules_split(
     packages: &BTreeMap<PackageId, Vec<String>>,
     root_packages: &std::collections::HashSet<PackageId>,
     manifest_index: &ManifestIndex,
-    fallback_repo: Option<&Path>,
+    fallback_repos: &[PathBuf],
 ) -> io::Result<()> {
     // flatten only root package capsules (deps don't need their own checkout)
     for (pkg_id, commits) in packages {
@@ -268,7 +265,7 @@ fn flatten_all_capsules_split(
                 &physical_pkg_dir,
                 commit,
                 manifest_index,
-                fallback_repo,
+                fallback_repos,
             )?;
             if flattened_count > 0 {
                 println!(
@@ -404,10 +401,10 @@ fn create_symlinks_split(
 fn get_commit_short_hash(
     repo_path: &str,
     commit: &str,
-    fallback_repo: Option<&Path>,
+    fallback_repos: &[PathBuf],
 ) -> io::Result<String> {
-    let repo = OstreeRepo::open_with_fallback(repo_path, fallback_repo)?;
-    let commit_id = repo.resolve_ref(commit)?;
+    let store = Store::open_with_fallback_chain(repo_path, fallback_repos)?;
+    let commit_id = store.resolve_ref(commit)?;
     Ok(commit_id[..8.min(commit_id.len())].to_string())
 }
 
@@ -415,23 +412,24 @@ fn get_commit_short_hash(
 fn get_manifest_hash(
     repo_path: &str,
     commit: &str,
-    fallback_repo: Option<&Path>,
+    fallback_repos: &[PathBuf],
 ) -> io::Result<String> {
-    let repo = OstreeRepo::open_with_fallback(repo_path, fallback_repo)?;
-    match repo.get_metadata(commit, "nex.manifest.hash")? {
+    let store = Store::open_with_fallback_chain(repo_path, fallback_repos)?;
+    match store.get_metadata(commit, "nex.manifest.hash")? {
         Some(hash) if !hash.is_empty() => Ok(hash),
-        _ => get_commit_short_hash(repo_path, commit, fallback_repo),
+        _ => get_commit_short_hash(repo_path, commit, fallback_repos),
     }
 }
 
-/// Extract package path from ostree ref binding (e.g., "x86_64/pkg/core/init/systemd/1.0/outputs/bin" -> "core/init/systemd/1.0").
+/// Extract package path from ref (e.g., "x86_64/pkg/core/init/systemd/1.0/outputs/bin" -> "core/init/systemd/1.0").
 fn get_package_path(
     repo_path: &str,
     commit: &str,
-    fallback_repo: Option<&Path>,
+    fallback_repos: &[PathBuf],
 ) -> io::Result<String> {
-    let repo = OstreeRepo::open_with_fallback(repo_path, fallback_repo)?;
-    match repo.get_metadata(commit, "ostree.ref-binding")? {
+    let store = Store::open_with_fallback_chain(repo_path, fallback_repos)?;
+    // try to get ref-binding metadata
+    match store.get_metadata(commit, "nex.ref-binding")? {
         Some(binding) => {
             // binding looks like: ['x86_64/pkg/core/init/systemd/1.0/outputs/bin']
             // extract the ref and parse it
@@ -476,10 +474,10 @@ fn parse_package_path_from_ref(ref_str: &str) -> io::Result<String> {
 fn get_package_id(
     repo_path: &str,
     commit: &str,
-    fallback_repo: Option<&Path>,
+    fallback_repos: &[PathBuf],
 ) -> io::Result<PackageId> {
-    let manifest_hash = get_manifest_hash(repo_path, commit, fallback_repo)?;
-    let path = get_package_path(repo_path, commit, fallback_repo)?;
+    let manifest_hash = get_manifest_hash(repo_path, commit, fallback_repos)?;
+    let path = get_package_path(repo_path, commit, fallback_repos)?;
 
     Ok(PackageId {
         path,
@@ -494,11 +492,11 @@ pub fn checkout_files(
     commit: &str,
     files: &[String],
     target_dir: &Path,
-    fallback_repo: Option<&Path>,
+    fallback_repos: &[PathBuf],
 ) -> io::Result<()> {
     // checkout to temp dir on same filesystem as target to allow hardlinks
     let temp = TempDir::new_in(target_dir)?;
-    checkout_commit_flat(repo_path, commit, temp.path(), fallback_repo)?;
+    checkout_commit_flat(repo_path, commit, temp.path(), fallback_repos)?;
 
     for file in files {
         let src = temp.path().join(file.trim_start_matches('/'));

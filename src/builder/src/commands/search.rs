@@ -1,16 +1,16 @@
 use clap::Args;
 use std::collections::HashSet;
 use std::io;
-use std::process::Command;
 
 use crate::repo::resolve_repo_path;
+use crate::store::Store;
 
 #[derive(Args)]
 pub struct SearchArgs {
     /// Search query (matches slug, namespace, or version)
     pub query: String,
 
-    /// OSTree repository path (auto-detected if not specified)
+    /// Repository path (auto-detected if not specified)
     #[clap(long)]
     pub repo: Option<String>,
 
@@ -21,16 +21,9 @@ pub struct SearchArgs {
 
 pub fn run(args: &SearchArgs) -> io::Result<()> {
     let repo_path = resolve_repo_path(args.repo.as_deref())?;
+    let store = Store::open(&repo_path)?;
+    let all_refs = store.refs(None)?;
 
-    let output = Command::new("ostree")
-        .args(["refs", "--repo", &repo_path])
-        .output()?;
-
-    if !output.status.success() {
-        return Err(io::Error::new(io::ErrorKind::Other, "Failed to list refs"));
-    }
-
-    let refs = String::from_utf8_lossy(&output.stdout);
     let query = if args.case_sensitive {
         args.query.clone()
     } else {
@@ -40,7 +33,7 @@ pub fn run(args: &SearchArgs) -> io::Result<()> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut results: Vec<SearchResult> = vec![];
 
-    for line in refs.lines() {
+    for line in &all_refs {
         let parts: Vec<&str> = line.split('/').collect();
         if parts.len() < 6 || parts[0] != "x86_64" || parts[1] != "pkg" {
             continue;
