@@ -6,18 +6,14 @@ package:
   version: 0.11.0
   description: Vim-fork focused on extensibility and usability
   homepage: https://neovim.io/
-  checksum: 1dce96f2a652623b5303a933c0d2dca0516aa52c56ac7d526058dc19782d18cd
+  checksum: 4cd14149b798a825a84d42aefa6e0a8f74fc42ed219f2f275f9b7f83055bc8c8
 sources:
 - name: neovim
   url: https://github.com/neovim/neovim/archive/refs/tags/v0.11.0.tar.gz
   sha256: 6826c4812e96995d29a98586d44fbee7c9b2045485d50d174becd6d5242b3319
-# bundled dependencies (to avoid network access during build)
 - name: libuv
   url: https://github.com/libuv/libuv/archive/v1.50.0.tar.gz
   sha256: b1ec56444ee3f1e10c8bd3eed16ba47016ed0b94fe42137435aaf2e0bd574579
-- name: luajit
-  url: https://github.com/luajit/luajit/archive/538a82133ad6fddfd0ca64de167c4aca3bc1a2da.tar.gz
-  sha256: 7acbc36be8f21072422eb9a5e5fc468d0eaa55bec1b70260d651e845684621e2
 - name: lua
   url: https://www.lua.org/ftp/lua-5.1.5.tar.gz
   sha256: 2640fc56a795f29d28ef15e13c34a47e223960b0240e8cb0a82d9b0738695333
@@ -72,8 +68,6 @@ dependencies:
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
 - name: coreutils
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
-- name: findutils
-  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
 - name: phase3
   commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: gawk
@@ -88,6 +82,8 @@ dependencies:
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: binutils
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: llvm
+  commit: x86_64/pkg/dev/toolchain/llvm/18.1.8/bundles/dev
 - name: gmp-bootstrap
   commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
 - name: mpfr
@@ -114,8 +110,20 @@ dependencies:
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: bzip2
   commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
 - name: expat
   commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: perl
+  commit: x86_64/pkg/bootstrap/phase2/perl/5.38.2/bundles/dev
+- name: strip-nondeterminism
+  commit: x86_64/pkg/bootstrap/phase3/strip-nondeterminism/1.13.0/bundles/dev
+- name: luajit
+  commit: x86_64/pkg/dev/lang/luajit/2.1-20241113/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: file
+  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 build:
   script: |
     tar --no-same-owner -xf ${SOURCE_neovim} -C "${WORK_DIR}" --strip-components=1
@@ -123,12 +131,11 @@ build:
 
     # pre-populate the deps download directory so cmake won't try to fetch
     DEPS_DIR="${WORK_DIR}/.deps/build/downloads"
-    mkdir -p ${DEPS_DIR}/{libuv,luajit,lua,unibilium,luv,lpeg,lua_compat53,utf8proc}
+    mkdir -p ${DEPS_DIR}/{libuv,lua,unibilium,luv,lpeg,lua_compat53,utf8proc}
     mkdir -p ${DEPS_DIR}/{treesitter,treesitter_c,treesitter_lua,treesitter_vim}
     mkdir -p ${DEPS_DIR}/{treesitter_vimdoc,treesitter_query,treesitter_markdown}
 
     cp /${SOURCE_libuv} ${DEPS_DIR}/libuv/v1.50.0.tar.gz
-    cp /${SOURCE_luajit} ${DEPS_DIR}/luajit/538a82133ad6fddfd0ca64de167c4aca3bc1a2da.tar.gz
     cp /${SOURCE_lua} ${DEPS_DIR}/lua/lua-5.1.5.tar.gz
     cp /${SOURCE_unibilium} ${DEPS_DIR}/unibilium/v2.1.2.tar.gz
     cp /${SOURCE_luv} ${DEPS_DIR}/luv/1.50.0-1.tar.gz
@@ -143,14 +150,128 @@ build:
     cp /${SOURCE_treesitter_query} ${DEPS_DIR}/treesitter_query/v0.5.1.tar.gz
     cp /${SOURCE_treesitter_markdown} ${DEPS_DIR}/treesitter_markdown/v0.4.1.tar.gz
 
-    # build with bundled dependencies
+    # symlink system luajit headers/libs to where deps build expects them
+    mkdir -p ${WORK_DIR}/.deps/usr/include
+    mkdir -p ${WORK_DIR}/.deps/usr/lib
+    ln -s /usr/include/luajit-2.1 ${WORK_DIR}/.deps/usr/include/luajit-2.1
+    ln -s /usr/lib/libluajit-5.1.so ${WORK_DIR}/.deps/usr/lib/libluajit-5.1.so
+    ln -s /usr/lib/libluajit-5.1.a ${WORK_DIR}/.deps/usr/lib/libluajit-5.1.a
+
+    # patch gen_api_dispatch.lua to make API metadata serialization deterministic
+    # the issue is that Lua tables with string keys have non-deterministic iteration order
+    # we replace the mpack.encode of exported_functions with manual fixdict serialization
+    # use sed to insert deterministic encoder functions before fixdict and replace put() call
+    sed -i "/^local function fixdict/i\\
+    local function encode_function_deterministic(f)\\
+      local pieces = {}\\
+      local count = 0\\
+      for _, attr in ipairs(exported_attributes) do\\
+        if f[attr] ~= nil then count = count + 1 end\\
+      end\\
+      if f.parameters then count = count + 1 end\\
+      if count <= 15 then\\
+        table.insert(pieces, string.char(128 + count))\\
+      else\\
+        error('too many fields')\\
+      end\\
+      for _, attr in ipairs(exported_attributes) do\\
+        if f[attr] ~= nil then\\
+          table.insert(pieces, mpack.encode(attr))\\
+          table.insert(pieces, mpack.encode(f[attr]))\\
+        end\\
+      end\\
+      if f.parameters then\\
+        table.insert(pieces, mpack.encode('parameters'))\\
+        table.insert(pieces, mpack.encode(f.parameters))\\
+      end\\
+      return table.concat(pieces)\\
+    end\\
+    local function encode_functions_deterministic(funcs)\\
+      local pieces = {}\\
+      if \\#funcs <= 15 then\\
+        table.insert(pieces, string.char(144 + \\#funcs))\\
+      elseif \\#funcs <= 65535 then\\
+        table.insert(pieces, string.char(0xdc))\\
+        table.insert(pieces, string.char(math.floor(\\#funcs / 256)))\\
+        table.insert(pieces, string.char(\\#funcs % 256))\\
+      else\\
+        error('too many functions')\\
+      end\\
+      for _, f in ipairs(funcs) do\\
+        table.insert(pieces, encode_function_deterministic(f))\\
+      end\\
+      return table.concat(pieces)\\
+    end\\
+    " src/gen/gen_api_dispatch.lua
+
+    # replace the non-deterministic put() call with deterministic version
+    sed -i "s/^put('functions', exported_functions)$/put('functions')\\ntable.insert(pieces, encode_functions_deterministic(exported_functions))/" src/gen/gen_api_dispatch.lua
+
+    # also patch gen_api_ui_events.lua for deterministic ui_events serialization
+    # same issue: mpack.encode(exported_events) iterates Lua tables non-deterministically
+    sed -i "/^local exported_attributes/a\\
+    local function encode_event_deterministic(ev)\\
+      local pieces = {}\\
+      local count = 0\\
+      for _, attr in ipairs(exported_attributes) do\\
+        if ev[attr] ~= nil then count = count + 1 end\\
+      end\\
+      table.insert(pieces, string.char(128 + count))\\
+      for _, attr in ipairs(exported_attributes) do\\
+        if ev[attr] ~= nil then\\
+          table.insert(pieces, mpack.encode(attr))\\
+          table.insert(pieces, mpack.encode(ev[attr]))\\
+        end\\
+      end\\
+      return table.concat(pieces)\\
+    end\\
+    local function encode_events_deterministic(events)\\
+      local pieces = {}\\
+      if \\#events <= 15 then\\
+        table.insert(pieces, string.char(144 + \\#events))\\
+      elseif \\#events <= 65535 then\\
+        table.insert(pieces, string.char(0xdc))\\
+        table.insert(pieces, string.char(math.floor(\\#events / 256)))\\
+        table.insert(pieces, string.char(\\#events % 256))\\
+      else\\
+        error('too many events')\\
+      end\\
+      for _, ev in ipairs(events) do\\
+        table.insert(pieces, encode_event_deterministic(ev))\\
+      end\\
+      return table.concat(pieces)\\
+    end" src/gen/gen_api_ui_events.lua
+
+    # replace mpack.encode(exported_events) with deterministic version
+    sed -i "s/^metadata_output:write(mpack.encode(exported_events))$/metadata_output:write(encode_events_deterministic(exported_events))/" src/gen/gen_api_ui_events.lua
+
+    # patch gen_options.lua to sort keys before passing to hashy_hash
+    # vim.tbl_keys returns non-deterministic order, which causes the hash table to differ
+    # use (function() local t=vim.tbl_keys(x) table.sort(t) return t end)() pattern
+    sed -i 's/vim.tbl_keys(option_index),/(function() local t = vim.tbl_keys(option_index); table.sort(t); return t end)(),/' src/gen/gen_options.lua
+
+    # patch gen_api_ui_events.lua to sort client_events keys before hashy_hash
+    sed -i 's/vim.tbl_keys(client_events),/(function() local t = vim.tbl_keys(client_events); table.sort(t); return t end)(),/' src/gen/gen_api_ui_events.lua
+
+    # reproducible build settings:
+    # - use clang for deterministic string constant ordering in .rodata
+    # - LUA_GEN_PRG points to our deterministic LuaJIT (LUAJIT_SECURITY_PRN=0)
+    # - lld with --sort-section=name for deterministic section ordering
+    # - deterministic ar/ranlib flags for static archives
+    export CC=clang
+    export CXX=clang++
+    export LDFLAGS="${LDFLAGS} -fuse-ld=lld -Wl,--sort-section=name"
+
     make CMAKE_BUILD_TYPE=Release \
          CMAKE_INSTALL_PREFIX=/usr \
-         USE_BUNDLED=ON
+         USE_BUNDLED=ON \
+         DEPS_CMAKE_FLAGS="-DUSE_BUNDLED_LUAJIT=OFF -DLUAJIT_INCLUDE_DIR=/usr/include/luajit-2.1 -DLUAJIT_LIBRARY=/usr/lib/libluajit-5.1.so" \
+         CMAKE_EXTRA_FLAGS="-DLUA_GEN_PRG=/usr/bin/luajit -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON -DCMAKE_C_ARCHIVE_CREATE='<CMAKE_AR> qcD <TARGET> <OBJECTS>' -DCMAKE_C_ARCHIVE_FINISH='<CMAKE_RANLIB> -D <TARGET>' -DCMAKE_CXX_ARCHIVE_CREATE='<CMAKE_AR> qcD <TARGET> <OBJECTS>' -DCMAKE_CXX_ARCHIVE_FINISH='<CMAKE_RANLIB> -D <TARGET>'"
 
     make DESTDIR="${OUT_DIR}" install
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
     2nex_strip_binaries ${OUT_DIR}
 bundles:
   full:
@@ -162,15 +283,34 @@ outputs:
   bin:
     files:
     - path: /usr/bin/nvim
+      needs:
+      - /usr/lib/libluajit-5.1.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
   lib:
     files:
     - path: /usr/lib/nvim/parser/c.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/nvim/parser/lua.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/nvim/parser/markdown.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/nvim/parser/markdown_inline.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/nvim/parser/query.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/nvim/parser/vim.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/nvim/parser/vimdoc.so
+      needs:
+      - /usr/lib/libc.so.6
   man:
     files:
     - path: /usr/share/man/man1/nvim.1
@@ -1266,25 +1406,6 @@ outputs:
     - path: /usr/share/nvim/runtime/lua/_vim9script.lua
     - path: /usr/share/nvim/runtime/lua/coxpcall.lua
     - path: /usr/share/nvim/runtime/lua/editorconfig.lua
-    - path: /usr/share/nvim/runtime/lua/jit/bc.lua
-    - path: /usr/share/nvim/runtime/lua/jit/bcsave.lua
-    - path: /usr/share/nvim/runtime/lua/jit/dis_arm.lua
-    - path: /usr/share/nvim/runtime/lua/jit/dis_arm64.lua
-    - path: /usr/share/nvim/runtime/lua/jit/dis_arm64be.lua
-    - path: /usr/share/nvim/runtime/lua/jit/dis_mips.lua
-    - path: /usr/share/nvim/runtime/lua/jit/dis_mips64.lua
-    - path: /usr/share/nvim/runtime/lua/jit/dis_mips64el.lua
-    - path: /usr/share/nvim/runtime/lua/jit/dis_mips64r6.lua
-    - path: /usr/share/nvim/runtime/lua/jit/dis_mips64r6el.lua
-    - path: /usr/share/nvim/runtime/lua/jit/dis_mipsel.lua
-    - path: /usr/share/nvim/runtime/lua/jit/dis_ppc.lua
-    - path: /usr/share/nvim/runtime/lua/jit/dis_x64.lua
-    - path: /usr/share/nvim/runtime/lua/jit/dis_x86.lua
-    - path: /usr/share/nvim/runtime/lua/jit/dump.lua
-    - path: /usr/share/nvim/runtime/lua/jit/p.lua
-    - path: /usr/share/nvim/runtime/lua/jit/v.lua
-    - path: /usr/share/nvim/runtime/lua/jit/vmdef.lua
-    - path: /usr/share/nvim/runtime/lua/jit/zone.lua
     - path: /usr/share/nvim/runtime/lua/man.lua
     - path: /usr/share/nvim/runtime/lua/tohtml.lua
     - path: /usr/share/nvim/runtime/lua/vim/F.lua
@@ -2218,3 +2339,9 @@ outputs:
     - path: /usr/share/nvim/runtime/tutor/ja/vim-01-beginner.tutor.json
     - path: /usr/share/nvim/runtime/tutor/tutor.tutor
     - path: /usr/share/nvim/runtime/tutor/tutor.tutor.json
+
+resolution:
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libluajit-5.1.so.2: luajit
