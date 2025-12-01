@@ -12,6 +12,7 @@ use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use zub;
 use nix::unistd::Uid;
 
 /// detect the appropriate repo path based on environment.
@@ -236,18 +237,22 @@ pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
 
 /// ensure user directories exist, creating them if needed.
 pub fn ensure_user_dirs(ctx: &NexContext) -> io::Result<()> {
-    // create directory structure
-    fs::create_dir_all(ctx.repo_path.join("objects"))?;
-    fs::create_dir_all(ctx.repo_path.join("refs/heads"))?;
+    // initialize zub repo if it doesn't exist
+    let config_path = ctx.repo_path.join("config.toml");
+    if !config_path.exists() {
+        fs::create_dir_all(&ctx.repo_path)?;
+        zub::Repo::init(&ctx.repo_path).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("failed to initialize user repo: {}", e),
+            )
+        })?;
+    }
+
+    // create other directories
     fs::create_dir_all(&ctx.pkg_path)?;
     fs::create_dir_all(ctx.env_path.join("default/bin"))?;
     fs::create_dir_all(&ctx.var_path)?;
-
-    // write minimal repo config if not exists
-    let config_path = ctx.repo_path.join("config");
-    if !config_path.exists() {
-        fs::write(&config_path, "[core]\nrepo_version=1\nmode=bare-user\n")?;
-    }
 
     // setup manifests worktree if needed
     if let Some(ref manifests_path) = ctx.manifests_path {

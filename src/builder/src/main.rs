@@ -158,7 +158,7 @@ fn run_build(args: &commands::build::BuildArgs) -> io::Result<()> {
         hydrate_dependencies(&repo_path, &args.manifest)
     } else if args.single {
         // single mode: build only the specified manifest without dependencies
-        build_single(&opts)
+        build::build_single(&opts)
     } else {
         // default: build with full dependency resolution
         build_with_dependencies(
@@ -281,55 +281,6 @@ fn build_package_manifest(opts: &BuildOpts, manifest: &mut Manifest) -> io::Resu
     build_package_manifest_with_dir(opts, manifest, "./build_rootfs")
 }
 
-fn build_single(opts: &BuildOpts) -> io::Result<()> {
-    // load the manifest
-    let manifest_data = load_manifest(&opts.manifest_file)?;
-
-    // validate flags for refresh_metadata
-    if opts.refresh_metadata {
-        if matches!(manifest_data, ManifestData::System(_)) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "--refresh-metadata only applies to package manifests",
-            ));
-        }
-        if opts.validate_reproducibility {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "--refresh-metadata cannot be combined with --validate-reproducibility",
-            ));
-        }
-    }
-
-    match manifest_data {
-        ManifestData::Package(mut manifest) => {
-            if opts.refresh_metadata {
-                refresh_package_metadata(&opts.repo_path, &manifest, Path::new(&opts.manifest_file))
-            } else {
-                println!("Building package: {}", manifest.package.slug);
-                let build_dir = opts.build_dir.clone().unwrap_or_else(|| {
-                    format!(
-                        "./build_rootfs_{}_{}",
-                        manifest.package.slug.replace("/", "_"),
-                        manifest.package.namespace.replace("/", "_")
-                    )
-                });
-                build_package_manifest_with_dir(opts, &mut manifest, &build_dir)
-            }
-        }
-        ManifestData::System(manifest) => {
-            println!("Building system: {}", manifest.system.slug);
-            let build_dir = opts.build_dir.clone().unwrap_or_else(|| {
-                format!(
-                    "./build_rootfs_{}_system",
-                    manifest.system.slug.replace("/", "_")
-                )
-            });
-            system::build_system_manifest_with_dir(opts, &manifest, &build_dir)
-        }
-    }
-}
-
 fn build_package_manifest_with_dir(
     opts: &BuildOpts,
     manifest: &mut Manifest,
@@ -412,12 +363,17 @@ fn build_package_manifest_with_dir(
                         manifest,
                         Path::new(&opts.manifest_file),
                     )?;
-                } else {
+                } else if !opts.validate_reproducibility {
                     eprintln!(
                         "Checksum mismatch. Expected: {}, Calculated: {}",
                         expected_checksum, checksum
                     );
                     process::exit(-2);
+                } else {
+                    println!(
+                        "Note: checksum differs from manifest (expected {}, got {}). Proceeding with reproducibility check.",
+                        expected_checksum, checksum
+                    );
                 }
             } else {
                 println!("Checksum verified successfully.");

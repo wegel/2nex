@@ -2,13 +2,19 @@ use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use walkdir::WalkDir;
 
+use sha2::{Digest, Sha256};
+
+use crate::commands::build::BuildOpts;
 use crate::manifest::*;
 use crate::outputs::*;
-use crate::store::{checkout_into, checkout_into_with_fallbacks, commit_tree};
+use crate::store::{
+    checkout_into, checkout_into_with_fallbacks, commit_tree, ensure_branch_exists,
+    find_commit_by_manifest_hash, rewrite_branch_metadata,
+};
 
 pub fn append_checksum_file(package: &Package, checksum: &str, file_path: &Path) -> io::Result<()> {
     // Step 1: Calculate the maximum width of the first column
@@ -574,4 +580,428 @@ pub fn create_and_commit_bundles(
     }
 
     Ok(())
+}
+
+// ============================================================================
+// public build API - entry points for building packages
+// ============================================================================
+
+/// build a single package or system from a manifest file.
+/// this is the main entry point for the build command.
+pub fn build_single(opts: &BuildOpts) -> io::Result<()> {
+    let manifest_data = load_manifest(&opts.manifest_file)?;
+
+    // validate flags for refresh_metadata
+    if opts.refresh_metadata {
+        if matches!(manifest_data, ManifestData::System(_)) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--refresh-metadata only applies to package manifests",
+            ));
+        }
+        if opts.validate_reproducibility {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "--refresh-metadata cannot be combined with --validate-reproducibility",
+            ));
+        }
+    }
+
+    match manifest_data {
+        ManifestData::Package(mut manifest) => {
+            if opts.refresh_metadata {
+                refresh_package_metadata(&opts.repo_path, &manifest, Path::new(&opts.manifest_file))
+            } else {
+                println!("Building package: {}", manifest.package.slug);
+                let build_dir = opts.build_dir.clone().unwrap_or_else(|| {
+                    format!(
+                        "./build_rootfs_{}_{}",
+                        manifest.package.slug.replace("/", "_"),
+                        manifest.package.namespace.replace("/", "_")
+                    )
+                });
+                build_package_manifest_with_dir(opts, &mut manifest, &build_dir)
+            }
+        }
+        ManifestData::System(manifest) => {
+            println!("Building system: {}", manifest.system.slug);
+            let build_dir = opts.build_dir.clone().unwrap_or_else(|| {
+                format!(
+                    "./build_rootfs_{}_system",
+                    manifest.system.slug.replace("/", "_")
+                )
+            });
+            crate::system::build_system_manifest_with_dir(opts, &manifest, &build_dir)
+        }
+    }
+}
+
+/// build a package manifest with a specific build directory.
+pub fn build_package_manifest_with_dir(
+    opts: &BuildOpts,
+    manifest: &mut Manifest,
+    base_dir: &str,
+) -> io::Result<()> {
+    let download_dir = "./inputs_cache";
+    fs::create_dir_all(download_dir)?;
+
+    // resolve dependencies to specific commit IDs when they have manifest_ref
+    let dependency_commits = resolve_dependency_commits(&manifest.dependencies, &opts.repo_path)?;
+
+    setup_composite_rootfs(base_dir, &opts.repo_path, &opts.fallback_repos, &dependency_commits)?;
+    let input_env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
+
+    let package_name = &manifest.package.name;
+    let package_version = &manifest.package.version;
+    let package_namespace = &manifest.package.namespace;
+
+    println!(
+        "Building {} {} in namespace {}",
+        package_name, package_version, package_namespace
+    );
+
+    let mut env_vars = HashMap::new();
+    env_vars.extend(input_env_vars);
+    let build_script = manifest.build.script.clone();
+
+    run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
+
+    // if generate_outputs is enabled, write auto-detected outputs to manifest
+    if opts.generate_outputs {
+        let out_dir = Path::new(base_dir).join("2nex/out");
+        let categorized = categorize_files(&out_dir);
+        crate::manifest::update::write_auto_outputs_to_manifest(&opts.manifest_file, &categorized)?;
+
+        // reload the manifest to pick up the new outputs
+        let reloaded = load_manifest(&opts.manifest_file)?;
+        if let ManifestData::Package(reloaded_manifest) = reloaded {
+            *manifest = reloaded_manifest;
+        }
+    }
+
+    verify_and_commit_outputs(
+        manifest,
+        base_dir,
+        &opts.repo_path,
+        Path::new(&opts.manifest_file),
+    )?;
+
+    create_and_commit_bundles(
+        manifest,
+        base_dir,
+        &opts.repo_path,
+        Path::new(&opts.manifest_file),
+    )?;
+
+    println!("Build, packaging, and commit completed for all outputs.");
+
+    let output_dir = Path::new(base_dir).join("2nex/out");
+    let checksum = calculate_output_checksum(&output_dir)?;
+    println!("Build output checksum: {}", checksum);
+
+    match manifest.package.checksum.as_ref() {
+        Some(expected_checksum) => {
+            if checksum != *expected_checksum {
+                if opts.update_checksum {
+                    println!(
+                        "Checksum mismatch (expected {}, calculated {}). Updating manifest.",
+                        expected_checksum, checksum
+                    );
+                    update_manifest_checksum_field(
+                        &opts.manifest_file,
+                        ManifestKind::Package,
+                        &checksum,
+                    )?;
+                    manifest.package.checksum = Some(checksum.clone());
+                    // refresh store metadata with new manifest hash
+                    refresh_package_metadata(
+                        &opts.repo_path,
+                        manifest,
+                        Path::new(&opts.manifest_file),
+                    )?;
+                } else if !opts.validate_reproducibility {
+                    // only exit on mismatch if we're not validating reproducibility
+                    // (reproducibility check compares two builds, not against stored checksum)
+                    eprintln!(
+                        "Checksum mismatch. Expected: {}, Calculated: {}",
+                        expected_checksum, checksum
+                    );
+                    std::process::exit(-2);
+                } else {
+                    println!(
+                        "Note: checksum differs from manifest (expected {}, got {}). Proceeding with reproducibility check.",
+                        expected_checksum, checksum
+                    );
+                }
+            } else {
+                println!("Checksum verified successfully.");
+            }
+        }
+        None => {
+            if opts.update_checksum {
+                println!(
+                    "Manifest {} does not record a checksum. Storing {}.",
+                    opts.manifest_file, checksum
+                );
+                update_manifest_checksum_field(
+                    &opts.manifest_file,
+                    ManifestKind::Package,
+                    &checksum,
+                )?;
+                manifest.package.checksum = Some(checksum.clone());
+                // refresh store metadata with new manifest hash
+                refresh_package_metadata(
+                    &opts.repo_path,
+                    manifest,
+                    Path::new(&opts.manifest_file),
+                )?;
+            }
+        }
+    }
+
+    // create {hash}/files commit (union of all outputs) for dependency resolution
+    create_files_commit_for_package(manifest, &opts.repo_path, Path::new(&opts.manifest_file))?;
+
+    // compute runtime dependencies (opt-in, modifies manifest)
+    if opts.compute_deps {
+        crate::commands::compute_deps::compute_deps_for_manifest(
+            manifest,
+            &opts.repo_path,
+            Path::new(&opts.manifest_file),
+            opts.runtime_deps_verbose,
+            false, // never dry_run during build
+        )?;
+        // refresh store metadata since compute_deps modified the manifest
+        refresh_package_metadata(&opts.repo_path, manifest, Path::new(&opts.manifest_file))?;
+    }
+
+    if opts.validate_reproducibility {
+        println!("Validating build reproducibility by building the package a second time.");
+        fs::remove_dir_all(base_dir)?;
+        setup_composite_rootfs(base_dir, &opts.repo_path, &opts.fallback_repos, &dependency_commits)?;
+        handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
+        run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
+        verify_and_commit_outputs(
+            manifest,
+            base_dir,
+            &opts.repo_path,
+            Path::new(&opts.manifest_file),
+        )?;
+        create_and_commit_bundles(
+            manifest,
+            base_dir,
+            &opts.repo_path,
+            Path::new(&opts.manifest_file),
+        )?;
+
+        let second_checksum = calculate_output_checksum(&output_dir)?;
+        println!("Second build output checksum: {}", second_checksum);
+
+        if checksum == second_checksum {
+            println!("Build is reproducible. Checksums match.");
+        } else {
+            println!("Build is not reproducible. Checksums do not match.");
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Build is not reproducible.",
+            ));
+        }
+    }
+
+    append_checksum_file(&manifest.package, &checksum, &Path::new("checksums.txt"))?;
+
+    Ok(())
+}
+
+/// refresh metadata on all output and bundle branches for a package.
+pub fn refresh_package_metadata(
+    repo_path: &str,
+    manifest: &Manifest,
+    manifest_path: &Path,
+) -> io::Result<()> {
+    println!(
+        "Refreshing store metadata for {}/{} ({})",
+        manifest.package.slug, manifest.package.version, manifest.package.namespace
+    );
+    let manifest_hash = compute_manifest_hash(manifest_path)?;
+    refresh_output_branches(repo_path, manifest, &manifest_hash)?;
+    refresh_bundle_branches(repo_path, manifest, &manifest_hash)?;
+    println!("Finished refreshing metadata for {}", manifest.package.slug);
+    Ok(())
+}
+
+/// create {hash}/files commit as in-store union of all outputs.
+fn create_files_commit_for_package(
+    manifest: &Manifest,
+    repo_path: &str,
+    manifest_path: &Path,
+) -> io::Result<()> {
+    // determine address hash: checksum if stable, else manifest git blob SHA
+    let has_stable_checksum =
+        manifest.package.checksum.is_some() && manifest.package.stable_checksum.unwrap_or(true);
+
+    let address_hash = if has_stable_checksum {
+        manifest.package.checksum.clone().unwrap()
+    } else {
+        crate::utils::hash_file_content(manifest_path)?
+    };
+
+    let files_ref = format!("{}/files", address_hash);
+
+    // build output refs
+    let output_refs: Vec<String> = manifest
+        .outputs
+        .keys()
+        .filter(|k| *k != "discard")
+        .map(|name| {
+            format!(
+                "x86_64/{}/{}/{}/outputs/{}",
+                manifest.package.namespace_path(),
+                manifest.package.slug,
+                manifest.package.version,
+                name
+            )
+        })
+        .collect();
+
+    if output_refs.is_empty() {
+        return Ok(());
+    }
+
+    println!("Creating files commit: {}", files_ref);
+
+    let repo = zub::Repo::open(Path::new(repo_path))
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    let ref_strs: Vec<&str> = output_refs.iter().map(|s| s.as_str()).collect();
+    zub::ops::union_trees(
+        &repo,
+        &ref_strs,
+        &files_ref,
+        zub::ops::UnionOptions {
+            on_conflict: zub::ops::ConflictResolution::Last,
+            ..Default::default()
+        },
+    )
+    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    // attach metadata
+    let metadata = vec![
+        ("nex.address_hash".to_string(), address_hash),
+        (
+            "nex.package".to_string(),
+            format!(
+                "{}/{}/{}",
+                manifest.package.namespace_path(),
+                manifest.package.slug,
+                manifest.package.version
+            ),
+        ),
+    ];
+    rewrite_branch_metadata(repo_path, &files_ref, &metadata)?;
+
+    Ok(())
+}
+
+fn refresh_output_branches(
+    repo_path: &str,
+    manifest: &Manifest,
+    manifest_hash: &str,
+) -> io::Result<()> {
+    for (category, spec) in &manifest.outputs {
+        if category == "discard" {
+            continue;
+        }
+        let branch_name = format!(
+            "x86_64/{}/{}/{}/outputs/{}",
+            manifest.package.namespace_path(),
+            manifest.package.slug,
+            manifest.package.version,
+            category
+        );
+        ensure_branch_exists(repo_path, &branch_name)?;
+        let metadata = output_branch_metadata(manifest, spec, manifest_hash)?;
+        rewrite_branch_metadata(repo_path, &branch_name, &metadata)?;
+    }
+    Ok(())
+}
+
+fn refresh_bundle_branches(
+    repo_path: &str,
+    manifest: &Manifest,
+    manifest_hash: &str,
+) -> io::Result<()> {
+    for (bundle_name, bundle) in &manifest.bundles {
+        let branch_name = format!(
+            "x86_64/{}/{}/{}/bundles/{}",
+            manifest.package.namespace_path(),
+            manifest.package.slug,
+            manifest.package.version,
+            bundle_name
+        );
+        ensure_branch_exists(repo_path, &branch_name)?;
+        let metadata = bundle_branch_metadata(manifest, bundle, manifest_hash)?;
+        rewrite_branch_metadata(repo_path, &branch_name, &metadata)?;
+    }
+    Ok(())
+}
+
+/// compute SHA256 hash of manifest file.
+pub fn compute_manifest_hash(manifest_path: &Path) -> io::Result<String> {
+    let contents = fs::read(manifest_path)?;
+    let mut hasher = Sha256::new();
+    hasher.update(&contents);
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// resolve dependencies to specific commit IDs when they have manifest_ref.
+fn resolve_dependency_commits(
+    dependencies: &[Dependency],
+    repo_path: &str,
+) -> io::Result<Vec<String>> {
+    let git_root = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let mut resolved = Vec::new();
+
+    for dep in dependencies {
+        if let Some(ref blob_sha) = dep.manifest_ref {
+            // fetch blob content and compute its hash
+            match crate::utils::fetch_git_blob(&git_root, blob_sha) {
+                Ok(content) => {
+                    let content_hash = format!("{:x}", Sha256::digest(content.as_bytes()));
+
+                    // search store history for matching build
+                    match find_commit_by_manifest_hash(repo_path, &dep.commit, &content_hash) {
+                        Ok(Some(commit_id)) => {
+                            // use the specific commit ID instead of branch name
+                            resolved.push(commit_id);
+                            continue;
+                        }
+                        Ok(None) => {
+                            // fall back to branch name
+                            eprintln!(
+                                "Warning: no matching commit found for {} with manifest_ref {}",
+                                dep.commit, blob_sha
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "Warning: failed to search history for {}: {}",
+                                dep.commit, e
+                            );
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "Warning: failed to fetch blob {} for {}: {}",
+                        blob_sha, dep.commit, e
+                    );
+                }
+            }
+        }
+        // no manifest_ref or resolution failed - use branch name
+        resolved.push(dep.commit.clone());
+    }
+
+    Ok(resolved)
 }

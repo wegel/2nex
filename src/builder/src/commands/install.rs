@@ -3,10 +3,11 @@ use std::fs;
 use std::io;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
+use super::build::BuildOpts;
 use super::stage::{is_staged, mount_nex_overlays, staging_upper_dir};
 use super::state::InstalledState;
+use crate::build;
 use crate::materializer::{materialize, MaterializeConfig, MaterializeMode, MaterializeRequest};
 use crate::repo::{detect_context, ensure_user_dirs, resolve_repo_path, NexContext};
 use crate::store::Store;
@@ -58,8 +59,8 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     // detect context: user install vs system install
     let ctx = detect_context(args.system)?;
 
-    // for user installs, ensure user directories exist
-    if !ctx.is_system && !ctx.repo_path.exists() {
+    // for user installs, ensure user directories exist (check for config.toml, the zub repo marker)
+    if !ctx.is_system && !ctx.repo_path.join("config.toml").exists() {
         ensure_user_dirs(&ctx)?;
         println!(
             "Created user environment at {}",
@@ -572,76 +573,29 @@ fn walkdir_inner(dir: &Path, results: &mut Vec<io::Result<PathBuf>>) -> io::Resu
     Ok(())
 }
 
-/// build a package and commit to repo
+/// build a package and commit to repo (calls build library directly, no subprocess)
 fn build_package_to_user_repo(
     repo_path: &str,
     fallback_repos: &[PathBuf],
-    manifest_dirs: &[PathBuf],
+    _manifest_dirs: &[PathBuf],
     manifest_path: &Path,
 ) -> io::Result<()> {
     println!("Building from manifest: {}", manifest_path.display());
 
-    // find nex binary path - can't use current_exe() because when running under
-    // nex-ld-shim, /proc/self/exe points to ld-linux, not to nex
-    let nex_path = std::env::args()
-        .next()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "argv[0] not available"))?;
-
-    // get manifest-dir from manifest_dirs or derive from manifest path
-    let manifest_dir = if let Some(first_dir) = manifest_dirs.first() {
-        // use parent of pkg/ from the manifest_dirs path
-        let dir_str = first_dir.to_string_lossy();
-        if dir_str.ends_with("/pkg") || dir_str.ends_with("\\pkg") {
-            first_dir.parent().map(|p| p.to_string_lossy().to_string())
-        } else {
-            Some(dir_str.to_string())
-        }
-    } else {
-        // fallback: extract from manifest path
-        let manifest_path_str = manifest_path.to_string_lossy().to_string();
-        manifest_path_str
-            .rfind("/pkg/")
-            .map(|idx| manifest_path_str[..idx].to_string())
+    let opts = BuildOpts {
+        repo_path: repo_path.to_string(),
+        manifest_file: manifest_path.to_string_lossy().to_string(),
+        validate_reproducibility: false,
+        update_checksum: false,
+        bootstrap: false,
+        compute_deps: false,
+        runtime_deps_verbose: false,
+        refresh_metadata: false,
+        force: false,
+        build_dir: None,
+        generate_outputs: false,
+        fallback_repos: fallback_repos.iter().map(|p| p.to_string_lossy().to_string()).collect(),
     };
 
-    // invoke nex build with repo path
-    let mut cmd = Command::new(&nex_path);
-    cmd.arg("build")
-        .arg("--single")
-        .arg("--repo")
-        .arg(repo_path);
-
-    // add fallback repos for dependency lookups
-    for fallback in fallback_repos {
-        cmd.arg("--fallback-repo").arg(fallback);
-    }
-
-    // add manifest-dir if we detected one
-    if let Some(ref dir) = manifest_dir {
-        if !dir.is_empty() {
-            cmd.arg("--manifest-dir").arg(dir);
-        }
-    }
-
-    let output = cmd.arg(manifest_path).output()?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "Build failed:\nstdout: {}\nstderr: {}",
-                stdout, stderr
-            ),
-        ));
-    }
-
-    // print build output
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    if !stdout.is_empty() {
-        print!("{}", stdout);
-    }
-
-    Ok(())
+    build::build_single(&opts)
 }
