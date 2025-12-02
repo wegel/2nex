@@ -6,7 +6,7 @@ system:
   description: "Bootable system with systemd init, nex package manager, and /nex/pkg structure"
   nex_structure: true
 
-  checksum: 04bcfceea9650d6dc559c00b51902d2ea99b06dc349103f23ee47b9c4142d50e
+  checksum: e602e1d7bd4e1307b23ab48b296a4fde50266210e03d0d7ec369f02d0bcbac96
 dependencies:
 - name: 2nex-utilities
   commit: x86_64/pkg/core/userland/2nex-utilities/0.0.1/bundles/dev
@@ -19,6 +19,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/outputs/lib
 - name: ncurses
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/outputs/lib
+- name: ncurses-terminfo
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/outputs/terminfo
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/outputs/lib
 - name: xz
@@ -42,7 +44,7 @@ dependencies:
 - name: util_linux-lib
   commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/lib
 - name: nex-ld-shim
-  commit: x86_64/pkg/core/nex/nex-ld-shim/0.1.0/outputs/bin
+  commit: x86_64/pkg/core/nex/nex-ld-shim/0.0.1/outputs/lib
 
 packages:
 # systemd - init system
@@ -99,38 +101,93 @@ packages:
 - commit: x86_64/pkg/core/nex/nex/0.1.0/outputs/bin
   name: nex
 
+# git - version control (needed for user builds)
+- commit: x86_64/pkg/dev/vcs/git/2.49.0/outputs/bin
+  name: git
+
+- commit: x86_64/pkg/cli/archive/gzip/1.13/outputs/bin
+  name: gzip
+
+# curl - HTTP client (needed for downloading sources)
+- commit: x86_64/pkg/cli/net/curl/8.17.0/outputs/bin
+  name: curl
+
+# ca-certificates - SSL/TLS root certificates
+- commit: x86_64/pkg/apps/misc/ca-certificates/20251104/outputs/certs
+  name: ca-certificates
+
+# neovim - text editor
+- commit: x86_64/pkg/cli/editors/neovim/0.11.0/bundles/full
+  name: neovim
+
+# openssh - SSH server and client
+- commit: x86_64/pkg/cli/net/openssh/9.9p1/outputs/bin
+  name: openssh-bin
+- commit: x86_64/pkg/cli/net/openssh/9.9p1/outputs/conf
+  name: openssh-conf
+
 # linux kernel - boot image with initramfs
 - commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/boot
   name: linux-kernel
 - commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/fs-overlay
   name: linux-overlay
+# kernel modules for virtio (qemu networking/gpu)
+- commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/drv-virtio-core
+  name: linux-virtio-core
+- commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/drv-net-virtio
+  name: linux-net-virtio
+- commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/drv-net-core
+  name: linux-net-core
 
 build:
   script: |
+    set -eux
     mkdir -p /target/etc
 
     cat > /target/etc/passwd << 'EOF'
     root:x:0:0:root:/root:/bin/bash
+    testuser:x:1000:1000:Test User:/home/testuser:/bin/bash
     systemd-network:x:192:192:systemd Network Management:/:/usr/sbin/nologin
     systemd-resolve:x:193:193:systemd Resolver:/:/usr/sbin/nologin
     systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/sbin/nologin
+    sshd:x:74:74:Privilege-separated SSH:/var/lib/sshd:/usr/sbin/nologin
     EOF
 
     cat > /target/etc/group << 'EOF'
     root:x:0:
+    testuser:x:1000:
     systemd-network:x:192:
     systemd-resolve:x:193:
     systemd-timesync:x:194:
     systemd-journal:x:190:
+    sshd:x:74:
     EOF
 
     cat > /target/etc/shadow << 'EOF'
     root::19735:0:99999:7:::
+    testuser::19735:0:99999:7:::
     systemd-network:!*:19735::::::
     systemd-resolve:!*:19735::::::
     systemd-timesync:!*:19735::::::
     EOF
     chmod 600 /target/etc/shadow
+
+    # subuid/subgid for user namespaces
+    cat > /target/etc/subuid << 'EOF'
+    testuser:100000:65536
+    EOF
+    cat > /target/etc/subgid << 'EOF'
+    testuser:100000:65536
+    EOF
+
+    # create testuser home directory
+    mkdir -p /target/home/testuser
+
+    # fix testuser home ownership on first boot via tmpfiles
+    mkdir -p /target/etc/tmpfiles.d
+    cat > /target/etc/tmpfiles.d/home-testuser.conf << 'EOF'
+    d /home/testuser 0755 testuser testuser -
+    EOF
 
     mkdir -p /target/{proc,sys,dev,run,tmp,root}
     mkdir -p /target/etc/systemd/system
@@ -172,14 +229,80 @@ build:
     mkdir -p /target/usr/lib
     ln -sf ../../etc/os-release /target/usr/lib/os-release
 
-    # link /usr/share to /nex/env/share for data files (dbus-1, keymaps, etc)
+    # link /usr/share to /nex/env/share for data files (dbus-1, keymaps, terminfo, etc)
     mkdir -p /target/usr/share
     ln -sf ../../nex/env/share/dbus-1 /target/usr/share/dbus-1
     ln -sf ../../nex/env/share/keymaps /target/usr/share/keymaps
     ln -sf ../../nex/env/share/consolefonts /target/usr/share/consolefonts
+    ln -sf ../../nex/env/share/terminfo /target/usr/share/terminfo
+    ln -sf ../../nex/env/share/nvim /target/usr/share/nvim
 
     # machine-id placeholder (systemd will initialize)
     touch /target/etc/machine-id
+
+    # systemd-networkd config: DHCP on all ethernet interfaces
+    mkdir -p /target/etc/systemd/network
+    cat > /target/etc/systemd/network/80-dhcp.network << 'EOF'
+    [Match]
+    Name=en*
+
+    [Network]
+    DHCP=yes
+    EOF
+
+    # enable systemd-networkd and systemd-resolved
+    mkdir -p /target/etc/systemd/system/multi-user.target.wants
+    mkdir -p /target/etc/systemd/system/getty.target.wants
+    ln -sf /usr/lib/systemd/system/systemd-networkd.service /target/etc/systemd/system/multi-user.target.wants/
+    ln -sf /usr/lib/systemd/system/systemd-resolved.service /target/etc/systemd/system/multi-user.target.wants/
+    # enable getty on tty1 for GTK console
+    ln -sf /usr/lib/systemd/system/getty@.service /target/etc/systemd/system/getty.target.wants/getty@tty1.service
+    # enable sshd
+    ln -sf /usr/lib/systemd/system/sshd-keygen.service /target/etc/systemd/system/multi-user.target.wants/
+    ln -sf /usr/lib/systemd/system/sshd.service /target/etc/systemd/system/multi-user.target.wants/
+
+    # sshd privilege separation directory
+    mkdir -p /target/var/lib/sshd
+    chmod 700 /target/var/lib/sshd
+
+    # create /usr/libexec symlinks for openssh (system builder only does /usr/bin)
+    mkdir -p /target/usr/libexec
+    for f in /target/nex/pkg/cli/net/openssh/*/*/usr/libexec/*; do
+      name=$(basename "$f")
+      # extract the relative path from /target to the actual file
+      relpath="${f#/target/}"
+      ln -sf "../../$relpath" "/target/usr/libexec/$name"
+    done
+
+    # configure sshd to accept any key (like terminal.shop)
+    # create script that echoes back whatever key is presented
+    # %t = key type, %k = base64-encoded key
+    mkdir -p /target/usr/local/bin
+    # remove the symlink to nex/pkg and replace with our own config
+    rm -f /target/etc/ssh/sshd_config
+    cat > /target/usr/local/bin/accept-any-key << 'SCRIPT'
+    #!/bin/bash
+    # accepts any SSH key - echoes back the key in authorized_keys format
+    echo "$1 $2"
+    SCRIPT
+    chmod 755 /target/usr/local/bin/accept-any-key
+
+    cat > /target/etc/ssh/sshd_config << 'EOF'
+    PermitRootLogin yes
+    PermitEmptyPasswords yes
+    PasswordAuthentication yes
+    PubkeyAuthentication yes
+    AuthorizedKeysFile none
+    AuthorizedKeysCommand /usr/local/bin/accept-any-key %t %k
+    AuthorizedKeysCommandUser root
+    HostKey /etc/ssh/ssh_host_ed25519_key
+    HostKey /etc/ssh/ssh_host_rsa_key
+    HostKey /etc/ssh/ssh_host_ecdsa_key
+    Subsystem sftp /usr/libexec/sftp-server
+    EOF
+
+    # resolv.conf -> systemd-resolved stub
+    ln -sf /run/systemd/resolve/stub-resolv.conf /target/etc/resolv.conf
 
     ln -sf usr/bin/init /target/init
 

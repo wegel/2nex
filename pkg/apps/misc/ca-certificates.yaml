@@ -3,14 +3,15 @@ package:
   name: CA Certificates
   slug: ca-certificates
   namespace: apps/misc
-  version: '20241223'
+  version: '20251104'
   description: Certificate Authority certificates for SSL/TLS
-  homepage: https://packages.debian.org/sid/ca-certificates
-  checksum: ddf040ae1b1de2c325d5af8f85ec12c79d70fe7b2dbebeb9a3b319a727dd68b6
+  homepage: https://curl.se/docs/caextract.html
+  checksum: 10e8605a8fbbd86226673b273140d123d17d1c2d1a1039ec2e62d80423fb6d12
 sources:
-- name: ca_certificates
-  url: https://mirrors.edge.kernel.org/debian/pool/main/c/ca-certificates/ca-certificates_20250419.tar.xz
-  sha256: 33b44ef78653ecd3f0f2f13e5bba6be466be2e7da72182f737912b81798ba5d2
+# curl's pre-extracted CA bundle from Mozilla - no conversion needed
+- name: cacert
+  url: https://curl.se/ca/cacert-2025-11-04.pem
+  sha256: 8ac40bdd3d3e151a6b4078d2b2029796e8f843e3f86fbf2adbc4dd9f05e79def
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
@@ -20,60 +21,199 @@ dependencies:
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
 - name: phase3
   commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
-- name: tar
-  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
 - name: ncurses
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
-- name: inetutils
-  commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
 - name: attr
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: acl
   commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
-- name: gmp
-  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
 build:
-  script: "tar --no-same-owner -xf ${SOURCE_ca_certificates} -C \"${WORK_DIR}\" --strip-components=1\n\
-    cd ${WORK_DIR}\n\n# Install\nmkdir -p ${OUT_DIR}/usr/share/ca-certificates\nmkdir\
-    \ -p ${OUT_DIR}/etc/ssl/certs\n\n# Install certificates\ncp -a mozilla/* ${OUT_DIR}/usr/share/ca-certificates/\n\
-    \n# Generate ca-certificates.crt file\ncd ${OUT_DIR}/usr/share/ca-certificates\n\
-    find . -name \"*.crt\" | LC_ALL=C sort > ${OUT_DIR}/etc/ca-certificates.conf\n\
-    cd ${WORK_DIR}\n\n# Use openssl to create certificate bundle\nawk '{print \"mozilla/\"\
-    \ $0}' ${OUT_DIR}/etc/ca-certificates.conf | \\\n  while read crt; do \\\n   \
-    \ cat ${OUT_DIR}/usr/share/ca-certificates/$crt >> ${OUT_DIR}/etc/ssl/certs/ca-certificates.crt;\
-    \ \\\n    echo >> ${OUT_DIR}/etc/ssl/certs/ca-certificates.crt; \\\n  done\n\n\
-    # Create individual certificate symlinks\ncd ${OUT_DIR}/etc/ssl/certs\nfor cert\
-    \ in $(find ${OUT_DIR}/usr/share/ca-certificates -name \"*.crt\"); do\n  filename=$(basename\
-    \ \"$cert\")\n  hash=$(openssl x509 -hash -noout -in \"$cert\")\n  ln -sf ../../../usr/share/ca-certificates/mozilla/$filename\
-    \ $hash.0\ndone\n\n# Set consistent timestamps for reproducible builds\nfind \"\
-    ${OUT_DIR}\" -exec touch -d '2024-01-01T00:00:00+00:00' {} \\;\n"
+  script: |
+    # create output directories
+    mkdir -p ${OUT_DIR}/etc/ssl/certs
+
+    # install the CA bundle
+    cp ${SOURCE_cacert} ${OUT_DIR}/etc/ssl/certs/ca-certificates.crt
+
+    # create hash symlinks for each certificate in the bundle
+    # this splits the bundle and creates hash-named symlinks
+    cd ${OUT_DIR}/etc/ssl/certs
+
+    # extract individual certs and create hash symlinks
+    csplit -z -f cert- -b '%03d.pem' ca-certificates.crt '/-----BEGIN CERTIFICATE-----/' '{*}' 2>/dev/null || true
+
+    for cert in cert-*.pem; do
+      if [ -f "$cert" ]; then
+        hash=$(openssl x509 -hash -noout -in "$cert" 2>/dev/null) || continue
+        # find unused hash.N name
+        n=0
+        while [ -e "$hash.$n" ]; do n=$((n+1)); done
+        ln -sf ca-certificates.crt "$hash.$n"
+        rm "$cert"
+      fi
+    done
+
+    # set consistent timestamps for reproducible builds
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 bundles:
   full:
-  - conf
-  - misc
+  - certs
   dev:
-  - conf
-  - misc
+  - certs
 outputs:
-  conf:
+  certs:
     files:
-    - path: /etc/ca-certificates.conf
-  misc:
-    files:
-    - path: /usr/share/ca-certificates/Makefile
-    - path: /usr/share/ca-certificates/blacklist.txt
-    - path: /usr/share/ca-certificates/certdata.txt
-    - path: /usr/share/ca-certificates/certdata2pem.py
-    - path: /usr/share/ca-certificates/nssckbi.h
+    - path: /etc/ssl/certs/002c0b4f.0
+    - path: /etc/ssl/certs/0179095f.0
+    - path: /etc/ssl/certs/02265526.0
+    - path: /etc/ssl/certs/062cdee6.0
+    - path: /etc/ssl/certs/064e0aa9.0
+    - path: /etc/ssl/certs/06dc52d5.0
+    - path: /etc/ssl/certs/09789157.0
+    - path: /etc/ssl/certs/0a775a30.0
+    - path: /etc/ssl/certs/0b1b94ef.0
+    - path: /etc/ssl/certs/0b9bc432.0
+    - path: /etc/ssl/certs/0bf05006.0
+    - path: /etc/ssl/certs/0f5dc4f3.0
+    - path: /etc/ssl/certs/0f6fa695.0
+    - path: /etc/ssl/certs/1001acf7.0
+    - path: /etc/ssl/certs/106f3e4d.0
+    - path: /etc/ssl/certs/14bc7599.0
+    - path: /etc/ssl/certs/1cef98f5.0
+    - path: /etc/ssl/certs/1d3472b9.0
+    - path: /etc/ssl/certs/1e08bfd1.0
+    - path: /etc/ssl/certs/1e09d511.0
+    - path: /etc/ssl/certs/228f89db.0
+    - path: /etc/ssl/certs/244b5494.0
+    - path: /etc/ssl/certs/2923b3f9.0
+    - path: /etc/ssl/certs/2ae6433e.0
+    - path: /etc/ssl/certs/2b349938.0
+    - path: /etc/ssl/certs/2ccbdda3.0
+    - path: /etc/ssl/certs/30e1580d.0
+    - path: /etc/ssl/certs/32888f65.0
+    - path: /etc/ssl/certs/3513523f.0
+    - path: /etc/ssl/certs/3bde41ac.0
+    - path: /etc/ssl/certs/3e359ba6.0
+    - path: /etc/ssl/certs/3fb36b73.0
+    - path: /etc/ssl/certs/40193066.0
+    - path: /etc/ssl/certs/4042bcee.0
+    - path: /etc/ssl/certs/40547a79.0
+    - path: /etc/ssl/certs/406c9bb1.0
+    - path: /etc/ssl/certs/48bec511.0
+    - path: /etc/ssl/certs/4b718d9b.0
+    - path: /etc/ssl/certs/4bfab552.0
+    - path: /etc/ssl/certs/4f316efb.0
+    - path: /etc/ssl/certs/4fd49c6c.0
+    - path: /etc/ssl/certs/5443e9e3.0
+    - path: /etc/ssl/certs/54657681.0
+    - path: /etc/ssl/certs/5860aaa6.0
+    - path: /etc/ssl/certs/5931b5bc.0
+    - path: /etc/ssl/certs/5cd81ad7.0
+    - path: /etc/ssl/certs/5f15c80c.0
+    - path: /etc/ssl/certs/5f618aec.0
+    - path: /etc/ssl/certs/607986c7.0
+    - path: /etc/ssl/certs/616816f6.0
+    - path: /etc/ssl/certs/626dceaf.0
+    - path: /etc/ssl/certs/6805c744.0
+    - path: /etc/ssl/certs/68dd7389.0
+    - path: /etc/ssl/certs/6a9bdba3.0
+    - path: /etc/ssl/certs/6b99d060.0
+    - path: /etc/ssl/certs/6d41d539.0
+    - path: /etc/ssl/certs/6fa5da56.0
+    - path: /etc/ssl/certs/749e9e03.0
+    - path: /etc/ssl/certs/75d1b2ed.0
+    - path: /etc/ssl/certs/76faf6c0.0
+    - path: /etc/ssl/certs/7719f463.0
+    - path: /etc/ssl/certs/773e07ad.0
+    - path: /etc/ssl/certs/7a3adc42.0
+    - path: /etc/ssl/certs/7a780d93.0
+    - path: /etc/ssl/certs/7f3d5d1d.0
+    - path: /etc/ssl/certs/7fa05551.0
+    - path: /etc/ssl/certs/8160b96c.0
+    - path: /etc/ssl/certs/81f2d2b1.0
+    - path: /etc/ssl/certs/8312c4c1.0
+    - path: /etc/ssl/certs/8508e720.0
+    - path: /etc/ssl/certs/865fbdf9.0
+    - path: /etc/ssl/certs/878d9bca.0
+    - path: /etc/ssl/certs/8cb5ee0f.0
+    - path: /etc/ssl/certs/8d86cdd1.0
+    - path: /etc/ssl/certs/8d89cda1.0
+    - path: /etc/ssl/certs/8f103249.0
+    - path: /etc/ssl/certs/9046744a.0
+    - path: /etc/ssl/certs/90c5a3c8.0
+    - path: /etc/ssl/certs/930ac5d2.0
+    - path: /etc/ssl/certs/93bc0acc.0
+    - path: /etc/ssl/certs/9482e63a.0
+    - path: /etc/ssl/certs/9846683b.0
+    - path: /etc/ssl/certs/988a38cb.0
+    - path: /etc/ssl/certs/9b46e03d.0
+    - path: /etc/ssl/certs/9b5697b0.0
+    - path: /etc/ssl/certs/9bf03295.0
+    - path: /etc/ssl/certs/9c8dfbd4.0
+    - path: /etc/ssl/certs/9d04f354.0
+    - path: /etc/ssl/certs/9e654b62.0
+    - path: /etc/ssl/certs/9ef4a08a.0
+    - path: /etc/ssl/certs/9f727ac7.0
+    - path: /etc/ssl/certs/a09a51ae.0
+    - path: /etc/ssl/certs/a3418fda.0
+    - path: /etc/ssl/certs/a89d74c2.0
+    - path: /etc/ssl/certs/a94d09e5.0
+    - path: /etc/ssl/certs/b0d5255e.0
+    - path: /etc/ssl/certs/b0e59380.0
+    - path: /etc/ssl/certs/b1159c4c.0
+    - path: /etc/ssl/certs/b433981b.0
+    - path: /etc/ssl/certs/b66938e9.0
+    - path: /etc/ssl/certs/b727005e.0
+    - path: /etc/ssl/certs/b7a5b843.0
+    - path: /etc/ssl/certs/b81b93f0.0
+    - path: /etc/ssl/certs/b8d25de6.0
+    - path: /etc/ssl/certs/ba8887ce.0
+    - path: /etc/ssl/certs/bf53fb88.0
+    - path: /etc/ssl/certs/c01eb047.0
+    - path: /etc/ssl/certs/c28a8a30.0
+    - path: /etc/ssl/certs/ca-certificates.crt
+    - path: /etc/ssl/certs/ca6e4ad9.0
+    - path: /etc/ssl/certs/cbf06781.0
+    - path: /etc/ssl/certs/cc450945.0
+    - path: /etc/ssl/certs/cd58d51e.0
+    - path: /etc/ssl/certs/cd8c0d63.0
+    - path: /etc/ssl/certs/ce5e74ef.0
+    - path: /etc/ssl/certs/cert-000.pem
+    - path: /etc/ssl/certs/d4dae3dd.0
+    - path: /etc/ssl/certs/d52c538d.0
+    - path: /etc/ssl/certs/d6325660.0
+    - path: /etc/ssl/certs/d7e8dc79.0
+    - path: /etc/ssl/certs/d887a5bb.0
+    - path: /etc/ssl/certs/da0cfd1d.0
+    - path: /etc/ssl/certs/dc4d6a89.0
+    - path: /etc/ssl/certs/dd8e9d41.0
+    - path: /etc/ssl/certs/ddcda989.0
+    - path: /etc/ssl/certs/de6d66f3.0
+    - path: /etc/ssl/certs/e113c810.0
+    - path: /etc/ssl/certs/e18bfb83.0
+    - path: /etc/ssl/certs/e35234b1.0
+    - path: /etc/ssl/certs/e36a6752.0
+    - path: /etc/ssl/certs/e73d606e.0
+    - path: /etc/ssl/certs/e868b802.0
+    - path: /etc/ssl/certs/e8de2f56.0
+    - path: /etc/ssl/certs/ecccd8db.0
+    - path: /etc/ssl/certs/ed858448.0
+    - path: /etc/ssl/certs/eed8c118.0
+    - path: /etc/ssl/certs/ef954a4e.0
+    - path: /etc/ssl/certs/f0c70a8d.0
+    - path: /etc/ssl/certs/f249de83.0
+    - path: /etc/ssl/certs/f30dd6ad.0
+    - path: /etc/ssl/certs/f39fc864.0
+    - path: /etc/ssl/certs/f51bb24c.0
+    - path: /etc/ssl/certs/fa5da96b.0
+    - path: /etc/ssl/certs/fb717492.0
+    - path: /etc/ssl/certs/fc5a8f99.0
+    - path: /etc/ssl/certs/fd64f3fc.0
+    - path: /etc/ssl/certs/fe8a2cd8.0
+    - path: /etc/ssl/certs/feffd413.0
+    - path: /etc/ssl/certs/ff34af3f.0
+    - path: /etc/ssl/certs/ffdd40f9.0

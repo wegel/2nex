@@ -1,0 +1,183 @@
+package:
+  schema: 1
+  name: LuaJIT
+  slug: luajit
+  namespace: dev/lang
+  version: 2.1-20241113
+  description: Just-In-Time Compiler for Lua (deterministic build for reproducibility)
+  homepage: https://luajit.org/
+  checksum: f65a1ac19636638fe53c5beccd5238fd243bc8179d5340e3189dc64417f3c4b6
+sources:
+- name: luajit
+  url: https://github.com/luajit/luajit/archive/538a82133ad6fddfd0ca64de167c4aca3bc1a2da.tar.gz
+  sha256: 7acbc36be8f21072422eb9a5e5fc468d0eaa55bec1b70260d651e845684621e2
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: phase3
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+- name: mpc
+  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: strip-nondeterminism
+  commit: x86_64/pkg/bootstrap/phase3/strip-nondeterminism/1.13.0/bundles/dev
+build:
+  script: |
+    tar --no-same-owner -xf ${SOURCE_luajit} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    # build with deterministic settings for reproducible builds
+    # LUAJIT_SECURITY_STRID=0 disables random string ID generation
+    # LUAJIT_SECURITY_PRN=0 disables secure PRNG seeding (makes bytecode deterministic)
+    make PREFIX=/usr \
+         XCFLAGS="-DLUAJIT_SECURITY_STRID=0 -DLUAJIT_SECURITY_PRN=0" \
+         INSTALL_INC=/usr/include/luajit-2.1
+
+    make PREFIX=/usr \
+         INSTALL_INC=${OUT_DIR}/usr/include/luajit-2.1 \
+         DESTDIR="${OUT_DIR}" install
+
+    # create lua symlinks for compatibility
+    #ln -sf luajit-2.1.0-beta3 ${OUT_DIR}/usr/bin/luajit
+    #ln -sf luajit ${OUT_DIR}/usr/bin/lua
+
+    # repack static archives with deterministic ar (D flag = deterministic mode)
+    for a in ${OUT_DIR}/usr/lib/*.a; do
+      if [ -f "$a" ]; then
+        tmpdir=$(mktemp -d)
+        cd "$tmpdir"
+        ar x "$a"
+        rm "$a"
+        ar Drc "$a" *.o
+        rm -rf "$tmpdir"
+      fi
+    done
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
+    2nex_strip_binaries ${OUT_DIR}
+bundles:
+  full:
+  - bin
+  - lib
+  - dev
+  - misc
+  dev:
+  - bin
+  - lib
+  - dev
+  - misc
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/luajit
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/bin/luajit-2.1.1741730670
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+  dev:
+    files:
+    - path: /usr/include/luajit-2.1/lauxlib.h
+    - path: /usr/include/luajit-2.1/lua.h
+    - path: /usr/include/luajit-2.1/lua.hpp
+    - path: /usr/include/luajit-2.1/luaconf.h
+    - path: /usr/include/luajit-2.1/luajit.h
+    - path: /usr/include/luajit-2.1/lualib.h
+    - path: /usr/lib/pkgconfig/luajit.pc
+  lib:
+    files:
+    - path: /usr/lib/libluajit-5.1.so
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/lib/libluajit-5.1.so.2
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/lib/libluajit-5.1.so.2.1.1741730670
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+  man:
+    files:
+    - path: /usr/share/man/man1/luajit.1
+  misc:
+    files:
+    - path: /usr/share/luajit-2.1/jit/bc.lua
+    - path: /usr/share/luajit-2.1/jit/bcsave.lua
+    - path: /usr/share/luajit-2.1/jit/dis_arm.lua
+    - path: /usr/share/luajit-2.1/jit/dis_arm64.lua
+    - path: /usr/share/luajit-2.1/jit/dis_arm64be.lua
+    - path: /usr/share/luajit-2.1/jit/dis_mips.lua
+    - path: /usr/share/luajit-2.1/jit/dis_mips64.lua
+    - path: /usr/share/luajit-2.1/jit/dis_mips64el.lua
+    - path: /usr/share/luajit-2.1/jit/dis_mips64r6.lua
+    - path: /usr/share/luajit-2.1/jit/dis_mips64r6el.lua
+    - path: /usr/share/luajit-2.1/jit/dis_mipsel.lua
+    - path: /usr/share/luajit-2.1/jit/dis_ppc.lua
+    - path: /usr/share/luajit-2.1/jit/dis_x64.lua
+    - path: /usr/share/luajit-2.1/jit/dis_x86.lua
+    - path: /usr/share/luajit-2.1/jit/dump.lua
+    - path: /usr/share/luajit-2.1/jit/p.lua
+    - path: /usr/share/luajit-2.1/jit/v.lua
+    - path: /usr/share/luajit-2.1/jit/vmdef.lua
+    - path: /usr/share/luajit-2.1/jit/zone.lua
+  static:
+    files:
+    - path: /usr/lib/libluajit-5.1.a
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/ld-linux-x86-64.so.2: glibc

@@ -6,7 +6,7 @@ package:
   version: 3.21.2
   description: Cross-platform Makefile generator
   homepage: https://cmake.org/
-  checksum: 90dda7ecf42712eeb6684b2ba1959ab0bfba19dbfdd0fcd8c12d7ba596a3347a
+  checksum: cb1a67990fcd386d0eef1b105a825fc44c2e3216e278653477b4c41cb6d4c798
 sources:
 - name: cmake
   url: https://cmake.org/files/v3.21/cmake-3.21.2.tar.gz
@@ -35,13 +35,13 @@ dependencies:
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gcc
-  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: zlib
-  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: bzip2
-  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
 - name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
 - name: expat
   commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
 - name: linux-headers
@@ -67,20 +67,39 @@ dependencies:
 - name: zstd
   commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
 build:
-  script: "tar --no-same-owner -xf ${SOURCE_cmake} -C \"${WORK_DIR}\" --strip-components=1\n\
-    cd ${WORK_DIR}\nsed -i '/\"lib64\"/s/64//' Modules/GNUInstallDirs.cmake\nmkdir\
-    \ build && cd build\n\n# Bootstrap CMake itself\n# We use a simple build for now\
-    \ without all the dependencies\n../bootstrap --prefix=/usr \\\n  --system-libs\
-    \ \\\n  --no-system-librhash \\\n  --no-system-libuv \\\n  --no-system-libarchive\
-    \ \\\n  --no-system-curl \\\n  --no-system-jsoncpp \\\n  --no-system-nghttp2 \\\
-    \n  --parallel=$(nproc) \\\n  -- \\\n  -DCMAKE_USE_SYSTEM_LIBRARY_JSONCPP=OFF\
-    \ \\\n  -DCMAKE_USE_OPENSSL=OFF \\\n  -DBUILD_CursesDialog=OFF\n\n# Install\n\
-    make DESTDIR=\"${OUT_DIR}\" install\n\n# Remove unnecessary files to reduce the\
-    \ size\n#rm -fr ${OUT_DIR}/usr/share/cmake-3.31/{completions,editors}\n#rm -fr\
-    \ ${OUT_DIR}/usr/share/cmake-3.31/{Help,include}\n\n# Set consistent timestamps\
-    \ for reproducible builds\nfind \"${OUT_DIR}\" -exec touch -d '2024-01-01T00:00:00+00:00'\
-    \ {} \\;\nfind \"${OUT_DIR}\" ! -type d -exec strip-nondeterminism -T 1704067200\
-    \ --normalizers +all {} \\; || true\n2nex_strip_binaries ${OUT_DIR}\n"
+  script: |
+    tar --no-same-owner -xf ${SOURCE_cmake} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    sed -i '/"lib64"/s/64//' Modules/GNUInstallDirs.cmake
+    mkdir build && cd build
+
+    # Bootstrap CMake itself
+    # We use a simple build for now without all the dependencies
+    ../bootstrap --prefix=/usr \
+      --system-libs \
+      --no-system-librhash \
+      --no-system-libuv \
+      --no-system-libarchive \
+      --no-system-curl \
+      --no-system-jsoncpp \
+      --no-system-nghttp2 \
+      --parallel=$(nproc) \
+      -- \
+      -DCMAKE_USE_SYSTEM_LIBRARY_JSONCPP=OFF \
+      -DCMAKE_USE_OPENSSL=OFF \
+      -DBUILD_CursesDialog=OFF
+
+    # Install
+    make DESTDIR="${OUT_DIR}" install
+
+    # Remove unnecessary files to reduce the size
+    #rm -fr ${OUT_DIR}/usr/share/cmake-3.31/{completions,editors}
+    #rm -fr ${OUT_DIR}/usr/share/cmake-3.31/{Help,include}
+
+    # Set consistent timestamps for reproducible builds
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
+    2nex_strip_binaries ${OUT_DIR}
 bundles:
   full:
   - bin
@@ -94,8 +113,40 @@ outputs:
   bin:
     files:
     - path: /usr/bin/cmake
+      needs:
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libzstd.so.1
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libz.so.1
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/cpack
+      needs:
+      - /usr/lib/libexpat.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libzstd.so.1
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libz.so.1
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/ctest
+      needs:
+      - /usr/lib/libexpat.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libzstd.so.1
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libz.so.1
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
   dev:
     files:
     - path: /usr/share/cmake-3.21/Help/include/COMPILE_DEFINITIONS_DISCLAIMER.txt
@@ -3055,3 +3106,15 @@ outputs:
     - path: /usr/share/emacs/site-lisp/cmake-mode.el
     - path: /usr/share/vim/vimfiles/indent/cmake.vim
     - path: /usr/share/vim/vimfiles/syntax/cmake.vim
+
+resolution:
+  /usr/lib/libbz2.so.1.0: bzip2
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libz.so.1: zlib
+  /usr/lib/libexpat.so.1: expat
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/liblzma.so.5: xz
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/libzstd.so.1: zstd

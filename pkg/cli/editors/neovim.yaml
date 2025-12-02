@@ -6,7 +6,7 @@ package:
   version: 0.11.0
   description: Vim-fork focused on extensibility and usability
   homepage: https://neovim.io/
-  checksum: 4cd14149b798a825a84d42aefa6e0a8f74fc42ed219f2f275f9b7f83055bc8c8
+  checksum: b40eb1e8da9aceb37af0932f31af248a6de18dc4f6a8960c853f29ce72ba869f
 sources:
 - name: neovim
   url: https://github.com/neovim/neovim/archive/refs/tags/v0.11.0.tar.gz
@@ -254,13 +254,10 @@ build:
     sed -i 's/vim.tbl_keys(client_events),/(function() local t = vim.tbl_keys(client_events); table.sort(t); return t end)(),/' src/gen/gen_api_ui_events.lua
 
     # reproducible build settings:
-    # - use clang for deterministic string constant ordering in .rodata
     # - LUA_GEN_PRG points to our deterministic LuaJIT (LUAJIT_SECURITY_PRN=0)
-    # - lld with --sort-section=name for deterministic section ordering
+    # - --sort-section=name for deterministic section ordering
     # - deterministic ar/ranlib flags for static archives
-    export CC=clang
-    export CXX=clang++
-    export LDFLAGS="${LDFLAGS} -fuse-ld=lld -Wl,--sort-section=name"
+    export LDFLAGS="${LDFLAGS} -Wl,--sort-section=name"
 
     make CMAKE_BUILD_TYPE=Release \
          CMAKE_INSTALL_PREFIX=/usr \

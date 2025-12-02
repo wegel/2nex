@@ -55,26 +55,18 @@ dependencies:
 - name: mpfr
   commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 build:
-  script: 'tar --no-same-owner -xf ${SOURCE_gawk} -C "${WORK_DIR}" --strip-components=1
-
+  script: |
+    tar --no-same-owner -xf ${SOURCE_gawk} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
-    sed -i ''s/extras//'' Makefile.in
-
+    sed -i 's/extras//' Makefile.in
     ./configure --prefix=/usr
 
-
     make
-
     make DESTDIR=${OUT_DIR} install
 
-
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-
     2nex_strip_binaries ${OUT_DIR}
-
-    '
 bundles:
   full:
   - bin
@@ -128,17 +120,57 @@ outputs:
   lib:
     files:
     - path: /usr/lib/gawk/filefuncs.so
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
     - path: /usr/lib/gawk/fnmatch.so
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
     - path: /usr/lib/gawk/fork.so
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
     - path: /usr/lib/gawk/inplace.so
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
     - path: /usr/lib/gawk/intdiv.so
+      needs:
+      - /usr/lib/libmpfr.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
     - path: /usr/lib/gawk/ordchr.so
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
     - path: /usr/lib/gawk/readdir.so
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
     - path: /usr/lib/gawk/readfile.so
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
     - path: /usr/lib/gawk/revoutput.so
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
     - path: /usr/lib/gawk/revtwoway.so
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
     - path: /usr/lib/gawk/rwarray.so
+      needs:
+      - /usr/lib/libmpfr.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
     - path: /usr/lib/gawk/time.so
+      needs:
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
   locale:
     files:
     - path: /usr/share/locale/bg/LC_MESSAGES/gawk.mo
@@ -196,8 +228,39 @@ outputs:
   bin:
     files:
     - path: /usr/bin/awk
+      needs:
+      - /usr/lib/libmpfr.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/gawk
+      needs:
+      - /usr/lib/libmpfr.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/gawk-5.3.0
+      needs:
+      - /usr/lib/libmpfr.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libm.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/gawkbug
     - path: /usr/libexec/awk/grcat
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/libexec/awk/pwcat
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+
+resolution:
+  /usr/lib/libmpfr.so.6: mpfr
+  /usr/lib/libgmp.so.10: gmp
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/ld-linux-x86-64.so.2: glibc

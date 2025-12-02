@@ -57,24 +57,17 @@ dependencies:
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 build:
-  script: 'tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
-
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
-
 
     ./configure --prefix=/usr
 
-
     make
-
     make DESTDIR=${OUT_DIR} install
 
-
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-
     2nex_strip_binaries ${OUT_DIR}
-
-    '
 bundles:
   full:
   - bin
@@ -90,6 +83,9 @@ outputs:
   bin:
     files:
     - path: /usr/bin/make
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
   info:
     files:
     - path: /usr/share/info/dir
@@ -135,3 +131,7 @@ outputs:
   man:
     files:
     - path: /usr/share/man/man1/make.1
+
+resolution:
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
