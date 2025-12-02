@@ -375,8 +375,13 @@ fn build_provider_lookup(
     let mut files_commits: HashMap<String, String> = HashMap::new();
     for (provider_key, commits) in &packages {
         // check if files commit already exists for this package
-        let files_commit =
-            find_or_create_files_commit(repo_path, provider_key, commits, manifest_base_dir, verbose)?;
+        let files_commit = find_or_create_files_commit(
+            repo_path,
+            provider_key,
+            commits,
+            manifest_base_dir,
+            verbose,
+        )?;
         files_commits.insert(provider_key.clone(), files_commit);
     }
 
@@ -431,8 +436,13 @@ fn build_provider_lookup(
 
     // index current package's own outputs (highest priority - overwrites deps)
     // this allows internal libraries like libsystemd-shared-257.so to be resolved
-    let self_files_commit =
-        find_or_create_files_commit(repo_path, self_provider_key, self_output_refs, manifest_base_dir, verbose)?;
+    let self_files_commit = find_or_create_files_commit(
+        repo_path,
+        self_provider_key,
+        self_output_refs,
+        manifest_base_dir,
+        verbose,
+    )?;
 
     for output_ref in self_output_refs {
         let files = match store.ls(output_ref) {
@@ -506,7 +516,10 @@ fn find_or_create_files_commit(
     let manifest_path = if manifest_base_dir.is_empty() {
         PathBuf::from(format!("pkg/{}/{}.yaml", namespace_path, slug))
     } else {
-        PathBuf::from(format!("{}/pkg/{}/{}.yaml", manifest_base_dir, namespace_path, slug))
+        PathBuf::from(format!(
+            "{}/pkg/{}/{}.yaml",
+            manifest_base_dir, namespace_path, slug
+        ))
     };
 
     if let Ok(manifest_data) =

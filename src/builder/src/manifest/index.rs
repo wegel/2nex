@@ -101,10 +101,8 @@ impl ManifestIndex {
                 match load_manifest_from_source(&ManifestSource::Path(path.to_path_buf())) {
                     Ok(ManifestData::Package(manifest)) => {
                         // only add if not already present (priority to earlier directories)
-                        let key = format!(
-                            "{}/{}",
-                            manifest.package.namespace, manifest.package.slug
-                        );
+                        let key =
+                            format!("{}/{}", manifest.package.namespace, manifest.package.slug);
                         if !index.manifests.contains_key(&key) {
                             index.add_manifest(manifest);
                         }

@@ -136,7 +136,12 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     // build if not cached or stale
     if !is_cached {
         println!("Building {}...", args.package_ref);
-        build_package_to_user_repo(&repo_path, &ctx.fallback_repos, &manifest_dirs, &manifest_path)?;
+        build_package_to_user_repo(
+            &repo_path,
+            &ctx.fallback_repos,
+            &manifest_dirs,
+            &manifest_path,
+        )?;
     }
 
     println!("Installing {}...", args.package_ref);
@@ -186,9 +191,23 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
 
     // determine target directory and mode based on context
     let (target_dir, nex_pkg_dir, nex_env_dir, mode, pkg_override, env_override) = if args.flat {
-        ("/".to_string(), "/nex/pkg".to_string(), "/nex/env".to_string(), MaterializeMode::Flat, None, None)
+        (
+            "/".to_string(),
+            "/nex/pkg".to_string(),
+            "/nex/env".to_string(),
+            MaterializeMode::Flat,
+            None,
+            None,
+        )
     } else if ctx.is_system {
-        ("/".to_string(), "/nex/pkg".to_string(), "/nex/env".to_string(), MaterializeMode::Nex, None, None)
+        (
+            "/".to_string(),
+            "/nex/pkg".to_string(),
+            "/nex/env".to_string(),
+            MaterializeMode::Nex,
+            None,
+            None,
+        )
     } else {
         // user install: override pkg/env directories to user's paths
         (
@@ -503,7 +522,10 @@ fn build_package_to_user_repo(
         force: false,
         build_dir: None,
         generate_outputs: false,
-        fallback_repos: fallback_repos.iter().map(|p| p.to_string_lossy().to_string()).collect(),
+        fallback_repos: fallback_repos
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect(),
     };
 
     build::build_single(&opts)

@@ -95,11 +95,22 @@ fn checkout_flat(
             // file-level checkout: only extract specific files
             let files_vec: Vec<String> = files.iter().cloned().collect();
             println!("  Checking out {} file(s) from {}", files_vec.len(), commit);
-            checkout_files(&config.repo_path, commit, &files_vec, &config.target_dir, &config.fallback_repo_paths)?;
+            checkout_files(
+                &config.repo_path,
+                commit,
+                &files_vec,
+                &config.target_dir,
+                &config.fallback_repo_paths,
+            )?;
         } else {
             // full checkout for root commits
             println!("  Checking out {} (flat)", commit);
-            checkout_commit_flat(&config.repo_path, commit, &config.target_dir, &config.fallback_repo_paths)?;
+            checkout_commit_flat(
+                &config.repo_path,
+                commit,
+                &config.target_dir,
+                &config.fallback_repo_paths,
+            )?;
         }
     }
 
@@ -196,7 +207,12 @@ fn checkout_nex(
 
         // checkout each commit (output) into the physical directory using --union
         for commit in commits {
-            checkout_commit_flat(&config.repo_path, commit, &physical_pkg_dir, &config.fallback_repo_paths)?;
+            checkout_commit_flat(
+                &config.repo_path,
+                commit,
+                &physical_pkg_dir,
+                &config.fallback_repo_paths,
+            )?;
         }
 
         // write .nex-app-root sentinel with all commits

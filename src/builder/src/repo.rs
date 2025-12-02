@@ -288,9 +288,7 @@ fn setup_user_manifests_worktree(manifests_path: &Path) -> io::Result<()> {
     let source_repo = PathBuf::from("/nex/manifests");
     if !source_repo.exists() {
         // no system manifest repo - user can manually set this up
-        eprintln!(
-            "Note: /nex/manifests not found. User manifests worktree not created."
-        );
+        eprintln!("Note: /nex/manifests not found. User manifests worktree not created.");
         return Ok(());
     }
 
@@ -313,10 +311,7 @@ fn setup_user_manifests_worktree(manifests_path: &Path) -> io::Result<()> {
             String::from_utf8_lossy(&output.stderr)
         );
     } else {
-        eprintln!(
-            "Created manifests worktree at {}",
-            manifests_path.display()
-        );
+        eprintln!("Created manifests worktree at {}", manifests_path.display());
     }
 
     Ok(())

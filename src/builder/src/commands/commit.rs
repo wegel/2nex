@@ -115,7 +115,13 @@ fn create_deployment(message: &str) -> io::Result<()> {
 
     // checkout current deployment
     println!("  Checking out current deployment...");
-    store::checkout_into(NEX_REPO, &current_ref, Path::new(&staging_dir), false, false)?;
+    store::checkout_into(
+        NEX_REPO,
+        &current_ref,
+        Path::new(&staging_dir),
+        false,
+        false,
+    )?;
 
     // apply overlay changes
     println!("  Applying staged changes...");

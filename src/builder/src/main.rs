@@ -297,7 +297,12 @@ fn build_package_manifest_with_dir(
     // resolve dependencies to specific commit IDs when they have manifest_ref
     let dependency_commits = resolve_dependency_commits(&manifest.dependencies, &opts.repo_path)?;
 
-    setup_composite_rootfs(base_dir, &opts.repo_path, &opts.fallback_repos, &dependency_commits)?;
+    setup_composite_rootfs(
+        base_dir,
+        &opts.repo_path,
+        &opts.fallback_repos,
+        &dependency_commits,
+    )?;
     let input_env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
 
     let package_name = &manifest.package.name;
@@ -425,7 +430,12 @@ fn build_package_manifest_with_dir(
     if opts.check {
         println!("Validating build reproducibility by building the package a second time.");
         fs::remove_dir_all(base_dir)?;
-        setup_composite_rootfs(base_dir, &opts.repo_path, &opts.fallback_repos, &dependency_commits)?;
+        setup_composite_rootfs(
+            base_dir,
+            &opts.repo_path,
+            &opts.fallback_repos,
+            &dependency_commits,
+        )?;
         handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
         run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
         verify_and_commit_outputs(
@@ -564,10 +574,14 @@ fn create_files_commit_for_package(
 
     // attach manifest hash to semantic ref for staleness checks
     let manifest_hash = compute_manifest_hash(manifest_path)?;
-    rewrite_branch_metadata(repo_path, &semantic_files_ref, &[
-        ("nex.manifest.hash".to_string(), manifest_hash),
-        ("nex.address_hash".to_string(), address_hash),
-    ])?;
+    rewrite_branch_metadata(
+        repo_path,
+        &semantic_files_ref,
+        &[
+            ("nex.manifest.hash".to_string(), manifest_hash),
+            ("nex.address_hash".to_string(), address_hash),
+        ],
+    )?;
 
     println!("Created semantic ref: {}", semantic_files_ref);
 

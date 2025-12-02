@@ -56,7 +56,10 @@ impl PackageRef {
 
         // validate structure
         if parts.get(1) != Some(&"pkg") {
-            return Err(format!("expected 'pkg' at position 1, got: {:?}", parts.get(1)));
+            return Err(format!(
+                "expected 'pkg' at position 1, got: {:?}",
+                parts.get(1)
+            ));
         }
 
         let arch = parts[0].to_string();
@@ -163,7 +166,12 @@ mod tests {
         assert_eq!(r.namespace, "libs/compression");
         assert_eq!(r.slug, "bzip2");
         assert_eq!(r.version, "1.0.8");
-        assert_eq!(r.ref_type, RefType::Output { name: "bin".to_string() });
+        assert_eq!(
+            r.ref_type,
+            RefType::Output {
+                name: "bin".to_string()
+            }
+        );
     }
 
     #[test]
@@ -172,7 +180,12 @@ mod tests {
         assert_eq!(r.namespace, "cli/editors");
         assert_eq!(r.slug, "neovim");
         assert_eq!(r.version, "0.11.0");
-        assert_eq!(r.ref_type, RefType::Bundle { name: "full".to_string() });
+        assert_eq!(
+            r.ref_type,
+            RefType::Bundle {
+                name: "full".to_string()
+            }
+        );
     }
 
     #[test]
@@ -183,13 +196,20 @@ mod tests {
 
     #[test]
     fn test_parse_files_with_path() {
-        let r = PackageRef::parse("x86_64/pkg/libs/compression/bzip2/1.0.8/files/usr/bin/bzip2").unwrap();
-        assert_eq!(r.ref_type, RefType::Files { path: Some("usr/bin/bzip2".to_string()) });
+        let r = PackageRef::parse("x86_64/pkg/libs/compression/bzip2/1.0.8/files/usr/bin/bzip2")
+            .unwrap();
+        assert_eq!(
+            r.ref_type,
+            RefType::Files {
+                path: Some("usr/bin/bzip2".to_string())
+            }
+        );
     }
 
     #[test]
     fn test_parse_deep_namespace() {
-        let r = PackageRef::parse("x86_64/pkg/core/kernel/drivers/nvidia/535.154/outputs/bin").unwrap();
+        let r =
+            PackageRef::parse("x86_64/pkg/core/kernel/drivers/nvidia/535.154/outputs/bin").unwrap();
         assert_eq!(r.namespace, "core/kernel/drivers");
         assert_eq!(r.slug, "nvidia");
         assert_eq!(r.version, "535.154");
