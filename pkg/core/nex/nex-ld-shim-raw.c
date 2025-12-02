@@ -9,27 +9,89 @@
  *   [rsp+8]  = argv[0], argv[1], ..., NULL
  *   then envp[0], envp[1], ..., NULL
  *   then auxv pairs (type, value), ending with AT_NULL
+ *
+ * This shim loads the real ld-linux into memory and jumps to it, rather than
+ * using execve. This preserves /proc/self/exe pointing to the original binary,
+ * which is required for programs that re-exec themselves (like nvim's TUI).
  */
 
 // auxv types we care about
-#define AT_NULL    0
-#define AT_EXECFN  31
-#define AT_SECURE  23
+#define AT_NULL     0
+#define AT_PHDR     3
+#define AT_PHENT    4
+#define AT_PHNUM    5
+#define AT_BASE     7
+#define AT_ENTRY    9
+#define AT_SECURE   23
+#define AT_EXECFN   31
 
 // syscall numbers (x86_64)
-#define SYS_read     0
-#define SYS_write    1
-#define SYS_open     2
-#define SYS_close    3
-#define SYS_stat     4
-#define SYS_fstat    5
-#define SYS_lstat    6
-#define SYS_readlink 89
-#define SYS_execve   59
-#define SYS_exit     60
+#define SYS_read      0
+#define SYS_write     1
+#define SYS_open      2
+#define SYS_close     3
+#define SYS_stat      4
+#define SYS_fstat     5
+#define SYS_lstat     6
+#define SYS_mmap      9
+#define SYS_mprotect  10
+#define SYS_munmap    11
+#define SYS_readlink  89
+#define SYS_execve    59
+#define SYS_exit      60
 
 // open flags
 #define O_RDONLY 0
+
+// mmap flags
+#define PROT_NONE   0x0
+#define PROT_READ   0x1
+#define PROT_WRITE  0x2
+#define PROT_EXEC   0x4
+#define MAP_PRIVATE   0x02
+#define MAP_FIXED     0x10
+#define MAP_ANONYMOUS 0x20
+
+// ELF types
+#define PT_NULL    0
+#define PT_LOAD    1
+#define PT_DYNAMIC 2
+#define PT_INTERP  3
+#define PT_PHDR    6
+
+#define PF_X 0x1
+#define PF_W 0x2
+#define PF_R 0x4
+
+#define ET_DYN 3
+
+typedef struct {
+    unsigned char e_ident[16];
+    unsigned short e_type;
+    unsigned short e_machine;
+    unsigned int e_version;
+    unsigned long e_entry;
+    unsigned long e_phoff;
+    unsigned long e_shoff;
+    unsigned int e_flags;
+    unsigned short e_ehsize;
+    unsigned short e_phentsize;
+    unsigned short e_phnum;
+    unsigned short e_shentsize;
+    unsigned short e_shnum;
+    unsigned short e_shstrndx;
+} Elf64_Ehdr;
+
+typedef struct {
+    unsigned int p_type;
+    unsigned int p_flags;
+    unsigned long p_offset;
+    unsigned long p_vaddr;
+    unsigned long p_paddr;
+    unsigned long p_filesz;
+    unsigned long p_memsz;
+    unsigned long p_align;
+} Elf64_Phdr;
 
 // stat structure (simplified, only need st_mode)
 struct stat {
@@ -100,6 +162,20 @@ static inline long syscall3_r10(long n, long a1, long a2, long a3) {
     return ret;
 }
 
+static inline long syscall6(long n, long a1, long a2, long a3, long a4, long a5, long a6) {
+    long ret;
+    register long r10 __asm__("r10") = a4;
+    register long r8  __asm__("r8")  = a5;
+    register long r9  __asm__("r9")  = a6;
+    __asm__ volatile (
+        "syscall"
+        : "=a"(ret)
+        : "a"(n), "D"(a1), "S"(a2), "d"(a3), "r"(r10), "r"(r8), "r"(r9)
+        : "rcx", "r11", "memory"
+    );
+    return ret;
+}
+
 // syscall wrappers
 static inline void sys_exit(int code) {
     syscall1(SYS_exit, code);
@@ -132,6 +208,19 @@ static inline long sys_readlink(const char *path, char *buf, unsigned long bufsi
 
 static inline long sys_execve(const char *path, char **argv, char **envp) {
     return syscall3(SYS_execve, (long)path, (long)argv, (long)envp);
+}
+
+static inline void *sys_mmap(void *addr, unsigned long length, int prot,
+                             int flags, int fd, long offset) {
+    return (void *)syscall6(SYS_mmap, (long)addr, length, prot, flags, fd, offset);
+}
+
+static inline long sys_mprotect(void *addr, unsigned long length, int prot) {
+    return syscall3(SYS_mprotect, (long)addr, length, prot);
+}
+
+static inline long sys_munmap(void *addr, unsigned long length) {
+    return syscall2(SYS_munmap, (long)addr, length);
 }
 
 // string functions
@@ -460,8 +549,203 @@ static int resolve_symlink_chain(const char *start_path, char *result, unsigned 
     return resolve_realpath(start_path, result, result_size);
 }
 
+// round down to page boundary
+static inline unsigned long page_align_down(unsigned long addr) {
+    return addr & ~0xFFFUL;
+}
+
+// round up to page boundary
+static inline unsigned long page_align_up(unsigned long addr) {
+    return (addr + 0xFFF) & ~0xFFFUL;
+}
+
+// convert ELF pflags to mmap prot flags
+static inline int elf_prot(unsigned int pflags) {
+    int prot = 0;
+    if (pflags & PF_R) prot |= PROT_READ;
+    if (pflags & PF_W) prot |= PROT_WRITE;
+    if (pflags & PF_X) prot |= PROT_EXEC;
+    return prot;
+}
+
+// load ld-linux into memory and return its entry point
+// returns 0 on failure
+static unsigned long load_elf_interp(const char *path, unsigned long *out_base) {
+    Elf64_Ehdr ehdr;
+    Elf64_Phdr phdrs[16];  // should be enough for ld-linux
+
+    int fd = sys_open(path, O_RDONLY);
+    if (fd < 0) return 0;
+
+    // read ELF header
+    if (sys_read(fd, (char *)&ehdr, sizeof(ehdr)) != sizeof(ehdr)) {
+        sys_close(fd);
+        return 0;
+    }
+
+    // verify ELF magic
+    if (ehdr.e_ident[0] != 0x7f || ehdr.e_ident[1] != 'E' ||
+        ehdr.e_ident[2] != 'L' || ehdr.e_ident[3] != 'F') {
+        sys_close(fd);
+        return 0;
+    }
+
+    // must be ET_DYN (shared object / PIE)
+    if (ehdr.e_type != ET_DYN) {
+        sys_close(fd);
+        return 0;
+    }
+
+    // read program headers
+    if (ehdr.e_phnum > 16) {
+        sys_close(fd);
+        return 0;
+    }
+
+    // seek to phdr offset - we need to use pread or re-open, but since we don't
+    // have lseek, we'll close and re-read. simpler: read entire file is bad.
+    // actually, we can just read from start and skip.
+    sys_close(fd);
+    fd = sys_open(path, O_RDONLY);
+    if (fd < 0) return 0;
+
+    // skip to phoff
+    char skip_buf[512];
+    unsigned long to_skip = ehdr.e_phoff;
+    while (to_skip > 0) {
+        unsigned long chunk = to_skip > sizeof(skip_buf) ? sizeof(skip_buf) : to_skip;
+        if (sys_read(fd, skip_buf, chunk) != (long)chunk) {
+            sys_close(fd);
+            return 0;
+        }
+        to_skip -= chunk;
+    }
+
+    unsigned long phdr_size = ehdr.e_phnum * sizeof(Elf64_Phdr);
+    if (sys_read(fd, (char *)phdrs, phdr_size) != (long)phdr_size) {
+        sys_close(fd);
+        return 0;
+    }
+    sys_close(fd);
+
+    // find the extent of all PT_LOAD segments
+    unsigned long vaddr_min = (unsigned long)-1;
+    unsigned long vaddr_max = 0;
+
+    for (int i = 0; i < ehdr.e_phnum; i++) {
+        if (phdrs[i].p_type != PT_LOAD) continue;
+        if (phdrs[i].p_vaddr < vaddr_min) vaddr_min = phdrs[i].p_vaddr;
+        unsigned long end = phdrs[i].p_vaddr + phdrs[i].p_memsz;
+        if (end > vaddr_max) vaddr_max = end;
+    }
+
+    if (vaddr_min >= vaddr_max) return 0;
+
+    // reserve address space for the entire range (we'll map over it)
+    unsigned long map_size = page_align_up(vaddr_max) - page_align_down(vaddr_min);
+    void *base = sys_mmap((void *)0, map_size, PROT_NONE,
+                          MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if ((long)base < 0 && (long)base > -4096) {
+        return 0;
+    }
+
+    unsigned long load_bias = (unsigned long)base - page_align_down(vaddr_min);
+
+    // now map each PT_LOAD segment
+    fd = sys_open(path, O_RDONLY);
+    if (fd < 0) {
+        sys_munmap(base, map_size);
+        return 0;
+    }
+
+    for (int i = 0; i < ehdr.e_phnum; i++) {
+        if (phdrs[i].p_type != PT_LOAD) continue;
+
+        unsigned long vaddr = phdrs[i].p_vaddr;
+        unsigned long offset = phdrs[i].p_offset;
+        unsigned long filesz = phdrs[i].p_filesz;
+        unsigned long memsz = phdrs[i].p_memsz;
+
+        // ELF requires: (vaddr - offset) % page_size == 0
+        // but vaddr and offset may differ by a multiple of page_size
+        // (this happens with separate-code in modern glibc)
+
+        // page-align for mmap
+        unsigned long map_start = page_align_down(vaddr);
+
+        // offset within the page
+        unsigned long page_offset = vaddr & 0xFFF;
+
+        // size to map includes the page offset
+        unsigned long map_size_seg = page_align_up(memsz + page_offset);
+
+        // first, map anonymous memory for the whole segment
+        void *mapped = sys_mmap((void *)(load_bias + map_start),
+                               map_size_seg,
+                               PROT_READ | PROT_WRITE,
+                               MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS,
+                               -1, 0);
+        if ((long)mapped < 0 && (long)mapped > -4096) {
+            sys_close(fd);
+            sys_munmap(base, map_size);
+            return 0;
+        }
+
+        // now read the file contents into the mapped area
+        // we need to read filesz bytes at file offset 'offset' to vaddr
+        if (filesz > 0) {
+            // seek to offset by reading and discarding
+            // (we already have fd open, need to seek)
+            sys_close(fd);
+            fd = sys_open(path, O_RDONLY);
+            if (fd < 0) {
+                sys_munmap(base, map_size);
+                return 0;
+            }
+
+            // skip to the right offset
+            char skip_buf[512];
+            unsigned long to_skip = offset;
+            while (to_skip > 0) {
+                unsigned long chunk = to_skip > sizeof(skip_buf) ? sizeof(skip_buf) : to_skip;
+                if (sys_read(fd, skip_buf, chunk) != (long)chunk) {
+                    sys_close(fd);
+                    sys_munmap(base, map_size);
+                    return 0;
+                }
+                to_skip -= chunk;
+            }
+
+            // read the file contents
+            char *dest = (char *)(load_bias + vaddr);
+            unsigned long remaining = filesz;
+            while (remaining > 0) {
+                long n = sys_read(fd, dest, remaining);
+                if (n <= 0) {
+                    sys_close(fd);
+                    sys_munmap(base, map_size);
+                    return 0;
+                }
+                dest += n;
+                remaining -= n;
+            }
+        }
+
+        // bss is already zeroed by MAP_ANONYMOUS
+
+        // set final protections
+        sys_mprotect((void *)(load_bias + map_start), map_size_seg, elf_prot(phdrs[i].p_flags));
+    }
+
+    sys_close(fd);
+
+    *out_base = load_bias;
+    return load_bias + ehdr.e_entry;
+}
+
 // main logic
-static void shim_main(int argc, char **argv, char **envp, unsigned long *auxv) {
+static void shim_main(int argc, char **argv, char **envp, unsigned long *auxv,
+                      unsigned long *stack_bottom) {
     char resolved_exe[PATH_MAX];
     char app_root[PATH_MAX];
     char loader_path[PATH_MAX];
@@ -575,29 +859,24 @@ static void shim_main(int argc, char **argv, char **envp, unsigned long *auxv) {
         fatal_path("loader not found", loader_path);
     }
 
-    // build new argv: loader --argv0 orig_argv0 --library-path lib_dir exe [args...]
-    // we need: loader, --argv0, argv[0], --library-path, lib_dir, resolved_exe, argv[1..], NULL
-    // that's 6 + (argc-1) + 1 = argc + 6 entries
-
-    static char *new_argv[1024];  // should be enough
-    static char argv0_opt[] = "--argv0";
-    static char libpath_opt[] = "--library-path";
-
-    int idx = 0;
-    new_argv[idx++] = loader_path;
-    new_argv[idx++] = argv0_opt;
-    new_argv[idx++] = argv[0];  // original argv[0]
-    new_argv[idx++] = libpath_opt;
-    new_argv[idx++] = lib_dir;
-    new_argv[idx++] = resolved_exe;
-
-    // copy remaining args
-    for (int i = 1; i < argc && idx < 1020; i++) {
-        new_argv[idx++] = argv[i];
+    // load ld-linux into memory
+    unsigned long interp_base = 0;
+    unsigned long entry = load_elf_interp(loader_path, &interp_base);
+    if (!entry) {
+        fatal_path("failed to load interpreter", loader_path);
     }
-    new_argv[idx] = (void*)0;
 
-    // filter envp: remove LD_LIBRARY_PATH, LD_PRELOAD, LD_AUDIT for security
+    // update auxv: set AT_BASE to where we loaded the interpreter
+    // the kernel already set AT_PHDR, AT_ENTRY etc. for the main program
+    for (unsigned long *a = auxv; a[0] != AT_NULL; a += 2) {
+        if (a[0] == AT_BASE) {
+            a[1] = interp_base;
+        }
+    }
+
+    // filter envp and add LD_LIBRARY_PATH
+    // since we're jumping to ld-linux as PT_INTERP (not command-line),
+    // it will use LD_LIBRARY_PATH to find libraries
     static char *new_envp[4096];
     int env_idx = 0;
 
@@ -609,6 +888,12 @@ static void shim_main(int argc, char **argv, char **envp, unsigned long *auxv) {
         }
         new_envp[env_idx++] = *e;
     }
+
+    // add our controlled LD_LIBRARY_PATH
+    static char ld_library_path_env[PATH_MAX + 20];
+    str_copy(ld_library_path_env, "LD_LIBRARY_PATH=", sizeof(ld_library_path_env));
+    str_append(ld_library_path_env, lib_dir, sizeof(ld_library_path_env));
+    new_envp[env_idx++] = ld_library_path_env;
 
     // add NEX_APP_ROOT and NEX_LIB_DIR
     static char app_root_env[PATH_MAX + 16];
@@ -624,11 +909,68 @@ static void shim_main(int argc, char **argv, char **envp, unsigned long *auxv) {
 
     new_envp[env_idx] = (void*)0;
 
-    // exec the real loader
-    sys_execve(loader_path, new_argv, new_envp);
+    // rebuild the stack with new envp
+    // stack layout: argc, argv[0..argc-1], NULL, envp[0..n], NULL, auxv
+    // we need to replace envp in place or rebuild the stack
 
-    // if we get here, execve failed
-    fatal_path("execve failed", loader_path);
+    // IMPORTANT: we need to build the new stack in a separate area first,
+    // because the original argv/envp pointers point to string data that
+    // may be on the stack above our write area
+
+    // count new_envp entries
+    int new_env_count = env_idx;
+
+    // find the end of auxv
+    unsigned long *auxv_end = auxv;
+    while (auxv_end[0] != AT_NULL) auxv_end += 2;
+    auxv_end += 2;  // include the AT_NULL entry
+
+    // use static buffer to build new stack frame
+    // this avoids overwriting data we still need to read
+    static unsigned long new_stack[8192];
+    unsigned long *new_sp = new_stack;
+
+    // write argc
+    *new_sp++ = argc;
+
+    // write argv pointers (these point to strings in the original stack's
+    // string area, which is above the pointers and won't be overwritten)
+    for (int i = 0; i < argc; i++) {
+        *new_sp++ = (unsigned long)argv[i];
+    }
+    *new_sp++ = 0;  // NULL terminator
+
+    // write new envp pointers
+    for (int i = 0; i < new_env_count; i++) {
+        *new_sp++ = (unsigned long)new_envp[i];
+    }
+    *new_sp++ = 0;  // NULL terminator
+
+    // copy auxv (already modified AT_BASE in place)
+    for (unsigned long *a = auxv; a < auxv_end; a++) {
+        *new_sp++ = *a;
+    }
+
+    // now copy the built stack to the original stack location
+    // we go backwards (from end to start) to avoid reading from
+    // already-written memory if there's overlap
+    unsigned long *dst = stack_bottom;
+    for (unsigned long i = 0; i < (unsigned long)(new_sp - new_stack); i++) {
+        dst[i] = new_stack[i];
+    }
+
+    // jump to ld-linux entry point with new stack
+    // ld-linux expects rsp to point to argc on the stack
+    __asm__ volatile (
+        "mov %0, %%rsp\n"
+        "xor %%rdx, %%rdx\n"   // clear rdx (rtld_fini)
+        "jmp *%1\n"
+        :
+        : "r"(stack_bottom), "r"(entry)
+        : "memory"
+    );
+
+    __builtin_unreachable();
 }
 
 // wrapper called from asm _start
@@ -642,9 +984,11 @@ void _start_c(unsigned long *sp) {
     while (*e) e++;
     unsigned long *auxv = (unsigned long *)(e + 1);
 
-    shim_main(argc, argv, envp, auxv);
+    // pass sp as stack_bottom - shim_main will rebuild the stack there
+    shim_main(argc, argv, envp, auxv, sp);
 
-    sys_exit(0);
+    // should never reach here - shim_main jumps to ld-linux
+    sys_exit(1);
 }
 
 // entry point in assembly - gets stack pointer and calls C
