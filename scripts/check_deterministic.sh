@@ -1,79 +1,73 @@
 #!/bin/sh
 set -eux
 
-LOCAL_REPO=${REPO:-bootstrap_store}
-REMOTE_REPO=${REMOTE_REPO:-}
+LOCAL_REPO=${REPO:-.nex/repo}
+ZUB=${ZUB:-./src/zub/target/debug/zub}
 REF="${1}"
-#x86_64/gcc/13.2.0/base/bundles/dev
+# example: x86_64/pkg/cli/editors/neovim/0.11.0/outputs/bin
 
-# Cleanup temporary directories at the end
+# cleanup temporary directories at the end
 cleanup() {
     echo "Cleaning up..."
-    # Remove temp directories if they exist
     [ -n "${dir1:-}" ] && [ -d "$dir1" ] && rm -rf "$dir1"
     [ -n "${dir2:-}" ] && [ -d "$dir2" ] && rm -rf "$dir2"
-    [ -n "${temp_repo:-}" ] && [ -d "$temp_repo" ] && rm -rf "$temp_repo"
     exit "${1:-0}"
 }
-#trap 'cleanup $?' EXIT INT TERM
+trap 'cleanup $?' EXIT INT TERM
 
-if [ -z "$REMOTE_REPO" ]; then
-    # Compare two local commits of the same package
-    echo "Comparing two local commits for ${REF}..."
-    
-    # Base directories to compare
-    dir1="$(mktemp -d)"
-    dir2="$(mktemp -d)"
-    
-    REF1="$(ostree --repo=$LOCAL_REPO log "${REF}" | head -1 | awk '{print $2}')"
-    REF2="$(ostree --repo=$LOCAL_REPO log "${REF}" | head -2 | tail -1 | awk '{print $2}')"
-    
-    unshare --map-root-user ostree --repo=${LOCAL_REPO} checkout --union ${REF1} ${dir1}
-    unshare --map-root-user ostree --repo=${LOCAL_REPO} checkout --union ${REF2} ${dir2}
-else
-    # Compare local commit with remote commit
-    echo "Comparing local vs remote ${REF}..."
-    
-    # Base directories to compare
-    dir1="$(mktemp -d)"
-    dir2="$(mktemp -d)"
-    
-    # Get latest commit from local repo
-    REF1="$(ostree --repo=$LOCAL_REPO log "${REF}" | head -1 | awk '{print $2}')"
-    
-    # Create a temporary local copy of the remote repo
-    temp_repo="$(mktemp -d)"
-    
-    # Use rsync to copy remote repo directly
-    echo "Copying remote repository content..."
-    rsync -az --xattrs --fake-super ${REMOTE_REPO} ${temp_repo}
-    
-    # Get the remote ref
-    REF2="$(ostree --repo=${temp_repo} log "${REF}" | head -1 | awk '{print $2}')"
-    
-    echo "Local commit: ${REF1}"
-    echo "Remote commit: ${REF2}"
-    
-    # Check out both commits
-    unshare --map-root-user ostree --repo=${LOCAL_REPO} checkout --union ${REF1} ${dir1}
-    unshare --map-root-user ostree --repo=${temp_repo} checkout --union ${REF2} ${dir2}
+echo "Comparing two local commits for ${REF}..."
+
+# base directories to compare (use .nex/tmp to avoid cross-device link issues)
+mkdir -p .nex/tmp
+dir1="$(mktemp -d -p .nex/tmp)"
+dir2="$(mktemp -d -p .nex/tmp)"
+
+# get the last two commits from zub log
+# zub log format: "commit <hash>" on each commit line
+REF1="$($ZUB --repo=$LOCAL_REPO log "${REF}" | grep '^commit ' | head -1 | awk '{print $2}')"
+REF2="$($ZUB --repo=$LOCAL_REPO log "${REF}" | grep '^commit ' | head -2 | tail -1 | awk '{print $2}')"
+
+echo "Commit 1: ${REF1}"
+echo "Commit 2: ${REF2}"
+
+if [ "$REF1" = "$REF2" ]; then
+    echo "Only one commit found, nothing to compare"
+    exit 0
 fi
 
-# Function to compare files
-compare_files() {
-    local file1="$1"
-    local file2="$2"
-    if ! diff -q "$file1" "$file2" > /dev/null; then
-        echo "Differing file: ${file1} ${file2}"
+$ZUB --repo=${LOCAL_REPO} checkout ${REF1} ${dir1}
+$ZUB --repo=${LOCAL_REPO} checkout ${REF2} ${dir2}
+
+# find differing files
+echo ""
+echo "=== Differing files ==="
+diff_found=0
+for file1 in $(find "$dir1" -type f); do
+    file2="${dir2}${file1#$dir1}"
+    if [ -f "$file2" ]; then
+        if ! diff -q "$file1" "$file2" > /dev/null 2>&1; then
+            echo "DIFF: ${file1#$dir1/}"
+            diff_found=1
+        fi
     else
-        echo "$file1 same"
+        echo "MISSING in build2: ${file1#$dir1/}"
+        diff_found=1
     fi
-}
+done
 
-# Export function and base directories for access in find command
-export -f compare_files
-export dir1
-export dir2
+# check for files only in dir2
+for file2 in $(find "$dir2" -type f); do
+    file1="${dir1}${file2#$dir2}"
+    if [ ! -f "$file1" ]; then
+        echo "MISSING in build1: ${file2#$dir2/}"
+        diff_found=1
+    fi
+done
 
-# Find and compare all files in dir1 to corresponding files in dir2
-find "$dir1" -type f -exec sh -c 'compare_files "{}" "${dir2}${1#$dir1}"' _ {} \;
+if [ "$diff_found" -eq 0 ]; then
+    echo "All files match!"
+else
+    echo ""
+    echo "Builds are NOT reproducible"
+    exit 1
+fi

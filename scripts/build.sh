@@ -6,6 +6,16 @@ PHASES="${PHASES:-bootstrap/phase0 bootstrap/phase1 bootstrap/phase2 bootstrap/p
 UPDATE_OUTPUTS="${UPDATE_OUTPUTS:-0}"
 UPDATE_CHECKSUM="${UPDATE_CHECKSUM:-0}"
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+ZUB="${ROOT_DIR}/src/zub/target/debug/zub"
+
+# build zub if needed
+if [ ! -f "$ZUB" ]; then
+  echo "Building zub CLI..."
+  (cd "$ROOT_DIR/src/zub" && cargo build)
+fi
+
 for PHASE in ${PHASES}; do
   echo "Phase: $PHASE"
   MANIFEST_DIR="pkg/${PHASE}"
@@ -31,7 +41,7 @@ for PHASE in ${PHASES}; do
       exit 1
     fi
 
-    # check if the bundle already exists in ostree
+    # check if the bundle already exists in zub
     BUNDLE_REF="x86_64/pkg/${REL_PATH}/${VERSION}/bundles/${BUNDLE_NAME}"
 
     FORCE_REBUILD=0
@@ -43,9 +53,9 @@ for PHASE in ${PHASES}; do
       echo "Forcing rebuild of ${M}"
     fi
 
-    if [ $FORCE_REBUILD -eq 0 ] && ostree --repo=bootstrap_store rev-parse "$BUNDLE_REF" >/dev/null 2>&1; then
+    if [ $FORCE_REBUILD -eq 0 ] && $ZUB --repo=bootstrap_store rev-parse "$BUNDLE_REF" >/dev/null 2>&1; then
       if [ -n "$CHECKSUM" ]; then
-        if ! EXISTING_CHECKSUM=$(ostree --repo=bootstrap_store show --print-metadata-key=nex.build.checksum "$BUNDLE_REF" 2>/dev/null | tr -d "'" | tr -d '[:space:]'); then
+        if ! EXISTING_CHECKSUM=$($ZUB --repo=bootstrap_store show --print-metadata-key=nex.build.checksum "$BUNDLE_REF" 2>/dev/null | tr -d "'" | tr -d '[:space:]'); then
           EXISTING_CHECKSUM=""
         fi
         if [ "$EXISTING_CHECKSUM" = "$CHECKSUM" ]; then

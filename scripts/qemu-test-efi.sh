@@ -173,14 +173,14 @@ QEMU_ARGS=(
 [ -f "$OVMF_VARS" ] && QEMU_ARGS+=(-drive "if=pflash,format=raw,file=$OVMF_VARS")
 QEMU_ARGS+=(
     -drive "file=$OUTPUT,format=raw,if=virtio"
-    -netdev user,id=net0,hostfwd=tcp::2222-:22
+    -netdev user,id=net0,hostfwd=tcp::10022-:22
     -device virtio-net-pci,netdev=net0
     -serial mon:stdio
     -display none
     -no-reboot
 )
 
-log "Network: SSH available on localhost:2222 (ssh -p 2222 root@localhost)"
+log "Network: SSH available on localhost:10022 (ssh -p 10022 root@localhost)"
 
 echo "--- QEMU output (Ctrl-A X to exit) ---"
 echo ""
