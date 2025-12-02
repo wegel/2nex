@@ -166,8 +166,8 @@ fn fetch_deps_from_manifest(
                     }
                 };
 
-                // skip @self entries - internal libs don't need resolution
-                if dep_name == "@self" {
+                // skip self entries - internal libs don't need resolution
+                if dep_name == "self" {
                     continue;
                 }
 

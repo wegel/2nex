@@ -750,7 +750,10 @@ pub fn build_package_manifest_with_dir(
         run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
         BuildScriptResult { new_profile: None }
     } else {
-        let mut progress_config = BuildProgressConfig::new(&manifest.package.slug);
+        let mut progress_config = BuildProgressConfig::new(&format!(
+            "{}/{}",
+            manifest.package.namespace, manifest.package.slug
+        ));
         progress_config.verbose = opts.verbose;
         // only record if explicitly requested - never auto-modify manifest
         progress_config.record_profile = opts.record_profile;

@@ -1,7 +1,54 @@
-use serde::de::Deserializer;
+use serde::de::{self, Deserializer, Visitor};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::path::PathBuf;
+
+/// deserialize version field that accepts both strings and numbers
+fn deserialize_version<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct VersionVisitor;
+
+    impl<'de> Visitor<'de> for VersionVisitor {
+        type Value = String;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a string or number")
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<String, E>
+        where
+            E: de::Error,
+        {
+            Ok(value.to_string())
+        }
+
+        fn visit_f64<E>(self, value: f64) -> Result<String, E>
+        where
+            E: de::Error,
+        {
+            Ok(value.to_string())
+        }
+
+        fn visit_i64<E>(self, value: i64) -> Result<String, E>
+        where
+            E: de::Error,
+        {
+            Ok(value.to_string())
+        }
+
+        fn visit_u64<E>(self, value: u64) -> Result<String, E>
+        where
+            E: de::Error,
+        {
+            Ok(value.to_string())
+        }
+    }
+
+    deserializer.deserialize_any(VersionVisitor)
+}
 
 /// Source for loading a manifest - either from disk or from a git blob
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -41,7 +88,7 @@ pub struct Manifest {
     #[serde(deserialize_with = "deserialize_bundles")]
     pub bundles: HashMap<String, Bundle>,
     /// resolution map: file_path (e.g., "/usr/lib/libc.so.6") -> dependency_name (e.g., "glibc")
-    /// internal libraries use "@self" as the value
+    /// internal libraries use "self" as the value
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub resolution: HashMap<String, String>,
 }
@@ -50,6 +97,7 @@ pub struct Manifest {
 pub struct Package {
     pub name: String,
     pub slug: String,
+    #[serde(deserialize_with = "deserialize_version")]
     pub version: String,
     #[serde(alias = "flavor")]
     pub namespace: String,
@@ -81,6 +129,7 @@ pub enum ManifestKind {
 pub struct SystemMeta {
     pub name: String,
     pub slug: String,
+    #[serde(deserialize_with = "deserialize_version")]
     pub version: String,
     #[serde(default)]
     pub architecture: Option<String>,

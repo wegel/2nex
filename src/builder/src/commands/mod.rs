@@ -3,6 +3,7 @@ pub mod commit;
 pub mod complete;
 pub mod compute_deps;
 pub mod discard;
+pub mod format;
 pub mod info;
 pub mod install;
 pub mod link;

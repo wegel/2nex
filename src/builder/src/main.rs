@@ -91,6 +91,9 @@ enum Command {
     /// Compute and store runtime dependencies in manifest
     ComputeDeps(commands::compute_deps::ComputeDepsArgs),
 
+    /// Format manifest files
+    Format(commands::format::FormatArgs),
+
     /// Generate ref completions for shell auto-completion
     Complete(commands::complete::CompleteArgs),
 }
@@ -117,6 +120,7 @@ fn main() -> io::Result<()> {
         Command::Rollback(args) => commands::rollback::run(&args),
         Command::Resolve(args) => commands::resolve::run(&args),
         Command::ComputeDeps(args) => commands::compute_deps::run(&args),
+        Command::Format(args) => commands::format::run(&args),
         Command::Complete(args) => commands::complete::run(&args),
     }
 }
@@ -1559,7 +1563,7 @@ fn get_manifest_deps(commit: &str, manifest_index: &manifest::ManifestIndex) -> 
     let mut seen = std::collections::HashSet::new();
 
     for dep_name in manifest.resolution.values() {
-        if dep_name == "@self" {
+        if dep_name == "self" {
             continue;
         }
         if let Some(dep) = manifest

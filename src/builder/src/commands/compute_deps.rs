@@ -2,7 +2,7 @@
 //!
 //! This command scans ELF files in a built package's outputs and populates
 //! the manifest's `resolution` map, mapping file paths to dependency names.
-//! Internal libraries (provided by the package itself) are marked with `@self`.
+//! Internal libraries (provided by the package itself) are marked with `self`.
 //!
 //! This eliminates the need for runtime ELF scanning during `nex install`.
 
@@ -284,9 +284,9 @@ pub fn compute_deps_for_manifest(
                 {
                     needs.push(lib_path.clone());
 
-                    // resolve provider_key to dependency name (or @self for internal libs)
+                    // resolve provider_key to dependency name (or self for internal libs)
                     let resolution_value = if provider_key == &self_provider_key {
-                        "@self".to_string()
+                        "self".to_string()
                     } else if let Some(dep_name) = provider_key_to_dep_name.get(provider_key) {
                         dep_name.clone()
                     } else {
@@ -298,7 +298,7 @@ pub fn compute_deps_for_manifest(
                         provider_key.clone()
                     };
 
-                    // add to resolution map (file_path -> dep_name or @self)
+                    // add to resolution map (file_path -> dep_name or self)
                     resolution
                         .entry(lib_path.clone())
                         .or_insert(resolution_value.clone());
