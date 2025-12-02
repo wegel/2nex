@@ -84,6 +84,18 @@ pub struct BuildArgs {
     /// Fallback repository for dependency lookups (can be specified multiple times)
     #[clap(long = "fallback-repo", action = clap::ArgAction::Append)]
     pub fallback_repos: Vec<String>,
+
+    /// Show build output alongside progress bar
+    #[clap(long, short = 'v')]
+    pub verbose: bool,
+
+    /// Force re-recording of build profile (discards existing profile)
+    #[clap(long)]
+    pub record_profile: bool,
+
+    /// Disable progress tracking (legacy behavior, shows raw output)
+    #[clap(long)]
+    pub no_progress: bool,
 }
 
 /// Build options passed to build functions
@@ -100,6 +112,9 @@ pub struct BuildOpts {
     pub build_dir: Option<String>,
     pub generate_outputs: bool,
     pub fallback_repos: Vec<String>,
+    pub verbose: bool,
+    pub record_profile: bool,
+    pub no_progress: bool,
 }
 
 impl BuildOpts {
@@ -117,6 +132,9 @@ impl BuildOpts {
             build_dir: args.build_dir.clone(),
             generate_outputs: args.generate_outputs,
             fallback_repos: args.fallback_repos.clone(),
+            verbose: args.verbose,
+            record_profile: args.record_profile,
+            no_progress: args.no_progress,
         }
     }
 }

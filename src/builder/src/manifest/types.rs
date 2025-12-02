@@ -142,6 +142,10 @@ pub struct Source {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Build {
     pub script: String,
+    /// progress profile for build time estimation
+    /// each element is "bytes:time_ms"
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub profile: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

@@ -279,3 +279,79 @@ pub fn write_auto_outputs_to_manifest(
 
     Ok(())
 }
+
+/// update or insert the build.profile field in a manifest
+pub fn update_build_profile(manifest_path: &str, new_profile: &[String]) -> io::Result<()> {
+    let contents = fs::read_to_string(manifest_path)?;
+    let mut lines: Vec<String> = contents.lines().map(|l| l.to_string()).collect();
+
+    let mut in_build = false;
+    let mut build_indent: Option<String> = None;
+    let mut profile_line_idx = None;
+    let mut script_line_idx = None;
+
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+
+        // detect leaving build section (new top-level key)
+        if in_build
+            && !line.starts_with(' ')
+            && !line.starts_with('\t')
+            && !trimmed.is_empty()
+            && trimmed != "build:"
+        {
+            break;
+        }
+
+        if trimmed == "build:" {
+            in_build = true;
+            continue;
+        }
+
+        if in_build {
+            // capture indent from first non-empty line
+            if build_indent.is_none() && !trimmed.is_empty() {
+                build_indent = Some(
+                    line.chars()
+                        .take_while(|c| c.is_whitespace())
+                        .collect::<String>(),
+                );
+            }
+
+            if trimmed.starts_with("profile:") {
+                profile_line_idx = Some(idx);
+            }
+            if trimmed.starts_with("script:") {
+                script_line_idx = Some(idx);
+            }
+        }
+    }
+
+    let indent = build_indent.unwrap_or_else(|| "  ".to_string());
+
+    // format as YAML flow array: [item1, item2, ...]
+    let profile_yaml = format!("[{}]", new_profile.join(", "));
+
+    if let Some(idx) = profile_line_idx {
+        // update existing profile line
+        lines[idx] = format!("{}profile: {}", indent, profile_yaml);
+    } else if let Some(script_idx) = script_line_idx {
+        // insert before script line (profile comes before script in the struct)
+        lines.insert(script_idx, format!("{}profile: {}", indent, profile_yaml));
+    } else {
+        // no script line found - unusual, but just append to build section
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Could not find build section or script field",
+        ));
+    }
+
+    let had_trailing_newline = contents.ends_with('\n');
+    let mut new_contents = lines.join("\n");
+    if had_trailing_newline {
+        new_contents.push('\n');
+    }
+    fs::write(manifest_path, new_contents)?;
+    println!("Updated build profile in {}", manifest_path);
+    Ok(())
+}

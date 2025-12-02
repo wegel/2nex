@@ -3,7 +3,7 @@ use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use walkdir::WalkDir;
 
 use sha2::{Digest, Sha256};
@@ -11,6 +11,7 @@ use sha2::{Digest, Sha256};
 use crate::commands::build::BuildOpts;
 use crate::manifest::*;
 use crate::outputs::*;
+use crate::progress::{self, BuildProgressConfig};
 use crate::store::{
     checkout_into, checkout_into_with_fallbacks, commit_tree, ensure_branch_exists,
     find_commit_by_manifest_hash, rewrite_branch_metadata,
@@ -179,12 +180,30 @@ pub fn handle_inputs(
     Ok(input_env_vars)
 }
 
+/// result from running a build script with progress tracking
+pub struct BuildScriptResult {
+    /// new profile if one was recorded (each element is "bytes:time_ms")
+    pub new_profile: Option<Vec<String>>,
+}
+
 pub fn run_build_script(
     build_script: &str,
     build_dir: &str,
     env_vars: &HashMap<String, String>,
     bootstrap: bool,
 ) -> io::Result<()> {
+    // legacy mode: no progress tracking
+    run_build_script_with_progress(build_script, build_dir, env_vars, bootstrap, None)?;
+    Ok(())
+}
+
+pub fn run_build_script_with_progress(
+    build_script: &str,
+    build_dir: &str,
+    env_vars: &HashMap<String, String>,
+    bootstrap: bool,
+    progress_config: Option<&BuildProgressConfig>,
+) -> io::Result<BuildScriptResult> {
     println!("Running build script in an isolated environment using unshare");
 
     let mut env = HashMap::new();
@@ -432,17 +451,74 @@ pub fn run_build_script(
     let mut command = Command::new("unshare");
     command.args(&command_args).envs(&env);
 
+    // configure stdout/stderr based on progress config
+    // when no profile exists, show all output since we can't show meaningful progress
+    let show_output = progress_config
+        .map(|c| c.verbose || c.profile.is_empty())
+        .unwrap_or(true);
+
+    if progress_config.is_some() {
+        command.stdout(Stdio::piped());
+        if show_output {
+            // show output mode: stderr goes to terminal
+            command.stderr(Stdio::inherit());
+        } else {
+            // quiet mode: capture stderr for clean progress bar
+            command.stderr(Stdio::piped());
+        }
+    }
+
     println!(
         "Executing build script under unshare with env vars: {:?}",
         env
     );
     let mut child = command.spawn()?;
 
+    // handle progress tracking if configured
+    let (new_profile, captured_stderr) = if let Some(config) = progress_config {
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "failed to capture stdout"))?;
+
+        // capture stderr in a separate thread if in quiet mode (has profile, not verbose)
+        let stderr_handle = if !show_output {
+            let stderr = child.stderr.take();
+            stderr.map(|stderr| {
+                std::thread::spawn(move || {
+                    let mut buf = Vec::new();
+                    let mut reader = std::io::BufReader::new(stderr);
+                    let _ = std::io::Read::read_to_end(&mut reader, &mut buf);
+                    buf
+                })
+            })
+        } else {
+            None
+        };
+
+        let result = progress::run_with_progress(stdout, config)?;
+
+        // collect stderr if we captured it
+        let stderr_output = stderr_handle.and_then(|h| h.join().ok());
+
+        (result.new_profile, stderr_output)
+    } else {
+        (None, None)
+    };
+
     // use the result of wait() to determine if the build script succeeded or not
     let result = child.wait()?;
     if result.success() {
-        Ok(())
+        Ok(BuildScriptResult { new_profile })
     } else {
+        // show captured stderr on failure
+        if let Some(stderr) = captured_stderr {
+            if !stderr.is_empty() {
+                eprintln!("\n--- build stderr ---");
+                let _ = std::io::Write::write_all(&mut std::io::stderr(), &stderr);
+                eprintln!("--- end stderr ---\n");
+            }
+        }
         Err(io::Error::new(io::ErrorKind::Other, "Build script failed"))
     }
 }
@@ -669,7 +745,32 @@ pub fn build_package_manifest_with_dir(
     env_vars.extend(input_env_vars);
     let build_script = manifest.build.script.clone();
 
-    run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
+    // run build with progress tracking if enabled
+    let build_result = if opts.no_progress {
+        run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
+        BuildScriptResult { new_profile: None }
+    } else {
+        let mut progress_config = BuildProgressConfig::new(&manifest.package.slug);
+        progress_config.verbose = opts.verbose;
+        // only record if explicitly requested - never auto-modify manifest
+        progress_config.record_profile = opts.record_profile;
+        progress_config.profile = manifest.build.profile.clone();
+        run_build_script_with_progress(
+            &build_script,
+            base_dir,
+            &env_vars,
+            opts.bootstrap,
+            Some(&progress_config),
+        )?
+    };
+
+    // only update manifest if --record-profile was explicitly requested
+    if opts.record_profile {
+        if let Some(new_profile) = build_result.new_profile {
+            crate::manifest::update::update_build_profile(&opts.manifest_file, &new_profile)?;
+            manifest.build.profile = new_profile;
+        }
+    }
 
     // if generate_outputs is enabled, write auto-detected outputs to manifest
     if opts.generate_outputs {

@@ -20,6 +20,7 @@ pub mod deps;
 pub mod manifest;
 pub mod materializer;
 pub mod outputs;
+pub mod progress;
 pub mod refs;
 pub mod repo;
 pub mod store;
@@ -1198,6 +1199,9 @@ fn build_packages_parallel(
                             build_dir: None,
                             generate_outputs: opts.generate_outputs,
                             fallback_repos: opts.fallback_repos.clone(),
+                            verbose: opts.verbose,
+                            record_profile: opts.record_profile,
+                            no_progress: opts.no_progress,
                         };
 
                         println!(
@@ -1243,6 +1247,9 @@ fn build_packages_parallel(
                             build_dir: None,
                             generate_outputs: opts.generate_outputs,
                             fallback_repos: opts.fallback_repos.clone(),
+                            verbose: opts.verbose,
+                            record_profile: opts.record_profile,
+                            no_progress: opts.no_progress,
                         };
 
                         println!(
@@ -1419,6 +1426,9 @@ fn add_missing_checksums_to_manifests(
                     build_dir: None,
                     generate_outputs: false, // don't auto-generate outputs when adding checksums
                     fallback_repos: opts.fallback_repos.clone(),
+                    verbose: opts.verbose,
+                    record_profile: opts.record_profile,
+                    no_progress: opts.no_progress,
                 };
 
                 build_package_manifest(&build_opts, &mut manifest_copy)?;

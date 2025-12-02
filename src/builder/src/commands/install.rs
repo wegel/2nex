@@ -526,6 +526,9 @@ fn build_package_to_user_repo(
             .iter()
             .map(|p| p.to_string_lossy().to_string())
             .collect(),
+        verbose: false,
+        record_profile: false,
+        no_progress: false,
     };
 
     build::build_single(&opts)
