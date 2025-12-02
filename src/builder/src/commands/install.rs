@@ -585,7 +585,7 @@ fn build_package_to_user_repo(
     let opts = BuildOpts {
         repo_path: repo_path.to_string(),
         manifest_file: manifest_path.to_string_lossy().to_string(),
-        validate_reproducibility: false,
+        check: false,
         update_checksum: false,
         bootstrap: false,
         compute_deps: false,

@@ -363,7 +363,7 @@ fn build_package_manifest_with_dir(
                         manifest,
                         Path::new(&opts.manifest_file),
                     )?;
-                } else if !opts.validate_reproducibility {
+                } else if !opts.check {
                     eprintln!(
                         "Checksum mismatch. Expected: {}, Calculated: {}",
                         expected_checksum, checksum
@@ -417,7 +417,7 @@ fn build_package_manifest_with_dir(
         refresh_package_metadata(&opts.repo_path, manifest, Path::new(&opts.manifest_file))?;
     }
 
-    if opts.validate_reproducibility {
+    if opts.check {
         println!("Validating build reproducibility by building the package a second time.");
         fs::remove_dir_all(base_dir)?;
         setup_composite_rootfs(base_dir, &opts.repo_path, &opts.fallback_repos, &dependency_commits)?;
@@ -1144,7 +1144,7 @@ fn build_packages_parallel(
                         let build_opts = BuildOpts {
                             repo_path: opts.repo_path.clone(),
                             manifest_file: path.to_str().unwrap().to_string(),
-                            validate_reproducibility: opts.validate_reproducibility,
+                            check: opts.check,
                             update_checksum: opts.update_checksum,
                             bootstrap: manifest.package.bootstrap,
                             compute_deps: opts.compute_deps,
@@ -1189,7 +1189,7 @@ fn build_packages_parallel(
                         let build_opts = BuildOpts {
                             repo_path: opts.repo_path.clone(),
                             manifest_file: path.to_str().unwrap().to_string(),
-                            validate_reproducibility: opts.validate_reproducibility,
+                            check: opts.check,
                             update_checksum: opts.update_checksum,
                             bootstrap: opts.bootstrap,
                             compute_deps: opts.compute_deps,
@@ -1365,7 +1365,7 @@ fn add_missing_checksums_to_manifests(
                 let build_opts = BuildOpts {
                     repo_path: repo_path.to_string(),
                     manifest_file: manifest_path.to_str().unwrap().to_string(),
-                    validate_reproducibility: false,
+                    check: false,
                     update_checksum: true, // enable checksum updating
                     bootstrap: manifest.package.bootstrap,
                     compute_deps: opts.compute_deps,

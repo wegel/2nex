@@ -599,7 +599,7 @@ pub fn build_single(opts: &BuildOpts) -> io::Result<()> {
                 "--refresh-metadata only applies to package manifests",
             ));
         }
-        if opts.validate_reproducibility {
+        if opts.check {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "--refresh-metadata cannot be combined with --validate-reproducibility",
@@ -719,7 +719,7 @@ pub fn build_package_manifest_with_dir(
                         manifest,
                         Path::new(&opts.manifest_file),
                     )?;
-                } else if !opts.validate_reproducibility {
+                } else if !opts.check {
                     // only exit on mismatch if we're not validating reproducibility
                     // (reproducibility check compares two builds, not against stored checksum)
                     eprintln!(
@@ -775,7 +775,7 @@ pub fn build_package_manifest_with_dir(
         refresh_package_metadata(&opts.repo_path, manifest, Path::new(&opts.manifest_file))?;
     }
 
-    if opts.validate_reproducibility {
+    if opts.check {
         println!("Validating build reproducibility by building the package a second time.");
         fs::remove_dir_all(base_dir)?;
         setup_composite_rootfs(base_dir, &opts.repo_path, &opts.fallback_repos, &dependency_commits)?;

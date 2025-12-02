@@ -126,7 +126,7 @@ pub fn build_system_manifest_with_dir(
         manifest.system.slug, manifest.system.version
     );
 
-    if opts.validate_reproducibility {
+    if opts.check {
         println!("Validating build reproducibility by building the system a second time.");
         fs::remove_dir_all(base_dir)?;
 

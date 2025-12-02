@@ -29,9 +29,9 @@ pub struct BuildArgs {
     #[clap(long)]
     pub runtime_deps_verbose: bool,
 
-    /// Validate build reproducibility
-    #[clap(long)]
-    pub validate_reproducibility: bool,
+    /// Validate build reproducibility by building twice and comparing
+    #[clap(long, alias = "validate-reproducibility")]
+    pub check: bool,
 
     /// Update the manifest checksum when build outputs differ from what is recorded
     #[clap(long)]
@@ -90,7 +90,7 @@ pub struct BuildArgs {
 pub struct BuildOpts {
     pub repo_path: String,
     pub manifest_file: String,
-    pub validate_reproducibility: bool,
+    pub check: bool,
     pub update_checksum: bool,
     pub bootstrap: bool,
     pub compute_deps: bool,
@@ -107,7 +107,7 @@ impl BuildOpts {
         Self {
             repo_path,
             manifest_file: args.manifest.clone(),
-            validate_reproducibility: args.validate_reproducibility,
+            check: args.check,
             update_checksum: args.update_checksum,
             bootstrap: args.bootstrap,
             compute_deps: args.compute_deps,

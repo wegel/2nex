@@ -164,11 +164,18 @@ pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
             manifest_dirs.push(PathBuf::from("pkg"));
         }
 
+        // in build-time context, still use /nex/repo as fallback if it exists
+        // (useful when building on a system that already has packages)
+        let mut fallback_repos = Vec::new();
+        if Path::new("/nex/repo").exists() {
+            fallback_repos.push(PathBuf::from("/nex/repo"));
+        }
+
         return Ok(NexContext {
             repo_path: PathBuf::from(".nex/repo"),
             pkg_path: PathBuf::from(".nex/pkg"),
             env_path: PathBuf::from(".nex/env"),
-            fallback_repos: Vec::new(), // no fallback in build-time context
+            fallback_repos,
             is_system: false,
             needs_staging: false,
             var_path: PathBuf::from(".nex/var"),
