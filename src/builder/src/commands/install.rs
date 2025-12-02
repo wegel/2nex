@@ -1,4 +1,5 @@
 use clap::Args;
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::io;
 use std::os::unix::fs::symlink;
@@ -8,14 +9,16 @@ use super::build::BuildOpts;
 use super::stage::{is_staged, mount_nex_overlays, staging_upper_dir};
 use super::state::InstalledState;
 use crate::build;
+use crate::manifest::{load_manifest, ManifestData};
 use crate::materializer::{materialize, MaterializeConfig, MaterializeMode, MaterializeRequest};
-use crate::repo::{detect_context, ensure_user_dirs, resolve_repo_path, NexContext};
+use crate::refs::{PackageRef, RefType};
+use crate::repo::{detect_context, ensure_user_dirs, resolve_repo_path};
 use crate::store::Store;
 
 #[derive(Args)]
 pub struct InstallArgs {
-    /// Package to install (e.g., "bash", "cli/shells/bash", or full ref)
-    pub package: String,
+    /// Package ref (e.g., x86_64/pkg/cli/editors/neovim/0.11.0/bundles/full)
+    pub package_ref: String,
 
     /// Repository path (auto-detected if not specified)
     #[clap(long)]
@@ -24,10 +27,6 @@ pub struct InstallArgs {
     /// Manifest directory (auto-detected if not specified)
     #[clap(long)]
     pub manifest_dir: Option<String>,
-
-    /// Install specific version
-    #[clap(long)]
-    pub version: Option<String>,
 
     /// Commit immediately after installing (stage, install, commit in one step)
     #[clap(long)]
@@ -112,45 +111,49 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     // load current state (context-aware)
     let mut state = InstalledState::load_for_context(&ctx).unwrap_or_default();
 
-    // find the bundle or output ref for the package
-    // for user installs, we look in the system repo via fallback
-    // if not found and in user context, try to auto-build
-    let package_ref = match find_package_ref_with_fallback(
+    // parse the package ref
+    let pkg_ref = PackageRef::parse(&args.package_ref).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Invalid package ref '{}': {}", args.package_ref, e),
+        )
+    })?;
+
+    // find manifest using direct path lookup
+    let manifest_path = find_manifest_by_ref(&manifest_dirs, &pkg_ref)?;
+
+    // load and validate manifest (validates version and output/bundle exists)
+    let _manifest = load_and_validate_manifest(&manifest_path, &pkg_ref)?;
+
+    // compute manifest hash for staleness check
+    let manifest_content = fs::read_to_string(&manifest_path)?;
+    let manifest_hash = format!("{:x}", Sha256::digest(manifest_content.as_bytes()));
+
+    // check if ref exists and is fresh in cache
+    let store = Store::open_with_fallback_chain(&repo_path, &ctx.fallback_repos).ok();
+    let is_cached = check_cache_freshness(store.as_ref(), &args.package_ref, &manifest_hash);
+
+    // build if not cached or stale
+    if !is_cached {
+        println!("Building {}...", args.package_ref);
+        build_package_to_user_repo(&repo_path, &ctx.fallback_repos, &manifest_dirs, &manifest_path)?;
+    }
+
+    println!("Installing {}...", args.package_ref);
+
+    // get checksum from zub (now guaranteed to exist after build)
+    let checksum = get_commit_short_hash_with_fallback(
         &repo_path,
         ctx.fallback_repo().map(|p| p.as_path()),
-        &args.package,
-        args.version.as_deref(),
-    ) {
-        Ok(r) => r,
-        Err(e) if e.kind() == io::ErrorKind::NotFound && !ctx.is_system => {
-            // package not found - try to auto-build in user context
-            println!(
-                "Package '{}' not found in repos, attempting build...",
-                args.package
-            );
-
-            let manifest_path =
-                find_manifest_for_package(&ctx, &args.package, args.version.as_deref())?;
-            build_package_to_user_repo(&repo_path, &ctx.fallback_repos, &manifest_dirs, &manifest_path)?;
-
-            // retry finding the package
-            find_package_ref_with_fallback(
-                &repo_path,
-                ctx.fallback_repo().map(|p| p.as_path()),
-                &args.package,
-                args.version.as_deref(),
-            )?
-        }
-        Err(e) => return Err(e),
-    };
-    println!("Installing {}...", package_ref);
-
-    // parse the ref to get package info
-    let pkg_info = parse_package_ref_with_fallback(
-        &repo_path,
-        ctx.fallback_repo().map(|p| p.as_path()),
-        &package_ref,
+        &args.package_ref,
     )?;
+
+    let pkg_info = PackageInfo {
+        namespace: pkg_ref.namespace.clone(),
+        slug: pkg_ref.slug.clone(),
+        version: pkg_ref.version.clone(),
+        checksum,
+    };
 
     // check if this exact version is already installed
     if state.is_version_installed(
@@ -221,7 +224,7 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     };
 
     let requests = vec![MaterializeRequest::Bundle {
-        commit: package_ref.clone(),
+        commit: args.package_ref.clone(),
     }];
 
     let result = materialize(&config, &requests)?;
@@ -309,7 +312,7 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
         &pkg_info.version,
         &pkg_info.checksum,
         binaries,
-        &package_ref,
+        &args.package_ref,
         should_create_symlinks,
     );
 
@@ -334,101 +337,105 @@ struct PackageInfo {
     checksum: String,
 }
 
-fn find_package_ref_with_fallback(
-    repo: &str,
-    fallback: Option<&Path>,
-    query: &str,
-    version: Option<&str>,
-) -> io::Result<String> {
-    let store = Store::open_with_fallback(repo, fallback)?;
-    let all_refs = store.refs(None)?;
-    let query_parts: Vec<&str> = query.split('/').collect();
+/// find manifest file using ref's namespace and slug (direct path lookup)
+fn find_manifest_by_ref(manifest_dirs: &[PathBuf], pkg_ref: &PackageRef) -> io::Result<PathBuf> {
+    let rel_path = pkg_ref.manifest_rel_path();
 
-    // prefer bundles/full, then bundles/*, then outputs/bin
-    let priorities = ["/bundles/full", "/bundles/", "/outputs/bin"];
-
-    for priority in &priorities {
-        for ref_name in &all_refs {
-            if !ref_name.contains(priority) {
-                continue;
-            }
-
-            let parts: Vec<&str> = ref_name.split('/').collect();
-            if parts.len() < 6 || parts[0] != "x86_64" || parts[1] != "pkg" {
-                continue;
-            }
-
-            let boundary = parts
-                .iter()
-                .position(|p| *p == "bundles" || *p == "outputs");
-
-            let boundary = match boundary {
-                Some(b) => b,
-                None => continue,
-            };
-
-            if boundary < 4 {
-                continue;
-            }
-
-            let namespace = parts[2..boundary - 2].join("/");
-            let slug = parts[boundary - 2];
-            let ver = parts[boundary - 1];
-
-            // filter by version if specified
-            if let Some(v) = version {
-                if ver != v {
-                    continue;
-                }
-            }
-
-            // match query
-            let matched = if query_parts.len() == 1 {
-                slug == query_parts[0]
-            } else {
-                let full_path = format!("{}/{}", namespace, slug);
-                full_path.contains(query) || full_path.ends_with(query)
-            };
-
-            if matched {
-                return Ok(ref_name.to_string());
-            }
+    for base in manifest_dirs {
+        let full_path = base.join(&rel_path);
+        if full_path.exists() {
+            return Ok(full_path);
         }
     }
 
     Err(io::Error::new(
         io::ErrorKind::NotFound,
-        format!("No package found for '{}'. Build it first.", query),
+        format!(
+            "Manifest not found: {} (searched in {:?})",
+            rel_path, manifest_dirs
+        ),
     ))
 }
 
-fn parse_package_ref_with_fallback(
-    repo: &str,
-    fallback: Option<&Path>,
-    ref_path: &str,
-) -> io::Result<PackageInfo> {
-    let parts: Vec<&str> = ref_path.split('/').collect();
-    let boundary = parts
-        .iter()
-        .position(|p| *p == "bundles" || *p == "outputs")
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid package ref"))?;
+/// load manifest and validate version/output/bundle exists
+fn load_and_validate_manifest(
+    manifest_path: &Path,
+    pkg_ref: &PackageRef,
+) -> io::Result<crate::manifest::Manifest> {
+    let manifest_data = load_manifest(&manifest_path.to_string_lossy())?;
 
-    if boundary < 4 {
+    let manifest = match manifest_data {
+        ManifestData::Package(m) => m,
+        ManifestData::System(_) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Cannot install a system manifest directly",
+            ))
+        }
+    };
+
+    // validate version
+    if manifest.package.version != pkg_ref.version {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "Invalid package ref format",
+            format!(
+                "Version mismatch: ref specifies '{}' but manifest has '{}'",
+                pkg_ref.version, manifest.package.version
+            ),
         ));
     }
 
-    // get commit hash for checksum
-    let checksum = get_commit_short_hash_with_fallback(repo, fallback, ref_path)?;
+    // validate output/bundle exists
+    match &pkg_ref.ref_type {
+        RefType::Output { name } => {
+            if !manifest.outputs.contains_key(name) {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!(
+                        "Output '{}' not found in manifest (available: {:?})",
+                        name,
+                        manifest.outputs.keys().collect::<Vec<_>>()
+                    ),
+                ));
+            }
+        }
+        RefType::Bundle { name } => {
+            if !manifest.bundles.contains_key(name) {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!(
+                        "Bundle '{}' not found in manifest (available: {:?})",
+                        name,
+                        manifest.bundles.keys().collect::<Vec<_>>()
+                    ),
+                ));
+            }
+        }
+        RefType::Files { .. } => {
+            // files ref is always valid if manifest exists
+        }
+    }
 
-    Ok(PackageInfo {
-        namespace: parts[2..boundary - 2].join("/"),
-        slug: parts[boundary - 2].to_string(),
-        version: parts[boundary - 1].to_string(),
-        checksum,
-    })
+    Ok(manifest)
+}
+
+/// check if ref is cached and manifest hash matches (not stale)
+fn check_cache_freshness(store: Option<&Store>, ref_str: &str, expected_hash: &str) -> bool {
+    let store = match store {
+        Some(s) => s,
+        None => return false,
+    };
+
+    // check if ref exists
+    if store.resolve_ref(ref_str).is_err() {
+        return false;
+    }
+
+    // check manifest hash matches
+    match store.get_metadata(ref_str, "nex.manifest.hash") {
+        Ok(Some(stored_hash)) => stored_hash == expected_hash,
+        _ => false,
+    }
 }
 
 fn get_commit_short_hash_with_fallback(
@@ -473,104 +480,6 @@ fn get_binaries_from_dir(pkg_dir: &str) -> io::Result<Vec<String>> {
     }
 
     Ok(binaries)
-}
-
-/// find manifest file for a package query
-fn find_manifest_for_package(
-    ctx: &NexContext,
-    query: &str,
-    version: Option<&str>,
-) -> io::Result<PathBuf> {
-    // search order: user worktree -> /nex/db/pkg -> local pkg/
-    let search_paths: Vec<PathBuf> = [
-        ctx.manifests_path.clone(),
-        Some(PathBuf::from("/nex/db/pkg")),
-        Some(PathBuf::from("pkg")),
-    ]
-    .into_iter()
-    .flatten()
-    .filter(|p| p.exists())
-    .collect();
-
-    for base in &search_paths {
-        if let Some(found) = search_manifest_in_dir(base, query, version)? {
-            return Ok(found);
-        }
-    }
-
-    Err(io::Error::new(
-        io::ErrorKind::NotFound,
-        format!(
-            "No manifest found for '{}'. Add to your manifests worktree at {:?}.",
-            query,
-            ctx.manifests_path
-        ),
-    ))
-}
-
-/// search for manifest matching query in a directory
-fn search_manifest_in_dir(
-    base: &Path,
-    query: &str,
-    _version: Option<&str>,
-) -> io::Result<Option<PathBuf>> {
-    // query can be: "bash", "cli/shells/bash", full path, etc.
-    let parts: Vec<&str> = query.split('/').collect();
-    let slug = parts.last().unwrap_or(&query);
-
-    // walk the directory looking for yaml files
-    for entry in walkdir(base)? {
-        let path = entry?;
-        if !path.is_file() {
-            continue;
-        }
-
-        let ext = path.extension().and_then(|e| e.to_str());
-        if ext != Some("yaml") && ext != Some("yml") {
-            continue;
-        }
-
-        let file_stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-
-        // match by slug (file stem matches query slug)
-        if file_stem == *slug {
-            return Ok(Some(path));
-        }
-
-        // also try matching the full path pattern
-        let rel_path = path.strip_prefix(base).unwrap_or(&path);
-        let rel_str = rel_path.to_string_lossy();
-        if rel_str.contains(query) {
-            return Ok(Some(path));
-        }
-    }
-
-    Ok(None)
-}
-
-/// recursively walk a directory yielding file paths
-fn walkdir(base: &Path) -> io::Result<Vec<io::Result<PathBuf>>> {
-    let mut results = Vec::new();
-    walkdir_inner(base, &mut results)?;
-    Ok(results)
-}
-
-fn walkdir_inner(dir: &Path, results: &mut Vec<io::Result<PathBuf>>) -> io::Result<()> {
-    if !dir.is_dir() {
-        return Ok(());
-    }
-
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            walkdir_inner(&path, results)?;
-        } else {
-            results.push(Ok(path));
-        }
-    }
-
-    Ok(())
 }
 
 /// build a package and commit to repo (calls build library directly, no subprocess)

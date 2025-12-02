@@ -20,6 +20,7 @@ pub mod deps;
 pub mod manifest;
 pub mod materializer;
 pub mod outputs;
+pub mod refs;
 pub mod repo;
 pub mod store;
 pub mod system;
@@ -88,6 +89,9 @@ enum Command {
 
     /// Compute and store runtime dependencies in manifest
     ComputeDeps(commands::compute_deps::ComputeDepsArgs),
+
+    /// Generate ref completions for shell auto-completion
+    Complete(commands::complete::CompleteArgs),
 }
 
 // re-export BuildOpts for internal use
@@ -112,6 +116,7 @@ fn main() -> io::Result<()> {
         Command::Rollback(args) => commands::rollback::run(&args),
         Command::Resolve(args) => commands::resolve::run(&args),
         Command::ComputeDeps(args) => commands::compute_deps::run(&args),
+        Command::Complete(args) => commands::complete::run(&args),
     }
 }
 
@@ -528,7 +533,7 @@ fn create_files_commit_for_package(
 
     // attach metadata
     let metadata = vec![
-        ("nex.address_hash".to_string(), address_hash),
+        ("nex.address_hash".to_string(), address_hash.clone()),
         (
             "nex.package".to_string(),
             format!(
@@ -540,6 +545,31 @@ fn create_files_commit_for_package(
         ),
     ];
     rewrite_branch_metadata(repo_path, &files_ref, &metadata)?;
+
+    // create semantic files ref (x86_64/pkg/{namespace}/{slug}/{version}/files)
+    let semantic_files_ref = format!(
+        "x86_64/{}/{}/{}/files",
+        manifest.package.namespace_path(),
+        manifest.package.slug,
+        manifest.package.version
+    );
+
+    // resolve the commit hash from the checksum-based ref
+    let commit_hash = zub::resolve_ref(&repo, &files_ref)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    // write the semantic ref pointing to the same commit
+    zub::write_ref(&repo, &semantic_files_ref, &commit_hash)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+    // attach manifest hash to semantic ref for staleness checks
+    let manifest_hash = compute_manifest_hash(manifest_path)?;
+    rewrite_branch_metadata(repo_path, &semantic_files_ref, &[
+        ("nex.manifest.hash".to_string(), manifest_hash),
+        ("nex.address_hash".to_string(), address_hash),
+    ])?;
+
+    println!("Created semantic ref: {}", semantic_files_ref);
 
     Ok(())
 }
