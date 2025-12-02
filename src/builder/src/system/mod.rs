@@ -21,7 +21,7 @@ use crate::store::{
 use crate::BuildOpts;
 
 pub fn build_system_manifest(opts: &BuildOpts, manifest: &SystemManifest) -> io::Result<()> {
-    build_system_manifest_with_dir(opts, manifest, "./build_rootfs")
+    build_system_manifest_with_dir(opts, manifest, ".nex/tmp/build_rootfs")
 }
 
 pub fn build_system_manifest_with_dir(

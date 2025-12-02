@@ -69,7 +69,7 @@ pub struct BuildArgs {
     #[clap(long)]
     pub trace_dependency: Option<String>,
 
-    /// Specify build directory (default: ./build_rootfs_{slug}_{namespace})
+    /// Specify build directory (default: .nex/tmp/build_rootfs_{slug}_{namespace})
     #[clap(long)]
     pub build_dir: Option<String>,
 

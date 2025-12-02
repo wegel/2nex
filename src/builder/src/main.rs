@@ -288,7 +288,7 @@ fn hydrate_dependencies(_repo_path: &str, manifest_file: &str) -> io::Result<()>
 }
 
 fn build_package_manifest(opts: &BuildOpts, manifest: &mut Manifest) -> io::Result<()> {
-    build_package_manifest_with_dir(opts, manifest, "./build_rootfs")
+    build_package_manifest_with_dir(opts, manifest, ".nex/tmp/build_rootfs")
 }
 
 fn build_package_manifest_with_dir(
@@ -1092,6 +1092,9 @@ fn build_packages_parallel(
     build_order: &[NodeIndex],
     opts: &BuildOpts,
 ) -> io::Result<()> {
+    // ensure tmp directory exists
+    fs::create_dir_all(".nex/tmp")?;
+
     let total = build_order.len();
     let completed = Arc::new(Mutex::new(HashSet::new()));
     let build_counter = Arc::new(Mutex::new(0usize));
@@ -1129,7 +1132,7 @@ fn build_packages_parallel(
             ));
         }
 
-        // bootstrap packages must build sequentially (they share ./build_rootfs directory)
+        // bootstrap packages must build sequentially (they share .nex/tmp/build_rootfs directory)
         // if this wave contains bootstrap packages, only build one at a time
         let has_bootstrap = wave.iter().any(|&node_idx| {
             let source = &graph[node_idx];
@@ -1180,10 +1183,10 @@ fn build_packages_parallel(
                     ManifestData::Package(mut manifest) => {
                         // bootstrap packages must use fixed directory name so GCC's hardcoded sysroot path remains valid
                         let build_dir = if manifest.package.bootstrap {
-                            "./build_rootfs".to_string()
+                            ".nex/tmp/build_rootfs".to_string()
                         } else {
                             format!(
-                                "./build_rootfs_{}_{}",
+                                ".nex/tmp/build_rootfs_{}_{}",
                                 manifest.package.slug.replace("/", "_"),
                                 manifest.package.namespace.replace("/", "_")
                             )
@@ -1233,7 +1236,7 @@ fn build_packages_parallel(
                     }
                     ManifestData::System(system_manifest) => {
                         let build_dir = format!(
-                            "./build_rootfs_{}_{}",
+                            ".nex/tmp/build_rootfs_{}_{}",
                             system_manifest.system.slug.replace("/", "_"),
                             "system"
                         );

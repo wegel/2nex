@@ -665,6 +665,9 @@ pub fn create_and_commit_bundles(
 /// build a single package or system from a manifest file.
 /// this is the main entry point for the build command.
 pub fn build_single(opts: &BuildOpts) -> io::Result<()> {
+    // ensure tmp directory exists
+    fs::create_dir_all(".nex/tmp")?;
+
     let manifest_data = load_manifest(&opts.manifest_file)?;
 
     // validate flags for refresh_metadata
@@ -691,7 +694,7 @@ pub fn build_single(opts: &BuildOpts) -> io::Result<()> {
                 println!("Building package: {}", manifest.package.slug);
                 let build_dir = opts.build_dir.clone().unwrap_or_else(|| {
                     format!(
-                        "./build_rootfs_{}_{}",
+                        ".nex/tmp/build_rootfs_{}_{}",
                         manifest.package.slug.replace("/", "_"),
                         manifest.package.namespace.replace("/", "_")
                     )
@@ -703,7 +706,7 @@ pub fn build_single(opts: &BuildOpts) -> io::Result<()> {
             println!("Building system: {}", manifest.system.slug);
             let build_dir = opts.build_dir.clone().unwrap_or_else(|| {
                 format!(
-                    "./build_rootfs_{}_system",
+                    ".nex/tmp/build_rootfs_{}_system",
                     manifest.system.slug.replace("/", "_")
                 )
             });
