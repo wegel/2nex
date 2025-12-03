@@ -16,6 +16,10 @@ pub fn format_manifest(path: &str) -> io::Result<()> {
 
 /// format a manifest string, returning the formatted version
 pub fn format_manifest_string(contents: &str) -> io::Result<String> {
+    // extract version from original text before YAML parsing mangles it
+    // (YAML parses "3.10" as float 3.1, losing the trailing zero)
+    let original_version = extract_version_from_text(contents);
+
     let value: Value = serde_yaml::from_str(contents)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
@@ -24,10 +28,28 @@ pub fn format_manifest_string(contents: &str) -> io::Result<String> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "manifest must be a mapping"))?;
 
     let is_system = mapping.contains_key(&Value::String("system".to_string()));
-    format_root(mapping, is_system)
+    format_root(mapping, is_system, original_version.as_deref())
 }
 
-fn format_root(mapping: &Mapping, is_system: bool) -> io::Result<String> {
+/// extract version string from raw YAML text before parsing
+fn extract_version_from_text(contents: &str) -> Option<String> {
+    for line in contents.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("version:") {
+            let value = trimmed.strip_prefix("version:")?.trim();
+            // remove quotes if present
+            let unquoted = value
+                .trim_start_matches('"')
+                .trim_end_matches('"')
+                .trim_start_matches('\'')
+                .trim_end_matches('\'');
+            return Some(unquoted.to_string());
+        }
+    }
+    None
+}
+
+fn format_root(mapping: &Mapping, is_system: bool, original_version: Option<&str>) -> io::Result<String> {
     let mut output = String::new();
 
     // top-level section order (system manifests use "system" instead of "package")
@@ -64,8 +86,8 @@ fn format_root(mapping: &Mapping, is_system: bool) -> io::Result<String> {
             first = false;
 
             match section {
-                "package" => output.push_str(&format_package(value)?),
-                "system" => output.push_str(&format_system(value)?),
+                "package" => output.push_str(&format_package(value, original_version)?),
+                "system" => output.push_str(&format_system(value, original_version)?),
                 "sources" => output.push_str(&format_sources(value)?),
                 "dependencies" => output.push_str(&format_dependencies(value)?),
                 "packages" => output.push_str(&format_packages(value)?),
@@ -85,7 +107,7 @@ fn format_root(mapping: &Mapping, is_system: bool) -> io::Result<String> {
     Ok(output)
 }
 
-fn format_package(value: &Value) -> io::Result<String> {
+fn format_package(value: &Value, original_version: Option<&str>) -> io::Result<String> {
     let mapping = value
         .as_mapping()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "package must be a mapping"))?;
@@ -109,11 +131,8 @@ fn format_package(value: &Value) -> io::Result<String> {
     for field in fields {
         let key = Value::String(field.to_string());
         if let Some(val) = mapping.get(&key) {
-            // version is always a string, never quote it even if it looks like a number
             let formatted = if field == "version" {
-                val.as_str()
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| format_scalar(val))
+                format_version(original_version, val)
             } else {
                 format_scalar(val)
             };
@@ -124,7 +143,7 @@ fn format_package(value: &Value) -> io::Result<String> {
     Ok(output)
 }
 
-fn format_system(value: &Value) -> io::Result<String> {
+fn format_system(value: &Value, original_version: Option<&str>) -> io::Result<String> {
     let mapping = value
         .as_mapping()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "system must be a mapping"))?;
@@ -147,11 +166,8 @@ fn format_system(value: &Value) -> io::Result<String> {
     for field in fields {
         let key = Value::String(field.to_string());
         if let Some(val) = mapping.get(&key) {
-            // version is always a string, never quote it even if it looks like a number
             let formatted = if field == "version" {
-                val.as_str()
-                    .map(|s| s.to_string())
-                    .unwrap_or_else(|| format_scalar(val))
+                format_version(original_version, val)
             } else {
                 format_scalar(val)
             };
@@ -160,6 +176,26 @@ fn format_system(value: &Value) -> io::Result<String> {
     }
 
     Ok(output)
+}
+
+/// format version field, quoting only if it looks like a number
+fn format_version(original: Option<&str>, parsed: &Value) -> String {
+    // use original text if available (preserves "3.10" that would parse as 3.1)
+    let version_str = match original {
+        Some(s) => s.to_string(),
+        None => match parsed {
+            Value::String(s) => s.clone(),
+            Value::Number(n) => n.to_string(),
+            _ => format_scalar(parsed),
+        },
+    };
+
+    // quote if it looks like a number (could lose precision on re-parse)
+    if version_str.parse::<f64>().is_ok() {
+        format!("\"{}\"", version_str)
+    } else {
+        version_str
+    }
 }
 
 fn format_sources(value: &Value) -> io::Result<String> {
