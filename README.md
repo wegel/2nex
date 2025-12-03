@@ -1,82 +1,172 @@
 # 2nex
 
-## Full source-bootstrappable
+Reproducible, source-bootstrappable Linux distribution.
+
+## Why
 
 I'm doing a (free) reproducible build system/distro (just a hobby, won't be big and professional like Guix or Nix) for Linux. This has been brewing for a few months, and is starting to get ready.
 
-Jokes aside, I love the idea of an immutable, reproducible OS, but I find that I don't like how the build scripts are implemented in "strange" programming languages in Nix (the Nix Language) and Guix (Scheme, which is Turing-complete; not something you necessarily want for a build script language), and I don't like the complexity of the configuration languages they are using, although they are incredibly powerful (too much?). Note that I LOVE functional programming languages, but I don't think build scripts and configuration are where they're most needed.
+Nix and Guix use DSLs for build scripts. 2nex uses YAML manifests and bash. Build a reproducible GNU toolchain, then build everything else reproducibly from there. Any x64 gcc system can bootstrap the whole thing.
 
-I also don't understand *why* exactly Guix and Nix are searching for the Holy Full Source Bootstrap, because we already have it. Maybe *they* don't have it, but it's there. [Guix says](https://guix.gnu.org/en/blog/2023/the-full-source-bootstrap-building-from-source-all-the-way-down/):
+## Architecture
 
-> If you run guix pull today, you get a package graph of more than 22,000 nodes rooted in a 357-byte program; something that had never been achieved, to our knowledge, since the birth of Unix.
+Two types of manifests:
 
-The 22,000 nodes is very impressive (and the >80,000 packages of Nix too), but the 357-byte root program is, to me, quite useless. They also need a ~25MB binary package to bootstrap the whole thing. Yes, the 357-byte program thing is VERY cool. But it's not *necessary*. Remember, the goal is to achieve reproducibility, and ultimately, you still have to build the "normal" GNU toolchain to be able to compile most software. They even say it in the "Full-Source Bootstrap" doc:
+- **Packages** (`pkg/`): Build individual software. Sources, dependencies, build script, outputs.
+- **Assemblies** (`asm/`): Compose packages into bootable systems.
 
-> hex0 (the 357-byte root program) builds hex1 and then on to M0, hex2, M1, mescc-tools and finally M2-Planet. Then, using mescc-tools, M2-Planet we build Mes. From here on starts the more traditional C-based bootstrap of the GNU System.
+Outputs go into a [zub](https://github.com/wegel/zub) store (content-addressed filesystem).
 
-Why would we take this particular route to achieve reproducibility exactly? What we need, it seems to me, is a reproducible GNU toolchain, and once we have that, we *only* have to make sure that everything else that's built from there is also reproducible. Sounds simple enough to me, especially if the build system actually enforces reproducibility.
+## Git as truth, store as cache
 
-So I present 2nex. Currently, it's only a proof-of-concept sandbox to make a fully reproducible, fully source-bootstrappable, no fixed binary build system (eg, any x64 system with a gcc toolchain should work), but eventually I'd like to build on that to make a full distro for multiple architectures, and I also have some ideas for the configuration part of the OS (e.g., what's handled by the Nix language in NixOS).
+The git repository of manifests is the source of truth. The zub store is purely a build cache.
 
-## How it works
+Everything can always be rebuilt deterministically from manifests alone. No store? Rebuild. Corrupted store? Rebuild. Different machine? Same result.
 
-Packages are described in a yaml Manifest (see [pkg](pkg)). The Manifest lists the sources, dependencies (in the form of other packages), and build instructions. The Manifest includes the checksum of the result of the build; we thus can know that the result of the build is what we expect, and is reproducible. The [builder](src/builder) is used to build the Manifest, and the bundles are then commited to an ostree repository.
+The vision: official manifest repos (curated packages) + public build cache repos (pre-built binaries). Trust the manifests, verify the checksums. Anyone can run their own build cache, or rebuild from source.
 
-There are two types of manifests:
+## Pinning
 
-- **Package manifests**: Build a single piece of software (e.g., zlib, coreutils). They specify sources, build-time dependencies, and produce outputs that get committed to OSTree. The runtime dependency scanner automatically detects what each output actually needs.
+Dependencies reference manifests by git blob sha:
 
-- **Assembly manifests**: Assemble packages (including their transitive runtime dependencies) into a file structure. Can specify build-time only `dependencies` that are available during a configure-time build script to modify the resulting filesystem. The output could be a bootable system or just a configured rootfs.
+```yaml
+dependencies:
+- name: zlib
+  manifest_ref: a1b2c3d4...
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+```
 
-Package manifests live under `pkg/`, while assembly manifests are in `asm/`.
+The builder fetches manifest content from `git cat-file`, not from disk. Builds are reproducible regardless of working tree state. Without `manifest_ref`, dependency is "floating" (disk lookup). Useful for development, rejected by CI.
 
-## The builder
+`nex link <manifest>` pins all dependencies to current working tree versions.
 
-The builder is a rust program that reads the Manifest, builds and verifies it, and then commits the result to an ostree repository. It controls the build environment for reproducibility (sandboxing, timestamp clamping, etc).
+## Flat vs nex-enabled rootfs
 
-## Manifest pinning
+Two modes for generating systems:
 
-Every dependency listed in a manifest records a `manifest_ref`, which is simply the Git blob SHA of the dependency's manifest at the moment you explicitly promoted it. The builder never trusts whatever happens to be on disk: when a dependency has a `manifest_ref` it calls `git cat-file -p <sha>`, writes the blob into a cache, and resolves the dependency graph from that content. If the referenced outputs already exist in OSTree, the builder compares the cached manifest's hash to `nex.manifest.hash` on the OSTree commits and reuses them bit-for-bit. If they are missing or stale, it builds from the cached manifest content and publishes new commits before continuing.
+**Flat rootfs**: Packages extracted directly to standard FHS paths (`/usr/bin`, `/usr/lib`). Simple. Good for embedded, containers, or systems not managed by nex.
 
-When a dependency is missing `manifest_ref` it is considered “floating” and the builder will fall back to the working tree copy of the manifest (with a loud log message). This escape hatch is handy while iterating locally, but CI should reject such manifests because the final pin is what keeps rebuilds reproducible long after the local file has changed.
+**Nex-enabled rootfs**: Packages live in `/nex/pkg/{namespace}/{name}/{version}/{hash}/`. Symlinks provide FHS compatibility. Each package is a self-contained "capsule" with its dependencies flattened. Enables:
 
-Use `nex link path/to/manifest.yaml` to update every dependency in that manifest to the current working tree versions. The subcommand hashes each dependency's manifest (`git hash-object -w …` ensures the blob is stored) and rewrites the `dependencies:` block with the new `manifest_ref` entries. This explicit promotion step lets you update libraries independently and only switch consumers over when you're ready.
+- Atomic upgrades and rollbacks
+- Multiple versions coexisting
+- System and user packages side-by-side
+- No dependency conflicts
 
-Every package branch now lives under `x86_64/pkg/<namespace-path>/<slug>/<version>/{outputs,bundles}/…`, so the directory layout in `pkg/` matches the strings you see in manifests and OSTree metadata.
+Scales from tiny embedded (~5MB busybox system) to full desktop/server.
 
-## Current Status
+## EFI bootloader
 
-**Bootstrap toolchain**: Complete. Three-phase bootstrap from any x64 GCC system. The whole thing is 100% reproducible.
+Custom UEFI bootloader (`src/bootloader/`).
 
-**Packages**: ~50 packages in categories (core/*, libs/*, cli/*, dev/*, net/*). Runtime dependency scanner auto-detects what each package needs.
+**Design:**
 
-**Assemblies**: Working. Bootable systemd system (~58MB) boots to login prompt with agetty. File-level dependency resolution pulls only the specific files each package needs, not entire dependency trees.
+- Bootloader loads ext4 driver, reads zub deployment structure directly
+- Kernel has built-in drivers for 95% of hardware (NVMe, SATA, virtio, ext4)
+- Constant init script built into kernel (busybox + shell, ~1-2MB)
+- No generated initramfs, no BLS entries, no dracut/mkinitcpio
+- Kernel lives in nex tree, not ESP partition
 
-**Bootable systems**:
-- `bootable-systemd`: Minimal systemd-based system (~58MB) with bash, coreutils, util-linux, shadow, dbus-broker. Boots in QEMU with serial console login via agetty.
-- `bootable-minimal`: Tiny system with just busybox and a shell script init. Good for testing.
-- `bootable-systemd-nex`: Full systemd system with custom EFI bootloader that scans OSTree deployments.
+**Boot flow:**
 
-**Builder features**:
-- Parallel graph-based builds with automatic dependency ordering
-- Runtime dependency scanning via `needs:` fields - tracks which specific files each binary requires
-- File-level materialization - only extracts needed files from `{checksum}/files` commits
-- `resolution:` mapping to resolve file paths to package names
-- Dependency tracing (`--trace-dependency "bootstrap/phase1"`)
-- Checksum verification
-- Hard errors on missing `/files` commits (run `nex compute-deps` to fix)
+```
+EFI firmware
+  → nex-bootloader (reads ext4, parses /nex/deploy/)
+  → presents deployment menu
+  → loads kernel + optional module cpio
+  → kernel (built-in init)
+  → mounts root, sets up deployment overlay
+  → switch_root to real init (systemd, etc.)
+```
 
-## TODOs
+**Edge case hardware (~5%):**
 
-**Next up**:
-- Enforce the new pkg/ taxonomy everywhere (CI checks for misplaced manifests)
-- Harden CI checks so floating `manifest_ref` entries are rejected
+For exotic storage controllers not built into kernel, user creates `/etc/boot-modules.conf` listing required `.ko` files. Bootloader reads this from deployment, generates small CPIO archive in memory with just those modules, passes as additional initramfs. Kernel merges it with built-in init automatically.
 
-**Bootloader improvements**:
-- Rollback support
-- A/B deployment switching
+**Deployment structure:**
 
-**Later**:
-- Deployment tooling for real hardware
-- User environments and composition
-- More packages
+```
+/nex/deploy/{stateroot}/{checksum}.{serial}/
+  boot/vmlinuz-*
+  usr/...
+```
+
+Serial number enables rollback. Higher serial = more recent. Bootloader picks highest by default, or user selects.
+
+**Status:** Bootloader implemented, reads ext4, finds deployments, boots kernel. CPIO module loading not yet implemented.
+
+## System vs user environments
+
+Three repository contexts:
+
+```
+.nex/repo              # local build-time (project-specific)
+/nex/repo              # system-wide (root required)
+/nex/users/$USER/      # user-specific (no root needed)
+```
+
+System packages: shared, root-managed, in `/nex/pkg/`.
+User packages: per-user, in `/nex/users/$USER/pkg/`.
+
+Same tools work everywhere. Users can build and install packages without root. System and user packages coexist cleanly.
+
+## Replaces containers
+
+A nex capsule is effectively a container without the container:
+
+- Self-contained: all dependencies bundled
+- Isolated: no system library conflicts
+- Reproducible: content-addressed, deterministic builds
+- Lightweight: no runtime overhead, no daemon
+
+Run the binary directly. It finds its libs in its capsule directory via `nex-ld-shim`. No docker, no podman, no namespaces needed for isolation from dependency hell.
+
+For actual sandboxing (network, filesystem), use namespaces directly or a thin wrapper. The package structure already solves the hard part.
+
+## Build
+
+```sh
+cargo build --manifest-path src/cli/Cargo.toml
+./src/cli/target/debug/nex build pkg/libs/system/zlib.yaml
+```
+
+## Status
+
+- Bootstrap: complete (3-phase from any x64 gcc)
+- Packages: ~160 manifests (core, libs, cli, dev, net, apps)
+- Assemblies: bootable systemd system (~58MB)
+- Bootloader: working EFI loader with deployment scanning
+
+## Layout
+
+```
+pkg/                    # package manifests
+  bootstrap/            # bootstrap toolchain (phase0-3)
+  core/                 # core system (toolchain, userland, fs, init)
+  libs/                 # libraries (system, compression, security)
+  cli/                  # cli tools (shells, text, archive)
+  dev/                  # development (lang, libs, tools)
+  net/                  # networking
+  apps/                 # applications (containers, etc.)
+asm/                    # assembly manifests (bootable systems)
+src/cli/                # nex build tool
+src/bootloader/         # UEFI bootloader
+```
+
+## Commands
+
+```
+nex build <manifest>      build a package
+nex check <manifest>      validate manifest
+nex format <manifest>     auto-format manifest
+nex compute-deps <m>      scan runtime dependencies
+nex link <manifest>       pin deps to current versions
+```
+
+## Dependencies
+
+- [zub-store](https://crates.io/crates/zub-store) - content-addressed filesystem store
+
+## License
+
+MIT
