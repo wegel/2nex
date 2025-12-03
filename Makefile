@@ -11,11 +11,11 @@ builder:
 	@echo "Building nex builder..."
 	cargo build --manifest-path src/builder/Cargo.toml
 
-# initialize the ostree repository
+# initialize the zub repository
 init:
-	@echo "Initializing OSTree repository at $(REPO)..."
+	@echo "Initializing zub repository at $(REPO)..."
 	@mkdir -p $(dir $(REPO))
-	ostree --repo=$(REPO) init --mode=bare-user
+	./zub init $(REPO)
 
 # legacy target for compatibility
 bootstrap_store:
