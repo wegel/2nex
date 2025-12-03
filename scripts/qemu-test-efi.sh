@@ -28,9 +28,9 @@ error() { echo -e "${RED}ERROR:${NC} $1"; exit 1; }
 command -v mke2fs >/dev/null || error "mke2fs not found (install e2fsprogs)"
 command -v mcopy >/dev/null || error "mcopy not found (install mtools)"
 command -v qemu-system-x86_64 >/dev/null || error "qemu-system-x86_64 not found"
-ZUB="$ROOT_DIR/src/zub/target/debug/zub"
-[ -f "$ZUB" ] || error "zub not found. Build with: cd src/zub && cargo build"
-$ZUB --repo="$REPO" refs | grep -q "$SYSTEM_REF" || \
+command -v zub >/dev/null || error "zub not found"
+
+zub --repo="$REPO" refs | grep -q "$SYSTEM_REF" || \
     error "$SYSTEM_REF not found. Build with: nex build asm/bootable-systemd-nex.yaml"
 
 # find OVMF firmware
@@ -85,10 +85,10 @@ ROOT_CONTENT="$TMPDIR/root"
 mkdir -p "$ROOT_CONTENT"
 
 # get the system's checksum for deployment path
-SYSTEM_CHECKSUM=$($ZUB --repo="$REPO" show "$SYSTEM_REF" 2>/dev/null | grep "nex.system.checksum:" | awk '{print $2}')
+SYSTEM_CHECKSUM=$(zub --repo="$REPO" show "$SYSTEM_REF" 2>/dev/null | grep "nex.system.checksum:" | awk '{print $2}')
 if [ -z "$SYSTEM_CHECKSUM" ]; then
     # fallback: use commit hash
-    SYSTEM_CHECKSUM=$($ZUB --repo="$REPO" rev-parse "$SYSTEM_REF")
+    SYSTEM_CHECKSUM=$(zub --repo="$REPO" rev-parse "$SYSTEM_REF")
 fi
 
 DEPLOY_PATH="nex/deploy/2nex/deploy/${SYSTEM_CHECKSUM}.0"
@@ -96,7 +96,7 @@ DEPLOY_DIR="$ROOT_CONTENT/$DEPLOY_PATH"
 
 log "Extracting $SYSTEM_REF..."
 mkdir -p "$(dirname "$DEPLOY_DIR")"
-$ZUB --repo="$REPO" checkout "$SYSTEM_REF" "$DEPLOY_DIR"
+zub --repo="$REPO" checkout "$SYSTEM_REF" "$DEPLOY_DIR"
 
 mkdir -p "$ROOT_CONTENT/nex/deploy/2nex/var"
 

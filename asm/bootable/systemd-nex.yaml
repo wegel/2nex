@@ -4,7 +4,7 @@ system:
   slug: bootable-systemd-nex
   version: 0.0.1
   description: Bootable system with systemd init, nex package manager, and /nex/pkg structure
-  checksum: 9823a9f867adb4b9ad94e206c64757ea384f115d91300059f412dbb95bb612bb
+  checksum: 699bf7101b4c4a5f4458ec3eeabfda1bbe3d821d99d35d57361ce359e6247bf4
   nex_structure: true
 
 dependencies:
@@ -98,6 +98,8 @@ packages:
   commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/drv-net-virtio
 - name: linux-net-core
   commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/drv-net-core
+- name: ldd
+  commit: x86_64/pkg/libs/system/glibc/2.39/files/usr/bin/ldd
 
 build:
   script: |
@@ -265,11 +267,3 @@ build:
     ln -sf /run/systemd/resolve/stub-resolv.conf /target/etc/resolv.conf
 
     ln -sf usr/bin/init /target/init
-
-    # fix ownership of setuid binaries - they must be owned by root
-    # (ostree checkout preserves build user uid, breaking setuid)
-    for bin in mount umount su newgrp chsh chfn passwd gpasswd; do
-      find /target/nex/pkg -name "$bin" -type f -perm -4000 -exec chown 0:0 {} \; 2>/dev/null
-    done
-
-    find /target -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
