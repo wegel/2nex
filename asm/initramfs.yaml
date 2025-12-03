@@ -1,38 +1,32 @@
-schema: 1
-kind: system
-
 system:
-  name: "Initramfs"
-  slug: "initramfs"
-  version: "0.1.0"
-  architecture: "x86_64"
-  description: "Initial ramdisk for early boot"
+  name: Initramfs
+  slug: initramfs
+  version: 0.1.0
+  architecture: x86_64
+  description: Initial ramdisk for early boot
   checksum: 4afd2c372cbcb24da8e8f675a95d5113dadfaff7bba3ac0f43a91a35b00e5689
 
 sources: []
 
-# these are runtime dependencies
-packages:
-- commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
-  name: bash
-- commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
-  name: coreutils
-- commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/bin
-  name: util-linux
-
-# these are build-time dependencies, ONLY available in the build script below to configure the
-# final rootfs that's available in /target
 dependencies:
-- commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/lib
-  name: util-linux-lib
-- commit: x86_64/pkg/core/kernel/kmod/32/outputs/bin
-  name: kmod
-- commit: x86_64/pkg/libs/system/glibc/2.39/outputs/lib
-  name: glibc
-- commit: x86_64/pkg/net/misc/inetutils/2.5/outputs/bin
-  name: inetutils
-- commit: x86_64/pkg/core/userland/findutils/4.9.0/outputs/bin
-  name: findutils
+- name: util-linux-lib
+  commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/lib
+- name: kmod
+  commit: x86_64/pkg/core/kernel/kmod/32/outputs/bin
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/lib
+- name: inetutils
+  commit: x86_64/pkg/net/misc/inetutils/2.5/outputs/bin
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/outputs/bin
+
+packages:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/bin
 
 build:
   script: |
@@ -54,4 +48,3 @@ build:
 
     # deterministic timestamps
     find "/target" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-
