@@ -1,4 +1,5 @@
 pub mod build;
+pub mod check;
 pub mod commit;
 pub mod complete;
 pub mod compute_deps;

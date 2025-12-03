@@ -49,6 +49,9 @@ enum Command {
     /// Build packages from manifests
     Build(commands::build::BuildArgs),
 
+    /// Check manifest files for issues
+    Check(commands::check::CheckArgs),
+
     /// List packages in the repository
     List(commands::list::ListArgs),
 
@@ -106,6 +109,7 @@ fn main() -> io::Result<()> {
 
     match cli.command {
         Command::Build(args) => run_build(&args),
+        Command::Check(args) => commands::check::run(&args),
         Command::List(args) => commands::list::run(&args),
         Command::Info(args) => commands::info::run(&args),
         Command::Search(args) => commands::search::run(&args),
