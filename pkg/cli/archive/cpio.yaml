@@ -3,14 +3,16 @@ package:
   name: GNU cpio
   slug: cpio
   namespace: cli/archive
-  version: '2.15'
+  version: "2.15"
   description: GNU cpio copies files into or out of a cpio or tar archive
   homepage: https://www.gnu.org/software/cpio/
   checksum: 57fe6accb6f91f65e3861c1daceea1105278e397c5853f7d240240f6318bc1bf
+
 sources:
 - name: cpio
   url: https://ftp.gnu.org/gnu/cpio/cpio-2.15.tar.gz
   sha256: efa50ef983137eefc0a02fdb51509d624b5e3295c980aa127ceee4183455499e
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -54,7 +56,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+
 build:
+  profile: [4118:2819, 8218:8356, 12363:18192, 16464:25967, 20575:33635, 24700:35721, 28809:36158, 32968:36997, 36038:37141]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_cpio} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -68,16 +73,19 @@ build:
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
   dev:
   - bin
+
 outputs:
   bin:
     files:
     - path: /usr/bin/cpio
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
   locale:
     files:
     - path: /usr/share/locale/bg/LC_MESSAGES/cpio.mo
@@ -110,5 +118,5 @@ outputs:
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/cpio.mo
 
 resolution:
-  /usr/lib/libc.so.6: glibc
   /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

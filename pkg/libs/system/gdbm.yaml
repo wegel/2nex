@@ -3,15 +3,23 @@ package:
   name: GDBM
   slug: gdbm
   namespace: libs/system
-  version: '1.23'
+  version: "1.23"
   description: GNU dbm is a set of database routines that use extensible hashing
   homepage: https://www.gnu.org/software/gdbm/
   checksum: e0f6100452193e91bb8cb38b1015efeb8d5dfc5f0f2cd6fd653678bb983d3c04
+
 sources:
 - name: gdbm
   url: https://ftp.gnu.org/gnu/gdbm/gdbm-1.23.tar.gz
   sha256: 74b1081d21fff13ae4bd7c16e5d6e504a4c26f7cde1dca0d963a484174bbcacd
+
 dependencies:
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
 - name: mpc
   commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
 - name: coreutils
@@ -40,8 +48,8 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 - name: binutils
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: None
-  commit: x86_64/gmp/6.3.0/bootstrap/phase3/bundles/dev
+- name: gmp-bootstrap
+  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
 - name: mpfr
   commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
 - name: attr
@@ -56,29 +64,66 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/ncurses/6.4-20230520/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+
 build:
-  script: "tar --no-same-owner -xf ${SOURCE0} -C \"${WORK_DIR}\" --strip-components=1\n\
-    cd ${WORK_DIR}\n\n./configure --prefix=/usr    \\\n            --disable-static\
-    \ \\\n            --enable-libgdbm-compat\nmake\nmake DESTDIR=$OUT_DIR install\n\
-    \nfind \"${OUT_DIR}\" -exec touch -d \"2024-01-01T00:00:00+00:00\" {} \\;\n2nex_strip_binaries\
-    \ ${OUT_DIR}\n"
+  profile: [4142:809, 8243:1988, 12373:2822, 16496:2973, 18096:3062]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr    \
+                --disable-static \
+                --enable-libgdbm-compat
+    make
+    make DESTDIR=$OUT_DIR install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
 bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
   full:
+  - bin
+  - dev
   - info
+  - lib
   - locale
   - man
-  - dev
-  - bin
-  - lib
-  dev:
-  - dev
-  - bin
-  - lib
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/gdbm_dump
+    - path: /usr/bin/gdbm_load
+    - path: /usr/bin/gdbmtool
+
+  dev:
+    files:
+    - path: /usr/include/dbm.h
+    - path: /usr/include/gdbm.h
+    - path: /usr/include/ndbm.h
+    - path: /usr/lib/libgdbm.la
+    - path: /usr/lib/libgdbm_compat.la
+
   info:
     files:
     - path: /usr/share/info/dir
     - path: /usr/share/info/gdbm.info
+
+  lib:
+    files:
+    - path: /usr/lib/libgdbm.so
+    - path: /usr/lib/libgdbm.so.6
+    - path: /usr/lib/libgdbm.so.6.0.0
+    - path: /usr/lib/libgdbm_compat.so
+    - path: /usr/lib/libgdbm_compat.so.4
+    - path: /usr/lib/libgdbm_compat.so.4.0.0
+
   locale:
     files:
     - path: /usr/share/locale/da/LC_MESSAGES/gdbm.mo
@@ -95,29 +140,10 @@ outputs:
     - path: /usr/share/locale/sv/LC_MESSAGES/gdbm.mo
     - path: /usr/share/locale/uk/LC_MESSAGES/gdbm.mo
     - path: /usr/share/locale/vi/LC_MESSAGES/gdbm.mo
+
   man:
     files:
     - path: /usr/share/man/man1/gdbm_dump.1
     - path: /usr/share/man/man1/gdbm_load.1
     - path: /usr/share/man/man1/gdbmtool.1
     - path: /usr/share/man/man3/gdbm.3
-  dev:
-    files:
-    - path: /usr/include/dbm.h
-    - path: /usr/include/gdbm.h
-    - path: /usr/include/ndbm.h
-    - path: /usr/lib/libgdbm.la
-    - path: /usr/lib/libgdbm_compat.la
-  bin:
-    files:
-    - path: /usr/bin/gdbm_dump
-    - path: /usr/bin/gdbm_load
-    - path: /usr/bin/gdbmtool
-  lib:
-    files:
-    - path: /usr/lib/libgdbm.so
-    - path: /usr/lib/libgdbm.so.6
-    - path: /usr/lib/libgdbm.so.6.0.0
-    - path: /usr/lib/libgdbm_compat.so
-    - path: /usr/lib/libgdbm_compat.so.4
-    - path: /usr/lib/libgdbm_compat.so.4.0.0

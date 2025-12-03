@@ -3,10 +3,11 @@ package:
   name: GNU C Library
   slug: glibc
   namespace: libs/system
-  version: '2.39'
+  version: "2.39"
   description: The GNU C Library project provides the core libraries for the GNU system and GNU/Linux systems.
   homepage: https://www.gnu.org/software/libc/
   checksum: dd0e5e5d360ab5a7c7e6311c295b53b37f90ccb4706c610f8c6bb58925b556c2
+
 sources:
 - name: glibc
   url: https://ftp.gnu.org/gnu/glibc/glibc-2.39.tar.xz
@@ -17,6 +18,7 @@ sources:
 - name: tzdata
   url: https://ftp.iana.org/tz/releases/tzdata2024a.tar.gz
   sha256: 0d0434459acbd2059a7a8da1f3304a84a86591f6ed69c6248fffa502b6edffe3
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
@@ -70,7 +72,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase2/python3/3.12.2/bundles/dev
 - name: texinfo
   commit: x86_64/pkg/bootstrap/phase2/texinfo/7.1/bundles/dev
+
 build:
+  profile: [283190:4752, 1132757:6414, 2550929:11090, 4250495:15135, 5665825:18247, 7077842:22094, 8492702:29685, 10615839:34593, 12741263:40770, 14153269:65226]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_glibc} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR} && patch -Np1 -i /${SOURCE_fhs_patch} && mkdir build && cd build
@@ -156,781 +161,104 @@ build:
 
     # strip shared libraries
     find ${OUT_DIR}/usr/lib -name "*.so*" -type f -exec strip --strip-debug {} \;
+
 bundles:
-  full:
-  - locale
-  - bin
-  - lib
-  - dev
-  - conf
-  - static
-  - info
   dev:
-  - locale
   - bin
-  - lib
-  - dev
   - conf
+  - dev
+  - lib
+  - locale
   - static
+
+  full:
+  - bin
+  - conf
+  - dev
+  - info
+  - lib
+  - locale
+  - static
+
 outputs:
-  locale:
-    files:
-    - path: /usr/share/locale/be/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/bg/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/ca/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/cs/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/da/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/de/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/el/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/en_GB/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/eo/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/es/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/fi/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/fr/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/gl/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/hr/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/hu/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/ia/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/id/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/it/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/ja/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/ka/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/ko/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/locale.alias
-    - path: /usr/share/locale/lt/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/nb/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/nl/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/pl/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/pt/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/pt_BR/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/ro/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/ru/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/rw/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/sk/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/sl/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/sr/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/sv/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/tr/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/uk/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/vi/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/zh_CN/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/zh_TW/LC_MESSAGES/libc.mo
   bin:
     files:
     - path: /usr/bin/gencat
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/getconf
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/getent
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/iconv
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/iconvconfig
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/ldconfig
     - path: /usr/bin/ldd
     - path: /usr/bin/locale
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/localedef
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/makedb
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/mtrace
     - path: /usr/bin/pcprofiledump
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/pldd
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/sln
     - path: /usr/bin/sotruss
     - path: /usr/bin/sprof
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/tzselect
     - path: /usr/bin/xtrace
     - path: /usr/bin/zdump
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/zic
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/libexec/getconf/POSIX_V6_LP64_OFF64
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/libexec/getconf/POSIX_V7_LP64_OFF64
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/libexec/getconf/XBS5_LP64_OFF64
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
-  info:
-    files:
-    - path: /usr/share/info/dir
-    - path: /usr/share/info/libc.info
-    - path: /usr/share/info/libc.info-1
-    - path: /usr/share/info/libc.info-10
-    - path: /usr/share/info/libc.info-11
-    - path: /usr/share/info/libc.info-12
-    - path: /usr/share/info/libc.info-13
-    - path: /usr/share/info/libc.info-14
-    - path: /usr/share/info/libc.info-15
-    - path: /usr/share/info/libc.info-16
-    - path: /usr/share/info/libc.info-17
-    - path: /usr/share/info/libc.info-18
-    - path: /usr/share/info/libc.info-19
-    - path: /usr/share/info/libc.info-2
-    - path: /usr/share/info/libc.info-3
-    - path: /usr/share/info/libc.info-4
-    - path: /usr/share/info/libc.info-5
-    - path: /usr/share/info/libc.info-6
-    - path: /usr/share/info/libc.info-7
-    - path: /usr/share/info/libc.info-8
-    - path: /usr/share/info/libc.info-9
-  i18n:
-    files:
-    - path: /usr/share/i18n/charmaps/ANSI_X3.110-1983.gz
-    - path: /usr/share/i18n/charmaps/ANSI_X3.4-1968.gz
-    - path: /usr/share/i18n/charmaps/ARMSCII-8.gz
-    - path: /usr/share/i18n/charmaps/ASMO_449.gz
-    - path: /usr/share/i18n/charmaps/BIG5-HKSCS.gz
-    - path: /usr/share/i18n/charmaps/BIG5.gz
-    - path: /usr/share/i18n/charmaps/BRF.gz
-    - path: /usr/share/i18n/charmaps/BS_4730.gz
-    - path: /usr/share/i18n/charmaps/BS_VIEWDATA.gz
-    - path: /usr/share/i18n/charmaps/CP10007.gz
-    - path: /usr/share/i18n/charmaps/CP1125.gz
-    - path: /usr/share/i18n/charmaps/CP1250.gz
-    - path: /usr/share/i18n/charmaps/CP1251.gz
-    - path: /usr/share/i18n/charmaps/CP1252.gz
-    - path: /usr/share/i18n/charmaps/CP1253.gz
-    - path: /usr/share/i18n/charmaps/CP1254.gz
-    - path: /usr/share/i18n/charmaps/CP1255.gz
-    - path: /usr/share/i18n/charmaps/CP1256.gz
-    - path: /usr/share/i18n/charmaps/CP1257.gz
-    - path: /usr/share/i18n/charmaps/CP1258.gz
-    - path: /usr/share/i18n/charmaps/CP737.gz
-    - path: /usr/share/i18n/charmaps/CP770.gz
-    - path: /usr/share/i18n/charmaps/CP771.gz
-    - path: /usr/share/i18n/charmaps/CP772.gz
-    - path: /usr/share/i18n/charmaps/CP773.gz
-    - path: /usr/share/i18n/charmaps/CP774.gz
-    - path: /usr/share/i18n/charmaps/CP775.gz
-    - path: /usr/share/i18n/charmaps/CP949.gz
-    - path: /usr/share/i18n/charmaps/CSA_Z243.4-1985-1.gz
-    - path: /usr/share/i18n/charmaps/CSA_Z243.4-1985-2.gz
-    - path: /usr/share/i18n/charmaps/CSA_Z243.4-1985-GR.gz
-    - path: /usr/share/i18n/charmaps/CSN_369103.gz
-    - path: /usr/share/i18n/charmaps/CWI.gz
-    - path: /usr/share/i18n/charmaps/DEC-MCS.gz
-    - path: /usr/share/i18n/charmaps/DIN_66003.gz
-    - path: /usr/share/i18n/charmaps/DS_2089.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-AT-DE-A.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-AT-DE.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-CA-FR.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-DK-NO-A.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-DK-NO.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-ES-A.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-ES-S.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-ES.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-FI-SE-A.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-FI-SE.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-FR.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-IS-FRISS.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-IT.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-PT.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-UK.gz
-    - path: /usr/share/i18n/charmaps/EBCDIC-US.gz
-    - path: /usr/share/i18n/charmaps/ECMA-CYRILLIC.gz
-    - path: /usr/share/i18n/charmaps/ES.gz
-    - path: /usr/share/i18n/charmaps/ES2.gz
-    - path: /usr/share/i18n/charmaps/EUC-JISX0213.gz
-    - path: /usr/share/i18n/charmaps/EUC-JP-MS.gz
-    - path: /usr/share/i18n/charmaps/EUC-JP.gz
-    - path: /usr/share/i18n/charmaps/EUC-KR.gz
-    - path: /usr/share/i18n/charmaps/EUC-TW.gz
-    - path: /usr/share/i18n/charmaps/GB18030.gz
-    - path: /usr/share/i18n/charmaps/GB2312.gz
-    - path: /usr/share/i18n/charmaps/GBK.gz
-    - path: /usr/share/i18n/charmaps/GB_1988-80.gz
-    - path: /usr/share/i18n/charmaps/GEORGIAN-ACADEMY.gz
-    - path: /usr/share/i18n/charmaps/GEORGIAN-PS.gz
-    - path: /usr/share/i18n/charmaps/GOST_19768-74.gz
-    - path: /usr/share/i18n/charmaps/GREEK-CCITT.gz
-    - path: /usr/share/i18n/charmaps/GREEK7-OLD.gz
-    - path: /usr/share/i18n/charmaps/GREEK7.gz
-    - path: /usr/share/i18n/charmaps/HP-GREEK8.gz
-    - path: /usr/share/i18n/charmaps/HP-ROMAN8.gz
-    - path: /usr/share/i18n/charmaps/HP-ROMAN9.gz
-    - path: /usr/share/i18n/charmaps/HP-THAI8.gz
-    - path: /usr/share/i18n/charmaps/HP-TURKISH8.gz
-    - path: /usr/share/i18n/charmaps/IBM037.gz
-    - path: /usr/share/i18n/charmaps/IBM038.gz
-    - path: /usr/share/i18n/charmaps/IBM1004.gz
-    - path: /usr/share/i18n/charmaps/IBM1026.gz
-    - path: /usr/share/i18n/charmaps/IBM1047.gz
-    - path: /usr/share/i18n/charmaps/IBM1124.gz
-    - path: /usr/share/i18n/charmaps/IBM1129.gz
-    - path: /usr/share/i18n/charmaps/IBM1132.gz
-    - path: /usr/share/i18n/charmaps/IBM1133.gz
-    - path: /usr/share/i18n/charmaps/IBM1160.gz
-    - path: /usr/share/i18n/charmaps/IBM1161.gz
-    - path: /usr/share/i18n/charmaps/IBM1162.gz
-    - path: /usr/share/i18n/charmaps/IBM1163.gz
-    - path: /usr/share/i18n/charmaps/IBM1164.gz
-    - path: /usr/share/i18n/charmaps/IBM256.gz
-    - path: /usr/share/i18n/charmaps/IBM273.gz
-    - path: /usr/share/i18n/charmaps/IBM274.gz
-    - path: /usr/share/i18n/charmaps/IBM275.gz
-    - path: /usr/share/i18n/charmaps/IBM277.gz
-    - path: /usr/share/i18n/charmaps/IBM278.gz
-    - path: /usr/share/i18n/charmaps/IBM280.gz
-    - path: /usr/share/i18n/charmaps/IBM281.gz
-    - path: /usr/share/i18n/charmaps/IBM284.gz
-    - path: /usr/share/i18n/charmaps/IBM285.gz
-    - path: /usr/share/i18n/charmaps/IBM290.gz
-    - path: /usr/share/i18n/charmaps/IBM297.gz
-    - path: /usr/share/i18n/charmaps/IBM420.gz
-    - path: /usr/share/i18n/charmaps/IBM423.gz
-    - path: /usr/share/i18n/charmaps/IBM424.gz
-    - path: /usr/share/i18n/charmaps/IBM437.gz
-    - path: /usr/share/i18n/charmaps/IBM500.gz
-    - path: /usr/share/i18n/charmaps/IBM850.gz
-    - path: /usr/share/i18n/charmaps/IBM851.gz
-    - path: /usr/share/i18n/charmaps/IBM852.gz
-    - path: /usr/share/i18n/charmaps/IBM855.gz
-    - path: /usr/share/i18n/charmaps/IBM856.gz
-    - path: /usr/share/i18n/charmaps/IBM857.gz
-    - path: /usr/share/i18n/charmaps/IBM858.gz
-    - path: /usr/share/i18n/charmaps/IBM860.gz
-    - path: /usr/share/i18n/charmaps/IBM861.gz
-    - path: /usr/share/i18n/charmaps/IBM862.gz
-    - path: /usr/share/i18n/charmaps/IBM863.gz
-    - path: /usr/share/i18n/charmaps/IBM864.gz
-    - path: /usr/share/i18n/charmaps/IBM865.gz
-    - path: /usr/share/i18n/charmaps/IBM866.gz
-    - path: /usr/share/i18n/charmaps/IBM866NAV.gz
-    - path: /usr/share/i18n/charmaps/IBM868.gz
-    - path: /usr/share/i18n/charmaps/IBM869.gz
-    - path: /usr/share/i18n/charmaps/IBM870.gz
-    - path: /usr/share/i18n/charmaps/IBM871.gz
-    - path: /usr/share/i18n/charmaps/IBM874.gz
-    - path: /usr/share/i18n/charmaps/IBM875.gz
-    - path: /usr/share/i18n/charmaps/IBM880.gz
-    - path: /usr/share/i18n/charmaps/IBM891.gz
-    - path: /usr/share/i18n/charmaps/IBM903.gz
-    - path: /usr/share/i18n/charmaps/IBM904.gz
-    - path: /usr/share/i18n/charmaps/IBM905.gz
-    - path: /usr/share/i18n/charmaps/IBM918.gz
-    - path: /usr/share/i18n/charmaps/IBM922.gz
-    - path: /usr/share/i18n/charmaps/IEC_P27-1.gz
-    - path: /usr/share/i18n/charmaps/INIS-8.gz
-    - path: /usr/share/i18n/charmaps/INIS-CYRILLIC.gz
-    - path: /usr/share/i18n/charmaps/INIS.gz
-    - path: /usr/share/i18n/charmaps/INVARIANT.gz
-    - path: /usr/share/i18n/charmaps/ISIRI-3342.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-1.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-10.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-11.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-13.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-14.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-15.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-16.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-2.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-3.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-4.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-5.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-6.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-7.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-8.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-9.gz
-    - path: /usr/share/i18n/charmaps/ISO-8859-9E.gz
-    - path: /usr/share/i18n/charmaps/ISO-IR-197.gz
-    - path: /usr/share/i18n/charmaps/ISO-IR-209.gz
-    - path: /usr/share/i18n/charmaps/ISO-IR-90.gz
-    - path: /usr/share/i18n/charmaps/ISO_10367-BOX.gz
-    - path: /usr/share/i18n/charmaps/ISO_10646.gz
-    - path: /usr/share/i18n/charmaps/ISO_11548-1.gz
-    - path: /usr/share/i18n/charmaps/ISO_2033-1983.gz
-    - path: /usr/share/i18n/charmaps/ISO_5427-EXT.gz
-    - path: /usr/share/i18n/charmaps/ISO_5427.gz
-    - path: /usr/share/i18n/charmaps/ISO_5428.gz
-    - path: /usr/share/i18n/charmaps/ISO_646.BASIC.gz
-    - path: /usr/share/i18n/charmaps/ISO_646.IRV.gz
-    - path: /usr/share/i18n/charmaps/ISO_6937-2-25.gz
-    - path: /usr/share/i18n/charmaps/ISO_6937-2-ADD.gz
-    - path: /usr/share/i18n/charmaps/ISO_6937.gz
-    - path: /usr/share/i18n/charmaps/ISO_8859-1,GL.gz
-    - path: /usr/share/i18n/charmaps/ISO_8859-SUPP.gz
-    - path: /usr/share/i18n/charmaps/IT.gz
-    - path: /usr/share/i18n/charmaps/JIS_C6220-1969-JP.gz
-    - path: /usr/share/i18n/charmaps/JIS_C6220-1969-RO.gz
-    - path: /usr/share/i18n/charmaps/JIS_C6229-1984-A.gz
-    - path: /usr/share/i18n/charmaps/JIS_C6229-1984-B-ADD.gz
-    - path: /usr/share/i18n/charmaps/JIS_C6229-1984-B.gz
-    - path: /usr/share/i18n/charmaps/JIS_C6229-1984-HAND-ADD.gz
-    - path: /usr/share/i18n/charmaps/JIS_C6229-1984-HAND.gz
-    - path: /usr/share/i18n/charmaps/JIS_C6229-1984-KANA.gz
-    - path: /usr/share/i18n/charmaps/JIS_X0201.gz
-    - path: /usr/share/i18n/charmaps/JOHAB.gz
-    - path: /usr/share/i18n/charmaps/JUS_I.B1.002.gz
-    - path: /usr/share/i18n/charmaps/JUS_I.B1.003-MAC.gz
-    - path: /usr/share/i18n/charmaps/JUS_I.B1.003-SERB.gz
-    - path: /usr/share/i18n/charmaps/KOI-8.gz
-    - path: /usr/share/i18n/charmaps/KOI8-R.gz
-    - path: /usr/share/i18n/charmaps/KOI8-RU.gz
-    - path: /usr/share/i18n/charmaps/KOI8-T.gz
-    - path: /usr/share/i18n/charmaps/KOI8-U.gz
-    - path: /usr/share/i18n/charmaps/KSC5636.gz
-    - path: /usr/share/i18n/charmaps/LATIN-GREEK-1.gz
-    - path: /usr/share/i18n/charmaps/LATIN-GREEK.gz
-    - path: /usr/share/i18n/charmaps/MAC-CENTRALEUROPE.gz
-    - path: /usr/share/i18n/charmaps/MAC-CYRILLIC.gz
-    - path: /usr/share/i18n/charmaps/MAC-IS.gz
-    - path: /usr/share/i18n/charmaps/MAC-SAMI.gz
-    - path: /usr/share/i18n/charmaps/MAC-UK.gz
-    - path: /usr/share/i18n/charmaps/MACINTOSH.gz
-    - path: /usr/share/i18n/charmaps/MIK.gz
-    - path: /usr/share/i18n/charmaps/MSZ_7795.3.gz
-    - path: /usr/share/i18n/charmaps/NATS-DANO-ADD.gz
-    - path: /usr/share/i18n/charmaps/NATS-DANO.gz
-    - path: /usr/share/i18n/charmaps/NATS-SEFI-ADD.gz
-    - path: /usr/share/i18n/charmaps/NATS-SEFI.gz
-    - path: /usr/share/i18n/charmaps/NC_NC00-10.gz
-    - path: /usr/share/i18n/charmaps/NEXTSTEP.gz
-    - path: /usr/share/i18n/charmaps/NF_Z_62-010.gz
-    - path: /usr/share/i18n/charmaps/NF_Z_62-010_1973.gz
-    - path: /usr/share/i18n/charmaps/NS_4551-1.gz
-    - path: /usr/share/i18n/charmaps/NS_4551-2.gz
-    - path: /usr/share/i18n/charmaps/PT.gz
-    - path: /usr/share/i18n/charmaps/PT154.gz
-    - path: /usr/share/i18n/charmaps/PT2.gz
-    - path: /usr/share/i18n/charmaps/RK1048.gz
-    - path: /usr/share/i18n/charmaps/SAMI-WS2.gz
-    - path: /usr/share/i18n/charmaps/SAMI.gz
-    - path: /usr/share/i18n/charmaps/SEN_850200_B.gz
-    - path: /usr/share/i18n/charmaps/SEN_850200_C.gz
-    - path: /usr/share/i18n/charmaps/SHIFT_JIS.gz
-    - path: /usr/share/i18n/charmaps/SHIFT_JISX0213.gz
-    - path: /usr/share/i18n/charmaps/T.101-G2.gz
-    - path: /usr/share/i18n/charmaps/T.61-7BIT.gz
-    - path: /usr/share/i18n/charmaps/T.61-8BIT.gz
-    - path: /usr/share/i18n/charmaps/TCVN5712-1.gz
-    - path: /usr/share/i18n/charmaps/TIS-620.gz
-    - path: /usr/share/i18n/charmaps/TSCII.gz
-    - path: /usr/share/i18n/charmaps/UTF-8.gz
-    - path: /usr/share/i18n/charmaps/VIDEOTEX-SUPPL.gz
-    - path: /usr/share/i18n/charmaps/VISCII.gz
-    - path: /usr/share/i18n/charmaps/WINDOWS-31J.gz
-    - path: /usr/share/i18n/locales/C
-    - path: /usr/share/i18n/locales/POSIX
-    - path: /usr/share/i18n/locales/aa_DJ
-    - path: /usr/share/i18n/locales/aa_ER
-    - path: /usr/share/i18n/locales/aa_ET
-    - path: /usr/share/i18n/locales/ab_GE
-    - path: /usr/share/i18n/locales/af_ZA
-    - path: /usr/share/i18n/locales/agr_PE
-    - path: /usr/share/i18n/locales/ak_GH
-    - path: /usr/share/i18n/locales/am_ET
-    - path: /usr/share/i18n/locales/an_ES
-    - path: /usr/share/i18n/locales/anp_IN
-    - path: /usr/share/i18n/locales/ar_AE
-    - path: /usr/share/i18n/locales/ar_BH
-    - path: /usr/share/i18n/locales/ar_DZ
-    - path: /usr/share/i18n/locales/ar_EG
-    - path: /usr/share/i18n/locales/ar_IN
-    - path: /usr/share/i18n/locales/ar_IQ
-    - path: /usr/share/i18n/locales/ar_JO
-    - path: /usr/share/i18n/locales/ar_KW
-    - path: /usr/share/i18n/locales/ar_LB
-    - path: /usr/share/i18n/locales/ar_LY
-    - path: /usr/share/i18n/locales/ar_MA
-    - path: /usr/share/i18n/locales/ar_OM
-    - path: /usr/share/i18n/locales/ar_QA
-    - path: /usr/share/i18n/locales/ar_SA
-    - path: /usr/share/i18n/locales/ar_SD
-    - path: /usr/share/i18n/locales/ar_SS
-    - path: /usr/share/i18n/locales/ar_SY
-    - path: /usr/share/i18n/locales/ar_TN
-    - path: /usr/share/i18n/locales/ar_YE
-    - path: /usr/share/i18n/locales/as_IN
-    - path: /usr/share/i18n/locales/ast_ES
-    - path: /usr/share/i18n/locales/ayc_PE
-    - path: /usr/share/i18n/locales/az_AZ
-    - path: /usr/share/i18n/locales/az_IR
-    - path: /usr/share/i18n/locales/be_BY
-    - path: /usr/share/i18n/locales/be_BY@latin
-    - path: /usr/share/i18n/locales/bem_ZM
-    - path: /usr/share/i18n/locales/ber_DZ
-    - path: /usr/share/i18n/locales/ber_MA
-    - path: /usr/share/i18n/locales/bg_BG
-    - path: /usr/share/i18n/locales/bhb_IN
-    - path: /usr/share/i18n/locales/bho_IN
-    - path: /usr/share/i18n/locales/bho_NP
-    - path: /usr/share/i18n/locales/bi_VU
-    - path: /usr/share/i18n/locales/bn_BD
-    - path: /usr/share/i18n/locales/bn_IN
-    - path: /usr/share/i18n/locales/bo_CN
-    - path: /usr/share/i18n/locales/bo_IN
-    - path: /usr/share/i18n/locales/br_FR
-    - path: /usr/share/i18n/locales/br_FR@euro
-    - path: /usr/share/i18n/locales/brx_IN
-    - path: /usr/share/i18n/locales/bs_BA
-    - path: /usr/share/i18n/locales/byn_ER
-    - path: /usr/share/i18n/locales/ca_AD
-    - path: /usr/share/i18n/locales/ca_ES
-    - path: /usr/share/i18n/locales/ca_ES@euro
-    - path: /usr/share/i18n/locales/ca_ES@valencia
-    - path: /usr/share/i18n/locales/ca_FR
-    - path: /usr/share/i18n/locales/ca_IT
-    - path: /usr/share/i18n/locales/ce_RU
-    - path: /usr/share/i18n/locales/chr_US
-    - path: /usr/share/i18n/locales/ckb_IQ
-    - path: /usr/share/i18n/locales/cmn_TW
-    - path: /usr/share/i18n/locales/cns11643_stroke
-    - path: /usr/share/i18n/locales/crh_RU
-    - path: /usr/share/i18n/locales/crh_UA
-    - path: /usr/share/i18n/locales/cs_CZ
-    - path: /usr/share/i18n/locales/csb_PL
-    - path: /usr/share/i18n/locales/cv_RU
-    - path: /usr/share/i18n/locales/cy_GB
-    - path: /usr/share/i18n/locales/da_DK
-    - path: /usr/share/i18n/locales/de_AT
-    - path: /usr/share/i18n/locales/de_AT@euro
-    - path: /usr/share/i18n/locales/de_BE
-    - path: /usr/share/i18n/locales/de_BE@euro
-    - path: /usr/share/i18n/locales/de_CH
-    - path: /usr/share/i18n/locales/de_DE
-    - path: /usr/share/i18n/locales/de_DE@euro
-    - path: /usr/share/i18n/locales/de_IT
-    - path: /usr/share/i18n/locales/de_LI
-    - path: /usr/share/i18n/locales/de_LU
-    - path: /usr/share/i18n/locales/de_LU@euro
-    - path: /usr/share/i18n/locales/doi_IN
-    - path: /usr/share/i18n/locales/dsb_DE
-    - path: /usr/share/i18n/locales/dv_MV
-    - path: /usr/share/i18n/locales/dz_BT
-    - path: /usr/share/i18n/locales/el_CY
-    - path: /usr/share/i18n/locales/el_GR
-    - path: /usr/share/i18n/locales/el_GR@euro
-    - path: /usr/share/i18n/locales/en_AG
-    - path: /usr/share/i18n/locales/en_AU
-    - path: /usr/share/i18n/locales/en_BW
-    - path: /usr/share/i18n/locales/en_CA
-    - path: /usr/share/i18n/locales/en_DK
-    - path: /usr/share/i18n/locales/en_GB
-    - path: /usr/share/i18n/locales/en_HK
-    - path: /usr/share/i18n/locales/en_IE
-    - path: /usr/share/i18n/locales/en_IE@euro
-    - path: /usr/share/i18n/locales/en_IL
-    - path: /usr/share/i18n/locales/en_IN
-    - path: /usr/share/i18n/locales/en_NG
-    - path: /usr/share/i18n/locales/en_NZ
-    - path: /usr/share/i18n/locales/en_PH
-    - path: /usr/share/i18n/locales/en_SC
-    - path: /usr/share/i18n/locales/en_SG
-    - path: /usr/share/i18n/locales/en_US
-    - path: /usr/share/i18n/locales/en_ZA
-    - path: /usr/share/i18n/locales/en_ZM
-    - path: /usr/share/i18n/locales/en_ZW
-    - path: /usr/share/i18n/locales/eo
-    - path: /usr/share/i18n/locales/es_AR
-    - path: /usr/share/i18n/locales/es_BO
-    - path: /usr/share/i18n/locales/es_CL
-    - path: /usr/share/i18n/locales/es_CO
-    - path: /usr/share/i18n/locales/es_CR
-    - path: /usr/share/i18n/locales/es_CU
-    - path: /usr/share/i18n/locales/es_DO
-    - path: /usr/share/i18n/locales/es_EC
-    - path: /usr/share/i18n/locales/es_ES
-    - path: /usr/share/i18n/locales/es_ES@euro
-    - path: /usr/share/i18n/locales/es_GT
-    - path: /usr/share/i18n/locales/es_HN
-    - path: /usr/share/i18n/locales/es_MX
-    - path: /usr/share/i18n/locales/es_NI
-    - path: /usr/share/i18n/locales/es_PA
-    - path: /usr/share/i18n/locales/es_PE
-    - path: /usr/share/i18n/locales/es_PR
-    - path: /usr/share/i18n/locales/es_PY
-    - path: /usr/share/i18n/locales/es_SV
-    - path: /usr/share/i18n/locales/es_US
-    - path: /usr/share/i18n/locales/es_UY
-    - path: /usr/share/i18n/locales/es_VE
-    - path: /usr/share/i18n/locales/et_EE
-    - path: /usr/share/i18n/locales/eu_ES
-    - path: /usr/share/i18n/locales/eu_ES@euro
-    - path: /usr/share/i18n/locales/fa_IR
-    - path: /usr/share/i18n/locales/ff_SN
-    - path: /usr/share/i18n/locales/fi_FI
-    - path: /usr/share/i18n/locales/fi_FI@euro
-    - path: /usr/share/i18n/locales/fil_PH
-    - path: /usr/share/i18n/locales/fo_FO
-    - path: /usr/share/i18n/locales/fr_BE
-    - path: /usr/share/i18n/locales/fr_BE@euro
-    - path: /usr/share/i18n/locales/fr_CA
-    - path: /usr/share/i18n/locales/fr_CH
-    - path: /usr/share/i18n/locales/fr_FR
-    - path: /usr/share/i18n/locales/fr_FR@euro
-    - path: /usr/share/i18n/locales/fr_LU
-    - path: /usr/share/i18n/locales/fr_LU@euro
-    - path: /usr/share/i18n/locales/fur_IT
-    - path: /usr/share/i18n/locales/fy_DE
-    - path: /usr/share/i18n/locales/fy_NL
-    - path: /usr/share/i18n/locales/ga_IE
-    - path: /usr/share/i18n/locales/ga_IE@euro
-    - path: /usr/share/i18n/locales/gbm_IN
-    - path: /usr/share/i18n/locales/gd_GB
-    - path: /usr/share/i18n/locales/gez_ER
-    - path: /usr/share/i18n/locales/gez_ER@abegede
-    - path: /usr/share/i18n/locales/gez_ET
-    - path: /usr/share/i18n/locales/gez_ET@abegede
-    - path: /usr/share/i18n/locales/gl_ES
-    - path: /usr/share/i18n/locales/gl_ES@euro
-    - path: /usr/share/i18n/locales/gu_IN
-    - path: /usr/share/i18n/locales/gv_GB
-    - path: /usr/share/i18n/locales/ha_NG
-    - path: /usr/share/i18n/locales/hak_TW
-    - path: /usr/share/i18n/locales/he_IL
-    - path: /usr/share/i18n/locales/hi_IN
-    - path: /usr/share/i18n/locales/hif_FJ
-    - path: /usr/share/i18n/locales/hne_IN
-    - path: /usr/share/i18n/locales/hr_HR
-    - path: /usr/share/i18n/locales/hsb_DE
-    - path: /usr/share/i18n/locales/ht_HT
-    - path: /usr/share/i18n/locales/hu_HU
-    - path: /usr/share/i18n/locales/hy_AM
-    - path: /usr/share/i18n/locales/i18n
-    - path: /usr/share/i18n/locales/i18n_ctype
-    - path: /usr/share/i18n/locales/ia_FR
-    - path: /usr/share/i18n/locales/id_ID
-    - path: /usr/share/i18n/locales/ig_NG
-    - path: /usr/share/i18n/locales/ik_CA
-    - path: /usr/share/i18n/locales/is_IS
-    - path: /usr/share/i18n/locales/iso14651_t1
-    - path: /usr/share/i18n/locales/iso14651_t1_common
-    - path: /usr/share/i18n/locales/iso14651_t1_pinyin
-    - path: /usr/share/i18n/locales/it_CH
-    - path: /usr/share/i18n/locales/it_IT
-    - path: /usr/share/i18n/locales/it_IT@euro
-    - path: /usr/share/i18n/locales/iu_CA
-    - path: /usr/share/i18n/locales/ja_JP
-    - path: /usr/share/i18n/locales/ka_GE
-    - path: /usr/share/i18n/locales/kab_DZ
-    - path: /usr/share/i18n/locales/kk_KZ
-    - path: /usr/share/i18n/locales/kl_GL
-    - path: /usr/share/i18n/locales/km_KH
-    - path: /usr/share/i18n/locales/kn_IN
-    - path: /usr/share/i18n/locales/ko_KR
-    - path: /usr/share/i18n/locales/kok_IN
-    - path: /usr/share/i18n/locales/ks_IN
-    - path: /usr/share/i18n/locales/ks_IN@devanagari
-    - path: /usr/share/i18n/locales/ku_TR
-    - path: /usr/share/i18n/locales/kv_RU
-    - path: /usr/share/i18n/locales/kw_GB
-    - path: /usr/share/i18n/locales/ky_KG
-    - path: /usr/share/i18n/locales/lb_LU
-    - path: /usr/share/i18n/locales/lg_UG
-    - path: /usr/share/i18n/locales/li_BE
-    - path: /usr/share/i18n/locales/li_NL
-    - path: /usr/share/i18n/locales/lij_IT
-    - path: /usr/share/i18n/locales/ln_CD
-    - path: /usr/share/i18n/locales/lo_LA
-    - path: /usr/share/i18n/locales/lt_LT
-    - path: /usr/share/i18n/locales/lv_LV
-    - path: /usr/share/i18n/locales/lzh_TW
-    - path: /usr/share/i18n/locales/mag_IN
-    - path: /usr/share/i18n/locales/mai_IN
-    - path: /usr/share/i18n/locales/mai_NP
-    - path: /usr/share/i18n/locales/mfe_MU
-    - path: /usr/share/i18n/locales/mg_MG
-    - path: /usr/share/i18n/locales/mhr_RU
-    - path: /usr/share/i18n/locales/mi_NZ
-    - path: /usr/share/i18n/locales/miq_NI
-    - path: /usr/share/i18n/locales/mjw_IN
-    - path: /usr/share/i18n/locales/mk_MK
-    - path: /usr/share/i18n/locales/ml_IN
-    - path: /usr/share/i18n/locales/mn_MN
-    - path: /usr/share/i18n/locales/mni_IN
-    - path: /usr/share/i18n/locales/mnw_MM
-    - path: /usr/share/i18n/locales/mr_IN
-    - path: /usr/share/i18n/locales/ms_MY
-    - path: /usr/share/i18n/locales/mt_MT
-    - path: /usr/share/i18n/locales/my_MM
-    - path: /usr/share/i18n/locales/nan_TW
-    - path: /usr/share/i18n/locales/nan_TW@latin
-    - path: /usr/share/i18n/locales/nb_NO
-    - path: /usr/share/i18n/locales/nds_DE
-    - path: /usr/share/i18n/locales/nds_NL
-    - path: /usr/share/i18n/locales/ne_NP
-    - path: /usr/share/i18n/locales/nhn_MX
-    - path: /usr/share/i18n/locales/niu_NU
-    - path: /usr/share/i18n/locales/niu_NZ
-    - path: /usr/share/i18n/locales/nl_AW
-    - path: /usr/share/i18n/locales/nl_BE
-    - path: /usr/share/i18n/locales/nl_BE@euro
-    - path: /usr/share/i18n/locales/nl_NL
-    - path: /usr/share/i18n/locales/nl_NL@euro
-    - path: /usr/share/i18n/locales/nn_NO
-    - path: /usr/share/i18n/locales/nr_ZA
-    - path: /usr/share/i18n/locales/nso_ZA
-    - path: /usr/share/i18n/locales/oc_FR
-    - path: /usr/share/i18n/locales/om_ET
-    - path: /usr/share/i18n/locales/om_KE
-    - path: /usr/share/i18n/locales/or_IN
-    - path: /usr/share/i18n/locales/os_RU
-    - path: /usr/share/i18n/locales/pa_IN
-    - path: /usr/share/i18n/locales/pa_PK
-    - path: /usr/share/i18n/locales/pap_AW
-    - path: /usr/share/i18n/locales/pap_CW
-    - path: /usr/share/i18n/locales/pl_PL
-    - path: /usr/share/i18n/locales/ps_AF
-    - path: /usr/share/i18n/locales/pt_BR
-    - path: /usr/share/i18n/locales/pt_PT
-    - path: /usr/share/i18n/locales/pt_PT@euro
-    - path: /usr/share/i18n/locales/quz_PE
-    - path: /usr/share/i18n/locales/raj_IN
-    - path: /usr/share/i18n/locales/rif_MA
-    - path: /usr/share/i18n/locales/ro_RO
-    - path: /usr/share/i18n/locales/ru_RU
-    - path: /usr/share/i18n/locales/ru_UA
-    - path: /usr/share/i18n/locales/rw_RW
-    - path: /usr/share/i18n/locales/sa_IN
-    - path: /usr/share/i18n/locales/sah_RU
-    - path: /usr/share/i18n/locales/sat_IN
-    - path: /usr/share/i18n/locales/sc_IT
-    - path: /usr/share/i18n/locales/sd_IN
-    - path: /usr/share/i18n/locales/sd_IN@devanagari
-    - path: /usr/share/i18n/locales/se_NO
-    - path: /usr/share/i18n/locales/sgs_LT
-    - path: /usr/share/i18n/locales/shn_MM
-    - path: /usr/share/i18n/locales/shs_CA
-    - path: /usr/share/i18n/locales/si_LK
-    - path: /usr/share/i18n/locales/sid_ET
-    - path: /usr/share/i18n/locales/sk_SK
-    - path: /usr/share/i18n/locales/sl_SI
-    - path: /usr/share/i18n/locales/sm_WS
-    - path: /usr/share/i18n/locales/so_DJ
-    - path: /usr/share/i18n/locales/so_ET
-    - path: /usr/share/i18n/locales/so_KE
-    - path: /usr/share/i18n/locales/so_SO
-    - path: /usr/share/i18n/locales/sq_AL
-    - path: /usr/share/i18n/locales/sq_MK
-    - path: /usr/share/i18n/locales/sr_ME
-    - path: /usr/share/i18n/locales/sr_RS
-    - path: /usr/share/i18n/locales/sr_RS@latin
-    - path: /usr/share/i18n/locales/ss_ZA
-    - path: /usr/share/i18n/locales/ssy_ER
-    - path: /usr/share/i18n/locales/st_ZA
-    - path: /usr/share/i18n/locales/su_ID
-    - path: /usr/share/i18n/locales/sv_FI
-    - path: /usr/share/i18n/locales/sv_FI@euro
-    - path: /usr/share/i18n/locales/sv_SE
-    - path: /usr/share/i18n/locales/sw_KE
-    - path: /usr/share/i18n/locales/sw_TZ
-    - path: /usr/share/i18n/locales/syr
-    - path: /usr/share/i18n/locales/szl_PL
-    - path: /usr/share/i18n/locales/ta_IN
-    - path: /usr/share/i18n/locales/ta_LK
-    - path: /usr/share/i18n/locales/tcy_IN
-    - path: /usr/share/i18n/locales/te_IN
-    - path: /usr/share/i18n/locales/tg_TJ
-    - path: /usr/share/i18n/locales/th_TH
-    - path: /usr/share/i18n/locales/the_NP
-    - path: /usr/share/i18n/locales/ti_ER
-    - path: /usr/share/i18n/locales/ti_ET
-    - path: /usr/share/i18n/locales/tig_ER
-    - path: /usr/share/i18n/locales/tk_TM
-    - path: /usr/share/i18n/locales/tl_PH
-    - path: /usr/share/i18n/locales/tn_ZA
-    - path: /usr/share/i18n/locales/to_TO
-    - path: /usr/share/i18n/locales/tok
-    - path: /usr/share/i18n/locales/tpi_PG
-    - path: /usr/share/i18n/locales/tr_CY
-    - path: /usr/share/i18n/locales/tr_TR
-    - path: /usr/share/i18n/locales/translit_circle
-    - path: /usr/share/i18n/locales/translit_cjk_compat
-    - path: /usr/share/i18n/locales/translit_cjk_variants
-    - path: /usr/share/i18n/locales/translit_combining
-    - path: /usr/share/i18n/locales/translit_compat
-    - path: /usr/share/i18n/locales/translit_emojis
-    - path: /usr/share/i18n/locales/translit_font
-    - path: /usr/share/i18n/locales/translit_fraction
-    - path: /usr/share/i18n/locales/translit_hangul
-    - path: /usr/share/i18n/locales/translit_narrow
-    - path: /usr/share/i18n/locales/translit_neutral
-    - path: /usr/share/i18n/locales/translit_small
-    - path: /usr/share/i18n/locales/translit_wide
-    - path: /usr/share/i18n/locales/ts_ZA
-    - path: /usr/share/i18n/locales/tt_RU
-    - path: /usr/share/i18n/locales/tt_RU@iqtelif
-    - path: /usr/share/i18n/locales/ug_CN
-    - path: /usr/share/i18n/locales/uk_UA
-    - path: /usr/share/i18n/locales/unm_US
-    - path: /usr/share/i18n/locales/ur_IN
-    - path: /usr/share/i18n/locales/ur_PK
-    - path: /usr/share/i18n/locales/uz_UZ
-    - path: /usr/share/i18n/locales/uz_UZ@cyrillic
-    - path: /usr/share/i18n/locales/ve_ZA
-    - path: /usr/share/i18n/locales/vi_VN
-    - path: /usr/share/i18n/locales/wa_BE
-    - path: /usr/share/i18n/locales/wa_BE@euro
-    - path: /usr/share/i18n/locales/wae_CH
-    - path: /usr/share/i18n/locales/wal_ET
-    - path: /usr/share/i18n/locales/wo_SN
-    - path: /usr/share/i18n/locales/xh_ZA
-    - path: /usr/share/i18n/locales/yi_US
-    - path: /usr/share/i18n/locales/yo_NG
-    - path: /usr/share/i18n/locales/yue_HK
-    - path: /usr/share/i18n/locales/yuw_PG
-    - path: /usr/share/i18n/locales/zgh_MA
-    - path: /usr/share/i18n/locales/zh_CN
-    - path: /usr/share/i18n/locales/zh_HK
-    - path: /usr/share/i18n/locales/zh_SG
-    - path: /usr/share/i18n/locales/zh_TW
-    - path: /usr/share/i18n/locales/zu_ZA
+      - /usr/lib/libc.so.6
+
   conf:
     files:
     - path: /etc/rpc
-  static:
-    files:
-    - path: /usr/lib/libBrokenLocale.a
-    - path: /usr/lib/libanl.a
-    - path: /usr/lib/libc.a
-    - path: /usr/lib/libc_nonshared.a
-    - path: /usr/lib/libdl.a
-    - path: /usr/lib/libg.a
-    - path: /usr/lib/libm-2.39.a
-    - path: /usr/lib/libm.a
-    - path: /usr/lib/libmcheck.a
-    - path: /usr/lib/libmvec.a
-    - path: /usr/lib/libpthread.a
-    - path: /usr/lib/libresolv.a
-    - path: /usr/lib/librt.a
-    - path: /usr/lib/libutil.a
+
   dev:
     files:
     - path: /usr/include/a.out.h
@@ -1410,6 +738,633 @@ outputs:
     - path: /usr/include/wchar.h
     - path: /usr/include/wctype.h
     - path: /usr/include/wordexp.h
+
+  i18n:
+    files:
+    - path: /usr/share/i18n/charmaps/ANSI_X3.4-1968.gz
+    - path: /usr/share/i18n/charmaps/ANSI_X3.110-1983.gz
+    - path: /usr/share/i18n/charmaps/ARMSCII-8.gz
+    - path: /usr/share/i18n/charmaps/ASMO_449.gz
+    - path: /usr/share/i18n/charmaps/BIG5-HKSCS.gz
+    - path: /usr/share/i18n/charmaps/BIG5.gz
+    - path: /usr/share/i18n/charmaps/BRF.gz
+    - path: /usr/share/i18n/charmaps/BS_4730.gz
+    - path: /usr/share/i18n/charmaps/BS_VIEWDATA.gz
+    - path: /usr/share/i18n/charmaps/CP737.gz
+    - path: /usr/share/i18n/charmaps/CP770.gz
+    - path: /usr/share/i18n/charmaps/CP771.gz
+    - path: /usr/share/i18n/charmaps/CP772.gz
+    - path: /usr/share/i18n/charmaps/CP773.gz
+    - path: /usr/share/i18n/charmaps/CP774.gz
+    - path: /usr/share/i18n/charmaps/CP775.gz
+    - path: /usr/share/i18n/charmaps/CP949.gz
+    - path: /usr/share/i18n/charmaps/CP1125.gz
+    - path: /usr/share/i18n/charmaps/CP1250.gz
+    - path: /usr/share/i18n/charmaps/CP1251.gz
+    - path: /usr/share/i18n/charmaps/CP1252.gz
+    - path: /usr/share/i18n/charmaps/CP1253.gz
+    - path: /usr/share/i18n/charmaps/CP1254.gz
+    - path: /usr/share/i18n/charmaps/CP1255.gz
+    - path: /usr/share/i18n/charmaps/CP1256.gz
+    - path: /usr/share/i18n/charmaps/CP1257.gz
+    - path: /usr/share/i18n/charmaps/CP1258.gz
+    - path: /usr/share/i18n/charmaps/CP10007.gz
+    - path: /usr/share/i18n/charmaps/CSA_Z243.4-1985-1.gz
+    - path: /usr/share/i18n/charmaps/CSA_Z243.4-1985-2.gz
+    - path: /usr/share/i18n/charmaps/CSA_Z243.4-1985-GR.gz
+    - path: /usr/share/i18n/charmaps/CSN_369103.gz
+    - path: /usr/share/i18n/charmaps/CWI.gz
+    - path: /usr/share/i18n/charmaps/DEC-MCS.gz
+    - path: /usr/share/i18n/charmaps/DIN_66003.gz
+    - path: /usr/share/i18n/charmaps/DS_2089.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-AT-DE-A.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-AT-DE.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-CA-FR.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-DK-NO-A.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-DK-NO.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-ES-A.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-ES-S.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-ES.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-FI-SE-A.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-FI-SE.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-FR.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-IS-FRISS.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-IT.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-PT.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-UK.gz
+    - path: /usr/share/i18n/charmaps/EBCDIC-US.gz
+    - path: /usr/share/i18n/charmaps/ECMA-CYRILLIC.gz
+    - path: /usr/share/i18n/charmaps/ES.gz
+    - path: /usr/share/i18n/charmaps/ES2.gz
+    - path: /usr/share/i18n/charmaps/EUC-JISX0213.gz
+    - path: /usr/share/i18n/charmaps/EUC-JP-MS.gz
+    - path: /usr/share/i18n/charmaps/EUC-JP.gz
+    - path: /usr/share/i18n/charmaps/EUC-KR.gz
+    - path: /usr/share/i18n/charmaps/EUC-TW.gz
+    - path: /usr/share/i18n/charmaps/GB2312.gz
+    - path: /usr/share/i18n/charmaps/GB18030.gz
+    - path: /usr/share/i18n/charmaps/GBK.gz
+    - path: /usr/share/i18n/charmaps/GB_1988-80.gz
+    - path: /usr/share/i18n/charmaps/GEORGIAN-ACADEMY.gz
+    - path: /usr/share/i18n/charmaps/GEORGIAN-PS.gz
+    - path: /usr/share/i18n/charmaps/GOST_19768-74.gz
+    - path: /usr/share/i18n/charmaps/GREEK-CCITT.gz
+    - path: /usr/share/i18n/charmaps/GREEK7-OLD.gz
+    - path: /usr/share/i18n/charmaps/GREEK7.gz
+    - path: /usr/share/i18n/charmaps/HP-GREEK8.gz
+    - path: /usr/share/i18n/charmaps/HP-ROMAN8.gz
+    - path: /usr/share/i18n/charmaps/HP-ROMAN9.gz
+    - path: /usr/share/i18n/charmaps/HP-THAI8.gz
+    - path: /usr/share/i18n/charmaps/HP-TURKISH8.gz
+    - path: /usr/share/i18n/charmaps/IBM037.gz
+    - path: /usr/share/i18n/charmaps/IBM038.gz
+    - path: /usr/share/i18n/charmaps/IBM256.gz
+    - path: /usr/share/i18n/charmaps/IBM273.gz
+    - path: /usr/share/i18n/charmaps/IBM274.gz
+    - path: /usr/share/i18n/charmaps/IBM275.gz
+    - path: /usr/share/i18n/charmaps/IBM277.gz
+    - path: /usr/share/i18n/charmaps/IBM278.gz
+    - path: /usr/share/i18n/charmaps/IBM280.gz
+    - path: /usr/share/i18n/charmaps/IBM281.gz
+    - path: /usr/share/i18n/charmaps/IBM284.gz
+    - path: /usr/share/i18n/charmaps/IBM285.gz
+    - path: /usr/share/i18n/charmaps/IBM290.gz
+    - path: /usr/share/i18n/charmaps/IBM297.gz
+    - path: /usr/share/i18n/charmaps/IBM420.gz
+    - path: /usr/share/i18n/charmaps/IBM423.gz
+    - path: /usr/share/i18n/charmaps/IBM424.gz
+    - path: /usr/share/i18n/charmaps/IBM437.gz
+    - path: /usr/share/i18n/charmaps/IBM500.gz
+    - path: /usr/share/i18n/charmaps/IBM850.gz
+    - path: /usr/share/i18n/charmaps/IBM851.gz
+    - path: /usr/share/i18n/charmaps/IBM852.gz
+    - path: /usr/share/i18n/charmaps/IBM855.gz
+    - path: /usr/share/i18n/charmaps/IBM856.gz
+    - path: /usr/share/i18n/charmaps/IBM857.gz
+    - path: /usr/share/i18n/charmaps/IBM858.gz
+    - path: /usr/share/i18n/charmaps/IBM860.gz
+    - path: /usr/share/i18n/charmaps/IBM861.gz
+    - path: /usr/share/i18n/charmaps/IBM862.gz
+    - path: /usr/share/i18n/charmaps/IBM863.gz
+    - path: /usr/share/i18n/charmaps/IBM864.gz
+    - path: /usr/share/i18n/charmaps/IBM865.gz
+    - path: /usr/share/i18n/charmaps/IBM866NAV.gz
+    - path: /usr/share/i18n/charmaps/IBM866.gz
+    - path: /usr/share/i18n/charmaps/IBM868.gz
+    - path: /usr/share/i18n/charmaps/IBM869.gz
+    - path: /usr/share/i18n/charmaps/IBM870.gz
+    - path: /usr/share/i18n/charmaps/IBM871.gz
+    - path: /usr/share/i18n/charmaps/IBM874.gz
+    - path: /usr/share/i18n/charmaps/IBM875.gz
+    - path: /usr/share/i18n/charmaps/IBM880.gz
+    - path: /usr/share/i18n/charmaps/IBM891.gz
+    - path: /usr/share/i18n/charmaps/IBM903.gz
+    - path: /usr/share/i18n/charmaps/IBM904.gz
+    - path: /usr/share/i18n/charmaps/IBM905.gz
+    - path: /usr/share/i18n/charmaps/IBM918.gz
+    - path: /usr/share/i18n/charmaps/IBM922.gz
+    - path: /usr/share/i18n/charmaps/IBM1004.gz
+    - path: /usr/share/i18n/charmaps/IBM1026.gz
+    - path: /usr/share/i18n/charmaps/IBM1047.gz
+    - path: /usr/share/i18n/charmaps/IBM1124.gz
+    - path: /usr/share/i18n/charmaps/IBM1129.gz
+    - path: /usr/share/i18n/charmaps/IBM1132.gz
+    - path: /usr/share/i18n/charmaps/IBM1133.gz
+    - path: /usr/share/i18n/charmaps/IBM1160.gz
+    - path: /usr/share/i18n/charmaps/IBM1161.gz
+    - path: /usr/share/i18n/charmaps/IBM1162.gz
+    - path: /usr/share/i18n/charmaps/IBM1163.gz
+    - path: /usr/share/i18n/charmaps/IBM1164.gz
+    - path: /usr/share/i18n/charmaps/IEC_P27-1.gz
+    - path: /usr/share/i18n/charmaps/INIS-8.gz
+    - path: /usr/share/i18n/charmaps/INIS-CYRILLIC.gz
+    - path: /usr/share/i18n/charmaps/INIS.gz
+    - path: /usr/share/i18n/charmaps/INVARIANT.gz
+    - path: /usr/share/i18n/charmaps/ISIRI-3342.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-1.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-2.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-3.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-4.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-5.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-6.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-7.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-8.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-9E.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-9.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-10.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-11.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-13.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-14.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-15.gz
+    - path: /usr/share/i18n/charmaps/ISO-8859-16.gz
+    - path: /usr/share/i18n/charmaps/ISO-IR-90.gz
+    - path: /usr/share/i18n/charmaps/ISO-IR-197.gz
+    - path: /usr/share/i18n/charmaps/ISO-IR-209.gz
+    - path: /usr/share/i18n/charmaps/ISO_646.BASIC.gz
+    - path: /usr/share/i18n/charmaps/ISO_646.IRV.gz
+    - path: /usr/share/i18n/charmaps/ISO_2033-1983.gz
+    - path: /usr/share/i18n/charmaps/ISO_5427-EXT.gz
+    - path: /usr/share/i18n/charmaps/ISO_5427.gz
+    - path: /usr/share/i18n/charmaps/ISO_5428.gz
+    - path: /usr/share/i18n/charmaps/ISO_6937-2-25.gz
+    - path: /usr/share/i18n/charmaps/ISO_6937-2-ADD.gz
+    - path: /usr/share/i18n/charmaps/ISO_6937.gz
+    - path: /usr/share/i18n/charmaps/ISO_8859-1,GL.gz
+    - path: /usr/share/i18n/charmaps/ISO_8859-SUPP.gz
+    - path: /usr/share/i18n/charmaps/ISO_10367-BOX.gz
+    - path: /usr/share/i18n/charmaps/ISO_10646.gz
+    - path: /usr/share/i18n/charmaps/ISO_11548-1.gz
+    - path: /usr/share/i18n/charmaps/IT.gz
+    - path: /usr/share/i18n/charmaps/JIS_C6220-1969-JP.gz
+    - path: /usr/share/i18n/charmaps/JIS_C6220-1969-RO.gz
+    - path: /usr/share/i18n/charmaps/JIS_C6229-1984-A.gz
+    - path: /usr/share/i18n/charmaps/JIS_C6229-1984-B-ADD.gz
+    - path: /usr/share/i18n/charmaps/JIS_C6229-1984-B.gz
+    - path: /usr/share/i18n/charmaps/JIS_C6229-1984-HAND-ADD.gz
+    - path: /usr/share/i18n/charmaps/JIS_C6229-1984-HAND.gz
+    - path: /usr/share/i18n/charmaps/JIS_C6229-1984-KANA.gz
+    - path: /usr/share/i18n/charmaps/JIS_X0201.gz
+    - path: /usr/share/i18n/charmaps/JOHAB.gz
+    - path: /usr/share/i18n/charmaps/JUS_I.B1.002.gz
+    - path: /usr/share/i18n/charmaps/JUS_I.B1.003-MAC.gz
+    - path: /usr/share/i18n/charmaps/JUS_I.B1.003-SERB.gz
+    - path: /usr/share/i18n/charmaps/KOI-8.gz
+    - path: /usr/share/i18n/charmaps/KOI8-R.gz
+    - path: /usr/share/i18n/charmaps/KOI8-RU.gz
+    - path: /usr/share/i18n/charmaps/KOI8-T.gz
+    - path: /usr/share/i18n/charmaps/KOI8-U.gz
+    - path: /usr/share/i18n/charmaps/KSC5636.gz
+    - path: /usr/share/i18n/charmaps/LATIN-GREEK-1.gz
+    - path: /usr/share/i18n/charmaps/LATIN-GREEK.gz
+    - path: /usr/share/i18n/charmaps/MAC-CENTRALEUROPE.gz
+    - path: /usr/share/i18n/charmaps/MAC-CYRILLIC.gz
+    - path: /usr/share/i18n/charmaps/MAC-IS.gz
+    - path: /usr/share/i18n/charmaps/MAC-SAMI.gz
+    - path: /usr/share/i18n/charmaps/MAC-UK.gz
+    - path: /usr/share/i18n/charmaps/MACINTOSH.gz
+    - path: /usr/share/i18n/charmaps/MIK.gz
+    - path: /usr/share/i18n/charmaps/MSZ_7795.3.gz
+    - path: /usr/share/i18n/charmaps/NATS-DANO-ADD.gz
+    - path: /usr/share/i18n/charmaps/NATS-DANO.gz
+    - path: /usr/share/i18n/charmaps/NATS-SEFI-ADD.gz
+    - path: /usr/share/i18n/charmaps/NATS-SEFI.gz
+    - path: /usr/share/i18n/charmaps/NC_NC00-10.gz
+    - path: /usr/share/i18n/charmaps/NEXTSTEP.gz
+    - path: /usr/share/i18n/charmaps/NF_Z_62-010_1973.gz
+    - path: /usr/share/i18n/charmaps/NF_Z_62-010.gz
+    - path: /usr/share/i18n/charmaps/NS_4551-1.gz
+    - path: /usr/share/i18n/charmaps/NS_4551-2.gz
+    - path: /usr/share/i18n/charmaps/PT.gz
+    - path: /usr/share/i18n/charmaps/PT2.gz
+    - path: /usr/share/i18n/charmaps/PT154.gz
+    - path: /usr/share/i18n/charmaps/RK1048.gz
+    - path: /usr/share/i18n/charmaps/SAMI-WS2.gz
+    - path: /usr/share/i18n/charmaps/SAMI.gz
+    - path: /usr/share/i18n/charmaps/SEN_850200_B.gz
+    - path: /usr/share/i18n/charmaps/SEN_850200_C.gz
+    - path: /usr/share/i18n/charmaps/SHIFT_JIS.gz
+    - path: /usr/share/i18n/charmaps/SHIFT_JISX0213.gz
+    - path: /usr/share/i18n/charmaps/T.61-7BIT.gz
+    - path: /usr/share/i18n/charmaps/T.61-8BIT.gz
+    - path: /usr/share/i18n/charmaps/T.101-G2.gz
+    - path: /usr/share/i18n/charmaps/TCVN5712-1.gz
+    - path: /usr/share/i18n/charmaps/TIS-620.gz
+    - path: /usr/share/i18n/charmaps/TSCII.gz
+    - path: /usr/share/i18n/charmaps/UTF-8.gz
+    - path: /usr/share/i18n/charmaps/VIDEOTEX-SUPPL.gz
+    - path: /usr/share/i18n/charmaps/VISCII.gz
+    - path: /usr/share/i18n/charmaps/WINDOWS-31J.gz
+    - path: /usr/share/i18n/locales/C
+    - path: /usr/share/i18n/locales/POSIX
+    - path: /usr/share/i18n/locales/aa_DJ
+    - path: /usr/share/i18n/locales/aa_ER
+    - path: /usr/share/i18n/locales/aa_ET
+    - path: /usr/share/i18n/locales/ab_GE
+    - path: /usr/share/i18n/locales/af_ZA
+    - path: /usr/share/i18n/locales/agr_PE
+    - path: /usr/share/i18n/locales/ak_GH
+    - path: /usr/share/i18n/locales/am_ET
+    - path: /usr/share/i18n/locales/an_ES
+    - path: /usr/share/i18n/locales/anp_IN
+    - path: /usr/share/i18n/locales/ar_AE
+    - path: /usr/share/i18n/locales/ar_BH
+    - path: /usr/share/i18n/locales/ar_DZ
+    - path: /usr/share/i18n/locales/ar_EG
+    - path: /usr/share/i18n/locales/ar_IN
+    - path: /usr/share/i18n/locales/ar_IQ
+    - path: /usr/share/i18n/locales/ar_JO
+    - path: /usr/share/i18n/locales/ar_KW
+    - path: /usr/share/i18n/locales/ar_LB
+    - path: /usr/share/i18n/locales/ar_LY
+    - path: /usr/share/i18n/locales/ar_MA
+    - path: /usr/share/i18n/locales/ar_OM
+    - path: /usr/share/i18n/locales/ar_QA
+    - path: /usr/share/i18n/locales/ar_SA
+    - path: /usr/share/i18n/locales/ar_SD
+    - path: /usr/share/i18n/locales/ar_SS
+    - path: /usr/share/i18n/locales/ar_SY
+    - path: /usr/share/i18n/locales/ar_TN
+    - path: /usr/share/i18n/locales/ar_YE
+    - path: /usr/share/i18n/locales/as_IN
+    - path: /usr/share/i18n/locales/ast_ES
+    - path: /usr/share/i18n/locales/ayc_PE
+    - path: /usr/share/i18n/locales/az_AZ
+    - path: /usr/share/i18n/locales/az_IR
+    - path: /usr/share/i18n/locales/be_BY
+    - path: /usr/share/i18n/locales/be_BY@latin
+    - path: /usr/share/i18n/locales/bem_ZM
+    - path: /usr/share/i18n/locales/ber_DZ
+    - path: /usr/share/i18n/locales/ber_MA
+    - path: /usr/share/i18n/locales/bg_BG
+    - path: /usr/share/i18n/locales/bhb_IN
+    - path: /usr/share/i18n/locales/bho_IN
+    - path: /usr/share/i18n/locales/bho_NP
+    - path: /usr/share/i18n/locales/bi_VU
+    - path: /usr/share/i18n/locales/bn_BD
+    - path: /usr/share/i18n/locales/bn_IN
+    - path: /usr/share/i18n/locales/bo_CN
+    - path: /usr/share/i18n/locales/bo_IN
+    - path: /usr/share/i18n/locales/br_FR
+    - path: /usr/share/i18n/locales/br_FR@euro
+    - path: /usr/share/i18n/locales/brx_IN
+    - path: /usr/share/i18n/locales/bs_BA
+    - path: /usr/share/i18n/locales/byn_ER
+    - path: /usr/share/i18n/locales/ca_AD
+    - path: /usr/share/i18n/locales/ca_ES
+    - path: /usr/share/i18n/locales/ca_ES@euro
+    - path: /usr/share/i18n/locales/ca_ES@valencia
+    - path: /usr/share/i18n/locales/ca_FR
+    - path: /usr/share/i18n/locales/ca_IT
+    - path: /usr/share/i18n/locales/ce_RU
+    - path: /usr/share/i18n/locales/chr_US
+    - path: /usr/share/i18n/locales/ckb_IQ
+    - path: /usr/share/i18n/locales/cmn_TW
+    - path: /usr/share/i18n/locales/cns11643_stroke
+    - path: /usr/share/i18n/locales/crh_RU
+    - path: /usr/share/i18n/locales/crh_UA
+    - path: /usr/share/i18n/locales/cs_CZ
+    - path: /usr/share/i18n/locales/csb_PL
+    - path: /usr/share/i18n/locales/cv_RU
+    - path: /usr/share/i18n/locales/cy_GB
+    - path: /usr/share/i18n/locales/da_DK
+    - path: /usr/share/i18n/locales/de_AT
+    - path: /usr/share/i18n/locales/de_AT@euro
+    - path: /usr/share/i18n/locales/de_BE
+    - path: /usr/share/i18n/locales/de_BE@euro
+    - path: /usr/share/i18n/locales/de_CH
+    - path: /usr/share/i18n/locales/de_DE
+    - path: /usr/share/i18n/locales/de_DE@euro
+    - path: /usr/share/i18n/locales/de_IT
+    - path: /usr/share/i18n/locales/de_LI
+    - path: /usr/share/i18n/locales/de_LU
+    - path: /usr/share/i18n/locales/de_LU@euro
+    - path: /usr/share/i18n/locales/doi_IN
+    - path: /usr/share/i18n/locales/dsb_DE
+    - path: /usr/share/i18n/locales/dv_MV
+    - path: /usr/share/i18n/locales/dz_BT
+    - path: /usr/share/i18n/locales/el_CY
+    - path: /usr/share/i18n/locales/el_GR
+    - path: /usr/share/i18n/locales/el_GR@euro
+    - path: /usr/share/i18n/locales/en_AG
+    - path: /usr/share/i18n/locales/en_AU
+    - path: /usr/share/i18n/locales/en_BW
+    - path: /usr/share/i18n/locales/en_CA
+    - path: /usr/share/i18n/locales/en_DK
+    - path: /usr/share/i18n/locales/en_GB
+    - path: /usr/share/i18n/locales/en_HK
+    - path: /usr/share/i18n/locales/en_IE
+    - path: /usr/share/i18n/locales/en_IE@euro
+    - path: /usr/share/i18n/locales/en_IL
+    - path: /usr/share/i18n/locales/en_IN
+    - path: /usr/share/i18n/locales/en_NG
+    - path: /usr/share/i18n/locales/en_NZ
+    - path: /usr/share/i18n/locales/en_PH
+    - path: /usr/share/i18n/locales/en_SC
+    - path: /usr/share/i18n/locales/en_SG
+    - path: /usr/share/i18n/locales/en_US
+    - path: /usr/share/i18n/locales/en_ZA
+    - path: /usr/share/i18n/locales/en_ZM
+    - path: /usr/share/i18n/locales/en_ZW
+    - path: /usr/share/i18n/locales/eo
+    - path: /usr/share/i18n/locales/es_AR
+    - path: /usr/share/i18n/locales/es_BO
+    - path: /usr/share/i18n/locales/es_CL
+    - path: /usr/share/i18n/locales/es_CO
+    - path: /usr/share/i18n/locales/es_CR
+    - path: /usr/share/i18n/locales/es_CU
+    - path: /usr/share/i18n/locales/es_DO
+    - path: /usr/share/i18n/locales/es_EC
+    - path: /usr/share/i18n/locales/es_ES
+    - path: /usr/share/i18n/locales/es_ES@euro
+    - path: /usr/share/i18n/locales/es_GT
+    - path: /usr/share/i18n/locales/es_HN
+    - path: /usr/share/i18n/locales/es_MX
+    - path: /usr/share/i18n/locales/es_NI
+    - path: /usr/share/i18n/locales/es_PA
+    - path: /usr/share/i18n/locales/es_PE
+    - path: /usr/share/i18n/locales/es_PR
+    - path: /usr/share/i18n/locales/es_PY
+    - path: /usr/share/i18n/locales/es_SV
+    - path: /usr/share/i18n/locales/es_US
+    - path: /usr/share/i18n/locales/es_UY
+    - path: /usr/share/i18n/locales/es_VE
+    - path: /usr/share/i18n/locales/et_EE
+    - path: /usr/share/i18n/locales/eu_ES
+    - path: /usr/share/i18n/locales/eu_ES@euro
+    - path: /usr/share/i18n/locales/fa_IR
+    - path: /usr/share/i18n/locales/ff_SN
+    - path: /usr/share/i18n/locales/fi_FI
+    - path: /usr/share/i18n/locales/fi_FI@euro
+    - path: /usr/share/i18n/locales/fil_PH
+    - path: /usr/share/i18n/locales/fo_FO
+    - path: /usr/share/i18n/locales/fr_BE
+    - path: /usr/share/i18n/locales/fr_BE@euro
+    - path: /usr/share/i18n/locales/fr_CA
+    - path: /usr/share/i18n/locales/fr_CH
+    - path: /usr/share/i18n/locales/fr_FR
+    - path: /usr/share/i18n/locales/fr_FR@euro
+    - path: /usr/share/i18n/locales/fr_LU
+    - path: /usr/share/i18n/locales/fr_LU@euro
+    - path: /usr/share/i18n/locales/fur_IT
+    - path: /usr/share/i18n/locales/fy_DE
+    - path: /usr/share/i18n/locales/fy_NL
+    - path: /usr/share/i18n/locales/ga_IE
+    - path: /usr/share/i18n/locales/ga_IE@euro
+    - path: /usr/share/i18n/locales/gbm_IN
+    - path: /usr/share/i18n/locales/gd_GB
+    - path: /usr/share/i18n/locales/gez_ER
+    - path: /usr/share/i18n/locales/gez_ER@abegede
+    - path: /usr/share/i18n/locales/gez_ET
+    - path: /usr/share/i18n/locales/gez_ET@abegede
+    - path: /usr/share/i18n/locales/gl_ES
+    - path: /usr/share/i18n/locales/gl_ES@euro
+    - path: /usr/share/i18n/locales/gu_IN
+    - path: /usr/share/i18n/locales/gv_GB
+    - path: /usr/share/i18n/locales/ha_NG
+    - path: /usr/share/i18n/locales/hak_TW
+    - path: /usr/share/i18n/locales/he_IL
+    - path: /usr/share/i18n/locales/hi_IN
+    - path: /usr/share/i18n/locales/hif_FJ
+    - path: /usr/share/i18n/locales/hne_IN
+    - path: /usr/share/i18n/locales/hr_HR
+    - path: /usr/share/i18n/locales/hsb_DE
+    - path: /usr/share/i18n/locales/ht_HT
+    - path: /usr/share/i18n/locales/hu_HU
+    - path: /usr/share/i18n/locales/hy_AM
+    - path: /usr/share/i18n/locales/i18n
+    - path: /usr/share/i18n/locales/i18n_ctype
+    - path: /usr/share/i18n/locales/ia_FR
+    - path: /usr/share/i18n/locales/id_ID
+    - path: /usr/share/i18n/locales/ig_NG
+    - path: /usr/share/i18n/locales/ik_CA
+    - path: /usr/share/i18n/locales/is_IS
+    - path: /usr/share/i18n/locales/iso14651_t1
+    - path: /usr/share/i18n/locales/iso14651_t1_common
+    - path: /usr/share/i18n/locales/iso14651_t1_pinyin
+    - path: /usr/share/i18n/locales/it_CH
+    - path: /usr/share/i18n/locales/it_IT
+    - path: /usr/share/i18n/locales/it_IT@euro
+    - path: /usr/share/i18n/locales/iu_CA
+    - path: /usr/share/i18n/locales/ja_JP
+    - path: /usr/share/i18n/locales/ka_GE
+    - path: /usr/share/i18n/locales/kab_DZ
+    - path: /usr/share/i18n/locales/kk_KZ
+    - path: /usr/share/i18n/locales/kl_GL
+    - path: /usr/share/i18n/locales/km_KH
+    - path: /usr/share/i18n/locales/kn_IN
+    - path: /usr/share/i18n/locales/ko_KR
+    - path: /usr/share/i18n/locales/kok_IN
+    - path: /usr/share/i18n/locales/ks_IN
+    - path: /usr/share/i18n/locales/ks_IN@devanagari
+    - path: /usr/share/i18n/locales/ku_TR
+    - path: /usr/share/i18n/locales/kv_RU
+    - path: /usr/share/i18n/locales/kw_GB
+    - path: /usr/share/i18n/locales/ky_KG
+    - path: /usr/share/i18n/locales/lb_LU
+    - path: /usr/share/i18n/locales/lg_UG
+    - path: /usr/share/i18n/locales/li_BE
+    - path: /usr/share/i18n/locales/li_NL
+    - path: /usr/share/i18n/locales/lij_IT
+    - path: /usr/share/i18n/locales/ln_CD
+    - path: /usr/share/i18n/locales/lo_LA
+    - path: /usr/share/i18n/locales/lt_LT
+    - path: /usr/share/i18n/locales/lv_LV
+    - path: /usr/share/i18n/locales/lzh_TW
+    - path: /usr/share/i18n/locales/mag_IN
+    - path: /usr/share/i18n/locales/mai_IN
+    - path: /usr/share/i18n/locales/mai_NP
+    - path: /usr/share/i18n/locales/mfe_MU
+    - path: /usr/share/i18n/locales/mg_MG
+    - path: /usr/share/i18n/locales/mhr_RU
+    - path: /usr/share/i18n/locales/mi_NZ
+    - path: /usr/share/i18n/locales/miq_NI
+    - path: /usr/share/i18n/locales/mjw_IN
+    - path: /usr/share/i18n/locales/mk_MK
+    - path: /usr/share/i18n/locales/ml_IN
+    - path: /usr/share/i18n/locales/mn_MN
+    - path: /usr/share/i18n/locales/mni_IN
+    - path: /usr/share/i18n/locales/mnw_MM
+    - path: /usr/share/i18n/locales/mr_IN
+    - path: /usr/share/i18n/locales/ms_MY
+    - path: /usr/share/i18n/locales/mt_MT
+    - path: /usr/share/i18n/locales/my_MM
+    - path: /usr/share/i18n/locales/nan_TW
+    - path: /usr/share/i18n/locales/nan_TW@latin
+    - path: /usr/share/i18n/locales/nb_NO
+    - path: /usr/share/i18n/locales/nds_DE
+    - path: /usr/share/i18n/locales/nds_NL
+    - path: /usr/share/i18n/locales/ne_NP
+    - path: /usr/share/i18n/locales/nhn_MX
+    - path: /usr/share/i18n/locales/niu_NU
+    - path: /usr/share/i18n/locales/niu_NZ
+    - path: /usr/share/i18n/locales/nl_AW
+    - path: /usr/share/i18n/locales/nl_BE
+    - path: /usr/share/i18n/locales/nl_BE@euro
+    - path: /usr/share/i18n/locales/nl_NL
+    - path: /usr/share/i18n/locales/nl_NL@euro
+    - path: /usr/share/i18n/locales/nn_NO
+    - path: /usr/share/i18n/locales/nr_ZA
+    - path: /usr/share/i18n/locales/nso_ZA
+    - path: /usr/share/i18n/locales/oc_FR
+    - path: /usr/share/i18n/locales/om_ET
+    - path: /usr/share/i18n/locales/om_KE
+    - path: /usr/share/i18n/locales/or_IN
+    - path: /usr/share/i18n/locales/os_RU
+    - path: /usr/share/i18n/locales/pa_IN
+    - path: /usr/share/i18n/locales/pa_PK
+    - path: /usr/share/i18n/locales/pap_AW
+    - path: /usr/share/i18n/locales/pap_CW
+    - path: /usr/share/i18n/locales/pl_PL
+    - path: /usr/share/i18n/locales/ps_AF
+    - path: /usr/share/i18n/locales/pt_BR
+    - path: /usr/share/i18n/locales/pt_PT
+    - path: /usr/share/i18n/locales/pt_PT@euro
+    - path: /usr/share/i18n/locales/quz_PE
+    - path: /usr/share/i18n/locales/raj_IN
+    - path: /usr/share/i18n/locales/rif_MA
+    - path: /usr/share/i18n/locales/ro_RO
+    - path: /usr/share/i18n/locales/ru_RU
+    - path: /usr/share/i18n/locales/ru_UA
+    - path: /usr/share/i18n/locales/rw_RW
+    - path: /usr/share/i18n/locales/sa_IN
+    - path: /usr/share/i18n/locales/sah_RU
+    - path: /usr/share/i18n/locales/sat_IN
+    - path: /usr/share/i18n/locales/sc_IT
+    - path: /usr/share/i18n/locales/sd_IN
+    - path: /usr/share/i18n/locales/sd_IN@devanagari
+    - path: /usr/share/i18n/locales/se_NO
+    - path: /usr/share/i18n/locales/sgs_LT
+    - path: /usr/share/i18n/locales/shn_MM
+    - path: /usr/share/i18n/locales/shs_CA
+    - path: /usr/share/i18n/locales/si_LK
+    - path: /usr/share/i18n/locales/sid_ET
+    - path: /usr/share/i18n/locales/sk_SK
+    - path: /usr/share/i18n/locales/sl_SI
+    - path: /usr/share/i18n/locales/sm_WS
+    - path: /usr/share/i18n/locales/so_DJ
+    - path: /usr/share/i18n/locales/so_ET
+    - path: /usr/share/i18n/locales/so_KE
+    - path: /usr/share/i18n/locales/so_SO
+    - path: /usr/share/i18n/locales/sq_AL
+    - path: /usr/share/i18n/locales/sq_MK
+    - path: /usr/share/i18n/locales/sr_ME
+    - path: /usr/share/i18n/locales/sr_RS
+    - path: /usr/share/i18n/locales/sr_RS@latin
+    - path: /usr/share/i18n/locales/ss_ZA
+    - path: /usr/share/i18n/locales/ssy_ER
+    - path: /usr/share/i18n/locales/st_ZA
+    - path: /usr/share/i18n/locales/su_ID
+    - path: /usr/share/i18n/locales/sv_FI
+    - path: /usr/share/i18n/locales/sv_FI@euro
+    - path: /usr/share/i18n/locales/sv_SE
+    - path: /usr/share/i18n/locales/sw_KE
+    - path: /usr/share/i18n/locales/sw_TZ
+    - path: /usr/share/i18n/locales/syr
+    - path: /usr/share/i18n/locales/szl_PL
+    - path: /usr/share/i18n/locales/ta_IN
+    - path: /usr/share/i18n/locales/ta_LK
+    - path: /usr/share/i18n/locales/tcy_IN
+    - path: /usr/share/i18n/locales/te_IN
+    - path: /usr/share/i18n/locales/tg_TJ
+    - path: /usr/share/i18n/locales/th_TH
+    - path: /usr/share/i18n/locales/the_NP
+    - path: /usr/share/i18n/locales/ti_ER
+    - path: /usr/share/i18n/locales/ti_ET
+    - path: /usr/share/i18n/locales/tig_ER
+    - path: /usr/share/i18n/locales/tk_TM
+    - path: /usr/share/i18n/locales/tl_PH
+    - path: /usr/share/i18n/locales/tn_ZA
+    - path: /usr/share/i18n/locales/to_TO
+    - path: /usr/share/i18n/locales/tok
+    - path: /usr/share/i18n/locales/tpi_PG
+    - path: /usr/share/i18n/locales/tr_CY
+    - path: /usr/share/i18n/locales/tr_TR
+    - path: /usr/share/i18n/locales/translit_circle
+    - path: /usr/share/i18n/locales/translit_cjk_compat
+    - path: /usr/share/i18n/locales/translit_cjk_variants
+    - path: /usr/share/i18n/locales/translit_combining
+    - path: /usr/share/i18n/locales/translit_compat
+    - path: /usr/share/i18n/locales/translit_emojis
+    - path: /usr/share/i18n/locales/translit_font
+    - path: /usr/share/i18n/locales/translit_fraction
+    - path: /usr/share/i18n/locales/translit_hangul
+    - path: /usr/share/i18n/locales/translit_narrow
+    - path: /usr/share/i18n/locales/translit_neutral
+    - path: /usr/share/i18n/locales/translit_small
+    - path: /usr/share/i18n/locales/translit_wide
+    - path: /usr/share/i18n/locales/ts_ZA
+    - path: /usr/share/i18n/locales/tt_RU
+    - path: /usr/share/i18n/locales/tt_RU@iqtelif
+    - path: /usr/share/i18n/locales/ug_CN
+    - path: /usr/share/i18n/locales/uk_UA
+    - path: /usr/share/i18n/locales/unm_US
+    - path: /usr/share/i18n/locales/ur_IN
+    - path: /usr/share/i18n/locales/ur_PK
+    - path: /usr/share/i18n/locales/uz_UZ
+    - path: /usr/share/i18n/locales/uz_UZ@cyrillic
+    - path: /usr/share/i18n/locales/ve_ZA
+    - path: /usr/share/i18n/locales/vi_VN
+    - path: /usr/share/i18n/locales/wa_BE
+    - path: /usr/share/i18n/locales/wa_BE@euro
+    - path: /usr/share/i18n/locales/wae_CH
+    - path: /usr/share/i18n/locales/wal_ET
+    - path: /usr/share/i18n/locales/wo_SN
+    - path: /usr/share/i18n/locales/xh_ZA
+    - path: /usr/share/i18n/locales/yi_US
+    - path: /usr/share/i18n/locales/yo_NG
+    - path: /usr/share/i18n/locales/yue_HK
+    - path: /usr/share/i18n/locales/yuw_PG
+    - path: /usr/share/i18n/locales/zgh_MA
+    - path: /usr/share/i18n/locales/zh_CN
+    - path: /usr/share/i18n/locales/zh_HK
+    - path: /usr/share/i18n/locales/zh_SG
+    - path: /usr/share/i18n/locales/zh_TW
+    - path: /usr/share/i18n/locales/zu_ZA
+
+  info:
+    files:
+    - path: /usr/share/info/dir
+    - path: /usr/share/info/libc.info
+    - path: /usr/share/info/libc.info-1
+    - path: /usr/share/info/libc.info-2
+    - path: /usr/share/info/libc.info-3
+    - path: /usr/share/info/libc.info-4
+    - path: /usr/share/info/libc.info-5
+    - path: /usr/share/info/libc.info-6
+    - path: /usr/share/info/libc.info-7
+    - path: /usr/share/info/libc.info-8
+    - path: /usr/share/info/libc.info-9
+    - path: /usr/share/info/libc.info-10
+    - path: /usr/share/info/libc.info-11
+    - path: /usr/share/info/libc.info-12
+    - path: /usr/share/info/libc.info-13
+    - path: /usr/share/info/libc.info-14
+    - path: /usr/share/info/libc.info-15
+    - path: /usr/share/info/libc.info-16
+    - path: /usr/share/info/libc.info-17
+    - path: /usr/share/info/libc.info-18
+    - path: /usr/share/info/libc.info-19
+
   lib:
     files:
     - path: /etc/ld.so.cache
@@ -1443,34 +1398,34 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/lib/libc_malloc_debug.so
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/lib/libc_malloc_debug.so.0
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/lib/libdl.so.2
       needs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/libm.so
     - path: /usr/lib/libm.so.6
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/lib/libmemusage.so
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/lib/libmvec.so
       needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/libmvec.so.1
       needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/libnsl.so.1
       needs:
       - /usr/lib/libc.so.6
@@ -1488,21 +1443,21 @@ outputs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/libnss_dns.so.2
       needs:
-      - /usr/lib/libresolv.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libresolv.so.2
     - path: /usr/lib/libnss_files.so.2
       needs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/libnss_hesiod.so
       needs:
-      - /usr/lib/libresolv.so.2
-      - /usr/lib/libnss_files.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libnss_files.so.2
+      - /usr/lib/libresolv.so.2
     - path: /usr/lib/libnss_hesiod.so.2
       needs:
-      - /usr/lib/libresolv.so.2
-      - /usr/lib/libnss_files.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libnss_files.so.2
+      - /usr/lib/libresolv.so.2
     - path: /usr/lib/libpcprofile.so
       needs:
       - /usr/lib/libc.so.6
@@ -1530,9 +1485,69 @@ outputs:
     - path: /usr/lib/rcrt1.o
     - path: /var/lib/nss_db/Makefile
 
+  locale:
+    files:
+    - path: /usr/share/locale/be/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/bg/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/en_GB/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/ia/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/locale.alias
+    - path: /usr/share/locale/lt/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/rw/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/sl/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/libc.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/libc.mo
+
+  static:
+    files:
+    - path: /usr/lib/libBrokenLocale.a
+    - path: /usr/lib/libanl.a
+    - path: /usr/lib/libc.a
+    - path: /usr/lib/libc_nonshared.a
+    - path: /usr/lib/libdl.a
+    - path: /usr/lib/libg.a
+    - path: /usr/lib/libm-2.39.a
+    - path: /usr/lib/libm.a
+    - path: /usr/lib/libmcheck.a
+    - path: /usr/lib/libmvec.a
+    - path: /usr/lib/libpthread.a
+    - path: /usr/lib/libresolv.a
+    - path: /usr/lib/librt.a
+    - path: /usr/lib/libutil.a
+
 resolution:
-  /usr/lib/libm.so.6: '@self'
-  /usr/lib/ld-linux-x86-64.so.2: '@self'
-  /usr/lib/libresolv.so.2: '@self'
-  /usr/lib/libnss_files.so.2: '@self'
-  /usr/lib/libc.so.6: '@self'
+  /usr/lib/ld-linux-x86-64.so.2: self
+  /usr/lib/libc.so.6: self
+  /usr/lib/libm.so.6: self
+  /usr/lib/libnss_files.so.2: self
+  /usr/lib/libresolv.so.2: self

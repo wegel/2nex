@@ -3,14 +3,16 @@ package:
   name: D-Bus Broker
   slug: dbus-broker
   namespace: core/ipc
-  version: '37'
+  version: "37"
   description: Linux D-Bus Message Broker
   homepage: https://github.com/bus1/dbus-broker
   checksum: 159a30d86ac7f78f9e3032f905f18ee6ea4a4adfe07862e97ecf635fa919887f
+
 sources:
 - name: dbus-broker
   url: https://github.com/bus1/dbus-broker/releases/download/v37/dbus-broker-37.tar.xz
   sha256: f819a8db8795fa08c767612e3823fd594694a0990f2543ecf35d6a1a6bf2ab5b
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
@@ -88,7 +90,10 @@ dependencies:
   commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
 - name: expat
   commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+
 build:
+  profile: [4109:455, 8238:558, 12346:843, 16474:1041, 20591:1550, 22577:1799]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -198,42 +203,45 @@ build:
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
   full:
   - bin
   - conf
+
 outputs:
   bin:
     files:
     - path: /usr/bin/dbus-broker
       needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
     - path: /usr/bin/dbus-broker-launch
       needs:
-      - /usr/lib/libexpat.so.1
-      - /usr/lib/libsystemd.so.0
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libexpat.so.1
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libsystemd.so.0
+
   conf:
     files:
-    - path: /usr/share/dbus-1/system.conf
-    - path: /usr/share/dbus-1/session.conf
     - path: /usr/lib/systemd/catalog/dbus-broker-launch.catalog
     - path: /usr/lib/systemd/catalog/dbus-broker.catalog
     - path: /usr/lib/systemd/system/dbus-broker.service
-    - path: /usr/lib/systemd/system/dbus.socket
     - path: /usr/lib/systemd/system/dbus.service
+    - path: /usr/lib/systemd/system/dbus.socket
     - path: /usr/lib/systemd/user/dbus-broker.service
     - path: /usr/lib/systemd/user/dbus.socket
+    - path: /usr/share/dbus-1/session.conf
+    - path: /usr/share/dbus-1/system.conf
 
 resolution:
+  /usr/lib/libexpat.so.1: expat
   /usr/lib/libgcc_s.so.1: gcc
   /usr/lib/ld-linux-x86-64.so.2: glibc
-  /usr/lib/libsystemd.so.0: systemd
   /usr/lib/libc.so.6: glibc
   /usr/lib/libm.so.6: glibc
-  /usr/lib/libexpat.so.1: expat
+  /usr/lib/libsystemd.so.0: systemd

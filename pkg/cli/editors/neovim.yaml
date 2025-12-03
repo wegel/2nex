@@ -7,6 +7,7 @@ package:
   description: Vim-fork focused on extensibility and usability
   homepage: https://neovim.io/
   checksum: b40eb1e8da9aceb37af0932f31af248a6de18dc4f6a8960c853f29ce72ba869f
+
 sources:
 - name: neovim
   url: https://github.com/neovim/neovim/archive/refs/tags/v0.11.0.tar.gz
@@ -53,6 +54,7 @@ sources:
 - name: treesitter_markdown
   url: https://github.com/tree-sitter-grammars/tree-sitter-markdown/archive/v0.4.1.tar.gz
   sha256: e0fdb2dca1eb3063940122e1475c9c2b069062a638c95939e374c5427eddee9f
+
 dependencies:
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
@@ -82,8 +84,6 @@ dependencies:
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: binutils
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: llvm
-  commit: x86_64/pkg/dev/toolchain/llvm/18.1.8/bundles/dev
 - name: gmp-bootstrap
   commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
 - name: mpfr
@@ -124,7 +124,10 @@ dependencies:
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
 - name: file
   commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
+
 build:
+  profile: [4097:432, 8227:438, 20660:1265, 28911:3182, 41239:5204, 49521:5440, 57806:5626, 74399:6432, 86806:13123, 95866:56763]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_neovim} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -263,28 +266,32 @@ build:
          CMAKE_INSTALL_PREFIX=/usr \
          USE_BUNDLED=ON \
          DEPS_CMAKE_FLAGS="-DUSE_BUNDLED_LUAJIT=OFF -DLUAJIT_INCLUDE_DIR=/usr/include/luajit-2.1 -DLUAJIT_LIBRARY=/usr/lib/libluajit-5.1.so" \
-         CMAKE_EXTRA_FLAGS="-DLUA_GEN_PRG=/usr/bin/luajit -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON -DCMAKE_C_ARCHIVE_CREATE='<CMAKE_AR> qcD <TARGET> <OBJECTS>' -DCMAKE_C_ARCHIVE_FINISH='<CMAKE_RANLIB> -D <TARGET>' -DCMAKE_CXX_ARCHIVE_CREATE='<CMAKE_AR> qcD <TARGET> <OBJECTS>' -DCMAKE_CXX_ARCHIVE_FINISH='<CMAKE_RANLIB> -D <TARGET>'"
+         CMAKE_EXTRA_FLAGS="-DLUA_GEN_PRG=/usr/bin/luajit -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON -DCMAKE_C_ARCHIVE_CREATE='<CMAKE_AR> qcD <TARGET> <OBJECTS>' -DCMAKE_C_ARCHIVE_FINISH='<CMAKE_RANLIB> -D <TARGET>'"
 
     make DESTDIR="${OUT_DIR}" install
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
+  dev:
+  - bin
+
   full:
   - bin
   - misc
-  dev:
-  - bin
+
 outputs:
   bin:
     files:
     - path: /usr/bin/nvim
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
       - /usr/lib/libluajit-5.1.so.2
       - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
+
   lib:
     files:
     - path: /usr/lib/nvim/parser/c.so
@@ -308,9 +315,11 @@ outputs:
     - path: /usr/lib/nvim/parser/vimdoc.so
       needs:
       - /usr/lib/libc.so.6
+
   man:
     files:
     - path: /usr/share/man/man1/nvim.1
+
   misc:
     files:
     - path: /usr/share/applications/nvim.desktop
@@ -369,12 +378,12 @@ outputs:
     - path: /usr/share/nvim/runtime/autoload/typst.vim
     - path: /usr/share/nvim/runtime/autoload/vimexpect.vim
     - path: /usr/share/nvim/runtime/autoload/xml/html32.vim
-    - path: /usr/share/nvim/runtime/autoload/xml/html401f.vim
-    - path: /usr/share/nvim/runtime/autoload/xml/html401s.vim
-    - path: /usr/share/nvim/runtime/autoload/xml/html401t.vim
     - path: /usr/share/nvim/runtime/autoload/xml/html40f.vim
     - path: /usr/share/nvim/runtime/autoload/xml/html40s.vim
     - path: /usr/share/nvim/runtime/autoload/xml/html40t.vim
+    - path: /usr/share/nvim/runtime/autoload/xml/html401f.vim
+    - path: /usr/share/nvim/runtime/autoload/xml/html401s.vim
+    - path: /usr/share/nvim/runtime/autoload/xml/html401t.vim
     - path: /usr/share/nvim/runtime/autoload/xml/xhtml10f.vim
     - path: /usr/share/nvim/runtime/autoload/xml/xhtml10s.vim
     - path: /usr/share/nvim/runtime/autoload/xml/xhtml10t.vim
@@ -426,8 +435,8 @@ outputs:
     - path: /usr/share/nvim/runtime/compiler/csslint.vim
     - path: /usr/share/nvim/runtime/compiler/cucumber.vim
     - path: /usr/share/nvim/runtime/compiler/dart.vim
-    - path: /usr/share/nvim/runtime/compiler/dart2js.vim
     - path: /usr/share/nvim/runtime/compiler/dart2native.vim
+    - path: /usr/share/nvim/runtime/compiler/dart2js.vim
     - path: /usr/share/nvim/runtime/compiler/dartanalyser.vim
     - path: /usr/share/nvim/runtime/compiler/dartdevc.vim
     - path: /usr/share/nvim/runtime/compiler/dartdoc.vim
@@ -595,8 +604,8 @@ outputs:
     - path: /usr/share/nvim/runtime/doc/message.txt
     - path: /usr/share/nvim/runtime/doc/mlang.txt
     - path: /usr/share/nvim/runtime/doc/motion.txt
-    - path: /usr/share/nvim/runtime/doc/news-0.10.txt
     - path: /usr/share/nvim/runtime/doc/news-0.9.txt
+    - path: /usr/share/nvim/runtime/doc/news-0.10.txt
     - path: /usr/share/nvim/runtime/doc/news.txt
     - path: /usr/share/nvim/runtime/doc/nvim.txt
     - path: /usr/share/nvim/runtime/doc/options.txt
@@ -889,10 +898,10 @@ outputs:
     - path: /usr/share/nvim/runtime/ftplugin/lua.vim
     - path: /usr/share/nvim/runtime/ftplugin/luau.vim
     - path: /usr/share/nvim/runtime/ftplugin/lynx.vim
-    - path: /usr/share/nvim/runtime/ftplugin/m17ndb.vim
-    - path: /usr/share/nvim/runtime/ftplugin/m3build.vim
     - path: /usr/share/nvim/runtime/ftplugin/m3quake.vim
+    - path: /usr/share/nvim/runtime/ftplugin/m3build.vim
     - path: /usr/share/nvim/runtime/ftplugin/m4.vim
+    - path: /usr/share/nvim/runtime/ftplugin/m17ndb.vim
     - path: /usr/share/nvim/runtime/ftplugin/mail.vim
     - path: /usr/share/nvim/runtime/ftplugin/mailaliases.vim
     - path: /usr/share/nvim/runtime/ftplugin/mailcap.vim
@@ -961,8 +970,8 @@ outputs:
     - path: /usr/share/nvim/runtime/ftplugin/prolog.vim
     - path: /usr/share/nvim/runtime/ftplugin/proto.vim
     - path: /usr/share/nvim/runtime/ftplugin/protocols.vim
-    - path: /usr/share/nvim/runtime/ftplugin/ps1.vim
     - path: /usr/share/nvim/runtime/ftplugin/ps1xml.vim
+    - path: /usr/share/nvim/runtime/ftplugin/ps1.vim
     - path: /usr/share/nvim/runtime/ftplugin/ptx.vim
     - path: /usr/share/nvim/runtime/ftplugin/purescript.vim
     - path: /usr/share/nvim/runtime/ftplugin/pymanifest.vim
@@ -1339,8 +1348,8 @@ outputs:
     - path: /usr/share/nvim/runtime/keymap/georgian-qwerty.vim
     - path: /usr/share/nvim/runtime/keymap/german-qwertz.vim
     - path: /usr/share/nvim/runtime/keymap/greek.vim
-    - path: /usr/share/nvim/runtime/keymap/greek_cp1253.vim
     - path: /usr/share/nvim/runtime/keymap/greek_cp737.vim
+    - path: /usr/share/nvim/runtime/keymap/greek_cp1253.vim
     - path: /usr/share/nvim/runtime/keymap/greek_iso-8859-7.vim
     - path: /usr/share/nvim/runtime/keymap/greek_utf-8.vim
     - path: /usr/share/nvim/runtime/keymap/hebrew.vim
@@ -1364,8 +1373,8 @@ outputs:
     - path: /usr/share/nvim/runtime/keymap/persian.vim
     - path: /usr/share/nvim/runtime/keymap/pinyin.vim
     - path: /usr/share/nvim/runtime/keymap/polish-slash.vim
-    - path: /usr/share/nvim/runtime/keymap/polish-slash_cp1250.vim
     - path: /usr/share/nvim/runtime/keymap/polish-slash_cp852.vim
+    - path: /usr/share/nvim/runtime/keymap/polish-slash_cp1250.vim
     - path: /usr/share/nvim/runtime/keymap/polish-slash_iso-8859-2.vim
     - path: /usr/share/nvim/runtime/keymap/polish-slash_utf-8.vim
     - path: /usr/share/nvim/runtime/keymap/russian-dvorak.vim
@@ -1926,10 +1935,10 @@ outputs:
     - path: /usr/share/nvim/runtime/syntax/luau.vim
     - path: /usr/share/nvim/runtime/syntax/lynx.vim
     - path: /usr/share/nvim/runtime/syntax/lyrics.vim
-    - path: /usr/share/nvim/runtime/syntax/m17ndb.vim
-    - path: /usr/share/nvim/runtime/syntax/m3build.vim
     - path: /usr/share/nvim/runtime/syntax/m3quake.vim
+    - path: /usr/share/nvim/runtime/syntax/m3build.vim
     - path: /usr/share/nvim/runtime/syntax/m4.vim
+    - path: /usr/share/nvim/runtime/syntax/m17ndb.vim
     - path: /usr/share/nvim/runtime/syntax/mail.vim
     - path: /usr/share/nvim/runtime/syntax/mailaliases.vim
     - path: /usr/share/nvim/runtime/syntax/mailcap.vim
@@ -1961,10 +1970,10 @@ outputs:
     - path: /usr/share/nvim/runtime/syntax/modconf.vim
     - path: /usr/share/nvim/runtime/syntax/model.vim
     - path: /usr/share/nvim/runtime/syntax/modsim3.vim
-    - path: /usr/share/nvim/runtime/syntax/modula2.vim
     - path: /usr/share/nvim/runtime/syntax/modula2/opt/iso.vim
     - path: /usr/share/nvim/runtime/syntax/modula2/opt/pim.vim
     - path: /usr/share/nvim/runtime/syntax/modula2/opt/r10.vim
+    - path: /usr/share/nvim/runtime/syntax/modula2.vim
     - path: /usr/share/nvim/runtime/syntax/modula3.vim
     - path: /usr/share/nvim/runtime/syntax/mojo.vim
     - path: /usr/share/nvim/runtime/syntax/monk.vim
@@ -2059,8 +2068,8 @@ outputs:
     - path: /usr/share/nvim/runtime/syntax/proto.vim
     - path: /usr/share/nvim/runtime/syntax/protocols.vim
     - path: /usr/share/nvim/runtime/syntax/prql.vim
-    - path: /usr/share/nvim/runtime/syntax/ps1.vim
     - path: /usr/share/nvim/runtime/syntax/ps1xml.vim
+    - path: /usr/share/nvim/runtime/syntax/ps1.vim
     - path: /usr/share/nvim/runtime/syntax/psf.vim
     - path: /usr/share/nvim/runtime/syntax/psl.vim
     - path: /usr/share/nvim/runtime/syntax/ptcap.vim
@@ -2249,9 +2258,9 @@ outputs:
     - path: /usr/share/nvim/runtime/syntax/tssgm.vim
     - path: /usr/share/nvim/runtime/syntax/tssop.vim
     - path: /usr/share/nvim/runtime/syntax/tsv.vim
-    - path: /usr/share/nvim/runtime/syntax/tt2.vim
-    - path: /usr/share/nvim/runtime/syntax/tt2html.vim
     - path: /usr/share/nvim/runtime/syntax/tt2js.vim
+    - path: /usr/share/nvim/runtime/syntax/tt2html.vim
+    - path: /usr/share/nvim/runtime/syntax/tt2.vim
     - path: /usr/share/nvim/runtime/syntax/tutor.vim
     - path: /usr/share/nvim/runtime/syntax/typescript.vim
     - path: /usr/share/nvim/runtime/syntax/typescriptreact.vim
@@ -2338,7 +2347,7 @@ outputs:
     - path: /usr/share/nvim/runtime/tutor/tutor.tutor.json
 
 resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
   /usr/lib/libm.so.6: glibc
-  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libluajit-5.1.so.2: luajit

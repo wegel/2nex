@@ -7,10 +7,12 @@ package:
   description: Command line tool and library for transferring data with URLs
   homepage: https://curl.se/
   checksum: ef7bab24e01b4333d6e6ad5bc59869e93c43e535efba35ead26ad5bafd4a4953
+
 sources:
 - name: curl
   url: https://curl.se/download/curl-8.17.0.tar.xz
   sha256: 955f6e729ad6b3566260e8fef68620e76ba3c31acf0a18524416a185acf77992
+
 dependencies:
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
@@ -60,7 +62,10 @@ dependencies:
   commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
 - name: zstd
   commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+
 build:
+  profile: [4145:847, 8272:1348, 12373:4955, 16471:6572, 24727:9156, 28827:10025, 32927:11030, 41157:13459, 49446:14792, 54119:14884]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_curl} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -88,26 +93,30 @@ build:
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - bin
-  - lib
-  - dev
   dev:
   - bin
-  - lib
   - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - lib
+
 outputs:
   bin:
     files:
     - path: /usr/bin/curl
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
       - /usr/lib/libcurl.so.4
       - /usr/lib/libz.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/curl-config
     - path: /usr/bin/wcurl
+
   dev:
     files:
     - path: /usr/include/curl/curl.h
@@ -123,38 +132,40 @@ outputs:
     - path: /usr/include/curl/urlapi.h
     - path: /usr/include/curl/websockets.h
     - path: /usr/lib/pkgconfig/libcurl.pc
+
   lib:
     files:
     - path: /usr/lib/libcurl.so
       needs:
-      - /usr/lib/libssl.so.3
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/libz.so.1
       - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
     - path: /usr/lib/libcurl.so.4
       needs:
-      - /usr/lib/libssl.so.3
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/libz.so.1
       - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
     - path: /usr/lib/libcurl.so.4.8.0
       needs:
-      - /usr/lib/libssl.so.3
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/libz.so.1
       - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+
   misc:
     files:
     - path: /usr/share/aclocal/libcurl.m4
 
 resolution:
-  /usr/lib/libz.so.1: zlib
   /usr/lib/ld-linux-x86-64.so.2: glibc
-  /usr/lib/libcrypto.so.3: openssl
-  /usr/lib/libzstd.so.1: zstd
-  /usr/lib/libssl.so.3: openssl
   /usr/lib/libc.so.6: glibc
-  /usr/lib/libcurl.so.4: '@self'
+  /usr/lib/libcrypto.so.3: openssl
+  /usr/lib/libssl.so.3: openssl
+  /usr/lib/libcurl.so.4: self
+  /usr/lib/libz.so.1: zlib
+  /usr/lib/libzstd.so.1: zstd

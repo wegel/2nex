@@ -7,10 +7,12 @@ package:
   description: Utility to maintain groups of programs
   homepage: https://www.gnu.org/software/make/
   checksum: 02827bce773dfd7e9d19db26634719cd226cf9c13817441b57c73909ce3f3143
+
 sources:
 - name: make
   url: https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz
   sha256: dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
@@ -56,7 +58,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+
 build:
+  profile: [4132:1918, 8250:5169, 12615:5244, 16741:5246, 21165:5248, 25264:5250, 29515:5935, 30794:6488]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -68,24 +73,32 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
+  dev:
+  - bin
+  - dev
+  - locale
+
   full:
   - bin
-  - info
   - dev
+  - info
   - locale
   - man
-  dev:
-  - dev
-  - locale
-  - bin
+
 outputs:
   bin:
     files:
     - path: /usr/bin/make
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  dev:
+    files:
+    - path: /usr/include/gnumake.h
+
   info:
     files:
     - path: /usr/share/info/dir
@@ -93,9 +106,7 @@ outputs:
     - path: /usr/share/info/make.info-1
     - path: /usr/share/info/make.info-2
     - path: /usr/share/info/make.info-3
-  dev:
-    files:
-    - path: /usr/include/gnumake.h
+
   locale:
     files:
     - path: /usr/share/locale/be/LC_MESSAGES/make.mo
@@ -128,10 +139,11 @@ outputs:
     - path: /usr/share/locale/vi/LC_MESSAGES/make.mo
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/make.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/make.mo
+
   man:
     files:
     - path: /usr/share/man/man1/make.1
 
 resolution:
-  /usr/lib/libc.so.6: glibc
   /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

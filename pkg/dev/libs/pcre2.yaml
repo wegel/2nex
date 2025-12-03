@@ -3,14 +3,16 @@ package:
   name: PCRE2
   slug: pcre2
   namespace: dev/libs
-  version: '10.44'
+  version: "10.44"
   description: Perl Compatible Regular Expressions (revised API)
   homepage: https://www.pcre.org/
-  checksum: b2459c954e0524839d6dbe3bde0dc0598c1366f18d13081d472f1e805733b48b
+  checksum: 66e59574708d3918677237b7f63bedbbd72b7c35bc104e34d021453eeb7421f3
+
 sources:
 - name: pcre2
   url: https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.44/pcre2-10.44.tar.bz2
   sha256: d34f02e113cf7193a1ebf2770d3ac527088d485d4e047ed10e5d217c6ef5de96
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
@@ -68,34 +70,68 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+
 build:
-  script: "tar --no-same-owner -xf ${SOURCE_pcre2} -C \"${WORK_DIR}\" --strip-components=1\n\
-    cd ${WORK_DIR}\n\n# Run autoconf to regenerate configure script\nautoreconf -fi\n\
-    \n# Configure with options from Buildroot\n./configure --prefix=/usr \\\n  --enable-pcre2-8\
-    \ \\\n  --enable-pcre2-16 \\\n  --disable-pcre2-32 \\\n  --enable-jit\n\n# Build\n\
-    make ${MAKEFLAGS}\n\n# Install\nmake DESTDIR=\"${OUT_DIR}\" install\n\n# Set consistent\
-    \ timestamps for reproducible builds\nfind \"${OUT_DIR}\" -exec touch -d '2024-01-01T00:00:00+00:00'\
-    \ {} \\;\nfind \"${OUT_DIR}\" ! -type d -exec strip-nondeterminism -T 1704067200\
-    \ --normalizers +all {} \\; || true\n2nex_strip_binaries ${OUT_DIR}\n"
+  profile: [4096:3522, 8225:4556, 12345:11822, 16484:11828, 20737:11850, 29022:12076, 33166:12087, 41390:12148, 49582:12233, 50862:12248]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_pcre2} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    # Run autoconf to regenerate configure script
+    autoreconf -fi
+
+    # Configure with options from Buildroot
+    ./configure --prefix=/usr \
+      --enable-pcre2-8 \
+      --enable-pcre2-16 \
+      --disable-pcre2-32 \
+      --enable-jit
+
+    # Build
+    make ${MAKEFLAGS}
+
+    # Install
+    make DESTDIR="${OUT_DIR}" install
+
+    # Set consistent timestamps for reproducible builds
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
+    2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - bin
-  - lib
-  - dev
-  - static
-  - doc
-  - man
   dev:
   - bin
-  - lib
   - dev
+  - lib
   - static
+
+  full:
+  - bin
+  - dev
+  - doc
+  - lib
+  - man
+  - static
+
 outputs:
-  static:
+  bin:
     files:
-    - path: /usr/lib/libpcre2-16.a
-    - path: /usr/lib/libpcre2-8.a
-    - path: /usr/lib/libpcre2-posix.a
+    - path: /usr/bin/pcre2-config
+    - path: /usr/bin/pcre2test
+    - path: /usr/bin/pcre2grep
+
+  dev:
+    files:
+    - path: /usr/include/pcre2.h
+    - path: /usr/include/pcre2posix.h
+    - path: /usr/lib/libpcre2-8.la
+    - path: /usr/lib/libpcre2-16.la
+    - path: /usr/lib/libpcre2-posix.la
+    - path: /usr/lib/pkgconfig/libpcre2-8.pc
+    - path: /usr/lib/pkgconfig/libpcre2-16.pc
+    - path: /usr/lib/pkgconfig/libpcre2-posix.pc
+
   doc:
     files:
     - path: /usr/share/doc/pcre2/AUTHORS
@@ -107,8 +143,11 @@ outputs:
     - path: /usr/share/doc/pcre2/html/NON-AUTOTOOLS-BUILD.txt
     - path: /usr/share/doc/pcre2/html/README.txt
     - path: /usr/share/doc/pcre2/html/index.html
-    - path: /usr/share/doc/pcre2/html/pcre2-config.html
-    - path: /usr/share/doc/pcre2/html/pcre2.html
+    - path: /usr/share/doc/pcre2/html/pcre2callout.html
+    - path: /usr/share/doc/pcre2/html/pcre2sample.html
+    - path: /usr/share/doc/pcre2/html/pcre2partial.html
+    - path: /usr/share/doc/pcre2/html/pcre2matching.html
+    - path: /usr/share/doc/pcre2/html/pcre2pattern.html
     - path: /usr/share/doc/pcre2/html/pcre2_callout_enumerate.html
     - path: /usr/share/doc/pcre2/html/pcre2_code_copy.html
     - path: /usr/share/doc/pcre2/html/pcre2_code_copy_with_tables.html
@@ -117,12 +156,17 @@ outputs:
     - path: /usr/share/doc/pcre2/html/pcre2_compile_context_copy.html
     - path: /usr/share/doc/pcre2/html/pcre2_compile_context_create.html
     - path: /usr/share/doc/pcre2/html/pcre2_compile_context_free.html
+    - path: /usr/share/doc/pcre2/html/pcre2-config.html
     - path: /usr/share/doc/pcre2/html/pcre2_config.html
     - path: /usr/share/doc/pcre2/html/pcre2_convert_context_copy.html
     - path: /usr/share/doc/pcre2/html/pcre2_convert_context_create.html
     - path: /usr/share/doc/pcre2/html/pcre2_convert_context_free.html
     - path: /usr/share/doc/pcre2/html/pcre2_converted_pattern_free.html
     - path: /usr/share/doc/pcre2/html/pcre2_dfa_match.html
+    - path: /usr/share/doc/pcre2/html/pcre2demo.html
+    - path: /usr/share/doc/pcre2/html/pcre2perform.html
+    - path: /usr/share/doc/pcre2/html/pcre2serialize.html
+    - path: /usr/share/doc/pcre2/html/pcre2test.html
     - path: /usr/share/doc/pcre2/html/pcre2_general_context_copy.html
     - path: /usr/share/doc/pcre2/html/pcre2_general_context_create.html
     - path: /usr/share/doc/pcre2/html/pcre2_general_context_free.html
@@ -133,6 +177,9 @@ outputs:
     - path: /usr/share/doc/pcre2/html/pcre2_get_ovector_count.html
     - path: /usr/share/doc/pcre2/html/pcre2_get_ovector_pointer.html
     - path: /usr/share/doc/pcre2/html/pcre2_get_startchar.html
+    - path: /usr/share/doc/pcre2/html/pcre2.html
+    - path: /usr/share/doc/pcre2/html/pcre2limits.html
+    - path: /usr/share/doc/pcre2/html/pcre2jit.html
     - path: /usr/share/doc/pcre2/html/pcre2_jit_compile.html
     - path: /usr/share/doc/pcre2/html/pcre2_jit_free_unused_memory.html
     - path: /usr/share/doc/pcre2/html/pcre2_jit_match.html
@@ -148,8 +195,14 @@ outputs:
     - path: /usr/share/doc/pcre2/html/pcre2_match_data_create.html
     - path: /usr/share/doc/pcre2/html/pcre2_match_data_create_from_pattern.html
     - path: /usr/share/doc/pcre2/html/pcre2_match_data_free.html
+    - path: /usr/share/doc/pcre2/html/pcre2unicode.html
+    - path: /usr/share/doc/pcre2/html/pcre2compat.html
+    - path: /usr/share/doc/pcre2/html/pcre2convert.html
+    - path: /usr/share/doc/pcre2/html/pcre2posix.html
     - path: /usr/share/doc/pcre2/html/pcre2_pattern_convert.html
     - path: /usr/share/doc/pcre2/html/pcre2_pattern_info.html
+    - path: /usr/share/doc/pcre2/html/pcre2api.html
+    - path: /usr/share/doc/pcre2/html/pcre2grep.html
     - path: /usr/share/doc/pcre2/html/pcre2_serialize_decode.html
     - path: /usr/share/doc/pcre2/html/pcre2_serialize_encode.html
     - path: /usr/share/doc/pcre2/html/pcre2_serialize_free.html
@@ -185,35 +238,36 @@ outputs:
     - path: /usr/share/doc/pcre2/html/pcre2_substring_list_get.html
     - path: /usr/share/doc/pcre2/html/pcre2_substring_nametable_scan.html
     - path: /usr/share/doc/pcre2/html/pcre2_substring_number_from_name.html
-    - path: /usr/share/doc/pcre2/html/pcre2api.html
     - path: /usr/share/doc/pcre2/html/pcre2build.html
-    - path: /usr/share/doc/pcre2/html/pcre2callout.html
-    - path: /usr/share/doc/pcre2/html/pcre2compat.html
-    - path: /usr/share/doc/pcre2/html/pcre2convert.html
-    - path: /usr/share/doc/pcre2/html/pcre2demo.html
-    - path: /usr/share/doc/pcre2/html/pcre2grep.html
-    - path: /usr/share/doc/pcre2/html/pcre2jit.html
-    - path: /usr/share/doc/pcre2/html/pcre2limits.html
-    - path: /usr/share/doc/pcre2/html/pcre2matching.html
-    - path: /usr/share/doc/pcre2/html/pcre2partial.html
-    - path: /usr/share/doc/pcre2/html/pcre2pattern.html
-    - path: /usr/share/doc/pcre2/html/pcre2perform.html
-    - path: /usr/share/doc/pcre2/html/pcre2posix.html
-    - path: /usr/share/doc/pcre2/html/pcre2sample.html
-    - path: /usr/share/doc/pcre2/html/pcre2serialize.html
     - path: /usr/share/doc/pcre2/html/pcre2syntax.html
-    - path: /usr/share/doc/pcre2/html/pcre2test.html
-    - path: /usr/share/doc/pcre2/html/pcre2unicode.html
     - path: /usr/share/doc/pcre2/pcre2-config.txt
-    - path: /usr/share/doc/pcre2/pcre2.txt
-    - path: /usr/share/doc/pcre2/pcre2grep.txt
     - path: /usr/share/doc/pcre2/pcre2test.txt
+    - path: /usr/share/doc/pcre2/pcre2grep.txt
+    - path: /usr/share/doc/pcre2/pcre2.txt
+
+  lib:
+    files:
+    - path: /usr/lib/libpcre2-8.so
+    - path: /usr/lib/libpcre2-8.so.0
+    - path: /usr/lib/libpcre2-8.so.0.13.0
+    - path: /usr/lib/libpcre2-16.so
+    - path: /usr/lib/libpcre2-16.so.0
+    - path: /usr/lib/libpcre2-16.so.0.13.0
+    - path: /usr/lib/libpcre2-posix.so
+    - path: /usr/lib/libpcre2-posix.so.3
+    - path: /usr/lib/libpcre2-posix.so.3.0.5
+
   man:
     files:
     - path: /usr/share/man/man1/pcre2-config.1
-    - path: /usr/share/man/man1/pcre2grep.1
     - path: /usr/share/man/man1/pcre2test.1
+    - path: /usr/share/man/man1/pcre2grep.1
     - path: /usr/share/man/man3/pcre2.3
+    - path: /usr/share/man/man3/pcre2callout.3
+    - path: /usr/share/man/man3/pcre2sample.3
+    - path: /usr/share/man/man3/pcre2partial.3
+    - path: /usr/share/man/man3/pcre2matching.3
+    - path: /usr/share/man/man3/pcre2pattern.3
     - path: /usr/share/man/man3/pcre2_callout_enumerate.3
     - path: /usr/share/man/man3/pcre2_code_copy.3
     - path: /usr/share/man/man3/pcre2_code_copy_with_tables.3
@@ -228,6 +282,9 @@ outputs:
     - path: /usr/share/man/man3/pcre2_convert_context_free.3
     - path: /usr/share/man/man3/pcre2_converted_pattern_free.3
     - path: /usr/share/man/man3/pcre2_dfa_match.3
+    - path: /usr/share/man/man3/pcre2demo.3
+    - path: /usr/share/man/man3/pcre2perform.3
+    - path: /usr/share/man/man3/pcre2serialize.3
     - path: /usr/share/man/man3/pcre2_general_context_copy.3
     - path: /usr/share/man/man3/pcre2_general_context_create.3
     - path: /usr/share/man/man3/pcre2_general_context_free.3
@@ -238,6 +295,8 @@ outputs:
     - path: /usr/share/man/man3/pcre2_get_ovector_count.3
     - path: /usr/share/man/man3/pcre2_get_ovector_pointer.3
     - path: /usr/share/man/man3/pcre2_get_startchar.3
+    - path: /usr/share/man/man3/pcre2limits.3
+    - path: /usr/share/man/man3/pcre2jit.3
     - path: /usr/share/man/man3/pcre2_jit_compile.3
     - path: /usr/share/man/man3/pcre2_jit_free_unused_memory.3
     - path: /usr/share/man/man3/pcre2_jit_match.3
@@ -253,8 +312,13 @@ outputs:
     - path: /usr/share/man/man3/pcre2_match_data_create.3
     - path: /usr/share/man/man3/pcre2_match_data_create_from_pattern.3
     - path: /usr/share/man/man3/pcre2_match_data_free.3
+    - path: /usr/share/man/man3/pcre2unicode.3
+    - path: /usr/share/man/man3/pcre2compat.3
+    - path: /usr/share/man/man3/pcre2convert.3
+    - path: /usr/share/man/man3/pcre2posix.3
     - path: /usr/share/man/man3/pcre2_pattern_convert.3
     - path: /usr/share/man/man3/pcre2_pattern_info.3
+    - path: /usr/share/man/man3/pcre2api.3
     - path: /usr/share/man/man3/pcre2_serialize_decode.3
     - path: /usr/share/man/man3/pcre2_serialize_encode.3
     - path: /usr/share/man/man3/pcre2_serialize_free.3
@@ -290,46 +354,11 @@ outputs:
     - path: /usr/share/man/man3/pcre2_substring_list_get.3
     - path: /usr/share/man/man3/pcre2_substring_nametable_scan.3
     - path: /usr/share/man/man3/pcre2_substring_number_from_name.3
-    - path: /usr/share/man/man3/pcre2api.3
     - path: /usr/share/man/man3/pcre2build.3
-    - path: /usr/share/man/man3/pcre2callout.3
-    - path: /usr/share/man/man3/pcre2compat.3
-    - path: /usr/share/man/man3/pcre2convert.3
-    - path: /usr/share/man/man3/pcre2demo.3
-    - path: /usr/share/man/man3/pcre2jit.3
-    - path: /usr/share/man/man3/pcre2limits.3
-    - path: /usr/share/man/man3/pcre2matching.3
-    - path: /usr/share/man/man3/pcre2partial.3
-    - path: /usr/share/man/man3/pcre2pattern.3
-    - path: /usr/share/man/man3/pcre2perform.3
-    - path: /usr/share/man/man3/pcre2posix.3
-    - path: /usr/share/man/man3/pcre2sample.3
-    - path: /usr/share/man/man3/pcre2serialize.3
     - path: /usr/share/man/man3/pcre2syntax.3
-    - path: /usr/share/man/man3/pcre2unicode.3
-  bin:
+
+  static:
     files:
-    - path: /usr/bin/pcre2-config
-    - path: /usr/bin/pcre2grep
-    - path: /usr/bin/pcre2test
-  dev:
-    files:
-    - path: /usr/include/pcre2.h
-    - path: /usr/include/pcre2posix.h
-    - path: /usr/lib/libpcre2-16.la
-    - path: /usr/lib/libpcre2-8.la
-    - path: /usr/lib/libpcre2-posix.la
-    - path: /usr/lib/pkgconfig/libpcre2-16.pc
-    - path: /usr/lib/pkgconfig/libpcre2-8.pc
-    - path: /usr/lib/pkgconfig/libpcre2-posix.pc
-  lib:
-    files:
-    - path: /usr/lib/libpcre2-16.so
-    - path: /usr/lib/libpcre2-16.so.0
-    - path: /usr/lib/libpcre2-16.so.0.13.0
-    - path: /usr/lib/libpcre2-8.so
-    - path: /usr/lib/libpcre2-8.so.0
-    - path: /usr/lib/libpcre2-8.so.0.13.0
-    - path: /usr/lib/libpcre2-posix.so
-    - path: /usr/lib/libpcre2-posix.so.3
-    - path: /usr/lib/libpcre2-posix.so.3.0.5
+    - path: /usr/lib/libpcre2-8.a
+    - path: /usr/lib/libpcre2-16.a
+    - path: /usr/lib/libpcre2-posix.a

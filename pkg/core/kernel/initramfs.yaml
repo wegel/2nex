@@ -7,10 +7,12 @@ package:
   description: Minimal initramfs for early userspace boot
   homepage: https://www.kernel.org/doc/html/latest/driver-api/early-userspace/
   checksum: ec036d8c20a071ad4e9c948674cced7d00c7424131b1b8a2d3ac11e556c27541
+
 sources:
 - name: init
   file: pkg/core/kernel/initramfs-init.sh
   sha256: 3227489503b777cd4bc8b7b0b244d2201b31c1b0e255e3dd5be6126c0dd102e5
+
 dependencies:
 - name: phase3
   commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
@@ -30,7 +32,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
 - name: cpio
   commit: x86_64/pkg/cli/archive/cpio/2.15/bundles/dev
+
 build:
+  profile: [4223:28, 7937:73]
+
   script: |
     set -eux
 
@@ -84,10 +89,12 @@ build:
     (cd "${INITRAMFS}" && find . -print0 | LC_ALL=C sort -z | cpio -o -H newc --quiet --reproducible --null --owner=0:0) > "${OUT_DIR}/boot/initramfs.cpio"
 
     touch -d "2024-01-01T00:00:00+00:00" "${OUT_DIR}/boot/initramfs.cpio"
+
+bundles:
+  full:
+  - boot
+
 outputs:
   boot:
     files:
     - path: /boot/initramfs.cpio
-bundles:
-  full:
-  - boot

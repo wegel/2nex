@@ -7,10 +7,12 @@ package:
   description: A utility for generating programs that recognize patterns in text
   homepage: https://github.com/westes/flex
   checksum: 8c0fe1aa92ce2837b9ccced410e269da83681119a26353e92b344f59e56fdc2b
+
 sources:
 - name: flex
   url: https://github.com/westes/flex/releases/download/v2.6.4/flex-2.6.4.tar.gz
   sha256: e87aae032bf07c26f85ac0ed3250998c37621d95f8bd748b31f15b33c45ee995
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -52,7 +54,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 - name: m4
   commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
+
 build:
+  profile: [8272:7684, 16899:9089, 37908:9733, 63602:14937, 84590:16082, 106119:17918, 127327:18296, 157288:18485, 187718:18636, 208231:19645]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_flex} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -67,50 +72,36 @@ build:
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries "${OUT_DIR}"
+
 bundles:
-  full:
-  - lib
-  - dev
-  - info
-  - man
-  - doc
-  - static
-  - bin
-  - locale
   dev:
-  - lib
-  - dev
-  - static
   - bin
+  - dev
+  - lib
+  - static
+
+  full:
+  - bin
+  - dev
+  - doc
+  - info
+  - lib
+  - locale
+  - man
+  - static
+
 outputs:
-  lib:
+  bin:
     files:
-    - path: /usr/lib/libfl.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libfl.so.2
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libfl.so.2.0.0
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
+    - path: /usr/bin/flex
+    - path: /usr/bin/flex++
+    - path: /usr/bin/lex
+
   dev:
     files:
     - path: /usr/include/FlexLexer.h
     - path: /usr/lib/libfl.la
-  info:
-    files:
-    - path: /usr/share/info/dir
-    - path: /usr/share/info/flex.info
-    - path: /usr/share/info/flex.info-1
-    - path: /usr/share/info/flex.info-2
-  man:
-    files:
-    - path: /usr/share/man/man1/flex.1
-    - path: /usr/share/man/man1/lex.1
+
   doc:
     files:
     - path: /usr/share/doc/flex-2.6.4/AUTHORS
@@ -118,26 +109,20 @@ outputs:
     - path: /usr/share/doc/flex-2.6.4/NEWS
     - path: /usr/share/doc/flex-2.6.4/ONEWS
     - path: /usr/share/doc/flex-2.6.4/README.md
-  static:
+
+  info:
     files:
-    - path: /usr/lib/libfl.a
-  bin:
+    - path: /usr/share/info/dir
+    - path: /usr/share/info/flex.info
+    - path: /usr/share/info/flex.info-1
+    - path: /usr/share/info/flex.info-2
+
+  lib:
     files:
-    - path: /usr/bin/flex
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/flex++
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/lex
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/lib/libfl.so
+    - path: /usr/lib/libfl.so.2
+    - path: /usr/lib/libfl.so.2.0.0
+
   locale:
     files:
     - path: /usr/share/locale/ca/LC_MESSAGES/flex.mo
@@ -164,7 +149,11 @@ outputs:
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/flex.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/flex.mo
 
-resolution:
-  /usr/lib/ld-linux-x86-64.so.2: glibc
-  /usr/lib/libc.so.6: glibc
-  /usr/lib/libm.so.6: glibc
+  man:
+    files:
+    - path: /usr/share/man/man1/flex.1
+    - path: /usr/share/man/man1/lex.1
+
+  static:
+    files:
+    - path: /usr/lib/libfl.a

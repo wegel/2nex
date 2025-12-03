@@ -7,10 +7,12 @@ package:
   description: A tool for automatically generating Makefile.in files compliant with the GNU Coding Standards
   homepage: https://www.gnu.org/software/automake/
   checksum: ff5f2a50887f0d6e9e9d6c89d680d201b2c60ab7debb0515b1098f185989e2d3
+
 sources:
 - name: automake
   url: https://ftp.gnu.org/gnu/automake/automake-1.16.5.tar.xz
   sha256: f01d58cd6d9d77fbdca9eb4bbd5ead1988228fdb73d6f7a201f5f8d6b118b469
+
 dependencies:
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
@@ -44,7 +46,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: xz
   commit: x86_64/pkg/bootstrap/phase1/xz/5.4.6/bundles/dev
+
 build:
+  profile: [4100:1137, 8216:2078, 12338:2366, 16434:2435, 17394:2454]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -55,39 +60,27 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - man
-  - bin
-  - doc
-  - info
-  - dev
   dev:
   - bin
   - dev
+
+  full:
+  - bin
+  - dev
+  - doc
+  - info
+  - man
+
 outputs:
-  man:
-    files:
-    - path: /usr/share/man/man1/aclocal-1.16.1
-    - path: /usr/share/man/man1/aclocal.1
-    - path: /usr/share/man/man1/automake-1.16.1
-    - path: /usr/share/man/man1/automake.1
   bin:
     files:
     - path: /usr/bin/aclocal
     - path: /usr/bin/aclocal-1.16
     - path: /usr/bin/automake
     - path: /usr/bin/automake-1.16
-  doc:
-    files:
-    - path: /usr/share/doc/automake-1.16.5/amhello-1.0.tar.gz
-  info:
-    files:
-    - path: /usr/share/info/automake-history.info
-    - path: /usr/share/info/automake.info
-    - path: /usr/share/info/automake.info-1
-    - path: /usr/share/info/automake.info-2
-    - path: /usr/share/info/dir
+
   dev:
     files:
     - path: /usr/share/aclocal-1.16/amversion.m4
@@ -200,3 +193,22 @@ outputs:
     - path: /usr/share/automake-1.16/test-driver
     - path: /usr/share/automake-1.16/texinfo.tex
     - path: /usr/share/automake-1.16/ylwrap
+
+  doc:
+    files:
+    - path: /usr/share/doc/automake-1.16.5/amhello-1.0.tar.gz
+
+  info:
+    files:
+    - path: /usr/share/info/automake-history.info
+    - path: /usr/share/info/automake.info
+    - path: /usr/share/info/automake.info-1
+    - path: /usr/share/info/automake.info-2
+    - path: /usr/share/info/dir
+
+  man:
+    files:
+    - path: /usr/share/man/man1/aclocal-1.16.1
+    - path: /usr/share/man/man1/aclocal.1
+    - path: /usr/share/man/man1/automake-1.16.1
+    - path: /usr/share/man/man1/automake.1

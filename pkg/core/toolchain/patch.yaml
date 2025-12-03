@@ -7,10 +7,12 @@ package:
   description: A utility to apply patch files to original sources
   homepage: https://savannah.gnu.org/projects/patch/
   checksum: 4773062ed18080f595ec1730ffa90521c97bcda03e76c55bda8cc4f5f3bc9c17
+
 sources:
 - name: patch
   url: https://ftp.gnu.org/gnu/patch/patch-2.7.6.tar.xz
   sha256: ac610bda97abe0d9f6b7c963255a11dcb196c25e337c61f94e4778d632f1d8fd
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
@@ -54,35 +56,35 @@ dependencies:
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: attr
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+
 build:
-  script: 'tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+  profile: [4116:4286, 8240:8281, 12370:9684, 16492:10907, 20632:11899, 24789:14060, 28900:15451, 33028:16331, 34568:16386]
 
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
-
 
     ./configure --prefix=/usr
 
-
     make
-
     make DESTDIR=${OUT_DIR} install
 
-
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
+  dev:
+  - bin
+
   full:
   - bin
   - man
-  dev:
-  - bin
+
 outputs:
   bin:
     files:
     - path: /usr/bin/patch
+
   man:
     files:
     - path: /usr/share/man/man1/patch.1

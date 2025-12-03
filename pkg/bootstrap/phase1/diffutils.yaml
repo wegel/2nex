@@ -3,12 +3,17 @@ package:
   name: Diffutils
   slug: diffutils
   namespace: bootstrap/phase1
-  bootstrap: true
-  version: '3.10'
+  version: "3.10"
   description: A package of several programs related to finding differences between files
   homepage: https://www.gnu.org/software/diffutils/
   stable_checksum: false
-  sha256: eb1b97b228b1156c753c24cae7738c8b4b739267515eaff031911eb1149f38e8
+  bootstrap: true
+
+sources:
+- name: diffutils
+  url: https://ftp.gnu.org/gnu/diffutils/diffutils-3.10.tar.xz
+  sha256: 90e5e93cc724e4ebe12ede80df1634063c7a855692685919bfe60b556c9bd09e
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
@@ -18,11 +23,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
 - name: coreutils
   commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
-sources:
-- name: diffutils
-  url: https://ftp.gnu.org/gnu/diffutils/diffutils-3.10.tar.xz
-  sha256: 90e5e93cc724e4ebe12ede80df1634063c7a855692685919bfe60b556c9bd09e
+
 build:
+  profile: [4109:2820, 8249:5631, 12354:8372, 16479:10070, 20629:11909, 24744:13271, 28940:19438, 33106:20378, 41461:20508, 43492:20632]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_diffutils} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -34,11 +38,20 @@ build:
     make DESTDIR=$OUT_DIR install
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
 bundles:
   dev:
   - bin
   - locale
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/cmp
+    - path: /usr/bin/diff
+    - path: /usr/bin/diff3
+    - path: /usr/bin/sdiff
+
   locale:
     files:
     - path: /usr/share/locale/bg/LC_MESSAGES/diffutils.mo
@@ -77,25 +90,3 @@ outputs:
     - path: /usr/share/locale/vi/LC_MESSAGES/diffutils.mo
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/diffutils.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/diffutils.mo
-  bin:
-    files:
-    - path: /usr/bin/cmp
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/diff
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/diff3
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/sdiff
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-
-resolution:
-  /bootstrap/usr/lib/libc.so.6: bootstrap_tools
-  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools

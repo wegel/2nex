@@ -7,10 +7,12 @@ package:
   description: OpenSSH SSH client and server
   homepage: https://www.openssh.com/
   checksum: 2a5789ec87a868dd473eedc58a027666bf21b5fb8422202e07653535e6462d2f
+
 sources:
 - name: openssh
   url: https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.9p1.tar.gz
   sha256: b343fbcdbff87f15b1986e6e15d6d4fc9a7d36066be6b7fb507087ba8f966c02
+
 dependencies:
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
@@ -56,7 +58,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: openssl
   commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+
 build:
+  profile: [8248:6535, 29442:19271, 63313:19276, 109400:19361, 141630:19461, 179624:19617, 212497:19758, 263310:20009, 318679:20410, 350306:21375]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_openssh} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -125,82 +130,86 @@ build:
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
+  dev:
+  - bin
+  - conf
+
   full:
   - bin
   - conf
   - man
-  dev:
-  - bin
-  - conf
+
 outputs:
   bin:
     files:
     - path: /usr/bin/scp
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/sftp
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/ssh
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
       - /usr/lib/libcrypto.so.3
       - /usr/lib/libz.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/ssh-add
       needs:
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
     - path: /usr/bin/ssh-agent
       needs:
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
     - path: /usr/bin/ssh-keygen
       needs:
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
     - path: /usr/bin/ssh-keyscan
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
       - /usr/lib/libcrypto.so.3
       - /usr/lib/libz.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/sftp-server
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/ssh-keysign
-      needs:
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/ssh-pkcs11-helper
-      needs:
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/ssh-sk-helper
-      needs:
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/sshd-session
-      needs:
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libz.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/sshd
       needs:
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/libexec/sftp-server
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/libexec/ssh-keysign
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/libexec/ssh-pkcs11-helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/libexec/ssh-sk-helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/libexec/sshd-session
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libz.so.1
+
   conf:
     files:
     - path: /etc/pam.d/sshd
@@ -209,6 +218,7 @@ outputs:
     - path: /etc/ssh/sshd_config
     - path: /usr/lib/systemd/system/sshd-keygen.service
     - path: /usr/lib/systemd/system/sshd.service
+
   man:
     files:
     - path: /usr/share/man/cat1/scp.1
@@ -228,7 +238,7 @@ outputs:
     - path: /usr/share/man/cat8/sshd.8
 
 resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
   /usr/lib/libcrypto.so.3: openssl
   /usr/lib/libz.so.1: zlib
-  /usr/lib/ld-linux-x86-64.so.2: glibc

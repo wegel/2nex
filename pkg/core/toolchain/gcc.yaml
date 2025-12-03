@@ -2,11 +2,12 @@ package:
   schema: 1
   name: GNU Compiler Collection
   slug: gcc
-  flavor: core/toolchain
+  namespace: core/toolchain
   version: 13.2.0
   description: The GNU Compiler Collection includes front ends for C, C++, Objective-C, Fortran, Ada, Go, and D, as well as libraries for these languages.
   homepage: https://gcc.gnu.org/
   checksum: 9002fa460d32aade925ceb06966b1c9644f5e01a479cb6759ca0f37e3f3d0e2c
+
 sources:
 - name: gcc
   url: https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.xz
@@ -26,6 +27,7 @@ sources:
 - name: mpc
   url: https://ftp.gnu.org/gnu/mpc/mpc-1.3.1.tar.gz
   sha256: ab642492f5cf882b74aa0cb730cd410a81edcdbec895183ce930e706c1c759b8
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -77,7 +79,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
 - name: libxcrypt
   commit: x86_64/pkg/bootstrap/phase3/libxcrypt/4.4.36/bundles/dev
+
 build:
+  profile: [118136:16924, 460100:23555, 1029951:34435, 1713459:60614, 2285541:169987, 2854447:318943, 3425704:323596, 4290124:356092, 5139480:388798, 5708750:423557]
+
   script: |
     CFLAGS=${CFLAGS/-Werror=format-security/}
     CXXFLAGS=${CXXFLAGS/-Werror=format-security/}
@@ -134,360 +139,139 @@ build:
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
     # TODO: the output contains /2nex/* in a lot of binaries
+
 bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - locale
+  - static
+
   full:
+  - bin
+  - dev
+  - lib
+  - locale
   - man
   - static
-  - dev
-  - lib
-  - bin
-  - locale
-  dev:
-  - static
-  - dev
-  - lib
-  - bin
-  - locale
+
 outputs:
-  man:
+  bin:
     files:
-    - path: /usr/share/man/man1/cc.1
-    - path: /usr/share/man/man1/cpp.1
-    - path: /usr/share/man/man1/g++.1
-    - path: /usr/share/man/man1/gcc.1
-    - path: /usr/share/man/man1/gcov-dump.1
-    - path: /usr/share/man/man1/gcov-tool.1
-    - path: /usr/share/man/man1/gcov.1
-    - path: /usr/share/man/man1/lto-dump.1
-    - path: /usr/share/man/man7/fsf-funding.7
-    - path: /usr/share/man/man7/gfdl.7
-    - path: /usr/share/man/man7/gpl.7
-  static:
-    files:
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/libgcc.a
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/libgcc_eh.a
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/libgcov.a
-    - path: /usr/lib/libasan.a
-    - path: /usr/lib/libatomic.a
-    - path: /usr/lib/libgomp.a
-    - path: /usr/lib/libhwasan.a
-    - path: /usr/lib/libitm.a
-    - path: /usr/lib/liblsan.a
-    - path: /usr/lib/libquadmath.a
-    - path: /usr/lib/libssp.a
-    - path: /usr/lib/libssp_nonshared.a
-    - path: /usr/lib/libstdc++.a
-    - path: /usr/lib/libstdc++exp.a
-    - path: /usr/lib/libstdc++fs.a
-    - path: /usr/lib/libsupc++.a
-    - path: /usr/lib/libtsan.a
-    - path: /usr/lib/libubsan.a
-  locale:
-    files:
-    - path: /usr/share/locale/be/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/be/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/ca/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/da/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/da/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/de/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/de/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/de/LC_MESSAGES/libstdc++.mo
-    - path: /usr/share/locale/el/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/el/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/eo/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/es/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/es/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/fi/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/fi/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/fr/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/fr/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/fr/LC_MESSAGES/libstdc++.mo
-    - path: /usr/share/locale/hr/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/id/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/id/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/ja/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/ja/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/ka/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/nl/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/nl/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/pt_BR/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/ro/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/ru/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/ru/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/sr/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/sr/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/sv/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/sv/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/tr/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/tr/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/uk/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/uk/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/vi/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/vi/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/zh_CN/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/zh_CN/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/zh_TW/LC_MESSAGES/cpplib.mo
-    - path: /usr/share/locale/zh_TW/LC_MESSAGES/gcc.mo
-  lib:
-    files:
-    - path: /usr/lib/cpp
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtbegin.o
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtbeginS.o
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtbeginT.o
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtend.o
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtendS.o
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtfastmath.o
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtprec32.o
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtprec64.o
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtprec80.o
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/fixinc_list
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/gsyslimits.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/macro_list
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/mkheaders.conf
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/gtype.state
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcc1plugin.so
+    - path: /usr/bin/c++
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcc1plugin.so.0
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcc1plugin.so.0.0.0
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcp1plugin.so
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcp1plugin.so.0
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcp1plugin.so.0.0.0
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libasan.so
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libasan.so.8
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libasan.so.8.0.0
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libasan_preinit.o
-    - path: /usr/lib/libatomic.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libatomic.so.1
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libatomic.so.1.2.0
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libcc1.so
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libcc1.so.0
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libcc1.so.0.0.0
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libgcc_s.so
-    - path: /usr/lib/libgcc_s.so.1
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libgomp.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libgomp.so.1
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libgomp.so.1.0.0
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libgomp.spec
-    - path: /usr/lib/libhwasan.so
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libhwasan.so.0
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+    - path: /usr/bin/cpp
+      needs:
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libhwasan.so.0.0.0
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+    - path: /usr/bin/g++
+      needs:
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libhwasan_preinit.o
-    - path: /usr/lib/libitm.so
-      needs:
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libc.so.6
-    - path: /usr/lib/libitm.so.1
+    - path: /usr/bin/gcc
       needs:
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libitm.so.1.0.0
-      needs:
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libitm.spec
-    - path: /usr/lib/liblsan.so
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/liblsan.so.0
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+    - path: /usr/bin/gcc-ar
+      needs:
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/liblsan.so.0.0.0
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+    - path: /usr/bin/gcc-nm
+      needs:
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/liblsan_preinit.o
-    - path: /usr/lib/libquadmath.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libc.so.6
-    - path: /usr/lib/libquadmath.so.0
+    - path: /usr/bin/gcc-ranlib
       needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libquadmath.so.0.0.0
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libsanitizer.spec
-    - path: /usr/lib/libssp.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libssp.so.0
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libssp.so.0.0.0
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libstdc++.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libstdc++.so.6
-      needs:
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+    - path: /usr/bin/gcov
+      needs:
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libstdc++.so.6.0.32
-      needs:
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/gcov-dump
+      needs:
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libtsan.so
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/gcov-tool
       needs:
-      - /usr/lib/libstdc++.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/lto-dump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
       - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libtsan.so.2
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/x86_64-pc-linux-gnu-c++
       needs:
-      - /usr/lib/libstdc++.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/x86_64-pc-linux-gnu-g++
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/x86_64-pc-linux-gnu-gcc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/x86_64-pc-linux-gnu-gcc-13.2.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/x86_64-pc-linux-gnu-gcc-ar
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/x86_64-pc-linux-gnu-gcc-nm
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/x86_64-pc-linux-gnu-gcc-ranlib
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/cc1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
       - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libtsan.so.2.0.0
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/cc1plus
       needs:
-      - /usr/lib/libstdc++.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
       - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libtsan_preinit.o
-    - path: /usr/lib/libubsan.so
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/collect2
       needs:
-      - /usr/lib/libstdc++.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/g++-mapper-server
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/mkinstalldirs
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/lto-wrapper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/lto1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
       - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libubsan.so.1
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/gengtype
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libubsan.so.1.0.0
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/liblto_plugin.so
-      needs:
-      - /usr/lib/libc.so.6
+
   dev:
     files:
-    - path: /usr/share/gdb/auto-load/usr/lib/libstdc++.so.6.0.32-gdb.py
-    - path: /usr/share/gcc-13.2.0/python/libstdcxx/__init__.py
-    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/__init__.py
-    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/printers.py
-    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/xmethods.py
     - path: /usr/include/c++/13.2.0/algorithm
     - path: /usr/include/c++/13.2.0/any
     - path: /usr/include/c++/13.2.0/array
@@ -752,8 +536,8 @@ outputs:
     - path: /usr/include/c++/13.2.0/experimental/bits/simd_neon.h
     - path: /usr/include/c++/13.2.0/experimental/bits/simd_ppc.h
     - path: /usr/include/c++/13.2.0/experimental/bits/simd_scalar.h
-    - path: /usr/include/c++/13.2.0/experimental/bits/simd_x86.h
     - path: /usr/include/c++/13.2.0/experimental/bits/simd_x86_conversions.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/simd_x86.h
     - path: /usr/include/c++/13.2.0/experimental/bits/string_view.tcc
     - path: /usr/include/c++/13.2.0/experimental/buffer
     - path: /usr/include/c++/13.2.0/experimental/chrono
@@ -1311,25 +1095,18 @@ outputs:
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/amxint8intrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/amxtileintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx2intrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx5124fmapsintrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx5124vnniwintrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512bf16intrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512bf16vlintrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512bitalgintrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512bwintrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512cdintrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512dqintrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512erintrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512fintrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512fp16intrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512fp16vlintrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512ifmaintrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512ifmavlintrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512pfintrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vbmi2intrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vbmi2vlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vbmi2intrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vbmiintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vbmivlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512cdintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512bf16vlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512bf16intrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512pfintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512ifmaintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512ifmavlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512fintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512bitalgintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vlbwintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vldqintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vlintrin.h
@@ -1337,8 +1114,15 @@ outputs:
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vnnivlintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vp2intersectintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vp2intersectvlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512fp16vlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512fp16intrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vpopcntdqintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vpopcntdqvlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512dqintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512erintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512bwintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx5124fmapsintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx5124vnniwintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avxifmaintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avxintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avxneconvertintrin.h
@@ -1427,8 +1211,8 @@ outputs:
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/waitpkgintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/wbnoinvdintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/wmmintrin.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/x86gprintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/x86intrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/x86gprintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/xmmintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/xopintrin.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/xsavecintrin.h
@@ -1494,10 +1278,10 @@ outputs:
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/biarch64.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/gnu-user-common.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/gnu-user64.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/i386.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/i386-isa.def
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/i386-opts.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/i386-protos.h
-    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/i386.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/linux-common.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/linux64.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/stringop.def
@@ -1908,123 +1692,352 @@ outputs:
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/wide-int-print.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/wide-int.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/xcoff.h
-  bin:
+    - path: /usr/share/gcc-13.2.0/python/libstdcxx/__init__.py
+    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/__init__.py
+    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/printers.py
+    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/xmethods.py
+    - path: /usr/share/gdb/auto-load/usr/lib/libstdc++.so.6.0.32-gdb.py
+
+  lib:
     files:
-    - path: /usr/bin/c++
+    - path: /usr/lib/cpp
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtbegin.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtbeginS.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtbeginT.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtend.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtendS.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtfastmath.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtprec32.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtprec64.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtprec80.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/fixinc_list
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/gsyslimits.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/macro_list
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/mkheaders.conf
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/gtype.state
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcc1plugin.so
       needs:
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/cpp
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/g++
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gcc
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gcc-ar
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gcc-nm
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gcc-ranlib
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gcov
-      needs:
-      - /usr/lib/libz.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gcov-dump
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gcov-tool
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/lto-dump
-      needs:
-      - /usr/lib/libz.so.1
+      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/x86_64-pc-linux-gnu-c++
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcc1plugin.so.0
       needs:
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/x86_64-pc-linux-gnu-g++
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/x86_64-pc-linux-gnu-gcc
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/x86_64-pc-linux-gnu-gcc-13.2.0
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/x86_64-pc-linux-gnu-gcc-ar
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/x86_64-pc-linux-gnu-gcc-nm
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/x86_64-pc-linux-gnu-gcc-ranlib
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/cc1
-      needs:
-      - /usr/lib/libz.so.1
+      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/cc1plus
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcc1plugin.so.0.0.0
       needs:
-      - /usr/lib/libz.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/collect2
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcp1plugin.so
       needs:
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/g++-mapper-server
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/mkinstalldirs
-    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/lto-wrapper
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/lto1
-      needs:
-      - /usr/lib/libz.so.1
+      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/gengtype
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcp1plugin.so.0
       needs:
       - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcp1plugin.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libasan.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libasan.so.8
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libasan.so.8.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libasan_preinit.o
+    - path: /usr/lib/libatomic.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libatomic.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libatomic.so.1.2.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libcc1.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libcc1.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libcc1.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libgcc_s.so
+    - path: /usr/lib/libgcc_s.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libgomp.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libgomp.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libgomp.so.1.0.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libgomp.spec
+    - path: /usr/lib/libhwasan.so
+      needs:
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libhwasan.so.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libhwasan.so.0.0.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libhwasan_preinit.o
+    - path: /usr/lib/libitm.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libitm.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libitm.so.1.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libitm.spec
+    - path: /usr/lib/liblsan.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/liblsan.so.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/liblsan.so.0.0.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/liblsan_preinit.o
+    - path: /usr/lib/libquadmath.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libquadmath.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libquadmath.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libsanitizer.spec
+    - path: /usr/lib/libssp.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libssp.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libssp.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libstdc++.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libstdc++.so.6
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libstdc++.so.6.0.32
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libtsan.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libtsan.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libtsan.so.2.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libtsan_preinit.o
+    - path: /usr/lib/libubsan.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libubsan.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libubsan.so.1.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/liblto_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+
+  locale:
+    files:
+    - path: /usr/share/locale/be/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/be/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/libstdc++.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/libstdc++.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/gcc.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/cc.1
+    - path: /usr/share/man/man1/cpp.1
+    - path: /usr/share/man/man1/g++.1
+    - path: /usr/share/man/man1/gcc.1
+    - path: /usr/share/man/man1/gcov-dump.1
+    - path: /usr/share/man/man1/gcov-tool.1
+    - path: /usr/share/man/man1/gcov.1
+    - path: /usr/share/man/man1/lto-dump.1
+    - path: /usr/share/man/man7/fsf-funding.7
+    - path: /usr/share/man/man7/gfdl.7
+    - path: /usr/share/man/man7/gpl.7
+
+  static:
+    files:
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/libgcc.a
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/libgcc_eh.a
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/libgcov.a
+    - path: /usr/lib/libasan.a
+    - path: /usr/lib/libatomic.a
+    - path: /usr/lib/libgomp.a
+    - path: /usr/lib/libhwasan.a
+    - path: /usr/lib/libitm.a
+    - path: /usr/lib/liblsan.a
+    - path: /usr/lib/libquadmath.a
+    - path: /usr/lib/libssp.a
+    - path: /usr/lib/libssp_nonshared.a
+    - path: /usr/lib/libstdc++.a
+    - path: /usr/lib/libstdc++exp.a
+    - path: /usr/lib/libstdc++fs.a
+    - path: /usr/lib/libsupc++.a
+    - path: /usr/lib/libtsan.a
+    - path: /usr/lib/libubsan.a
 
 resolution:
-  /usr/lib/libz.so.1: zlib
-  /usr/lib/libm.so.6: glibc
-  /usr/lib/libstdc++.so.6: '@self'
   /usr/lib/ld-linux-x86-64.so.2: glibc
-  /usr/lib/libgcc_s.so.1: '@self'
   /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libgcc_s.so.1: self
+  /usr/lib/libstdc++.so.6: self
+  /usr/lib/libz.so.1: zlib

@@ -7,10 +7,12 @@ package:
   description: Extended cryptographic library
   homepage: https://github.com/besser82/libxcrypt
   checksum: 4089c92bd3c6573c6bdc25673fb1b2c4015f06a772ec5bda6ec6e6515d474f9c
+
 sources:
 - name: libxcrypt
   url: https://github.com/besser82/libxcrypt/releases/download/v4.4.36/libxcrypt-4.4.36.tar.xz
   sha256: e5e1f4caee0a01de2aee26e3138807d6d3ca2b8e67287966d1fefd65e1fd8943
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -48,18 +50,37 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 - name: binutils
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+
 build:
-  script: "tar --no-same-owner -xf ${SOURCE_libxcrypt} -C \"${WORK_DIR}\" --strip-components=1\ncd ${WORK_DIR}\n\n./configure --prefix=/usr                \\\n          --enable-hashes=strong,glibc \\\n          --enable-obsolete-api=no     \\\n          --disable-failure-tokens\n       \nmake\nmake DESTDIR=\"${OUT_DIR}\" install\n\nfind \"${OUT_DIR}\" -exec touch -d '2024-01-01T00:00:00+00:00' {} \\;\n2nex_strip_binaries ${OUT_DIR}\n"
+  profile: [4103:1823, 13183:3358, 22328:3360, 36233:3362, 45184:3404, 53828:3412, 66944:3468, 79931:3568, 98931:4710, 106163:6085]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_libxcrypt} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr                \
+              --enable-hashes=strong,glibc \
+              --enable-obsolete-api=no     \
+              --disable-failure-tokens
+           
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - dev
-  - static
-  - man
-  - lib
   dev:
   - dev
-  - static
   - lib
+  - static
+
+  full:
+  - dev
+  - lib
+  - man
+  - static
+
 outputs:
   dev:
     files:
@@ -67,9 +88,13 @@ outputs:
     - path: /usr/lib/libcrypt.la
     - path: /usr/lib/pkgconfig/libcrypt.pc
     - path: /usr/lib/pkgconfig/libxcrypt.pc
-  static:
+
+  lib:
     files:
-    - path: /usr/lib/libcrypt.a
+    - path: /usr/lib/libcrypt.so
+    - path: /usr/lib/libcrypt.so.2
+    - path: /usr/lib/libcrypt.so.2.0.0
+
   man:
     files:
     - path: /usr/share/man/man3/crypt.3
@@ -82,17 +107,7 @@ outputs:
     - path: /usr/share/man/man3/crypt_ra.3
     - path: /usr/share/man/man3/crypt_rn.3
     - path: /usr/share/man/man5/crypt.5
-  lib:
-    files:
-    - path: /usr/lib/libcrypt.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libcrypt.so.2
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libcrypt.so.2.0.0
-      needs:
-      - /usr/lib/libc.so.6
 
-resolution:
-  /usr/lib/libc.so.6: glibc
+  static:
+    files:
+    - path: /usr/lib/libcrypt.a

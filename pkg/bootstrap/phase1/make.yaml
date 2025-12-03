@@ -3,15 +3,17 @@ package:
   name: Make
   slug: make
   namespace: bootstrap/phase1
-  bootstrap: true
   version: 4.4.1
   description: Utility to maintain groups of programs
   homepage: https://www.gnu.org/software/make/
   stable_checksum: false
+  bootstrap: true
+
 sources:
 - name: make
   url: https://ftp.gnu.org/gnu/make/make-4.4.1.tar.gz
   sha256: dd16fb1d67bfab79a72f5e8390735c49e3e8e70b4945a15ab1f81ddb78658fb3
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
@@ -33,7 +35,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
 - name: gzip
   commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
+
 build:
+  profile: [4120:1620, 8218:4729, 12383:5357, 16703:5359, 20991:5361, 25179:7053, 29375:7113, 31445:7198]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_make} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -48,15 +53,22 @@ build:
     rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
 bundles:
   dev:
+  - bin
   - dev
   - locale
-  - bin
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/make
+
   dev:
     files:
     - path: /usr/include/gnumake.h
+
   locale:
     files:
     - path: /usr/share/locale/be/LC_MESSAGES/make.mo
@@ -89,13 +101,3 @@ outputs:
     - path: /usr/share/locale/vi/LC_MESSAGES/make.mo
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/make.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/make.mo
-  bin:
-    files:
-    - path: /usr/bin/make
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-
-resolution:
-  /bootstrap/usr/lib/libc.so.6: bootstrap_tools
-  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools

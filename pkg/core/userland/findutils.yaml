@@ -7,10 +7,12 @@ package:
   description: The GNU versions of find utilities (find and xargs)
   homepage: https://www.gnu.org/software/findutils/
   checksum: be34111aaa0b8ce915b538bb48e10651d291da7c583fe28ae7bb448f06e384d0
+
 sources:
 - name: findutils
   url: https://ftp.gnu.org/gnu/findutils/findutils-4.9.0.tar.xz
   sha256: a2bfb8c09d436770edc59f50fa483e785b161a3b7b9d547573cb08065fd462fe
+
 dependencies:
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
@@ -54,7 +56,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+
 build:
+  profile: [4097:3072, 8199:9381, 12306:18793, 20529:32208, 24632:35504, 32893:42753, 37006:43853, 45253:45020, 53477:45439, 58290:45718]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -67,31 +72,34 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
   dev:
   - bin
   - locale
+
 outputs:
   bin:
     files:
     - path: /usr/bin/find
       needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/bin/locate
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/updatedb
     - path: /usr/bin/xargs
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/libexec/frcode
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
   locale:
     files:
     - path: /usr/share/locale/be/LC_MESSAGES/findutils.mo
@@ -136,5 +144,5 @@ outputs:
 
 resolution:
   /usr/lib/ld-linux-x86-64.so.2: glibc
-  /usr/lib/libm.so.6: glibc
   /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc

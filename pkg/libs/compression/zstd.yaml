@@ -7,10 +7,12 @@ package:
   description: Zstandard - Fast real-time compression algorithm
   homepage: https://facebook.github.io/zstd/
   checksum: 14f7cac68ec1375c9d8182ec7d09398ffd52e03912d76bace883baa6ce98e90d
+
 sources:
 - name: zstd
   url: https://github.com/facebook/zstd/releases/download/v1.5.6/zstd-1.5.6.tar.gz
   sha256: 8c29e06cf42aacc1eafc4077ae2ec6c6fcb96a626157e0593d5e82a34fd403c1
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
@@ -56,7 +58,10 @@ dependencies:
   commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
 - name: lz4
   commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+
 build:
+  profile: [4108:539, 12317:16374, 24728:16463, 41212:16719, 53590:17160, 61978:18827, 74574:19983, 95473:22098, 112038:31620, 123770:33050]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_zstd} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -68,25 +73,62 @@ build:
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - dev
-  - static
-  - lib
-  - bin
-  - man
   dev:
+  - bin
   - dev
   - lib
-  - bin
   - static
+
+  full:
+  - bin
+  - dev
+  - lib
+  - man
+  - static
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/unzstd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liblz4.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/zstd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liblz4.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/zstdcat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liblz4.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/zstdgrep
+    - path: /usr/bin/zstdless
+    - path: /usr/bin/zstdmt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liblz4.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+
   dev:
     files:
     - path: /usr/include/zdict.h
     - path: /usr/include/zstd.h
     - path: /usr/include/zstd_errors.h
     - path: /usr/lib/pkgconfig/libzstd.pc
+
   lib:
     files:
     - path: /usr/lib/libzstd.so
@@ -98,38 +140,7 @@ outputs:
     - path: /usr/lib/libzstd.so.1.5.6
       needs:
       - /usr/lib/libc.so.6
-  bin:
-    files:
-    - path: /usr/bin/unzstd
-      needs:
-      - /usr/lib/libz.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/liblz4.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/zstd
-      needs:
-      - /usr/lib/libz.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/liblz4.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/zstdcat
-      needs:
-      - /usr/lib/libz.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/liblz4.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/zstdgrep
-    - path: /usr/bin/zstdless
-    - path: /usr/bin/zstdmt
-      needs:
-      - /usr/lib/libz.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/liblz4.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
+
   man:
     files:
     - path: /usr/share/man/man1/unzstd.1
@@ -137,13 +148,14 @@ outputs:
     - path: /usr/share/man/man1/zstdcat.1
     - path: /usr/share/man/man1/zstdgrep.1
     - path: /usr/share/man/man1/zstdless.1
+
   static:
     files:
     - path: /usr/lib/libzstd.a
 
 resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
+  /usr/lib/liblz4.so.1: lz4
   /usr/lib/liblzma.so.5: xz
   /usr/lib/libz.so.1: zlib
-  /usr/lib/liblz4.so.1: lz4
-  /usr/lib/ld-linux-x86-64.so.2: glibc

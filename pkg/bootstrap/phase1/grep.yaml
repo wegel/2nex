@@ -3,12 +3,17 @@ package:
   name: Grep
   slug: grep
   namespace: bootstrap/phase1
-  bootstrap: true
-  version: '3.11'
+  version: "3.11"
   description: Print lines that match patterns
   homepage: https://www.gnu.org/software/grep/
   stable_checksum: false
-  sha256: 985c6cd3fcf7ce0f364c15fc2e2cf4e0b723f8db01088a96649063d3b389d4ed
+  bootstrap: true
+
+sources:
+- name: grep
+  url: https://ftp.gnu.org/gnu/grep/grep-3.11.tar.xz
+  sha256: 1db2aedde89d0dea42b16d9528f894c8d15dae4e190b59aecc78f5a951276eab
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
@@ -26,11 +31,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
 - name: gawk
   commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
-sources:
-- name: grep
-  url: https://ftp.gnu.org/gnu/grep/grep-3.11.tar.xz
-  sha256: 1db2aedde89d0dea42b16d9528f894c8d15dae4e190b59aecc78f5a951276eab
+
 build:
+  profile: [4099:2468, 8235:5182, 12395:7897, 16544:10760, 20656:12273, 24786:13907, 28907:14228, 37154:21581, 41313:21683, 44259:21836]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_grep} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -44,19 +48,19 @@ build:
     rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
 bundles:
   dev:
-  - locale
   - bin
+  - locale
+
 outputs:
   bin:
     files:
     - path: /usr/bin/egrep
     - path: /usr/bin/fgrep
     - path: /usr/bin/grep
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+
   locale:
     files:
     - path: /usr/share/locale/af/LC_MESSAGES/grep.mo
@@ -104,7 +108,3 @@ outputs:
     - path: /usr/share/locale/vi/LC_MESSAGES/grep.mo
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/grep.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/grep.mo
-
-resolution:
-  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools
-  /bootstrap/usr/lib/libc.so.6: bootstrap_tools

@@ -7,10 +7,12 @@ package:
   description: C++ library for interacting with JSON
   homepage: https://github.com/open-source-parsers/jsoncpp
   checksum: 05f7a23b0de043ac9dbcf699f054710cd8c67100bdb835bc8f3f63dbd2a5a319
+
 sources:
 - name: jsoncpp
   url: https://github.com/open-source-parsers/jsoncpp/archive/refs/tags/1.9.6.tar.gz
   sha256: f93b6dd7ce796b13d02c108bc9f79812245a82e577581c4c9aabe57075c90ea2
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
@@ -54,28 +56,41 @@ dependencies:
   commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
 - name: meson
   commit: x86_64/pkg/core/toolchain/meson/1.4.1/bundles/dev
+
 build:
-  script: "tar --no-same-owner -xf ${SOURCE_jsoncpp} -C \"${WORK_DIR}\" --strip-components=1\n\
-    cd ${WORK_DIR}\n\n# Configure with Meson\nmeson setup build \\\n  --prefix=/usr\
-    \ \\\n  --buildtype=release \\\n  -Dtests=false\n\n# Build\nninja -C build\n\n\
-    # Install\nDESTDIR=\"${OUT_DIR}\" ninja -C build install\n\n# Set consistent timestamps\
-    \ for reproducible builds\nfind \"${OUT_DIR}\" -exec touch -d '2024-01-01T00:00:00+00:00'\
-    \ {} \\;\nfind \"${OUT_DIR}\" ! -type d -exec strip-nondeterminism -T 1704067200\
-    \ --normalizers +all {} \\; || true\n2nex_strip_binaries ${OUT_DIR}\n"
+  profile: [4100:1840, 4740:1843]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_jsoncpp} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    # Configure with Meson
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      -Dtests=false
+
+    # Build
+    ninja -C build
+
+    # Install
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # Set consistent timestamps for reproducible builds
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
+    2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - lib
-  - dev
   dev:
-  - lib
   - dev
+  - lib
+
+  full:
+  - dev
+  - lib
+
 outputs:
-  lib:
-    files:
-    - path: /usr/lib/cmake/jsoncpp/jsoncpp-namespaced-targets.cmake
-    - path: /usr/lib/cmake/jsoncpp/jsoncppConfig.cmake
-    - path: /usr/lib/libjsoncpp.so
-    - path: /usr/lib/libjsoncpp.so.26
   dev:
     files:
     - path: /usr/include/json/allocator.h
@@ -89,3 +104,10 @@ outputs:
     - path: /usr/include/json/version.h
     - path: /usr/include/json/writer.h
     - path: /usr/lib/pkgconfig/jsoncpp.pc
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/jsoncpp/jsoncpp-namespaced-targets.cmake
+    - path: /usr/lib/cmake/jsoncpp/jsoncppConfig.cmake
+    - path: /usr/lib/libjsoncpp.so
+    - path: /usr/lib/libjsoncpp.so.26

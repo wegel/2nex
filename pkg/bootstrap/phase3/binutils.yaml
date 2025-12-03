@@ -3,14 +3,16 @@ package:
   name: GNU Binutils
   slug: binutils
   namespace: bootstrap/phase3
-  version: '2.42'
+  version: "2.42"
   description: GNU Binutils
   homepage: https://www.gnu.org/software/binutils/
-  checksum: 5819a55ca6630df62f218732b2143b0841adbd4ec0835898598646ab8382ee97
+  checksum: 51212cc0e7c443ad085dac1313f5b5615a9fb448c8f922b0326cefab80c4eb3c
+
 sources:
 - name: binutils
   url: https://ftp.gnu.org/gnu/binutils/binutils-2.42.tar.xz
   sha256: f6e4d41fd5fc778b06b7891457b3620da5ecea1006c6a4a41ae998109f85a800
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -84,7 +86,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/dejagnu/1.6.3/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/bootstrap/phase3/pkgconf/2.2.0/bundles/dev
+
 build:
+  profile: [8225:2365, 20575:3031, 45553:3860, 75930:9785, 101719:9891, 123377:10095, 149406:10340, 187364:17282, 224370:112996, 245499:116336]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_binutils} -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}" && mkdir -p build && cd build
@@ -98,7 +103,9 @@ build:
       --enable-gprofng=no        \
       --disable-werror           \
       --enable-64-bit-bfd        \
-      --enable-default-hash-style=gnu
+      --enable-default-hash-style=gnu \
+      --enable-gold              \
+      --enable-plugins
 
     echo "configure done, make"
     make
@@ -107,19 +114,54 @@ build:
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - bin
-  - lib
-  - dev
-  - info
-  - static
-  - man
   dev:
   - bin
-  - lib
   - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - info
+  - lib
+  - man
+  - static
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/addr2line
+    - path: /usr/bin/ar
+    - path: /usr/bin/as
+    - path: /usr/bin/c++filt
+    - path: /usr/bin/dwp
+    - path: /usr/bin/elfedit
+    - path: /usr/bin/gprof
+    - path: /usr/bin/ld
+    - path: /usr/bin/ld.bfd
+    - path: /usr/bin/ld.gold
+    - path: /usr/bin/nm
+    - path: /usr/bin/objcopy
+    - path: /usr/bin/objdump
+    - path: /usr/bin/ranlib
+    - path: /usr/bin/readelf
+    - path: /usr/bin/size
+    - path: /usr/bin/strings
+    - path: /usr/bin/strip
+    - path: /usr/x86_64-pc-linux-gnu/bin/ar
+    - path: /usr/x86_64-pc-linux-gnu/bin/as
+    - path: /usr/x86_64-pc-linux-gnu/bin/ld
+    - path: /usr/x86_64-pc-linux-gnu/bin/ld.bfd
+    - path: /usr/x86_64-pc-linux-gnu/bin/ld.gold
+    - path: /usr/x86_64-pc-linux-gnu/bin/nm
+    - path: /usr/x86_64-pc-linux-gnu/bin/objcopy
+    - path: /usr/x86_64-pc-linux-gnu/bin/objdump
+    - path: /usr/x86_64-pc-linux-gnu/bin/ranlib
+    - path: /usr/x86_64-pc-linux-gnu/bin/readelf
+    - path: /usr/x86_64-pc-linux-gnu/bin/strip
+
   dev:
     files:
     - path: /usr/include/ansidecl.h
@@ -138,176 +180,7 @@ outputs:
     - path: /usr/lib/libctf.la
     - path: /usr/lib/libopcodes.la
     - path: /usr/lib/libsframe.la
-  man:
-    files:
-    - path: /usr/share/man/man1/addr2line.1
-    - path: /usr/share/man/man1/ar.1
-    - path: /usr/share/man/man1/as.1
-    - path: /usr/share/man/man1/c++filt.1
-    - path: /usr/share/man/man1/dlltool.1
-    - path: /usr/share/man/man1/elfedit.1
-    - path: /usr/share/man/man1/gprof.1
-    - path: /usr/share/man/man1/ld.1
-    - path: /usr/share/man/man1/nm.1
-    - path: /usr/share/man/man1/objcopy.1
-    - path: /usr/share/man/man1/objdump.1
-    - path: /usr/share/man/man1/ranlib.1
-    - path: /usr/share/man/man1/readelf.1
-    - path: /usr/share/man/man1/size.1
-    - path: /usr/share/man/man1/strings.1
-    - path: /usr/share/man/man1/strip.1
-    - path: /usr/share/man/man1/windmc.1
-    - path: /usr/share/man/man1/windres.1
-  bin:
-    files:
-    - path: /usr/bin/addr2line
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/ar
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/as
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/c++filt
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/elfedit
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gprof
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/ld
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libctf.so.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/ld.bfd
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libctf.so.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/nm
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/objcopy
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/objdump
-      needs:
-      - /usr/lib/libopcodes-2.42.so
-      - /usr/lib/libctf.so.0
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libsframe.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/ranlib
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/readelf
-      needs:
-      - /usr/lib/libctf-nobfd.so.0
-      - /usr/lib/libsframe.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/size
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/strings
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/strip
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-pc-linux-gnu/bin/ar
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-pc-linux-gnu/bin/as
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-pc-linux-gnu/bin/ld
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libctf.so.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-pc-linux-gnu/bin/ld.bfd
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libctf.so.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-pc-linux-gnu/bin/nm
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-pc-linux-gnu/bin/objcopy
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-pc-linux-gnu/bin/objdump
-      needs:
-      - /usr/lib/libopcodes-2.42.so
-      - /usr/lib/libctf.so.0
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libsframe.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-pc-linux-gnu/bin/ranlib
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-pc-linux-gnu/bin/readelf
-      needs:
-      - /usr/lib/libctf-nobfd.so.0
-      - /usr/lib/libsframe.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-pc-linux-gnu/bin/strip
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-  static:
-    files:
-    - path: /usr/lib/libbfd.a
-    - path: /usr/lib/libctf-nobfd.a
-    - path: /usr/lib/libctf.a
-    - path: /usr/lib/libopcodes.a
-    - path: /usr/lib/libsframe.a
+
   info:
     files:
     - path: /usr/share/info/as.info
@@ -319,69 +192,23 @@ outputs:
     - path: /usr/share/info/ld.info
     - path: /usr/share/info/ldint.info
     - path: /usr/share/info/sframe-spec.info
+
   lib:
     files:
     - path: /usr/lib/bfd-plugins/libdep.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/libbfd-2.42.so
-      needs:
-      - /usr/lib/libsframe.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/lib/libbfd.so
-      needs:
-      - /usr/lib/libsframe.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/lib/libctf-nobfd.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/libctf-nobfd.so.0
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/libctf-nobfd.so.0.0.0
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/libctf.so
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libsframe.so.1
-      - /usr/lib/libz.so.1
-      - /usr/lib/libc.so.6
     - path: /usr/lib/libctf.so.0
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libsframe.so.1
-      - /usr/lib/libz.so.1
-      - /usr/lib/libc.so.6
     - path: /usr/lib/libctf.so.0.0.0
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libsframe.so.1
-      - /usr/lib/libz.so.1
-      - /usr/lib/libc.so.6
     - path: /usr/lib/libopcodes-2.42.so
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libz.so.1
-      - /usr/lib/libsframe.so.1
-      - /usr/lib/libc.so.6
     - path: /usr/lib/libopcodes.so
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libz.so.1
-      - /usr/lib/libsframe.so.1
-      - /usr/lib/libc.so.6
     - path: /usr/lib/libsframe.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/libsframe.so.1
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/libsframe.so.1.0.0
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/x86_64-pc-linux-gnu/lib/ldscripts/elf32_x86_64.x
     - path: /usr/x86_64-pc-linux-gnu/lib/ldscripts/elf32_x86_64.xbn
     - path: /usr/x86_64-pc-linux-gnu/lib/ldscripts/elf32_x86_64.xc
@@ -472,12 +299,31 @@ outputs:
     - path: /usr/x86_64-pc-linux-gnu/lib/ldscripts/elf_x86_64.xwe
     - path: /usr/x86_64-pc-linux-gnu/lib/ldscripts/stamp
 
-resolution:
-  /usr/lib/libz.so.1: zlib
-  /usr/lib/libbfd-2.42.so: '@self'
-  /usr/lib/ld-linux-x86-64.so.2: glibc
-  /usr/lib/libc.so.6: glibc
-  /usr/lib/libopcodes-2.42.so: '@self'
-  /usr/lib/libctf-nobfd.so.0: '@self'
-  /usr/lib/libsframe.so.1: '@self'
-  /usr/lib/libctf.so.0: '@self'
+  man:
+    files:
+    - path: /usr/share/man/man1/addr2line.1
+    - path: /usr/share/man/man1/ar.1
+    - path: /usr/share/man/man1/as.1
+    - path: /usr/share/man/man1/c++filt.1
+    - path: /usr/share/man/man1/dlltool.1
+    - path: /usr/share/man/man1/elfedit.1
+    - path: /usr/share/man/man1/gprof.1
+    - path: /usr/share/man/man1/ld.1
+    - path: /usr/share/man/man1/nm.1
+    - path: /usr/share/man/man1/objcopy.1
+    - path: /usr/share/man/man1/objdump.1
+    - path: /usr/share/man/man1/ranlib.1
+    - path: /usr/share/man/man1/readelf.1
+    - path: /usr/share/man/man1/size.1
+    - path: /usr/share/man/man1/strings.1
+    - path: /usr/share/man/man1/strip.1
+    - path: /usr/share/man/man1/windmc.1
+    - path: /usr/share/man/man1/windres.1
+
+  static:
+    files:
+    - path: /usr/lib/libbfd.a
+    - path: /usr/lib/libctf-nobfd.a
+    - path: /usr/lib/libctf.a
+    - path: /usr/lib/libopcodes.a
+    - path: /usr/lib/libsframe.a

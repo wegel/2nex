@@ -3,15 +3,17 @@ package:
   name: Xz
   slug: xz
   namespace: bootstrap/phase1
-  bootstrap: true
   version: 5.4.6
   description: General-purpose data compression with high compression ratio
   homepage: https://tukaani.org/xz/
   stable_checksum: false
+  bootstrap: true
+
 sources:
 - name: xz
   url: https://github.com/tukaani-project/xz/releases/download/v5.4.6/xz-5.4.6.tar.xz
   sha256: b92d4e3a438affcf13362a1305cd9d94ed47ddda22e456a42791e630a5644f5c
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
@@ -41,7 +43,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
 - name: tar
   commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+
 build:
+  profile: [8256:2881, 26013:4093, 52434:4132, 86854:4189, 113403:4235, 145630:4301, 172107:4363, 213319:5168, 257578:7041, 283120:7695]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_xz} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -56,31 +61,18 @@ build:
     rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
 bundles:
   dev:
-  - lib
   - bin
   - dev
+  - lib
   - locale
+
 outputs:
-  lib:
-    files:
-    - path: /usr/lib/liblzma.so
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-    - path: /usr/lib/liblzma.so.5
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-    - path: /usr/lib/liblzma.so.5.4.6
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
   bin:
     files:
     - path: /usr/bin/lzcat
-      needs:
-      - /usr/lib/liblzma.so.5
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/lzcmp
     - path: /usr/bin/lzdiff
     - path: /usr/bin/lzegrep
@@ -88,53 +80,48 @@ outputs:
     - path: /usr/bin/lzgrep
     - path: /usr/bin/lzless
     - path: /usr/bin/lzma
-      needs:
-      - /usr/lib/liblzma.so.5
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/lzmadec
-      needs:
-      - /usr/lib/liblzma.so.5
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/lzmainfo
-      needs:
-      - /usr/lib/liblzma.so.5
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/lzmore
     - path: /usr/bin/unlzma
-      needs:
-      - /usr/lib/liblzma.so.5
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/unxz
-      needs:
-      - /usr/lib/liblzma.so.5
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/xz
-      needs:
-      - /usr/lib/liblzma.so.5
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/xzcat
-      needs:
-      - /usr/lib/liblzma.so.5
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/xzcmp
     - path: /usr/bin/xzdec
-      needs:
-      - /usr/lib/liblzma.so.5
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/xzdiff
     - path: /usr/bin/xzegrep
     - path: /usr/bin/xzfgrep
     - path: /usr/bin/xzgrep
     - path: /usr/bin/xzless
     - path: /usr/bin/xzmore
+
+  dev:
+    files:
+    - path: /usr/include/lzma.h
+    - path: /usr/include/lzma/base.h
+    - path: /usr/include/lzma/bcj.h
+    - path: /usr/include/lzma/block.h
+    - path: /usr/include/lzma/check.h
+    - path: /usr/include/lzma/container.h
+    - path: /usr/include/lzma/delta.h
+    - path: /usr/include/lzma/filter.h
+    - path: /usr/include/lzma/hardware.h
+    - path: /usr/include/lzma/index.h
+    - path: /usr/include/lzma/index_hash.h
+    - path: /usr/include/lzma/lzma12.h
+    - path: /usr/include/lzma/stream_flags.h
+    - path: /usr/include/lzma/version.h
+    - path: /usr/include/lzma/vli.h
+    - path: /usr/lib/liblzma.la
+    - path: /usr/lib/pkgconfig/liblzma.pc
+
+  lib:
+    files:
+    - path: /usr/lib/liblzma.so
+    - path: /usr/lib/liblzma.so.5
+    - path: /usr/lib/liblzma.so.5.4.6
+
   locale:
     files:
     - path: /usr/share/locale/ca/LC_MESSAGES/xz.mo
@@ -160,27 +147,3 @@ outputs:
     - path: /usr/share/locale/vi/LC_MESSAGES/xz.mo
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/xz.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/xz.mo
-  dev:
-    files:
-    - path: /usr/include/lzma.h
-    - path: /usr/include/lzma/base.h
-    - path: /usr/include/lzma/bcj.h
-    - path: /usr/include/lzma/block.h
-    - path: /usr/include/lzma/check.h
-    - path: /usr/include/lzma/container.h
-    - path: /usr/include/lzma/delta.h
-    - path: /usr/include/lzma/filter.h
-    - path: /usr/include/lzma/hardware.h
-    - path: /usr/include/lzma/index.h
-    - path: /usr/include/lzma/index_hash.h
-    - path: /usr/include/lzma/lzma12.h
-    - path: /usr/include/lzma/stream_flags.h
-    - path: /usr/include/lzma/version.h
-    - path: /usr/include/lzma/vli.h
-    - path: /usr/lib/liblzma.la
-    - path: /usr/lib/pkgconfig/liblzma.pc
-
-resolution:
-  /usr/lib/liblzma.so.5: '@self'
-  /bootstrap/usr/lib/libc.so.6: bootstrap_tools
-  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools

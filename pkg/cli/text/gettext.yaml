@@ -7,10 +7,12 @@ package:
   description: GNU internationalization (i18n) and localization (l10n) library
   homepage: https://www.gnu.org/software/gettext/
   checksum: 360deda2f948c310dbd99952f4e7a7f577dead8424a1eb1a96089147461908dd
+
 sources:
 - name: gettext
   url: https://ftp.gnu.org/gnu/gettext/gettext-0.22.5.tar.xz
   sha256: fe10c37353213d78a5b83d48af231e005c4da84db5ce88037d88355938259640
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
@@ -66,7 +68,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
 - name: sed
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+
 build:
+  profile: [57917:64714, 232036:154716, 521253:162514, 867258:168578, 1151265:169244, 1440749:185793, 1728661:195615, 2157638:204747, 2588226:207018, 2875348:245024]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
@@ -83,117 +88,180 @@ build:
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - lib
-  - doc
-  - man
-  - info
-  - bin
-  - locale
-  - dev
-  - gettext
   dev:
-  - lib
   - bin
-  - locale
   - dev
   - gettext
+  - lib
+  - locale
+
+  full:
+  - bin
+  - dev
+  - doc
+  - gettext
+  - info
+  - lib
+  - locale
+  - man
+
 outputs:
-  lib:
+  bin:
     files:
-    - path: /usr/lib/gettext/cldr-plurals
+    - path: /usr/bin/autopoint
+    - path: /usr/bin/envsubst
       needs:
-      - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/gettext/hostname
-      needs:
-      - /usr/lib/libgettextlib-0.22.5.so
       - /usr/lib/libc.so.6
+    - path: /usr/bin/gettext
+      needs:
       - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/gettext/project-id
-    - path: /usr/lib/gettext/urlget
-      needs:
-      - /usr/lib/libgettextlib-0.22.5.so
       - /usr/lib/libc.so.6
+    - path: /usr/bin/gettext.sh
+    - path: /usr/bin/gettextize
+    - path: /usr/bin/msgattrib
+      needs:
       - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/gettext/user-email
-    - path: /usr/lib/libasprintf.so
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libasprintf.so.0
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libasprintf.so.0.0.0
-      needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libgettextlib-0.22.5.so
-      needs:
-      - /usr/lib/libacl.so.1
-      - /usr/lib/libm.so.6
-      - /usr/lib/libattr.so.1
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libgettextlib.so
-      needs:
-      - /usr/lib/libacl.so.1
-      - /usr/lib/libm.so.6
-      - /usr/lib/libattr.so.1
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libgettextpo.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libgettextpo.so.0
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libgettextpo.so.0.5.10
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libgettextsrc-0.22.5.so
-      needs:
       - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libacl.so.1
-      - /usr/lib/libattr.so.1
+      - /usr/lib/libgettextsrc-0.22.5.so
       - /usr/lib/libtextstyle.so.0
-      - /usr/lib/libm.so.6
-      - /usr/lib/libncursesw.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libgettextsrc.so
+    - path: /usr/bin/msgcat
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
       - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libacl.so.1
-      - /usr/lib/libattr.so.1
+      - /usr/lib/libgettextsrc-0.22.5.so
       - /usr/lib/libtextstyle.so.0
-      - /usr/lib/libm.so.6
-      - /usr/lib/libncursesw.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libtextstyle.so
+    - path: /usr/bin/msgcmp
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libgettextsrc-0.22.5.so
       - /usr/lib/libm.so.6
-      - /usr/lib/libncursesw.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libtextstyle.so.0
+    - path: /usr/bin/msgcomm
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libgettextsrc-0.22.5.so
+      - /usr/lib/libtextstyle.so.0
+    - path: /usr/bin/msgconv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libgettextsrc-0.22.5.so
+      - /usr/lib/libtextstyle.so.0
+    - path: /usr/bin/msgen
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libgettextsrc-0.22.5.so
+      - /usr/lib/libtextstyle.so.0
+    - path: /usr/bin/msgexec
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libgettextsrc-0.22.5.so
+    - path: /usr/bin/msgfilter
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libgettextsrc-0.22.5.so
+      - /usr/lib/libtextstyle.so.0
+    - path: /usr/bin/msgfmt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libgettextsrc-0.22.5.so
+    - path: /usr/bin/msggrep
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libgettextsrc-0.22.5.so
+      - /usr/lib/libtextstyle.so.0
+    - path: /usr/bin/msginit
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libgettextsrc-0.22.5.so
+      - /usr/lib/libtextstyle.so.0
+    - path: /usr/bin/msgmerge
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libgettextsrc-0.22.5.so
+      - /usr/lib/libgomp.so.1
       - /usr/lib/libm.so.6
-      - /usr/lib/libncursesw.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libtextstyle.so.0.2.1
+      - /usr/lib/libtextstyle.so.0
+    - path: /usr/bin/msgunfmt
       needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libncursesw.so.6
+      - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-    - path: /usr/lib/preloadable_libintl.so
+      - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libgettextsrc-0.22.5.so
+      - /usr/lib/libtextstyle.so.0
+    - path: /usr/bin/msguniq
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libgettextsrc-0.22.5.so
+      - /usr/lib/libtextstyle.so.0
+    - path: /usr/bin/ngettext
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/recode-sr-latin
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgettextlib-0.22.5.so
+    - path: /usr/bin/xgettext
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libgettextsrc-0.22.5.so
+      - /usr/lib/libtextstyle.so.0
+
+  dev:
+    files:
+    - path: /usr/include/autosprintf.h
+    - path: /usr/include/gettext-po.h
+    - path: /usr/include/textstyle.h
+    - path: /usr/include/textstyle/stdbool.h
+    - path: /usr/include/textstyle/version.h
+    - path: /usr/include/textstyle/woe32dll.h
+    - path: /usr/lib/libasprintf.la
+    - path: /usr/lib/libgettextlib.la
+    - path: /usr/lib/libgettextpo.la
+    - path: /usr/lib/libgettextsrc.la
+    - path: /usr/lib/libtextstyle.la
+    - path: /usr/share/aclocal/build-to-host.m4
+    - path: /usr/share/aclocal/gettext.m4
+    - path: /usr/share/aclocal/host-cpu-c-abi.m4
+    - path: /usr/share/aclocal/iconv.m4
+    - path: /usr/share/aclocal/intlmacosx.m4
+    - path: /usr/share/aclocal/lib-ld.m4
+    - path: /usr/share/aclocal/lib-link.m4
+    - path: /usr/share/aclocal/lib-prefix.m4
+    - path: /usr/share/aclocal/nls.m4
+    - path: /usr/share/aclocal/po.m4
+    - path: /usr/share/aclocal/progtest.m4
+
   doc:
     files:
     - path: /usr/share/doc/gettext-0.22.5/FAQ.html
@@ -1935,6 +2003,14 @@ outputs:
     - path: /usr/share/doc/gettext-0.22.5/gettext.1.html
     - path: /usr/share/doc/gettext-0.22.5/gettext.3.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_1.html
+    - path: /usr/share/doc/gettext-0.22.5/gettext_2.html
+    - path: /usr/share/doc/gettext-0.22.5/gettext_3.html
+    - path: /usr/share/doc/gettext-0.22.5/gettext_4.html
+    - path: /usr/share/doc/gettext-0.22.5/gettext_5.html
+    - path: /usr/share/doc/gettext-0.22.5/gettext_6.html
+    - path: /usr/share/doc/gettext-0.22.5/gettext_7.html
+    - path: /usr/share/doc/gettext-0.22.5/gettext_8.html
+    - path: /usr/share/doc/gettext-0.22.5/gettext_9.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_10.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_11.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_12.html
@@ -1945,7 +2021,6 @@ outputs:
     - path: /usr/share/doc/gettext-0.22.5/gettext_17.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_18.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_19.html
-    - path: /usr/share/doc/gettext-0.22.5/gettext_2.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_20.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_21.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_22.html
@@ -1956,14 +2031,7 @@ outputs:
     - path: /usr/share/doc/gettext-0.22.5/gettext_27.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_28.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_29.html
-    - path: /usr/share/doc/gettext-0.22.5/gettext_3.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_30.html
-    - path: /usr/share/doc/gettext-0.22.5/gettext_4.html
-    - path: /usr/share/doc/gettext-0.22.5/gettext_5.html
-    - path: /usr/share/doc/gettext-0.22.5/gettext_6.html
-    - path: /usr/share/doc/gettext-0.22.5/gettext_7.html
-    - path: /usr/share/doc/gettext-0.22.5/gettext_8.html
-    - path: /usr/share/doc/gettext-0.22.5/gettext_9.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_abt.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_fot.html
     - path: /usr/share/doc/gettext-0.22.5/gettext_toc.html
@@ -2011,172 +2079,155 @@ outputs:
     - path: /usr/share/doc/gettext-0.22.5/textdomain.3.html
     - path: /usr/share/doc/gettext-0.22.5/tutorial.html
     - path: /usr/share/doc/gettext-0.22.5/xgettext.1.html
-  man:
+
+  gettext:
     files:
-    - path: /usr/share/man/man1/autopoint.1
-    - path: /usr/share/man/man1/envsubst.1
-    - path: /usr/share/man/man1/gettext.1
-    - path: /usr/share/man/man1/gettextize.1
-    - path: /usr/share/man/man1/msgattrib.1
-    - path: /usr/share/man/man1/msgcat.1
-    - path: /usr/share/man/man1/msgcmp.1
-    - path: /usr/share/man/man1/msgcomm.1
-    - path: /usr/share/man/man1/msgconv.1
-    - path: /usr/share/man/man1/msgen.1
-    - path: /usr/share/man/man1/msgexec.1
-    - path: /usr/share/man/man1/msgfilter.1
-    - path: /usr/share/man/man1/msgfmt.1
-    - path: /usr/share/man/man1/msggrep.1
-    - path: /usr/share/man/man1/msginit.1
-    - path: /usr/share/man/man1/msgmerge.1
-    - path: /usr/share/man/man1/msgunfmt.1
-    - path: /usr/share/man/man1/msguniq.1
-    - path: /usr/share/man/man1/ngettext.1
-    - path: /usr/share/man/man1/recode-sr-latin.1
-    - path: /usr/share/man/man1/xgettext.1
-    - path: /usr/share/man/man3/bind_textdomain_codeset.3
-    - path: /usr/share/man/man3/bindtextdomain.3
-    - path: /usr/share/man/man3/dcgettext.3
-    - path: /usr/share/man/man3/dcngettext.3
-    - path: /usr/share/man/man3/dgettext.3
-    - path: /usr/share/man/man3/dngettext.3
-    - path: /usr/share/man/man3/gettext.3
-    - path: /usr/share/man/man3/ngettext.3
-    - path: /usr/share/man/man3/textdomain.3
+    - path: /usr/share/gettext-0.22.5/its/glade.loc
+    - path: /usr/share/gettext-0.22.5/its/glade1.its
+    - path: /usr/share/gettext-0.22.5/its/glade2.its
+    - path: /usr/share/gettext-0.22.5/its/gsettings.its
+    - path: /usr/share/gettext-0.22.5/its/gsettings.loc
+    - path: /usr/share/gettext-0.22.5/its/gtkbuilder.its
+    - path: /usr/share/gettext-0.22.5/its/metainfo.its
+    - path: /usr/share/gettext-0.22.5/its/metainfo.loc
+    - path: /usr/share/gettext/ABOUT-NLS
+    - path: /usr/share/gettext/archive.dir.tar.xz
+    - path: /usr/share/gettext/config.rpath
+    - path: /usr/share/gettext/gettext.h
+    - path: /usr/share/gettext/javaversion.class
+    - path: /usr/share/gettext/msgunfmt.tcl
+    - path: /usr/share/gettext/po/Makefile.in.in
+    - path: /usr/share/gettext/po/Makevars.template
+    - path: /usr/share/gettext/po/Rules-quot
+    - path: /usr/share/gettext/po/boldquot.sed
+    - path: /usr/share/gettext/po/en@boldquot.header
+    - path: /usr/share/gettext/po/en@quot.header
+    - path: /usr/share/gettext/po/insert-header.sin
+    - path: /usr/share/gettext/po/quot.sed
+    - path: /usr/share/gettext/po/remove-potcdate.sin
+    - path: /usr/share/gettext/projects/GNOME/team-address
+    - path: /usr/share/gettext/projects/GNOME/teams.html
+    - path: /usr/share/gettext/projects/GNOME/teams.url
+    - path: /usr/share/gettext/projects/GNOME/trigger
+    - path: /usr/share/gettext/projects/KDE/team-address
+    - path: /usr/share/gettext/projects/KDE/teams.html
+    - path: /usr/share/gettext/projects/KDE/teams.url
+    - path: /usr/share/gettext/projects/KDE/trigger
+    - path: /usr/share/gettext/projects/TP/team-address
+    - path: /usr/share/gettext/projects/TP/teams.html
+    - path: /usr/share/gettext/projects/TP/teams.url
+    - path: /usr/share/gettext/projects/TP/trigger
+    - path: /usr/share/gettext/projects/index
+    - path: /usr/share/gettext/projects/team-address
+    - path: /usr/share/gettext/styles/po-default.css
+    - path: /usr/share/gettext/styles/po-emacs-x.css
+    - path: /usr/share/gettext/styles/po-emacs-xterm.css
+    - path: /usr/share/gettext/styles/po-emacs-xterm16.css
+    - path: /usr/share/gettext/styles/po-emacs-xterm256.css
+    - path: /usr/share/gettext/styles/po-vim.css
+
   info:
     files:
     - path: /usr/share/info/autosprintf.info
     - path: /usr/share/info/dir
     - path: /usr/share/info/gettext.info
     - path: /usr/share/info/libtextstyle.info
-  bin:
+
+  lib:
     files:
-    - path: /usr/bin/autopoint
-    - path: /usr/bin/envsubst
+    - path: /usr/lib/gettext/cldr-plurals
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gettext
-      needs:
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gettext.sh
-    - path: /usr/bin/gettextize
-    - path: /usr/bin/msgattrib
-      needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
       - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libtextstyle.so.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/msgcat
+    - path: /usr/lib/gettext/hostname
       needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
-      - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libtextstyle.so.0
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/msgcmp
-      needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
-      - /usr/lib/libgettextlib-0.22.5.so
       - /usr/lib/libc.so.6
-      - /usr/lib/libm.so.6
+      - /usr/lib/libgettextlib-0.22.5.so
+    - path: /usr/lib/gettext/project-id
+    - path: /usr/lib/gettext/urlget
+      needs:
       - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/msgcomm
-      needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
-      - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libtextstyle.so.0
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/msgconv
-      needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
       - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libtextstyle.so.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/msgen
+    - path: /usr/lib/gettext/user-email
+    - path: /usr/lib/libasprintf.so
       needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
-      - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libtextstyle.so.0
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/msgexec
-      needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
-      - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/msgfilter
-      needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
-      - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libtextstyle.so.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/msgfmt
-      needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
-      - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/msggrep
-      needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
-      - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libtextstyle.so.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/msginit
-      needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
-      - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libtextstyle.so.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/msgmerge
-      needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
-      - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libtextstyle.so.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgomp.so.1
       - /usr/lib/libgcc_s.so.1
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/msgunfmt
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libasprintf.so.0
       needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libasprintf.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libgettextlib-0.22.5.so
+      needs:
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libattr.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libgettextlib.so
+      needs:
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libattr.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libgettextpo.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libgettextpo.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libgettextpo.so.0.5.10
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libgettextsrc-0.22.5.so
+      needs:
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libattr.so.1
+      - /usr/lib/libc.so.6
       - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libm.so.6
+      - /usr/lib/libncursesw.so.6
       - /usr/lib/libtextstyle.so.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/msguniq
+    - path: /usr/lib/libgettextsrc.so
       needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libattr.so.1
+      - /usr/lib/libc.so.6
       - /usr/lib/libgettextlib-0.22.5.so
+      - /usr/lib/libm.so.6
+      - /usr/lib/libncursesw.so.6
       - /usr/lib/libtextstyle.so.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/ngettext
+    - path: /usr/lib/libtextstyle.so
       needs:
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/recode-sr-latin
+      - /usr/lib/libm.so.6
+      - /usr/lib/libncursesw.so.6
+    - path: /usr/lib/libtextstyle.so.0
       needs:
-      - /usr/lib/libgettextlib-0.22.5.so
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/xgettext
+      - /usr/lib/libm.so.6
+      - /usr/lib/libncursesw.so.6
+    - path: /usr/lib/libtextstyle.so.0.2.1
       needs:
-      - /usr/lib/libgettextsrc-0.22.5.so
-      - /usr/lib/libgettextlib-0.22.5.so
-      - /usr/lib/libtextstyle.so.0
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libncursesw.so.6
+    - path: /usr/lib/preloadable_libintl.so
+      needs:
+      - /usr/lib/libc.so.6
+
   locale:
     files:
     - path: /usr/share/locale/ast/LC_MESSAGES/gettext-runtime.mo
@@ -2260,86 +2311,50 @@ outputs:
     - path: /usr/share/locale/zh_HK/LC_MESSAGES/gettext-runtime.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/gettext-runtime.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/gettext-tools.mo
-  dev:
+
+  man:
     files:
-    - path: /usr/include/autosprintf.h
-    - path: /usr/include/gettext-po.h
-    - path: /usr/include/textstyle.h
-    - path: /usr/include/textstyle/stdbool.h
-    - path: /usr/include/textstyle/version.h
-    - path: /usr/include/textstyle/woe32dll.h
-    - path: /usr/lib/libasprintf.la
-    - path: /usr/lib/libgettextlib.la
-    - path: /usr/lib/libgettextpo.la
-    - path: /usr/lib/libgettextsrc.la
-    - path: /usr/lib/libtextstyle.la
-    - path: /usr/share/aclocal/build-to-host.m4
-    - path: /usr/share/aclocal/gettext.m4
-    - path: /usr/share/aclocal/host-cpu-c-abi.m4
-    - path: /usr/share/aclocal/iconv.m4
-    - path: /usr/share/aclocal/intlmacosx.m4
-    - path: /usr/share/aclocal/lib-ld.m4
-    - path: /usr/share/aclocal/lib-link.m4
-    - path: /usr/share/aclocal/lib-prefix.m4
-    - path: /usr/share/aclocal/nls.m4
-    - path: /usr/share/aclocal/po.m4
-    - path: /usr/share/aclocal/progtest.m4
-  gettext:
-    files:
-    - path: /usr/share/gettext-0.22.5/its/glade.loc
-    - path: /usr/share/gettext-0.22.5/its/glade1.its
-    - path: /usr/share/gettext-0.22.5/its/glade2.its
-    - path: /usr/share/gettext-0.22.5/its/gsettings.its
-    - path: /usr/share/gettext-0.22.5/its/gsettings.loc
-    - path: /usr/share/gettext-0.22.5/its/gtkbuilder.its
-    - path: /usr/share/gettext-0.22.5/its/metainfo.its
-    - path: /usr/share/gettext-0.22.5/its/metainfo.loc
-    - path: /usr/share/gettext/ABOUT-NLS
-    - path: /usr/share/gettext/archive.dir.tar.xz
-    - path: /usr/share/gettext/config.rpath
-    - path: /usr/share/gettext/gettext.h
-    - path: /usr/share/gettext/javaversion.class
-    - path: /usr/share/gettext/msgunfmt.tcl
-    - path: /usr/share/gettext/po/Makefile.in.in
-    - path: /usr/share/gettext/po/Makevars.template
-    - path: /usr/share/gettext/po/Rules-quot
-    - path: /usr/share/gettext/po/boldquot.sed
-    - path: /usr/share/gettext/po/en@boldquot.header
-    - path: /usr/share/gettext/po/en@quot.header
-    - path: /usr/share/gettext/po/insert-header.sin
-    - path: /usr/share/gettext/po/quot.sed
-    - path: /usr/share/gettext/po/remove-potcdate.sin
-    - path: /usr/share/gettext/projects/GNOME/team-address
-    - path: /usr/share/gettext/projects/GNOME/teams.html
-    - path: /usr/share/gettext/projects/GNOME/teams.url
-    - path: /usr/share/gettext/projects/GNOME/trigger
-    - path: /usr/share/gettext/projects/KDE/team-address
-    - path: /usr/share/gettext/projects/KDE/teams.html
-    - path: /usr/share/gettext/projects/KDE/teams.url
-    - path: /usr/share/gettext/projects/KDE/trigger
-    - path: /usr/share/gettext/projects/TP/team-address
-    - path: /usr/share/gettext/projects/TP/teams.html
-    - path: /usr/share/gettext/projects/TP/teams.url
-    - path: /usr/share/gettext/projects/TP/trigger
-    - path: /usr/share/gettext/projects/index
-    - path: /usr/share/gettext/projects/team-address
-    - path: /usr/share/gettext/styles/po-default.css
-    - path: /usr/share/gettext/styles/po-emacs-x.css
-    - path: /usr/share/gettext/styles/po-emacs-xterm.css
-    - path: /usr/share/gettext/styles/po-emacs-xterm16.css
-    - path: /usr/share/gettext/styles/po-emacs-xterm256.css
-    - path: /usr/share/gettext/styles/po-vim.css
+    - path: /usr/share/man/man1/autopoint.1
+    - path: /usr/share/man/man1/envsubst.1
+    - path: /usr/share/man/man1/gettext.1
+    - path: /usr/share/man/man1/gettextize.1
+    - path: /usr/share/man/man1/msgattrib.1
+    - path: /usr/share/man/man1/msgcat.1
+    - path: /usr/share/man/man1/msgcmp.1
+    - path: /usr/share/man/man1/msgcomm.1
+    - path: /usr/share/man/man1/msgconv.1
+    - path: /usr/share/man/man1/msgen.1
+    - path: /usr/share/man/man1/msgexec.1
+    - path: /usr/share/man/man1/msgfilter.1
+    - path: /usr/share/man/man1/msgfmt.1
+    - path: /usr/share/man/man1/msggrep.1
+    - path: /usr/share/man/man1/msginit.1
+    - path: /usr/share/man/man1/msgmerge.1
+    - path: /usr/share/man/man1/msgunfmt.1
+    - path: /usr/share/man/man1/msguniq.1
+    - path: /usr/share/man/man1/ngettext.1
+    - path: /usr/share/man/man1/recode-sr-latin.1
+    - path: /usr/share/man/man1/xgettext.1
+    - path: /usr/share/man/man3/bind_textdomain_codeset.3
+    - path: /usr/share/man/man3/bindtextdomain.3
+    - path: /usr/share/man/man3/dcgettext.3
+    - path: /usr/share/man/man3/dcngettext.3
+    - path: /usr/share/man/man3/dgettext.3
+    - path: /usr/share/man/man3/dngettext.3
+    - path: /usr/share/man/man3/gettext.3
+    - path: /usr/share/man/man3/ngettext.3
+    - path: /usr/share/man/man3/textdomain.3
 
 resolution:
-  /usr/lib/ld-linux-x86-64.so.2: glibc
-  /usr/lib/libgettextlib-0.22.5.so: '@self'
-  /usr/lib/libgomp.so.1: gcc
-  /usr/lib/libstdc++.so.6: gcc
-  /usr/lib/libgcc_s.so.1: gcc
-  /usr/lib/libm.so.6: glibc
-  /usr/lib/libc.so.6: glibc
   /usr/lib/libacl.so.1: acl
   /usr/lib/libattr.so.1: attr
-  /usr/lib/libtextstyle.so.0: '@self'
-  /usr/lib/libgettextsrc-0.22.5.so: '@self'
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libgomp.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
   /usr/lib/libncursesw.so.6: ncurses
+  /usr/lib/libgettextlib-0.22.5.so: self
+  /usr/lib/libgettextsrc-0.22.5.so: self
+  /usr/lib/libtextstyle.so.0: self

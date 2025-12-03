@@ -3,14 +3,16 @@ package:
   name: psmisc
   slug: psmisc
   namespace: core/userland
-  version: '23.7'
+  version: "23.7"
   description: A package of small utilities that use the proc file-system.
   homepage: https://gitlab.com/psmisc/psmisc
   checksum: bb7484d0afa9e6f5ca7357e69b7a1f38e4d28dc92841a2b182f2c1f37d22a4de
+
 sources:
 - name: psmisc
   url: https://netactuate.dl.sourceforge.net/project/psmisc/psmisc/psmisc-23.7.tar.xz?viasf=1
   sha256: 58c55d9c1402474065adae669511c191de374b0871eec781239ab400b907c327
+
 dependencies:
 - name: mpc
   commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
@@ -26,6 +28,8 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
 - name: grep
   commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
 - name: make
   commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
 - name: tar
@@ -44,6 +48,12 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 - name: binutils
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+- name: mpc
+  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
 - name: linux-headers
@@ -52,35 +62,42 @@ dependencies:
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: ncurses
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+
 build:
-  script: 'tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+  profile: [4122:1136, 8226:2313, 12350:2650, 16647:2715, 18181:4316]
 
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
-
     ./configure --prefix=/usr
-
     make
-
     make DESTDIR=${OUT_DIR} install
 
-
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-
-    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers
-    +all {} \;
-
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
   dev:
-  - locale
   - bin
+  - locale
+
   full:
-  - locale
   - bin
+  - locale
   - man
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/fuser
+    - path: /usr/bin/killall
+    - path: /usr/bin/peekfd
+    - path: /usr/bin/prtstat
+    - path: /usr/bin/pslog
+    - path: /usr/bin/pstree
+    - path: /usr/bin/pstree.x11
+
   locale:
     files:
     - path: /usr/share/locale/bg/LC_MESSAGES/psmisc.mo
@@ -114,15 +131,7 @@ outputs:
     - path: /usr/share/locale/vi/LC_MESSAGES/psmisc.mo
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/psmisc.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/psmisc.mo
-  bin:
-    files:
-    - path: /usr/bin/fuser
-    - path: /usr/bin/killall
-    - path: /usr/bin/peekfd
-    - path: /usr/bin/prtstat
-    - path: /usr/bin/pslog
-    - path: /usr/bin/pstree
-    - path: /usr/bin/pstree.x11
+
   man:
     files:
     - path: /usr/share/man/da/man1/prtstat.1

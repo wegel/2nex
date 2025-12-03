@@ -3,14 +3,16 @@ package:
   name: Abseil C++
   slug: libabseil-cpp
   namespace: dev/libs
-  version: '20250127.0'
+  version: "20250127.0"
   description: C++ Common Libraries
   homepage: https://github.com/abseil/abseil-cpp
   checksum: 8d44a35bc77e9c8305a867394fc9b513204241fb85855fec2851fa51d29b52f5
+
 sources:
 - name: libabseil_cpp
   url: https://github.com/abseil/abseil-cpp/archive/refs/tags/20250127.0.tar.gz
   sha256: 16242f394245627e508ec6bb296b433c90f8d914f73b9c026fddb905e27276e8
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
@@ -58,129 +60,56 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
 - name: bzip2
   commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/bootstrap/phase3/zstd/1.5.6/bundles/dev
 - name: strip-nondeterminism
   commit: x86_64/pkg/bootstrap/phase3/strip-nondeterminism/1.13.0/bundles/dev
 - name: perl
   commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+
 build:
-  script: "tar --no-same-owner -xf ${SOURCE_libabseil_cpp} -C \"${WORK_DIR}\" --strip-components=1\n\
-    cd ${WORK_DIR}\n\n# Create a build directory\nmkdir -p build\ncd build\n\n# Configure\n\
-    cmake .. \\\n  -G Ninja \\\n  -DCMAKE_INSTALL_PREFIX=/usr \\\n  -DCMAKE_BUILD_TYPE=Release\
-    \ \\\n  -DABSL_ENABLE_INSTALL=ON \\\n  -DABSL_USE_GOOGLETEST_HEAD=OFF \\\n  -DCMAKE_CXX_STANDARD=14\n\
-    \n# Build\nninja\n\n# Install\nDESTDIR=\"${OUT_DIR}\" ninja install\n\n# Set consistent\
-    \ timestamps for reproducible builds\nfind \"${OUT_DIR}\" -exec touch -d '2024-01-01T00:00:00+00:00'\
-    \ {} \\;\nfind \"${OUT_DIR}\" ! -type d -exec strip-nondeterminism -T 1704067200\
-    \ --normalizers +all {} \\; || true\n#2nex_strip_binaries ${OUT_DIR}\n"
+  profile: [4177:1234, 8344:2210, 16602:3396, 24884:5443, 29015:5449, 37271:5459, 45514:5469, 58006:5479, 66289:5486, 71986:14444]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_libabseil_cpp} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    # Create a build directory
+    mkdir -p build
+    cd build
+
+    # Configure
+    cmake .. \
+      -G Ninja \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DABSL_ENABLE_INSTALL=ON \
+      -DABSL_USE_GOOGLETEST_HEAD=OFF \
+      -DCMAKE_CXX_STANDARD=14
+
+    # Build
+    ninja
+
+    # Install
+    DESTDIR="${OUT_DIR}" ninja install
+
+    # Set consistent timestamps for reproducible builds
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
+    #2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - lib
-  - static
-  - dev
   dev:
-  - lib
   - dev
+  - lib
   - static
+
+  full:
+  - dev
+  - lib
+  - static
+
 outputs:
-  lib:
-    files:
-    - path: /usr/lib/cmake/absl/abslConfig.cmake
-    - path: /usr/lib/cmake/absl/abslConfigVersion.cmake
-    - path: /usr/lib/cmake/absl/abslTargets-release.cmake
-    - path: /usr/lib/cmake/absl/abslTargets.cmake
-  static:
-    files:
-    - path: /usr/lib/libabsl_bad_any_cast_impl.a
-    - path: /usr/lib/libabsl_bad_optional_access.a
-    - path: /usr/lib/libabsl_bad_variant_access.a
-    - path: /usr/lib/libabsl_base.a
-    - path: /usr/lib/libabsl_city.a
-    - path: /usr/lib/libabsl_civil_time.a
-    - path: /usr/lib/libabsl_cord.a
-    - path: /usr/lib/libabsl_cord_internal.a
-    - path: /usr/lib/libabsl_cordz_functions.a
-    - path: /usr/lib/libabsl_cordz_handle.a
-    - path: /usr/lib/libabsl_cordz_info.a
-    - path: /usr/lib/libabsl_cordz_sample_token.a
-    - path: /usr/lib/libabsl_crc32c.a
-    - path: /usr/lib/libabsl_crc_cord_state.a
-    - path: /usr/lib/libabsl_crc_cpu_detect.a
-    - path: /usr/lib/libabsl_crc_internal.a
-    - path: /usr/lib/libabsl_debugging_internal.a
-    - path: /usr/lib/libabsl_decode_rust_punycode.a
-    - path: /usr/lib/libabsl_demangle_internal.a
-    - path: /usr/lib/libabsl_demangle_rust.a
-    - path: /usr/lib/libabsl_die_if_null.a
-    - path: /usr/lib/libabsl_examine_stack.a
-    - path: /usr/lib/libabsl_exponential_biased.a
-    - path: /usr/lib/libabsl_failure_signal_handler.a
-    - path: /usr/lib/libabsl_flags_commandlineflag.a
-    - path: /usr/lib/libabsl_flags_commandlineflag_internal.a
-    - path: /usr/lib/libabsl_flags_config.a
-    - path: /usr/lib/libabsl_flags_internal.a
-    - path: /usr/lib/libabsl_flags_marshalling.a
-    - path: /usr/lib/libabsl_flags_parse.a
-    - path: /usr/lib/libabsl_flags_private_handle_accessor.a
-    - path: /usr/lib/libabsl_flags_program_name.a
-    - path: /usr/lib/libabsl_flags_reflection.a
-    - path: /usr/lib/libabsl_flags_usage.a
-    - path: /usr/lib/libabsl_flags_usage_internal.a
-    - path: /usr/lib/libabsl_graphcycles_internal.a
-    - path: /usr/lib/libabsl_hash.a
-    - path: /usr/lib/libabsl_hashtablez_sampler.a
-    - path: /usr/lib/libabsl_int128.a
-    - path: /usr/lib/libabsl_kernel_timeout_internal.a
-    - path: /usr/lib/libabsl_leak_check.a
-    - path: /usr/lib/libabsl_log_entry.a
-    - path: /usr/lib/libabsl_log_flags.a
-    - path: /usr/lib/libabsl_log_globals.a
-    - path: /usr/lib/libabsl_log_initialize.a
-    - path: /usr/lib/libabsl_log_internal_check_op.a
-    - path: /usr/lib/libabsl_log_internal_conditions.a
-    - path: /usr/lib/libabsl_log_internal_fnmatch.a
-    - path: /usr/lib/libabsl_log_internal_format.a
-    - path: /usr/lib/libabsl_log_internal_globals.a
-    - path: /usr/lib/libabsl_log_internal_log_sink_set.a
-    - path: /usr/lib/libabsl_log_internal_message.a
-    - path: /usr/lib/libabsl_log_internal_nullguard.a
-    - path: /usr/lib/libabsl_log_internal_proto.a
-    - path: /usr/lib/libabsl_log_internal_structured_proto.a
-    - path: /usr/lib/libabsl_log_severity.a
-    - path: /usr/lib/libabsl_log_sink.a
-    - path: /usr/lib/libabsl_low_level_hash.a
-    - path: /usr/lib/libabsl_malloc_internal.a
-    - path: /usr/lib/libabsl_periodic_sampler.a
-    - path: /usr/lib/libabsl_poison.a
-    - path: /usr/lib/libabsl_random_distributions.a
-    - path: /usr/lib/libabsl_random_internal_distribution_test_util.a
-    - path: /usr/lib/libabsl_random_internal_platform.a
-    - path: /usr/lib/libabsl_random_internal_pool_urbg.a
-    - path: /usr/lib/libabsl_random_internal_randen.a
-    - path: /usr/lib/libabsl_random_internal_randen_hwaes.a
-    - path: /usr/lib/libabsl_random_internal_randen_hwaes_impl.a
-    - path: /usr/lib/libabsl_random_internal_randen_slow.a
-    - path: /usr/lib/libabsl_random_internal_seed_material.a
-    - path: /usr/lib/libabsl_random_seed_gen_exception.a
-    - path: /usr/lib/libabsl_random_seed_sequences.a
-    - path: /usr/lib/libabsl_raw_hash_set.a
-    - path: /usr/lib/libabsl_raw_logging_internal.a
-    - path: /usr/lib/libabsl_scoped_set_env.a
-    - path: /usr/lib/libabsl_spinlock_wait.a
-    - path: /usr/lib/libabsl_stacktrace.a
-    - path: /usr/lib/libabsl_status.a
-    - path: /usr/lib/libabsl_statusor.a
-    - path: /usr/lib/libabsl_str_format_internal.a
-    - path: /usr/lib/libabsl_strerror.a
-    - path: /usr/lib/libabsl_string_view.a
-    - path: /usr/lib/libabsl_strings.a
-    - path: /usr/lib/libabsl_strings_internal.a
-    - path: /usr/lib/libabsl_symbolize.a
-    - path: /usr/lib/libabsl_synchronization.a
-    - path: /usr/lib/libabsl_throw_delegate.a
-    - path: /usr/lib/libabsl_time.a
-    - path: /usr/lib/libabsl_time_zone.a
-    - path: /usr/lib/libabsl_tracing_internal.a
-    - path: /usr/lib/libabsl_utf8_for_code_point.a
-    - path: /usr/lib/libabsl_vlog_config_internal.a
   dev:
     files:
     - path: /usr/include/absl/algorithm/algorithm.h
@@ -272,13 +201,11 @@ outputs:
     - path: /usr/include/absl/container/internal/test_allocator.h
     - path: /usr/include/absl/container/internal/test_instance_tracker.h
     - path: /usr/include/absl/container/internal/tracked.h
-    - path: 
-        /usr/include/absl/container/internal/unordered_map_constructor_test.h
+    - path: /usr/include/absl/container/internal/unordered_map_constructor_test.h
     - path: /usr/include/absl/container/internal/unordered_map_lookup_test.h
     - path: /usr/include/absl/container/internal/unordered_map_members_test.h
     - path: /usr/include/absl/container/internal/unordered_map_modifiers_test.h
-    - path: 
-        /usr/include/absl/container/internal/unordered_set_constructor_test.h
+    - path: /usr/include/absl/container/internal/unordered_set_constructor_test.h
     - path: /usr/include/absl/container/internal/unordered_set_lookup_test.h
     - path: /usr/include/absl/container/internal/unordered_set_members_test.h
     - path: /usr/include/absl/container/internal/unordered_set_modifiers_test.h
@@ -287,9 +214,9 @@ outputs:
     - path: /usr/include/absl/crc/crc32c.h
     - path: /usr/include/absl/crc/internal/cpu_detect.h
     - path: /usr/include/absl/crc/internal/crc.h
-    - path: /usr/include/absl/crc/internal/crc32_x86_arm_combined_simd.h
     - path: /usr/include/absl/crc/internal/crc32c.h
     - path: /usr/include/absl/crc/internal/crc32c_inline.h
+    - path: /usr/include/absl/crc/internal/crc32_x86_arm_combined_simd.h
     - path: /usr/include/absl/crc/internal/crc_cord_state.h
     - path: /usr/include/absl/crc/internal/crc_internal.h
     - path: /usr/include/absl/crc/internal/crc_memcpy.h
@@ -311,8 +238,7 @@ outputs:
     - path: /usr/include/absl/debugging/internal/stacktrace_generic-inl.inc
     - path: /usr/include/absl/debugging/internal/stacktrace_powerpc-inl.inc
     - path: /usr/include/absl/debugging/internal/stacktrace_riscv-inl.inc
-    - path: 
-        /usr/include/absl/debugging/internal/stacktrace_unimplemented-inl.inc
+    - path: /usr/include/absl/debugging/internal/stacktrace_unimplemented-inl.inc
     - path: /usr/include/absl/debugging/internal/stacktrace_win32-inl.inc
     - path: /usr/include/absl/debugging/internal/stacktrace_x86-inl.inc
     - path: /usr/include/absl/debugging/internal/symbolize.h
@@ -543,8 +469,7 @@ outputs:
     - path: /usr/include/absl/time/civil_time.h
     - path: /usr/include/absl/time/clock.h
     - path: /usr/include/absl/time/internal/cctz/include/cctz/civil_time.h
-    - path: 
-        /usr/include/absl/time/internal/cctz/include/cctz/civil_time_detail.h
+    - path: /usr/include/absl/time/internal/cctz/include/cctz/civil_time_detail.h
     - path: /usr/include/absl/time/internal/cctz/include/cctz/time_zone.h
     - path: /usr/include/absl/time/internal/cctz/include/cctz/zone_info_source.h
     - path: /usr/include/absl/time/internal/cctz/src/time_zone_fixed.h
@@ -763,3 +688,105 @@ outputs:
     - path: /usr/lib/pkgconfig/absl_variant.pc
     - path: /usr/lib/pkgconfig/absl_vlog_config_internal.pc
     - path: /usr/lib/pkgconfig/absl_vlog_is_on.pc
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/absl/abslConfig.cmake
+    - path: /usr/lib/cmake/absl/abslConfigVersion.cmake
+    - path: /usr/lib/cmake/absl/abslTargets-release.cmake
+    - path: /usr/lib/cmake/absl/abslTargets.cmake
+
+  static:
+    files:
+    - path: /usr/lib/libabsl_bad_any_cast_impl.a
+    - path: /usr/lib/libabsl_bad_optional_access.a
+    - path: /usr/lib/libabsl_bad_variant_access.a
+    - path: /usr/lib/libabsl_base.a
+    - path: /usr/lib/libabsl_city.a
+    - path: /usr/lib/libabsl_civil_time.a
+    - path: /usr/lib/libabsl_cord.a
+    - path: /usr/lib/libabsl_cord_internal.a
+    - path: /usr/lib/libabsl_cordz_functions.a
+    - path: /usr/lib/libabsl_cordz_handle.a
+    - path: /usr/lib/libabsl_cordz_info.a
+    - path: /usr/lib/libabsl_cordz_sample_token.a
+    - path: /usr/lib/libabsl_crc32c.a
+    - path: /usr/lib/libabsl_crc_cord_state.a
+    - path: /usr/lib/libabsl_crc_cpu_detect.a
+    - path: /usr/lib/libabsl_crc_internal.a
+    - path: /usr/lib/libabsl_debugging_internal.a
+    - path: /usr/lib/libabsl_decode_rust_punycode.a
+    - path: /usr/lib/libabsl_demangle_internal.a
+    - path: /usr/lib/libabsl_demangle_rust.a
+    - path: /usr/lib/libabsl_die_if_null.a
+    - path: /usr/lib/libabsl_examine_stack.a
+    - path: /usr/lib/libabsl_exponential_biased.a
+    - path: /usr/lib/libabsl_failure_signal_handler.a
+    - path: /usr/lib/libabsl_flags_commandlineflag.a
+    - path: /usr/lib/libabsl_flags_commandlineflag_internal.a
+    - path: /usr/lib/libabsl_flags_config.a
+    - path: /usr/lib/libabsl_flags_internal.a
+    - path: /usr/lib/libabsl_flags_marshalling.a
+    - path: /usr/lib/libabsl_flags_parse.a
+    - path: /usr/lib/libabsl_flags_private_handle_accessor.a
+    - path: /usr/lib/libabsl_flags_program_name.a
+    - path: /usr/lib/libabsl_flags_reflection.a
+    - path: /usr/lib/libabsl_flags_usage.a
+    - path: /usr/lib/libabsl_flags_usage_internal.a
+    - path: /usr/lib/libabsl_graphcycles_internal.a
+    - path: /usr/lib/libabsl_hash.a
+    - path: /usr/lib/libabsl_hashtablez_sampler.a
+    - path: /usr/lib/libabsl_int128.a
+    - path: /usr/lib/libabsl_kernel_timeout_internal.a
+    - path: /usr/lib/libabsl_leak_check.a
+    - path: /usr/lib/libabsl_log_entry.a
+    - path: /usr/lib/libabsl_log_flags.a
+    - path: /usr/lib/libabsl_log_globals.a
+    - path: /usr/lib/libabsl_log_initialize.a
+    - path: /usr/lib/libabsl_log_internal_check_op.a
+    - path: /usr/lib/libabsl_log_internal_conditions.a
+    - path: /usr/lib/libabsl_log_internal_fnmatch.a
+    - path: /usr/lib/libabsl_log_internal_format.a
+    - path: /usr/lib/libabsl_log_internal_globals.a
+    - path: /usr/lib/libabsl_log_internal_log_sink_set.a
+    - path: /usr/lib/libabsl_log_internal_message.a
+    - path: /usr/lib/libabsl_log_internal_nullguard.a
+    - path: /usr/lib/libabsl_log_internal_proto.a
+    - path: /usr/lib/libabsl_log_internal_structured_proto.a
+    - path: /usr/lib/libabsl_log_severity.a
+    - path: /usr/lib/libabsl_log_sink.a
+    - path: /usr/lib/libabsl_low_level_hash.a
+    - path: /usr/lib/libabsl_malloc_internal.a
+    - path: /usr/lib/libabsl_periodic_sampler.a
+    - path: /usr/lib/libabsl_poison.a
+    - path: /usr/lib/libabsl_random_distributions.a
+    - path: /usr/lib/libabsl_random_internal_distribution_test_util.a
+    - path: /usr/lib/libabsl_random_internal_platform.a
+    - path: /usr/lib/libabsl_random_internal_pool_urbg.a
+    - path: /usr/lib/libabsl_random_internal_randen.a
+    - path: /usr/lib/libabsl_random_internal_randen_hwaes.a
+    - path: /usr/lib/libabsl_random_internal_randen_hwaes_impl.a
+    - path: /usr/lib/libabsl_random_internal_randen_slow.a
+    - path: /usr/lib/libabsl_random_internal_seed_material.a
+    - path: /usr/lib/libabsl_random_seed_gen_exception.a
+    - path: /usr/lib/libabsl_random_seed_sequences.a
+    - path: /usr/lib/libabsl_raw_hash_set.a
+    - path: /usr/lib/libabsl_raw_logging_internal.a
+    - path: /usr/lib/libabsl_scoped_set_env.a
+    - path: /usr/lib/libabsl_spinlock_wait.a
+    - path: /usr/lib/libabsl_stacktrace.a
+    - path: /usr/lib/libabsl_status.a
+    - path: /usr/lib/libabsl_statusor.a
+    - path: /usr/lib/libabsl_str_format_internal.a
+    - path: /usr/lib/libabsl_strerror.a
+    - path: /usr/lib/libabsl_string_view.a
+    - path: /usr/lib/libabsl_strings.a
+    - path: /usr/lib/libabsl_strings_internal.a
+    - path: /usr/lib/libabsl_symbolize.a
+    - path: /usr/lib/libabsl_synchronization.a
+    - path: /usr/lib/libabsl_throw_delegate.a
+    - path: /usr/lib/libabsl_time.a
+    - path: /usr/lib/libabsl_time_zone.a
+    - path: /usr/lib/libabsl_tracing_internal.a
+    - path: /usr/lib/libabsl_utf8_for_code_point.a
+    - path: /usr/lib/libabsl_vlog_config_internal.a

@@ -3,11 +3,12 @@ package:
   name: GNU Compiler Collection
   slug: gcc
   namespace: bootstrap/phase1
-  bootstrap: true
   version: 13.2.0
   description: The GNU Compiler Collection includes front ends for C, C++, Objective-C, Fortran, Ada, Go, and D, as well as libraries for these languages.
   homepage: https://gcc.gnu.org/
   stable_checksum: false
+  bootstrap: true
+
 sources:
 - name: gcc
   url: https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.xz
@@ -27,6 +28,7 @@ sources:
 - name: mpc
   url: https://ftp.gnu.org/gnu/mpc/mpc-1.3.1.tar.gz
   sha256: ab642492f5cf882b74aa0cb730cd410a81edcdbec895183ce930e706c1c759b8
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
@@ -62,7 +64,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/bzip2/1.0.8/bundles/dev
 - name: binutils
   commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
+
 build:
+  profile: [66815:5968, 265785:14587, 599972:22491, 998908:23398, 1328719:63063, 1659880:91523, 1991631:119838, 2486975:228977, 2984052:277458, 3315609:283671]
+
   script: |
     mkdir -p ${WORK_DIR}/{build,mpfr,gmp,mpc}
     tar --no-same-owner -xf ${SOURCE_gcc} -C "${WORK_DIR}" --strip-components=1
@@ -115,74 +120,48 @@ build:
       usr/lib/libitm.a usr/lib/libstdc++.a usr/lib/libstdc++exp.a usr/lib/libstdc++fs.a usr/lib/libsupc++.a; do
       strip --strip-debug ${OUT_DIR}/${F}
     done
+
 bundles:
   dev:
   - bin
-  - static
   - dev
   - lib
+  - static
+
 outputs:
-  static:
+  bin:
     files:
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/libgcc.a
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/libgcc_eh.a
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/libgcov.a
-    - path: /usr/lib/libitm.a
-    - path: /usr/lib/libstdc++.a
-    - path: /usr/lib/libstdc++exp.a
-    - path: /usr/lib/libstdc++fs.a
-    - path: /usr/lib/libsupc++.a
-  lib:
-    files:
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtbegin.o
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtbeginS.o
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtbeginT.o
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtend.o
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtendS.o
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtfastmath.o
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtprec32.o
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtprec64.o
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtprec80.o
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include-fixed/README
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include-fixed/pthread.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/fixinc_list
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/gsyslimits.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/macro_list
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/mkheaders.conf
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/gtype.state
-    - path: /usr/lib/libgcc_s.so
-    - path: /usr/lib/libgcc_s.so.1
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-    - path: /usr/lib/libitm.so
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-    - path: /usr/lib/libitm.so.1
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-    - path: /usr/lib/libitm.so.1.0.0
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-    - path: /usr/lib/libitm.spec
-    - path: /usr/lib/libstdc++.so
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libstdc++.so.6
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libstdc++.so.6.0.32
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libstdc++.so.6.0.32-gdb.py
-    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/liblto_plugin.so
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
+    - path: /usr/bin/c++
+    - path: /usr/bin/cc
+    - path: /usr/bin/cpp
+    - path: /usr/bin/g++
+    - path: /usr/bin/gcc
+    - path: /usr/bin/gcc-ar
+    - path: /usr/bin/gcc-nm
+    - path: /usr/bin/gcc-ranlib
+    - path: /usr/bin/gcov
+    - path: /usr/bin/gcov-dump
+    - path: /usr/bin/gcov-tool
+    - path: /usr/bin/lto-dump
+    - path: /usr/bin/x86_64-2nex-linux-gnu-c++
+    - path: /usr/bin/x86_64-2nex-linux-gnu-g++
+    - path: /usr/bin/x86_64-2nex-linux-gnu-gcc
+    - path: /usr/bin/x86_64-2nex-linux-gnu-gcc-13.2.0
+    - path: /usr/bin/x86_64-2nex-linux-gnu-gcc-ar
+    - path: /usr/bin/x86_64-2nex-linux-gnu-gcc-nm
+    - path: /usr/bin/x86_64-2nex-linux-gnu-gcc-ranlib
+    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/cc1
+    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/cc1plus
+    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/collect2
+    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/g++-mapper-server
+    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/fixinc.sh
+    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/fixincl
+    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/mkheaders
+    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/mkinstalldirs
+    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/lto-wrapper
+    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/lto1
+    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/gengtype
+
   dev:
     files:
     - path: /usr/include/c++/13.2.0/algorithm
@@ -449,8 +428,8 @@ outputs:
     - path: /usr/include/c++/13.2.0/experimental/bits/simd_neon.h
     - path: /usr/include/c++/13.2.0/experimental/bits/simd_ppc.h
     - path: /usr/include/c++/13.2.0/experimental/bits/simd_scalar.h
-    - path: /usr/include/c++/13.2.0/experimental/bits/simd_x86.h
     - path: /usr/include/c++/13.2.0/experimental/bits/simd_x86_conversions.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/simd_x86.h
     - path: /usr/include/c++/13.2.0/experimental/bits/string_view.tcc
     - path: /usr/include/c++/13.2.0/experimental/buffer
     - path: /usr/include/c++/13.2.0/experimental/chrono
@@ -1007,25 +986,18 @@ outputs:
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/amxint8intrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/amxtileintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx2intrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx5124fmapsintrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx5124vnniwintrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512bf16intrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512bf16vlintrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512bitalgintrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512bwintrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512cdintrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512dqintrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512erintrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512fintrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512fp16intrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512fp16vlintrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512ifmaintrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512ifmavlintrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512pfintrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512vbmi2intrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512vbmi2vlintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512vbmi2intrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512vbmiintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512vbmivlintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512cdintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512bf16vlintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512bf16intrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512pfintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512ifmaintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512ifmavlintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512fintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512bitalgintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512vlbwintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512vldqintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512vlintrin.h
@@ -1033,8 +1005,15 @@ outputs:
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512vnnivlintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512vp2intersectintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512vp2intersectvlintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512fp16vlintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512fp16intrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512vpopcntdqintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512vpopcntdqvlintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512dqintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512erintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx512bwintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx5124fmapsintrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avx5124vnniwintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avxifmaintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avxintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/avxneconvertintrin.h
@@ -1110,8 +1089,8 @@ outputs:
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/waitpkgintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/wbnoinvdintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/wmmintrin.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/x86gprintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/x86intrin.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/x86gprintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/xmmintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/xopintrin.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include/xsavecintrin.h
@@ -1178,10 +1157,10 @@ outputs:
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/include/config/i386/biarch64.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/include/config/i386/gnu-user-common.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/include/config/i386/gnu-user64.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/include/config/i386/i386.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/include/config/i386/i386-isa.def
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/include/config/i386/i386-opts.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/include/config/i386/i386-protos.h
-    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/include/config/i386/i386.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/include/config/i386/linux-common.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/include/config/i386/linux64.h
     - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/include/config/i386/stringop.def
@@ -1602,147 +1581,44 @@ outputs:
     - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/__init__.py
     - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/printers.py
     - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/xmethods.py
-  bin:
-    files:
-    - path: /usr/bin/c++
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/cc
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/cpp
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/g++
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gcc
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gcc-ar
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gcc-nm
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gcc-ranlib
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gcov
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gcov-dump
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gcov-tool
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/lto-dump
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/x86_64-2nex-linux-gnu-c++
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/x86_64-2nex-linux-gnu-g++
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/x86_64-2nex-linux-gnu-gcc
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/x86_64-2nex-linux-gnu-gcc-13.2.0
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/x86_64-2nex-linux-gnu-gcc-ar
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/x86_64-2nex-linux-gnu-gcc-nm
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/x86_64-2nex-linux-gnu-gcc-ranlib
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/cc1
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/cc1plus
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/collect2
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/g++-mapper-server
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/fixinc.sh
-    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/fixincl
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/mkheaders
-    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/mkinstalldirs
-    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/lto-wrapper
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/lto1
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/gengtype
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
 
-resolution:
-  /bootstrap/usr/lib/libm.so.6: bootstrap_tools
-  /bootstrap/usr/lib/libc.so.6: bootstrap_tools
-  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools
+  lib:
+    files:
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtbegin.o
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtbeginS.o
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtbeginT.o
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtend.o
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtendS.o
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtfastmath.o
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtprec32.o
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtprec64.o
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/crtprec80.o
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include-fixed/README
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/include-fixed/pthread.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/fixinc_list
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/gsyslimits.h
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/macro_list
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/install-tools/mkheaders.conf
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/plugin/gtype.state
+    - path: /usr/lib/libgcc_s.so
+    - path: /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libitm.so
+    - path: /usr/lib/libitm.so.1
+    - path: /usr/lib/libitm.so.1.0.0
+    - path: /usr/lib/libitm.spec
+    - path: /usr/lib/libstdc++.so
+    - path: /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libstdc++.so.6.0.32
+    - path: /usr/lib/libstdc++.so.6.0.32-gdb.py
+    - path: /usr/libexec/gcc/x86_64-2nex-linux-gnu/13.2.0/liblto_plugin.so
+
+  static:
+    files:
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/libgcc.a
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/libgcc_eh.a
+    - path: /usr/lib/gcc/x86_64-2nex-linux-gnu/13.2.0/libgcov.a
+    - path: /usr/lib/libitm.a
+    - path: /usr/lib/libstdc++.a
+    - path: /usr/lib/libstdc++exp.a
+    - path: /usr/lib/libstdc++fs.a
+    - path: /usr/lib/libsupc++.a

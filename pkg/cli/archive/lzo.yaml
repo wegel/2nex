@@ -3,14 +3,16 @@ package:
   name: LZO
   slug: lzo
   namespace: cli/archive
-  version: '2.10'
+  version: "2.10"
   description: Data compression library with very fast (de)compression
   homepage: http://www.oberhumer.com/opensource/lzo/
   checksum: 2af00787975ef41e1ea3c9855efabc6e57a0070509f65660ee467a68b37193c0
+
 sources:
 - name: lzo
   url: https://www.oberhumer.com/opensource/lzo/download/lzo-2.10.tar.gz
   sha256: c0f892943208266f9b6543b3ae308fab6284c5c90e627931446fb49b4221a072
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
@@ -58,48 +60,40 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
 - name: ncurses
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
-build:
-  script: 'tar --no-same-owner -xf ${SOURCE_lzo} -C "${WORK_DIR}" --strip-components=1
 
+build:
+  profile: [4146:851, 8262:3063, 12370:4288, 16501:4896, 18197:4916]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_lzo} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
     # Configure
-
     ./configure --prefix=/usr --enable-shared --disable-static
 
-
     # Build
-
     make
 
-
     # Install
-
     make DESTDIR="${OUT_DIR}" install
 
-
     # Set consistent timestamps for reproducible builds
-
-    find "${OUT_DIR}" -exec touch -d ''2024-01-01T00:00:00+00:00'' {} \;
-
-    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers
-    +all {} \; || true
-
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
-  full:
-  - lib
-  - dev
   dev:
-  - lib
   - dev
+  - lib
+
+  full:
+  - dev
+  - lib
+
 outputs:
   dev:
     files:
-    - path: /usr/include/lzo/lzo1.h
     - path: /usr/include/lzo/lzo1a.h
     - path: /usr/include/lzo/lzo1b.h
     - path: /usr/include/lzo/lzo1c.h
@@ -107,6 +101,7 @@ outputs:
     - path: /usr/include/lzo/lzo1x.h
     - path: /usr/include/lzo/lzo1y.h
     - path: /usr/include/lzo/lzo1z.h
+    - path: /usr/include/lzo/lzo1.h
     - path: /usr/include/lzo/lzo2a.h
     - path: /usr/include/lzo/lzo_asm.h
     - path: /usr/include/lzo/lzoconf.h
@@ -114,6 +109,7 @@ outputs:
     - path: /usr/include/lzo/lzoutil.h
     - path: /usr/lib/liblzo2.la
     - path: /usr/lib/pkgconfig/lzo2.pc
+
   doc:
     files:
     - path: /usr/share/doc/lzo/AUTHORS
@@ -123,6 +119,7 @@ outputs:
     - path: /usr/share/doc/lzo/LZOAPI.TXT
     - path: /usr/share/doc/lzo/NEWS
     - path: /usr/share/doc/lzo/THANKS
+
   lib:
     files:
     - path: /usr/lib/liblzo2.so

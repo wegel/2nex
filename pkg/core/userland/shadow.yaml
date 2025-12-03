@@ -7,6 +7,7 @@ package:
   description: Shadow password file utilities
   homepage: https://github.com/shadow-maint/shadow
   checksum: 47224c697da95a40fc8d24c958fe613bb8e35d2dd31703c98cf5152ec80b1f11
+
 sources:
 - name: shadow
   url: https://github.com/shadow-maint/shadow/releases/download/4.15.1/shadow-4.15.1.tar.xz
@@ -20,6 +21,7 @@ sources:
 - name: 0003-Add-Arch-Linux-defaults-for-login.defs.patch
   url: https://gitlab.archlinux.org/archlinux/packaging/packages/shadow/-/raw/e8ce898b2b59739cea8e8e5a94cf9e2993f26a0a/0003-Add-Arch-Linux-defaults-for-login.defs.patch
   sha256: 11549cd64a218332dfa712853bb4618c58f8c1c09d7fbc90e2323e0c7bae3bf2
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -75,7 +77,10 @@ dependencies:
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
 - name: libxcrypt
   commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
+
 build:
+  profile: [4147:677, 8267:2403, 12373:4229, 16553:5492, 24841:7344, 28977:7418, 33092:7493, 41342:7560, 49679:7620, 54794:20746]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_shadow} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -123,206 +128,213 @@ build:
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - dev
-  - static
-  - man
-  - lib
-  - locale
-  - conf
-  - man
-  - bin
   dev:
   - bin
-  - lib
-  - dev
   - conf
+  - dev
+  - lib
   - static
+
+  full:
+  - bin
+  - conf
+  - dev
+  - lib
+  - locale
+  - man
+  - man
+  - static
+
 outputs:
   bin:
     files:
     - path: /usr/bin/chage
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/chfn
       needs:
-      - /usr/lib/libcrypt.so.2
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
     - path: /usr/bin/chgpasswd
       needs:
-      - /usr/lib/libcrypt.so.2
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
     - path: /usr/bin/chpasswd
       needs:
-      - /usr/lib/libcrypt.so.2
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
     - path: /usr/bin/chsh
       needs:
-      - /usr/lib/libcrypt.so.2
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
     - path: /usr/bin/expiry
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/faillog
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/getsubids
       needs:
-      - /usr/lib/libsubid.so.4
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsubid.so.4
     - path: /usr/bin/gpasswd
       needs:
-      - /usr/lib/libcrypt.so.2
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
     - path: /usr/bin/groupadd
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/groupdel
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/groupmems
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/groupmod
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/grpck
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/grpconv
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/grpunconv
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/login
       needs:
-      - /usr/lib/libcrypt.so.2
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
     - path: /usr/bin/logoutd
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/newgidmap
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/newgrp
       needs:
-      - /usr/lib/libcrypt.so.2
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
     - path: /usr/bin/newuidmap
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/newusers
       needs:
-      - /usr/lib/libcrypt.so.2
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
     - path: /usr/bin/nologin
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/passwd
       needs:
-      - /usr/lib/libcrypt.so.2
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
     - path: /usr/bin/pwck
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/pwconv
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/pwunconv
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/sg
       needs:
-      - /usr/lib/libcrypt.so.2
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
     - path: /usr/bin/su
       needs:
-      - /usr/lib/libcrypt.so.2
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
     - path: /usr/bin/useradd
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libacl.so.1
       - /usr/lib/libattr.so.1
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/userdel
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/usermod
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libacl.so.1
       - /usr/lib/libattr.so.1
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/vigr
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/vipw
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
   conf:
     files:
     - path: /etc/limits
     - path: /etc/login.access
     - path: /etc/login.defs
+
   dev:
     files:
     - path: /usr/include/shadow/subid.h
     - path: /usr/lib/libsubid.la
+
   lib:
     files:
     - path: /usr/lib/libsubid.so
       needs:
-      - /usr/lib/libcrypt.so.2
       - /usr/lib/libacl.so.1
       - /usr/lib/libattr.so.1
       - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
     - path: /usr/lib/libsubid.so.4
       needs:
-      - /usr/lib/libcrypt.so.2
       - /usr/lib/libacl.so.1
       - /usr/lib/libattr.so.1
       - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
     - path: /usr/lib/libsubid.so.4.0.0
       needs:
-      - /usr/lib/libcrypt.so.2
       - /usr/lib/libacl.so.1
       - /usr/lib/libattr.so.1
       - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+
   locale:
     files:
     - path: /usr/share/locale/bs/LC_MESSAGES/shadow.mo
@@ -364,6 +376,7 @@ outputs:
     - path: /usr/share/locale/vi/LC_MESSAGES/shadow.mo
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/shadow.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/shadow.mo
+
   man:
     files:
     - path: /usr/share/man/cs/man1/expiry.1
@@ -801,14 +814,15 @@ outputs:
     - path: /usr/share/man/zh_TW/man8/useradd.8
     - path: /usr/share/man/zh_TW/man8/userdel.8
     - path: /usr/share/man/zh_TW/man8/usermod.8
+
   static:
     files:
     - path: /usr/lib/libsubid.a
 
 resolution:
-  /usr/lib/libsubid.so.4: '@self'
   /usr/lib/libacl.so.1: acl
-  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libattr.so.1: attr
-  /usr/lib/libcrypt.so.2: libxcrypt
+  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
+  /usr/lib/libcrypt.so.2: libxcrypt
+  /usr/lib/libsubid.so.4: self

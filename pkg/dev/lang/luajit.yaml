@@ -7,10 +7,12 @@ package:
   description: Just-In-Time Compiler for Lua (deterministic build for reproducibility)
   homepage: https://luajit.org/
   checksum: f65a1ac19636638fe53c5beccd5238fd243bc8179d5340e3189dc64417f3c4b6
+
 sources:
 - name: luajit
   url: https://github.com/luajit/luajit/archive/538a82133ad6fddfd0ca64de167c4aca3bc1a2da.tar.gz
   sha256: 7acbc36be8f21072422eb9a5e5fc468d0eaa55bec1b70260d651e845684621e2
+
 dependencies:
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
@@ -58,7 +60,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
 - name: strip-nondeterminism
   commit: x86_64/pkg/bootstrap/phase3/strip-nondeterminism/1.13.0/bundles/dev
+
 build:
+  profile: [4150:3217, 7866:3244]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_luajit} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -93,32 +98,36 @@ build:
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - bin
-  - lib
-  - dev
-  - misc
   dev:
   - bin
-  - lib
   - dev
+  - lib
   - misc
+
+  full:
+  - bin
+  - dev
+  - lib
+  - misc
+
 outputs:
   bin:
     files:
     - path: /usr/bin/luajit
       needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
     - path: /usr/bin/luajit-2.1.1741730670
       needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+
   dev:
     files:
     - path: /usr/include/luajit-2.1/lauxlib.h
@@ -128,41 +137,44 @@ outputs:
     - path: /usr/include/luajit-2.1/luajit.h
     - path: /usr/include/luajit-2.1/lualib.h
     - path: /usr/lib/pkgconfig/luajit.pc
+
   lib:
     files:
     - path: /usr/lib/libluajit-5.1.so
       needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
     - path: /usr/lib/libluajit-5.1.so.2
       needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
     - path: /usr/lib/libluajit-5.1.so.2.1.1741730670
       needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+
   man:
     files:
     - path: /usr/share/man/man1/luajit.1
+
   misc:
     files:
     - path: /usr/share/luajit-2.1/jit/bc.lua
     - path: /usr/share/luajit-2.1/jit/bcsave.lua
     - path: /usr/share/luajit-2.1/jit/dis_arm.lua
-    - path: /usr/share/luajit-2.1/jit/dis_arm64.lua
     - path: /usr/share/luajit-2.1/jit/dis_arm64be.lua
+    - path: /usr/share/luajit-2.1/jit/dis_arm64.lua
     - path: /usr/share/luajit-2.1/jit/dis_mips.lua
-    - path: /usr/share/luajit-2.1/jit/dis_mips64.lua
-    - path: /usr/share/luajit-2.1/jit/dis_mips64el.lua
-    - path: /usr/share/luajit-2.1/jit/dis_mips64r6.lua
     - path: /usr/share/luajit-2.1/jit/dis_mips64r6el.lua
+    - path: /usr/share/luajit-2.1/jit/dis_mips64r6.lua
+    - path: /usr/share/luajit-2.1/jit/dis_mips64el.lua
+    - path: /usr/share/luajit-2.1/jit/dis_mips64.lua
     - path: /usr/share/luajit-2.1/jit/dis_mipsel.lua
     - path: /usr/share/luajit-2.1/jit/dis_ppc.lua
     - path: /usr/share/luajit-2.1/jit/dis_x64.lua
@@ -172,12 +184,13 @@ outputs:
     - path: /usr/share/luajit-2.1/jit/v.lua
     - path: /usr/share/luajit-2.1/jit/vmdef.lua
     - path: /usr/share/luajit-2.1/jit/zone.lua
+
   static:
     files:
     - path: /usr/lib/libluajit-5.1.a
 
 resolution:
   /usr/lib/libgcc_s.so.1: gcc
-  /usr/lib/libm.so.6: glibc
-  /usr/lib/libc.so.6: glibc
   /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc

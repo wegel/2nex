@@ -7,10 +7,12 @@ package:
   description: A portable foreign-function interface library.
   homepage: https://github.com/libffi/libffi
   checksum: 8f9b26ad177aece8b53c788316db47111caef9c29940552ec64170828b6e0797
+
 sources:
 - name: libffi
   url: https://github.com/libffi/libffi/releases/download/v3.4.6/libffi-3.4.6.tar.gz
   sha256: b0dea9df23c863a7a50e825440f3ebffabd65df1497108e5d437747843895a4e
+
 dependencies:
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
@@ -56,7 +58,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+
 build:
+  profile: [4149:1503, 8495:3479, 12888:3483, 17123:3521, 21376:3541, 25651:4546, 29826:4755, 30806:4824]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -69,37 +74,33 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
+  dev:
+  - dev
+  - lib
   - static
+
+  full:
   - dev
   - info
+  - lib
   - man
-  - lib
-  dev:
-  - lib
-  - dev
   - static
+
 outputs:
-  static:
-    files:
-    - path: /usr/lib/libffi.a
   dev:
     files:
     - path: /usr/include/ffi.h
     - path: /usr/include/ffitarget.h
     - path: /usr/lib/libffi.la
     - path: /usr/lib/pkgconfig/libffi.pc
+
   info:
     files:
     - path: /usr/share/info/dir
     - path: /usr/share/info/libffi.info
-  man:
-    files:
-    - path: /usr/share/man/man3/ffi.3
-    - path: /usr/share/man/man3/ffi_call.3
-    - path: /usr/share/man/man3/ffi_prep_cif.3
-    - path: /usr/share/man/man3/ffi_prep_cif_var.3
+
   lib:
     files:
     - path: /usr/lib/libffi.so
@@ -111,6 +112,17 @@ outputs:
     - path: /usr/lib/libffi.so.8.1.4
       needs:
       - /usr/lib/libc.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man3/ffi.3
+    - path: /usr/share/man/man3/ffi_call.3
+    - path: /usr/share/man/man3/ffi_prep_cif.3
+    - path: /usr/share/man/man3/ffi_prep_cif_var.3
+
+  static:
+    files:
+    - path: /usr/lib/libffi.a
 
 resolution:
   /usr/lib/libc.so.6: glibc

@@ -3,14 +3,16 @@ package:
   name: Gzip
   slug: gzip
   namespace: cli/archive
-  version: '1.13'
+  version: "1.13"
   description: GNU compression utility
   homepage: https://www.gnu.org/software/gzip/
   checksum: ea7d5b06401433c2bc602abbcfcb19869c5ca57e190cfb2ce488380ab16c86d0
+
 sources:
 - name: gzip
   url: https://ftp.gnu.org/gnu/gzip/gzip-1.13.tar.xz
   sha256: 7454eb6935db17c6655576c2e1b0fabefd38b4d0936e0f87f48cd062ce91a057
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
@@ -56,7 +58,10 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: less
   commit: x86_64/pkg/cli/text/less/643/bundles/dev
+
 build:
+  profile: [4121:1601, 8247:5063, 12389:6749, 16508:8226, 20609:8922, 21160:8985]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -67,18 +72,42 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - info
-  - man
-  - bin
   dev:
   - bin
+
+  full:
+  - bin
+  - info
+  - man
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/gunzip
+    - path: /usr/bin/gzexe
+    - path: /usr/bin/gzip
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/uncompress
+    - path: /usr/bin/zcat
+    - path: /usr/bin/zcmp
+    - path: /usr/bin/zdiff
+    - path: /usr/bin/zegrep
+    - path: /usr/bin/zfgrep
+    - path: /usr/bin/zforce
+    - path: /usr/bin/zgrep
+    - path: /usr/bin/zless
+    - path: /usr/bin/zmore
+    - path: /usr/bin/znew
+
   info:
     files:
     - path: /usr/share/info/dir
     - path: /usr/share/info/gzip.info
+
   man:
     files:
     - path: /usr/share/man/man1/gunzip.1
@@ -92,26 +121,7 @@ outputs:
     - path: /usr/share/man/man1/zless.1
     - path: /usr/share/man/man1/zmore.1
     - path: /usr/share/man/man1/znew.1
-  bin:
-    files:
-    - path: /usr/bin/gunzip
-    - path: /usr/bin/gzexe
-    - path: /usr/bin/gzip
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/uncompress
-    - path: /usr/bin/zcat
-    - path: /usr/bin/zcmp
-    - path: /usr/bin/zdiff
-    - path: /usr/bin/zegrep
-    - path: /usr/bin/zfgrep
-    - path: /usr/bin/zforce
-    - path: /usr/bin/zgrep
-    - path: /usr/bin/zless
-    - path: /usr/bin/zmore
-    - path: /usr/bin/znew
 
 resolution:
-  /usr/lib/libc.so.6: glibc
   /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

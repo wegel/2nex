@@ -3,14 +3,16 @@ package:
   name: Sed
   slug: sed
   namespace: cli/text
-  version: '4.9'
+  version: "4.9"
   description: A stream editor
   homepage: https://www.gnu.org/software/sed/
   checksum: 260964bdfc655f42777f637b9b368b4607960395c9486a27a2a8dd1bfc3fe38e
+
 sources:
 - name: sed
   url: https://ftp.gnu.org/gnu/sed/sed-4.9.tar.xz
   sha256: 6e226b732e1cd739464ad6862bd1a1aba42d7982922da7a53519631d24975181
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
@@ -60,36 +62,55 @@ dependencies:
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: acl
   commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+
 build:
-  script: "tar --no-same-owner -xf ${SOURCE_sed} -C \"${WORK_DIR}\" --strip-components=1\ncd ${WORK_DIR}\n./configure --prefix=/usr\n\nmake \nmake html\n\nmake DESTDIR=${OUT_DIR} install\ninstall -d -m755           ${OUT_DIR}/usr/share/doc/sed-4.9\ninstall -m644 doc/sed.html ${OUT_DIR}/usr/share/doc/sed-4.9\n\nfind \"${OUT_DIR}\" -exec touch -d \"2024-01-01T00:00:00+00:00\" {} \\;\n2nex_strip_binaries ${OUT_DIR}\n"
+  profile: [4102:2091, 8255:4906, 12355:8783, 16461:10442, 20585:16070, 24703:18043, 28850:19405, 32907:19690]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_sed} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    ./configure --prefix=/usr
+
+    make 
+    make html
+
+    make DESTDIR=${OUT_DIR} install
+    install -d -m755           ${OUT_DIR}/usr/share/doc/sed-4.9
+    install -m644 doc/sed.html ${OUT_DIR}/usr/share/doc/sed-4.9
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
 bundles:
   dev:
   - bin
   - locale
+
   full:
-  - man
-  - doc
   - bin
+  - doc
   - info
   - locale
+  - man
+
 outputs:
-  man:
-    files:
-    - path: /usr/share/man/man1/sed.1
-  doc:
-    files:
-    - path: /usr/share/doc/sed-4.9/sed.html
   bin:
     files:
     - path: /usr/bin/sed
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libacl.so.1
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
+
+  doc:
+    files:
+    - path: /usr/share/doc/sed-4.9/sed.html
+
   info:
     files:
     - path: /usr/share/info/dir
     - path: /usr/share/info/sed.info
+
   locale:
     files:
     - path: /usr/share/locale/af/LC_MESSAGES/sed.mo
@@ -133,7 +154,11 @@ outputs:
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/sed.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/sed.mo
 
+  man:
+    files:
+    - path: /usr/share/man/man1/sed.1
+
 resolution:
-  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libacl.so.1: acl
+  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc

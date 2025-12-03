@@ -7,10 +7,12 @@ package:
   description: GNU multiple precision arithmetic library
   homepage: https://gmplib.org
   checksum: 6ebdb7bae932da93bfc83d9f60d3c2c9c78554a55d9aff6cdcc316ad1f2991af
+
 sources:
 - name: gmp
   url: https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz
   sha256: a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -52,7 +54,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
 - name: binutils
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+
 build:
+  profile: [28977:11054, 110264:11188, 238950:11391, 398684:11646, 530986:13186, 666078:16067, 796269:17479, 997061:22339, 1196705:30254, 1325427:45829]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_gmp} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -75,60 +80,28 @@ build:
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - lib
+  dev:
   - dev
+  - lib
   - static
+
+  full:
+  - dev
   - doc
   - info
-  dev:
   - lib
-  - dev
   - static
+
 outputs:
-  lib:
-    files:
-    - path: /usr/lib/libgmp.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libgmp.so.10
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libgmp.so.10.5.0
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libgmpxx.so
-      needs:
-      - /usr/lib/libgmp.so.10
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libgmpxx.so.4
-      needs:
-      - /usr/lib/libgmp.so.10
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-    - path: /usr/lib/libgmpxx.so.4.7.0
-      needs:
-      - /usr/lib/libgmp.so.10
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
   dev:
     files:
     - path: /usr/include/gmp.h
     - path: /usr/include/gmpxx.h
     - path: /usr/lib/pkgconfig/gmp.pc
     - path: /usr/lib/pkgconfig/gmpxx.pc
-  static:
-    files:
-    - path: /usr/lib/libgmp.a
-    - path: /usr/lib/libgmpxx.a
+
   doc:
     files:
     - path: /usr/share/doc/gmp-6.3.0/gmp.html/ABI-and-ISA.html
@@ -277,6 +250,7 @@ outputs:
     - path: /usr/share/doc/gmp-6.3.0/gmp.html/Useful-Macros-and-Constants.html
     - path: /usr/share/doc/gmp-6.3.0/gmp.html/Variable-Conventions.html
     - path: /usr/share/doc/gmp-6.3.0/gmp.html/index.html
+
   info:
     files:
     - path: /usr/share/info/dir
@@ -284,9 +258,16 @@ outputs:
     - path: /usr/share/info/gmp.info-1
     - path: /usr/share/info/gmp.info-2
 
-resolution:
-  /usr/lib/libgcc_s.so.1: gcc
-  /usr/lib/libstdc++.so.6: gcc
-  /usr/lib/libgmp.so.10: '@self'
-  /usr/lib/libc.so.6: glibc
-  /usr/lib/libm.so.6: glibc
+  lib:
+    files:
+    - path: /usr/lib/libgmp.so
+    - path: /usr/lib/libgmp.so.10
+    - path: /usr/lib/libgmp.so.10.5.0
+    - path: /usr/lib/libgmpxx.so
+    - path: /usr/lib/libgmpxx.so.4
+    - path: /usr/lib/libgmpxx.so.4.7.0
+
+  static:
+    files:
+    - path: /usr/lib/libgmp.a
+    - path: /usr/lib/libgmpxx.a

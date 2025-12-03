@@ -3,12 +3,17 @@ package:
   name: Findutils
   slug: findutils
   namespace: bootstrap/phase1
-  bootstrap: true
   version: 4.9.0
   description: The GNU versions of find utilities (find and xargs)
   homepage: https://www.gnu.org/software/findutils/
   stable_checksum: false
-  sha256: caa6d1599ac8c281eb58d8d09f0efd67fcbc1b6e7c36bad81b741cc2c5fc102c
+  bootstrap: true
+
+sources:
+- name: findutils
+  url: https://ftp.gnu.org/gnu/findutils/findutils-4.9.0.tar.xz
+  sha256: a2bfb8c09d436770edc59f50fa483e785b161a3b7b9d547573cb08065fd462fe
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
@@ -22,11 +27,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
 - name: file
   commit: x86_64/pkg/bootstrap/phase1/file/5.45/bundles/dev
-sources:
-- name: findutils
-  url: https://ftp.gnu.org/gnu/findutils/findutils-4.9.0.tar.xz
-  sha256: a2bfb8c09d436770edc59f50fa483e785b161a3b7b9d547573cb08065fd462fe
+
 build:
+  profile: [4110:2284, 8238:6299, 16497:11832, 24708:15208, 28856:16120, 37107:19593, 45381:27153, 53668:28345, 66182:28589, 70183:28757]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_findutils} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -41,11 +45,21 @@ build:
     rm -rf ${OUT_DIR}/usr/share/man ${OUT_DIR}/usr/share/info
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
 bundles:
   dev:
   - bin
   - locale
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/find
+    - path: /usr/bin/locate
+    - path: /usr/bin/updatedb
+    - path: /usr/bin/xargs
+    - path: /usr/libexec/frcode
+
   locale:
     files:
     - path: /usr/share/locale/be/LC_MESSAGES/findutils.mo
@@ -87,28 +101,3 @@ outputs:
     - path: /usr/share/locale/vi/LC_MESSAGES/findutils.mo
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/findutils.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/findutils.mo
-  bin:
-    files:
-    - path: /usr/bin/find
-      needs:
-      - /bootstrap/usr/lib/libm.so.6
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/locate
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/updatedb
-    - path: /usr/bin/xargs
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/frcode
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-
-resolution:
-  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools
-  /bootstrap/usr/lib/libc.so.6: bootstrap_tools
-  /bootstrap/usr/lib/libm.so.6: bootstrap_tools

@@ -7,6 +7,7 @@ package:
   description: Linux kernel with granular module outputs
   homepage: https://www.kernel.org/
   checksum: 1a5ef26131cb5635e4dbef4340e2c4a7cfc3594b2c4a46b3ebb781113c1b5abf
+
 sources:
 - name: kernel
   url: https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.58.tar.xz
@@ -14,6 +15,7 @@ sources:
 - name: config_fragment
   file: inputs_cache/kernel-config-fragment-6.12.58.txt
   sha256: 25eb7346618ca2543ba83d8e123bb830a37ae589af3e7303fe4f638efabe6b1d
+
 dependencies:
 - name: phase3
   commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
@@ -93,7 +95,10 @@ dependencies:
   commit: x86_64/pkg/dev/util/elfutils/0.191/bundles/dev
 - name: initramfs
   commit: x86_64/pkg/core/kernel/initramfs/1.0.0/bundles/full
+
 build:
+  profile: [8230:13736, 24703:29800, 49423:45611, 82349:64846, 111160:76508, 139930:92022, 164608:108193, 205902:129565, 247220:145606, 272997:160864]
+
   script: |
     set -eux
     tar --no-same-owner -xf ${SOURCE_kernel} -C "${WORK_DIR}"
@@ -139,7 +144,303 @@ build:
 
     # strip kernel modules with --strip-debug to preserve symbols needed by modprobe
     find "${OUT_DIR}" -name "*.ko" -exec strip --strip-debug {} \;
+
+bundles:
+  block-ahci:
+  - drv-block-ahci
+  - drv-block-core
+  - drv-scsi-core
+  - modules-meta
+
+  block-nvme:
+  - drv-block-nvme
+  - modules-meta
+
+  cloud:
+  - boot
+  - drv-gpu-core
+  - drv-gpu-virtio
+  - drv-net-core
+  - drv-net-virtio
+  - drv-virtio-core
+  - fs-btrfs
+  - fs-xfs
+  - modules-meta
+
+  desktop:
+  - boot
+  - drv-block-ahci
+  - drv-block-core
+  - drv-block-nvme
+  - drv-gpu-amd
+  - drv-gpu-core
+  - drv-gpu-intel
+  - drv-gpu-nouveau
+  - drv-net-core
+  - drv-net-intel
+  - drv-net-realtek
+  - drv-scsi-core
+  - drv-sound-core
+  - drv-sound-hda
+  - drv-usb-core
+  - drv-usb-hid
+  - drv-usb-host
+  - drv-usb-storage
+  - drv-wireless-core
+  - fs-btrfs
+  - fs-overlay
+  - fs-vfat
+  - modules-meta
+
+  ethernet-intel:
+  - drv-net-core
+  - drv-net-intel
+  - modules-meta
+
+  ethernet-realtek:
+  - drv-net-core
+  - drv-net-realtek
+  - modules-meta
+
+  gpu-amd:
+  - drv-gpu-amd
+  - drv-gpu-core
+  - modules-meta
+
+  gpu-intel:
+  - drv-gpu-core
+  - drv-gpu-intel
+  - modules-meta
+
+  gpu-nouveau:
+  - drv-gpu-core
+  - drv-gpu-nouveau
+  - modules-meta
+
+  minimal:
+  - boot
+  - modules-meta
+
+  server:
+  - boot
+  - drv-block-ahci
+  - drv-block-core
+  - drv-block-nvme
+  - drv-net-core
+  - drv-net-intel
+  - drv-net-realtek
+  - drv-scsi-core
+  - drv-usb-core
+  - drv-usb-host
+  - drv-usb-storage
+  - fs-btrfs
+  - fs-xfs
+  - modules-meta
+
+  usb-storage:
+  - drv-scsi-core
+  - drv-usb-core
+  - drv-usb-host
+  - drv-usb-storage
+  - modules-meta
+
 outputs:
+  boot:
+    files:
+    - path: /boot/System.map-6.12.58
+    - path: /boot/config-6.12.58
+    - path: /boot/vmlinuz-6.12.58
+
+  crypto-core:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/crypto/blake2b_generic.ko
+    - path: /usr/lib/modules/6.12.58/kernel/crypto/crc32_generic.ko
+    - path: /usr/lib/modules/6.12.58/kernel/crypto/xor.ko
+    - path: /usr/lib/modules/6.12.58/kernel/crypto/xxhash_generic.ko
+
+  drv-block-ahci:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/ata/ahci.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/ata/ata_piix.ko
+
+  drv-block-core:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/ata/libahci.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/cdrom/cdrom.ko
+
+  drv-block-misc:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/block/brd.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/block/loop.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/block/nbd.ko
+
+  drv-block-nvme:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/nvme/host/nvme-core.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/nvme/host/nvme.ko
+
+  drv-gpu-amd:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/amd/amdgpu/amdgpu.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/amd/amdxcp/amdxcp.ko
+
+  drv-gpu-core:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/display/drm_display_helper.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm_buddy.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm_exec.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm_gpuvm.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm_kms_helper.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm_shmem_helper.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm_suballoc_helper.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm_ttm_helper.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/scheduler/gpu-sched.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/ttm/ttm.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/i2c/algos/i2c-algo-bit.ko
+
+  drv-gpu-intel:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/i915/i915.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/platform/x86/mxm-wmi.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/thermal/intel/x86_pkg_temp_thermal.ko
+
+  drv-gpu-nouveau:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/nouveau/nouveau.ko
+
+  drv-gpu-virtio:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/virtio/virtio-gpu.ko
+
+  drv-net-core:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/mdio.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv4/netfilter/iptable_nat.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nf_log_syslog.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_LOG.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_MASQUERADE.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_addrtype.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_mark.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_nat.ko
+
+  drv-net-intel:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/ethernet/intel/e1000e/e1000e.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/ethernet/intel/e1000/e1000.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/ethernet/intel/igb/igb.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/ethernet/intel/ixgbe/ixgbe.ko
+
+  drv-net-realtek:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/ethernet/realtek/r8169.ko
+
+  drv-net-virtio:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/virtio_net.ko
+
+  drv-scsi-core:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/scsi/sd_mod.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/scsi/sg.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/scsi/sr_mod.ko
+
+  drv-sound-core:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/sound/core/seq/snd-seq-dummy.ko
+    - path: /usr/lib/modules/6.12.58/kernel/sound/core/seq/snd-seq.ko
+    - path: /usr/lib/modules/6.12.58/kernel/sound/core/snd-hrtimer.ko
+    - path: /usr/lib/modules/6.12.58/kernel/sound/core/snd-hwdep.ko
+    - path: /usr/lib/modules/6.12.58/kernel/sound/core/snd-pcm.ko
+    - path: /usr/lib/modules/6.12.58/kernel/sound/core/snd-seq-device.ko
+    - path: /usr/lib/modules/6.12.58/kernel/sound/core/snd-timer.ko
+    - path: /usr/lib/modules/6.12.58/kernel/sound/core/snd.ko
+    - path: /usr/lib/modules/6.12.58/kernel/sound/hda/snd-hda-core.ko
+    - path: /usr/lib/modules/6.12.58/kernel/sound/hda/snd-intel-dspcfg.ko
+    - path: /usr/lib/modules/6.12.58/kernel/sound/hda/snd-intel-sdw-acpi.ko
+    - path: /usr/lib/modules/6.12.58/kernel/sound/pci/hda/snd-hda-codec.ko
+    - path: /usr/lib/modules/6.12.58/kernel/sound/soundcore.ko
+
+  drv-sound-hda:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/sound/pci/hda/snd-hda-intel.ko
+
+  drv-usb-core:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/common/usb-common.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/core/usbcore.ko
+
+  drv-usb-hid:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/hid/hid-chicony.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/hid/hid-lg-g15.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/hid/hid-logitech.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/hid/hid-ntrig.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/hid/hid-samsung.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/hid/hid-sony.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/hid/usbhid/usbhid.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/class/usblp.ko
+
+  drv-usb-host:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/host/ehci-hcd.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/host/ehci-pci.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/host/ohci-hcd.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/host/ohci-pci.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/host/uhci-hcd.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/host/xhci-hcd.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/host/xhci-pci.ko
+
+  drv-usb-mon:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/mon/usbmon.ko
+
+  drv-usb-storage:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/storage/usb-storage.ko
+
+  drv-virtio-core:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/virtio/virtio_dma_buf.ko
+
+  drv-wireless-core:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/lib/crypto/libarc4.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/mac80211/mac80211.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/wireless/cfg80211.ko
+
+  fs-btrfs:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/fs/btrfs/btrfs.ko
+    - path: /usr/lib/modules/6.12.58/kernel/lib/raid6/raid6_pq.ko
+    - path: /usr/lib/modules/6.12.58/kernel/lib/zlib_deflate/zlib_deflate.ko
+    - path: /usr/lib/modules/6.12.58/kernel/lib/zstd/zstd_compress.ko
+
+  fs-efivarfs:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/fs/efivarfs/efivarfs.ko
+
+  fs-f2fs:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/fs/f2fs/f2fs.ko
+
+  fs-fuse:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/fs/fuse/fuse.ko
+
+  fs-overlay:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/fs/overlayfs/overlay.ko
+
+  fs-vfat:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/fs/fat/vfat.ko
+
+  fs-xfs:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/fs/xfs/xfs.ko
+    - path: /usr/lib/modules/6.12.58/kernel/lib/libcrc32c.ko
+
   modules-meta:
     files:
     - path: /usr/lib/modules/6.12.58/modules.alias
@@ -155,254 +456,3 @@ outputs:
     - path: /usr/lib/modules/6.12.58/modules.softdep
     - path: /usr/lib/modules/6.12.58/modules.symbols
     - path: /usr/lib/modules/6.12.58/modules.symbols.bin
-  drv-net-core:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/mdio.ko
-    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_addrtype.ko
-    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_LOG.ko
-    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_mark.ko
-    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_MASQUERADE.ko
-    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_nat.ko
-    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nf_log_syslog.ko
-    - path: /usr/lib/modules/6.12.58/kernel/net/ipv4/netfilter/iptable_nat.ko
-  drv-net-intel:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/ethernet/intel/e1000/e1000.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/ethernet/intel/e1000e/e1000e.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/ethernet/intel/igb/igb.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/ethernet/intel/ixgbe/ixgbe.ko
-  drv-net-realtek:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/ethernet/realtek/r8169.ko
-  drv-net-virtio:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/virtio_net.ko
-  drv-wireless-core:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/net/wireless/cfg80211.ko
-    - path: /usr/lib/modules/6.12.58/kernel/net/mac80211/mac80211.ko
-    - path: /usr/lib/modules/6.12.58/kernel/lib/crypto/libarc4.ko
-  drv-block-core:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/ata/libahci.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/cdrom/cdrom.ko
-  drv-block-ahci:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/ata/ahci.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/ata/ata_piix.ko
-  drv-block-nvme:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/nvme/host/nvme-core.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/nvme/host/nvme.ko
-  drv-block-misc:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/block/loop.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/block/nbd.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/block/brd.ko
-  drv-scsi-core:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/scsi/sd_mod.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/scsi/sr_mod.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/scsi/sg.ko
-  drv-gpu-core:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm_buddy.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/display/drm_display_helper.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm_exec.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm_gpuvm.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm_kms_helper.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm_shmem_helper.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm_suballoc_helper.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/drm_ttm_helper.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/scheduler/gpu-sched.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/ttm/ttm.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/i2c/algos/i2c-algo-bit.ko
-  drv-gpu-intel:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/i915/i915.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/platform/x86/mxm-wmi.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/thermal/intel/x86_pkg_temp_thermal.ko
-  drv-gpu-amd:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/amd/amdgpu/amdgpu.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/amd/amdxcp/amdxcp.ko
-  drv-gpu-nouveau:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/nouveau/nouveau.ko
-  drv-gpu-virtio:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/virtio/virtio-gpu.ko
-  drv-usb-core:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/core/usbcore.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/common/usb-common.ko
-  drv-usb-host:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/host/xhci-hcd.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/host/xhci-pci.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/host/ehci-hcd.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/host/ehci-pci.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/host/ohci-hcd.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/host/ohci-pci.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/host/uhci-hcd.ko
-  drv-usb-storage:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/storage/usb-storage.ko
-  drv-usb-hid:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/hid/usbhid/usbhid.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/hid/hid-chicony.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/hid/hid-lg-g15.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/hid/hid-logitech.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/hid/hid-ntrig.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/hid/hid-samsung.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/hid/hid-sony.ko
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/class/usblp.ko
-  drv-usb-mon:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/usb/mon/usbmon.ko
-  crypto-core:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/crypto/blake2b_generic.ko
-    - path: /usr/lib/modules/6.12.58/kernel/crypto/crc32_generic.ko
-    - path: /usr/lib/modules/6.12.58/kernel/crypto/xor.ko
-    - path: /usr/lib/modules/6.12.58/kernel/crypto/xxhash_generic.ko
-  fs-btrfs:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/lib/raid6/raid6_pq.ko
-    - path: /usr/lib/modules/6.12.58/kernel/lib/zstd/zstd_compress.ko
-    - path: /usr/lib/modules/6.12.58/kernel/lib/zlib_deflate/zlib_deflate.ko
-    - path: /usr/lib/modules/6.12.58/kernel/fs/btrfs/btrfs.ko
-  fs-xfs:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/lib/libcrc32c.ko
-    - path: /usr/lib/modules/6.12.58/kernel/fs/xfs/xfs.ko
-  fs-f2fs:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/fs/f2fs/f2fs.ko
-  fs-vfat:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/fs/fat/vfat.ko
-  fs-efivarfs:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/fs/efivarfs/efivarfs.ko
-  fs-overlay:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/fs/overlayfs/overlay.ko
-  fs-fuse:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/fs/fuse/fuse.ko
-  drv-sound-core:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/sound/soundcore.ko
-    - path: /usr/lib/modules/6.12.58/kernel/sound/core/snd.ko
-    - path: /usr/lib/modules/6.12.58/kernel/sound/core/snd-hwdep.ko
-    - path: /usr/lib/modules/6.12.58/kernel/sound/core/snd-pcm.ko
-    - path: /usr/lib/modules/6.12.58/kernel/sound/core/snd-timer.ko
-    - path: /usr/lib/modules/6.12.58/kernel/sound/core/snd-hrtimer.ko
-    - path: /usr/lib/modules/6.12.58/kernel/sound/core/snd-seq-device.ko
-    - path: /usr/lib/modules/6.12.58/kernel/sound/core/seq/snd-seq.ko
-    - path: /usr/lib/modules/6.12.58/kernel/sound/core/seq/snd-seq-dummy.ko
-    - path: /usr/lib/modules/6.12.58/kernel/sound/hda/snd-hda-core.ko
-    - path: /usr/lib/modules/6.12.58/kernel/sound/hda/snd-intel-dspcfg.ko
-    - path: /usr/lib/modules/6.12.58/kernel/sound/hda/snd-intel-sdw-acpi.ko
-    - path: /usr/lib/modules/6.12.58/kernel/sound/pci/hda/snd-hda-codec.ko
-  drv-sound-hda:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/sound/pci/hda/snd-hda-intel.ko
-  drv-virtio-core:
-    files:
-    - path: /usr/lib/modules/6.12.58/kernel/drivers/virtio/virtio_dma_buf.ko
-  boot:
-    files:
-    - path: /boot/vmlinuz-6.12.58
-    - path: /boot/System.map-6.12.58
-    - path: /boot/config-6.12.58
-bundles:
-  minimal:
-  - boot
-  - modules-meta
-  ethernet-intel:
-  - drv-net-intel
-  - drv-net-core
-  - modules-meta
-  ethernet-realtek:
-  - drv-net-realtek
-  - drv-net-core
-  - modules-meta
-  block-ahci:
-  - drv-block-ahci
-  - drv-block-core
-  - drv-scsi-core
-  - modules-meta
-  block-nvme:
-  - drv-block-nvme
-  - modules-meta
-  gpu-intel:
-  - drv-gpu-intel
-  - drv-gpu-core
-  - modules-meta
-  gpu-amd:
-  - drv-gpu-amd
-  - drv-gpu-core
-  - modules-meta
-  gpu-nouveau:
-  - drv-gpu-nouveau
-  - drv-gpu-core
-  - modules-meta
-  usb-storage:
-  - drv-usb-storage
-  - drv-usb-host
-  - drv-usb-core
-  - drv-scsi-core
-  - modules-meta
-  cloud:
-  - boot
-  - drv-net-virtio
-  - drv-net-core
-  - drv-gpu-virtio
-  - drv-gpu-core
-  - drv-virtio-core
-  - fs-xfs
-  - fs-btrfs
-  - modules-meta
-  server:
-  - boot
-  - drv-net-intel
-  - drv-net-realtek
-  - drv-net-core
-  - drv-block-ahci
-  - drv-block-nvme
-  - drv-block-core
-  - drv-scsi-core
-  - drv-usb-storage
-  - drv-usb-host
-  - drv-usb-core
-  - fs-xfs
-  - fs-btrfs
-  - modules-meta
-  desktop:
-  - boot
-  - drv-net-intel
-  - drv-net-realtek
-  - drv-wireless-core
-  - drv-net-core
-  - drv-block-ahci
-  - drv-block-nvme
-  - drv-block-core
-  - drv-scsi-core
-  - drv-gpu-intel
-  - drv-gpu-amd
-  - drv-gpu-nouveau
-  - drv-gpu-core
-  - drv-usb-storage
-  - drv-usb-host
-  - drv-usb-hid
-  - drv-usb-core
-  - drv-sound-hda
-  - drv-sound-core
-  - fs-btrfs
-  - fs-vfat
-  - fs-overlay
-  - modules-meta

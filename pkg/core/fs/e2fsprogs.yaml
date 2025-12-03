@@ -6,12 +6,32 @@ package:
   version: 1.47.0
   description: Utilities for managing ext2, ext3, and ext4 filesystems
   homepage: http://e2fsprogs.sourceforge.net/
-  checksum: 2e3574e42eab0eafea61b7df889ccff3611338cfc048fb55702fa16cf24a6990
+  checksum: e5114ff39852ebc332a9d2db69a4f907463b4ed06b1a9e938a593b59ea5ce46b
+
 sources:
 - name: e2fsprogs
   url: https://downloads.sourceforge.net/project/e2fsprogs/e2fsprogs/v1.47.0/e2fsprogs-1.47.0.tar.gz
   sha256: 6667afde56eef0c6af26684974400e4d2288ea49e9441bf5e6229195d51a3578
+
 dependencies:
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
 - name: mpc
   commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
 - name: phase3
@@ -28,8 +48,8 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/pkgconf/2.2.0/bundles/dev
 - name: binutils
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: None
-  commit: x86_64/gmp/6.3.0/bootstrap/phase3/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
 - name: mpfr
   commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
 - name: attr
@@ -46,27 +66,47 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/ncurses/6.4-20230520/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: util_linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+
 build:
-  script: "tar --no-same-owner -xf ${SOURCE0} -C \"${WORK_DIR}\" --strip-components=1\n\
-    cd ${WORK_DIR}\n\nmkdir -v build\ncd       build\n\n../configure --prefix=/usr\
-    \           \\\n         --sysconfdir=/etc       \\\n         --enable-elf-shlibs\
-    \     \\\n         --disable-libblkid      \\\n         --disable-libuuid    \
-    \   \\\n         --disable-uuidd         \\\n         --disable-fsck\n\nmake\n\
-    make DESTDIR=$OUT_DIR install\n\nfind \"${OUT_DIR}\" -exec touch -d \"2024-01-01T00:00:00+00:00\"\
-    \ {} \\;\n2nex_strip_binaries ${OUT_DIR}\n"
+  profile: [4115:866, 8223:2989, 12346:4571, 16451:5159, 20560:6754, 24660:7839, 28773:8908, 32895:9026, 41124:9406, 41487:9526]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    mkdir -v build
+    cd       build
+
+    ../configure --prefix=/usr           \
+             --sysconfdir=/etc       \
+             --enable-elf-shlibs     \
+             --disable-libblkid      \
+             --disable-libuuid       \
+             --disable-uuidd         \
+             --disable-fsck
+
+    make
+    make DESTDIR=$OUT_DIR install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - info
-  - bin
-  - man
-  - misc
-  - locale
-  - lib
-  - dev
   dev:
   - bin
-  - lib
   - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - lib
+  - locale
+  - man
+  - misc
+
 outputs:
   bin:
     files:
@@ -77,16 +117,16 @@ outputs:
     - path: /usr/sbin/badblocks
     - path: /usr/sbin/debugfs
     - path: /usr/sbin/dumpe2fs
-    - path: /usr/sbin/e2freefrag
-    - path: /usr/sbin/e2fsck
-    - path: /usr/sbin/e2image
     - path: /usr/sbin/e2label
-    - path: /usr/sbin/e2mmpstatus
     - path: /usr/sbin/e2scrub
     - path: /usr/sbin/e2scrub_all
+    - path: /usr/sbin/e2image
+    - path: /usr/sbin/e2mmpstatus
     - path: /usr/sbin/e2undo
-    - path: /usr/sbin/e4crypt
+    - path: /usr/sbin/e2freefrag
+    - path: /usr/sbin/e2fsck
     - path: /usr/sbin/e4defrag
+    - path: /usr/sbin/e4crypt
     - path: /usr/sbin/filefrag
     - path: /usr/sbin/fsck.ext2
     - path: /usr/sbin/fsck.ext3
@@ -99,10 +139,12 @@ outputs:
     - path: /usr/sbin/mklost+found
     - path: /usr/sbin/resize2fs
     - path: /usr/sbin/tune2fs
+
   conf:
     files:
     - path: /etc/e2scrub.conf
     - path: /etc/mke2fs.conf
+
   dev:
     files:
     - path: /usr/include/com_err.h
@@ -113,8 +155,8 @@ outputs:
     - path: /usr/include/ext2fs/ext2_ext_attr.h
     - path: /usr/include/ext2fs/ext2_fs.h
     - path: /usr/include/ext2fs/ext2_io.h
-    - path: /usr/include/ext2fs/ext2_types.h
     - path: /usr/include/ext2fs/ext2fs.h
+    - path: /usr/include/ext2fs/ext2_types.h
     - path: /usr/include/ext2fs/ext3_extents.h
     - path: /usr/include/ext2fs/hashmap.h
     - path: /usr/include/ext2fs/qcow2.h
@@ -125,6 +167,23 @@ outputs:
     - path: /usr/lib/pkgconfig/e2p.pc
     - path: /usr/lib/pkgconfig/ext2fs.pc
     - path: /usr/lib/pkgconfig/ss.pc
+
+  lib:
+    files:
+    - path: /usr/lib/e2initrd_helper
+    - path: /usr/lib/libcom_err.so
+    - path: /usr/lib/libcom_err.so.2
+    - path: /usr/lib/libcom_err.so.2.1
+    - path: /usr/lib/libe2p.so
+    - path: /usr/lib/libe2p.so.2
+    - path: /usr/lib/libe2p.so.2.3
+    - path: /usr/lib/libext2fs.so
+    - path: /usr/lib/libext2fs.so.2
+    - path: /usr/lib/libext2fs.so.2.4
+    - path: /usr/lib/libss.so
+    - path: /usr/lib/libss.so.2
+    - path: /usr/lib/libss.so.2.0
+
   locale:
     files:
     - path: /usr/share/locale/ca/LC_MESSAGES/e2fsprogs.mo
@@ -149,33 +208,7 @@ outputs:
     - path: /usr/share/locale/uk/LC_MESSAGES/e2fsprogs.mo
     - path: /usr/share/locale/vi/LC_MESSAGES/e2fsprogs.mo
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/e2fsprogs.mo
-  lib:
-    files:
-    - path: /usr/lib/e2initrd_helper
-    - path: /usr/lib/libcom_err.so
-    - path: /usr/lib/libcom_err.so.2
-    - path: /usr/lib/libcom_err.so.2.1
-    - path: /usr/lib/libe2p.so
-    - path: /usr/lib/libe2p.so.2
-    - path: /usr/lib/libe2p.so.2.3
-    - path: /usr/lib/libext2fs.so
-    - path: /usr/lib/libext2fs.so.2
-    - path: /usr/lib/libext2fs.so.2.4
-    - path: /usr/lib/libss.so
-    - path: /usr/lib/libss.so.2
-    - path: /usr/lib/libss.so.2.0
-  static:
-    files:
-    - path: /usr/lib/libcom_err.a
-    - path: /usr/lib/libe2p.a
-    - path: /usr/lib/libext2fs.a
-    - path: /usr/lib/libss.a
-  misc:
-    files:
-    - path: /usr/share/et/et_c.awk
-    - path: /usr/share/et/et_h.awk
-    - path: /usr/share/ss/ct_c.awk
-    - path: /usr/share/ss/ct_c.sed
+
   man:
     files:
     - path: /usr/share/man/man1/chattr.1
@@ -191,16 +224,16 @@ outputs:
     - path: /usr/share/man/man8/badblocks.8
     - path: /usr/share/man/man8/debugfs.8
     - path: /usr/share/man/man8/dumpe2fs.8
-    - path: /usr/share/man/man8/e2freefrag.8
-    - path: /usr/share/man/man8/e2fsck.8
-    - path: /usr/share/man/man8/e2image.8
     - path: /usr/share/man/man8/e2label.8
-    - path: /usr/share/man/man8/e2mmpstatus.8
     - path: /usr/share/man/man8/e2scrub.8
     - path: /usr/share/man/man8/e2scrub_all.8
+    - path: /usr/share/man/man8/e2image.8
+    - path: /usr/share/man/man8/e2mmpstatus.8
     - path: /usr/share/man/man8/e2undo.8
-    - path: /usr/share/man/man8/e4crypt.8
+    - path: /usr/share/man/man8/e2freefrag.8
+    - path: /usr/share/man/man8/e2fsck.8
     - path: /usr/share/man/man8/e4defrag.8
+    - path: /usr/share/man/man8/e4crypt.8
     - path: /usr/share/man/man8/filefrag.8
     - path: /usr/share/man/man8/fsck.ext2.8
     - path: /usr/share/man/man8/fsck.ext3.8
@@ -213,6 +246,17 @@ outputs:
     - path: /usr/share/man/man8/mklost+found.8
     - path: /usr/share/man/man8/resize2fs.8
     - path: /usr/share/man/man8/tune2fs.8
-  info:
+
+  misc:
     files:
-    - path: /usr/share/info/libext2fs.info.gz
+    - path: /usr/share/et/et_c.awk
+    - path: /usr/share/et/et_h.awk
+    - path: /usr/share/ss/ct_c.awk
+    - path: /usr/share/ss/ct_c.sed
+
+  static:
+    files:
+    - path: /usr/lib/libcom_err.a
+    - path: /usr/lib/libe2p.a
+    - path: /usr/lib/libext2fs.a
+    - path: /usr/lib/libss.a

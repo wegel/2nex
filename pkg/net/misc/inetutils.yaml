@@ -2,11 +2,12 @@ package:
   schema: 1
   name: Inetutils
   slug: inetutils
-  flavor: net/misc
-  version: '2.5'
+  namespace: net/misc
+  version: "2.5"
   description: A collection of common network programs
   homepage: https://www.gnu.org/software/inetutils/
   checksum: 5669546a530c86ea939af19e74d6af225ef22d88c4c70a39d2bc59531f65c149
+
 sources:
 - name: inetutils
   url: https://ftp.gnu.org/gnu/inetutils/inetutils-2.5.tar.xz
@@ -14,6 +15,7 @@ sources:
 - name: inetutils-no-proc.patch
   file: inputs_cache/inetutils-no-proc.patch
   sha256: ce74ce825b244be5ddb98fbb1d6573ef3854cd51782f59f612aa1386321fbb2d
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -57,7 +59,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+
 build:
+  profile: [4107:1268, 8226:4195, 12345:5755, 20580:9211, 24684:11909, 28796:13264, 37051:16445, 45290:17293, 53557:18624, 56501:18762]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -79,13 +84,16 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - info
-  - man
-  - bin
   dev:
   - bin
+
+  full:
+  - bin
+  - info
+  - man
+
 outputs:
   bin:
     files:
@@ -98,9 +106,11 @@ outputs:
     - path: /usr/bin/telnet
     - path: /usr/bin/tftp
     - path: /usr/bin/traceroute
+
   info:
     files:
     - path: /usr/share/info/inetutils.info
+
   man:
     files:
     - path: /usr/share/man/man1/dnsdomainname.1
@@ -112,6 +122,7 @@ outputs:
     - path: /usr/share/man/man1/telnet.1
     - path: /usr/share/man/man1/tftp.1
     - path: /usr/share/man/man1/traceroute.1
+
 resolution:
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc

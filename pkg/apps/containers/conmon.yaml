@@ -7,6 +7,7 @@ package:
   description: A container monitor for podman and other OCI container runtimes
   homepage: https://github.com/containers/conmon
   checksum: 5d8ee01f1ee57dc1c511f108d25ace8485b7acb019b0a37aef9f34ec1699bb5e
+
 sources:
 - name: conmon
   url: https://github.com/containers/conmon/archive/refs/tags/v2.1.8.tar.gz
@@ -14,6 +15,7 @@ sources:
 - name: seccomp_patch
   url: https://raw.githubusercontent.com/buildroot/buildroot/master/package/conmon/0001-src-seccomp_notify.c-fix-static-build.patch
   sha256: 6e09ee2abf5f9dbb4f45f9240ed37469997f053c27968ad7dab00f881eef0fe7
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
@@ -63,48 +65,39 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/pkgconf/2.2.0/bundles/dev
 - name: pcre2
   commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
-build:
-  script: 'tar --no-same-owner -xf ${SOURCE_conmon} -C "${WORK_DIR}" --strip-components=1
 
+build:
+  profile: [4187:59, 7546:228]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_conmon} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
     # Apply the seccomp patch
-
     patch -Np1 -i "/./${SOURCE_seccomp_patch}"
 
-
     # Create seccomp-notify script
-
-    printf ''#!/bin/bash\necho "0"\n'' > hack/seccomp-notify.sh
-
+    printf '#!/bin/bash\necho "0"\n' > hack/seccomp-notify.sh
     chmod +x hack/seccomp-notify.sh
 
-
     # Build using gcc explicitly with proper include paths for glib
-
     make CC=gcc CFLAGS="-std=c99 ${CFLAGS} -I/usr/lib/glib-2.0/include" LDFLAGS="${LDFLAGS}"
 
-
     # Install
-
     mkdir -p ${OUT_DIR}/usr/bin
-
     install -D -m 755 bin/conmon ${OUT_DIR}/usr/bin/conmon
 
-
     # Set consistent timestamps for reproducible builds
-
-    find "${OUT_DIR}" -exec touch -d ''2024-01-01T00:00:00+00:00'' {} \;
-
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
-  full:
-  - bin
   dev:
   - bin
+
+  full:
+  - bin
+
 outputs:
   bin:
     files:

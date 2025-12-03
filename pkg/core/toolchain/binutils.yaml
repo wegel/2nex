@@ -3,14 +3,16 @@ package:
   name: GNU Binutils
   slug: binutils
   namespace: core/toolchain
-  version: '2.42'
+  version: "2.42"
   description: GNU Binutils
   homepage: https://www.gnu.org/software/binutils/
   checksum: d8aeb3afc8ad7af67eb3b22913042cb112b9c089bc89c069814a285dce949654
+
 sources:
 - name: binutils
   url: https://ftp.gnu.org/gnu/binutils/binutils-2.42.tar.xz
   sha256: f6e4d41fd5fc778b06b7891457b3620da5ecea1006c6a4a41ae998109f85a800
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -64,67 +66,48 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 - name: dejagnu
   commit: x86_64/pkg/bootstrap/phase3/dejagnu/1.6.3/bundles/dev
+
 build:
-  script: "tar --no-same-owner -xf ${SOURCE_binutils} -C \"${WORK_DIR}\" --strip-components=1\n\
-    cd \"${WORK_DIR}\" && mkdir -p build && cd build\n\n../configure             \
-    \    \\\n  --prefix=/usr              \\\n  --build=$(../config.guess) \\\n  --host=${TARGET}\
-    \           \\\n  --disable-nls              \\\n  --enable-shared           \
-    \ \\\n  --enable-gprofng=no        \\\n  --disable-werror           \\\n  --enable-64-bit-bfd\
-    \        \\\n  --enable-default-hash-style=gnu\n\necho \"configure done, make\"\
-    \nmake\nmake DESTDIR=${OUT_DIR} install\n\nfind \"${OUT_DIR}\" -exec touch -d\
-    \ \"2024-01-01T00:00:00+00:00\" {} \\;\nfind \"${OUT_DIR}\" ! -type d -exec strip-nondeterminism\
-    \ -T 1704067200 --normalizers +all {} \\;\n2nex_strip_binaries ${OUT_DIR}\n"
+  profile: [8251:2293, 20742:2765, 45572:3315, 75037:6943, 96504:7011, 118607:7079, 144934:7206, 179592:10466, 212696:27149, 236092:30729]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_binutils} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}" && mkdir -p build && cd build
+
+    ../configure                 \
+      --prefix=/usr              \
+      --build=$(../config.guess) \
+      --host=${TARGET}           \
+      --disable-nls              \
+      --enable-shared            \
+      --enable-gprofng=no        \
+      --disable-werror           \
+      --enable-64-bit-bfd        \
+      --enable-default-hash-style=gnu
+
+    echo "configure done, make"
+    make
+    make DESTDIR=${OUT_DIR} install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
 bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
   full:
   - bin
-  - lib
   - dev
   - info
-  - static
-  - man
-  dev:
-  - bin
   - lib
-  - dev
+  - man
+  - static
+
 outputs:
-  dev:
-    files:
-    - path: /usr/include/ansidecl.h
-    - path: /usr/include/bfd.h
-    - path: /usr/include/bfdlink.h
-    - path: /usr/include/ctf-api.h
-    - path: /usr/include/ctf.h
-    - path: /usr/include/diagnostics.h
-    - path: /usr/include/dis-asm.h
-    - path: /usr/include/plugin-api.h
-    - path: /usr/include/sframe-api.h
-    - path: /usr/include/sframe.h
-    - path: /usr/include/symcat.h
-    - path: /usr/lib/libbfd.la
-    - path: /usr/lib/libctf-nobfd.la
-    - path: /usr/lib/libctf.la
-    - path: /usr/lib/libopcodes.la
-    - path: /usr/lib/libsframe.la
-  man:
-    files:
-    - path: /usr/share/man/man1/addr2line.1
-    - path: /usr/share/man/man1/ar.1
-    - path: /usr/share/man/man1/as.1
-    - path: /usr/share/man/man1/c++filt.1
-    - path: /usr/share/man/man1/dlltool.1
-    - path: /usr/share/man/man1/elfedit.1
-    - path: /usr/share/man/man1/gprof.1
-    - path: /usr/share/man/man1/ld.1
-    - path: /usr/share/man/man1/nm.1
-    - path: /usr/share/man/man1/objcopy.1
-    - path: /usr/share/man/man1/objdump.1
-    - path: /usr/share/man/man1/ranlib.1
-    - path: /usr/share/man/man1/readelf.1
-    - path: /usr/share/man/man1/size.1
-    - path: /usr/share/man/man1/strings.1
-    - path: /usr/share/man/man1/strip.1
-    - path: /usr/share/man/man1/windmc.1
-    - path: /usr/share/man/man1/windres.1
   bin:
     files:
     - path: /usr/bin/addr2line
@@ -153,13 +136,26 @@ outputs:
     - path: /usr/x86_64-pc-linux-gnu/bin/ranlib
     - path: /usr/x86_64-pc-linux-gnu/bin/readelf
     - path: /usr/x86_64-pc-linux-gnu/bin/strip
-  static:
+
+  dev:
     files:
-    - path: /usr/lib/libbfd.a
-    - path: /usr/lib/libctf-nobfd.a
-    - path: /usr/lib/libctf.a
-    - path: /usr/lib/libopcodes.a
-    - path: /usr/lib/libsframe.a
+    - path: /usr/include/ansidecl.h
+    - path: /usr/include/bfd.h
+    - path: /usr/include/bfdlink.h
+    - path: /usr/include/ctf-api.h
+    - path: /usr/include/ctf.h
+    - path: /usr/include/diagnostics.h
+    - path: /usr/include/dis-asm.h
+    - path: /usr/include/plugin-api.h
+    - path: /usr/include/sframe-api.h
+    - path: /usr/include/sframe.h
+    - path: /usr/include/symcat.h
+    - path: /usr/lib/libbfd.la
+    - path: /usr/lib/libctf-nobfd.la
+    - path: /usr/lib/libctf.la
+    - path: /usr/lib/libopcodes.la
+    - path: /usr/lib/libsframe.la
+
   info:
     files:
     - path: /usr/share/info/as.info
@@ -171,6 +167,7 @@ outputs:
     - path: /usr/share/info/ld.info
     - path: /usr/share/info/ldint.info
     - path: /usr/share/info/sframe-spec.info
+
   lib:
     files:
     - path: /usr/lib/bfd-plugins/libdep.so
@@ -276,3 +273,32 @@ outputs:
     - path: /usr/x86_64-pc-linux-gnu/lib/ldscripts/elf_x86_64.xw
     - path: /usr/x86_64-pc-linux-gnu/lib/ldscripts/elf_x86_64.xwe
     - path: /usr/x86_64-pc-linux-gnu/lib/ldscripts/stamp
+
+  man:
+    files:
+    - path: /usr/share/man/man1/addr2line.1
+    - path: /usr/share/man/man1/ar.1
+    - path: /usr/share/man/man1/as.1
+    - path: /usr/share/man/man1/c++filt.1
+    - path: /usr/share/man/man1/dlltool.1
+    - path: /usr/share/man/man1/elfedit.1
+    - path: /usr/share/man/man1/gprof.1
+    - path: /usr/share/man/man1/ld.1
+    - path: /usr/share/man/man1/nm.1
+    - path: /usr/share/man/man1/objcopy.1
+    - path: /usr/share/man/man1/objdump.1
+    - path: /usr/share/man/man1/ranlib.1
+    - path: /usr/share/man/man1/readelf.1
+    - path: /usr/share/man/man1/size.1
+    - path: /usr/share/man/man1/strings.1
+    - path: /usr/share/man/man1/strip.1
+    - path: /usr/share/man/man1/windmc.1
+    - path: /usr/share/man/man1/windres.1
+
+  static:
+    files:
+    - path: /usr/lib/libbfd.a
+    - path: /usr/lib/libctf-nobfd.a
+    - path: /usr/lib/libctf.a
+    - path: /usr/lib/libopcodes.a
+    - path: /usr/lib/libsframe.a

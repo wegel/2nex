@@ -3,15 +3,16 @@ package:
   name: Diffutils
   slug: diffutils
   namespace: core/userland
-  version: '3.10'
-  description: A package of several programs related to finding differences between
-    files
+  version: "3.10"
+  description: A package of several programs related to finding differences between files
   homepage: https://www.gnu.org/software/diffutils/
   checksum: cf7614289936a348da1e4562e4317338b777223e09186f81ef69fe886d25dac5
+
 sources:
 - name: diffutils
   url: https://ftp.gnu.org/gnu/diffutils/diffutils-3.10.tar.xz
   sha256: 90e5e93cc724e4ebe12ede80df1634063c7a855692685919bfe60b556c9bd09e
+
 dependencies:
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
@@ -55,40 +56,45 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
-build:
-  script: 'tar --no-same-owner -xf ${SOURCE_diffutils} -C "${WORK_DIR}" --strip-components=1
 
+build:
+  profile: [4111:1950, 8223:4768, 12355:6527, 16505:7929, 20633:13769, 24746:14705, 28847:15307, 33009:15669, 35769:15870]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_diffutils} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
     ./configure --prefix=/usr
-
     make
-
     make DESTDIR=$OUT_DIR install
 
-
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
-  full:
-  - man
-  - bin
-  - locale
-  - info
   dev:
   - bin
   - locale
+
+  full:
+  - bin
+  - info
+  - locale
+  - man
+
 outputs:
-  man:
+  bin:
     files:
-    - path: /usr/share/man/man1/cmp.1
-    - path: /usr/share/man/man1/diff.1
-    - path: /usr/share/man/man1/diff3.1
-    - path: /usr/share/man/man1/sdiff.1
+    - path: /usr/bin/cmp
+    - path: /usr/bin/diff
+    - path: /usr/bin/diff3
+    - path: /usr/bin/sdiff
+
+  info:
+    files:
+    - path: /usr/share/info/diffutils.info
+    - path: /usr/share/info/dir
+
   locale:
     files:
     - path: /usr/share/locale/bg/LC_MESSAGES/diffutils.mo
@@ -127,13 +133,10 @@ outputs:
     - path: /usr/share/locale/vi/LC_MESSAGES/diffutils.mo
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/diffutils.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/diffutils.mo
-  info:
+
+  man:
     files:
-    - path: /usr/share/info/diffutils.info
-    - path: /usr/share/info/dir
-  bin:
-    files:
-    - path: /usr/bin/cmp
-    - path: /usr/bin/diff
-    - path: /usr/bin/diff3
-    - path: /usr/bin/sdiff
+    - path: /usr/share/man/man1/cmp.1
+    - path: /usr/share/man/man1/diff.1
+    - path: /usr/share/man/man1/diff3.1
+    - path: /usr/share/man/man1/sdiff.1

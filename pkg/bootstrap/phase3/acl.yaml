@@ -7,10 +7,12 @@ package:
   description: Utilities for manipulating access control lists
   homepage: https://savannah.nongnu.org/projects/acl
   checksum: 4fbcc925324436299ce905f9186fd1d0c35c18d1e9bcd5caeada97f861016892
+
 sources:
 - name: acl
   url: https://download.savannah.nongnu.org/releases/acl/acl-2.3.2.tar.xz
   sha256: 97203a72cae99ab89a067fe2210c1cbf052bc492b479eca7d226d9830883b0bd
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -52,7 +54,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
 - name: attr
   commit: x86_64/pkg/bootstrap/phase3/attr/2.5.2/bundles/dev
+
 build:
+  profile: [4115:1281, 8212:2458, 12456:2598, 13496:3661]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_acl} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -67,19 +72,49 @@ build:
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - locale
-  - bin
-  - doc
-  - man
-  - dev
-  - lib
   dev:
   - bin
   - dev
   - lib
+
+  full:
+  - bin
+  - dev
+  - doc
+  - lib
+  - locale
+  - man
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/chacl
+    - path: /usr/bin/getfacl
+    - path: /usr/bin/setfacl
+
+  dev:
+    files:
+    - path: /usr/include/acl/libacl.h
+    - path: /usr/include/sys/acl.h
+    - path: /usr/lib/libacl.la
+    - path: /usr/lib/pkgconfig/libacl.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/acl-2.3.2/CHANGES
+    - path: /usr/share/doc/acl-2.3.2/COPYING
+    - path: /usr/share/doc/acl-2.3.2/COPYING.LGPL
+    - path: /usr/share/doc/acl-2.3.2/extensions.txt
+    - path: /usr/share/doc/acl-2.3.2/libacl.txt
+
+  lib:
+    files:
+    - path: /usr/lib/libacl.so
+    - path: /usr/lib/libacl.so.1
+    - path: /usr/lib/libacl.so.1.1.2302
+
   locale:
     files:
     - path: /usr/share/locale/de/LC_MESSAGES/acl.mo
@@ -91,30 +126,7 @@ outputs:
     - path: /usr/share/locale/ka/LC_MESSAGES/acl.mo
     - path: /usr/share/locale/pl/LC_MESSAGES/acl.mo
     - path: /usr/share/locale/sv/LC_MESSAGES/acl.mo
-  bin:
-    files:
-    - path: /usr/bin/chacl
-      needs:
-      - /usr/lib/libacl.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/getfacl
-      needs:
-      - /usr/lib/libacl.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/setfacl
-      needs:
-      - /usr/lib/libacl.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-  doc:
-    files:
-    - path: /usr/share/doc/acl-2.3.2/CHANGES
-    - path: /usr/share/doc/acl-2.3.2/COPYING
-    - path: /usr/share/doc/acl-2.3.2/COPYING.LGPL
-    - path: /usr/share/doc/acl-2.3.2/extensions.txt
-    - path: /usr/share/doc/acl-2.3.2/libacl.txt
+
   man:
     files:
     - path: /usr/share/man/man1/chacl.1
@@ -160,29 +172,3 @@ outputs:
     - path: /usr/share/man/man3/acl_to_text.3
     - path: /usr/share/man/man3/acl_valid.3
     - path: /usr/share/man/man5/acl.5
-  dev:
-    files:
-    - path: /usr/include/acl/libacl.h
-    - path: /usr/include/sys/acl.h
-    - path: /usr/lib/libacl.la
-    - path: /usr/lib/pkgconfig/libacl.pc
-  lib:
-    files:
-    - path: /usr/lib/libacl.so
-      needs:
-      - /usr/lib/libattr.so.1
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libacl.so.1
-      needs:
-      - /usr/lib/libattr.so.1
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libacl.so.1.1.2302
-      needs:
-      - /usr/lib/libattr.so.1
-      - /usr/lib/libc.so.6
-
-resolution:
-  /usr/lib/libacl.so.1: '@self'
-  /usr/lib/libc.so.6: glibc-bootstrap
-  /usr/lib/libattr.so.1: attr
-  /usr/lib/ld-linux-x86-64.so.2: glibc-bootstrap

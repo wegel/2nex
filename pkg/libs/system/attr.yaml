@@ -7,10 +7,12 @@ package:
   description: Utilities for manipulating filesystem extended attributes
   homepage: https://savannah.nongnu.org/projects/attr
   checksum: a54d58eabcbb648d594594827204b4786d49ce4c6e422a5b6a2e5d9f544eb513
+
 sources:
 - name: attr
   url: https://download.savannah.nongnu.org/releases/attr/attr-2.5.2.tar.xz
   sha256: f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -56,7 +58,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+
 build:
+  profile: [4134:1509, 8285:2417, 12389:2906, 14743:4077]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_attr} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -71,23 +76,60 @@ build:
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - lib
-  - doc
-  - man
-  - locale
-  - bin
-  - conf
-  - static
-  - dev
   dev:
-  - lib
   - bin
   - conf
-  - static
   - dev
+  - lib
+  - static
+
+  full:
+  - bin
+  - conf
+  - dev
+  - doc
+  - lib
+  - locale
+  - man
+  - static
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/attr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libattr.so.1
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/getfattr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/setfattr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  conf:
+    files:
+    - path: /etc/xattr.conf
+
+  dev:
+    files:
+    - path: /usr/include/attr/attributes.h
+    - path: /usr/include/attr/error_context.h
+    - path: /usr/include/attr/libattr.h
+    - path: /usr/lib/libattr.la
+    - path: /usr/lib/pkgconfig/libattr.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/attr-2.5.2/CHANGES
+    - path: /usr/share/doc/attr-2.5.2/COPYING
+    - path: /usr/share/doc/attr-2.5.2/COPYING.LGPL
+
   lib:
     files:
     - path: /usr/lib/libattr.so
@@ -99,11 +141,21 @@ outputs:
     - path: /usr/lib/libattr.so.1.1.2502
       needs:
       - /usr/lib/libc.so.6
-  doc:
+
+  locale:
     files:
-    - path: /usr/share/doc/attr-2.5.2/CHANGES
-    - path: /usr/share/doc/attr-2.5.2/COPYING
-    - path: /usr/share/doc/attr-2.5.2/COPYING.LGPL
+    - path: /usr/share/locale/cs/LC_MESSAGES/attr.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/attr.mo
+    - path: /usr/share/locale/en@boldquot/LC_MESSAGES/attr.mo
+    - path: /usr/share/locale/en@quot/LC_MESSAGES/attr.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/attr.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/attr.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/attr.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/attr.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/attr.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/attr.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/attr.mo
+
   man:
     files:
     - path: /usr/share/man/man1/attr.1
@@ -119,49 +171,12 @@ outputs:
     - path: /usr/share/man/man3/attr_removef.3
     - path: /usr/share/man/man3/attr_set.3
     - path: /usr/share/man/man3/attr_setf.3
-  locale:
-    files:
-    - path: /usr/share/locale/cs/LC_MESSAGES/attr.mo
-    - path: /usr/share/locale/de/LC_MESSAGES/attr.mo
-    - path: /usr/share/locale/en@boldquot/LC_MESSAGES/attr.mo
-    - path: /usr/share/locale/en@quot/LC_MESSAGES/attr.mo
-    - path: /usr/share/locale/es/LC_MESSAGES/attr.mo
-    - path: /usr/share/locale/fr/LC_MESSAGES/attr.mo
-    - path: /usr/share/locale/gl/LC_MESSAGES/attr.mo
-    - path: /usr/share/locale/ka/LC_MESSAGES/attr.mo
-    - path: /usr/share/locale/nl/LC_MESSAGES/attr.mo
-    - path: /usr/share/locale/pl/LC_MESSAGES/attr.mo
-    - path: /usr/share/locale/sv/LC_MESSAGES/attr.mo
-  bin:
-    files:
-    - path: /usr/bin/attr
-      needs:
-      - /usr/lib/libattr.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/getfattr
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/setfattr
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-  conf:
-    files:
-    - path: /etc/xattr.conf
+
   static:
     files:
     - path: /usr/lib/libattr.a
-  dev:
-    files:
-    - path: /usr/include/attr/attributes.h
-    - path: /usr/include/attr/error_context.h
-    - path: /usr/include/attr/libattr.h
-    - path: /usr/lib/libattr.la
-    - path: /usr/lib/pkgconfig/libattr.pc
 
 resolution:
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
-  /usr/lib/libattr.so.1: '@self'
+  /usr/lib/libattr.so.1: self

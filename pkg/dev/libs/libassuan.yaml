@@ -7,10 +7,12 @@ package:
   description: IPC library used by GnuPG and related software
   homepage: https://www.gnupg.org/software/libassuan/
   checksum: fd74792bb29674078ef24f4a37e76cfe21bfc45fa25d7ec32af410b57df08b44
+
 sources:
 - name: libassuan
   url: https://gnupg.org/ftp/gcrypt/libassuan/libassuan-2.5.7.tar.bz2
   sha256: 0103081ffc27838a2e50479153ca105e873d3d65d8a9593282e9c94c7e6afb76
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
@@ -60,58 +62,53 @@ dependencies:
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
 - name: libgpg-error
   commit: x86_64/pkg/dev/libs/libgpg-error/1.51/bundles/dev
-build:
-  script: 'tar --no-same-owner -xf ${SOURCE_libassuan} -C "${WORK_DIR}" --strip-components=1
 
+build:
+  profile: [4111:789, 8470:3109, 12736:3110, 17317:3112, 21882:3121, 26414:3123, 30887:3124, 35309:3324, 43731:3512, 45780:3543]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_libassuan} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
     # Configure
-
     ./configure --prefix=/usr --disable-static
 
-
     # Build
-
     make
 
-
     # Install
-
     make DESTDIR="${OUT_DIR}" install
 
-
     # Set consistent timestamps for reproducible builds
-
-    find "${OUT_DIR}" -exec touch -d ''2024-01-01T00:00:00+00:00'' {} \;
-
-    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers
-    +all {} \; || true
-
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
-  full:
-  - bin
-  - lib
-  - dev
   dev:
   - bin
-  - lib
   - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - lib
+
 outputs:
   bin:
     files:
     - path: /usr/bin/libassuan-config
-  lib:
-    files:
-    - path: /usr/lib/libassuan.so
-    - path: /usr/lib/libassuan.so.0
-    - path: /usr/lib/libassuan.so.0.8.7
+
   dev:
     files:
     - path: /usr/include/assuan.h
     - path: /usr/lib/libassuan.la
     - path: /usr/lib/pkgconfig/libassuan.pc
     - path: /usr/share/aclocal/libassuan.m4
+
+  lib:
+    files:
+    - path: /usr/lib/libassuan.so
+    - path: /usr/lib/libassuan.so.0
+    - path: /usr/lib/libassuan.so.0.8.7

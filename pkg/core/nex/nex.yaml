@@ -5,11 +5,13 @@ package:
   namespace: core/nex
   version: 0.1.0
   description: 2nex package builder and manager
-  checksum: 679ca5c46348a8c6c91c8c63204ee5834c40084d05febe65dbc3ef7092bf5561
+  checksum: 08d2b0548cb1d790d2c40b9487b344363ed5716ba11225ece8b13372010800b5
+
 sources:
 - name: nex_src
   file: pkg/core/nex/nex-builder-src.tar.gz
-  sha256: e2c3ee51adaf3433c8645dcc9693886149a5fb15e0c824a8da05a957fbd53f8f
+  sha256: 68ba40081f6de0e8546b25ef357b794cd002a5527ef937246a09efdc637ceee6
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
@@ -39,7 +41,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+
 build:
+  profile: [3168:22173]
+
   script: |
     # extract source
     tar --no-same-owner -xzf ${SOURCE_nex_src} -C ${WORK_DIR} --strip-components=1
@@ -63,21 +68,24 @@ build:
 
     # set timestamp for reproducibility
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
 bundles:
-  full:
-  - bin
   dev:
   - bin
+
+  full:
+  - bin
+
 outputs:
   bin:
     files:
     - path: /usr/bin/nex
       needs:
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
 
 resolution:
-  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc

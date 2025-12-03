@@ -7,10 +7,12 @@ package:
   description: Multiple Precision Complex Library
   homepage: https://www.multiprecision.org/mpc/
   checksum: e8054eff4e172bc708136cd54b99502f8a5f619947b4a294f70627f9678120a1
+
 sources:
 - name: mpc
   url: https://ftp.gnu.org/gnu/mpc/mpc-1.3.1.tar.gz
   sha256: ab642492f5cf882b74aa0cb730cd410a81edcdbec895183ce930e706c1c759b8
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -54,7 +56,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
 - name: mpfr
   commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+
 build:
+  profile: [8363:2333, 21262:2371, 46594:2552, 76279:2819, 101835:3071, 123906:3974, 149246:4264, 187369:4861, 221443:5043, 245472:8892]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_mpc} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -70,51 +75,36 @@ build:
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - static
-  - dev
-  - lib
-  - info
   dev:
-  - static
   - dev
   - lib
+  - static
+
+  full:
+  - dev
+  - info
+  - lib
+  - static
+
 outputs:
-  static:
-    files:
-    - path: /usr/lib/libmpc.a
   dev:
     files:
     - path: /usr/include/mpc.h
     - path: /usr/lib/libmpc.la
-  lib:
-    files:
-    - path: /usr/lib/libmpc.so
-      needs:
-      - /usr/lib/libmpfr.so.6
-      - /usr/lib/libgmp.so.10
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libmpc.so.3
-      needs:
-      - /usr/lib/libmpfr.so.6
-      - /usr/lib/libgmp.so.10
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libmpc.so.3.3.1
-      needs:
-      - /usr/lib/libmpfr.so.6
-      - /usr/lib/libgmp.so.10
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
+
   info:
     files:
     - path: /usr/share/info/dir
     - path: /usr/share/info/mpc.info
 
-resolution:
-  /usr/lib/libmpfr.so.6: mpfr
-  /usr/lib/libgmp.so.10: gmp
-  /usr/lib/libc.so.6: glibc
-  /usr/lib/libm.so.6: glibc
+  lib:
+    files:
+    - path: /usr/lib/libmpc.so
+    - path: /usr/lib/libmpc.so.3
+    - path: /usr/lib/libmpc.so.3.3.1
+
+  static:
+    files:
+    - path: /usr/lib/libmpc.a

@@ -3,10 +3,11 @@ package:
   name: Readline
   slug: readline
   namespace: libs/system
-  version: '8.2'
+  version: "8.2"
   description: The GNU Readline library
   homepage: https://tiswww.case.edu/php/chet/readline/rltop.html
   checksum: 122b49186da086b3d2e577dfff3fbd700c97cf4c5565f06a15cccd87caa248ac
+
 sources:
 - name: readline
   url: https://ftp.gnu.org/gnu/readline/readline-8.2.tar.gz
@@ -14,6 +15,7 @@ sources:
 - name: patch
   url: https://www.linuxfromscratch.org/patches/downloads/readline/readline-8.2-upstream_fixes-3.patch
   sha256: 8a108b34c5bdf9d6a9d6c0bd4cf2da756ae5232c5de2ae55c5468e953bb8de62
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -63,27 +65,66 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+
 build:
-  script: "tar --no-same-owner -xf ${SOURCE_readline} -C \"${WORK_DIR}\" --strip-components=1\n\
-    cd ${WORK_DIR}\n\nsed -i \"/MV.*old/d\" Makefile.in\nsed -i \"/{OLDSUFF}/c:\"\
-    \ support/shlib-install\npatch -Np1 -i /inputs/readline-8.2-upstream_fixes-3.patch\n\
-    ./configure --prefix=/usr    \\\n          --docdir=/usr/share/doc/readline-8.2\n\
-    make DESTDIR=\"${OUT_DIR}\" install\n\nfind \"${OUT_DIR}\" -exec touch -d '2024-01-01T00:00:00+00:00'\
-    \ {} \\;\n2nex_strip_binaries ${OUT_DIR}\n"
+  profile: [4127:1584, 8225:2515, 12620:2520, 16757:2538, 20896:2601, 25257:2621, 29359:2651, 33469:2696, 37626:3288, 37696:3361]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_readline} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    sed -i "/MV.*old/d" Makefile.in
+    sed -i "/{OLDSUFF}/c:" support/shlib-install
+    patch -Np1 -i /inputs/readline-8.2-upstream_fixes-3.patch
+    ./configure --prefix=/usr    \
+              --docdir=/usr/share/doc/readline-8.2
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
 bundles:
   dev:
+  - dev
   - lib
   - static
-  - dev
+
   full:
-  - lib
+  - dev
   - doc
+  - info
+  - lib
   - man
   - misc
-  - info
   - static
-  - dev
+
 outputs:
+  dev:
+    files:
+    - path: /usr/include/readline/chardefs.h
+    - path: /usr/include/readline/history.h
+    - path: /usr/include/readline/keymaps.h
+    - path: /usr/include/readline/readline.h
+    - path: /usr/include/readline/rlconf.h
+    - path: /usr/include/readline/rlstdc.h
+    - path: /usr/include/readline/rltypedefs.h
+    - path: /usr/include/readline/tilde.h
+    - path: /usr/lib/pkgconfig/history.pc
+    - path: /usr/lib/pkgconfig/readline.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/readline-8.2/CHANGES
+    - path: /usr/share/doc/readline-8.2/INSTALL
+    - path: /usr/share/doc/readline-8.2/README
+
+  info:
+    files:
+    - path: /usr/share/info/dir
+    - path: /usr/share/info/history.info
+    - path: /usr/share/info/readline.info
+    - path: /usr/share/info/rluserman.info
+
   lib:
     files:
     - path: /usr/lib/libhistory.so
@@ -92,15 +133,12 @@ outputs:
     - path: /usr/lib/libreadline.so
     - path: /usr/lib/libreadline.so.8
     - path: /usr/lib/libreadline.so.8.2
-  doc:
-    files:
-    - path: /usr/share/doc/readline-8.2/CHANGES
-    - path: /usr/share/doc/readline-8.2/INSTALL
-    - path: /usr/share/doc/readline-8.2/README
+
   man:
     files:
     - path: /usr/share/man/man3/history.3
     - path: /usr/share/man/man3/readline.3
+
   misc:
     files:
     - path: /usr/share/readline/excallback.c
@@ -120,25 +158,8 @@ outputs:
     - path: /usr/share/readline/rlptytest.c
     - path: /usr/share/readline/rltest.c
     - path: /usr/share/readline/rlversion.c
-  info:
-    files:
-    - path: /usr/share/info/dir
-    - path: /usr/share/info/history.info
-    - path: /usr/share/info/readline.info
-    - path: /usr/share/info/rluserman.info
+
   static:
     files:
     - path: /usr/lib/libhistory.a
     - path: /usr/lib/libreadline.a
-  dev:
-    files:
-    - path: /usr/include/readline/chardefs.h
-    - path: /usr/include/readline/history.h
-    - path: /usr/include/readline/keymaps.h
-    - path: /usr/include/readline/readline.h
-    - path: /usr/include/readline/rlconf.h
-    - path: /usr/include/readline/rlstdc.h
-    - path: /usr/include/readline/rltypedefs.h
-    - path: /usr/include/readline/tilde.h
-    - path: /usr/lib/pkgconfig/history.pc
-    - path: /usr/lib/pkgconfig/readline.pc

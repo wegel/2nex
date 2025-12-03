@@ -7,10 +7,12 @@ package:
   description: A Modern Linker
   homepage: https://github.com/rui314/mold
   checksum: 2497b673d74ebdc14d0c65757674d5f3156ad129d01fd1949cbce644551ed4c7
+
 sources:
 - name: mold
   url: https://github.com/rui314/mold/archive/v2.35.1.tar.gz
   sha256: 912b90afe7fde03e53db08d85a62c7b03a57417e54afc72c08e2fa07cab421ff
+
 dependencies:
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
@@ -70,7 +72,10 @@ dependencies:
   commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
 - name: strip_nondeterminism
   commit: x86_64/pkg/bootstrap/phase3/strip-nondeterminism/1.13.0/bundles/dev
+
 build:
+  profile: [4165:1046, 8281:1807, 16605:2138, 25039:3317, 29222:3317, 37784:4083, 46064:30694, 54349:57791, 66761:83691, 71306:88504]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_mold} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -87,60 +92,66 @@ build:
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
+  dev:
+  - bin
+
   full:
   - bin
   - lib
-  dev:
-  - bin
+
 outputs:
   bin:
     files:
     - path: /usr/bin/ld.mold
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/mold
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/libexec/mold/ld
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
+
   doc:
     files:
     - path: /usr/share/doc/mold/LICENSE
+
   lib:
     files:
     - path: /usr/lib/mold/mold-wrapper.so
       needs:
       - /usr/lib/libc.so.6
+
   man:
     files:
     - path: /usr/share/man/man1/ld.mold.1
     - path: /usr/share/man/man1/mold.1
 
 resolution:
-  /usr/lib/ld-linux-x86-64.so.2: glibc
-  /usr/lib/libz.so.1: zlib
-  /usr/lib/libm.so.6: glibc
-  /usr/lib/libzstd.so.1: zstd
   /usr/lib/libgcc_s.so.1: gcc
   /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libz.so.1: zlib
+  /usr/lib/libzstd.so.1: zstd

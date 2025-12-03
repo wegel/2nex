@@ -3,14 +3,16 @@ package:
   name: File
   slug: file
   namespace: dev/tools
-  version: '5.45'
+  version: "5.45"
   description: File type identification utility
   homepage: https://www.darwinsys.com/file/
   checksum: 7b9274ed49780b1f1ccfd7746e338b23d44d6d4c06545a32614e14823e6cd109
+
 sources:
 - name: file
   url: https://astron.com/pub/file/file-5.45.tar.gz
   sha256: fc97f51029bb0e2c9f4e3bffefdaf678f0e039ee872b9de5c002a6d09c784d82
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -54,55 +56,57 @@ dependencies:
   commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
 - name: xz
   commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+
 build:
-  script: 'tar --no-same-owner -xf ${SOURCE_file} -C "${WORK_DIR}" --strip-components=1
+  profile: [4130:764, 8240:2938, 12358:3935, 16544:4030, 20806:4148, 24949:4229, 29086:4331, 32090:4413]
 
+  script: |
+    tar --no-same-owner -xf ${SOURCE_file} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
-
     ./configure --prefix=/usr
-
     make
-
     make check
-
     make DESTDIR="${OUT_DIR}" install
 
-
-    find "${OUT_DIR}" -exec touch -d ''2024-01-01T00:00:00+00:00'' {} \;
-
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
-  full:
-  - man
-  - bin
-  - lib
-  - dev
   dev:
   - bin
-  - lib
   - dev
+  - lib
   - misc
+
+  full:
+  - bin
+  - dev
+  - lib
+  - man
+
 outputs:
-  man:
-    files:
-    - path: /usr/share/man/man1/file.1
-    - path: /usr/share/man/man3/libmagic.3
-    - path: /usr/share/man/man4/magic.4
   bin:
     files:
     - path: /usr/bin/file
-  lib:
-    files:
-    - path: /usr/lib/libmagic.so
-    - path: /usr/lib/libmagic.so.1
-    - path: /usr/lib/libmagic.so.1.0.0
+
   dev:
     files:
     - path: /usr/include/magic.h
     - path: /usr/lib/libmagic.la
     - path: /usr/lib/pkgconfig/libmagic.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libmagic.so
+    - path: /usr/lib/libmagic.so.1
+    - path: /usr/lib/libmagic.so.1.0.0
+
+  man:
+    files:
+    - path: /usr/share/man/man1/file.1
+    - path: /usr/share/man/man3/libmagic.3
+    - path: /usr/share/man/man4/magic.4
+
   misc:
     files:
     - path: /usr/share/misc/magic.mgc

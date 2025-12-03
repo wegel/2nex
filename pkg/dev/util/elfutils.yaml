@@ -3,14 +3,16 @@ package:
   name: Elfutils
   slug: elfutils
   namespace: dev/util
-  version: '0.191'
+  version: "0.191"
   description: A collection of utilities and libraries for handling ELF (Executable and Linkable Format) files
   homepage: https://sourceware.org/elfutils/
   checksum: 70fafd3697e6641b477fe72d209801433ad71181e0ff1c48b28980123e57a463
+
 sources:
 - name: elfutils
   url: https://sourceware.org/ftp/elfutils/0.191/elfutils-0.191.tar.bz2
   sha256: df76db71366d1d708365fc7a6c60ca48398f14367eb2b8954efc8897147ad871
+
 dependencies:
 - name: coreutils
   commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
@@ -62,7 +64,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
 - name: gmp-bootstrap
   commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
+
 build:
+  profile: [4112:1731, 8292:3236, 12392:3544, 16498:4251, 20619:5342, 28828:6349, 32942:7135, 41158:8993, 49377:15901, 50561:16027]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -78,96 +83,144 @@ build:
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - locale
-  - lib
-  - dev
-  - static
-  - man
-  - bin
-  - conf
   dev:
-  - lib
-  - dev
-  - static
   - bin
   - conf
+  - dev
+  - lib
+  - static
+
+  full:
+  - bin
+  - conf
+  - dev
+  - lib
+  - locale
+  - man
+  - static
+
 outputs:
-  lib:
+  bin:
     files:
-    - path: /usr/lib/libasm-0.191.so
+    - path: /usr/bin/debuginfod-find
       needs:
-      - /usr/lib/libelf.so.1
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdebuginfod.so.1
       - /usr/lib/libdw.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libasm.so
-      needs:
       - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-addr2line
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
       - /usr/lib/libdw.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libasm.so.1
-      needs:
       - /usr/lib/libelf.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/eu-ar
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-elfclassify
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
       - /usr/lib/libdw.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libdebuginfod-0.191.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libdebuginfod.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libdebuginfod.so.1
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libdw-0.191.so
-      needs:
       - /usr/lib/libelf.so.1
-      - /usr/lib/libz.so.1
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/libbz2.so.1.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libdw.so
+    - path: /usr/bin/eu-elfcmp
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
       - /usr/lib/libelf.so.1
-      - /usr/lib/libz.so.1
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/libbz2.so.1.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libdw.so.1
+    - path: /usr/bin/eu-elfcompress
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
       - /usr/lib/libelf.so.1
-      - /usr/lib/libz.so.1
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/libbz2.so.1.0
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libelf-0.191.so
+    - path: /usr/bin/eu-elflint
       needs:
-      - /usr/lib/libz.so.1
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libelf.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-findtextrel
       needs:
-      - /usr/lib/libz.so.1
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libelf.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-make-debug-archive
+    - path: /usr/bin/eu-nm
       needs:
-      - /usr/lib/libz.so.1
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/eu-objdump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasm.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-ranlib
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-readelf
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-size
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-srcfiles
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/eu-stack
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/eu-strings
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-strip
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-unstrip
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+
+  conf:
+    files:
+    - path: /usr/etc/profile.d/debuginfod.csh
+    - path: /usr/etc/profile.d/debuginfod.sh
+
   dev:
     files:
     - path: /usr/include/dwarf.h
@@ -185,6 +238,82 @@ outputs:
     - path: /usr/lib/pkgconfig/libdebuginfod.pc
     - path: /usr/lib/pkgconfig/libdw.pc
     - path: /usr/lib/pkgconfig/libelf.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libasm-0.191.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/lib/libasm.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/lib/libasm.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/lib/libdebuginfod-0.191.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libdebuginfod.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libdebuginfod.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libdw-0.191.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libdw.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libdw.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libelf-0.191.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libelf.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libelf.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+
   locale:
     files:
     - path: /usr/share/locale/de/LC_MESSAGES/elfutils.mo
@@ -194,119 +323,7 @@ outputs:
     - path: /usr/share/locale/ja/LC_MESSAGES/elfutils.mo
     - path: /usr/share/locale/pl/LC_MESSAGES/elfutils.mo
     - path: /usr/share/locale/uk/LC_MESSAGES/elfutils.mo
-  bin:
-    files:
-    - path: /usr/bin/debuginfod-find
-      needs:
-      - /usr/lib/libdw.so.1
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libdebuginfod.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-addr2line
-      needs:
-      - /usr/lib/libdw.so.1
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-ar
-      needs:
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-elfclassify
-      needs:
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libdw.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-elfcmp
-      needs:
-      - /usr/lib/libdw.so.1
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-elfcompress
-      needs:
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libdw.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-elflint
-      needs:
-      - /usr/lib/libdw.so.1
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-findtextrel
-      needs:
-      - /usr/lib/libdw.so.1
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-make-debug-archive
-    - path: /usr/bin/eu-nm
-      needs:
-      - /usr/lib/libdw.so.1
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-objdump
-      needs:
-      - /usr/lib/libasm.so.1
-      - /usr/lib/libdw.so.1
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-ranlib
-      needs:
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-readelf
-      needs:
-      - /usr/lib/libdw.so.1
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-size
-      needs:
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-srcfiles
-      needs:
-      - /usr/lib/libdw.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-stack
-      needs:
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libdw.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-strings
-      needs:
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-strip
-      needs:
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libdw.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/eu-unstrip
-      needs:
-      - /usr/lib/libelf.so.1
-      - /usr/lib/libdw.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
+
   man:
     files:
     - path: /usr/share/man/man1/debuginfod-find.1
@@ -329,10 +346,7 @@ outputs:
     - path: /usr/share/man/man3/elf_getdata.3
     - path: /usr/share/man/man3/elf_update.3
     - path: /usr/share/man/man7/debuginfod-client-config.7
-  conf:
-    files:
-    - path: /usr/etc/profile.d/debuginfod.csh
-    - path: /usr/etc/profile.d/debuginfod.sh
+
   static:
     files:
     - path: /usr/lib/libasm.a
@@ -340,15 +354,15 @@ outputs:
     - path: /usr/lib/libelf.a
 
 resolution:
-  /usr/lib/libgcc_s.so.1: gcc
-  /usr/lib/liblzma.so.5: xz
-  /usr/lib/libelf.so.1: '@self'
-  /usr/lib/ld-linux-x86-64.so.2: glibc
-  /usr/lib/libz.so.1: zlib
-  /usr/lib/libdebuginfod.so.1: '@self'
   /usr/lib/libbz2.so.1.0: bzip2
-  /usr/lib/libzstd.so.1: zstd
-  /usr/lib/libc.so.6: glibc
-  /usr/lib/libasm.so.1: '@self'
-  /usr/lib/libdw.so.1: '@self'
+  /usr/lib/libgcc_s.so.1: gcc
   /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libasm.so.1: self
+  /usr/lib/libdebuginfod.so.1: self
+  /usr/lib/libdw.so.1: self
+  /usr/lib/libelf.so.1: self
+  /usr/lib/liblzma.so.5: xz
+  /usr/lib/libz.so.1: zlib
+  /usr/lib/libzstd.so.1: zstd

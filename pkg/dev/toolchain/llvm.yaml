@@ -7,10 +7,12 @@ package:
   description: LLVM compiler infrastructure (clang, lld)
   homepage: https://llvm.org/
   checksum: 8dac8124290e8aee9fc8f71ecdf0663cd2062012e7a2dc36457e7eeee6085ff4
+
 sources:
 - name: llvm
   url: https://github.com/llvm/llvm-project/releases/download/llvmorg-18.1.8/llvm-project-18.1.8.src.tar.xz
   sha256: 0b58557a6d32ceee97c8d533a59b9212d87e0fc4d2833924eb6c611247db2f2a
+
 dependencies:
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
@@ -68,7 +70,10 @@ dependencies:
   commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
 - name: strip_nondeterminism
   commit: x86_64/pkg/bootstrap/phase3/strip-nondeterminism/1.13.0/bundles/dev
+
 build:
+  profile: [24762:15855, 91083:59506, 207444:237698, 340660:473251, 453841:613003, 565744:664401, 681532:665777, 851227:667608, 1019987:668945, 1130707:670069]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_llvm} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -103,930 +108,934 @@ build:
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - static
+
   full:
   - bin
   - dev
   - lib
   - misc
   - static
-  dev:
-  - bin
-  - dev
-  - lib
-  - static
+
 outputs:
   bin:
     files:
     - path: /usr/bin/FileCheck
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/UnicodeNameMappingGenerator
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/amdgpu-arch
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/bugpoint
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/c-index-test
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
       - /usr/lib/libclang.so.18.1
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/clang
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/clang++
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/clang-18
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/clang-cl
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/clang-cpp
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/clang-format
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/clang-linker-wrapper
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/clang-offload-bundler
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/clang-offload-packager
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/clang-refactor
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/clang-rename
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/clang-repl
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/clang-scan-deps
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/clang-tblgen
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/count
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/diagtool
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/dsymutil
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/git-clang-format
     - path: /usr/bin/hmaptool
     - path: /usr/bin/ld.lld
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/ld64.lld
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llc
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/lld
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/lld-link
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/lli
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/lli-child-target
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-PerfectShuffle
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-addr2line
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-ar
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-as
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-bcanalyzer
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-bitcode-strip
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-c-test
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-cat
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-cfi-verify
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-config
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-cov
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-cvtres
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-cxxdump
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-cxxfilt
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-cxxmap
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-debuginfo-analyzer
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-debuginfod
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-debuginfod-find
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-diff
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-dis
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-dlltool
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-dwarfdump
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-dwarfutil
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-dwp
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-exegesis
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-extract
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-gsymutil
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-ifs
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-install-name-tool
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-jitlink
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-jitlink-executor
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-lib
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-libtool-darwin
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-link
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-lipo
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-lto
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-lto2
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-mc
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-mca
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-ml
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-modextract
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-mt
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-nm
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-objcopy
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-objdump
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-opt-report
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-otool
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-pdbutil
       needs:
-      - /usr/lib/libz.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libz.so.1
     - path: /usr/bin/llvm-profdata
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-profgen
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-ranlib
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-rc
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-readelf
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-readobj
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-readtapi
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-reduce
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-remarkutil
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-rtdyld
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-sim
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-size
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-split
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-stress
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-strings
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-strip
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-symbolizer
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/llvm-tblgen
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-tli-checker
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-undname
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-windres
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/llvm-xray
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/not
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/nvptx-arch
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/obj2yaml
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/opt
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/sancov
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/sanstats
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/split-file
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/verify-uselistorder
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/wasm-ld
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/yaml-bench
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
     - path: /usr/bin/yaml2obj
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+
   dev:
     files:
     - path: /usr/include/clang-c/BuildSystem.h
@@ -1307,8 +1316,8 @@ outputs:
     - path: /usr/include/clang/Basic/BuiltinsVE.def
     - path: /usr/include/clang/Basic/BuiltinsVEVL.gen.def
     - path: /usr/include/clang/Basic/BuiltinsWebAssembly.def
-    - path: /usr/include/clang/Basic/BuiltinsX86.def
     - path: /usr/include/clang/Basic/BuiltinsX86_64.def
+    - path: /usr/include/clang/Basic/BuiltinsX86.def
     - path: /usr/include/clang/Basic/BuiltinsXCore.def
     - path: /usr/include/clang/Basic/CLWarnings.h
     - path: /usr/include/clang/Basic/CapturedStmt.h
@@ -3780,20 +3789,16 @@ outputs:
     - path: /usr/lib/clang/18/include/arm_neon_sve_bridge.h
     - path: /usr/lib/clang/18/include/armintr.h
     - path: /usr/lib/clang/18/include/avx2intrin.h
-    - path: /usr/lib/clang/18/include/avx512bf16intrin.h
-    - path: /usr/lib/clang/18/include/avx512bitalgintrin.h
-    - path: /usr/lib/clang/18/include/avx512bwintrin.h
-    - path: /usr/lib/clang/18/include/avx512cdintrin.h
-    - path: /usr/lib/clang/18/include/avx512dqintrin.h
-    - path: /usr/lib/clang/18/include/avx512erintrin.h
-    - path: /usr/lib/clang/18/include/avx512fintrin.h
-    - path: /usr/lib/clang/18/include/avx512fp16intrin.h
-    - path: /usr/lib/clang/18/include/avx512ifmaintrin.h
-    - path: /usr/lib/clang/18/include/avx512ifmavlintrin.h
-    - path: /usr/lib/clang/18/include/avx512pfintrin.h
     - path: /usr/lib/clang/18/include/avx512vbmi2intrin.h
     - path: /usr/lib/clang/18/include/avx512vbmiintrin.h
     - path: /usr/lib/clang/18/include/avx512vbmivlintrin.h
+    - path: /usr/lib/clang/18/include/avx512cdintrin.h
+    - path: /usr/lib/clang/18/include/avx512bf16intrin.h
+    - path: /usr/lib/clang/18/include/avx512pfintrin.h
+    - path: /usr/lib/clang/18/include/avx512ifmaintrin.h
+    - path: /usr/lib/clang/18/include/avx512ifmavlintrin.h
+    - path: /usr/lib/clang/18/include/avx512fintrin.h
+    - path: /usr/lib/clang/18/include/avx512bitalgintrin.h
     - path: /usr/lib/clang/18/include/avx512vlbf16intrin.h
     - path: /usr/lib/clang/18/include/avx512vlbitalgintrin.h
     - path: /usr/lib/clang/18/include/avx512vlbwintrin.h
@@ -3806,13 +3811,17 @@ outputs:
     - path: /usr/lib/clang/18/include/avx512vlvp2intersectintrin.h
     - path: /usr/lib/clang/18/include/avx512vnniintrin.h
     - path: /usr/lib/clang/18/include/avx512vp2intersectintrin.h
+    - path: /usr/lib/clang/18/include/avx512fp16intrin.h
     - path: /usr/lib/clang/18/include/avx512vpopcntdqintrin.h
     - path: /usr/lib/clang/18/include/avx512vpopcntdqvlintrin.h
+    - path: /usr/lib/clang/18/include/avx512dqintrin.h
+    - path: /usr/lib/clang/18/include/avx512erintrin.h
+    - path: /usr/lib/clang/18/include/avx512bwintrin.h
     - path: /usr/lib/clang/18/include/avxifmaintrin.h
     - path: /usr/lib/clang/18/include/avxintrin.h
     - path: /usr/lib/clang/18/include/avxneconvertintrin.h
-    - path: /usr/lib/clang/18/include/avxvnniint16intrin.h
     - path: /usr/lib/clang/18/include/avxvnniint8intrin.h
+    - path: /usr/lib/clang/18/include/avxvnniint16intrin.h
     - path: /usr/lib/clang/18/include/avxvnniintrin.h
     - path: /usr/lib/clang/18/include/bmi2intrin.h
     - path: /usr/lib/clang/18/include/bmiintrin.h
@@ -3899,8 +3908,8 @@ outputs:
     - path: /usr/lib/clang/18/include/ppc_wrappers/pmmintrin.h
     - path: /usr/lib/clang/18/include/ppc_wrappers/smmintrin.h
     - path: /usr/lib/clang/18/include/ppc_wrappers/tmmintrin.h
-    - path: /usr/lib/clang/18/include/ppc_wrappers/x86gprintrin.h
     - path: /usr/lib/clang/18/include/ppc_wrappers/x86intrin.h
+    - path: /usr/lib/clang/18/include/ppc_wrappers/x86gprintrin.h
     - path: /usr/lib/clang/18/include/ppc_wrappers/xmmintrin.h
     - path: /usr/lib/clang/18/include/prfchiintrin.h
     - path: /usr/lib/clang/18/include/prfchwintrin.h
@@ -3948,8 +3957,8 @@ outputs:
     - path: /usr/lib/clang/18/include/wasm_simd128.h
     - path: /usr/lib/clang/18/include/wbnoinvdintrin.h
     - path: /usr/lib/clang/18/include/wmmintrin.h
-    - path: /usr/lib/clang/18/include/x86gprintrin.h
     - path: /usr/lib/clang/18/include/x86intrin.h
+    - path: /usr/lib/clang/18/include/x86gprintrin.h
     - path: /usr/lib/clang/18/include/xmmintrin.h
     - path: /usr/lib/clang/18/include/xopintrin.h
     - path: /usr/lib/clang/18/include/xsavecintrin.h
@@ -3957,6 +3966,7 @@ outputs:
     - path: /usr/lib/clang/18/include/xsaveoptintrin.h
     - path: /usr/lib/clang/18/include/xsavesintrin.h
     - path: /usr/lib/clang/18/include/xtestintrin.h
+
   lib:
     files:
     - path: /usr/lib/cmake/clang/AddClang.cmake
@@ -4009,69 +4019,70 @@ outputs:
     - path: /usr/lib/cmake/llvm/llvm-driver-template.cpp.in
     - path: /usr/lib/libLTO.so
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/lib/libLTO.so.18.1
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/lib/libRemarks.so
     - path: /usr/lib/libRemarks.so.18.1
     - path: /usr/lib/libclang-cpp.so
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/lib/libclang-cpp.so.18.1
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/lib/libclang.so
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/lib/libclang.so.18.1
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/lib/libclang.so.18.1.8
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
+
   misc:
     files:
     - path: /usr/share/clang/bash-autocomplete.sh
@@ -4088,6 +4099,7 @@ outputs:
     - path: /usr/share/opt-viewer/optpmap.py
     - path: /usr/share/opt-viewer/optrecord.py
     - path: /usr/share/opt-viewer/style.css
+
   static:
     files:
     - path: /usr/lib/libLLVMAggressiveInstCombine.a
@@ -4179,12 +4191,12 @@ outputs:
     - path: /usr/lib/libLLVMVectorize.a
     - path: /usr/lib/libLLVMWindowsDriver.a
     - path: /usr/lib/libLLVMWindowsManifest.a
-    - path: /usr/lib/libLLVMX86AsmParser.a
-    - path: /usr/lib/libLLVMX86CodeGen.a
+    - path: /usr/lib/libLLVMX86TargetMCA.a
     - path: /usr/lib/libLLVMX86Desc.a
     - path: /usr/lib/libLLVMX86Disassembler.a
     - path: /usr/lib/libLLVMX86Info.a
-    - path: /usr/lib/libLLVMX86TargetMCA.a
+    - path: /usr/lib/libLLVMX86CodeGen.a
+    - path: /usr/lib/libLLVMX86AsmParser.a
     - path: /usr/lib/libLLVMXRay.a
     - path: /usr/lib/libLLVMipo.a
     - path: /usr/lib/libclangAPINotes.a
@@ -4236,11 +4248,11 @@ outputs:
     - path: /usr/lib/liblldWasm.a
 
 resolution:
-  /usr/lib/libzstd.so.1: zstd
-  /usr/lib/libc.so.6: glibc
-  /usr/lib/ld-linux-x86-64.so.2: glibc
-  /usr/lib/libstdc++.so.6: gcc
-  /usr/lib/libm.so.6: glibc
-  /usr/lib/libclang.so.18.1: '@self'
   /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libclang.so.18.1: self
   /usr/lib/libz.so.1: zlib
+  /usr/lib/libzstd.so.1: zstd

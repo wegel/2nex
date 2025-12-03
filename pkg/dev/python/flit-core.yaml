@@ -7,10 +7,12 @@ package:
   description: The distribution-building parts of Flit (a packaging tool for simple Python modules)
   homepage: https://pypi.org/project/flit-core/
   checksum: b133cca31126631d02f87dfc35ef54e6cf9c009ee5de509c424eac0190b0c21b
+
 sources:
 - name: flit_core
   url: https://pypi.org/packages/source/f/flit-core/flit_core-3.9.0.tar.gz
   sha256: 72ad266176c4a3fcfab5f2930d76896059851240570ce9a98733b658cb786eba
+
 dependencies:
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
@@ -32,7 +34,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/zlib/1.3.1/outputs/lib
 - name: python3
   commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+
 build:
+  profile: [4109:757, 8209:772, 12360:788, 16456:799, 20552:812, 24648:825, 26760:833]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -42,16 +47,16 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
+  dev:
+  - lib
+
   full:
   - lib
   - man
-  dev:
-  - lib
+
 outputs:
-  man:
-    files:
-    - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/with_data_dir/data/share/man/man1/foo.1
   lib:
     files:
     - path: /usr/lib/python3.12/site-packages/flit_core-3.9.0.dist-info/INSTALLER
@@ -131,7 +136,6 @@ outputs:
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/ns1-pkg/ns1/pkg/__init__.py
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/ns1-pkg/ns1/pkg/__pycache__/__init__.cpython-312.pyc
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/ns1-pkg/pyproject.toml
-    - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1.toml
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/__init__.py
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/__pycache__/__init__.cpython-312.pyc
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/__pycache__/foo.cpython-312.pyc
@@ -142,6 +146,7 @@ outputs:
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/subpkg/sp_data_dir/test.json
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/subpkg2/__init__.py
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1/subpkg2/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/package1.toml
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep517/LICENSE
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep517/README.rst
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep517/__pycache__/module1.cpython-312.pyc
@@ -151,11 +156,11 @@ outputs:
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621/README.rst
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621/__pycache__/module1a.cpython-312.pyc
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621/module1a.py
-    - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621/pyproject.toml
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621_nodynamic/README.rst
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621_nodynamic/__pycache__/module1.cpython-312.pyc
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621_nodynamic/module1.py
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621_nodynamic/pyproject.toml
+    - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/pep621/pyproject.toml
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/requires-dev.toml
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/requires-envmark.toml
     - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/requires-extra-envmark.toml
@@ -188,3 +193,7 @@ outputs:
     - path: /usr/lib/python3.12/site-packages/flit_core/vendor/tomli/py.typed
     - path: /usr/lib/python3.12/site-packages/flit_core/versionno.py
     - path: /usr/lib/python3.12/site-packages/flit_core/wheel.py
+
+  man:
+    files:
+    - path: /usr/lib/python3.12/site-packages/flit_core/tests/samples/with_data_dir/data/share/man/man1/foo.1

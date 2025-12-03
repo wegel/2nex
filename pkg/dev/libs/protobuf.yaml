@@ -3,14 +3,16 @@ package:
   name: Protocol Buffers
   slug: protobuf
   namespace: dev/libs
-  version: '30.2'
+  version: "30.2"
   description: Google's data interchange format
   homepage: https://protobuf.dev/
   checksum: f67de969a99b97782cf6a46f38b4e641f82a14a3702b045bedc9499fd88dd0db
+
 sources:
 - name: protobuf
   url: https://github.com/protocolbuffers/protobuf/archive/refs/tags/v30.2.tar.gz
   sha256: 07a43d88fe5a38e434c7f94129cad56a4c43a51f99336074d0799c2f7d4e44c5
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
@@ -62,106 +64,63 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
 - name: bzip2
   commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
-build:
-  script: 'tar --no-same-owner -xf ${SOURCE_protobuf} -C "${WORK_DIR}" --strip-components=1
+- name: zstd
+  commit: x86_64/pkg/bootstrap/phase3/zstd/1.5.6/bundles/dev
 
+build:
+  profile: [4163:4739, 8296:7143, 20718:23054, 33160:37192, 41504:44893, 49971:51286, 62447:62055, 74833:62070, 91353:62250, 97366:62959]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_protobuf} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
     # Create build directory
-
     mkdir -p build
-
     cd build
 
-
     # Configure with CMake
-
     # Using the same options as Buildroot
-
     cmake .. \
-
     -G Ninja \
-
     -DCMAKE_INSTALL_PREFIX=/usr \
-
     -DCMAKE_BUILD_TYPE=Release \
-
     -Dprotobuf_ALLOW_CCACHE=ON \
-
     -Dprotobuf_BUILD_CONFORMANCE=OFF \
-
     -Dprotobuf_BUILD_LIBPROTOC=OFF \
-
     -Dprotobuf_BUILD_LIBUPB=ON \
-
     -Dprotobuf_BUILD_PROTOBUF_BINARIES=ON \
-
     -Dprotobuf_BUILD_PROTOC_BINARIES=ON \
-
     -Dprotobuf_BUILD_TESTS=OFF \
-
     -Dprotobuf_DISABLE_RTTI=OFF \
-
     -Dprotobuf_INSTALL=ON \
-
     -Dprotobuf_WITH_ZLIB=ON \
-
     -DCMAKE_EXE_LINKER_FLAGS="-Wl,--allow-multiple-definition"
 
-
     # Build
-
     ninja
 
-
     # Install
-
     DESTDIR="${OUT_DIR}" ninja install
 
-
     # Set consistent timestamps for reproducible builds
-
-    find "${OUT_DIR}" -exec touch -d ''2024-01-01T00:00:00+00:00'' {} \;
-
-    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers
-    +all {} \; || true
-
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
-  full:
-  - static
-  - lib
-  - dev
-  - bin
   dev:
   - bin
-  - static
-  - lib
   - dev
+  - lib
+  - static
+
+  full:
+  - bin
+  - dev
+  - lib
+  - static
+
 outputs:
-  static:
-    files:
-    - path: /usr/lib/libprotobuf-lite.a
-    - path: /usr/lib/libprotobuf.a
-    - path: /usr/lib/libprotoc.a
-    - path: /usr/lib/libupb.a
-    - path: /usr/lib/libutf8_range.a
-    - path: /usr/lib/libutf8_validity.a
-  lib:
-    files:
-    - path: /usr/lib/cmake/protobuf/protobuf-config-version.cmake
-    - path: /usr/lib/cmake/protobuf/protobuf-config.cmake
-    - path: /usr/lib/cmake/protobuf/protobuf-generate.cmake
-    - path: /usr/lib/cmake/protobuf/protobuf-module.cmake
-    - path: /usr/lib/cmake/protobuf/protobuf-options.cmake
-    - path: /usr/lib/cmake/protobuf/protobuf-targets-release.cmake
-    - path: /usr/lib/cmake/protobuf/protobuf-targets.cmake
-    - path: /usr/lib/cmake/utf8_range/utf8_range-config.cmake
-    - path: /usr/lib/cmake/utf8_range/utf8_range-targets-release.cmake
-    - path: /usr/lib/cmake/utf8_range/utf8_range-targets.cmake
   bin:
     files:
     - path: /usr/bin/protoc
@@ -172,6 +131,7 @@ outputs:
     - path: /usr/bin/protoc-gen-upb_minitable-30.2.0
     - path: /usr/bin/protoc-gen-upbdefs
     - path: /usr/bin/protoc-gen-upbdefs-30.2.0
+
   dev:
     files:
     - path: /usr/include/google/protobuf/any.h
@@ -281,8 +241,7 @@ outputs:
     - path: /usr/include/google/protobuf/json/internal/unparser_traits.h
     - path: /usr/include/google/protobuf/json/internal/untyped_message.h
     - path: /usr/include/google/protobuf/json/internal/writer.h
-    - path: 
-        /usr/include/google/protobuf/json/internal/zero_copy_buffered_stream.h
+    - path: /usr/include/google/protobuf/json/internal/zero_copy_buffered_stream.h
     - path: /usr/include/google/protobuf/json/json.h
     - path: /usr/include/google/protobuf/map.h
     - path: /usr/include/google/protobuf/map_entry.h
@@ -462,3 +421,25 @@ outputs:
     - path: /usr/lib/pkgconfig/protobuf.pc
     - path: /usr/lib/pkgconfig/upb.pc
     - path: /usr/lib/pkgconfig/utf8_range.pc
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/protobuf/protobuf-config-version.cmake
+    - path: /usr/lib/cmake/protobuf/protobuf-config.cmake
+    - path: /usr/lib/cmake/protobuf/protobuf-generate.cmake
+    - path: /usr/lib/cmake/protobuf/protobuf-module.cmake
+    - path: /usr/lib/cmake/protobuf/protobuf-options.cmake
+    - path: /usr/lib/cmake/protobuf/protobuf-targets-release.cmake
+    - path: /usr/lib/cmake/protobuf/protobuf-targets.cmake
+    - path: /usr/lib/cmake/utf8_range/utf8_range-config.cmake
+    - path: /usr/lib/cmake/utf8_range/utf8_range-targets-release.cmake
+    - path: /usr/lib/cmake/utf8_range/utf8_range-targets.cmake
+
+  static:
+    files:
+    - path: /usr/lib/libprotobuf-lite.a
+    - path: /usr/lib/libprotobuf.a
+    - path: /usr/lib/libprotoc.a
+    - path: /usr/lib/libupb.a
+    - path: /usr/lib/libutf8_range.a
+    - path: /usr/lib/libutf8_validity.a

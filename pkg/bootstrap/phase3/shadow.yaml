@@ -7,6 +7,7 @@ package:
   description: Shadow password file utilities
   homepage: https://github.com/shadow-maint/shadow
   checksum: c5d99b80d9d413e4cfbc7bedd04ee5363c09b6b9b6b2e4a18e504de28ef56cec
+
 sources:
 - name: shadow
   url: https://github.com/shadow-maint/shadow/releases/download/4.15.1/shadow-4.15.1.tar.xz
@@ -20,6 +21,7 @@ sources:
 - name: 0003-Add-Arch-Linux-defaults-for-login.defs.patch
   url: https://gitlab.archlinux.org/archlinux/packaging/packages/shadow/-/raw/e8ce898b2b59739cea8e8e5a94cf9e2993f26a0a/0003-Add-Arch-Linux-defaults-for-login.defs.patch
   sha256: 11549cd64a218332dfa712853bb4618c58f8c1c09d7fbc90e2323e0c7bae3bf2
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -69,52 +71,173 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/libcap-bootstrap/2.69/bundles/dev
 - name: libxcrypt
   commit: x86_64/pkg/bootstrap/phase3/libxcrypt/4.4.36/bundles/dev
+
 build:
-  script: "tar --no-same-owner -xf ${SOURCE_shadow} -C \"${WORK_DIR}\" --strip-components=1\n\
-    cd ${WORK_DIR}\n\npatch -Np1 -i /inputs/0001-Disable-replaced-tools-their-man-pages-and-PAM-integ.patch\n\
-    patch -Np1 -i /inputs/0002-Adapt-login.defs-for-PAM-and-util-linux.patch\npatch\
-    \ -Np1 -i /inputs/0003-Add-Arch-Linux-defaults-for-login.defs.patch\n\nsed -i\
-    \ \"s/groups\\$(EXEEXT) //\" src/Makefile.in\nfind man -name Makefile.in -exec\
-    \ sed -i \"s/groups\\.1 / /\"   {} \\;\nfind man -name Makefile.in -exec sed -i\
-    \ \"s/getspnam\\.3 / /\" {} \\;\nfind man -name Makefile.in -exec sed -i \"s/passwd\\\
-    .5 / /\"   {} \\;\n\nsed -e \"s:#ENCRYPT_METHOD DES:ENCRYPT_METHOD YESCRYPT:\"\
-    \ \\\n  -e \"s:/var/spool/mail:/var/mail:\"                   \\\n  -e \"/PATH=/{s@/sbin:@@;s@/bin:@@}\"\
-    \                  \\\n  -i etc/login.defs\n\nmkdir -p ${OUT_DIR}/usr/bin && touch\
-    \ ${OUT_DIR}/usr/bin/passwd\nln -s ${OUT_DIR}/usr/bin ${OUT_DIR}/usr/sbin\n\n\
-    export CFLAGS=\"$CFLAGS -DEXTRA_CHECK_HOME_DIR\"\n./configure \\\n  --bindir=/usr/bin\
-    \ \\\n  --disable-account-tools-setuid \\\n  --libdir=/usr/lib \\\n  --mandir=/usr/share/man\
-    \ \\\n  --prefix=/usr \\\n  --sbindir=/usr/bin \\\n  --sysconfdir=/etc \\\n  --with-fcaps\
-    \ \\\n  --with-group-name-max-length=32 \\\n  --with-yescrypt \\\n  --without-bcrypt\
-    \ \\\n  --without-libbsd \\\n  --without-nscd \\\n  --without-selinux \\\n  --without-su\n\
-    \nsed -i -e \"s/ -shared / -Wl,-O1,--as-needed\\0/g\" libtool\nmake DESTDIR=\"\
-    ${OUT_DIR}\" install\nmake DESTDIR=\"${OUT_DIR}\" -C man install\n\nrm ${OUT_DIR}/usr/sbin\n\
-    \nfind \"${OUT_DIR}\" -exec touch -d \"2024-01-01T00:00:00+00:00\" {} \\;\nfind\
-    \ \"${OUT_DIR}\" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers\
-    \ +all {} \\;\n2nex_strip_binaries ${OUT_DIR}\n"
+  profile: [4137:1053, 8233:3656, 12334:4909, 16438:6098, 24673:8509, 28818:8579, 32924:8646, 41157:8708, 49447:8766, 54498:16236]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_shadow} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch -Np1 -i /inputs/0001-Disable-replaced-tools-their-man-pages-and-PAM-integ.patch
+    patch -Np1 -i /inputs/0002-Adapt-login.defs-for-PAM-and-util-linux.patch
+    patch -Np1 -i /inputs/0003-Add-Arch-Linux-defaults-for-login.defs.patch
+
+    sed -i "s/groups\$(EXEEXT) //" src/Makefile.in
+    find man -name Makefile.in -exec sed -i "s/groups\.1 / /"   {} \;
+    find man -name Makefile.in -exec sed -i "s/getspnam\.3 / /" {} \;
+    find man -name Makefile.in -exec sed -i "s/passwd\.5 / /"   {} \;
+
+    sed -e "s:#ENCRYPT_METHOD DES:ENCRYPT_METHOD YESCRYPT:" \
+      -e "s:/var/spool/mail:/var/mail:"                   \
+      -e "/PATH=/{s@/sbin:@@;s@/bin:@@}"                  \
+      -i etc/login.defs
+
+    mkdir -p ${OUT_DIR}/usr/bin && touch ${OUT_DIR}/usr/bin/passwd
+    ln -s ${OUT_DIR}/usr/bin ${OUT_DIR}/usr/sbin
+
+    export CFLAGS="$CFLAGS -DEXTRA_CHECK_HOME_DIR"
+    ./configure \
+      --bindir=/usr/bin \
+      --disable-account-tools-setuid \
+      --libdir=/usr/lib \
+      --mandir=/usr/share/man \
+      --prefix=/usr \
+      --sbindir=/usr/bin \
+      --sysconfdir=/etc \
+      --with-fcaps \
+      --with-group-name-max-length=32 \
+      --with-yescrypt \
+      --without-bcrypt \
+      --without-libbsd \
+      --without-nscd \
+      --without-selinux \
+      --without-su
+
+    sed -i -e "s/ -shared / -Wl,-O1,--as-needed\0/g" libtool
+    make DESTDIR="${OUT_DIR}" install
+    make DESTDIR="${OUT_DIR}" -C man install
+
+    rm ${OUT_DIR}/usr/sbin
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - dev
-  - static
-  - man
-  - lib
-  - locale
-  - conf
-  - man
-  - bin
   dev:
   - bin
-  - lib
-  - dev
   - conf
+  - dev
+  - lib
   - static
+
+  full:
+  - bin
+  - conf
+  - dev
+  - lib
+  - locale
+  - man
+  - man
+  - static
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/chage
+    - path: /usr/bin/chfn
+    - path: /usr/bin/chgpasswd
+    - path: /usr/bin/chpasswd
+    - path: /usr/bin/chsh
+    - path: /usr/bin/expiry
+    - path: /usr/bin/faillog
+    - path: /usr/bin/getsubids
+    - path: /usr/bin/gpasswd
+    - path: /usr/bin/groupadd
+    - path: /usr/bin/groupdel
+    - path: /usr/bin/groupmems
+    - path: /usr/bin/groupmod
+    - path: /usr/bin/grpck
+    - path: /usr/bin/grpconv
+    - path: /usr/bin/grpunconv
+    - path: /usr/bin/login
+    - path: /usr/bin/logoutd
+    - path: /usr/bin/newgidmap
+    - path: /usr/bin/newgrp
+    - path: /usr/bin/newuidmap
+    - path: /usr/bin/newusers
+    - path: /usr/bin/nologin
+    - path: /usr/bin/passwd
+    - path: /usr/bin/pwck
+    - path: /usr/bin/pwconv
+    - path: /usr/bin/pwunconv
+    - path: /usr/bin/sg
+    - path: /usr/bin/useradd
+    - path: /usr/bin/userdel
+    - path: /usr/bin/usermod
+    - path: /usr/bin/vigr
+    - path: /usr/bin/vipw
+
+  conf:
+    files:
+    - path: /etc/limits
+    - path: /etc/login.access
+    - path: /etc/login.defs
+
   dev:
     files:
     - path: /usr/include/shadow/subid.h
     - path: /usr/lib/libsubid.la
-  static:
+
+  lib:
     files:
-    - path: /usr/lib/libsubid.a
+    - path: /usr/lib/libsubid.so
+    - path: /usr/lib/libsubid.so.4
+    - path: /usr/lib/libsubid.so.4.0.0
+
+  locale:
+    files:
+    - path: /usr/share/locale/bs/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/dz/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/eu/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/he/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/kk/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/km/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/ne/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/nn/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/sq/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/tl/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/shadow.mo
+
   man:
     files:
     - path: /usr/share/man/cs/man1/expiry.1
@@ -551,89 +674,7 @@ outputs:
     - path: /usr/share/man/zh_TW/man8/useradd.8
     - path: /usr/share/man/zh_TW/man8/userdel.8
     - path: /usr/share/man/zh_TW/man8/usermod.8
-  bin:
+
+  static:
     files:
-    - path: /usr/bin/chage
-    - path: /usr/bin/chfn
-    - path: /usr/bin/chgpasswd
-    - path: /usr/bin/chpasswd
-    - path: /usr/bin/chsh
-    - path: /usr/bin/expiry
-    - path: /usr/bin/faillog
-    - path: /usr/bin/getsubids
-    - path: /usr/bin/gpasswd
-    - path: /usr/bin/groupadd
-    - path: /usr/bin/groupdel
-    - path: /usr/bin/groupmems
-    - path: /usr/bin/groupmod
-    - path: /usr/bin/grpck
-    - path: /usr/bin/grpconv
-    - path: /usr/bin/grpunconv
-    - path: /usr/bin/login
-    - path: /usr/bin/logoutd
-    - path: /usr/bin/newgidmap
-    - path: /usr/bin/newgrp
-    - path: /usr/bin/newuidmap
-    - path: /usr/bin/newusers
-    - path: /usr/bin/nologin
-    - path: /usr/bin/passwd
-    - path: /usr/bin/pwck
-    - path: /usr/bin/pwconv
-    - path: /usr/bin/pwunconv
-    - path: /usr/bin/sg
-    - path: /usr/bin/useradd
-    - path: /usr/bin/userdel
-    - path: /usr/bin/usermod
-    - path: /usr/bin/vigr
-    - path: /usr/bin/vipw
-  conf:
-    files:
-    - path: /etc/limits
-    - path: /etc/login.access
-    - path: /etc/login.defs
-  locale:
-    files:
-    - path: /usr/share/locale/bs/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/ca/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/cs/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/da/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/de/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/dz/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/el/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/es/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/eu/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/fi/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/fr/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/gl/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/he/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/hu/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/id/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/it/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/ja/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/ka/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/kk/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/km/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/ko/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/nb/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/ne/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/nl/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/nn/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/pl/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/pt/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/pt_BR/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/ro/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/ru/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/sk/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/sq/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/sv/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/tl/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/tr/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/uk/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/vi/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/zh_CN/LC_MESSAGES/shadow.mo
-    - path: /usr/share/locale/zh_TW/LC_MESSAGES/shadow.mo
-  lib:
-    files:
-    - path: /usr/lib/libsubid.so
-    - path: /usr/lib/libsubid.so.4
-    - path: /usr/lib/libsubid.so.4.0.0
+    - path: /usr/lib/libsubid.a

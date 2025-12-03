@@ -7,10 +7,12 @@ package:
   description: A small build system with a focus on speed.
   homepage: https://ninja-build.org/
   checksum: e9e38fda60ace274d8a9db8a33805cc68fa863d6a76ca29266b1908bde0a1bb9
+
 sources:
 - name: ninja
   url: https://github.com/ninja-build/ninja/archive/v1.12.1/ninja-1.12.1.tar.gz
   sha256: 821bdff48a3f683bc4bb3b6f0b5fe7b2d647cf65d52aeb63328c91a6c6df285a
+
 dependencies:
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
@@ -52,7 +54,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
 - name: gmp-bootstrap
   commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
+
 build:
+  profile: [3493:24271]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -65,28 +70,32 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - misc
-  - bin
   dev:
   - bin
+
+  full:
+  - bin
+  - misc
+
 outputs:
-  misc:
-    files:
-    - path: /usr/share/bash-completion/completions/ninja
-    - path: /usr/share/zsh/site-functions/_ninja
   bin:
     files:
     - path: /usr/bin/ninja
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+
+  misc:
+    files:
+    - path: /usr/share/bash-completion/completions/ninja
+    - path: /usr/share/zsh/site-functions/_ninja
 
 resolution:
-  /usr/lib/libc.so.6: glibc
   /usr/lib/libgcc_s.so.1: gcc
-  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

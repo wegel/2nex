@@ -3,20 +3,24 @@ package:
   name: M4
   slug: m4
   namespace: bootstrap/phase1
-  bootstrap: true
   version: 1.4.19
   description: A macro processor
   homepage: https://www.gnu.org/software/m4/
   stable_checksum: false
-  sha256: a6218dce36e47ae953fa699ff315ea8d1d6dde519e6e98daada82f322f5e2093
-dependencies:
-- name: bootstrap_tools
-  commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
+  bootstrap: true
+
 sources:
 - name: m4
   url: https://ftp.gnu.org/gnu/m4/m4-1.4.19.tar.xz
   sha256: 63aede5c6d33b6d9b13511cd0be2cac046f2e70fd0a07aa9573a04a82783af96
+
+dependencies:
+- name: bootstrap_tools
+  commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
+
 build:
+  profile: [4109:2610, 8229:6154, 12350:8161, 16477:10779, 20606:12126, 24707:13300, 32950:15434, 37118:23020, 45450:23612, 48643:23707]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_m4} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -33,17 +37,12 @@ build:
     rm -rf ${OUT_DIR}/usr/share
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
 bundles:
   dev:
   - bin
+
 outputs:
   bin:
     files:
     - path: /usr/bin/m4
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-
-resolution:
-  /bootstrap/usr/lib/libc.so.6: bootstrap_tools
-  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools

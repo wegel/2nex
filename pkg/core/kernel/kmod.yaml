@@ -3,14 +3,16 @@ package:
   name: kmod
   slug: kmod
   namespace: core/kernel
-  version: '32'
+  version: "32"
   description: Linux kernel module handling
   homepage: https://github.com/kmod-project/kmod
   checksum: 139ce9b15a8e66500ec7d02e7ae964b220d1dae09bd6593992bef62b2a80035f
+
 sources:
 - name: kmod
   url: https://www.kernel.org/pub/linux/utils/kernel/kmod/kmod-32.tar.xz
   sha256: 630ed0d92275a88cb9a7bf68f5700e911fdadaf02e051cf2e4680ff8480bd492
+
 dependencies:
 - name: coreutils
   commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
@@ -58,7 +60,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
 - name: gmp-bootstrap
   commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
+
 build:
+  profile: [4137:905, 8241:2294, 12377:3362, 15841:4403]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -75,47 +80,121 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - lib
-  - misc
-  - man
-  - dev
-  - bin
   dev:
-  - lib
   - bin
   - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - lib
+  - man
+  - misc
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/depmod
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/insmod
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/kmod
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/lsmod
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/modinfo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/modprobe
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/rmmod
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+
+  dev:
+    files:
+    - path: /usr/include/libkmod.h
+    - path: /usr/lib/libkmod.la
+    - path: /usr/lib/pkgconfig/kmod.pc
+    - path: /usr/lib/pkgconfig/libkmod.pc
+
   lib:
     files:
     - path: /usr/lib/libkmod.so
       needs:
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/libz.so.1
+      - /usr/lib/libc.so.6
       - /usr/lib/libcrypto.so.3
       - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
     - path: /usr/lib/libkmod.so.2
       needs:
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/libz.so.1
+      - /usr/lib/libc.so.6
       - /usr/lib/libcrypto.so.3
       - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
     - path: /usr/lib/libkmod.so.2.4.2
       needs:
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/libz.so.1
+      - /usr/lib/libc.so.6
       - /usr/lib/libcrypto.so.3
       - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-  misc:
-    files:
-    - path: /usr/share/bash-completion/completions/kmod
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+
   man:
     files:
     - path: /usr/share/man/man5/depmod.d.5
@@ -129,83 +208,16 @@ outputs:
     - path: /usr/share/man/man8/modinfo.8
     - path: /usr/share/man/man8/modprobe.8
     - path: /usr/share/man/man8/rmmod.8
-  dev:
+
+  misc:
     files:
-    - path: /usr/include/libkmod.h
-    - path: /usr/lib/libkmod.la
-    - path: /usr/lib/pkgconfig/kmod.pc
-    - path: /usr/lib/pkgconfig/libkmod.pc
-  bin:
-    files:
-    - path: /usr/bin/depmod
-      needs:
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/libz.so.1
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/insmod
-      needs:
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/libz.so.1
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/kmod
-      needs:
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/libz.so.1
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/lsmod
-      needs:
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/libz.so.1
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/modinfo
-      needs:
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/libz.so.1
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/modprobe
-      needs:
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/libz.so.1
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/rmmod
-      needs:
-      - /usr/lib/libzstd.so.1
-      - /usr/lib/liblzma.so.5
-      - /usr/lib/libz.so.1
-      - /usr/lib/libcrypto.so.3
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/share/bash-completion/completions/kmod
 
 resolution:
-  /usr/lib/liblzma.so.5: xz
-  /usr/lib/libcrypto.so.3: openssl3
-  /usr/lib/libc.so.6: glibc
-  /usr/lib/ld-linux-x86-64.so.2: glibc
-  /usr/lib/libzstd.so.1: zstd
-  /usr/lib/libz.so.1: zlib
   /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libcrypto.so.3: openssl3
+  /usr/lib/liblzma.so.5: xz
+  /usr/lib/libz.so.1: zlib
+  /usr/lib/libzstd.so.1: zstd

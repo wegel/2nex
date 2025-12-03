@@ -7,10 +7,12 @@ package:
   description: CLI tool for spawning and running containers according to the OCI specification
   homepage: https://github.com/opencontainers/runc
   checksum: 59a22c4c145fbaa1441814d66dfd6125d68f1f6afa16e499162332d486ad2293
+
 sources:
 - name: runc
   url: https://github.com/opencontainers/runc/archive/refs/tags/v1.2.4.tar.gz
   sha256: 9785c144c97974b52b6091b7a79168b73681ff574bc8438b44f3f5f8c112f171
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
@@ -56,47 +58,38 @@ dependencies:
   commit: x86_64/pkg/dev/libs/libseccomp/2.5.6/bundles/dev
 - name: go
   commit: x86_64/pkg/dev/lang/go/1.23.8/bundles/dev
-build:
-  script: 'tar --no-same-owner -xf ${SOURCE_runc} -C "${WORK_DIR}" --strip-components=1
 
+build:
+  profile: [498:4706]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_runc} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
     # Set up Go environment
-
     export GOPATH="${WORK_DIR}/gopath"
-
     export GOROOT="/usr/lib/go"
-
     export PATH="/usr/bin:/usr/lib/go/bin:${PATH}"
-
     export GOFLAGS="-ldflags=-compressdwarf=false"
 
-
     # Build with seccomp support
-
     make BUILDTAGS="seccomp cgo static_build" EXTRA_LDFLAGS="-X main.version=1.2.4"
 
-
     # Install
-
     mkdir -p ${OUT_DIR}/usr/bin
-
     install -D -m 755 runc ${OUT_DIR}/usr/bin/runc
 
-
     # Set consistent timestamps for reproducible builds
-
-    find "${OUT_DIR}" -exec touch -d ''2024-01-01T00:00:00+00:00'' {} \;
-
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
-  full:
-  - bin
   dev:
   - bin
+
+  full:
+  - bin
+
 outputs:
   bin:
     files:

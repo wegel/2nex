@@ -3,15 +3,17 @@ package:
   name: Patch
   slug: patch
   namespace: bootstrap/phase1
-  bootstrap: true
   version: 2.7.6
   description: A utility to apply patch files to original sources
   homepage: https://savannah.gnu.org/projects/patch/
   stable_checksum: false
+  bootstrap: true
+
 sources:
 - name: patch
   url: https://ftp.gnu.org/gnu/patch/patch-2.7.6.tar.xz
   sha256: ac610bda97abe0d9f6b7c963255a11dcb196c25e337c61f94e4778d632f1d8fd
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
@@ -35,7 +37,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
 - name: make
   commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
+
 build:
+  profile: [4115:2800, 8240:5042, 12394:7410, 16514:8625, 20611:10771, 24760:12220, 28861:14609, 33003:18407, 37162:18530, 37465:18537]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_patch} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -49,17 +54,12 @@ build:
     rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
 bundles:
   dev:
   - bin
+
 outputs:
   bin:
     files:
     - path: /usr/bin/patch
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-
-resolution:
-  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools
-  /bootstrap/usr/lib/libc.so.6: bootstrap_tools

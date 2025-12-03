@@ -3,14 +3,16 @@ package:
   name: GNU gperf
   slug: gperf
   namespace: core/toolchain
-  version: '3.1'
+  version: "3.1"
   description: GNU gperf is a perfect hash function generator
   homepage: https://www.gnu.org/software/gperf/
   checksum: 611e325332f05433a237e40ba1197b413f5459803d16440c2f2f9b814230418d
+
 sources:
 - name: gperf
   url: https://ftp.gnu.org/gnu/gperf/gperf-3.1.tar.gz
   sha256: 588546b945bba4b70b6a3a616e80b4ab466e3f33024a352fc2198112cdbb3ae2
+
 dependencies:
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
@@ -53,8 +55,11 @@ dependencies:
 - name: mpc
   commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/outputs/lib
 - name: gcc
-  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+
 build:
+  profile: [4146:2024, 8246:2085, 10314:2865]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_gperf} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -66,37 +71,43 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
+  dev:
+  - bin
+
   full:
   - bin
   - doc
   - info
   - man
-  dev:
-  - bin
+
 outputs:
   bin:
     files:
     - path: /usr/bin/gperf
       needs:
-      - /usr/lib/libstdc++.so.6
-      - /usr/lib/libm.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+
   doc:
     files:
     - path: /usr/share/doc/gperf-3.1/gperf.html
+
   info:
     files:
     - path: /usr/share/info/gperf.info
+
   man:
     files:
     - path: /usr/share/man/man1/gperf.1
 
 resolution:
-  /usr/lib/libm.so.6: glibc
-  /usr/lib/libc.so.6: glibc
   /usr/lib/libgcc_s.so.1: gcc
-  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc

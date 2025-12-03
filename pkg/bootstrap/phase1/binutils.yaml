@@ -3,15 +3,17 @@ package:
   name: GNU Binutils
   slug: binutils
   namespace: bootstrap/phase1
-  bootstrap: true
-  version: '2.42'
+  version: "2.42"
   description: GNU Hello prints a friendly greeting.
   homepage: https://www.gnu.org/software/binutils/
   stable_checksum: false
+  bootstrap: true
+
 sources:
 - name: binutils
   url: https://ftp.gnu.org/gnu/binutils/binutils-2.42.tar.xz
   sha256: f6e4d41fd5fc778b06b7891457b3620da5ecea1006c6a4a41ae998109f85a800
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
@@ -45,7 +47,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/xz/5.4.6/bundles/dev
 - name: bzip2
   commit: x86_64/pkg/bootstrap/phase1/bzip2/1.0.8/bundles/dev
+
 build:
+  profile: [8201:2239, 20529:2841, 41573:3383, 70706:10904, 92160:11003, 117487:11351, 138724:12168, 171714:37749, 209892:77228, 228742:78205]
+
   script: |
     # Build binutils
     tar --no-same-owner -xf ${SOURCE_binutils} -C "${WORK_DIR}" --strip-components=1
@@ -72,70 +77,73 @@ build:
     rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
 bundles:
   dev:
   - bin
-  - lib
   - dev
+  - lib
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/addr2line
+    - path: /usr/bin/ar
+    - path: /usr/bin/as
+    - path: /usr/bin/c++filt
+    - path: /usr/bin/elfedit
+    - path: /usr/bin/gprof
+    - path: /usr/bin/ld
+    - path: /usr/bin/ld.bfd
+    - path: /usr/bin/nm
+    - path: /usr/bin/objcopy
+    - path: /usr/bin/objdump
+    - path: /usr/bin/ranlib
+    - path: /usr/bin/readelf
+    - path: /usr/bin/size
+    - path: /usr/bin/strings
+    - path: /usr/bin/strip
+    - path: /usr/x86_64-2nex-linux-gnu/bin/ar
+    - path: /usr/x86_64-2nex-linux-gnu/bin/as
+    - path: /usr/x86_64-2nex-linux-gnu/bin/ld
+    - path: /usr/x86_64-2nex-linux-gnu/bin/ld.bfd
+    - path: /usr/x86_64-2nex-linux-gnu/bin/nm
+    - path: /usr/x86_64-2nex-linux-gnu/bin/objcopy
+    - path: /usr/x86_64-2nex-linux-gnu/bin/objdump
+    - path: /usr/x86_64-2nex-linux-gnu/bin/ranlib
+    - path: /usr/x86_64-2nex-linux-gnu/bin/readelf
+    - path: /usr/x86_64-2nex-linux-gnu/bin/strip
+
+  dev:
+    files:
+    - path: /usr/include/ansidecl.h
+    - path: /usr/include/bfd.h
+    - path: /usr/include/bfdlink.h
+    - path: /usr/include/ctf-api.h
+    - path: /usr/include/ctf.h
+    - path: /usr/include/diagnostics.h
+    - path: /usr/include/dis-asm.h
+    - path: /usr/include/plugin-api.h
+    - path: /usr/include/sframe-api.h
+    - path: /usr/include/sframe.h
+    - path: /usr/include/symcat.h
+
   lib:
     files:
     - path: /usr/lib/bfd-plugins/libdep.so
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/libbfd-2.42.so
-      needs:
-      - /usr/lib/libsframe.so.1
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/lib/libbfd.so
-      needs:
-      - /usr/lib/libsframe.so.1
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/lib/libctf-nobfd.so
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/libctf-nobfd.so.0
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/libctf-nobfd.so.0.0.0
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/libctf.so
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libsframe.so.1
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/libctf.so.0
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libsframe.so.1
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/libctf.so.0.0.0
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libsframe.so.1
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/libopcodes-2.42.so
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libsframe.so.1
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/libopcodes.so
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libsframe.so.1
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/libsframe.so
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/libsframe.so.1
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/libsframe.so.1.0.0
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.x
     - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xbn
     - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf32_x86_64.xc
@@ -225,168 +233,3 @@ outputs:
     - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xw
     - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/elf_x86_64.xwe
     - path: /usr/x86_64-2nex-linux-gnu/lib/ldscripts/stamp
-  dev:
-    files:
-    - path: /usr/include/ansidecl.h
-    - path: /usr/include/bfd.h
-    - path: /usr/include/bfdlink.h
-    - path: /usr/include/ctf-api.h
-    - path: /usr/include/ctf.h
-    - path: /usr/include/diagnostics.h
-    - path: /usr/include/dis-asm.h
-    - path: /usr/include/plugin-api.h
-    - path: /usr/include/sframe-api.h
-    - path: /usr/include/sframe.h
-    - path: /usr/include/symcat.h
-  bin:
-    files:
-    - path: /usr/bin/addr2line
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/ar
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/as
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/c++filt
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/elfedit
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gprof
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/ld
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libctf.so.0
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/ld.bfd
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libctf.so.0
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/nm
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/objcopy
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/objdump
-      needs:
-      - /usr/lib/libopcodes-2.42.so
-      - /usr/lib/libctf.so.0
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libsframe.so.1
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/ranlib
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/readelf
-      needs:
-      - /usr/lib/libctf-nobfd.so.0
-      - /usr/lib/libsframe.so.1
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/size
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/strings
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/strip
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-2nex-linux-gnu/bin/ar
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-2nex-linux-gnu/bin/as
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-2nex-linux-gnu/bin/ld
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libctf.so.0
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-2nex-linux-gnu/bin/ld.bfd
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libctf.so.0
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-2nex-linux-gnu/bin/nm
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-2nex-linux-gnu/bin/objcopy
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-2nex-linux-gnu/bin/objdump
-      needs:
-      - /usr/lib/libopcodes-2.42.so
-      - /usr/lib/libctf.so.0
-      - /usr/lib/libbfd-2.42.so
-      - /usr/lib/libsframe.so.1
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-2nex-linux-gnu/bin/ranlib
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-2nex-linux-gnu/bin/readelf
-      needs:
-      - /usr/lib/libctf-nobfd.so.0
-      - /usr/lib/libsframe.so.1
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/x86_64-2nex-linux-gnu/bin/strip
-      needs:
-      - /usr/lib/libbfd-2.42.so
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-
-resolution:
-  /usr/lib/libsframe.so.1: '@self'
-  /usr/lib/libopcodes-2.42.so: '@self'
-  /usr/lib/libctf-nobfd.so.0: '@self'
-  /usr/lib/libbfd-2.42.so: '@self'
-  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools
-  /usr/lib/libctf.so.0: '@self'
-  /bootstrap/usr/lib/libc.so.6: bootstrap_tools

@@ -3,14 +3,16 @@ package:
   name: Less
   slug: less
   namespace: cli/text
-  version: '643'
+  version: "643"
   description: A text file viewer
   homepage: https://www.greenwoodsoftware.com/less/
   checksum: ded6c07c7982e77fb8e58ddc410abbf264d407626d32862c6e9b377fcd022599
+
 sources:
 - name: less
   url: https://www.greenwoodsoftware.com/less/less-643.tar.gz
   sha256: 2911b5432c836fa084c8a2e68f6cd6312372c026a58faaa98862731c8b6052e8
+
 dependencies:
 - name: coreutils
   commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
@@ -56,7 +58,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
 - name: grep
   commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+
 build:
+  profile: [4154:1767, 8388:1770, 12629:1775, 16600:2102]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -67,28 +72,32 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
+  dev:
+  - bin
+
   full:
   - bin
   - man
-  dev:
-  - bin
+
 outputs:
   bin:
     files:
     - path: /usr/bin/less
       needs:
-      - /usr/lib/libncursesw.so.6
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
     - path: /usr/bin/lessecho
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/lesskey
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
   man:
     files:
     - path: /usr/share/man/man1/less.1
@@ -96,6 +105,6 @@ outputs:
     - path: /usr/share/man/man1/lesskey.1
 
 resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
   /usr/lib/libncursesw.so.6: ncurses
-  /usr/lib/ld-linux-x86-64.so.2: glibc

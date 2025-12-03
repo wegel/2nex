@@ -7,10 +7,12 @@ package:
   description: The GNU general-purpose parser generator
   homepage: https://www.gnu.org/software/bison/
   checksum: abb94f484bfbca92bd0659c7b7dbe14c6b5e5a5eeb6b610482518bb842ba978a
+
 sources:
 - name: bison
   url: https://ftp.gnu.org/gnu/bison/bison-3.8.2.tar.xz
   sha256: 9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
@@ -64,38 +66,42 @@ dependencies:
   commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
 - name: sed
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+
 build:
-  script: 'tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+  profile: [4109:1457, 8242:6510, 12342:8431, 16453:10141, 24681:12542, 28798:13251, 32924:13655, 41185:14346, 49443:14540, 51592:15055]
 
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
-
     ./configure --prefix=/usr --docdir=/usr/share/doc/bison-3.8.2
-
     make
-
     make DESTDIR=${OUT_DIR} install
 
-
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
-  full:
-  - dev
-  - bin
-  - man
-  - doc
-  - static
-  - locale
-  - info
   dev:
-  - dev
   - bin
-  - static
+  - dev
   - locale
+  - static
+
+  full:
+  - bin
+  - dev
+  - doc
+  - info
+  - locale
+  - man
+  - static
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/bison
+    - path: /usr/bin/yacc
+
   dev:
     files:
     - path: /usr/share/aclocal/bison-i18n.m4
@@ -125,17 +131,10 @@ outputs:
     - path: /usr/share/bison/skeletons/variant.hh
     - path: /usr/share/bison/skeletons/yacc.c
     - path: /usr/share/bison/xslt/bison.xsl
-    - path: /usr/share/bison/xslt/xml2dot.xsl
     - path: /usr/share/bison/xslt/xml2text.xsl
     - path: /usr/share/bison/xslt/xml2xhtml.xsl
-  bin:
-    files:
-    - path: /usr/bin/bison
-    - path: /usr/bin/yacc
-  man:
-    files:
-    - path: /usr/share/man/man1/bison.1
-    - path: /usr/share/man/man1/yacc.1
+    - path: /usr/share/bison/xslt/xml2dot.xsl
+
   doc:
     files:
     - path: /usr/share/doc/bison-3.8.2/AUTHORS
@@ -193,9 +192,12 @@ outputs:
     - path: /usr/share/doc/bison-3.8.2/examples/java/calc/Makefile
     - path: /usr/share/doc/bison-3.8.2/examples/java/simple/Calc.y
     - path: /usr/share/doc/bison-3.8.2/examples/java/simple/Makefile
-  static:
+
+  info:
     files:
-    - path: /usr/lib/liby.a
+    - path: /usr/share/info/bison.info
+    - path: /usr/share/info/dir
+
   locale:
     files:
     - path: /usr/share/locale/af/LC_MESSAGES/bison-gnulib.mo
@@ -307,7 +309,12 @@ outputs:
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/bison-gnulib.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/bison-runtime.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/bison.mo
-  info:
+
+  man:
     files:
-    - path: /usr/share/info/bison.info
-    - path: /usr/share/info/dir
+    - path: /usr/share/man/man1/bison.1
+    - path: /usr/share/man/man1/yacc.1
+
+  static:
+    files:
+    - path: /usr/lib/liby.a

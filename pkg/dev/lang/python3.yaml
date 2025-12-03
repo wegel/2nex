@@ -7,6 +7,7 @@ package:
   description: Python is an easy to learn, powerful programming language
   homepage: https://www.python.org/
   checksum: 4a3562e42cfbb5d341b98e4239451354b547aef5c9741c1ffa6f743ea87b860c
+
 sources:
 - name: python
   url: https://www.python.org/ftp/python/3.12.2/Python-3.12.2.tar.xz
@@ -14,6 +15,7 @@ sources:
 - name: docs
   url: https://www.python.org/ftp/python/doc/3.12.3/python-3.12.3-docs-html.tar.bz2
   sha256: 1d4646c6f8060e2e3feb99f4552a6ab19aa85b0b6061a37c6bc622a5b36931c5
+
 dependencies:
 - name: coreutils
   commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
@@ -31,14 +33,14 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: bzip2
   commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
 - name: file
   commit: x86_64/pkg/bootstrap/phase1/file/5.45/bundles/dev
-- name: bootstrap_tools
-  commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/bootstrap/phase3/pkgconf/2.2.0/bundles/dev
 - name: binutils
@@ -65,7 +67,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
 - name: xz
   commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+
 build:
+  profile: [24721:16867, 91975:26665, 203792:28888, 337651:55758, 445393:59466, 557162:66175, 668891:96023, 834678:101384, 1004417:121318, 1111972:165193]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_python} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -115,21 +120,24 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - man
-  - static
-  - misc
-  - bin
-  - dev
-  - lib
-  - doc
   dev:
   - bin
   - dev
   - lib
-  - static
   - misc
+  - static
+
+  full:
+  - bin
+  - dev
+  - doc
+  - lib
+  - man
+  - misc
+  - static
+
 outputs:
   bin:
     files:
@@ -143,18 +151,19 @@ outputs:
     - path: /usr/bin/pydoc3.12
     - path: /usr/bin/python3
       needs:
-      - /usr/lib/libpython3.12.so.1.0
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/python3-config
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpython3.12.so.1.0
     - path: /usr/bin/python3.12
       needs:
-      - /usr/lib/libpython3.12.so.1.0
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpython3.12.so.1.0
     - path: /usr/bin/python3.12-config
+    - path: /usr/bin/python3-config
+
   dev:
     files:
     - path: /usr/include/python3.12/Python.h
@@ -375,6 +384,7 @@ outputs:
     - path: /usr/lib/pkgconfig/python-3.12.pc
     - path: /usr/lib/pkgconfig/python3-embed.pc
     - path: /usr/lib/pkgconfig/python3.pc
+
   doc:
     files:
     - path: /usr/share/doc/python-3.12.3/html/_downloads/6dc1f3f4f0e6ca13cb42ddf4d6cbc8af/tzinfo_examples.py
@@ -856,9 +866,6 @@ outputs:
     - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/2.7.rst.txt
     - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/3.0.rst.txt
     - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/3.1.rst.txt
-    - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/3.10.rst.txt
-    - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/3.11.rst.txt
-    - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/3.12.rst.txt
     - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/3.2.rst.txt
     - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/3.3.rst.txt
     - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/3.4.rst.txt
@@ -867,6 +874,9 @@ outputs:
     - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/3.7.rst.txt
     - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/3.8.rst.txt
     - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/3.9.rst.txt
+    - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/3.10.rst.txt
+    - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/3.11.rst.txt
+    - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/3.12.rst.txt
     - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/changelog.rst.txt
     - path: /usr/share/doc/python-3.12.3/html/_sources/whatsnew/index.rst.txt
     - path: /usr/share/doc/python-3.12.3/html/_static/basic.css
@@ -1402,9 +1412,6 @@ outputs:
     - path: /usr/share/doc/python-3.12.3/html/whatsnew/2.7.html
     - path: /usr/share/doc/python-3.12.3/html/whatsnew/3.0.html
     - path: /usr/share/doc/python-3.12.3/html/whatsnew/3.1.html
-    - path: /usr/share/doc/python-3.12.3/html/whatsnew/3.10.html
-    - path: /usr/share/doc/python-3.12.3/html/whatsnew/3.11.html
-    - path: /usr/share/doc/python-3.12.3/html/whatsnew/3.12.html
     - path: /usr/share/doc/python-3.12.3/html/whatsnew/3.2.html
     - path: /usr/share/doc/python-3.12.3/html/whatsnew/3.3.html
     - path: /usr/share/doc/python-3.12.3/html/whatsnew/3.4.html
@@ -1413,24 +1420,28 @@ outputs:
     - path: /usr/share/doc/python-3.12.3/html/whatsnew/3.7.html
     - path: /usr/share/doc/python-3.12.3/html/whatsnew/3.8.html
     - path: /usr/share/doc/python-3.12.3/html/whatsnew/3.9.html
+    - path: /usr/share/doc/python-3.12.3/html/whatsnew/3.10.html
+    - path: /usr/share/doc/python-3.12.3/html/whatsnew/3.11.html
+    - path: /usr/share/doc/python-3.12.3/html/whatsnew/3.12.html
     - path: /usr/share/doc/python-3.12.3/html/whatsnew/changelog.html
     - path: /usr/share/doc/python-3.12.3/html/whatsnew/index.html
+
   lib:
     files:
     - path: /usr/lib/libpython3.12.so
       needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/libpython3.12.so.1.0
       needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/libpython3.so
       needs:
-      - /usr/lib/libpython3.12.so.1.0
       - /usr/lib/libc.so.6
+      - /usr/lib/libpython3.12.so.1.0
     - path: /usr/lib/python3.12/LICENSE.txt
     - path: /usr/lib/python3.12/__future__.py
     - path: /usr/lib/python3.12/__hello__.py
@@ -2377,45 +2388,6 @@ outputs:
     - path: /usr/lib/python3.12/encodings/__pycache__/cp037.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/cp037.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/cp037.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1006.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1006.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1006.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1026.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1026.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1026.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1125.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1125.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1125.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1140.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1140.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1140.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1250.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1250.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1250.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1251.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1251.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1251.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1252.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1252.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1252.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1253.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1253.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1253.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1254.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1254.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1254.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1255.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1255.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1255.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1256.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1256.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1256.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1257.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1257.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1257.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1258.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1258.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/cp1258.cpython-312.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/cp273.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/cp273.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/cp273.cpython-312.pyc
@@ -2494,6 +2466,45 @@ outputs:
     - path: /usr/lib/python3.12/encodings/__pycache__/cp950.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/cp950.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/cp950.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1006.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1006.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1006.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1026.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1026.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1026.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1125.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1125.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1125.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1140.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1140.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1140.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1250.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1250.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1250.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1251.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1251.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1251.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1252.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1252.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1252.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1253.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1253.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1253.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1254.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1254.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1254.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1255.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1255.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1255.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1256.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1256.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1256.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1257.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1257.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1257.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1258.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1258.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/cp1258.cpython-312.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/euc_jis_2004.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/euc_jis_2004.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/euc_jis_2004.cpython-312.pyc
@@ -2506,12 +2517,12 @@ outputs:
     - path: /usr/lib/python3.12/encodings/__pycache__/euc_kr.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/euc_kr.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/euc_kr.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/gb18030.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/gb18030.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/gb18030.cpython-312.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/gb2312.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/gb2312.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/gb2312.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/gb18030.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/gb18030.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/gb18030.cpython-312.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/gbk.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/gbk.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/gbk.cpython-312.pyc
@@ -2536,12 +2547,12 @@ outputs:
     - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_2.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_2.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_2.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_2004.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_2004.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_2004.cpython-312.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_3.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_3.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_3.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_2004.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_2004.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_2004.cpython-312.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_ext.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_ext.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso2022_jp_ext.cpython-312.pyc
@@ -2551,24 +2562,6 @@ outputs:
     - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_1.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_1.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_1.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_10.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_10.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_10.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_11.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_11.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_11.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_13.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_13.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_13.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_14.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_14.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_14.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_15.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_15.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_15.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_16.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_16.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_16.cpython-312.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_2.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_2.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_2.cpython-312.pyc
@@ -2593,6 +2586,24 @@ outputs:
     - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_9.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_9.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_9.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_10.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_10.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_10.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_11.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_11.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_11.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_13.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_13.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_13.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_14.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_14.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_14.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_15.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_15.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_15.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_16.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_16.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/iso8859_16.cpython-312.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/johab.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/johab.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/johab.cpython-312.pyc
@@ -2683,24 +2694,6 @@ outputs:
     - path: /usr/lib/python3.12/encodings/__pycache__/unicode_escape.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/unicode_escape.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/unicode_escape.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16_be.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16_be.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16_be.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16_le.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16_le.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16_le.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32_be.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32_be.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32_be.cpython-312.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32_le.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32_le.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32_le.cpython-312.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/utf_7.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/utf_7.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/utf_7.cpython-312.pyc
@@ -2710,6 +2703,24 @@ outputs:
     - path: /usr/lib/python3.12/encodings/__pycache__/utf_8_sig.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/utf_8_sig.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/utf_8_sig.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16_be.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16_be.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16_be.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16_le.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16_le.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_16_le.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32_be.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32_be.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32_be.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32.cpython-312.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32_le.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32_le.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/encodings/__pycache__/utf_32_le.cpython-312.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/uu_codec.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/uu_codec.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/encodings/__pycache__/uu_codec.cpython-312.pyc
@@ -2719,24 +2730,11 @@ outputs:
     - path: /usr/lib/python3.12/encodings/aliases.py
     - path: /usr/lib/python3.12/encodings/ascii.py
     - path: /usr/lib/python3.12/encodings/base64_codec.py
-    - path: /usr/lib/python3.12/encodings/big5.py
     - path: /usr/lib/python3.12/encodings/big5hkscs.py
+    - path: /usr/lib/python3.12/encodings/big5.py
     - path: /usr/lib/python3.12/encodings/bz2_codec.py
     - path: /usr/lib/python3.12/encodings/charmap.py
     - path: /usr/lib/python3.12/encodings/cp037.py
-    - path: /usr/lib/python3.12/encodings/cp1006.py
-    - path: /usr/lib/python3.12/encodings/cp1026.py
-    - path: /usr/lib/python3.12/encodings/cp1125.py
-    - path: /usr/lib/python3.12/encodings/cp1140.py
-    - path: /usr/lib/python3.12/encodings/cp1250.py
-    - path: /usr/lib/python3.12/encodings/cp1251.py
-    - path: /usr/lib/python3.12/encodings/cp1252.py
-    - path: /usr/lib/python3.12/encodings/cp1253.py
-    - path: /usr/lib/python3.12/encodings/cp1254.py
-    - path: /usr/lib/python3.12/encodings/cp1255.py
-    - path: /usr/lib/python3.12/encodings/cp1256.py
-    - path: /usr/lib/python3.12/encodings/cp1257.py
-    - path: /usr/lib/python3.12/encodings/cp1258.py
     - path: /usr/lib/python3.12/encodings/cp273.py
     - path: /usr/lib/python3.12/encodings/cp424.py
     - path: /usr/lib/python3.12/encodings/cp437.py
@@ -2763,12 +2761,25 @@ outputs:
     - path: /usr/lib/python3.12/encodings/cp932.py
     - path: /usr/lib/python3.12/encodings/cp949.py
     - path: /usr/lib/python3.12/encodings/cp950.py
+    - path: /usr/lib/python3.12/encodings/cp1006.py
+    - path: /usr/lib/python3.12/encodings/cp1026.py
+    - path: /usr/lib/python3.12/encodings/cp1125.py
+    - path: /usr/lib/python3.12/encodings/cp1140.py
+    - path: /usr/lib/python3.12/encodings/cp1250.py
+    - path: /usr/lib/python3.12/encodings/cp1251.py
+    - path: /usr/lib/python3.12/encodings/cp1252.py
+    - path: /usr/lib/python3.12/encodings/cp1253.py
+    - path: /usr/lib/python3.12/encodings/cp1254.py
+    - path: /usr/lib/python3.12/encodings/cp1255.py
+    - path: /usr/lib/python3.12/encodings/cp1256.py
+    - path: /usr/lib/python3.12/encodings/cp1257.py
+    - path: /usr/lib/python3.12/encodings/cp1258.py
     - path: /usr/lib/python3.12/encodings/euc_jis_2004.py
     - path: /usr/lib/python3.12/encodings/euc_jisx0213.py
     - path: /usr/lib/python3.12/encodings/euc_jp.py
     - path: /usr/lib/python3.12/encodings/euc_kr.py
-    - path: /usr/lib/python3.12/encodings/gb18030.py
     - path: /usr/lib/python3.12/encodings/gb2312.py
+    - path: /usr/lib/python3.12/encodings/gb18030.py
     - path: /usr/lib/python3.12/encodings/gbk.py
     - path: /usr/lib/python3.12/encodings/hex_codec.py
     - path: /usr/lib/python3.12/encodings/hp_roman8.py
@@ -2777,17 +2788,11 @@ outputs:
     - path: /usr/lib/python3.12/encodings/iso2022_jp.py
     - path: /usr/lib/python3.12/encodings/iso2022_jp_1.py
     - path: /usr/lib/python3.12/encodings/iso2022_jp_2.py
-    - path: /usr/lib/python3.12/encodings/iso2022_jp_2004.py
     - path: /usr/lib/python3.12/encodings/iso2022_jp_3.py
+    - path: /usr/lib/python3.12/encodings/iso2022_jp_2004.py
     - path: /usr/lib/python3.12/encodings/iso2022_jp_ext.py
     - path: /usr/lib/python3.12/encodings/iso2022_kr.py
     - path: /usr/lib/python3.12/encodings/iso8859_1.py
-    - path: /usr/lib/python3.12/encodings/iso8859_10.py
-    - path: /usr/lib/python3.12/encodings/iso8859_11.py
-    - path: /usr/lib/python3.12/encodings/iso8859_13.py
-    - path: /usr/lib/python3.12/encodings/iso8859_14.py
-    - path: /usr/lib/python3.12/encodings/iso8859_15.py
-    - path: /usr/lib/python3.12/encodings/iso8859_16.py
     - path: /usr/lib/python3.12/encodings/iso8859_2.py
     - path: /usr/lib/python3.12/encodings/iso8859_3.py
     - path: /usr/lib/python3.12/encodings/iso8859_4.py
@@ -2796,6 +2801,12 @@ outputs:
     - path: /usr/lib/python3.12/encodings/iso8859_7.py
     - path: /usr/lib/python3.12/encodings/iso8859_8.py
     - path: /usr/lib/python3.12/encodings/iso8859_9.py
+    - path: /usr/lib/python3.12/encodings/iso8859_10.py
+    - path: /usr/lib/python3.12/encodings/iso8859_11.py
+    - path: /usr/lib/python3.12/encodings/iso8859_13.py
+    - path: /usr/lib/python3.12/encodings/iso8859_14.py
+    - path: /usr/lib/python3.12/encodings/iso8859_15.py
+    - path: /usr/lib/python3.12/encodings/iso8859_16.py
     - path: /usr/lib/python3.12/encodings/johab.py
     - path: /usr/lib/python3.12/encodings/koi8_r.py
     - path: /usr/lib/python3.12/encodings/koi8_t.py
@@ -2826,15 +2837,15 @@ outputs:
     - path: /usr/lib/python3.12/encodings/tis_620.py
     - path: /usr/lib/python3.12/encodings/undefined.py
     - path: /usr/lib/python3.12/encodings/unicode_escape.py
-    - path: /usr/lib/python3.12/encodings/utf_16.py
-    - path: /usr/lib/python3.12/encodings/utf_16_be.py
-    - path: /usr/lib/python3.12/encodings/utf_16_le.py
-    - path: /usr/lib/python3.12/encodings/utf_32.py
-    - path: /usr/lib/python3.12/encodings/utf_32_be.py
-    - path: /usr/lib/python3.12/encodings/utf_32_le.py
     - path: /usr/lib/python3.12/encodings/utf_7.py
     - path: /usr/lib/python3.12/encodings/utf_8.py
     - path: /usr/lib/python3.12/encodings/utf_8_sig.py
+    - path: /usr/lib/python3.12/encodings/utf_16_be.py
+    - path: /usr/lib/python3.12/encodings/utf_16_le.py
+    - path: /usr/lib/python3.12/encodings/utf_16.py
+    - path: /usr/lib/python3.12/encodings/utf_32_be.py
+    - path: /usr/lib/python3.12/encodings/utf_32_le.py
+    - path: /usr/lib/python3.12/encodings/utf_32.py
     - path: /usr/lib/python3.12/encodings/uu_codec.py
     - path: /usr/lib/python3.12/encodings/zlib_codec.py
     - path: /usr/lib/python3.12/ensurepip/__init__.py
@@ -2907,11 +2918,11 @@ outputs:
     - path: /usr/lib/python3.12/idlelib/Icons/idle.ico
     - path: /usr/lib/python3.12/idlelib/Icons/idle_16.gif
     - path: /usr/lib/python3.12/idlelib/Icons/idle_16.png
-    - path: /usr/lib/python3.12/idlelib/Icons/idle_256.png
     - path: /usr/lib/python3.12/idlelib/Icons/idle_32.gif
     - path: /usr/lib/python3.12/idlelib/Icons/idle_32.png
     - path: /usr/lib/python3.12/idlelib/Icons/idle_48.gif
     - path: /usr/lib/python3.12/idlelib/Icons/idle_48.png
+    - path: /usr/lib/python3.12/idlelib/Icons/idle_256.png
     - path: /usr/lib/python3.12/idlelib/Icons/minusnode.gif
     - path: /usr/lib/python3.12/idlelib/Icons/openfolder.gif
     - path: /usr/lib/python3.12/idlelib/Icons/plusnode.gif
@@ -3593,35 +3604,35 @@ outputs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/python3.12/lib-dynload/_ctypes.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libffi.so.8
       - /usr/lib/libc.so.6
+      - /usr/lib/libffi.so.8
     - path: /usr/lib/python3.12/lib-dynload/_ctypes_test.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/python3.12/lib-dynload/_curses.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libncursesw.so.6
       - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
     - path: /usr/lib/python3.12/lib-dynload/_curses_panel.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libpanelw.so.6
       - /usr/lib/libc.so.6
+      - /usr/lib/libpanelw.so.6
     - path: /usr/lib/python3.12/lib-dynload/_datetime.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/python3.12/lib-dynload/_decimal.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/python3.12/lib-dynload/_elementtree.cpython-312-x86_64-linux-gnu.so
       needs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/python3.12/lib-dynload/_hashlib.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libcrypto.so.3
       - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
     - path: /usr/lib/python3.12/lib-dynload/_heapq.cpython-312-x86_64-linux-gnu.so
       needs:
       - /usr/lib/libc.so.6
@@ -3633,8 +3644,8 @@ outputs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/python3.12/lib-dynload/_lzma.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/liblzma.so.5
       - /usr/lib/libc.so.6
+      - /usr/lib/liblzma.so.5
     - path: /usr/lib/python3.12/lib-dynload/_md5.cpython-312-x86_64-linux-gnu.so
       needs:
       - /usr/lib/libc.so.6
@@ -3676,13 +3687,13 @@ outputs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/python3.12/lib-dynload/_ssl.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libssl.so.3
-      - /usr/lib/libcrypto.so.3
       - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libssl.so.3
     - path: /usr/lib/python3.12/lib-dynload/_statistics.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/python3.12/lib-dynload/_struct.cpython-312-x86_64-linux-gnu.so
       needs:
       - /usr/lib/libc.so.6
@@ -3724,16 +3735,16 @@ outputs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/python3.12/lib-dynload/audioop.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/python3.12/lib-dynload/binascii.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libz.so.1
       - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
     - path: /usr/lib/python3.12/lib-dynload/cmath.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/python3.12/lib-dynload/fcntl.cpython-312-x86_64-linux-gnu.so
       needs:
       - /usr/lib/libc.so.6
@@ -3742,8 +3753,8 @@ outputs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/python3.12/lib-dynload/math.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/python3.12/lib-dynload/mmap.cpython-312-x86_64-linux-gnu.so
       needs:
       - /usr/lib/libc.so.6
@@ -3752,8 +3763,8 @@ outputs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/python3.12/lib-dynload/pyexpat.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libexpat.so.1
       - /usr/lib/libc.so.6
+      - /usr/lib/libexpat.so.1
     - path: /usr/lib/python3.12/lib-dynload/resource.cpython-312-x86_64-linux-gnu.so
       needs:
       - /usr/lib/libc.so.6
@@ -3783,8 +3794,8 @@ outputs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/python3.12/lib-dynload/zlib.cpython-312-x86_64-linux-gnu.so
       needs:
-      - /usr/lib/libz.so.1
       - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
     - path: /usr/lib/python3.12/lib2to3/Grammar.txt
     - path: /usr/lib/python3.12/lib2to3/Grammar3.12.2.final.0.pickle
     - path: /usr/lib/python3.12/lib2to3/PatternGrammar.txt
@@ -4848,12 +4859,12 @@ outputs:
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/universaldetector.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/universaldetector.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/universaldetector.cpython-312.pyc
-    - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/utf1632prober.cpython-312.opt-1.pyc
-    - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/utf1632prober.cpython-312.opt-2.pyc
-    - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/utf1632prober.cpython-312.pyc
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/utf8prober.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/utf8prober.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/utf8prober.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/utf1632prober.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/utf1632prober.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/utf1632prober.cpython-312.pyc
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/version.cpython-312.opt-1.pyc
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/version.cpython-312.opt-2.pyc
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/__pycache__/version.cpython-312.pyc
@@ -4914,8 +4925,8 @@ outputs:
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/sbcsgroupprober.py
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/sjisprober.py
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/universaldetector.py
-    - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/utf1632prober.py
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/utf8prober.py
+    - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/utf1632prober.py
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/chardet/version.py
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/colorama/__init__.py
     - path: /usr/lib/python3.12/site-packages/pip/_vendor/colorama/__pycache__/__init__.cpython-312.opt-1.pyc
@@ -6518,28 +6529,31 @@ outputs:
     - path: /usr/lib/python3.12/zoneinfo/_common.py
     - path: /usr/lib/python3.12/zoneinfo/_tzpath.py
     - path: /usr/lib/python3.12/zoneinfo/_zoneinfo.py
+
   man:
     files:
     - path: /usr/share/man/man1/python3.1
     - path: /usr/share/man/man1/python3.12.1
+
   misc:
     files:
     - path: /usr/share/gdb/libpython.py
+
   static:
     files:
     - path: /usr/lib/python3.12/config-3.12-x86_64-linux-gnu/libpython3.12.a
 
 resolution:
-  /usr/lib/libncursesw.so.6: ncurses
-  /usr/lib/ld-linux-x86-64.so.2: bootstrap_tools
-  /usr/lib/libpanelw.so.6: ncurses
-  /usr/lib/libpython3.12.so.1.0: '@self'
-  /usr/lib/libcrypto.so.3: openssl3
-  /usr/lib/liblzma.so.5: xz
-  /usr/lib/libc.so.6: bootstrap_tools
-  /usr/lib/libz.so.1: zlib
-  /usr/lib/libexpat.so.1: expat
   /usr/lib/libbz2.so.1.0: bzip2
-  /usr/lib/libm.so.6: bootstrap_tools
-  /usr/lib/libssl.so.3: openssl3
+  /usr/lib/libexpat.so.1: expat
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
   /usr/lib/libffi.so.8: libffi
+  /usr/lib/libncursesw.so.6: ncurses
+  /usr/lib/libpanelw.so.6: ncurses
+  /usr/lib/libcrypto.so.3: openssl3
+  /usr/lib/libssl.so.3: openssl3
+  /usr/lib/libpython3.12.so.1.0: self
+  /usr/lib/liblzma.so.5: xz
+  /usr/lib/libz.so.1: zlib

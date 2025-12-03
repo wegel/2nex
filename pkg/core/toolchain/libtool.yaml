@@ -7,13 +7,19 @@ package:
   description: A generic library support script
   homepage: https://www.gnu.org/software/libtool/
   checksum: 67f043593c2b04efcb6f2c701d91510a401777d1b78eb9f64da3e4ce1a8ecdd5
+
 sources:
 - name: libtool
   url: https://ftp.gnu.org/gnu/libtool/libtool-2.4.7.tar.xz
   sha256: 4f7f217f057ce655ff22559ad221a0fd8ef84ad1fc5fcb6990cecc333aa1635d
+
 dependencies:
 - name: coreutils
   commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
 - name: diffutils
   commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
 - name: findutils
@@ -40,8 +46,16 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
 - name: binutils
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+- name: mpc
+  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
 - name: strip-nondeterminism
@@ -50,46 +64,42 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase2/perl/5.38.2/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
-build:
-  script: 'tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
 
+build:
+  profile: [4158:788, 8261:1802, 12364:3339, 16528:3401, 17939:4413]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
     ./configure --prefix=/usr
-
     make
-
     make DESTDIR=$OUT_DIR install
-
     rm -fv ${OUT_DIR}/usr/lib/libltdl.a
-
-    sed -i ''s/max_cmd_len=[0-9]*/max_cmd_len=4718592/'' ${OUT_DIR}/usr/bin/libtool
-
+    sed -i 's/max_cmd_len=[0-9]*/max_cmd_len=4718592/' ${OUT_DIR}/usr/bin/libtool
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-
-    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers
-    +all {} \;
-
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
-  full:
-  - bin
-  - dev
-  - lib
-  - info
-  - man
   dev:
   - bin
   - dev
   - lib
+
+  full:
+  - bin
+  - dev
+  - info
+  - lib
+  - man
+
 outputs:
   bin:
     files:
     - path: /usr/bin/libtool
     - path: /usr/bin/libtoolize
+
   dev:
     files:
     - path: /usr/include/libltdl/lt_dlloader.h
@@ -146,17 +156,20 @@ outputs:
     - path: /usr/share/libtool/ltdl.h
     - path: /usr/share/libtool/ltdl.mk
     - path: /usr/share/libtool/slist.c
-  lib:
-    files:
-    - path: /usr/lib/libltdl.so
-    - path: /usr/lib/libltdl.so.7
-    - path: /usr/lib/libltdl.so.7.3.2
+
   info:
     files:
     - path: /usr/share/info/dir
     - path: /usr/share/info/libtool.info
     - path: /usr/share/info/libtool.info-1
     - path: /usr/share/info/libtool.info-2
+
+  lib:
+    files:
+    - path: /usr/lib/libltdl.so
+    - path: /usr/lib/libltdl.so.7
+    - path: /usr/lib/libltdl.so.7.3.2
+
   man:
     files:
     - path: /usr/share/man/man1/libtool.1

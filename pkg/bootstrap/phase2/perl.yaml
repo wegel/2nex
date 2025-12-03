@@ -7,10 +7,12 @@ package:
   description: The Perl programming language
   homepage: https://www.perl.org/
   stable_checksum: false
+
 sources:
 - name: perl
   url: https://www.cpan.org/src/5.0/perl-5.38.2.tar.xz
   sha256: d91115e90b896520e83d4de6b52f8254ef2b70a8d545ffab33200ea9f1cf29e8
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -50,7 +52,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
 - name: gcc
   commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/bundles/dev
+
 build:
+  profile: [8272:2516, 28810:41405, 66287:62298, 103904:65041, 141702:67199, 175160:72245, 208147:86021, 261751:86370, 311275:86443, 345441:95365]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_perl} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -103,11 +108,47 @@ build:
 
     rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
 bundles:
   dev:
   - bin
   - lib
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/corelist
+    - path: /usr/bin/cpan
+    - path: /usr/bin/enc2xs
+    - path: /usr/bin/encguess
+    - path: /usr/bin/h2ph
+    - path: /usr/bin/h2xs
+    - path: /usr/bin/instmodsh
+    - path: /usr/bin/json_pp
+    - path: /usr/bin/libnetcfg
+    - path: /usr/bin/perl
+    - path: /usr/bin/perl5.38.2
+    - path: /usr/bin/perlbug
+    - path: /usr/bin/perldoc
+    - path: /usr/bin/perlivp
+    - path: /usr/bin/perlthanks
+    - path: /usr/bin/piconv
+    - path: /usr/bin/pl2pm
+    - path: /usr/bin/pod2man
+    - path: /usr/bin/pod2text
+    - path: /usr/bin/pod2usage
+    - path: /usr/bin/pod2html
+    - path: /usr/bin/podchecker
+    - path: /usr/bin/prove
+    - path: /usr/bin/ptar
+    - path: /usr/bin/ptardiff
+    - path: /usr/bin/ptargrep
+    - path: /usr/bin/shasum
+    - path: /usr/bin/splain
+    - path: /usr/bin/streamzip
+    - path: /usr/bin/xsubpp
+    - path: /usr/bin/zipdetails
+
   lib:
     files:
     - path: /usr/lib/perl5/5.38/core_perl/.packlist
@@ -161,9 +202,6 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/CORE/keywords.h
     - path: /usr/lib/perl5/5.38/core_perl/CORE/l1_char_class_tab.h
     - path: /usr/lib/perl5/5.38/core_perl/CORE/libperl.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/CORE/malloc_ctl.h
     - path: /usr/lib/perl5/5.38/core_perl/CORE/metaconfig.h
     - path: /usr/lib/perl5/5.38/core_perl/CORE/mg.h
@@ -207,8 +245,8 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/CORE/sv.h
     - path: /usr/lib/perl5/5.38/core_perl/CORE/sv_inline.h
     - path: /usr/lib/perl5/5.38/core_perl/CORE/thread.h
-    - path: /usr/lib/perl5/5.38/core_perl/CORE/time64.h
     - path: /usr/lib/perl5/5.38/core_perl/CORE/time64_config.h
+    - path: /usr/lib/perl5/5.38/core_perl/CORE/time64.h
     - path: /usr/lib/perl5/5.38/core_perl/CORE/uconfig.h
     - path: /usr/lib/perl5/5.38/core_perl/CORE/uni_keywords.h
     - path: /usr/lib/perl5/5.38/core_perl/CORE/unicode_constants.h
@@ -704,7 +742,6 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/Test/Tester/Delegate.pm
     - path: /usr/lib/perl5/5.38/core_perl/Test/Tutorial.pod
     - path: /usr/lib/perl5/5.38/core_perl/Test/use/ok.pm
-    - path: /usr/lib/perl5/5.38/core_perl/Test2.pm
     - path: /usr/lib/perl5/5.38/core_perl/Test2/API.pm
     - path: /usr/lib/perl5/5.38/core_perl/Test2/API/Breakage.pm
     - path: /usr/lib/perl5/5.38/core_perl/Test2/API/Context.pm
@@ -761,6 +798,7 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/Test2/Util/Facets2Legacy.pm
     - path: /usr/lib/perl5/5.38/core_perl/Test2/Util/HashBase.pm
     - path: /usr/lib/perl5/5.38/core_perl/Test2/Util/Trace.pm
+    - path: /usr/lib/perl5/5.38/core_perl/Test2.pm
     - path: /usr/lib/perl5/5.38/core_perl/Text/Abbrev.pm
     - path: /usr/lib/perl5/5.38/core_perl/Text/Balanced.pm
     - path: /usr/lib/perl5/5.38/core_perl/Text/ParseWords.pm
@@ -893,153 +931,54 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/_charnames.pm
     - path: /usr/lib/perl5/5.38/core_perl/attributes.pm
     - path: /usr/lib/perl5/5.38/core_perl/auto/B/B.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Compress/Raw/Bzip2/Bzip2.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Compress/Raw/Zlib/Zlib.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Cwd/Cwd.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Data/Dumper/Dumper.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Devel/Peek/Peek.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Digest/MD5/MD5.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Digest/SHA/SHA.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/Byte/Byte.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/CN/CN.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/EBCDIC/EBCDIC.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/Encode.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/JP/JP.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/KR/KR.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/Symbol/Symbol.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/TW/TW.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/Unicode/Unicode.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Fcntl/Fcntl.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/File/DosGlob/DosGlob.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/File/Glob/Glob.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Filter/Util/Call/Call.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Hash/Util/FieldHash/FieldHash.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Hash/Util/Util.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/I18N/Langinfo/Langinfo.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/IO/IO.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/IPC/SysV/SysV.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/List/Util/Util.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/MIME/Base64/Base64.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Math/BigInt/FastCalc/FastCalc.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Opcode/Opcode.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/POSIX/POSIX.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/PerlIO/encoding/encoding.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/PerlIO/mmap/mmap.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/PerlIO/scalar/scalar.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/PerlIO/via/via.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/SDBM_File/SDBM_File.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Socket/Socket.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Storable/Storable.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Sys/Hostname/Hostname.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Sys/Syslog/Syslog.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Time/HiRes/HiRes.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Time/Piece/Piece.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Unicode/Collate/Collate.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Unicode/Normalize/Normalize.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/attributes/attributes.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/mro/mro.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/re/re.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/threads/shared/shared.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/threads/threads.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/autodie.pm
     - path: /usr/lib/perl5/5.38/core_perl/autodie/Scope/Guard.pm
     - path: /usr/lib/perl5/5.38/core_perl/autodie/Scope/GuardStack.pm
@@ -1086,6 +1025,18 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/perl5db.pl
     - path: /usr/lib/perl5/5.38/core_perl/perlfaq.pm
     - path: /usr/lib/perl5/5.38/core_perl/pod/perl.pod
+    - path: /usr/lib/perl5/5.38/core_perl/pod/perl56delta.pod
+    - path: /usr/lib/perl5/5.38/core_perl/pod/perl58delta.pod
+    - path: /usr/lib/perl5/5.38/core_perl/pod/perl561delta.pod
+    - path: /usr/lib/perl5/5.38/core_perl/pod/perl581delta.pod
+    - path: /usr/lib/perl5/5.38/core_perl/pod/perl582delta.pod
+    - path: /usr/lib/perl5/5.38/core_perl/pod/perl583delta.pod
+    - path: /usr/lib/perl5/5.38/core_perl/pod/perl584delta.pod
+    - path: /usr/lib/perl5/5.38/core_perl/pod/perl585delta.pod
+    - path: /usr/lib/perl5/5.38/core_perl/pod/perl586delta.pod
+    - path: /usr/lib/perl5/5.38/core_perl/pod/perl587delta.pod
+    - path: /usr/lib/perl5/5.38/core_perl/pod/perl588delta.pod
+    - path: /usr/lib/perl5/5.38/core_perl/pod/perl589delta.pod
     - path: /usr/lib/perl5/5.38/core_perl/pod/perl5004delta.pod
     - path: /usr/lib/perl5/5.38/core_perl/pod/perl5005delta.pod
     - path: /usr/lib/perl5/5.38/core_perl/pod/perl5100delta.pod
@@ -1148,18 +1099,6 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/pod/perl5380delta.pod
     - path: /usr/lib/perl5/5.38/core_perl/pod/perl5381delta.pod
     - path: /usr/lib/perl5/5.38/core_perl/pod/perl5382delta.pod
-    - path: /usr/lib/perl5/5.38/core_perl/pod/perl561delta.pod
-    - path: /usr/lib/perl5/5.38/core_perl/pod/perl56delta.pod
-    - path: /usr/lib/perl5/5.38/core_perl/pod/perl581delta.pod
-    - path: /usr/lib/perl5/5.38/core_perl/pod/perl582delta.pod
-    - path: /usr/lib/perl5/5.38/core_perl/pod/perl583delta.pod
-    - path: /usr/lib/perl5/5.38/core_perl/pod/perl584delta.pod
-    - path: /usr/lib/perl5/5.38/core_perl/pod/perl585delta.pod
-    - path: /usr/lib/perl5/5.38/core_perl/pod/perl586delta.pod
-    - path: /usr/lib/perl5/5.38/core_perl/pod/perl587delta.pod
-    - path: /usr/lib/perl5/5.38/core_perl/pod/perl588delta.pod
-    - path: /usr/lib/perl5/5.38/core_perl/pod/perl589delta.pod
-    - path: /usr/lib/perl5/5.38/core_perl/pod/perl58delta.pod
     - path: /usr/lib/perl5/5.38/core_perl/pod/perlaix.pod
     - path: /usr/lib/perl5/5.38/core_perl/pod/perlamiga.pod
     - path: /usr/lib/perl5/5.38/core_perl/pod/perlandroid.pod
@@ -1359,13 +1298,7 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/unicore/To/_PerlSCX.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/UCD.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/NA.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V100.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V11.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V110.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V120.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V130.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V140.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V150.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V20.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V30.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V31.pl
@@ -1380,6 +1313,12 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V70.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V80.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V90.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V100.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V110.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V120.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V130.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V140.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Age/V150.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Alpha/Y.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Bc/AL.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Bc/AN.pl
@@ -1510,13 +1449,6 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/IdType/Technica.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/IdType/Uncommon.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Ideo/Y.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/10_0.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/11_0.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/12_0.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/12_1.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/13_0.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/14_0.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/15_0.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/2_0.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/2_1.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/3_0.pl
@@ -1534,6 +1466,13 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/7_0.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/8_0.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/9_0.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/10_0.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/11_0.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/12_0.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/12_1.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/13_0.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/14_0.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/In/15_0.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/InPC/Bottom.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/InPC/BottomAn.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/InPC/Left.pl
@@ -1632,12 +1571,25 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nt/None.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nt/Nu.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/0.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1_2.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1_3.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1_4.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1_6.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1_8.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1_16.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/2_3.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/2.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/3_4.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/3_16.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/3.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/4.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/5.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/6.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/7.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/8.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/9.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/10.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/100.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/10000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/100000.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/11.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/12.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/13.pl
@@ -1647,55 +1599,42 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/17.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/18.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/19.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1_16.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1_2.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1_3.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1_4.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1_6.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1_8.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/2.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/20.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/200.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/2000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/20000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/2_3.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/3.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/30.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/300.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/3000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/30000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/3_16.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/3_4.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/4.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/40.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/400.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/4000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/40000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/5.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/50.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/500.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/5000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/50000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/6.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/60.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/600.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/6000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/60000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/7.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/70.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/700.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/7000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/70000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/8.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/80.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/800.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/8000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/80000.pl
-    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/9.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/90.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/100.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/200.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/300.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/400.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/500.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/600.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/700.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/800.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/900.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/1000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/2000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/3000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/4000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/5000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/6000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/7000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/8000.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/9000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/10000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/20000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/30000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/40000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/50000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/60000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/70000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/80000.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/90000.pl
+    - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Nv/100000.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/PCM/Y.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/PatSyn/Y.pl
     - path: /usr/lib/perl5/5.38/core_perl/unicore/lib/Perl/Alnum.pl
@@ -1871,52 +1810,3 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/vmsish.pm
     - path: /usr/lib/perl5/5.38/core_perl/warnings.pm
     - path: /usr/lib/perl5/5.38/core_perl/warnings/register.pm
-  bin:
-    files:
-    - path: /usr/bin/corelist
-    - path: /usr/bin/cpan
-    - path: /usr/bin/enc2xs
-    - path: /usr/bin/encguess
-    - path: /usr/bin/h2ph
-    - path: /usr/bin/h2xs
-    - path: /usr/bin/instmodsh
-    - path: /usr/bin/json_pp
-    - path: /usr/bin/libnetcfg
-    - path: /usr/bin/perl
-      needs:
-      - /usr/lib/perl5/5.38/core_perl/CORE/libperl.so
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/perl5.38.2
-      needs:
-      - /usr/lib/perl5/5.38/core_perl/CORE/libperl.so
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/perlbug
-    - path: /usr/bin/perldoc
-    - path: /usr/bin/perlivp
-    - path: /usr/bin/perlthanks
-    - path: /usr/bin/piconv
-    - path: /usr/bin/pl2pm
-    - path: /usr/bin/pod2html
-    - path: /usr/bin/pod2man
-    - path: /usr/bin/pod2text
-    - path: /usr/bin/pod2usage
-    - path: /usr/bin/podchecker
-    - path: /usr/bin/prove
-    - path: /usr/bin/ptar
-    - path: /usr/bin/ptardiff
-    - path: /usr/bin/ptargrep
-    - path: /usr/bin/shasum
-    - path: /usr/bin/splain
-    - path: /usr/bin/streamzip
-    - path: /usr/bin/xsubpp
-    - path: /usr/bin/zipdetails
-
-resolution:
-  /usr/lib/perl5/5.38/core_perl/CORE/libperl.so: '@self'
-  /usr/lib/libm.so.6: bootstrap_tools
-  /usr/lib/libc.so.6: bootstrap_tools
-  /usr/lib/ld-linux-x86-64.so.2: bootstrap_tools

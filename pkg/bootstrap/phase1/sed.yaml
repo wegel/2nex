@@ -3,15 +3,17 @@ package:
   name: Sed
   slug: sed
   namespace: bootstrap/phase1
-  bootstrap: true
-  version: '4.9'
+  version: "4.9"
   description: A stream editor
   homepage: https://www.gnu.org/software/sed/
   stable_checksum: false
+  bootstrap: true
+
 sources:
 - name: sed
   url: https://ftp.gnu.org/gnu/sed/sed-4.9.tar.xz
   sha256: 6e226b732e1cd739464ad6862bd1a1aba42d7982922da7a53519631d24975181
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
@@ -37,7 +39,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
 - name: patch
   commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
+
 build:
+  profile: [4117:2969, 8218:5814, 12340:8484, 16459:9835, 20609:11132, 24738:12045, 28934:17471, 33129:17559, 37256:17704, 37585:17754]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_sed} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -51,11 +56,17 @@ build:
     rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
 bundles:
   dev:
   - bin
   - locale
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/sed
+
   locale:
     files:
     - path: /usr/share/locale/af/LC_MESSAGES/sed.mo
@@ -98,13 +109,3 @@ outputs:
     - path: /usr/share/locale/vi/LC_MESSAGES/sed.mo
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/sed.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/sed.mo
-  bin:
-    files:
-    - path: /usr/bin/sed
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-
-resolution:
-  /bootstrap/usr/lib/libc.so.6: bootstrap_tools
-  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools

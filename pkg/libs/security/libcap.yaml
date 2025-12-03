@@ -3,14 +3,16 @@ package:
   name: Libcap
   slug: libcap
   namespace: libs/security
-  version: '2.69'
+  version: "2.69"
   description: POSIX 1003.1e capabilities
   homepage: https://sites.google.com/site/fullycapable/
   checksum: 1cb04410339b4ad660e26acb4d8cfa2463befc0b0844f48e34e5c75e2f5cd36d
+
 sources:
 - name: libcap
   url: https://www.kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-2.69.tar.xz
   sha256: f311f8f3dad84699d0566d1d6f7ec943a9298b28f714cae3c931dfd57492d7eb
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -52,7 +54,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
 - name: gmp-bootstrap
   commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
+
 build:
+  profile: [4610:84, 9215:406, 13849:481, 18912:769, 19492:997]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_libcap} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -62,17 +67,80 @@ build:
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - man
-  - dev
-  - lib
-  - bin
   dev:
+  - bin
   - dev
   - lib
+
+  full:
   - bin
+  - dev
+  - lib
+  - man
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/capsh
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap.so.2
+    - path: /usr/bin/getcap
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap.so.2
+    - path: /usr/bin/getpcaps
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap.so.2
+    - path: /usr/bin/setcap
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap.so.2
+
+  dev:
+    files:
+    - path: /usr/include/sys/capability.h
+    - path: /usr/include/sys/psx_syscall.h
+    - path: /usr/lib/pkgconfig/libcap.pc
+    - path: /usr/lib/pkgconfig/libpsx.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libcap.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libcap.so.2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libcap.so.2.69
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libpsx.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libpsx.so.2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libpsx.so.2.69
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+
   man:
     files:
     - path: /usr/share/man/man1/capsh.1
@@ -153,66 +221,9 @@ outputs:
     - path: /usr/share/man/man8/getcap.8
     - path: /usr/share/man/man8/getpcaps.8
     - path: /usr/share/man/man8/setcap.8
-  bin:
-    files:
-    - path: /usr/bin/capsh
-      needs:
-      - /usr/lib/libcap.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/getcap
-      needs:
-      - /usr/lib/libcap.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/getpcaps
-      needs:
-      - /usr/lib/libcap.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/setcap
-      needs:
-      - /usr/lib/libcap.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-  dev:
-    files:
-    - path: /usr/include/sys/capability.h
-    - path: /usr/include/sys/psx_syscall.h
-    - path: /usr/lib/pkgconfig/libcap.pc
-    - path: /usr/lib/pkgconfig/libpsx.pc
-  lib:
-    files:
-    - path: /usr/lib/libcap.so
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libcap.so.2
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libcap.so.2.69
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libpsx.so
-      needs:
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libpsx.so.2
-      needs:
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libpsx.so.2.69
-      needs:
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
 
 resolution:
-  /usr/lib/libcap.so.2: '@self'
-  /usr/lib/libc.so.6: glibc
-  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libcap.so.2: self

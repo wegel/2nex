@@ -7,10 +7,12 @@ package:
   description: Low-level core library that forms the basis of GTK and GNOME
   homepage: https://www.gtk.org/
   checksum: 58d1682e592cc8ed8f6852de5c4d4be2e05ef10d7f4b16feb663a6cef3dfa03e
+
 sources:
 - name: glib2
   url: https://download.gnome.org/sources/glib/2.84/glib-2.84.0.tar.xz
   sha256: f8823600cb85425e2815cfad82ea20fdaa538482ab74e7293d58b3f64a5aff6a
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
@@ -70,38 +72,91 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
 - name: expat
   commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+
 build:
-  script: "tar --no-same-owner -xf ${SOURCE_glib2} -C \"${WORK_DIR}\" --strip-components=1\n\
-    cd ${WORK_DIR}\n\n# Configure with meson build system\nmeson setup build \\\n\
-    \  --prefix=/usr \\\n  --buildtype=release \\\n  -Dglib_debug=disabled \\\n  -Dlibelf=disabled\
-    \ \\\n  -Dselinux=disabled \\\n  -Dxattr=false \\\n  -Dtests=false \\\n  -Doss_fuzz=disabled\
-    \ \\\n  -Dintrospection=disabled \\\n  -Dgio_module_dir=/usr/lib/gio/modules \\\
-    \n  -Dlibmount=enabled\n\n# Build\nninja -C build\n\n# Install\nDESTDIR=\"${OUT_DIR}\"\
-    \ ninja -C build install\n\n# Commenting out removal of development files to preserve\
-    \ glibconfig.h and other potentially needed files\n# rm -rf ${OUT_DIR}/usr/lib/glib-2.0\n\
-    # rm -rf ${OUT_DIR}/usr/share/glib-2.0/codegen ${OUT_DIR}/usr/share/glib-2.0/gettext\n\
-    # rm -f ${OUT_DIR}/usr/bin/gdbus-codegen\n# rm -f ${OUT_DIR}/usr/bin/glib-compile-schemas\n\
-    # rm -f ${OUT_DIR}/usr/bin/glib-compile-resources\n# rm -f ${OUT_DIR}/usr/bin/glib-genmarshal\n\
-    # rm -f ${OUT_DIR}/usr/bin/glib-gettextize\n# rm -f ${OUT_DIR}/usr/bin/glib-mkenums\n\
-    # rm -f ${OUT_DIR}/usr/bin/gobject-query\n# rm -f ${OUT_DIR}/usr/bin/gtester\n\
-    # rm -f ${OUT_DIR}/usr/bin/gtester-report\n# rm -rf ${OUT_DIR}/usr/share/glib-2.0/gdb\n\
-    # rm -f ${OUT_DIR}/usr/share/glib-2.0/schemas/*.xml\n# rm -f ${OUT_DIR}/usr/share/glib-2.0/schemas/*.dtd\n\
-    \n# Set consistent timestamps for reproducible builds\nfind \"${OUT_DIR}\" -exec\
-    \ touch -d '2024-01-01T00:00:00+00:00' {} \\;\nfind \"${OUT_DIR}\" ! -type d -exec\
-    \ strip-nondeterminism -T 1704067200 --normalizers +all {} \\; || true\n2nex_strip_binaries\
-    \ ${OUT_DIR}\n"
+  profile: [4127:1491, 12371:4390, 24788:5290, 41352:6659, 53737:7605, 66068:8911, 82626:9962, 99133:9980, 119803:10203, 130882:10915]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_glib2} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    # Configure with meson build system
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      -Dglib_debug=disabled \
+      -Dlibelf=disabled \
+      -Dselinux=disabled \
+      -Dxattr=false \
+      -Dtests=false \
+      -Doss_fuzz=disabled \
+      -Dintrospection=disabled \
+      -Dgio_module_dir=/usr/lib/gio/modules \
+      -Dlibmount=enabled
+
+    # Build
+    ninja -C build
+
+    # Install
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # Commenting out removal of development files to preserve glibconfig.h and other potentially needed files
+    # rm -rf ${OUT_DIR}/usr/lib/glib-2.0
+    # rm -rf ${OUT_DIR}/usr/share/glib-2.0/codegen ${OUT_DIR}/usr/share/glib-2.0/gettext
+    # rm -f ${OUT_DIR}/usr/bin/gdbus-codegen
+    # rm -f ${OUT_DIR}/usr/bin/glib-compile-schemas
+    # rm -f ${OUT_DIR}/usr/bin/glib-compile-resources
+    # rm -f ${OUT_DIR}/usr/bin/glib-genmarshal
+    # rm -f ${OUT_DIR}/usr/bin/glib-gettextize
+    # rm -f ${OUT_DIR}/usr/bin/glib-mkenums
+    # rm -f ${OUT_DIR}/usr/bin/gobject-query
+    # rm -f ${OUT_DIR}/usr/bin/gtester
+    # rm -f ${OUT_DIR}/usr/bin/gtester-report
+    # rm -rf ${OUT_DIR}/usr/share/glib-2.0/gdb
+    # rm -f ${OUT_DIR}/usr/share/glib-2.0/schemas/*.xml
+    # rm -f ${OUT_DIR}/usr/share/glib-2.0/schemas/*.dtd
+
+    # Set consistent timestamps for reproducible builds
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
+    2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - bin
-  - lib
-  - dev
-  - misc
   dev:
   - bin
-  - lib
   - dev
+  - lib
   - misc
+
+  full:
+  - bin
+  - dev
+  - lib
+  - misc
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/gapplication
+    - path: /usr/bin/gdbus
+    - path: /usr/bin/gdbus-codegen
+    - path: /usr/bin/gi-compile-repository
+    - path: /usr/bin/gi-decompile-typelib
+    - path: /usr/bin/gi-inspect-typelib
+    - path: /usr/bin/gio
+    - path: /usr/bin/gio-querymodules
+    - path: /usr/bin/glib-compile-resources
+    - path: /usr/bin/glib-compile-schemas
+    - path: /usr/bin/glib-genmarshal
+    - path: /usr/bin/glib-gettextize
+    - path: /usr/bin/glib-mkenums
+    - path: /usr/bin/gobject-query
+    - path: /usr/bin/gresource
+    - path: /usr/bin/gsettings
+    - path: /usr/bin/gtester
+    - path: /usr/bin/gtester-report
+    - path: /usr/libexec/gio-launch-desktop
+
   dev:
     files:
     - path: /usr/include/gio-unix-2.0/gio/gdesktopappinfo.h
@@ -419,27 +474,7 @@ outputs:
     - path: /usr/lib/pkgconfig/gmodule-no-export-2.0.pc
     - path: /usr/lib/pkgconfig/gobject-2.0.pc
     - path: /usr/lib/pkgconfig/gthread-2.0.pc
-  bin:
-    files:
-    - path: /usr/bin/gapplication
-    - path: /usr/bin/gdbus
-    - path: /usr/bin/gdbus-codegen
-    - path: /usr/bin/gi-compile-repository
-    - path: /usr/bin/gi-decompile-typelib
-    - path: /usr/bin/gi-inspect-typelib
-    - path: /usr/bin/gio
-    - path: /usr/bin/gio-querymodules
-    - path: /usr/bin/glib-compile-resources
-    - path: /usr/bin/glib-compile-schemas
-    - path: /usr/bin/glib-genmarshal
-    - path: /usr/bin/glib-gettextize
-    - path: /usr/bin/glib-mkenums
-    - path: /usr/bin/gobject-query
-    - path: /usr/bin/gresource
-    - path: /usr/bin/gsettings
-    - path: /usr/bin/gtester
-    - path: /usr/bin/gtester-report
-    - path: /usr/libexec/gio-launch-desktop
+
   lib:
     files:
     - path: /usr/lib/libgio-2.0.so
@@ -462,6 +497,7 @@ outputs:
     - path: /usr/lib/libgthread-2.0.so.0.8400.0
     - path: /usr/share/gdb/auto-load/usr/lib/libglib-2.0.so.0.8400.0-gdb.py
     - path: /usr/share/gdb/auto-load/usr/lib/libgobject-2.0.so.0.8400.0-gdb.py
+
   misc:
     files:
     - path: /usr/share/aclocal/glib-2.0.m4

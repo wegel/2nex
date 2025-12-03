@@ -7,10 +7,12 @@ package:
   description: GNU awk, a pattern scanning and processing language
   homepage: https://www.gnu.org/software/gawk/
   checksum: 62f3dff1389d691cc8d2e233a708e862a67fa168df09e0050b683b919f303f3a
+
 sources:
 - name: gawk
   url: https://ftp.gnu.org/gnu/gawk/gawk-5.3.0.tar.xz
   sha256: ca9c16d3d11d0ff8c69d79dc0b47267e1329a69b39b799895604ed447d3ca90b
+
 dependencies:
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
@@ -54,7 +56,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: mpfr
   commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+
 build:
+  profile: [4118:1126, 8234:4484, 16673:6328, 24905:7405, 33657:7412, 43061:7414, 51744:8734, 64338:8835, 76882:9218, 82120:9714]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_gawk} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -67,25 +72,174 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - locale
+  - misc
+
   full:
   - bin
   - dev
+  - info
   - lib
-  - misc
   - locale
   - man
-  - info
-  dev:
-  - bin
-  - dev
-  - lib
   - misc
-  - locale
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/awk
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libm.so.6
+      - /usr/lib/libmpfr.so.6
+    - path: /usr/bin/gawk
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libm.so.6
+      - /usr/lib/libmpfr.so.6
+    - path: /usr/bin/gawk-5.3.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libm.so.6
+      - /usr/lib/libmpfr.so.6
+    - path: /usr/bin/gawkbug
+    - path: /usr/libexec/awk/grcat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/libexec/awk/pwcat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
   dev:
     files:
     - path: /usr/include/gawkapi.h
+
+  info:
+    files:
+    - path: /usr/share/info/dir
+    - path: /usr/share/info/gawk.info
+    - path: /usr/share/info/gawk_api-figure1.png
+    - path: /usr/share/info/gawk_api-figure2.png
+    - path: /usr/share/info/gawk_api-figure3.png
+    - path: /usr/share/info/gawk_array-elements.png
+    - path: /usr/share/info/gawk_general-program.png
+    - path: /usr/share/info/gawk_process-flow.png
+    - path: /usr/share/info/gawk_statist.jpg
+    - path: /usr/share/info/gawkinet.info
+    - path: /usr/share/info/gawkworkflow.info
+    - path: /usr/share/info/pm-gawk.info
+
+  lib:
+    files:
+    - path: /usr/lib/gawk/filefuncs.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/fnmatch.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/fork.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/inplace.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/intdiv.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libm.so.6
+      - /usr/lib/libmpfr.so.6
+    - path: /usr/lib/gawk/ordchr.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/readdir.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/readfile.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/revoutput.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/revtwoway.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/rwarray.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libm.so.6
+      - /usr/lib/libmpfr.so.6
+    - path: /usr/lib/gawk/time.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+
+  locale:
+    files:
+    - path: /usr/share/locale/bg/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/gawk.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/gawk.1
+    - path: /usr/share/man/man1/gawkbug.1
+    - path: /usr/share/man/man1/pm-gawk.1
+    - path: /usr/share/man/man3/filefuncs.3am
+    - path: /usr/share/man/man3/fnmatch.3am
+    - path: /usr/share/man/man3/fork.3am
+    - path: /usr/share/man/man3/inplace.3am
+    - path: /usr/share/man/man3/ordchr.3am
+    - path: /usr/share/man/man3/readdir.3am
+    - path: /usr/share/man/man3/readfile.3am
+    - path: /usr/share/man/man3/revoutput.3am
+    - path: /usr/share/man/man3/revtwoway.3am
+    - path: /usr/share/man/man3/rwarray.3am
+    - path: /usr/share/man/man3/time.3am
+
   misc:
     files:
     - path: /usr/share/awk/assert.awk
@@ -117,150 +271,10 @@ outputs:
     - path: /usr/share/awk/tocsv.awk
     - path: /usr/share/awk/walkarray.awk
     - path: /usr/share/awk/zerofile.awk
-  lib:
-    files:
-    - path: /usr/lib/gawk/filefuncs.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/gawk/fnmatch.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/gawk/fork.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/gawk/inplace.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/gawk/intdiv.so
-      needs:
-      - /usr/lib/libmpfr.so.6
-      - /usr/lib/libgmp.so.10
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/gawk/ordchr.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/gawk/readdir.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/gawk/readfile.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/gawk/revoutput.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/gawk/revtwoway.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/gawk/rwarray.so
-      needs:
-      - /usr/lib/libmpfr.so.6
-      - /usr/lib/libgmp.so.10
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/gawk/time.so
-      needs:
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-  locale:
-    files:
-    - path: /usr/share/locale/bg/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/ca/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/da/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/de/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/es/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/fi/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/fr/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/id/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/it/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/ja/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/ko/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/ms/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/nl/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/pl/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/pt/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/pt_BR/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/ro/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/sr/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/sv/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/uk/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/vi/LC_MESSAGES/gawk.mo
-    - path: /usr/share/locale/zh_CN/LC_MESSAGES/gawk.mo
-  info:
-    files:
-    - path: /usr/share/info/dir
-    - path: /usr/share/info/gawk.info
-    - path: /usr/share/info/gawk_api-figure1.png
-    - path: /usr/share/info/gawk_api-figure2.png
-    - path: /usr/share/info/gawk_api-figure3.png
-    - path: /usr/share/info/gawk_array-elements.png
-    - path: /usr/share/info/gawk_general-program.png
-    - path: /usr/share/info/gawk_process-flow.png
-    - path: /usr/share/info/gawk_statist.jpg
-    - path: /usr/share/info/gawkinet.info
-    - path: /usr/share/info/gawkworkflow.info
-    - path: /usr/share/info/pm-gawk.info
-  man:
-    files:
-    - path: /usr/share/man/man1/gawk.1
-    - path: /usr/share/man/man1/gawkbug.1
-    - path: /usr/share/man/man1/pm-gawk.1
-    - path: /usr/share/man/man3/filefuncs.3am
-    - path: /usr/share/man/man3/fnmatch.3am
-    - path: /usr/share/man/man3/fork.3am
-    - path: /usr/share/man/man3/inplace.3am
-    - path: /usr/share/man/man3/ordchr.3am
-    - path: /usr/share/man/man3/readdir.3am
-    - path: /usr/share/man/man3/readfile.3am
-    - path: /usr/share/man/man3/revoutput.3am
-    - path: /usr/share/man/man3/revtwoway.3am
-    - path: /usr/share/man/man3/rwarray.3am
-    - path: /usr/share/man/man3/time.3am
-  bin:
-    files:
-    - path: /usr/bin/awk
-      needs:
-      - /usr/lib/libmpfr.so.6
-      - /usr/lib/libgmp.so.10
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gawk
-      needs:
-      - /usr/lib/libmpfr.so.6
-      - /usr/lib/libgmp.so.10
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gawk-5.3.0
-      needs:
-      - /usr/lib/libmpfr.so.6
-      - /usr/lib/libgmp.so.10
-      - /usr/lib/libm.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/gawkbug
-    - path: /usr/libexec/awk/grcat
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/libexec/awk/pwcat
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
 
 resolution:
-  /usr/lib/libmpfr.so.6: mpfr
-  /usr/lib/libgmp.so.10: gmp
-  /usr/lib/libm.so.6: glibc
-  /usr/lib/libc.so.6: glibc
   /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libgmp.so.10: gmp
+  /usr/lib/libmpfr.so.6: mpfr

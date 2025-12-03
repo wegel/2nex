@@ -3,12 +3,17 @@ package:
   name: Bash
   slug: bash
   namespace: bootstrap/phase1
-  bootstrap: true
   version: 5.2.21
   description: The GNU Bourne Again shell
   homepage: https://www.gnu.org/software/bash/
   stable_checksum: false
-  sha256: 621a75ff2ef12e03763b8df92d8268f253708db8ee9f6deb240cc02129eeae3e
+  bootstrap: true
+
+sources:
+- name: bash
+  url: https://ftp.gnu.org/gnu/bash/bash-5.2.21.tar.gz
+  sha256: c8e31bdc59b69aaffc5b36509905ba3e5cbb12747091d27b4b977f078560d5b8
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
@@ -16,11 +21,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
 - name: ncurses
   commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
-sources:
-- name: bash
-  url: https://ftp.gnu.org/gnu/bash/bash-5.2.21.tar.gz
-  sha256: c8e31bdc59b69aaffc5b36509905ba3e5cbb12747091d27b4b977f078560d5b8
+
 build:
+  profile: [4150:2066, 12388:9000, 25196:16901, 42282:17200, 54768:17344, 67375:17403, 84008:18295, 100849:26250, 121839:26374, 133794:26852]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_bash} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -40,12 +44,17 @@ build:
     ln -sv bash ${OUT_DIR}/usr/bin/sh
 
     rm -rf ${OUT_DIR}/usr/share/man ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/doc
+
 bundles:
   dev:
   - dev
+
 outputs:
   dev:
     files:
+    - path: /usr/bin/bash
+    - path: /usr/bin/bashbug
+    - path: /usr/bin/sh
     - path: /usr/include/bash/alias.h
     - path: /usr/include/bash/array.h
     - path: /usr/include/bash/arrayfunc.h
@@ -105,125 +114,46 @@ outputs:
     - path: /usr/include/bash/version.h
     - path: /usr/include/bash/xmalloc.h
     - path: /usr/include/bash/y.tab.h
-    - path: /usr/lib/pkgconfig/bash.pc
     - path: /usr/lib/bash/Makefile.inc
     - path: /usr/lib/bash/Makefile.sample
     - path: /usr/lib/bash/accept
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/basename
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/csv
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/cut
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/dirname
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/dsv
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/fdflags
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/finfo
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/getconf
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/head
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/id
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/ln
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/loadables.h
     - path: /usr/lib/bash/logname
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/mkdir
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/mkfifo
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/mktemp
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/mypid
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/pathchk
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/print
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/printenv
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/push
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/realpath
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/rm
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/rmdir
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/seq
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/setpgid
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/sleep
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/stat
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/strftime
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/sync
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/tee
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/truefalse
     - path: /usr/lib/bash/tty
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/uname
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/unlink
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/bash/whoami
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-    - path: /usr/bin/bash
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/bashbug
-    - path: /usr/bin/sh
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/lib/pkgconfig/bash.pc
     - path: /usr/share/locale/af/LC_MESSAGES/bash.mo
     - path: /usr/share/locale/bg/LC_MESSAGES/bash.mo
     - path: /usr/share/locale/ca/LC_MESSAGES/bash.mo
@@ -263,7 +193,3 @@ outputs:
     - path: /usr/share/locale/vi/LC_MESSAGES/bash.mo
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/bash.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/bash.mo
-
-resolution:
-  /bootstrap/usr/lib/libc.so.6: bootstrap_tools
-  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools

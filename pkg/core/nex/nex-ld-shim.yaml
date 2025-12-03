@@ -6,10 +6,12 @@ package:
   version: 0.0.1
   description: Minimal PT_INTERP shim using raw syscalls (no libc dependency)
   checksum: 748fe59db63e4f9d79fd3b984b1cb7ef8c218c58729de24541309e49dbfc9f5d
+
 sources:
 - name: shim
   file: pkg/core/nex/nex-ld-shim-raw.c
   sha256: c9da5b2d40d9c6f125f7f485ce31a568c6df527b334b898b1a36bd5065facde8
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -49,7 +51,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+
 build:
+  profile: [434:222]
+
   script: |
     # create output directory
     mkdir -p ${OUT_DIR}/usr/lib
@@ -71,9 +76,11 @@ build:
 
     # set timestamp for reproducibility
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
 bundles:
   full:
   - lib
+
 outputs:
   lib:
     files:

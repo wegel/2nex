@@ -7,6 +7,7 @@ package:
   description: A freely available, patent free, high-quality data compressor
   homepage: https://sourceware.org/bzip2/
   checksum: 147f373f24da362dec62dbe4ca1c76fb53b288ee95da351c18984c2b817c24dd
+
 sources:
 - name: bzip2
   url: https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz
@@ -14,6 +15,7 @@ sources:
 - name: install_docs_patch
   url: https://www.linuxfromscratch.org/patches/downloads/bzip2/bzip2-1.0.8-install_docs-1.patch
   sha256: 35e3bbd9642af51fef2a8a83afba040d272da42d7e3a251d8e43255a7b496702
+
 dependencies:
 - name: gmp-bootstrap
   commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/outputs/lib
@@ -59,7 +61,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+
 build:
+  profile: [4164:2167, 8262:3415, 9844:3501]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_bzip2} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -82,45 +87,35 @@ build:
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - static
+
   full:
-  - dev
-  - man
   - bin
-  - lib
-  - static
+  - dev
   - doc
-  dev:
-  - dev
   - lib
+  - man
   - static
-  - bin
+
 outputs:
-  dev:
-    files:
-    - path: /usr/include/bzlib.h
-  man:
-    files:
-    - path: /usr/share/man/man1/bzcmp.1
-    - path: /usr/share/man/man1/bzdiff.1
-    - path: /usr/share/man/man1/bzegrep.1
-    - path: /usr/share/man/man1/bzfgrep.1
-    - path: /usr/share/man/man1/bzgrep.1
-    - path: /usr/share/man/man1/bzip2.1
-    - path: /usr/share/man/man1/bzless.1
-    - path: /usr/share/man/man1/bzmore.1
   bin:
     files:
     - path: /usr/bin/bunzip2
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libbz2.so.1.0
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/bzcat
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libbz2.so.1.0
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/bzcmp
     - path: /usr/bin/bzdiff
     - path: /usr/bin/bzegrep
@@ -128,15 +123,27 @@ outputs:
     - path: /usr/bin/bzgrep
     - path: /usr/bin/bzip2
       needs:
+      - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libbz2.so.1.0
       - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/bzip2recover
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/bzless
     - path: /usr/bin/bzmore
+
+  dev:
+    files:
+    - path: /usr/include/bzlib.h
+
+  doc:
+    files:
+    - path: /usr/share/doc/bzip2-1.0.8/bzip2.txt
+    - path: /usr/share/doc/bzip2-1.0.8/manual.html
+    - path: /usr/share/doc/bzip2-1.0.8/manual.pdf
+    - path: /usr/share/doc/bzip2-1.0.8/manual.ps
+
   lib:
     files:
     - path: /usr/lib/libbz2.so
@@ -148,17 +155,23 @@ outputs:
     - path: /usr/lib/libbz2.so.1.0.8
       needs:
       - /usr/lib/libc.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man1/bzcmp.1
+    - path: /usr/share/man/man1/bzdiff.1
+    - path: /usr/share/man/man1/bzegrep.1
+    - path: /usr/share/man/man1/bzfgrep.1
+    - path: /usr/share/man/man1/bzgrep.1
+    - path: /usr/share/man/man1/bzip2.1
+    - path: /usr/share/man/man1/bzless.1
+    - path: /usr/share/man/man1/bzmore.1
+
   static:
     files:
     - path: /usr/lib/libbz2.a
-  doc:
-    files:
-    - path: /usr/share/doc/bzip2-1.0.8/bzip2.txt
-    - path: /usr/share/doc/bzip2-1.0.8/manual.html
-    - path: /usr/share/doc/bzip2-1.0.8/manual.pdf
-    - path: /usr/share/doc/bzip2-1.0.8/manual.ps
 
 resolution:
   /usr/lib/ld-linux-x86-64.so.2: glibc
-  /usr/lib/libbz2.so.1.0: '@self'
   /usr/lib/libc.so.6: glibc
+  /usr/lib/libbz2.so.1.0: self

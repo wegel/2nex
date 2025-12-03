@@ -7,10 +7,12 @@ package:
   description: Enhanced seccomp library
   homepage: https://github.com/seccomp/libseccomp
   checksum: e95283d740080704359174857626339f284c3801cdd5aa9220ca87fa47b9d791
+
 sources:
 - name: libseccomp
   url: https://github.com/seccomp/libseccomp/releases/download/v2.5.6/libseccomp-2.5.6.tar.gz
   sha256: 04c37d72965dce218a0c94519b056e1775cf786b5260ee2b7992956c4ee38633
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
@@ -66,54 +68,57 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
 - name: bzip2
   commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
-build:
-  script: 'tar --no-same-owner -xf ${SOURCE_libseccomp} -C "${WORK_DIR}" --strip-components=1
 
+build:
+  profile: [4121:749, 8299:4321, 9643:4497]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_libseccomp} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
     # Configure
-
     ./configure --prefix=/usr --disable-static
 
-
     # Build
-
     make
 
-
     # Install
-
     make DESTDIR="${OUT_DIR}" install
 
-
     # Set consistent timestamps for reproducible builds
-
-    find "${OUT_DIR}" -exec touch -d ''2024-01-01T00:00:00+00:00'' {} \;
-
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
-  full:
-  - bin
-  - lib
-  - man
-  - dev
   dev:
   - bin
-  - lib
   - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - lib
+  - man
+
 outputs:
   bin:
     files:
     - path: /usr/bin/scmp_sys_resolver
+
   dev:
     files:
     - path: /usr/include/seccomp-syscalls.h
     - path: /usr/include/seccomp.h
     - path: /usr/lib/libseccomp.la
     - path: /usr/lib/pkgconfig/libseccomp.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libseccomp.so
+    - path: /usr/lib/libseccomp.so.2
+    - path: /usr/lib/libseccomp.so.2.5.6
+
   man:
     files:
     - path: /usr/share/man/man1/scmp_sys_resolver.1
@@ -149,8 +154,3 @@ outputs:
     - path: /usr/share/man/man3/seccomp_syscall_resolve_name_rewrite.3
     - path: /usr/share/man/man3/seccomp_syscall_resolve_num_arch.3
     - path: /usr/share/man/man3/seccomp_version.3
-  lib:
-    files:
-    - path: /usr/lib/libseccomp.so
-    - path: /usr/lib/libseccomp.so.2
-    - path: /usr/lib/libseccomp.so.2.5.6

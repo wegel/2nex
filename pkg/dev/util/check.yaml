@@ -7,11 +7,21 @@ package:
   description: A unit testing framework for C.
   homepage: https://libcheck.github.io/check
   checksum: fface91eb38c629cdbc0f676f7f31a7e1be2a1cb2e8fd23292b74c88b425303f
+
 sources:
 - name: check
   url: https://github.com/libcheck/check/releases/download/0.15.2/check-0.15.2.tar.gz
   sha256: a8de4e0bacfb4d76dd1c618ded263523b53b85d92a146d8835eb1a52932fa20a
+
 dependencies:
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
 - name: mpc
   commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
 - name: findutils
@@ -38,8 +48,8 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 - name: binutils
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: None
-  commit: x86_64/gmp/6.3.0/bootstrap/phase3/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
 - name: mpfr
   commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
 - name: attr
@@ -54,55 +64,50 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/ncurses/6.4-20230520/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
-build:
-  script: 'tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
 
+build:
+  profile: [4102:731, 8232:2104, 17100:3252, 30286:3467, 39528:3469, 48780:3477, 57119:3527, 70062:3560, 83319:3968, 92379:4289]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
     ./configure --prefix=/usr --disable-static
-
     make
-
     make DESTDIR=$OUT_DIR install
-
     make docdir=${OUT_DIR}/usr/share/doc/check-0.15.2 install
 
-
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
-  full:
-  - man
+  dev:
+  - bin
   - dev
   - lib
+  - misc
+
+  full:
+  - bin
+  - dev
   - doc
   - info
-  - misc
-  - bin
-  dev:
-  - dev
   - lib
-  - bin
+  - man
   - misc
+
 outputs:
-  man:
+  bin:
     files:
-    - path: /usr/share/man/man1/checkmk.1
+    - path: /usr/bin/checkmk
+
   dev:
     files:
     - path: /usr/include/check.h
     - path: /usr/include/check_stdint.h
     - path: /usr/lib/libcheck.la
     - path: /usr/lib/pkgconfig/check.pc
-  lib:
-    files:
-    - path: /usr/lib/libcheck.so
-    - path: /usr/lib/libcheck.so.0
-    - path: /usr/lib/libcheck.so.0.0.0
+
   doc:
     files:
     - path: /usr/share/doc/check-0.15.2/COPYING.LESSER
@@ -155,13 +160,22 @@ outputs:
     - path: /usr/share/doc/check/example/tests/check_money.6.c
     - path: /usr/share/doc/check/example/tests/check_money.7.c
     - path: /usr/share/doc/check/example/tests/check_money.c
+
   info:
     files:
     - path: /usr/share/info/check.info
     - path: /usr/share/info/dir
+
+  lib:
+    files:
+    - path: /usr/lib/libcheck.so
+    - path: /usr/lib/libcheck.so.0
+    - path: /usr/lib/libcheck.so.0.0.0
+
+  man:
+    files:
+    - path: /usr/share/man/man1/checkmk.1
+
   misc:
     files:
     - path: /usr/share/aclocal/check.m4
-  bin:
-    files:
-    - path: /usr/bin/checkmk

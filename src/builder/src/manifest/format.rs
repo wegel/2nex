@@ -221,8 +221,8 @@ fn format_sources(value: &Value) -> io::Result<String> {
             output.push_str("- ");
             let mut first = true;
 
-            // order: name, url, file, sha256
-            for field in ["name", "url", "file", "sha256"] {
+            // order: name, url, file, sha256, then auto-vendoring fields
+            for field in ["name", "url", "file", "sha256", "cargo_lock", "cargo_toml", "go_sum", "zig_zon"] {
                 let key = Value::String(field.to_string());
                 if let Some(val) = mapping.get(&key) {
                     if first {

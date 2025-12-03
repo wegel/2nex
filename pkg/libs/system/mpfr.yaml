@@ -7,10 +7,12 @@ package:
   description: Multiple Precision Floating-Point Reliable Library
   homepage: https://www.mpfr.org/
   checksum: a750dc948f4cae3d8264f0a04fe660bdb926d5e37d58131b848e154cbaca5205
+
 sources:
 - name: mpfr
   url: https://ftp.gnu.org/gnu/mpfr/mpfr-4.2.1.tar.xz
   sha256: 277807353a6726978996945af13e52829e3abd7a9a5b7fb2793894e18f1fcbb2
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -56,7 +58,10 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+
 build:
+  profile: [39266:3335, 141832:3518, 321357:3881, 532597:4388, 707393:5072, 881872:5734, 1060673:6165, 1326117:8784, 1587470:10683, 1763675:15023]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_mpfr} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -73,17 +78,20 @@ build:
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - dev
-  - lib
-  - static
-  - doc
-  - info
   dev:
   - dev
   - lib
   - static
+
+  full:
+  - dev
+  - doc
+  - info
+  - lib
+  - static
+
 outputs:
   dev:
     files:
@@ -91,26 +99,7 @@ outputs:
     - path: /usr/include/mpfr.h
     - path: /usr/lib/libmpfr.la
     - path: /usr/lib/pkgconfig/mpfr.pc
-  lib:
-    files:
-    - path: /usr/lib/libmpfr.so
-      needs:
-      - /usr/lib/libgmp.so.10
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libmpfr.so.6
-      needs:
-      - /usr/lib/libgmp.so.10
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libmpfr.so.6.2.1
-      needs:
-      - /usr/lib/libgmp.so.10
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-  static:
-    files:
-    - path: /usr/lib/libmpfr.a
+
   doc:
     files:
     - path: /usr/share/doc/mpfr-4.2.1/AUTHORS
@@ -175,12 +164,35 @@ outputs:
     - path: /usr/share/doc/mpfr-4.2.1/mpfr.html/mpfr_005fget_005fstr_005fndigits.html
     - path: /usr/share/doc/mpfr-4.2.1/mpfr.html/mpfr_005fpow.html
     - path: /usr/share/doc/mpfr-4.2.1/mpfr.html/ternary-value.html
+
   info:
     files:
     - path: /usr/share/info/dir
     - path: /usr/share/info/mpfr.info
 
+  lib:
+    files:
+    - path: /usr/lib/libmpfr.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+    - path: /usr/lib/libmpfr.so.6
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+    - path: /usr/lib/libmpfr.so.6.2.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+
+  static:
+    files:
+    - path: /usr/lib/libmpfr.a
+
 resolution:
   /usr/lib/ld-linux-x86-64.so.2: glibc
-  /usr/lib/libgmp.so.10: gmp
   /usr/lib/libc.so.6: glibc
+  /usr/lib/libgmp.so.10: gmp

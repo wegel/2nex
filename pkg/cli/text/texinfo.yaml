@@ -3,14 +3,16 @@ package:
   name: Texinfo
   slug: texinfo
   namespace: cli/text
-  version: '7.1'
+  version: "7.1"
   description: GNU documentation system for online information and printed output
   homepage: https://www.gnu.org/software/texinfo/
-  checksum: 83f40152f8b5218a5a26b2d111c136891a12754e04282ebca49a912f0fa88c1b
+  checksum: aa26e92e9adf3484743da210dbec1501180f1be36b00043febce543a9a10d0e7
+
 sources:
 - name: texinfo
   url: https://ftp.gnu.org/gnu/texinfo/texinfo-7.1.tar.xz
   sha256: deeec9f19f159e046fdf8ad22231981806dac332cc372f1c763504ad82b30953
+
 dependencies:
 - name: phase3
   commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
@@ -20,6 +22,14 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
 - name: gcc
   commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+- name: mpc
+  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
 - name: sed
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
 - name: grep
@@ -40,40 +50,41 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/bootstrap/phase3/ncurses/6.4-20230520/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
 - name: xz
   commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
-build:
-  script: 'tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
 
+build:
+  profile: [4155:1837, 16479:6596, 28801:6985, 49437:6992, 65893:7000, 83258:7030, 96540:7063, 122514:7283, 143645:10450, 157841:12102]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
     ./configure --prefix=/usr
-
     make
-
     make DESTDIR=$OUT_DIR install
 
-
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
-  full:
-  - lib
-  - dev
-  - bin
-  - locale
-  - info
-  - misc
   dev:
-  - lib
-  - dev
   - bin
+  - lib
   - locale
   - misc
+
+  full:
+  - bin
+  - info
+  - lib
+  - locale
+  - misc
+
 outputs:
   bin:
     files:
@@ -81,15 +92,11 @@ outputs:
     - path: /usr/bin/makeinfo
     - path: /usr/bin/pdftexi2dvi
     - path: /usr/bin/pod2texi
+    - path: /usr/bin/texi2pdf
     - path: /usr/bin/texi2any
     - path: /usr/bin/texi2dvi
-    - path: /usr/bin/texi2pdf
     - path: /usr/bin/texindex
-  dev:
-    files:
-    - path: /usr/lib/texinfo/MiscXS.la
-    - path: /usr/lib/texinfo/Parsetexi.la
-    - path: /usr/lib/texinfo/XSParagraph.la
+
   info:
     files:
     - path: /usr/share/info/info-stnd.info
@@ -99,28 +106,80 @@ outputs:
     - path: /usr/share/info/texinfo.info-1
     - path: /usr/share/info/texinfo.info-2
     - path: /usr/share/info/texinfo.info-3
+
   lib:
     files:
-    - path: /usr/lib/texinfo/MiscXS.so
-    - path: /usr/lib/texinfo/Parsetexi.so
-    - path: /usr/lib/texinfo/XSParagraph.so
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x00.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x01.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x02.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x03.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x04.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x05.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x06.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x07.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x08.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x09.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x0a.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x0b.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x0c.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x0d.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x0e.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x0f.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x00.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x1a.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x1b.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x1c.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x1d.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x1e.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x1f.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x01.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x2a.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x2b.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x2c.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x2d.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x2e.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x2f.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x02.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x3a.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x3b.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x3c.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x3d.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x3e.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x3f.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x03.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x4a.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x4b.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x4c.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x4d.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x4e.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x4f.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x04.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x5a.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x5b.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x5c.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x5d.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x5e.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x5f.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x05.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x6a.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x6b.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x6c.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x6d.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x6e.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x6f.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x06.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x7a.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x7b.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x7c.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x7d.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x7e.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x7f.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x07.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x8a.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x8b.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x8c.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x8d.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x8e.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x8f.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x08.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x9a.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x9b.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x9c.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x9d.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x9e.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x9f.pm
+    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x09.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x10.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x11.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x12.pm
@@ -131,12 +190,6 @@ outputs:
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x17.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x18.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x19.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x1a.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x1b.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x1c.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x1d.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x1e.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x1f.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x20.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x21.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x22.pm
@@ -147,12 +200,6 @@ outputs:
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x27.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x28.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x29.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x2a.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x2b.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x2c.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x2d.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x2e.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x2f.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x30.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x31.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x32.pm
@@ -163,12 +210,6 @@ outputs:
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x37.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x38.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x39.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x3a.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x3b.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x3c.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x3d.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x3e.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x3f.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x40.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x41.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x42.pm
@@ -179,12 +220,6 @@ outputs:
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x47.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x48.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x49.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x4a.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x4b.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x4c.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x4d.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x4e.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x4f.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x50.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x51.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x52.pm
@@ -195,12 +230,6 @@ outputs:
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x57.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x58.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x59.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x5a.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x5b.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x5c.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x5d.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x5e.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x5f.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x60.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x61.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x62.pm
@@ -211,12 +240,6 @@ outputs:
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x67.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x68.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x69.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x6a.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x6b.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x6c.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x6d.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x6e.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x6f.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x70.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x71.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x72.pm
@@ -227,12 +250,6 @@ outputs:
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x77.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x78.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x79.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x7a.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x7b.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x7c.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x7d.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x7e.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x7f.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x80.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x81.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x82.pm
@@ -243,12 +260,6 @@ outputs:
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x87.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x88.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x89.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x8a.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x8b.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x8c.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x8d.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x8e.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x8f.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x90.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x91.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x92.pm
@@ -259,12 +270,6 @@ outputs:
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x97.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x98.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x99.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x9a.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x9b.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x9c.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x9d.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x9e.pm
-    - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x9f.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/xa0.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/xa1.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/xa2.pm
@@ -361,21 +366,15 @@ outputs:
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/xfd.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/xfe.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/xff.pm
-    - path: 
-        /usr/share/texinfo/lib/Unicode-EastAsianWidth/lib/Unicode/EastAsianWidth.pm
+    - path: /usr/share/texinfo/lib/Unicode-EastAsianWidth/lib/Unicode/EastAsianWidth.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/Messages.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/Recode.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/Recode/_Aliases.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/Recode/_Conversions.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/Recode/_Conversions.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ASMO_449.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ATARI_ST.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ATARI_ST_EURO.pm
-    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/CP10007.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ASMO_449.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ATARI_ST.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ATARI_ST_EURO.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/CP1250.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/CP1251.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/CP1252.pm
@@ -383,62 +382,36 @@ outputs:
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/CP1254.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/CP1256.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/CP1257.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/CSN_369103.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/CP10007.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/CSN_369103.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/CWI.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/DEC_MCS.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_AT_DE.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_AT_DE_A.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_CA_FR.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_DK_NO.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_DK_NO_A.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_ES.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_ES_A.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_ES_S.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_FI_SE.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_FI_SE_A.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_FR.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_IS_FRISS.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_IT.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_PT.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_UK.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_US.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ECMA_CYRILLIC.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/GEORGIAN_ACADEMY.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/GEORGIAN_PS.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/GOST_19768_74.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_AT_DE.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_AT_DE_A.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_CA_FR.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_DK_NO.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_DK_NO_A.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_ES.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_ES_A.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_ES_S.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_FI_SE.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_FI_SE_A.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_FR.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_IS_FRISS.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_IT.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_PT.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_UK.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/EBCDIC_US.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ECMA_CYRILLIC.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/GEORGIAN_ACADEMY.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/GEORGIAN_PS.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/GOST_19768_74.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/GREEK7_OLD.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/GREEK7.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/GREEK7_OLD.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/GREEK_CCITT.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/HP_ROMAN8.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/GREEK_CCITT.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/HP_ROMAN8.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IBM037.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IBM038.pm
-    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IBM1004.pm
-    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IBM1026.pm
-    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IBM1047.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IBM256.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IBM273.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IBM274.pm
@@ -480,97 +453,60 @@ outputs:
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IBM904.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IBM905.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IBM918.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IEC_P27_1.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IBM1004.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IBM1026.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IBM1047.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/IEC_P27_1.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/INIS.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/INIS_8.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/INIS_CYRILLIC.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_10367_BOX.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_2033_1983.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_5427.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_5427_EXT.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_5428.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_1.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_10.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_11.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_13.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_14.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_15.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_16.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_2.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_3.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_4.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_5.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_6.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_7.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_8.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_9.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/INIS_CYRILLIC.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_2033_1983.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_5427_EXT.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_5427.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_5428.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_1.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_2.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_3.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_4.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_5.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_6.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_7.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_8.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_9.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_10.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_11.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_13.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_14.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_15.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_8859_16.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/ISO_10367_BOX.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/KOI8_R.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/KOI8_RU.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/KOI8_T.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/KOI8_U.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/KOI_8.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/LATIN_GREEK.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/LATIN_GREEK_1.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACARABIC.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACCROATIAN.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACCYRILLIC.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACGREEK.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACHEBREW.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACICELAND.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACINTOSH.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACROMANIA.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/LATIN_GREEK.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/LATIN_GREEK_1.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACARABIC.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACCROATIAN.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACCYRILLIC.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACGREEK.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACHEBREW.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACICELAND.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACINTOSH.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACROMANIA.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACTHAI.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACTURKISH.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACUKRAINE.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACTURKISH.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MACUKRAINE.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MAC_IS.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MAC_SAMI.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MAC_SAMI.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/MAC_UK.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/NATS_DANO.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/NATS_SEFI.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/NEXTSTEP.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/SAMI_WS2.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/NATS_DANO.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/NATS_SEFI.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/NEXTSTEP.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/SAMI_WS2.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/TIS_620.pm
-    - path: 
-        /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/US_ASCII.pm
+    - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/US_ASCII.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/UTF_8.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/VISCII.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/RecodeData/_Encode.pm
@@ -578,6 +514,7 @@ outputs:
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/Util.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/gettext_dumb.pm
     - path: /usr/share/texinfo/lib/libintl-perl/lib/Locale/gettext_pp.pm
+
   locale:
     files:
     - path: /usr/share/locale/ca.us-ascii/LC_MESSAGES/texinfo_document.mo
@@ -638,18 +575,20 @@ outputs:
     - path: /usr/share/locale/vi/LC_MESSAGES/texinfo.mo
     - path: /usr/share/locale/zh_CN/LC_MESSAGES/texinfo.mo
     - path: /usr/share/locale/zh_TW/LC_MESSAGES/texinfo.mo
+
   man:
     files:
     - path: /usr/share/man/man1/install-info.1
     - path: /usr/share/man/man1/makeinfo.1
     - path: /usr/share/man/man1/pdftexi2dvi.1
     - path: /usr/share/man/man1/pod2texi.1
+    - path: /usr/share/man/man1/texi2pdf.1
     - path: /usr/share/man/man1/texi2any.1
     - path: /usr/share/man/man1/texi2dvi.1
-    - path: /usr/share/man/man1/texi2pdf.1
     - path: /usr/share/man/man1/texindex.1
     - path: /usr/share/man/man5/info.5
     - path: /usr/share/man/man5/texinfo.5
+
   misc:
     files:
     - path: /usr/share/texinfo/DebugTexinfo/DebugTree.pm
@@ -679,7 +618,6 @@ outputs:
     - path: /usr/share/texinfo/Texinfo/Convert/Unicode.pm
     - path: /usr/share/texinfo/Texinfo/Convert/Utils.pm
     - path: /usr/share/texinfo/Texinfo/Documentlanguages.pm
-    - path: /usr/share/texinfo/Texinfo/MiscXS.pm
     - path: /usr/share/texinfo/Texinfo/ModulePath.pm
     - path: /usr/share/texinfo/Texinfo/Parser.pm
     - path: /usr/share/texinfo/Texinfo/ParserNonXS.pm
@@ -687,7 +625,6 @@ outputs:
     - path: /usr/share/texinfo/Texinfo/Structuring.pm
     - path: /usr/share/texinfo/Texinfo/Transformations.pm
     - path: /usr/share/texinfo/Texinfo/Translations.pm
-    - path: /usr/share/texinfo/Texinfo/XS/parsetexi/Parsetexi.pm
     - path: /usr/share/texinfo/Texinfo/XSLoader.pm
     - path: /usr/share/texinfo/ext/epub3.pm
     - path: /usr/share/texinfo/ext/highlight_syntax.pm

@@ -7,10 +7,12 @@ package:
   description: A container init system with simple and predictable behavior
   homepage: https://github.com/openSUSE/catatonit
   checksum: 54a56c4c894dfef037c44e33a09cb3a93dd3d8f75954a0b22e0ece7edceda58c
+
 sources:
 - name: catatonit
   url: https://github.com/openSUSE/catatonit/archive/refs/tags/v0.2.1.tar.gz
   sha256: 771385049516fdd561fbb9164eddf376075c4c7de3900a8b18654660172748f1
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
@@ -66,51 +68,41 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
-build:
-  script: 'tar --no-same-owner -xf ${SOURCE_catatonit} -C "${WORK_DIR}" --strip-components=1
 
+build:
+  profile: [4144:2701, 7781:3553]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_catatonit} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
     # Bootstrap the build system
-
     autoreconf -fi
 
-
     # Configure
-
     ./configure --prefix=/usr
 
-
     # Build
-
     make
 
-
     # Install
-
     make DESTDIR="${OUT_DIR}" install
 
-
     # Create directory for podman
-
     mkdir -p ${OUT_DIR}/usr/libexec/podman
-
     ln -sf ../../bin/catatonit ${OUT_DIR}/usr/libexec/podman/catatonit
 
-
     # Set consistent timestamps for reproducible builds
-
-    find "${OUT_DIR}" -exec touch -d ''2024-01-01T00:00:00+00:00'' {} \;
-
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
-  full:
-  - bin
   dev:
   - bin
+
+  full:
+  - bin
+
 outputs:
   bin:
     files:

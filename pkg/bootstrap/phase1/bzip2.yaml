@@ -3,11 +3,12 @@ package:
   name: Bzip2
   slug: bzip2
   namespace: bootstrap/phase1
-  bootstrap: true
   version: 1.0.8
   description: A freely available, patent free, high-quality data compressor
   homepage: https://sourceware.org/bzip2/
   stable_checksum: false
+  bootstrap: true
+
 sources:
 - name: bzip2
   url: https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz
@@ -15,6 +16,7 @@ sources:
 - name: install_docs_patch
   url: https://www.linuxfromscratch.org/patches/downloads/bzip2/bzip2-1.0.8-install_docs-1.patch
   sha256: 35e3bbd9642af51fef2a8a83afba040d272da42d7e3a251d8e43255a7b496702
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
@@ -46,7 +48,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
 - name: xz
   commit: x86_64/pkg/bootstrap/phase1/xz/5.4.6/bundles/dev
+
 build:
+  profile: [4239:1544, 8351:1561, 9907:1580]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_bzip2} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -68,56 +73,34 @@ build:
     rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
 bundles:
   dev:
+  - bin
   - dev
   - lib
-  - bin
+
 outputs:
-  dev:
-    files:
-    - path: /usr/include/bzlib.h
   bin:
     files:
     - path: /usr/bin/bunzip2
-      needs:
-      - /usr/lib/libbz2.so.1.0
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/bzcat
-      needs:
-      - /usr/lib/libbz2.so.1.0
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/bzcmp
     - path: /usr/bin/bzdiff
     - path: /usr/bin/bzegrep
     - path: /usr/bin/bzfgrep
     - path: /usr/bin/bzgrep
     - path: /usr/bin/bzip2
-      needs:
-      - /usr/lib/libbz2.so.1.0
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/bzip2recover
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-      - /bootstrap/usr/lib/ld-linux-x86-64.so.2
     - path: /usr/bin/bzless
     - path: /usr/bin/bzmore
+
+  dev:
+    files:
+    - path: /usr/include/bzlib.h
+
   lib:
     files:
     - path: /usr/lib/libbz2.so
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/libbz2.so.1.0
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
     - path: /usr/lib/libbz2.so.1.0.8
-      needs:
-      - /bootstrap/usr/lib/libc.so.6
-
-resolution:
-  /usr/lib/libbz2.so.1.0: '@self'
-  /bootstrap/usr/lib/libc.so.6: bootstrap_tools
-  /bootstrap/usr/lib/ld-linux-x86-64.so.2: bootstrap_tools

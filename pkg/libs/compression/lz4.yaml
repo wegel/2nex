@@ -7,10 +7,12 @@ package:
   description: Extremely Fast Compression algorithm
   homepage: https://lz4.github.io/lz4/
   checksum: 13929744a6344075fa0d4c7025038b771e93a74c96b46e2d208d281946aa48d6
+
 sources:
 - name: lz4
   url: https://github.com/lz4/lz4/archive/v1.9.4/lz4-1.9.4.tar.gz
   sha256: 0b0e3aa07c8c063ddf40b082bdf7e37a1562bda40a0ff5272957f3e987e0e54b
+
 dependencies:
 - name: m4
   commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
@@ -72,7 +74,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+
 build:
+  profile: [4100:4063, 8267:4171, 12496:4676, 16633:5071, 20127:17462]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_lz4} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -84,35 +89,46 @@ build:
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - bin
-  - lib
-  - dev
-  - man
   dev:
   - bin
-  - lib
   - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - lib
+  - man
+
 outputs:
   bin:
     files:
     - path: /usr/bin/lz4
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/lz4c
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/lz4cat
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/unlz4
       needs:
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  dev:
+    files:
+    - path: /usr/include/lz4hc.h
+    - path: /usr/include/lz4.h
+    - path: /usr/include/lz4frame.h
+    - path: /usr/lib/pkgconfig/liblz4.pc
+
   lib:
     files:
     - path: /usr/lib/liblz4.so
@@ -124,19 +140,14 @@ outputs:
     - path: /usr/lib/liblz4.so.1.9.4
       needs:
       - /usr/lib/libc.so.6
-  dev:
-    files:
-    - path: /usr/include/lz4.h
-    - path: /usr/include/lz4frame.h
-    - path: /usr/include/lz4hc.h
-    - path: /usr/lib/pkgconfig/liblz4.pc
+
   man:
     files:
-    - path: /usr/share/man/man1/lz4.1
     - path: /usr/share/man/man1/lz4c.1
+    - path: /usr/share/man/man1/lz4.1
     - path: /usr/share/man/man1/lz4cat.1
     - path: /usr/share/man/man1/unlz4.1
 
 resolution:
-  /usr/lib/libc.so.6: glibc
   /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

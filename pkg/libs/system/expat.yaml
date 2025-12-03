@@ -7,10 +7,12 @@ package:
   description: An XML parser library written in C
   homepage: https://libexpat.github.io/
   checksum: 27c545ad189789f5d5ce8957156aef819bdad52b6ee38fc597325b3d0582f34e
+
 sources:
 - name: expat
   url: https://github.com/libexpat/libexpat/releases/download/R_2_6_2/expat-2.6.2.tar.xz
   sha256: ee14b4c5d8908b1bec37ad937607eab183d4d9806a08adee472c3c3121d27364
+
 dependencies:
 - name: coreutils
   commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
@@ -52,7 +54,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
 - name: grep
   commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+
 build:
+  profile: [4126:1354, 8469:3595, 12982:3638, 17291:3672, 21502:5145, 25797:5220, 30593:5339, 34701:5648, 38821:5742, 39240:5816]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -67,25 +72,29 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
   full:
   - bin
   - dev
-  - lib
   - doc
-  - man
-  dev:
-  - bin
   - lib
-  - dev
+  - man
+
 outputs:
   bin:
     files:
     - path: /usr/bin/xmlwf
       needs:
-      - /usr/lib/libexpat.so.1
-      - /usr/lib/libc.so.6
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libexpat.so.1
+
   dev:
     files:
     - path: /usr/include/expat.h
@@ -93,6 +102,15 @@ outputs:
     - path: /usr/include/expat_external.h
     - path: /usr/lib/libexpat.la
     - path: /usr/lib/pkgconfig/expat.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/expat-2.6.2/AUTHORS
+    - path: /usr/share/doc/expat-2.6.2/changelog
+    - path: /usr/share/doc/expat-2.6.2/ok.min.css
+    - path: /usr/share/doc/expat-2.6.2/reference.html
+    - path: /usr/share/doc/expat-2.6.2/style.css
+
   lib:
     files:
     - path: /usr/lib/cmake/expat-2.6.2/expat-config-version.cmake
@@ -101,29 +119,23 @@ outputs:
     - path: /usr/lib/cmake/expat-2.6.2/expat.cmake
     - path: /usr/lib/libexpat.so
       needs:
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/libexpat.so.1
       needs:
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/libexpat.so.1.9.2
       needs:
-      - /usr/lib/libm.so.6
       - /usr/lib/libc.so.6
-  doc:
-    files:
-    - path: /usr/share/doc/expat-2.6.2/AUTHORS
-    - path: /usr/share/doc/expat-2.6.2/changelog
-    - path: /usr/share/doc/expat-2.6.2/ok.min.css
-    - path: /usr/share/doc/expat-2.6.2/reference.html
-    - path: /usr/share/doc/expat-2.6.2/style.css
+      - /usr/lib/libm.so.6
+
   man:
     files:
     - path: /usr/share/man/man1/xmlwf.1
 
 resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
   /usr/lib/libm.so.6: glibc
-  /usr/lib/libexpat.so.1: '@self'
-  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libexpat.so.1: self

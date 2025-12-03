@@ -7,10 +7,12 @@ package:
   description: System V Release 4.0 curses emulation library
   homepage: https://invisible-island.net/ncurses/
   checksum: 1194eb726021417a6eab21ad5a355a2741b7bcdf32e7167f15a2081a9d82544b
+
 sources:
 - name: ncurses
   url: https://anduin.linuxfromscratch.org/LFS/ncurses-6.4-20230520.tar.xz
   sha256: d76a52f604718bc5e6b48943b021c1e4463cc6b226a44cfe19a3698b6f895579
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
@@ -52,35 +54,104 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+
 build:
-  script: "tar --no-same-owner -xf ${SOURCE_ncurses} -C \"${WORK_DIR}\" --strip-components=1\n\
-    cd ${WORK_DIR}\n\nCFLAGS=\nCPPFLAGS=\n./configure --prefix=/usr           \\\n\
-    \        --mandir=/usr/share/man \\\n        --with-shared           \\\n    \
-    \    --without-debug         \\\n        --without-normal        \\\n        --with-cxx-shared\
-    \       \\\n        --enable-pc-files       \\\n        --enable-widec       \
-    \   \\\n        --with-pkg-config-libdir=/usr/lib/pkgconfig\nmake\nmake DESTDIR=$OUT_DIR\
-    \ install\n\nfor lib in ncurses form panel menu ; do\n    rm -vf             \
-    \       $OUT_DIR/usr/lib/lib${lib}.so\n    echo \"INPUT(-l${lib}w)\" > $OUT_DIR/usr/lib/lib${lib}.so\n\
-    \    ln -sfv ${lib}w.pc        $OUT_DIR/usr/lib/pkgconfig/${lib}.pc\ndone\n\n\
-    rm -vf                     $OUT_DIR/usr/lib/libcursesw.so\necho \"INPUT(-lncursesw)\"\
-    \ > $OUT_DIR/usr/lib/libcursesw.so\nln -sfv libncurses.so      $OUT_DIR/usr/lib/libcurses.so\n\
-    \nmkdir -pv      $OUT_DIR/usr/share/doc/ncurses-6.4\ncp -v -R doc/* $OUT_DIR/usr/share/doc/ncurses-6.4\n\
-    \nfind \"${OUT_DIR}\" -exec touch -d \"2024-01-01T00:00:00+00:00\" {} \\;\n2nex_strip_binaries\
-    \ ${OUT_DIR}\n"
+  profile: [8243:1688, 20642:9266, 45847:9474, 71292:9982, 96621:10308, 121801:10602, 143276:10796, 180323:12743, 212065:13868, 235361:18982]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_ncurses} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    CFLAGS=
+    CPPFLAGS=
+    ./configure --prefix=/usr           \
+            --mandir=/usr/share/man \
+            --with-shared           \
+            --without-debug         \
+            --without-normal        \
+            --with-cxx-shared       \
+            --enable-pc-files       \
+            --enable-widec          \
+            --with-pkg-config-libdir=/usr/lib/pkgconfig
+    make
+    make DESTDIR=$OUT_DIR install
+
+    for lib in ncurses form panel menu ; do
+        rm -vf                    $OUT_DIR/usr/lib/lib${lib}.so
+        echo "INPUT(-l${lib}w)" > $OUT_DIR/usr/lib/lib${lib}.so
+        ln -sfv ${lib}w.pc        $OUT_DIR/usr/lib/pkgconfig/${lib}.pc
+    done
+
+    rm -vf                     $OUT_DIR/usr/lib/libcursesw.so
+    echo "INPUT(-lncursesw)" > $OUT_DIR/usr/lib/libcursesw.so
+    ln -sfv libncurses.so      $OUT_DIR/usr/lib/libcurses.so
+
+    mkdir -pv      $OUT_DIR/usr/share/doc/ncurses-6.4
+    cp -v -R doc/* $OUT_DIR/usr/share/doc/ncurses-6.4
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
 bundles:
   dev:
-  - dev
   - bin
+  - dev
   - lib
   - terminfo
+
   full:
-  - doc
-  - man
-  - dev
   - bin
+  - dev
+  - doc
   - lib
+  - man
   - terminfo
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/captoinfo
+    - path: /usr/bin/clear
+    - path: /usr/bin/infocmp
+    - path: /usr/bin/infotocap
+    - path: /usr/bin/ncursesw6-config
+    - path: /usr/bin/reset
+    - path: /usr/bin/tabs
+    - path: /usr/bin/tic
+    - path: /usr/bin/toe
+    - path: /usr/bin/tput
+    - path: /usr/bin/tset
+
+  dev:
+    files:
+    - path: /usr/include/curses.h
+    - path: /usr/include/cursesapp.h
+    - path: /usr/include/cursesf.h
+    - path: /usr/include/cursesm.h
+    - path: /usr/include/cursesp.h
+    - path: /usr/include/cursesw.h
+    - path: /usr/include/cursslk.h
+    - path: /usr/include/eti.h
+    - path: /usr/include/etip.h
+    - path: /usr/include/form.h
+    - path: /usr/include/menu.h
+    - path: /usr/include/ncurses.h
+    - path: /usr/include/ncurses_dll.h
+    - path: /usr/include/panel.h
+    - path: /usr/include/term.h
+    - path: /usr/include/term_entry.h
+    - path: /usr/include/termcap.h
+    - path: /usr/include/unctrl.h
+    - path: /usr/lib/pkgconfig/form.pc
+    - path: /usr/lib/pkgconfig/formw.pc
+    - path: /usr/lib/pkgconfig/menu.pc
+    - path: /usr/lib/pkgconfig/menuw.pc
+    - path: /usr/lib/pkgconfig/ncurses++w.pc
+    - path: /usr/lib/pkgconfig/ncurses.pc
+    - path: /usr/lib/pkgconfig/ncursesw.pc
+    - path: /usr/lib/pkgconfig/panel.pc
+    - path: /usr/lib/pkgconfig/panelw.pc
+
   doc:
     files:
     - path: /usr/share/doc/ncurses-6.4/hackguide.doc
@@ -114,148 +185,77 @@ outputs:
     - path: /usr/share/doc/ncurses-6.4/html/ada/index.htm
     - path: /usr/share/doc/ncurses-6.4/html/ada/main.htm
     - path: /usr/share/doc/ncurses-6.4/html/ada/table.html
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-aux__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-aux__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-alpha__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-alpha__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-alphanumeric__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-alphanumeric__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-enumeration-ada__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-enumeration-ada__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-enumeration__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-enumeration__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-intfield__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-intfield__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-ipv4_address__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-ipv4_address__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-numeric__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-numeric__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-regexp__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-regexp__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-user-choice__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-user-choice__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-user__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-user__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_user_data__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_user_data__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-form_user_data__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-form_user_data__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-menus-item_user_data__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-menus-item_user_data__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-menus-menu_user_data__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-menus-menu_user_data__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-menus__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-menus__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-mouse__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-mouse__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-panels-user_data__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-panels-user_data__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-panels__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-panels__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-putwin__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-putwin__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-termcap__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-termcap__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-terminfo__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-terminfo__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-aux__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-aux__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-complex_io__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-complex_io__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-decimal_io__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-decimal_io__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-enumeration_io__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-enumeration_io__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-fixed_io__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-fixed_io__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-float_io__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-float_io__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-integer_io__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-integer_io__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-modular_io__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-modular_io__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-trace__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-trace__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses__adb.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses__ads.htm
-    - path: 
-        /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses_constants__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-aux__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-aux__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-alpha__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-alpha__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-alphanumeric__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-alphanumeric__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-enumeration-ada__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-enumeration-ada__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-enumeration__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-enumeration__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-intfield__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-intfield__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-ipv4_address__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-ipv4_address__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-numeric__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-numeric__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-regexp__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-regexp__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-user-choice__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-user-choice__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-user__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types-user__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_types__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_user_data__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-field_user_data__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-form_user_data__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms-form_user_data__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-forms__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-menus-item_user_data__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-menus-item_user_data__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-menus-menu_user_data__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-menus-menu_user_data__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-menus__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-menus__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-mouse__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-mouse__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-panels-user_data__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-panels-user_data__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-panels__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-panels__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-putwin__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-putwin__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-termcap__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-termcap__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-terminfo__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-terminfo__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-aux__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-aux__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-complex_io__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-complex_io__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-decimal_io__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-decimal_io__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-enumeration_io__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-enumeration_io__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-fixed_io__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-fixed_io__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-float_io__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-float_io__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-integer_io__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-integer_io__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-modular_io__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io-modular_io__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-text_io__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-trace__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses-trace__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses__adb.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses__ads.htm
+    - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface-curses_constants__ads.htm
     - path: /usr/share/doc/ncurses-6.4/html/ada/terminal_interface__ads.htm
     - path: /usr/share/doc/ncurses-6.4/html/announce.html
     - path: /usr/share/doc/ncurses-6.4/html/hackguide.html
@@ -399,6 +399,32 @@ outputs:
     - path: /usr/share/doc/ncurses-6.4/html/man/wresize.3x.html
     - path: /usr/share/doc/ncurses-6.4/html/ncurses-intro.html
     - path: /usr/share/doc/ncurses-6.4/ncurses-intro.doc
+
+  lib:
+    files:
+    - path: /usr/lib/libcurses.so
+    - path: /usr/lib/libcursesw.so
+    - path: /usr/lib/libform.so
+    - path: /usr/lib/libformw.so
+    - path: /usr/lib/libformw.so.6
+    - path: /usr/lib/libformw.so.6.4
+    - path: /usr/lib/libmenu.so
+    - path: /usr/lib/libmenuw.so
+    - path: /usr/lib/libmenuw.so.6
+    - path: /usr/lib/libmenuw.so.6.4
+    - path: /usr/lib/libncurses++w.so
+    - path: /usr/lib/libncurses++w.so.6
+    - path: /usr/lib/libncurses++w.so.6.4
+    - path: /usr/lib/libncurses.so
+    - path: /usr/lib/libncursesw.so
+    - path: /usr/lib/libncursesw.so.6
+    - path: /usr/lib/libncursesw.so.6.4
+    - path: /usr/lib/libpanel.so
+    - path: /usr/lib/libpanelw.so
+    - path: /usr/lib/libpanelw.so.6
+    - path: /usr/lib/libpanelw.so.6.4
+    - path: /usr/lib/terminfo
+
   man:
     files:
     - path: /usr/share/man/man1/captoinfo.1m
@@ -1301,6 +1327,7 @@ outputs:
     - path: /usr/share/man/man5/terminfo.5
     - path: /usr/share/man/man5/user_caps.5
     - path: /usr/share/man/man7/term.7
+
   terminfo:
     files:
     - path: /usr/share/tabset/std
@@ -1310,11 +1337,11 @@ outputs:
     - path: /usr/share/terminfo/1/1178
     - path: /usr/share/terminfo/1/1730-lm
     - path: /usr/share/terminfo/2/2621
-    - path: /usr/share/terminfo/2/2621-wl
     - path: /usr/share/terminfo/2/2621A
     - path: /usr/share/terminfo/2/2621a
-    - path: /usr/share/terminfo/3/386at
+    - path: /usr/share/terminfo/2/2621-wl
     - path: /usr/share/terminfo/3/3b1
+    - path: /usr/share/terminfo/3/386at
     - path: /usr/share/terminfo/4/4025ex
     - path: /usr/share/terminfo/4/4027ex
     - path: /usr/share/terminfo/4/4410-w
@@ -1323,25 +1350,25 @@ outputs:
     - path: /usr/share/terminfo/5/5620
     - path: /usr/share/terminfo/5/5630-24
     - path: /usr/share/terminfo/5/5630DMD-24
-    - path: /usr/share/terminfo/6/6053
-    - path: /usr/share/terminfo/6/6053-dg
     - path: /usr/share/terminfo/6/605x
     - path: /usr/share/terminfo/6/605x-dg
-    - path: /usr/share/terminfo/6/630-lm
     - path: /usr/share/terminfo/6/630MTG-24
+    - path: /usr/share/terminfo/6/630-lm
+    - path: /usr/share/terminfo/6/6053
+    - path: /usr/share/terminfo/6/6053-dg
     - path: /usr/share/terminfo/7/730MTG-24
     - path: /usr/share/terminfo/7/730MTG-41
     - path: /usr/share/terminfo/7/730MTG-41r
     - path: /usr/share/terminfo/7/730MTGr
     - path: /usr/share/terminfo/7/730MTGr-24
     - path: /usr/share/terminfo/8/8510
+    - path: /usr/share/terminfo/9/9term
     - path: /usr/share/terminfo/9/955-hb
     - path: /usr/share/terminfo/9/955-w
-    - path: /usr/share/terminfo/9/9term
     - path: /usr/share/terminfo/A/Apple_Terminal
     - path: /usr/share/terminfo/E/Eterm
-    - path: /usr/share/terminfo/E/Eterm-256color
     - path: /usr/share/terminfo/E/Eterm-88color
+    - path: /usr/share/terminfo/E/Eterm-256color
     - path: /usr/share/terminfo/E/Eterm-color
     - path: /usr/share/terminfo/L/LFT-PC850
     - path: /usr/share/terminfo/M/MtxOrb
@@ -1349,14 +1376,6 @@ outputs:
     - path: /usr/share/terminfo/M/MtxOrb204
     - path: /usr/share/terminfo/N/NCR260VT300WPP
     - path: /usr/share/terminfo/N/NCRVT100WPP
-    - path: /usr/share/terminfo/P/P12
-    - path: /usr/share/terminfo/P/P12-M
-    - path: /usr/share/terminfo/P/P12-M-W
-    - path: /usr/share/terminfo/P/P12-W
-    - path: /usr/share/terminfo/P/P14
-    - path: /usr/share/terminfo/P/P14-M
-    - path: /usr/share/terminfo/P/P14-M-W
-    - path: /usr/share/terminfo/P/P14-W
     - path: /usr/share/terminfo/P/P4
     - path: /usr/share/terminfo/P/P5
     - path: /usr/share/terminfo/P/P7
@@ -1366,6 +1385,14 @@ outputs:
     - path: /usr/share/terminfo/P/P9-8
     - path: /usr/share/terminfo/P/P9-8-W
     - path: /usr/share/terminfo/P/P9-W
+    - path: /usr/share/terminfo/P/P12
+    - path: /usr/share/terminfo/P/P12-M
+    - path: /usr/share/terminfo/P/P12-M-W
+    - path: /usr/share/terminfo/P/P12-W
+    - path: /usr/share/terminfo/P/P14
+    - path: /usr/share/terminfo/P/P14-M
+    - path: /usr/share/terminfo/P/P14-M-W
+    - path: /usr/share/terminfo/P/P14-W
     - path: /usr/share/terminfo/Q/Q306-8-pc
     - path: /usr/share/terminfo/Q/Q310-vip-H
     - path: /usr/share/terminfo/Q/Q310-vip-H-am
@@ -1374,8 +1401,8 @@ outputs:
     - path: /usr/share/terminfo/Q/Q310-vip-w-am
     - path: /usr/share/terminfo/X/X-hpterm
     - path: /usr/share/terminfo/X/X-hpterm-color2
-    - path: /usr/share/terminfo/a/a210
     - path: /usr/share/terminfo/a/a80
+    - path: /usr/share/terminfo/a/a210
     - path: /usr/share/terminfo/a/a980
     - path: /usr/share/terminfo/a/aa4080
     - path: /usr/share/terminfo/a/aaa
@@ -1435,23 +1462,23 @@ outputs:
     - path: /usr/share/terminfo/a/addsvp60
     - path: /usr/share/terminfo/a/adm+sgr
     - path: /usr/share/terminfo/a/adm1
-    - path: /usr/share/terminfo/a/adm11
-    - path: /usr/share/terminfo/a/adm1178
-    - path: /usr/share/terminfo/a/adm12
     - path: /usr/share/terminfo/a/adm1a
     - path: /usr/share/terminfo/a/adm2
+    - path: /usr/share/terminfo/a/adm3
+    - path: /usr/share/terminfo/a/adm3a
+    - path: /usr/share/terminfo/a/adm3a+
+    - path: /usr/share/terminfo/a/adm5
+    - path: /usr/share/terminfo/a/adm11
+    - path: /usr/share/terminfo/a/adm12
     - path: /usr/share/terminfo/a/adm20
     - path: /usr/share/terminfo/a/adm21
     - path: /usr/share/terminfo/a/adm22
-    - path: /usr/share/terminfo/a/adm3
     - path: /usr/share/terminfo/a/adm31
     - path: /usr/share/terminfo/a/adm31-old
     - path: /usr/share/terminfo/a/adm36
-    - path: /usr/share/terminfo/a/adm3a
-    - path: /usr/share/terminfo/a/adm3a+
     - path: /usr/share/terminfo/a/adm42
     - path: /usr/share/terminfo/a/adm42-ns
-    - path: /usr/share/terminfo/a/adm5
+    - path: /usr/share/terminfo/a/adm1178
     - path: /usr/share/terminfo/a/aepro
     - path: /usr/share/terminfo/a/aixterm
     - path: /usr/share/terminfo/a/aixterm+sl
@@ -1496,6 +1523,7 @@ outputs:
     - path: /usr/share/terminfo/a/ampex-219
     - path: /usr/share/terminfo/a/ampex-219w
     - path: /usr/share/terminfo/a/ampex-232
+    - path: /usr/share/terminfo/a/ampex80
     - path: /usr/share/terminfo/a/ampex175
     - path: /usr/share/terminfo/a/ampex175-b
     - path: /usr/share/terminfo/a/ampex210
@@ -1503,7 +1531,6 @@ outputs:
     - path: /usr/share/terminfo/a/ampex219w
     - path: /usr/share/terminfo/a/ampex232
     - path: /usr/share/terminfo/a/ampex232w
-    - path: /usr/share/terminfo/a/ampex80
     - path: /usr/share/terminfo/a/annarbor4080
     - path: /usr/share/terminfo/a/ansi
     - path: /usr/share/terminfo/a/ansi+arrows
@@ -1601,12 +1628,45 @@ outputs:
     - path: /usr/share/terminfo/a/atari_st-color
     - path: /usr/share/terminfo/a/atarist-m
     - path: /usr/share/terminfo/a/aterm
+    - path: /usr/share/terminfo/a/att500
+    - path: /usr/share/terminfo/a/att505
+    - path: /usr/share/terminfo/a/att505-22
+    - path: /usr/share/terminfo/a/att505-24
+    - path: /usr/share/terminfo/a/att510a
+    - path: /usr/share/terminfo/a/att510d
+    - path: /usr/share/terminfo/a/att513
+    - path: /usr/share/terminfo/a/att605
+    - path: /usr/share/terminfo/a/att605-pc
+    - path: /usr/share/terminfo/a/att605-w
+    - path: /usr/share/terminfo/a/att610
+    - path: /usr/share/terminfo/a/att610-103k
+    - path: /usr/share/terminfo/a/att610-103k-w
+    - path: /usr/share/terminfo/a/att610+cvis
+    - path: /usr/share/terminfo/a/att610+cvis0
+    - path: /usr/share/terminfo/a/att610-w
+    - path: /usr/share/terminfo/a/att615
+    - path: /usr/share/terminfo/a/att615-103k
+    - path: /usr/share/terminfo/a/att615-103k-w
+    - path: /usr/share/terminfo/a/att615-w
+    - path: /usr/share/terminfo/a/att620
+    - path: /usr/share/terminfo/a/att620-103k
+    - path: /usr/share/terminfo/a/att620-103k-w
+    - path: /usr/share/terminfo/a/att620-w
+    - path: /usr/share/terminfo/a/att630
+    - path: /usr/share/terminfo/a/att630-24
+    - path: /usr/share/terminfo/a/att700
+    - path: /usr/share/terminfo/a/att730
+    - path: /usr/share/terminfo/a/att730r
+    - path: /usr/share/terminfo/a/att730r-24
+    - path: /usr/share/terminfo/a/att730r-41
+    - path: /usr/share/terminfo/a/att730-24
+    - path: /usr/share/terminfo/a/att730-41
     - path: /usr/share/terminfo/a/att2300
     - path: /usr/share/terminfo/a/att2350
     - path: /usr/share/terminfo/a/att4410
-    - path: /usr/share/terminfo/a/att4410-w
     - path: /usr/share/terminfo/a/att4410v1
     - path: /usr/share/terminfo/a/att4410v1-w
+    - path: /usr/share/terminfo/a/att4410-w
     - path: /usr/share/terminfo/a/att4415
     - path: /usr/share/terminfo/a/att4415+nl
     - path: /usr/share/terminfo/a/att4415-nl
@@ -1620,28 +1680,23 @@ outputs:
     - path: /usr/share/terminfo/a/att4418-w
     - path: /usr/share/terminfo/a/att4420
     - path: /usr/share/terminfo/a/att4424
-    - path: /usr/share/terminfo/a/att4424-1
     - path: /usr/share/terminfo/a/att4424m
+    - path: /usr/share/terminfo/a/att4424-1
     - path: /usr/share/terminfo/a/att4425
     - path: /usr/share/terminfo/a/att4425-nl
     - path: /usr/share/terminfo/a/att4425-w
     - path: /usr/share/terminfo/a/att4426
-    - path: /usr/share/terminfo/a/att500
-    - path: /usr/share/terminfo/a/att505
-    - path: /usr/share/terminfo/a/att505-22
-    - path: /usr/share/terminfo/a/att505-24
-    - path: /usr/share/terminfo/a/att510a
-    - path: /usr/share/terminfo/a/att510d
-    - path: /usr/share/terminfo/a/att513
     - path: /usr/share/terminfo/a/att5310
     - path: /usr/share/terminfo/a/att5320
     - path: /usr/share/terminfo/a/att5410
-    - path: /usr/share/terminfo/a/att5410-w
     - path: /usr/share/terminfo/a/att5410v1
     - path: /usr/share/terminfo/a/att5410v1-w
+    - path: /usr/share/terminfo/a/att5410-w
     - path: /usr/share/terminfo/a/att5418
     - path: /usr/share/terminfo/a/att5418-w
     - path: /usr/share/terminfo/a/att5420
+    - path: /usr/share/terminfo/a/att5420_2
+    - path: /usr/share/terminfo/a/att5420_2-w
     - path: /usr/share/terminfo/a/att5420+nl
     - path: /usr/share/terminfo/a/att5420-nl
     - path: /usr/share/terminfo/a/att5420-rv
@@ -1650,8 +1705,6 @@ outputs:
     - path: /usr/share/terminfo/a/att5420-w-nl
     - path: /usr/share/terminfo/a/att5420-w-rv
     - path: /usr/share/terminfo/a/att5420-w-rv-n
-    - path: /usr/share/terminfo/a/att5420_2
-    - path: /usr/share/terminfo/a/att5420_2-w
     - path: /usr/share/terminfo/a/att5425
     - path: /usr/share/terminfo/a/att5425-nl
     - path: /usr/share/terminfo/a/att5425-w
@@ -1661,34 +1714,8 @@ outputs:
     - path: /usr/share/terminfo/a/att5620-24
     - path: /usr/share/terminfo/a/att5620-34
     - path: /usr/share/terminfo/a/att5620-s
-    - path: /usr/share/terminfo/a/att605
-    - path: /usr/share/terminfo/a/att605-pc
-    - path: /usr/share/terminfo/a/att605-w
-    - path: /usr/share/terminfo/a/att610
-    - path: /usr/share/terminfo/a/att610+cvis
-    - path: /usr/share/terminfo/a/att610+cvis0
-    - path: /usr/share/terminfo/a/att610-103k
-    - path: /usr/share/terminfo/a/att610-103k-w
-    - path: /usr/share/terminfo/a/att610-w
-    - path: /usr/share/terminfo/a/att615
-    - path: /usr/share/terminfo/a/att615-103k
-    - path: /usr/share/terminfo/a/att615-103k-w
-    - path: /usr/share/terminfo/a/att615-w
-    - path: /usr/share/terminfo/a/att620
-    - path: /usr/share/terminfo/a/att620-103k
-    - path: /usr/share/terminfo/a/att620-103k-w
-    - path: /usr/share/terminfo/a/att620-w
-    - path: /usr/share/terminfo/a/att630
-    - path: /usr/share/terminfo/a/att630-24
     - path: /usr/share/terminfo/a/att6386
-    - path: /usr/share/terminfo/a/att700
-    - path: /usr/share/terminfo/a/att730
-    - path: /usr/share/terminfo/a/att730-24
-    - path: /usr/share/terminfo/a/att730-41
     - path: /usr/share/terminfo/a/att7300
-    - path: /usr/share/terminfo/a/att730r
-    - path: /usr/share/terminfo/a/att730r-24
-    - path: /usr/share/terminfo/a/att730r-41
     - path: /usr/share/terminfo/a/avatar
     - path: /usr/share/terminfo/a/avatar0
     - path: /usr/share/terminfo/a/avatar0+
@@ -1737,12 +1764,12 @@ outputs:
     - path: /usr/share/terminfo/b/bobcat
     - path: /usr/share/terminfo/b/bq300
     - path: /usr/share/terminfo/b/bq300-8
+    - path: /usr/share/terminfo/b/bq300-8w
     - path: /usr/share/terminfo/b/bq300-8-pc
     - path: /usr/share/terminfo/b/bq300-8-pc-rv
     - path: /usr/share/terminfo/b/bq300-8-pc-w
     - path: /usr/share/terminfo/b/bq300-8-pc-w-rv
     - path: /usr/share/terminfo/b/bq300-8rv
-    - path: /usr/share/terminfo/b/bq300-8w
     - path: /usr/share/terminfo/b/bq300-pc
     - path: /usr/share/terminfo/b/bq300-pc-rv
     - path: /usr/share/terminfo/b/bq300-pc-w
@@ -1795,6 +1822,7 @@ outputs:
     - path: /usr/share/terminfo/c/chromatics
     - path: /usr/share/terminfo/c/ci8510
     - path: /usr/share/terminfo/c/cit-80
+    - path: /usr/share/terminfo/c/cit80
     - path: /usr/share/terminfo/c/cit101
     - path: /usr/share/terminfo/c/cit101e
     - path: /usr/share/terminfo/c/cit101e-132
@@ -1802,7 +1830,6 @@ outputs:
     - path: /usr/share/terminfo/c/cit101e-n132
     - path: /usr/share/terminfo/c/cit101e-rv
     - path: /usr/share/terminfo/c/cit500
-    - path: /usr/share/terminfo/c/cit80
     - path: /usr/share/terminfo/c/citc
     - path: /usr/share/terminfo/c/citoh
     - path: /usr/share/terminfo/c/citoh-6lpi
@@ -1824,45 +1851,45 @@ outputs:
     - path: /usr/share/terminfo/c/concept108
     - path: /usr/share/terminfo/c/concept108-4p
     - path: /usr/share/terminfo/c/concept108-8p
+    - path: /usr/share/terminfo/c/concept108rv4p
     - path: /usr/share/terminfo/c/concept108-w-8
     - path: /usr/share/terminfo/c/concept108-w8p
-    - path: /usr/share/terminfo/c/concept108rv4p
     - path: /usr/share/terminfo/c/cons25
+    - path: /usr/share/terminfo/c/cons25r
+    - path: /usr/share/terminfo/c/cons25w
+    - path: /usr/share/terminfo/c/cons25r-m
+    - path: /usr/share/terminfo/c/cons25l1
+    - path: /usr/share/terminfo/c/cons25l1-m
     - path: /usr/share/terminfo/c/cons25-debian
     - path: /usr/share/terminfo/c/cons25-iso-m
     - path: /usr/share/terminfo/c/cons25-iso8859
-    - path: /usr/share/terminfo/c/cons25-koi8-r
     - path: /usr/share/terminfo/c/cons25-koi8r-m
+    - path: /usr/share/terminfo/c/cons25-koi8-r
     - path: /usr/share/terminfo/c/cons25-m
-    - path: /usr/share/terminfo/c/cons25l1
-    - path: /usr/share/terminfo/c/cons25l1-m
-    - path: /usr/share/terminfo/c/cons25r
-    - path: /usr/share/terminfo/c/cons25r-m
-    - path: /usr/share/terminfo/c/cons25w
     - path: /usr/share/terminfo/c/cons30
     - path: /usr/share/terminfo/c/cons30-m
     - path: /usr/share/terminfo/c/cons43
     - path: /usr/share/terminfo/c/cons43-m
     - path: /usr/share/terminfo/c/cons50
+    - path: /usr/share/terminfo/c/cons50r
+    - path: /usr/share/terminfo/c/cons50r-m
+    - path: /usr/share/terminfo/c/cons50l1
+    - path: /usr/share/terminfo/c/cons50l1-m
     - path: /usr/share/terminfo/c/cons50-iso-m
     - path: /usr/share/terminfo/c/cons50-iso8859
     - path: /usr/share/terminfo/c/cons50-koi8r
     - path: /usr/share/terminfo/c/cons50-koi8r-m
     - path: /usr/share/terminfo/c/cons50-m
-    - path: /usr/share/terminfo/c/cons50l1
-    - path: /usr/share/terminfo/c/cons50l1-m
-    - path: /usr/share/terminfo/c/cons50r
-    - path: /usr/share/terminfo/c/cons50r-m
     - path: /usr/share/terminfo/c/cons60
+    - path: /usr/share/terminfo/c/cons60r
+    - path: /usr/share/terminfo/c/cons60r-m
+    - path: /usr/share/terminfo/c/cons60l1
+    - path: /usr/share/terminfo/c/cons60l1-m
     - path: /usr/share/terminfo/c/cons60-iso
     - path: /usr/share/terminfo/c/cons60-iso-m
     - path: /usr/share/terminfo/c/cons60-koi8r
     - path: /usr/share/terminfo/c/cons60-koi8r-m
     - path: /usr/share/terminfo/c/cons60-m
-    - path: /usr/share/terminfo/c/cons60l1
-    - path: /usr/share/terminfo/c/cons60l1-m
-    - path: /usr/share/terminfo/c/cons60r
-    - path: /usr/share/terminfo/c/cons60r-m
     - path: /usr/share/terminfo/c/contel300
     - path: /usr/share/terminfo/c/contel301
     - path: /usr/share/terminfo/c/contel320
@@ -1879,14 +1906,15 @@ outputs:
     - path: /usr/share/terminfo/c/ctrm
     - path: /usr/share/terminfo/c/cx
     - path: /usr/share/terminfo/c/cx100
-    - path: /usr/share/terminfo/c/cyb110
     - path: /usr/share/terminfo/c/cyb83
+    - path: /usr/share/terminfo/c/cyb110
     - path: /usr/share/terminfo/c/cygwin
     - path: /usr/share/terminfo/c/cygwinB19
     - path: /usr/share/terminfo/c/cygwinDBG
-    - path: /usr/share/terminfo/d/d132
     - path: /usr/share/terminfo/d/d2
     - path: /usr/share/terminfo/d/d2-dg
+    - path: /usr/share/terminfo/d/d80
+    - path: /usr/share/terminfo/d/d132
     - path: /usr/share/terminfo/d/d200
     - path: /usr/share/terminfo/d/d200-dg
     - path: /usr/share/terminfo/d/d210
@@ -1900,15 +1928,15 @@ outputs:
     - path: /usr/share/terminfo/d/d215-7b
     - path: /usr/share/terminfo/d/d215-dg
     - path: /usr/share/terminfo/d/d216+
+    - path: /usr/share/terminfo/d/d216e+
+    - path: /usr/share/terminfo/d/d216e+dg
+    - path: /usr/share/terminfo/d/d216e-dg
+    - path: /usr/share/terminfo/d/d216e-unix
     - path: /usr/share/terminfo/d/d216+25
     - path: /usr/share/terminfo/d/d216+dg
     - path: /usr/share/terminfo/d/d216-dg
     - path: /usr/share/terminfo/d/d216-unix
     - path: /usr/share/terminfo/d/d216-unix-25
-    - path: /usr/share/terminfo/d/d216e+
-    - path: /usr/share/terminfo/d/d216e+dg
-    - path: /usr/share/terminfo/d/d216e-dg
-    - path: /usr/share/terminfo/d/d216e-unix
     - path: /usr/share/terminfo/d/d217-dg
     - path: /usr/share/terminfo/d/d217-unix
     - path: /usr/share/terminfo/d/d217-unix-25
@@ -1916,9 +1944,9 @@ outputs:
     - path: /usr/share/terminfo/d/d220-7b
     - path: /usr/share/terminfo/d/d220-dg
     - path: /usr/share/terminfo/d/d230
-    - path: /usr/share/terminfo/d/d230-dg
     - path: /usr/share/terminfo/d/d230c
     - path: /usr/share/terminfo/d/d230c-dg
+    - path: /usr/share/terminfo/d/d230-dg
     - path: /usr/share/terminfo/d/d400
     - path: /usr/share/terminfo/d/d400-dg
     - path: /usr/share/terminfo/d/d410
@@ -1934,15 +1962,15 @@ outputs:
     - path: /usr/share/terminfo/d/d412+
     - path: /usr/share/terminfo/d/d412+25
     - path: /usr/share/terminfo/d/d412+dg
+    - path: /usr/share/terminfo/d/d412-dg
     - path: /usr/share/terminfo/d/d412+s
     - path: /usr/share/terminfo/d/d412+sr
-    - path: /usr/share/terminfo/d/d412+w
-    - path: /usr/share/terminfo/d/d412-dg
     - path: /usr/share/terminfo/d/d412-unix
     - path: /usr/share/terminfo/d/d412-unix-25
     - path: /usr/share/terminfo/d/d412-unix-s
     - path: /usr/share/terminfo/d/d412-unix-sr
     - path: /usr/share/terminfo/d/d412-unix-w
+    - path: /usr/share/terminfo/d/d412+w
     - path: /usr/share/terminfo/d/d413-dg
     - path: /usr/share/terminfo/d/d413-unix
     - path: /usr/share/terminfo/d/d413-unix-25
@@ -1954,18 +1982,6 @@ outputs:
     - path: /usr/share/terminfo/d/d414-unix-s
     - path: /usr/share/terminfo/d/d414-unix-sr
     - path: /usr/share/terminfo/d/d414-unix-w
-    - path: /usr/share/terminfo/d/d430-dg
-    - path: /usr/share/terminfo/d/d430-dg-ccc
-    - path: /usr/share/terminfo/d/d430-unix
-    - path: /usr/share/terminfo/d/d430-unix-25
-    - path: /usr/share/terminfo/d/d430-unix-25-ccc
-    - path: /usr/share/terminfo/d/d430-unix-ccc
-    - path: /usr/share/terminfo/d/d430-unix-s
-    - path: /usr/share/terminfo/d/d430-unix-s-ccc
-    - path: /usr/share/terminfo/d/d430-unix-sr
-    - path: /usr/share/terminfo/d/d430-unix-sr-ccc
-    - path: /usr/share/terminfo/d/d430-unix-w
-    - path: /usr/share/terminfo/d/d430-unix-w-ccc
     - path: /usr/share/terminfo/d/d430c-dg
     - path: /usr/share/terminfo/d/d430c-dg-ccc
     - path: /usr/share/terminfo/d/d430c-unix
@@ -1978,6 +1994,18 @@ outputs:
     - path: /usr/share/terminfo/d/d430c-unix-sr-ccc
     - path: /usr/share/terminfo/d/d430c-unix-w
     - path: /usr/share/terminfo/d/d430c-unix-w-ccc
+    - path: /usr/share/terminfo/d/d430-dg
+    - path: /usr/share/terminfo/d/d430-dg-ccc
+    - path: /usr/share/terminfo/d/d430-unix
+    - path: /usr/share/terminfo/d/d430-unix-25
+    - path: /usr/share/terminfo/d/d430-unix-25-ccc
+    - path: /usr/share/terminfo/d/d430-unix-ccc
+    - path: /usr/share/terminfo/d/d430-unix-s
+    - path: /usr/share/terminfo/d/d430-unix-s-ccc
+    - path: /usr/share/terminfo/d/d430-unix-sr
+    - path: /usr/share/terminfo/d/d430-unix-sr-ccc
+    - path: /usr/share/terminfo/d/d430-unix-w
+    - path: /usr/share/terminfo/d/d430-unix-w-ccc
     - path: /usr/share/terminfo/d/d450
     - path: /usr/share/terminfo/d/d450-dg
     - path: /usr/share/terminfo/d/d460
@@ -1991,18 +2019,18 @@ outputs:
     - path: /usr/share/terminfo/d/d461-dg
     - path: /usr/share/terminfo/d/d461-w
     - path: /usr/share/terminfo/d/d462+
+    - path: /usr/share/terminfo/d/d462e-dg
     - path: /usr/share/terminfo/d/d462+25
     - path: /usr/share/terminfo/d/d462+dg
+    - path: /usr/share/terminfo/d/d462-dg
     - path: /usr/share/terminfo/d/d462+s
     - path: /usr/share/terminfo/d/d462+sr
-    - path: /usr/share/terminfo/d/d462+w
-    - path: /usr/share/terminfo/d/d462-dg
     - path: /usr/share/terminfo/d/d462-unix
     - path: /usr/share/terminfo/d/d462-unix-25
     - path: /usr/share/terminfo/d/d462-unix-s
     - path: /usr/share/terminfo/d/d462-unix-sr
     - path: /usr/share/terminfo/d/d462-unix-w
-    - path: /usr/share/terminfo/d/d462e-dg
+    - path: /usr/share/terminfo/d/d462+w
     - path: /usr/share/terminfo/d/d463-dg
     - path: /usr/share/terminfo/d/d463-unix
     - path: /usr/share/terminfo/d/d463-unix-25
@@ -2015,11 +2043,11 @@ outputs:
     - path: /usr/share/terminfo/d/d464-unix-sr
     - path: /usr/share/terminfo/d/d464-unix-w
     - path: /usr/share/terminfo/d/d470
-    - path: /usr/share/terminfo/d/d470-7b
-    - path: /usr/share/terminfo/d/d470-dg
     - path: /usr/share/terminfo/d/d470c
     - path: /usr/share/terminfo/d/d470c-7b
     - path: /usr/share/terminfo/d/d470c-dg
+    - path: /usr/share/terminfo/d/d470-7b
+    - path: /usr/share/terminfo/d/d470-dg
     - path: /usr/share/terminfo/d/d555
     - path: /usr/share/terminfo/d/d555-7b
     - path: /usr/share/terminfo/d/d555-7b-w
@@ -2033,9 +2061,14 @@ outputs:
     - path: /usr/share/terminfo/d/d578
     - path: /usr/share/terminfo/d/d578-7b
     - path: /usr/share/terminfo/d/d578-dg
-    - path: /usr/share/terminfo/d/d80
     - path: /usr/share/terminfo/d/d800
     - path: /usr/share/terminfo/d/darwin
+    - path: /usr/share/terminfo/d/darwin-80x25
+    - path: /usr/share/terminfo/d/darwin-80x25-m
+    - path: /usr/share/terminfo/d/darwin-80x30
+    - path: /usr/share/terminfo/d/darwin-80x30-m
+    - path: /usr/share/terminfo/d/darwin-90x30
+    - path: /usr/share/terminfo/d/darwin-90x30-m
     - path: /usr/share/terminfo/d/darwin-100x37
     - path: /usr/share/terminfo/d/darwin-100x37-m
     - path: /usr/share/terminfo/d/darwin-112x37
@@ -2054,12 +2087,6 @@ outputs:
     - path: /usr/share/terminfo/d/darwin-200x75-m
     - path: /usr/share/terminfo/d/darwin-256x96
     - path: /usr/share/terminfo/d/darwin-256x96-m
-    - path: /usr/share/terminfo/d/darwin-80x25
-    - path: /usr/share/terminfo/d/darwin-80x25-m
-    - path: /usr/share/terminfo/d/darwin-80x30
-    - path: /usr/share/terminfo/d/darwin-80x30-m
-    - path: /usr/share/terminfo/d/darwin-90x30
-    - path: /usr/share/terminfo/d/darwin-90x30-m
     - path: /usr/share/terminfo/d/darwin-b
     - path: /usr/share/terminfo/d/darwin-f
     - path: /usr/share/terminfo/d/darwin-f2
@@ -2098,20 +2125,22 @@ outputs:
     - path: /usr/share/terminfo/d/dg211
     - path: /usr/share/terminfo/d/dg450
     - path: /usr/share/terminfo/d/dg460-ansi
+    - path: /usr/share/terminfo/d/dg605x
     - path: /usr/share/terminfo/d/dg6053
     - path: /usr/share/terminfo/d/dg6053-old
-    - path: /usr/share/terminfo/d/dg605x
     - path: /usr/share/terminfo/d/dg6134
-    - path: /usr/share/terminfo/d/dgkeys+11
-    - path: /usr/share/terminfo/d/dgkeys+15
     - path: /usr/share/terminfo/d/dgkeys+7b
     - path: /usr/share/terminfo/d/dgkeys+8b
+    - path: /usr/share/terminfo/d/dgkeys+11
+    - path: /usr/share/terminfo/d/dgkeys+15
     - path: /usr/share/terminfo/d/dgmode+color
     - path: /usr/share/terminfo/d/dgmode+color8
     - path: /usr/share/terminfo/d/dgunix+ccc
     - path: /usr/share/terminfo/d/dgunix+fixed
     - path: /usr/share/terminfo/d/diablo
     - path: /usr/share/terminfo/d/diablo-lm
+    - path: /usr/share/terminfo/d/diablo450
+    - path: /usr/share/terminfo/d/diablo630
     - path: /usr/share/terminfo/d/diablo1620
     - path: /usr/share/terminfo/d/diablo1620-m8
     - path: /usr/share/terminfo/d/diablo1640
@@ -2121,8 +2150,6 @@ outputs:
     - path: /usr/share/terminfo/d/diablo1730
     - path: /usr/share/terminfo/d/diablo1740
     - path: /usr/share/terminfo/d/diablo1740-lm
-    - path: /usr/share/terminfo/d/diablo450
-    - path: /usr/share/terminfo/d/diablo630
     - path: /usr/share/terminfo/d/dialogue
     - path: /usr/share/terminfo/d/dialogue80
     - path: /usr/share/terminfo/d/digilog
@@ -2136,13 +2163,13 @@ outputs:
     - path: /usr/share/terminfo/d/dku7102-sna
     - path: /usr/share/terminfo/d/dku7103-sna
     - path: /usr/share/terminfo/d/dku7202
+    - path: /usr/share/terminfo/d/dm80
+    - path: /usr/share/terminfo/d/dm80w
     - path: /usr/share/terminfo/d/dm1520
     - path: /usr/share/terminfo/d/dm1521
     - path: /usr/share/terminfo/d/dm2500
     - path: /usr/share/terminfo/d/dm3025
     - path: /usr/share/terminfo/d/dm3045
-    - path: /usr/share/terminfo/d/dm80
-    - path: /usr/share/terminfo/d/dm80w
     - path: /usr/share/terminfo/d/dmchat
     - path: /usr/share/terminfo/d/dmd
     - path: /usr/share/terminfo/d/dmd-24
@@ -2158,12 +2185,12 @@ outputs:
     - path: /usr/share/terminfo/d/ds40-2
     - path: /usr/share/terminfo/d/dt-100
     - path: /usr/share/terminfo/d/dt-100w
+    - path: /usr/share/terminfo/d/dt80
+    - path: /usr/share/terminfo/d/dt80w
+    - path: /usr/share/terminfo/d/dt80-sas
     - path: /usr/share/terminfo/d/dt100
     - path: /usr/share/terminfo/d/dt100w
     - path: /usr/share/terminfo/d/dt110
-    - path: /usr/share/terminfo/d/dt80
-    - path: /usr/share/terminfo/d/dt80-sas
-    - path: /usr/share/terminfo/d/dt80w
     - path: /usr/share/terminfo/d/dtc300s
     - path: /usr/share/terminfo/d/dtc382
     - path: /usr/share/terminfo/d/dtterm
@@ -2194,9 +2221,9 @@ outputs:
     - path: /usr/share/terminfo/e/env230
     - path: /usr/share/terminfo/e/envision230
     - path: /usr/share/terminfo/e/ep40
+    - path: /usr/share/terminfo/e/ep48
     - path: /usr/share/terminfo/e/ep4000
     - path: /usr/share/terminfo/e/ep4080
-    - path: /usr/share/terminfo/e/ep48
     - path: /usr/share/terminfo/e/ergo4000
     - path: /usr/share/terminfo/e/esprit
     - path: /usr/share/terminfo/e/esprit-am
@@ -2216,12 +2243,12 @@ outputs:
     - path: /usr/share/terminfo/f/f110-14
     - path: /usr/share/terminfo/f/f110-14w
     - path: /usr/share/terminfo/f/f110-w
-    - path: /usr/share/terminfo/f/f1720
-    - path: /usr/share/terminfo/f/f1720a
     - path: /usr/share/terminfo/f/f200
-    - path: /usr/share/terminfo/f/f200-w
     - path: /usr/share/terminfo/f/f200vi
     - path: /usr/share/terminfo/f/f200vi-w
+    - path: /usr/share/terminfo/f/f200-w
+    - path: /usr/share/terminfo/f/f1720
+    - path: /usr/share/terminfo/f/f1720a
     - path: /usr/share/terminfo/f/falco
     - path: /usr/share/terminfo/f/falco-p
     - path: /usr/share/terminfo/f/fbterm
@@ -2247,10 +2274,10 @@ outputs:
     - path: /usr/share/terminfo/g/glasstty
     - path: /usr/share/terminfo/g/gnome
     - path: /usr/share/terminfo/g/gnome+pcfkeys
+    - path: /usr/share/terminfo/g/gnome-256color
     - path: /usr/share/terminfo/g/gnome-2007
     - path: /usr/share/terminfo/g/gnome-2008
     - path: /usr/share/terminfo/g/gnome-2012
-    - path: /usr/share/terminfo/g/gnome-256color
     - path: /usr/share/terminfo/g/gnome-fc5
     - path: /usr/share/terminfo/g/gnome-rh62
     - path: /usr/share/terminfo/g/gnome-rh72
@@ -2267,10 +2294,10 @@ outputs:
     - path: /usr/share/terminfo/g/gs5430-24
     - path: /usr/share/terminfo/g/gs6300
     - path: /usr/share/terminfo/g/gsi
-    - path: /usr/share/terminfo/g/gt100
-    - path: /usr/share/terminfo/g/gt100a
     - path: /usr/share/terminfo/g/gt40
     - path: /usr/share/terminfo/g/gt42
+    - path: /usr/share/terminfo/g/gt100
+    - path: /usr/share/terminfo/g/gt100a
     - path: /usr/share/terminfo/g/guru
     - path: /usr/share/terminfo/g/guru+rv
     - path: /usr/share/terminfo/g/guru+s
@@ -2293,26 +2320,26 @@ outputs:
     - path: /usr/share/terminfo/g/guru-s
     - path: /usr/share/terminfo/h/h-100
     - path: /usr/share/terminfo/h/h-100bw
-    - path: /usr/share/terminfo/h/h100
-    - path: /usr/share/terminfo/h/h100bw
     - path: /usr/share/terminfo/h/h19
-    - path: /usr/share/terminfo/h/h19-a
-    - path: /usr/share/terminfo/h/h19-b
-    - path: /usr/share/terminfo/h/h19-bs
-    - path: /usr/share/terminfo/h/h19-g
-    - path: /usr/share/terminfo/h/h19-smul
-    - path: /usr/share/terminfo/h/h19-u
-    - path: /usr/share/terminfo/h/h19-us
     - path: /usr/share/terminfo/h/h19a
     - path: /usr/share/terminfo/h/h19g
     - path: /usr/share/terminfo/h/h19k
+    - path: /usr/share/terminfo/h/h19-a
+    - path: /usr/share/terminfo/h/h19-b
+    - path: /usr/share/terminfo/h/h19-bs
     - path: /usr/share/terminfo/h/h19kermit
+    - path: /usr/share/terminfo/h/h19-g
     - path: /usr/share/terminfo/h/h19us
+    - path: /usr/share/terminfo/h/h19-smul
+    - path: /usr/share/terminfo/h/h19-u
+    - path: /usr/share/terminfo/h/h19-us
     - path: /usr/share/terminfo/h/h29a-kc-bc
     - path: /usr/share/terminfo/h/h29a-kc-uc
     - path: /usr/share/terminfo/h/h29a-nkc-bc
     - path: /usr/share/terminfo/h/h29a-nkc-uc
     - path: /usr/share/terminfo/h/h80
+    - path: /usr/share/terminfo/h/h100
+    - path: /usr/share/terminfo/h/h100bw
     - path: /usr/share/terminfo/h/ha8675
     - path: /usr/share/terminfo/h/ha8686
     - path: /usr/share/terminfo/h/hazel
@@ -2338,16 +2365,31 @@ outputs:
     - path: /usr/share/terminfo/h/hp+pfk+cr
     - path: /usr/share/terminfo/h/hp+pfk-cr
     - path: /usr/share/terminfo/h/hp+printer
+    - path: /usr/share/terminfo/h/hp2
+    - path: /usr/share/terminfo/h/hp45
     - path: /usr/share/terminfo/h/hp110
     - path: /usr/share/terminfo/h/hp150
-    - path: /usr/share/terminfo/h/hp2
     - path: /usr/share/terminfo/h/hp236
+    - path: /usr/share/terminfo/h/hp262x
+    - path: /usr/share/terminfo/h/hp300h
+    - path: /usr/share/terminfo/h/hp700
+    - path: /usr/share/terminfo/h/hp700-wy
     - path: /usr/share/terminfo/h/hp2382
     - path: /usr/share/terminfo/h/hp2382a
     - path: /usr/share/terminfo/h/hp2392
     - path: /usr/share/terminfo/h/hp2397
     - path: /usr/share/terminfo/h/hp2397a
     - path: /usr/share/terminfo/h/hp2621
+    - path: /usr/share/terminfo/h/hp2621A
+    - path: /usr/share/terminfo/h/hp2621a
+    - path: /usr/share/terminfo/h/hp2621b
+    - path: /usr/share/terminfo/h/hp2621p
+    - path: /usr/share/terminfo/h/hp2621a-a
+    - path: /usr/share/terminfo/h/hp2621p-a
+    - path: /usr/share/terminfo/h/hp2621b-kx
+    - path: /usr/share/terminfo/h/hp2621b-kx-p
+    - path: /usr/share/terminfo/h/hp2621b-p
+    - path: /usr/share/terminfo/h/hp2621k45
     - path: /usr/share/terminfo/h/hp2621-48
     - path: /usr/share/terminfo/h/hp2621-a
     - path: /usr/share/terminfo/h/hp2621-ba
@@ -2356,43 +2398,32 @@ outputs:
     - path: /usr/share/terminfo/h/hp2621-nl
     - path: /usr/share/terminfo/h/hp2621-nt
     - path: /usr/share/terminfo/h/hp2621-wl
-    - path: /usr/share/terminfo/h/hp2621A
-    - path: /usr/share/terminfo/h/hp2621a
-    - path: /usr/share/terminfo/h/hp2621a-a
-    - path: /usr/share/terminfo/h/hp2621b
-    - path: /usr/share/terminfo/h/hp2621b-kx
-    - path: /usr/share/terminfo/h/hp2621b-kx-p
-    - path: /usr/share/terminfo/h/hp2621b-p
-    - path: /usr/share/terminfo/h/hp2621k45
-    - path: /usr/share/terminfo/h/hp2621p
-    - path: /usr/share/terminfo/h/hp2621p-a
     - path: /usr/share/terminfo/h/hp2622
     - path: /usr/share/terminfo/h/hp2622a
     - path: /usr/share/terminfo/h/hp2623
     - path: /usr/share/terminfo/h/hp2623a
     - path: /usr/share/terminfo/h/hp2624
-    - path: /usr/share/terminfo/h/hp2624-10p
     - path: /usr/share/terminfo/h/hp2624a
-    - path: /usr/share/terminfo/h/hp2624a-10p
     - path: /usr/share/terminfo/h/hp2624b
-    - path: /usr/share/terminfo/h/hp2624b-10p
-    - path: /usr/share/terminfo/h/hp2624b-10p-p
     - path: /usr/share/terminfo/h/hp2624b-4p
     - path: /usr/share/terminfo/h/hp2624b-4p-p
+    - path: /usr/share/terminfo/h/hp2624a-10p
+    - path: /usr/share/terminfo/h/hp2624b-10p
+    - path: /usr/share/terminfo/h/hp2624b-10p-p
     - path: /usr/share/terminfo/h/hp2624b-p
+    - path: /usr/share/terminfo/h/hp2624-10p
     - path: /usr/share/terminfo/h/hp2626
+    - path: /usr/share/terminfo/h/hp2626a
+    - path: /usr/share/terminfo/h/hp2626p
     - path: /usr/share/terminfo/h/hp2626-12
-    - path: /usr/share/terminfo/h/hp2626-12-s
     - path: /usr/share/terminfo/h/hp2626-12x40
+    - path: /usr/share/terminfo/h/hp2626-12-s
     - path: /usr/share/terminfo/h/hp2626-ns
     - path: /usr/share/terminfo/h/hp2626-s
     - path: /usr/share/terminfo/h/hp2626-x40
-    - path: /usr/share/terminfo/h/hp2626a
-    - path: /usr/share/terminfo/h/hp2626p
     - path: /usr/share/terminfo/h/hp2627a
-    - path: /usr/share/terminfo/h/hp2627a-rev
     - path: /usr/share/terminfo/h/hp2627c
-    - path: /usr/share/terminfo/h/hp262x
+    - path: /usr/share/terminfo/h/hp2627a-rev
     - path: /usr/share/terminfo/h/hp2640a
     - path: /usr/share/terminfo/h/hp2640b
     - path: /usr/share/terminfo/h/hp2641a
@@ -2402,19 +2433,15 @@ outputs:
     - path: /usr/share/terminfo/h/hp2647a
     - path: /usr/share/terminfo/h/hp2648
     - path: /usr/share/terminfo/h/hp2648a
-    - path: /usr/share/terminfo/h/hp300h
-    - path: /usr/share/terminfo/h/hp45
-    - path: /usr/share/terminfo/h/hp700
-    - path: /usr/share/terminfo/h/hp700-wy
+    - path: /usr/share/terminfo/h/hp9837
+    - path: /usr/share/terminfo/h/hp9845
     - path: /usr/share/terminfo/h/hp70092
     - path: /usr/share/terminfo/h/hp70092A
     - path: /usr/share/terminfo/h/hp70092a
-    - path: /usr/share/terminfo/h/hp9837
-    - path: /usr/share/terminfo/h/hp9845
     - path: /usr/share/terminfo/h/hp98550
-    - path: /usr/share/terminfo/h/hp98550-color
     - path: /usr/share/terminfo/h/hp98550a
     - path: /usr/share/terminfo/h/hp98550a-color
+    - path: /usr/share/terminfo/h/hp98550-color
     - path: /usr/share/terminfo/h/hp98720
     - path: /usr/share/terminfo/h/hp98721
     - path: /usr/share/terminfo/h/hpansi
@@ -2439,9 +2466,9 @@ outputs:
     - path: /usr/share/terminfo/h/hz1552-rv
     - path: /usr/share/terminfo/h/hz2000
     - path: /usr/share/terminfo/i/i100
+    - path: /usr/share/terminfo/i/i400
     - path: /usr/share/terminfo/i/i3101
     - path: /usr/share/terminfo/i/i3164
-    - path: /usr/share/terminfo/i/i400
     - path: /usr/share/terminfo/i/iTerm.app
     - path: /usr/share/terminfo/i/iTerm2.app
     - path: /usr/share/terminfo/i/ibcs2
@@ -2450,6 +2477,7 @@ outputs:
     - path: /usr/share/terminfo/i/ibm-apl
     - path: /usr/share/terminfo/i/ibm-pc
     - path: /usr/share/terminfo/i/ibm-system1
+    - path: /usr/share/terminfo/i/ibm327x
     - path: /usr/share/terminfo/i/ibm3101
     - path: /usr/share/terminfo/i/ibm3151
     - path: /usr/share/terminfo/i/ibm3161
@@ -2457,7 +2485,6 @@ outputs:
     - path: /usr/share/terminfo/i/ibm3162
     - path: /usr/share/terminfo/i/ibm3163
     - path: /usr/share/terminfo/i/ibm3164
-    - path: /usr/share/terminfo/i/ibm327x
     - path: /usr/share/terminfo/i/ibm5051
     - path: /usr/share/terminfo/i/ibm5081
     - path: /usr/share/terminfo/i/ibm5081-c
@@ -2478,10 +2505,10 @@ outputs:
     - path: /usr/share/terminfo/i/ibm8514-c
     - path: /usr/share/terminfo/i/ibm8604
     - path: /usr/share/terminfo/i/ibmaed
-    - path: /usr/share/terminfo/i/ibmapa16
     - path: /usr/share/terminfo/i/ibmapa8
     - path: /usr/share/terminfo/i/ibmapa8c
     - path: /usr/share/terminfo/i/ibmapa8c-c
+    - path: /usr/share/terminfo/i/ibmapa16
     - path: /usr/share/terminfo/i/ibmega
     - path: /usr/share/terminfo/i/ibmega-c
     - path: /usr/share/terminfo/i/ibmmono
@@ -2636,22 +2663,22 @@ outputs:
     - path: /usr/share/terminfo/m/mime2a
     - path: /usr/share/terminfo/m/mime2a-s
     - path: /usr/share/terminfo/m/mime2a-v
-    - path: /usr/share/terminfo/m/mime314
-    - path: /usr/share/terminfo/m/mime340
     - path: /usr/share/terminfo/m/mime3a
     - path: /usr/share/terminfo/m/mime3ax
+    - path: /usr/share/terminfo/m/mime314
+    - path: /usr/share/terminfo/m/mime340
     - path: /usr/share/terminfo/m/mimei
     - path: /usr/share/terminfo/m/mimeii
     - path: /usr/share/terminfo/m/minitel
     - path: /usr/share/terminfo/m/minitel-2
     - path: /usr/share/terminfo/m/minitel-2-nam
     - path: /usr/share/terminfo/m/minitel1
-    - path: /usr/share/terminfo/m/minitel1-nb
-    - path: /usr/share/terminfo/m/minitel12-80
     - path: /usr/share/terminfo/m/minitel1b
     - path: /usr/share/terminfo/m/minitel1b-80
     - path: /usr/share/terminfo/m/minitel1b-nb
+    - path: /usr/share/terminfo/m/minitel1-nb
     - path: /usr/share/terminfo/m/minitel2-80
+    - path: /usr/share/terminfo/m/minitel12-80
     - path: /usr/share/terminfo/m/minix
     - path: /usr/share/terminfo/m/minix-1.5
     - path: /usr/share/terminfo/m/minix-1.7
@@ -2687,14 +2714,14 @@ outputs:
     - path: /usr/share/terminfo/m/ms-vt100+
     - path: /usr/share/terminfo/m/ms-vt100-color
     - path: /usr/share/terminfo/m/msk227
-    - path: /usr/share/terminfo/m/msk22714
     - path: /usr/share/terminfo/m/msk227am
+    - path: /usr/share/terminfo/m/msk22714
     - path: /usr/share/terminfo/m/mskermit227
-    - path: /usr/share/terminfo/m/mskermit22714
     - path: /usr/share/terminfo/m/mskermit227am
+    - path: /usr/share/terminfo/m/mskermit22714
     - path: /usr/share/terminfo/m/mt-70
-    - path: /usr/share/terminfo/m/mt4520-rv
     - path: /usr/share/terminfo/m/mt70
+    - path: /usr/share/terminfo/m/mt4520-rv
     - path: /usr/share/terminfo/m/mterm
     - path: /usr/share/terminfo/m/mterm-ansi
     - path: /usr/share/terminfo/m/mvterm
@@ -2705,17 +2732,17 @@ outputs:
     - path: /usr/share/terminfo/n/nansisysk
     - path: /usr/share/terminfo/n/ncr160vppp
     - path: /usr/share/terminfo/n/ncr160vpwpp
+    - path: /usr/share/terminfo/n/ncr160vt100wan
     - path: /usr/share/terminfo/n/ncr160vt100an
     - path: /usr/share/terminfo/n/ncr160vt100pp
-    - path: /usr/share/terminfo/n/ncr160vt100wan
     - path: /usr/share/terminfo/n/ncr160vt100wpp
+    - path: /usr/share/terminfo/n/ncr160vt200wan
     - path: /usr/share/terminfo/n/ncr160vt200an
     - path: /usr/share/terminfo/n/ncr160vt200pp
-    - path: /usr/share/terminfo/n/ncr160vt200wan
     - path: /usr/share/terminfo/n/ncr160vt200wpp
+    - path: /usr/share/terminfo/n/ncr160vt300wan
     - path: /usr/share/terminfo/n/ncr160vt300an
     - path: /usr/share/terminfo/n/ncr160vt300pp
-    - path: /usr/share/terminfo/n/ncr160vt300wan
     - path: /usr/share/terminfo/n/ncr160vt300wpp
     - path: /usr/share/terminfo/n/ncr160wy50+pp
     - path: /usr/share/terminfo/n/ncr160wy50+wpp
@@ -2729,33 +2756,33 @@ outputs:
     - path: /usr/share/terminfo/n/ncr260vppp
     - path: /usr/share/terminfo/n/ncr260vpwpp
     - path: /usr/share/terminfo/n/ncr260vt+sl
+    - path: /usr/share/terminfo/n/ncr260vt100wan
     - path: /usr/share/terminfo/n/ncr260vt100an
     - path: /usr/share/terminfo/n/ncr260vt100pp
-    - path: /usr/share/terminfo/n/ncr260vt100wan
     - path: /usr/share/terminfo/n/ncr260vt100wpp
+    - path: /usr/share/terminfo/n/ncr260vt200wan
     - path: /usr/share/terminfo/n/ncr260vt200an
     - path: /usr/share/terminfo/n/ncr260vt200pp
-    - path: /usr/share/terminfo/n/ncr260vt200wan
     - path: /usr/share/terminfo/n/ncr260vt200wpp
+    - path: /usr/share/terminfo/n/ncr260vt300wan
     - path: /usr/share/terminfo/n/ncr260vt300an
     - path: /usr/share/terminfo/n/ncr260vt300pp
-    - path: /usr/share/terminfo/n/ncr260vt300wan
     - path: /usr/share/terminfo/n/ncr260vt300wpp
-    - path: /usr/share/terminfo/n/ncr260wy325pp
-    - path: /usr/share/terminfo/n/ncr260wy325wpp
-    - path: /usr/share/terminfo/n/ncr260wy350pp
-    - path: /usr/share/terminfo/n/ncr260wy350wpp
     - path: /usr/share/terminfo/n/ncr260wy50+pp
     - path: /usr/share/terminfo/n/ncr260wy50+wpp
     - path: /usr/share/terminfo/n/ncr260wy60pp
     - path: /usr/share/terminfo/n/ncr260wy60wpp
+    - path: /usr/share/terminfo/n/ncr260wy325pp
+    - path: /usr/share/terminfo/n/ncr260wy325wpp
+    - path: /usr/share/terminfo/n/ncr260wy350pp
+    - path: /usr/share/terminfo/n/ncr260wy350wpp
     - path: /usr/share/terminfo/n/ncr7900
     - path: /usr/share/terminfo/n/ncr7900i
     - path: /usr/share/terminfo/n/ncr7900iv
     - path: /usr/share/terminfo/n/ncr7901
+    - path: /usr/share/terminfo/n/ncrvt100wan
     - path: /usr/share/terminfo/n/ncrvt100an
     - path: /usr/share/terminfo/n/ncrvt100pp
-    - path: /usr/share/terminfo/n/ncrvt100wan
     - path: /usr/share/terminfo/n/ncrvt100wpp
     - path: /usr/share/terminfo/n/ncsa
     - path: /usr/share/terminfo/n/ncsa-m
@@ -2817,14 +2844,14 @@ outputs:
     - path: /usr/share/terminfo/n/nsterm+c41
     - path: /usr/share/terminfo/n/nsterm+mac
     - path: /usr/share/terminfo/n/nsterm+s
-    - path: /usr/share/terminfo/n/nsterm-16color
-    - path: /usr/share/terminfo/n/nsterm-256color
     - path: /usr/share/terminfo/n/nsterm-7
     - path: /usr/share/terminfo/n/nsterm-7-c
     - path: /usr/share/terminfo/n/nsterm-7-c-s
     - path: /usr/share/terminfo/n/nsterm-7-m
     - path: /usr/share/terminfo/n/nsterm-7-m-s
     - path: /usr/share/terminfo/n/nsterm-7-s
+    - path: /usr/share/terminfo/n/nsterm-16color
+    - path: /usr/share/terminfo/n/nsterm-256color
     - path: /usr/share/terminfo/n/nsterm-acs
     - path: /usr/share/terminfo/n/nsterm-acs-c
     - path: /usr/share/terminfo/n/nsterm-acs-c-s
@@ -2856,8 +2883,6 @@ outputs:
     - path: /usr/share/terminfo/n/nsterm-s-7
     - path: /usr/share/terminfo/n/nsterm-s-acs
     - path: /usr/share/terminfo/n/ntconsole
-    - path: /usr/share/terminfo/n/ntconsole-100
-    - path: /usr/share/terminfo/n/ntconsole-100-nti
     - path: /usr/share/terminfo/n/ntconsole-25
     - path: /usr/share/terminfo/n/ntconsole-25-nti
     - path: /usr/share/terminfo/n/ntconsole-25-w
@@ -2871,6 +2896,8 @@ outputs:
     - path: /usr/share/terminfo/n/ntconsole-60
     - path: /usr/share/terminfo/n/ntconsole-60-nti
     - path: /usr/share/terminfo/n/ntconsole-60-w
+    - path: /usr/share/terminfo/n/ntconsole-100
+    - path: /usr/share/terminfo/n/ntconsole-100-nti
     - path: /usr/share/terminfo/n/ntconsole-w
     - path: /usr/share/terminfo/n/ntconsole-w-vt
     - path: /usr/share/terminfo/n/nwe501
@@ -2898,8 +2925,8 @@ outputs:
     - path: /usr/share/terminfo/n/nwp518-o
     - path: /usr/share/terminfo/n/nxterm
     - path: /usr/share/terminfo/o/o31
-    - path: /usr/share/terminfo/o/o4112-nd
     - path: /usr/share/terminfo/o/o85h
+    - path: /usr/share/terminfo/o/o4112-nd
     - path: /usr/share/terminfo/o/oabm85h
     - path: /usr/share/terminfo/o/oblit
     - path: /usr/share/terminfo/o/oc100
@@ -2912,8 +2939,6 @@ outputs:
     - path: /usr/share/terminfo/o/oldsun
     - path: /usr/share/terminfo/o/omron
     - path: /usr/share/terminfo/o/opennt
-    - path: /usr/share/terminfo/o/opennt-100
-    - path: /usr/share/terminfo/o/opennt-100-nti
     - path: /usr/share/terminfo/o/opennt-25
     - path: /usr/share/terminfo/o/opennt-25-nti
     - path: /usr/share/terminfo/o/opennt-25-w
@@ -2927,6 +2952,8 @@ outputs:
     - path: /usr/share/terminfo/o/opennt-60
     - path: /usr/share/terminfo/o/opennt-60-nti
     - path: /usr/share/terminfo/o/opennt-60-w
+    - path: /usr/share/terminfo/o/opennt-100
+    - path: /usr/share/terminfo/o/opennt-100-nti
     - path: /usr/share/terminfo/o/opennt-nti
     - path: /usr/share/terminfo/o/opennt-w
     - path: /usr/share/terminfo/o/opennt-w-vt
@@ -2944,6 +2971,16 @@ outputs:
     - path: /usr/share/terminfo/o/otek4114
     - path: /usr/share/terminfo/o/otek4115
     - path: /usr/share/terminfo/o/owl
+    - path: /usr/share/terminfo/p/p4
+    - path: /usr/share/terminfo/p/p5
+    - path: /usr/share/terminfo/p/p7
+    - path: /usr/share/terminfo/p/p8
+    - path: /usr/share/terminfo/p/p8gl
+    - path: /usr/share/terminfo/p/p8-w
+    - path: /usr/share/terminfo/p/p9
+    - path: /usr/share/terminfo/p/p9-8
+    - path: /usr/share/terminfo/p/p9-8-w
+    - path: /usr/share/terminfo/p/p9-w
     - path: /usr/share/terminfo/p/p12
     - path: /usr/share/terminfo/p/p12-m
     - path: /usr/share/terminfo/p/p12-m-w
@@ -2953,23 +2990,13 @@ outputs:
     - path: /usr/share/terminfo/p/p14-m-w
     - path: /usr/share/terminfo/p/p14-w
     - path: /usr/share/terminfo/p/p19
-    - path: /usr/share/terminfo/p/p4
-    - path: /usr/share/terminfo/p/p5
-    - path: /usr/share/terminfo/p/p7
-    - path: /usr/share/terminfo/p/p8
-    - path: /usr/share/terminfo/p/p8-w
-    - path: /usr/share/terminfo/p/p8gl
-    - path: /usr/share/terminfo/p/p9
-    - path: /usr/share/terminfo/p/p9-8
-    - path: /usr/share/terminfo/p/p9-8-w
-    - path: /usr/share/terminfo/p/p9-w
     - path: /usr/share/terminfo/p/pc-coherent
     - path: /usr/share/terminfo/p/pc-minix
     - path: /usr/share/terminfo/p/pc-venix
     - path: /usr/share/terminfo/p/pc3
-    - path: /usr/share/terminfo/p/pc3-bold
     - path: /usr/share/terminfo/p/pc3r
     - path: /usr/share/terminfo/p/pc3r-m
+    - path: /usr/share/terminfo/p/pc3-bold
     - path: /usr/share/terminfo/p/pc6300plus
     - path: /usr/share/terminfo/p/pc7300
     - path: /usr/share/terminfo/p/pcansi
@@ -3004,8 +3031,8 @@ outputs:
     - path: /usr/share/terminfo/p/pcmw
     - path: /usr/share/terminfo/p/pcplot
     - path: /usr/share/terminfo/p/pcvt25
-    - path: /usr/share/terminfo/p/pcvt25-color
     - path: /usr/share/terminfo/p/pcvt25w
+    - path: /usr/share/terminfo/p/pcvt25-color
     - path: /usr/share/terminfo/p/pcvt28
     - path: /usr/share/terminfo/p/pcvt28w
     - path: /usr/share/terminfo/p/pcvt35
@@ -3018,10 +3045,10 @@ outputs:
     - path: /usr/share/terminfo/p/pcvt50w
     - path: /usr/share/terminfo/p/pcvtXX
     - path: /usr/share/terminfo/p/pcz19
+    - path: /usr/share/terminfo/p/pe550
     - path: /usr/share/terminfo/p/pe1100
     - path: /usr/share/terminfo/p/pe1200
     - path: /usr/share/terminfo/p/pe1251
-    - path: /usr/share/terminfo/p/pe550
     - path: /usr/share/terminfo/p/pe6100
     - path: /usr/share/terminfo/p/pe6300
     - path: /usr/share/terminfo/p/pe6312
@@ -3031,6 +3058,17 @@ outputs:
     - path: /usr/share/terminfo/p/pmcons
     - path: /usr/share/terminfo/p/pmconsole
     - path: /usr/share/terminfo/p/printer
+    - path: /usr/share/terminfo/p/prism2
+    - path: /usr/share/terminfo/p/prism4
+    - path: /usr/share/terminfo/p/prism5
+    - path: /usr/share/terminfo/p/prism7
+    - path: /usr/share/terminfo/p/prism8
+    - path: /usr/share/terminfo/p/prism8gl
+    - path: /usr/share/terminfo/p/prism8-w
+    - path: /usr/share/terminfo/p/prism9
+    - path: /usr/share/terminfo/p/prism9-8
+    - path: /usr/share/terminfo/p/prism9-8-w
+    - path: /usr/share/terminfo/p/prism9-w
     - path: /usr/share/terminfo/p/prism12
     - path: /usr/share/terminfo/p/prism12-m
     - path: /usr/share/terminfo/p/prism12-m-w
@@ -3039,17 +3077,6 @@ outputs:
     - path: /usr/share/terminfo/p/prism14-m
     - path: /usr/share/terminfo/p/prism14-m-w
     - path: /usr/share/terminfo/p/prism14-w
-    - path: /usr/share/terminfo/p/prism2
-    - path: /usr/share/terminfo/p/prism4
-    - path: /usr/share/terminfo/p/prism5
-    - path: /usr/share/terminfo/p/prism7
-    - path: /usr/share/terminfo/p/prism8
-    - path: /usr/share/terminfo/p/prism8-w
-    - path: /usr/share/terminfo/p/prism8gl
-    - path: /usr/share/terminfo/p/prism9
-    - path: /usr/share/terminfo/p/prism9-8
-    - path: /usr/share/terminfo/p/prism9-8-w
-    - path: /usr/share/terminfo/p/prism9-w
     - path: /usr/share/terminfo/p/pro350
     - path: /usr/share/terminfo/p/ps300
     - path: /usr/share/terminfo/p/psterm
@@ -3114,15 +3141,15 @@ outputs:
     - path: /usr/share/terminfo/q/qvt108
     - path: /usr/share/terminfo/q/qvt119
     - path: /usr/share/terminfo/q/qvt119+
+    - path: /usr/share/terminfo/q/qvt119p
     - path: /usr/share/terminfo/q/qvt119+-25
+    - path: /usr/share/terminfo/q/qvt119p-25
     - path: /usr/share/terminfo/q/qvt119+-25-w
+    - path: /usr/share/terminfo/q/qvt119p-25-w
     - path: /usr/share/terminfo/q/qvt119+-w
+    - path: /usr/share/terminfo/q/qvt119p-w
     - path: /usr/share/terminfo/q/qvt119-25-w
     - path: /usr/share/terminfo/q/qvt119-w
-    - path: /usr/share/terminfo/q/qvt119p
-    - path: /usr/share/terminfo/q/qvt119p-25
-    - path: /usr/share/terminfo/q/qvt119p-25-w
-    - path: /usr/share/terminfo/q/qvt119p-w
     - path: /usr/share/terminfo/q/qvt203
     - path: /usr/share/terminfo/q/qvt203+
     - path: /usr/share/terminfo/q/qvt203-25
@@ -3137,13 +3164,13 @@ outputs:
     - path: /usr/share/terminfo/r/rcons-color
     - path: /usr/share/terminfo/r/rebus3180
     - path: /usr/share/terminfo/r/regent
-    - path: /usr/share/terminfo/r/regent100
     - path: /usr/share/terminfo/r/regent20
-    - path: /usr/share/terminfo/r/regent200
     - path: /usr/share/terminfo/r/regent25
     - path: /usr/share/terminfo/r/regent40
     - path: /usr/share/terminfo/r/regent40+
     - path: /usr/share/terminfo/r/regent60
+    - path: /usr/share/terminfo/r/regent100
+    - path: /usr/share/terminfo/r/regent200
     - path: /usr/share/terminfo/r/report+da2
     - path: /usr/share/terminfo/r/report+version
     - path: /usr/share/terminfo/r/rt6221
@@ -3152,8 +3179,8 @@ outputs:
     - path: /usr/share/terminfo/r/rxvt
     - path: /usr/share/terminfo/r/rxvt+pcfkeys
     - path: /usr/share/terminfo/r/rxvt-16color
-    - path: /usr/share/terminfo/r/rxvt-256color
     - path: /usr/share/terminfo/r/rxvt-88color
+    - path: /usr/share/terminfo/r/rxvt-256color
     - path: /usr/share/terminfo/r/rxvt-basic
     - path: /usr/share/terminfo/r/rxvt-color
     - path: /usr/share/terminfo/r/rxvt-cygwin
@@ -3203,12 +3230,12 @@ outputs:
     - path: /usr/share/terminfo/s/screen.linux-m2
     - path: /usr/share/terminfo/s/screen.linux-s
     - path: /usr/share/terminfo/s/screen.minitel1
-    - path: /usr/share/terminfo/s/screen.minitel1-nb
-    - path: /usr/share/terminfo/s/screen.minitel12-80
     - path: /usr/share/terminfo/s/screen.minitel1b
     - path: /usr/share/terminfo/s/screen.minitel1b-80
     - path: /usr/share/terminfo/s/screen.minitel1b-nb
+    - path: /usr/share/terminfo/s/screen.minitel1-nb
     - path: /usr/share/terminfo/s/screen.minitel2-80
+    - path: /usr/share/terminfo/s/screen.minitel12-80
     - path: /usr/share/terminfo/s/screen.mlterm
     - path: /usr/share/terminfo/s/screen.mlterm-256color
     - path: /usr/share/terminfo/s/screen.mrxvt
@@ -3289,20 +3316,20 @@ outputs:
     - path: /usr/share/terminfo/s/synertek380
     - path: /usr/share/terminfo/s/system1
     - path: /usr/share/terminfo/t/t10
+    - path: /usr/share/terminfo/t/t16
+    - path: /usr/share/terminfo/t/t653x
     - path: /usr/share/terminfo/t/t1061
     - path: /usr/share/terminfo/t/t1061f
-    - path: /usr/share/terminfo/t/t16
     - path: /usr/share/terminfo/t/t3700
     - path: /usr/share/terminfo/t/t3800
-    - path: /usr/share/terminfo/t/t653x
     - path: /usr/share/terminfo/t/tab
     - path: /usr/share/terminfo/t/tab132
     - path: /usr/share/terminfo/t/tab132-15
     - path: /usr/share/terminfo/t/tab132-rv
     - path: /usr/share/terminfo/t/tab132-w
     - path: /usr/share/terminfo/t/tab132-w-rv
-    - path: /usr/share/terminfo/t/tandem6510
     - path: /usr/share/terminfo/t/tandem653
+    - path: /usr/share/terminfo/t/tandem6510
     - path: /usr/share/terminfo/t/tek
     - path: /usr/share/terminfo/t/tek4012
     - path: /usr/share/terminfo/t/tek4013
@@ -3313,17 +3340,17 @@ outputs:
     - path: /usr/share/terminfo/t/tek4023
     - path: /usr/share/terminfo/t/tek4024
     - path: /usr/share/terminfo/t/tek4025
+    - path: /usr/share/terminfo/t/tek4025a
     - path: /usr/share/terminfo/t/tek4025-17
     - path: /usr/share/terminfo/t/tek4025-17-ws
     - path: /usr/share/terminfo/t/tek4025-cr
     - path: /usr/share/terminfo/t/tek4025-ex
-    - path: /usr/share/terminfo/t/tek4025a
     - path: /usr/share/terminfo/t/tek4025ex
     - path: /usr/share/terminfo/t/tek4027
     - path: /usr/share/terminfo/t/tek4027-ex
     - path: /usr/share/terminfo/t/tek4105
-    - path: /usr/share/terminfo/t/tek4105-30
     - path: /usr/share/terminfo/t/tek4105a
+    - path: /usr/share/terminfo/t/tek4105-30
     - path: /usr/share/terminfo/t/tek4106brl
     - path: /usr/share/terminfo/t/tek4107
     - path: /usr/share/terminfo/t/tek4107brl
@@ -3359,8 +3386,8 @@ outputs:
     - path: /usr/share/terminfo/t/teraterm4.97
     - path: /usr/share/terminfo/t/terminator
     - path: /usr/share/terminfo/t/terminet
-    - path: /usr/share/terminfo/t/terminet1200
     - path: /usr/share/terminfo/t/terminet300
+    - path: /usr/share/terminfo/t/terminet1200
     - path: /usr/share/terminfo/t/terminology
     - path: /usr/share/terminfo/t/terminology-0.6.1
     - path: /usr/share/terminfo/t/terminology-1.0.0
@@ -3377,15 +3404,15 @@ outputs:
     - path: /usr/share/terminfo/t/ti745
     - path: /usr/share/terminfo/t/ti800
     - path: /usr/share/terminfo/t/ti916
+    - path: /usr/share/terminfo/t/ti916-8
+    - path: /usr/share/terminfo/t/ti916-8-132
     - path: /usr/share/terminfo/t/ti916-132
     - path: /usr/share/terminfo/t/ti916-220-7
     - path: /usr/share/terminfo/t/ti916-220-8
-    - path: /usr/share/terminfo/t/ti916-8
-    - path: /usr/share/terminfo/t/ti916-8-132
     - path: /usr/share/terminfo/t/ti924
+    - path: /usr/share/terminfo/t/ti924w
     - path: /usr/share/terminfo/t/ti924-8
     - path: /usr/share/terminfo/t/ti924-8w
-    - path: /usr/share/terminfo/t/ti924w
     - path: /usr/share/terminfo/t/ti926
     - path: /usr/share/terminfo/t/ti926-8
     - path: /usr/share/terminfo/t/ti928
@@ -3396,19 +3423,19 @@ outputs:
     - path: /usr/share/terminfo/t/tmux
     - path: /usr/share/terminfo/t/tmux-256color
     - path: /usr/share/terminfo/t/tmux-direct
-    - path: /usr/share/terminfo/t/tn1200
     - path: /usr/share/terminfo/t/tn300
-    - path: /usr/share/terminfo/t/trs16
+    - path: /usr/share/terminfo/t/tn1200
     - path: /usr/share/terminfo/t/trs2
+    - path: /usr/share/terminfo/t/trs16
     - path: /usr/share/terminfo/t/trs80II
     - path: /usr/share/terminfo/t/trsII
     - path: /usr/share/terminfo/t/ts-1
     - path: /usr/share/terminfo/t/ts-1p
     - path: /usr/share/terminfo/t/ts1
+    - path: /usr/share/terminfo/t/ts1p
     - path: /usr/share/terminfo/t/ts100
     - path: /usr/share/terminfo/t/ts100-ctxt
     - path: /usr/share/terminfo/t/ts100-sp
-    - path: /usr/share/terminfo/t/ts1p
     - path: /usr/share/terminfo/t/tt
     - path: /usr/share/terminfo/t/tt52
     - path: /usr/share/terminfo/t/tty33
@@ -3418,13 +3445,13 @@ outputs:
     - path: /usr/share/terminfo/t/tty43
     - path: /usr/share/terminfo/t/tty4420
     - path: /usr/share/terminfo/t/tty4424
-    - path: /usr/share/terminfo/t/tty4424-1
     - path: /usr/share/terminfo/t/tty4424m
+    - path: /usr/share/terminfo/t/tty4424-1
     - path: /usr/share/terminfo/t/tty4426
     - path: /usr/share/terminfo/t/tty5410
-    - path: /usr/share/terminfo/t/tty5410-w
     - path: /usr/share/terminfo/t/tty5410v1
     - path: /usr/share/terminfo/t/tty5410v1-w
+    - path: /usr/share/terminfo/t/tty5410-w
     - path: /usr/share/terminfo/t/tty5420
     - path: /usr/share/terminfo/t/tty5420+nl
     - path: /usr/share/terminfo/t/tty5420-nl
@@ -3443,98 +3470,97 @@ outputs:
     - path: /usr/share/terminfo/t/tty5620-34
     - path: /usr/share/terminfo/t/tty5620-s
     - path: /usr/share/terminfo/t/ttydmd
+    - path: /usr/share/terminfo/t/tvi92B
+    - path: /usr/share/terminfo/t/tvi92D
     - path: /usr/share/terminfo/t/tvi803
-    - path: /usr/share/terminfo/t/tvi9065
     - path: /usr/share/terminfo/t/tvi910
     - path: /usr/share/terminfo/t/tvi910+
     - path: /usr/share/terminfo/t/tvi912
     - path: /usr/share/terminfo/t/tvi912b
+    - path: /usr/share/terminfo/t/tvi912c
     - path: /usr/share/terminfo/t/tvi912b+2p
     - path: /usr/share/terminfo/t/tvi912b+dim
     - path: /usr/share/terminfo/t/tvi912b+mc
     - path: /usr/share/terminfo/t/tvi912b+printer
     - path: /usr/share/terminfo/t/tvi912b+vb
     - path: /usr/share/terminfo/t/tvi912b-2p
-    - path: /usr/share/terminfo/t/tvi912b-2p-mc
-    - path: /usr/share/terminfo/t/tvi912b-2p-p
-    - path: /usr/share/terminfo/t/tvi912b-2p-unk
-    - path: /usr/share/terminfo/t/tvi912b-mc
-    - path: /usr/share/terminfo/t/tvi912b-mc-2p
-    - path: /usr/share/terminfo/t/tvi912b-mc-vb
-    - path: /usr/share/terminfo/t/tvi912b-p
-    - path: /usr/share/terminfo/t/tvi912b-p-2p
-    - path: /usr/share/terminfo/t/tvi912b-p-vb
-    - path: /usr/share/terminfo/t/tvi912b-unk
-    - path: /usr/share/terminfo/t/tvi912b-unk-2p
-    - path: /usr/share/terminfo/t/tvi912b-unk-vb
-    - path: /usr/share/terminfo/t/tvi912b-vb
-    - path: /usr/share/terminfo/t/tvi912b-vb-mc
-    - path: /usr/share/terminfo/t/tvi912b-vb-p
-    - path: /usr/share/terminfo/t/tvi912b-vb-unk
-    - path: /usr/share/terminfo/t/tvi912c
     - path: /usr/share/terminfo/t/tvi912c-2p
+    - path: /usr/share/terminfo/t/tvi912b-2p-mc
     - path: /usr/share/terminfo/t/tvi912c-2p-mc
+    - path: /usr/share/terminfo/t/tvi912b-2p-p
     - path: /usr/share/terminfo/t/tvi912c-2p-p
+    - path: /usr/share/terminfo/t/tvi912b-2p-unk
     - path: /usr/share/terminfo/t/tvi912c-2p-unk
+    - path: /usr/share/terminfo/t/tvi912b-mc
     - path: /usr/share/terminfo/t/tvi912c-mc
+    - path: /usr/share/terminfo/t/tvi912b-mc-2p
     - path: /usr/share/terminfo/t/tvi912c-mc-2p
+    - path: /usr/share/terminfo/t/tvi912b-mc-vb
     - path: /usr/share/terminfo/t/tvi912c-mc-vb
+    - path: /usr/share/terminfo/t/tvi912b-p
     - path: /usr/share/terminfo/t/tvi912c-p
+    - path: /usr/share/terminfo/t/tvi912b-p-2p
     - path: /usr/share/terminfo/t/tvi912c-p-2p
+    - path: /usr/share/terminfo/t/tvi912b-p-vb
     - path: /usr/share/terminfo/t/tvi912c-p-vb
+    - path: /usr/share/terminfo/t/tvi912b-unk
     - path: /usr/share/terminfo/t/tvi912c-unk
+    - path: /usr/share/terminfo/t/tvi912b-unk-2p
     - path: /usr/share/terminfo/t/tvi912c-unk-2p
+    - path: /usr/share/terminfo/t/tvi912b-unk-vb
     - path: /usr/share/terminfo/t/tvi912c-unk-vb
+    - path: /usr/share/terminfo/t/tvi912b-vb
     - path: /usr/share/terminfo/t/tvi912c-vb
+    - path: /usr/share/terminfo/t/tvi912b-vb-mc
     - path: /usr/share/terminfo/t/tvi912c-vb-mc
+    - path: /usr/share/terminfo/t/tvi912b-vb-p
     - path: /usr/share/terminfo/t/tvi912c-vb-p
+    - path: /usr/share/terminfo/t/tvi912b-vb-unk
     - path: /usr/share/terminfo/t/tvi912c-vb-unk
     - path: /usr/share/terminfo/t/tvi912cc
     - path: /usr/share/terminfo/t/tvi914
     - path: /usr/share/terminfo/t/tvi920
     - path: /usr/share/terminfo/t/tvi920b
+    - path: /usr/share/terminfo/t/tvi920c
     - path: /usr/share/terminfo/t/tvi920b+fn
     - path: /usr/share/terminfo/t/tvi920b-2p
-    - path: /usr/share/terminfo/t/tvi920b-2p-mc
-    - path: /usr/share/terminfo/t/tvi920b-2p-p
-    - path: /usr/share/terminfo/t/tvi920b-2p-unk
-    - path: /usr/share/terminfo/t/tvi920b-mc
-    - path: /usr/share/terminfo/t/tvi920b-mc-2p
-    - path: /usr/share/terminfo/t/tvi920b-mc-vb
-    - path: /usr/share/terminfo/t/tvi920b-p
-    - path: /usr/share/terminfo/t/tvi920b-p-2p
-    - path: /usr/share/terminfo/t/tvi920b-p-vb
-    - path: /usr/share/terminfo/t/tvi920b-unk
-    - path: /usr/share/terminfo/t/tvi920b-unk-2p
-    - path: /usr/share/terminfo/t/tvi920b-unk-vb
-    - path: /usr/share/terminfo/t/tvi920b-vb
-    - path: /usr/share/terminfo/t/tvi920b-vb-mc
-    - path: /usr/share/terminfo/t/tvi920b-vb-p
-    - path: /usr/share/terminfo/t/tvi920b-vb-unk
-    - path: /usr/share/terminfo/t/tvi920c
     - path: /usr/share/terminfo/t/tvi920c-2p
+    - path: /usr/share/terminfo/t/tvi920b-2p-mc
     - path: /usr/share/terminfo/t/tvi920c-2p-mc
+    - path: /usr/share/terminfo/t/tvi920b-2p-p
     - path: /usr/share/terminfo/t/tvi920c-2p-p
+    - path: /usr/share/terminfo/t/tvi920b-2p-unk
     - path: /usr/share/terminfo/t/tvi920c-2p-unk
+    - path: /usr/share/terminfo/t/tvi920b-mc
     - path: /usr/share/terminfo/t/tvi920c-mc
+    - path: /usr/share/terminfo/t/tvi920b-mc-2p
     - path: /usr/share/terminfo/t/tvi920c-mc-2p
+    - path: /usr/share/terminfo/t/tvi920b-mc-vb
     - path: /usr/share/terminfo/t/tvi920c-mc-vb
+    - path: /usr/share/terminfo/t/tvi920b-p
     - path: /usr/share/terminfo/t/tvi920c-p
+    - path: /usr/share/terminfo/t/tvi920b-p-2p
     - path: /usr/share/terminfo/t/tvi920c-p-2p
+    - path: /usr/share/terminfo/t/tvi920b-p-vb
     - path: /usr/share/terminfo/t/tvi920c-p-vb
+    - path: /usr/share/terminfo/t/tvi920b-unk
     - path: /usr/share/terminfo/t/tvi920c-unk
+    - path: /usr/share/terminfo/t/tvi920b-unk-2p
     - path: /usr/share/terminfo/t/tvi920c-unk-2p
+    - path: /usr/share/terminfo/t/tvi920b-unk-vb
     - path: /usr/share/terminfo/t/tvi920c-unk-vb
+    - path: /usr/share/terminfo/t/tvi920b-vb
     - path: /usr/share/terminfo/t/tvi920c-vb
+    - path: /usr/share/terminfo/t/tvi920b-vb-mc
     - path: /usr/share/terminfo/t/tvi920c-vb-mc
+    - path: /usr/share/terminfo/t/tvi920b-vb-p
     - path: /usr/share/terminfo/t/tvi920c-vb-p
+    - path: /usr/share/terminfo/t/tvi920b-vb-unk
     - path: /usr/share/terminfo/t/tvi920c-vb-unk
     - path: /usr/share/terminfo/t/tvi921
     - path: /usr/share/terminfo/t/tvi924
     - path: /usr/share/terminfo/t/tvi925
     - path: /usr/share/terminfo/t/tvi925-hi
-    - path: /usr/share/terminfo/t/tvi92B
-    - path: /usr/share/terminfo/t/tvi92D
     - path: /usr/share/terminfo/t/tvi950
     - path: /usr/share/terminfo/t/tvi950-2p
     - path: /usr/share/terminfo/t/tvi950-4p
@@ -3547,11 +3573,12 @@ outputs:
     - path: /usr/share/terminfo/t/tvi970
     - path: /usr/share/terminfo/t/tvi970-2p
     - path: /usr/share/terminfo/t/tvi970-vb
+    - path: /usr/share/terminfo/t/tvi9065
     - path: /usr/share/terminfo/t/tvipt
-    - path: /usr/share/terminfo/t/tw100
     - path: /usr/share/terminfo/t/tw52
     - path: /usr/share/terminfo/t/tw52-color
     - path: /usr/share/terminfo/t/tw52-m
+    - path: /usr/share/terminfo/t/tw100
     - path: /usr/share/terminfo/t/tws-generic
     - path: /usr/share/terminfo/t/tws2102-sna
     - path: /usr/share/terminfo/t/tws2103
@@ -3582,15 +3609,15 @@ outputs:
     - path: /usr/share/terminfo/v/vc415
     - path: /usr/share/terminfo/v/venix
     - path: /usr/share/terminfo/v/versaterm
+    - path: /usr/share/terminfo/v/vi50
+    - path: /usr/share/terminfo/v/vi50adm
+    - path: /usr/share/terminfo/v/vi55
     - path: /usr/share/terminfo/v/vi200
     - path: /usr/share/terminfo/v/vi200-f
     - path: /usr/share/terminfo/v/vi200-rv
     - path: /usr/share/terminfo/v/vi300
     - path: /usr/share/terminfo/v/vi300-old
-    - path: /usr/share/terminfo/v/vi50
     - path: /usr/share/terminfo/v/vi500
-    - path: /usr/share/terminfo/v/vi50adm
-    - path: /usr/share/terminfo/v/vi55
     - path: /usr/share/terminfo/v/vi550
     - path: /usr/share/terminfo/v/vi603
     - path: /usr/share/terminfo/v/viewdata
@@ -3622,21 +3649,29 @@ outputs:
     - path: /usr/share/terminfo/v/vscode-direct
     - path: /usr/share/terminfo/v/vt-61
     - path: /usr/share/terminfo/v/vt-utf8
+    - path: /usr/share/terminfo/v/vt50
+    - path: /usr/share/terminfo/v/vt50h
+    - path: /usr/share/terminfo/v/vt52
+    - path: /usr/share/terminfo/v/vt52-basic
+    - path: /usr/share/terminfo/v/vt52+keypad
+    - path: /usr/share/terminfo/v/vt61
+    - path: /usr/share/terminfo/v/vt61.5
     - path: /usr/share/terminfo/v/vt100
     - path: /usr/share/terminfo/v/vt100+
     - path: /usr/share/terminfo/v/vt100+4bsd
-    - path: /usr/share/terminfo/v/vt100+enq
-    - path: /usr/share/terminfo/v/vt100+fnkeys
-    - path: /usr/share/terminfo/v/vt100+keypad
-    - path: /usr/share/terminfo/v/vt100+pfkeys
     - path: /usr/share/terminfo/v/vt100-am
+    - path: /usr/share/terminfo/v/vt100nam
     - path: /usr/share/terminfo/v/vt100-bm
     - path: /usr/share/terminfo/v/vt100-bm-o
     - path: /usr/share/terminfo/v/vt100-bot-s
+    - path: /usr/share/terminfo/v/vt100+enq
+    - path: /usr/share/terminfo/v/vt100+fnkeys
+    - path: /usr/share/terminfo/v/vt100+keypad
     - path: /usr/share/terminfo/v/vt100-nam
     - path: /usr/share/terminfo/v/vt100-nam-w
     - path: /usr/share/terminfo/v/vt100-nav
     - path: /usr/share/terminfo/v/vt100-nav-w
+    - path: /usr/share/terminfo/v/vt100+pfkeys
     - path: /usr/share/terminfo/v/vt100-putty
     - path: /usr/share/terminfo/v/vt100-s
     - path: /usr/share/terminfo/v/vt100-s-bot
@@ -3647,7 +3682,6 @@ outputs:
     - path: /usr/share/terminfo/v/vt100-w-am
     - path: /usr/share/terminfo/v/vt100-w-nam
     - path: /usr/share/terminfo/v/vt100-w-nav
-    - path: /usr/share/terminfo/v/vt100nam
     - path: /usr/share/terminfo/v/vt102
     - path: /usr/share/terminfo/v/vt102+enq
     - path: /usr/share/terminfo/v/vt102-nsgr
@@ -3662,61 +3696,54 @@ outputs:
     - path: /usr/share/terminfo/v/vt200-old
     - path: /usr/share/terminfo/v/vt200-w
     - path: /usr/share/terminfo/v/vt220
-    - path: /usr/share/terminfo/v/vt220+cvis
-    - path: /usr/share/terminfo/v/vt220+cvis8
-    - path: /usr/share/terminfo/v/vt220+keypad
-    - path: /usr/share/terminfo/v/vt220+pcedit
-    - path: /usr/share/terminfo/v/vt220+vtedit
+    - path: /usr/share/terminfo/v/vt220d
     - path: /usr/share/terminfo/v/vt220-8
     - path: /usr/share/terminfo/v/vt220-8bit
     - path: /usr/share/terminfo/v/vt220-base
+    - path: /usr/share/terminfo/v/vt220+cvis
+    - path: /usr/share/terminfo/v/vt220+cvis8
     - path: /usr/share/terminfo/v/vt220-js
+    - path: /usr/share/terminfo/v/vt220+keypad
     - path: /usr/share/terminfo/v/vt220-nam
     - path: /usr/share/terminfo/v/vt220-old
+    - path: /usr/share/terminfo/v/vt220+pcedit
+    - path: /usr/share/terminfo/v/vt220+vtedit
     - path: /usr/share/terminfo/v/vt220-w
-    - path: /usr/share/terminfo/v/vt220d
     - path: /usr/share/terminfo/v/vt300
     - path: /usr/share/terminfo/v/vt300-nam
     - path: /usr/share/terminfo/v/vt300-w
     - path: /usr/share/terminfo/v/vt300-w-nam
     - path: /usr/share/terminfo/v/vt320
+    - path: /usr/share/terminfo/v/vt320nam
     - path: /usr/share/terminfo/v/vt320-k3
     - path: /usr/share/terminfo/v/vt320-k311
     - path: /usr/share/terminfo/v/vt320-nam
     - path: /usr/share/terminfo/v/vt320-w
     - path: /usr/share/terminfo/v/vt320-w-nam
-    - path: /usr/share/terminfo/v/vt320nam
     - path: /usr/share/terminfo/v/vt330
     - path: /usr/share/terminfo/v/vt340
     - path: /usr/share/terminfo/v/vt400
     - path: /usr/share/terminfo/v/vt400-24
     - path: /usr/share/terminfo/v/vt420
-    - path: /usr/share/terminfo/v/vt420+lrmm
     - path: /usr/share/terminfo/v/vt420f
     - path: /usr/share/terminfo/v/vt420pc
     - path: /usr/share/terminfo/v/vt420pcdos
-    - path: /usr/share/terminfo/v/vt50
-    - path: /usr/share/terminfo/v/vt50h
+    - path: /usr/share/terminfo/v/vt420+lrmm
     - path: /usr/share/terminfo/v/vt510
     - path: /usr/share/terminfo/v/vt510pc
     - path: /usr/share/terminfo/v/vt510pcdos
-    - path: /usr/share/terminfo/v/vt52
-    - path: /usr/share/terminfo/v/vt52+keypad
-    - path: /usr/share/terminfo/v/vt52-basic
     - path: /usr/share/terminfo/v/vt520
     - path: /usr/share/terminfo/v/vt520ansi
     - path: /usr/share/terminfo/v/vt525
-    - path: /usr/share/terminfo/v/vt61
-    - path: /usr/share/terminfo/v/vt61.5
     - path: /usr/share/terminfo/v/vte
     - path: /usr/share/terminfo/v/vte+pcfkeys
+    - path: /usr/share/terminfo/v/vte-256color
     - path: /usr/share/terminfo/v/vte-2007
     - path: /usr/share/terminfo/v/vte-2008
     - path: /usr/share/terminfo/v/vte-2012
     - path: /usr/share/terminfo/v/vte-2014
     - path: /usr/share/terminfo/v/vte-2017
     - path: /usr/share/terminfo/v/vte-2018
-    - path: /usr/share/terminfo/v/vte-256color
     - path: /usr/share/terminfo/v/vte-direct
     - path: /usr/share/terminfo/v/vtnt
     - path: /usr/share/terminfo/v/vv100
@@ -3729,6 +3756,53 @@ outputs:
     - path: /usr/share/terminfo/w/wy-75ap
     - path: /usr/share/terminfo/w/wy-99fgt
     - path: /usr/share/terminfo/w/wy-99fgta
+    - path: /usr/share/terminfo/w/wy30
+    - path: /usr/share/terminfo/w/wy30-mc
+    - path: /usr/share/terminfo/w/wy30-vb
+    - path: /usr/share/terminfo/w/wy50
+    - path: /usr/share/terminfo/w/wy50-mc
+    - path: /usr/share/terminfo/w/wy50-vb
+    - path: /usr/share/terminfo/w/wy50-w
+    - path: /usr/share/terminfo/w/wy50-wvb
+    - path: /usr/share/terminfo/w/wy60
+    - path: /usr/share/terminfo/w/wy60-25
+    - path: /usr/share/terminfo/w/wy60-25-w
+    - path: /usr/share/terminfo/w/wy60-42
+    - path: /usr/share/terminfo/w/wy60-42-w
+    - path: /usr/share/terminfo/w/wy60-43
+    - path: /usr/share/terminfo/w/wy60-43-w
+    - path: /usr/share/terminfo/w/wy60-316X
+    - path: /usr/share/terminfo/w/wy60-AT
+    - path: /usr/share/terminfo/w/wy60-PC
+    - path: /usr/share/terminfo/w/wy60-vb
+    - path: /usr/share/terminfo/w/wy60-w
+    - path: /usr/share/terminfo/w/wy60-w-vb
+    - path: /usr/share/terminfo/w/wy60-wvb
+    - path: /usr/share/terminfo/w/wy75
+    - path: /usr/share/terminfo/w/wy75-mc
+    - path: /usr/share/terminfo/w/wy75ap
+    - path: /usr/share/terminfo/w/wy75-vb
+    - path: /usr/share/terminfo/w/wy75-w
+    - path: /usr/share/terminfo/w/wy75-wvb
+    - path: /usr/share/terminfo/w/wy85
+    - path: /usr/share/terminfo/w/wy85-8bit
+    - path: /usr/share/terminfo/w/wy85-vb
+    - path: /usr/share/terminfo/w/wy85-w
+    - path: /usr/share/terminfo/w/wy85-wvb
+    - path: /usr/share/terminfo/w/wy99f
+    - path: /usr/share/terminfo/w/wy99a-ansi
+    - path: /usr/share/terminfo/w/wy99fa
+    - path: /usr/share/terminfo/w/wy99-ansi
+    - path: /usr/share/terminfo/w/wy99fgt
+    - path: /usr/share/terminfo/w/wy99fgta
+    - path: /usr/share/terminfo/w/wy99gt
+    - path: /usr/share/terminfo/w/wy99gt-25
+    - path: /usr/share/terminfo/w/wy99gt-25-w
+    - path: /usr/share/terminfo/w/wy99gt-tek
+    - path: /usr/share/terminfo/w/wy99gt-vb
+    - path: /usr/share/terminfo/w/wy99gt-w
+    - path: /usr/share/terminfo/w/wy99gt-w-vb
+    - path: /usr/share/terminfo/w/wy99gt-wvb
     - path: /usr/share/terminfo/w/wy100
     - path: /usr/share/terminfo/w/wy100q
     - path: /usr/share/terminfo/w/wy120
@@ -3761,10 +3835,8 @@ outputs:
     - path: /usr/share/terminfo/w/wy185-vb
     - path: /usr/share/terminfo/w/wy185-w
     - path: /usr/share/terminfo/w/wy185-wvb
-    - path: /usr/share/terminfo/w/wy30
-    - path: /usr/share/terminfo/w/wy30-mc
-    - path: /usr/share/terminfo/w/wy30-vb
     - path: /usr/share/terminfo/w/wy325
+    - path: /usr/share/terminfo/w/wy325w-24
     - path: /usr/share/terminfo/w/wy325-25
     - path: /usr/share/terminfo/w/wy325-25w
     - path: /usr/share/terminfo/w/wy325-42
@@ -3780,7 +3852,6 @@ outputs:
     - path: /usr/share/terminfo/w/wy325-w
     - path: /usr/share/terminfo/w/wy325-w-vb
     - path: /usr/share/terminfo/w/wy325-wvb
-    - path: /usr/share/terminfo/w/wy325w-24
     - path: /usr/share/terminfo/w/wy350
     - path: /usr/share/terminfo/w/wy350-vb
     - path: /usr/share/terminfo/w/wy350-w
@@ -3795,20 +3866,15 @@ outputs:
     - path: /usr/share/terminfo/w/wy370-vb
     - path: /usr/share/terminfo/w/wy370-w
     - path: /usr/share/terminfo/w/wy370-wvb
-    - path: /usr/share/terminfo/w/wy50
-    - path: /usr/share/terminfo/w/wy50-mc
-    - path: /usr/share/terminfo/w/wy50-vb
-    - path: /usr/share/terminfo/w/wy50-w
-    - path: /usr/share/terminfo/w/wy50-wvb
     - path: /usr/share/terminfo/w/wy520
     - path: /usr/share/terminfo/w/wy520-24
     - path: /usr/share/terminfo/w/wy520-36
-    - path: /usr/share/terminfo/w/wy520-36pc
     - path: /usr/share/terminfo/w/wy520-36w
+    - path: /usr/share/terminfo/w/wy520-36pc
     - path: /usr/share/terminfo/w/wy520-36wpc
     - path: /usr/share/terminfo/w/wy520-48
-    - path: /usr/share/terminfo/w/wy520-48pc
     - path: /usr/share/terminfo/w/wy520-48w
+    - path: /usr/share/terminfo/w/wy520-48pc
     - path: /usr/share/terminfo/w/wy520-48wpc
     - path: /usr/share/terminfo/w/wy520-epc
     - path: /usr/share/terminfo/w/wy520-epc-24
@@ -3818,49 +3884,48 @@ outputs:
     - path: /usr/share/terminfo/w/wy520-vb
     - path: /usr/share/terminfo/w/wy520-w
     - path: /usr/share/terminfo/w/wy520-wvb
-    - path: /usr/share/terminfo/w/wy60
-    - path: /usr/share/terminfo/w/wy60-25
-    - path: /usr/share/terminfo/w/wy60-25-w
-    - path: /usr/share/terminfo/w/wy60-316X
-    - path: /usr/share/terminfo/w/wy60-42
-    - path: /usr/share/terminfo/w/wy60-42-w
-    - path: /usr/share/terminfo/w/wy60-43
-    - path: /usr/share/terminfo/w/wy60-43-w
-    - path: /usr/share/terminfo/w/wy60-AT
-    - path: /usr/share/terminfo/w/wy60-PC
-    - path: /usr/share/terminfo/w/wy60-vb
-    - path: /usr/share/terminfo/w/wy60-w
-    - path: /usr/share/terminfo/w/wy60-w-vb
-    - path: /usr/share/terminfo/w/wy60-wvb
-    - path: /usr/share/terminfo/w/wy75
-    - path: /usr/share/terminfo/w/wy75-mc
-    - path: /usr/share/terminfo/w/wy75-vb
-    - path: /usr/share/terminfo/w/wy75-w
-    - path: /usr/share/terminfo/w/wy75-wvb
-    - path: /usr/share/terminfo/w/wy75ap
-    - path: /usr/share/terminfo/w/wy85
-    - path: /usr/share/terminfo/w/wy85-8bit
-    - path: /usr/share/terminfo/w/wy85-vb
-    - path: /usr/share/terminfo/w/wy85-w
-    - path: /usr/share/terminfo/w/wy85-wvb
-    - path: /usr/share/terminfo/w/wy99-ansi
-    - path: /usr/share/terminfo/w/wy99a-ansi
-    - path: /usr/share/terminfo/w/wy99f
-    - path: /usr/share/terminfo/w/wy99fa
-    - path: /usr/share/terminfo/w/wy99fgt
-    - path: /usr/share/terminfo/w/wy99fgta
-    - path: /usr/share/terminfo/w/wy99gt
-    - path: /usr/share/terminfo/w/wy99gt-25
-    - path: /usr/share/terminfo/w/wy99gt-25-w
-    - path: /usr/share/terminfo/w/wy99gt-tek
-    - path: /usr/share/terminfo/w/wy99gt-vb
-    - path: /usr/share/terminfo/w/wy99gt-w
-    - path: /usr/share/terminfo/w/wy99gt-w-vb
-    - path: /usr/share/terminfo/w/wy99gt-wvb
     - path: /usr/share/terminfo/w/wyse+sl
-    - path: /usr/share/terminfo/w/wyse-325
     - path: /usr/share/terminfo/w/wyse-75ap
+    - path: /usr/share/terminfo/w/wyse-325
     - path: /usr/share/terminfo/w/wyse-vp
+    - path: /usr/share/terminfo/w/wyse30
+    - path: /usr/share/terminfo/w/wyse30-mc
+    - path: /usr/share/terminfo/w/wyse30-vb
+    - path: /usr/share/terminfo/w/wyse50
+    - path: /usr/share/terminfo/w/wyse50-mc
+    - path: /usr/share/terminfo/w/wyse50-vb
+    - path: /usr/share/terminfo/w/wyse50-w
+    - path: /usr/share/terminfo/w/wyse50-wvb
+    - path: /usr/share/terminfo/w/wyse60
+    - path: /usr/share/terminfo/w/wyse60-25
+    - path: /usr/share/terminfo/w/wyse60-25-w
+    - path: /usr/share/terminfo/w/wyse60-42
+    - path: /usr/share/terminfo/w/wyse60-42-w
+    - path: /usr/share/terminfo/w/wyse60-43
+    - path: /usr/share/terminfo/w/wyse60-43-w
+    - path: /usr/share/terminfo/w/wyse60-316X
+    - path: /usr/share/terminfo/w/wyse60-AT
+    - path: /usr/share/terminfo/w/wyse60-PC
+    - path: /usr/share/terminfo/w/wyse60-vb
+    - path: /usr/share/terminfo/w/wyse60-w
+    - path: /usr/share/terminfo/w/wyse60-wvb
+    - path: /usr/share/terminfo/w/wyse75
+    - path: /usr/share/terminfo/w/wyse75-mc
+    - path: /usr/share/terminfo/w/wyse75ap
+    - path: /usr/share/terminfo/w/wyse75-vb
+    - path: /usr/share/terminfo/w/wyse75-w
+    - path: /usr/share/terminfo/w/wyse75-wvb
+    - path: /usr/share/terminfo/w/wyse85
+    - path: /usr/share/terminfo/w/wyse85-8bit
+    - path: /usr/share/terminfo/w/wyse85-vb
+    - path: /usr/share/terminfo/w/wyse85-w
+    - path: /usr/share/terminfo/w/wyse85-wvb
+    - path: /usr/share/terminfo/w/wyse99gt
+    - path: /usr/share/terminfo/w/wyse99gt-25
+    - path: /usr/share/terminfo/w/wyse99gt-25-w
+    - path: /usr/share/terminfo/w/wyse99gt-vb
+    - path: /usr/share/terminfo/w/wyse99gt-w
+    - path: /usr/share/terminfo/w/wyse99gt-wvb
     - path: /usr/share/terminfo/w/wyse120
     - path: /usr/share/terminfo/w/wyse120-25
     - path: /usr/share/terminfo/w/wyse120-25-w
@@ -3888,9 +3953,6 @@ outputs:
     - path: /usr/share/terminfo/w/wyse185-vb
     - path: /usr/share/terminfo/w/wyse185-w
     - path: /usr/share/terminfo/w/wyse185-wvb
-    - path: /usr/share/terminfo/w/wyse30
-    - path: /usr/share/terminfo/w/wyse30-mc
-    - path: /usr/share/terminfo/w/wyse30-vb
     - path: /usr/share/terminfo/w/wyse325
     - path: /usr/share/terminfo/w/wyse325-25
     - path: /usr/share/terminfo/w/wyse325-25w
@@ -3906,20 +3968,15 @@ outputs:
     - path: /usr/share/terminfo/w/wyse350-w
     - path: /usr/share/terminfo/w/wyse350-wvb
     - path: /usr/share/terminfo/w/wyse370
-    - path: /usr/share/terminfo/w/wyse50
-    - path: /usr/share/terminfo/w/wyse50-mc
-    - path: /usr/share/terminfo/w/wyse50-vb
-    - path: /usr/share/terminfo/w/wyse50-w
-    - path: /usr/share/terminfo/w/wyse50-wvb
     - path: /usr/share/terminfo/w/wyse520
     - path: /usr/share/terminfo/w/wyse520-24
     - path: /usr/share/terminfo/w/wyse520-36
-    - path: /usr/share/terminfo/w/wyse520-36pc
     - path: /usr/share/terminfo/w/wyse520-36w
+    - path: /usr/share/terminfo/w/wyse520-36pc
     - path: /usr/share/terminfo/w/wyse520-36wpc
     - path: /usr/share/terminfo/w/wyse520-48
-    - path: /usr/share/terminfo/w/wyse520-48pc
     - path: /usr/share/terminfo/w/wyse520-48w
+    - path: /usr/share/terminfo/w/wyse520-48pc
     - path: /usr/share/terminfo/w/wyse520-48wpc
     - path: /usr/share/terminfo/w/wyse520-epc
     - path: /usr/share/terminfo/w/wyse520-epc-w
@@ -3929,56 +3986,29 @@ outputs:
     - path: /usr/share/terminfo/w/wyse520-vb
     - path: /usr/share/terminfo/w/wyse520-w
     - path: /usr/share/terminfo/w/wyse520-wvb
-    - path: /usr/share/terminfo/w/wyse60
-    - path: /usr/share/terminfo/w/wyse60-25
-    - path: /usr/share/terminfo/w/wyse60-25-w
-    - path: /usr/share/terminfo/w/wyse60-316X
-    - path: /usr/share/terminfo/w/wyse60-42
-    - path: /usr/share/terminfo/w/wyse60-42-w
-    - path: /usr/share/terminfo/w/wyse60-43
-    - path: /usr/share/terminfo/w/wyse60-43-w
-    - path: /usr/share/terminfo/w/wyse60-AT
-    - path: /usr/share/terminfo/w/wyse60-PC
-    - path: /usr/share/terminfo/w/wyse60-vb
-    - path: /usr/share/terminfo/w/wyse60-w
-    - path: /usr/share/terminfo/w/wyse60-wvb
-    - path: /usr/share/terminfo/w/wyse75
-    - path: /usr/share/terminfo/w/wyse75-mc
-    - path: /usr/share/terminfo/w/wyse75-vb
-    - path: /usr/share/terminfo/w/wyse75-w
-    - path: /usr/share/terminfo/w/wyse75-wvb
-    - path: /usr/share/terminfo/w/wyse75ap
-    - path: /usr/share/terminfo/w/wyse85
-    - path: /usr/share/terminfo/w/wyse85-8bit
-    - path: /usr/share/terminfo/w/wyse85-vb
-    - path: /usr/share/terminfo/w/wyse85-w
-    - path: /usr/share/terminfo/w/wyse85-wvb
-    - path: /usr/share/terminfo/w/wyse99gt
-    - path: /usr/share/terminfo/w/wyse99gt-25
-    - path: /usr/share/terminfo/w/wyse99gt-25-w
-    - path: /usr/share/terminfo/w/wyse99gt-vb
-    - path: /usr/share/terminfo/w/wyse99gt-w
-    - path: /usr/share/terminfo/w/wyse99gt-wvb
     - path: /usr/share/terminfo/x/x10term
     - path: /usr/share/terminfo/x/x10term+sl
+    - path: /usr/share/terminfo/x/x68k
+    - path: /usr/share/terminfo/x/x68k-ite
+    - path: /usr/share/terminfo/x/x820
     - path: /usr/share/terminfo/x/x1700
     - path: /usr/share/terminfo/x/x1700-lm
     - path: /usr/share/terminfo/x/x1720
     - path: /usr/share/terminfo/x/x1750
-    - path: /usr/share/terminfo/x/x68k
-    - path: /usr/share/terminfo/x/x68k-ite
-    - path: /usr/share/terminfo/x/x820
     - path: /usr/share/terminfo/x/xdku
     - path: /usr/share/terminfo/x/xenix
     - path: /usr/share/terminfo/x/xerox
     - path: /usr/share/terminfo/x/xerox-lm
-    - path: /usr/share/terminfo/x/xerox1720
     - path: /usr/share/terminfo/x/xerox820
+    - path: /usr/share/terminfo/x/xerox1720
     - path: /usr/share/terminfo/x/xfce
     - path: /usr/share/terminfo/x/xgterm
     - path: /usr/share/terminfo/x/xiterm
     - path: /usr/share/terminfo/x/xl83
     - path: /usr/share/terminfo/x/xnuppc
+    - path: /usr/share/terminfo/x/xnuppc+80x25
+    - path: /usr/share/terminfo/x/xnuppc+80x30
+    - path: /usr/share/terminfo/x/xnuppc+90x30
     - path: /usr/share/terminfo/x/xnuppc+100x37
     - path: /usr/share/terminfo/x/xnuppc+112x37
     - path: /usr/share/terminfo/x/xnuppc+128x40
@@ -3988,14 +4018,17 @@ outputs:
     - path: /usr/share/terminfo/x/xnuppc+200x64
     - path: /usr/share/terminfo/x/xnuppc+200x75
     - path: /usr/share/terminfo/x/xnuppc+256x96
-    - path: /usr/share/terminfo/x/xnuppc+80x25
-    - path: /usr/share/terminfo/x/xnuppc+80x30
-    - path: /usr/share/terminfo/x/xnuppc+90x30
     - path: /usr/share/terminfo/x/xnuppc+b
     - path: /usr/share/terminfo/x/xnuppc+basic
     - path: /usr/share/terminfo/x/xnuppc+c
     - path: /usr/share/terminfo/x/xnuppc+f
     - path: /usr/share/terminfo/x/xnuppc+f2
+    - path: /usr/share/terminfo/x/xnuppc-80x25
+    - path: /usr/share/terminfo/x/xnuppc-80x25-m
+    - path: /usr/share/terminfo/x/xnuppc-80x30
+    - path: /usr/share/terminfo/x/xnuppc-80x30-m
+    - path: /usr/share/terminfo/x/xnuppc-90x30
+    - path: /usr/share/terminfo/x/xnuppc-90x30-m
     - path: /usr/share/terminfo/x/xnuppc-100x37
     - path: /usr/share/terminfo/x/xnuppc-100x37-m
     - path: /usr/share/terminfo/x/xnuppc-112x37
@@ -4014,12 +4047,6 @@ outputs:
     - path: /usr/share/terminfo/x/xnuppc-200x75-m
     - path: /usr/share/terminfo/x/xnuppc-256x96
     - path: /usr/share/terminfo/x/xnuppc-256x96-m
-    - path: /usr/share/terminfo/x/xnuppc-80x25
-    - path: /usr/share/terminfo/x/xnuppc-80x25-m
-    - path: /usr/share/terminfo/x/xnuppc-80x30
-    - path: /usr/share/terminfo/x/xnuppc-80x30-m
-    - path: /usr/share/terminfo/x/xnuppc-90x30
-    - path: /usr/share/terminfo/x/xnuppc-90x30-m
     - path: /usr/share/terminfo/x/xnuppc-b
     - path: /usr/share/terminfo/x/xnuppc-f
     - path: /usr/share/terminfo/x/xnuppc-f2
@@ -4029,19 +4056,19 @@ outputs:
     - path: /usr/share/terminfo/x/xnuppc-m-f2
     - path: /usr/share/terminfo/x/xtalk
     - path: /usr/share/terminfo/x/xterm
-    - path: /usr/share/terminfo/x/xterm+256color
-    - path: /usr/share/terminfo/x/xterm+256color2
-    - path: /usr/share/terminfo/x/xterm+256setaf
     - path: /usr/share/terminfo/x/xterm+88color
     - path: /usr/share/terminfo/x/xterm+88color2
+    - path: /usr/share/terminfo/x/xterm+256setaf
+    - path: /usr/share/terminfo/x/xterm+256color
+    - path: /usr/share/terminfo/x/xterm+256color2
     - path: /usr/share/terminfo/x/xterm+acs
     - path: /usr/share/terminfo/x/xterm+alt+title
-    - path: /usr/share/terminfo/x/xterm+alt1049
     - path: /usr/share/terminfo/x/xterm+alt47
+    - path: /usr/share/terminfo/x/xterm+alt1049
     - path: /usr/share/terminfo/x/xterm+app
     - path: /usr/share/terminfo/x/xterm+direct
-    - path: /usr/share/terminfo/x/xterm+direct16
     - path: /usr/share/terminfo/x/xterm+direct2
+    - path: /usr/share/terminfo/x/xterm+direct16
     - path: /usr/share/terminfo/x/xterm+direct256
     - path: /usr/share/terminfo/x/xterm+edit
     - path: /usr/share/terminfo/x/xterm+focus
@@ -4078,21 +4105,21 @@ outputs:
     - path: /usr/share/terminfo/x/xterm+x10mouse
     - path: /usr/share/terminfo/x/xterm+x11hilite
     - path: /usr/share/terminfo/x/xterm+x11mouse
+    - path: /usr/share/terminfo/x/xterm-8bit
+    - path: /usr/share/terminfo/x/xterm-16color
+    - path: /usr/share/terminfo/x/xterm-24
+    - path: /usr/share/terminfo/x/xterm-88color
+    - path: /usr/share/terminfo/x/xterm-256color
     - path: /usr/share/terminfo/x/xterm-1002
     - path: /usr/share/terminfo/x/xterm-1003
     - path: /usr/share/terminfo/x/xterm-1005
     - path: /usr/share/terminfo/x/xterm-1006
-    - path: /usr/share/terminfo/x/xterm-16color
-    - path: /usr/share/terminfo/x/xterm-24
-    - path: /usr/share/terminfo/x/xterm-256color
-    - path: /usr/share/terminfo/x/xterm-88color
-    - path: /usr/share/terminfo/x/xterm-8bit
     - path: /usr/share/terminfo/x/xterm-basic
     - path: /usr/share/terminfo/x/xterm-bold
     - path: /usr/share/terminfo/x/xterm-color
     - path: /usr/share/terminfo/x/xterm-direct
-    - path: /usr/share/terminfo/x/xterm-direct16
     - path: /usr/share/terminfo/x/xterm-direct2
+    - path: /usr/share/terminfo/x/xterm-direct16
     - path: /usr/share/terminfo/x/xterm-direct256
     - path: /usr/share/terminfo/x/xterm-hp
     - path: /usr/share/terminfo/x/xterm-mono
@@ -4108,17 +4135,17 @@ outputs:
     - path: /usr/share/terminfo/x/xterm-sco
     - path: /usr/share/terminfo/x/xterm-sun
     - path: /usr/share/terminfo/x/xterm-utf8
-    - path: /usr/share/terminfo/x/xterm-vt220
     - path: /usr/share/terminfo/x/xterm-vt52
+    - path: /usr/share/terminfo/x/xterm-vt220
     - path: /usr/share/terminfo/x/xterm-x10mouse
     - path: /usr/share/terminfo/x/xterm-x11hilite
     - path: /usr/share/terminfo/x/xterm-x11mouse
     - path: /usr/share/terminfo/x/xterm-xf86-v32
     - path: /usr/share/terminfo/x/xterm-xf86-v33
-    - path: /usr/share/terminfo/x/xterm-xf86-v333
     - path: /usr/share/terminfo/x/xterm-xf86-v40
     - path: /usr/share/terminfo/x/xterm-xf86-v43
     - path: /usr/share/terminfo/x/xterm-xf86-v44
+    - path: /usr/share/terminfo/x/xterm-xf86-v333
     - path: /usr/share/terminfo/x/xterm-xfree86
     - path: /usr/share/terminfo/x/xterm-xi
     - path: /usr/share/terminfo/x/xterm.js
@@ -4130,24 +4157,24 @@ outputs:
     - path: /usr/share/terminfo/x/xwsh
     - path: /usr/share/terminfo/z/z-100
     - path: /usr/share/terminfo/z/z-100bw
-    - path: /usr/share/terminfo/z/z100
-    - path: /usr/share/terminfo/z/z100bw
-    - path: /usr/share/terminfo/z/z110
-    - path: /usr/share/terminfo/z/z110bw
     - path: /usr/share/terminfo/z/z19
     - path: /usr/share/terminfo/z/z29
     - path: /usr/share/terminfo/z/z29a
+    - path: /usr/share/terminfo/z/z29b
     - path: /usr/share/terminfo/z/z29a-kc-bc
     - path: /usr/share/terminfo/z/z29a-kc-uc
     - path: /usr/share/terminfo/z/z29a-nkc-bc
     - path: /usr/share/terminfo/z/z29a-nkc-uc
-    - path: /usr/share/terminfo/z/z29b
     - path: /usr/share/terminfo/z/z30
+    - path: /usr/share/terminfo/z/z39a
+    - path: /usr/share/terminfo/z/z39-a
+    - path: /usr/share/terminfo/z/z50
+    - path: /usr/share/terminfo/z/z100
+    - path: /usr/share/terminfo/z/z100bw
+    - path: /usr/share/terminfo/z/z110
+    - path: /usr/share/terminfo/z/z110bw
     - path: /usr/share/terminfo/z/z340
     - path: /usr/share/terminfo/z/z340-nam
-    - path: /usr/share/terminfo/z/z39-a
-    - path: /usr/share/terminfo/z/z39a
-    - path: /usr/share/terminfo/z/z50
     - path: /usr/share/terminfo/z/z8001
     - path: /usr/share/terminfo/z/zen30
     - path: /usr/share/terminfo/z/zen50
@@ -4160,69 +4187,3 @@ outputs:
     - path: /usr/share/terminfo/z/ztx
     - path: /usr/share/terminfo/z/ztx-1-a
     - path: /usr/share/terminfo/z/ztx11
-  dev:
-    files:
-    - path: /usr/include/curses.h
-    - path: /usr/include/cursesapp.h
-    - path: /usr/include/cursesf.h
-    - path: /usr/include/cursesm.h
-    - path: /usr/include/cursesp.h
-    - path: /usr/include/cursesw.h
-    - path: /usr/include/cursslk.h
-    - path: /usr/include/eti.h
-    - path: /usr/include/etip.h
-    - path: /usr/include/form.h
-    - path: /usr/include/menu.h
-    - path: /usr/include/ncurses.h
-    - path: /usr/include/ncurses_dll.h
-    - path: /usr/include/panel.h
-    - path: /usr/include/term.h
-    - path: /usr/include/term_entry.h
-    - path: /usr/include/termcap.h
-    - path: /usr/include/unctrl.h
-    - path: /usr/lib/pkgconfig/form.pc
-    - path: /usr/lib/pkgconfig/formw.pc
-    - path: /usr/lib/pkgconfig/menu.pc
-    - path: /usr/lib/pkgconfig/menuw.pc
-    - path: /usr/lib/pkgconfig/ncurses++w.pc
-    - path: /usr/lib/pkgconfig/ncurses.pc
-    - path: /usr/lib/pkgconfig/ncursesw.pc
-    - path: /usr/lib/pkgconfig/panel.pc
-    - path: /usr/lib/pkgconfig/panelw.pc
-  bin:
-    files:
-    - path: /usr/bin/captoinfo
-    - path: /usr/bin/clear
-    - path: /usr/bin/infocmp
-    - path: /usr/bin/infotocap
-    - path: /usr/bin/ncursesw6-config
-    - path: /usr/bin/reset
-    - path: /usr/bin/tabs
-    - path: /usr/bin/tic
-    - path: /usr/bin/toe
-    - path: /usr/bin/tput
-    - path: /usr/bin/tset
-  lib:
-    files:
-    - path: /usr/lib/libcurses.so
-    - path: /usr/lib/libcursesw.so
-    - path: /usr/lib/libform.so
-    - path: /usr/lib/libformw.so
-    - path: /usr/lib/libformw.so.6
-    - path: /usr/lib/libformw.so.6.4
-    - path: /usr/lib/libmenu.so
-    - path: /usr/lib/libmenuw.so
-    - path: /usr/lib/libmenuw.so.6
-    - path: /usr/lib/libmenuw.so.6.4
-    - path: /usr/lib/libncurses++w.so
-    - path: /usr/lib/libncurses++w.so.6
-    - path: /usr/lib/libncurses++w.so.6.4
-    - path: /usr/lib/libncurses.so
-    - path: /usr/lib/libncursesw.so
-    - path: /usr/lib/libncursesw.so.6
-    - path: /usr/lib/libncursesw.so.6.4
-    - path: /usr/lib/libpanel.so
-    - path: /usr/lib/libpanelw.so
-    - path: /usr/lib/libpanelw.so.6
-    - path: /usr/lib/libpanelw.so.6.4
-    - path: /usr/lib/terminfo

@@ -4,14 +4,15 @@ package:
   slug: intltool
   namespace: dev/perl
   version: 0.51.0
-  description: intltool is a set of tools to centralize translation of many different
-    file formats using GNU gettext-compatible PO files.
+  description: intltool is a set of tools to centralize translation of many different file formats using GNU gettext-compatible PO files.
   homepage: https://freedesktop.org/wiki/Software/intltool
   checksum: ec29ce03f93b199331b3d1ae367cdd58eb3479e09062eb84c3c53e81f534cd90
+
 sources:
 - name: intltool
   url: https://launchpad.net/intltool/trunk/0.51.0/+download/intltool-0.51.0.tar.gz
   sha256: 67c74d94196b153b774ab9f89b2fa6c6ba79352407037c8c14d5aeb334e959cd
+
 dependencies:
 - name: coreutils
   commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
@@ -39,39 +40,36 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
 - name: expat
   commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
-- name: None
-  commit: x86_64/xml_parser/2.47/dev/perl/bundles/dev
-build:
-  script: 'tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+- name: xml_parser
+  commit: x86_64/pkg/dev/perl/xml_parser/2.47/bundles/dev
 
+build:
+  profile: [4097:203, 6523:224]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-
-    sed -i ''s:\\\${:\\\$\\{:'' intltool-update.in
-
+    sed -i 's:\\\${:\\\$\\{:' intltool-update.in
     ./configure --prefix=/usr
-
     make
-
     make DESTDIR=$OUT_DIR install
-
     install -v -Dm644 doc/I18N-HOWTO ${OUT_DIR}/usr/share/doc/intltool-0.51.0/I18N-HOWTO
 
-
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-
     2nex_strip_binaries ${OUT_DIR}
 
-    '
 bundles:
+  dev:
+  - bin
+  - misc
+
   full:
   - bin
   - doc
   - man
   - misc
-  dev:
-  - bin
-  - misc
+
 outputs:
   bin:
     files:
@@ -80,9 +78,11 @@ outputs:
     - path: /usr/bin/intltool-prepare
     - path: /usr/bin/intltool-update
     - path: /usr/bin/intltoolize
+
   doc:
     files:
     - path: /usr/share/doc/intltool-0.51.0/I18N-HOWTO
+
   man:
     files:
     - path: /usr/share/man/man8/intltool-extract.8
@@ -90,6 +90,7 @@ outputs:
     - path: /usr/share/man/man8/intltool-prepare.8
     - path: /usr/share/man/man8/intltool-update.8
     - path: /usr/share/man/man8/intltoolize.8
+
   misc:
     files:
     - path: /usr/share/aclocal/intltool.m4

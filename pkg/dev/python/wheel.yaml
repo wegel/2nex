@@ -7,10 +7,12 @@ package:
   description: The reference implementation of the Python wheel packaging standard.
   homepage: https://pypi.org/project/wheel
   checksum: cb04f78dccce938e103c062bca00f50fb0f9ccd62db347c7a291cf9c3526c95c
+
 sources:
 - name: wheel
   url: https://pypi.org/packages/source/w/wheel/wheel-0.43.0.tar.gz
   sha256: 465ef92c69fa5c5da2d1cf8ac40559a8c940886afcef87dcf14b9470862f1d85
+
 dependencies:
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
@@ -34,7 +36,10 @@ dependencies:
   commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
 - name: flit-core
   commit: x86_64/pkg/dev/python/flit-core/3.9.0/bundles/dev
+
 build:
+  profile: [4114:697, 8262:712, 12358:724, 12998:726]
+
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -44,14 +49,21 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - bin
-  - lib
   dev:
   - bin
   - lib
+
+  full:
+  - bin
+  - lib
+
 outputs:
+  bin:
+    files:
+    - path: /usr/bin/wheel
+
   lib:
     files:
     - path: /usr/lib/python3.12/site-packages/wheel-0.43.0.dist-info/INSTALLER
@@ -116,6 +128,3 @@ outputs:
     - path: /usr/lib/python3.12/site-packages/wheel/vendored/packaging/version.py
     - path: /usr/lib/python3.12/site-packages/wheel/vendored/vendor.txt
     - path: /usr/lib/python3.12/site-packages/wheel/wheelfile.py
-  bin:
-    files:
-    - path: /usr/bin/wheel

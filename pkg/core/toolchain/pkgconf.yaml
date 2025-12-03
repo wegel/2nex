@@ -7,10 +7,12 @@ package:
   description: A program which helps to configure compiler and linker flags for development frameworks
   homepage: https://github.com/pkgconf/pkgconf
   checksum: 0599627af0b90696055eae245762aaf4e6ea6cdd0167b08593fadf2b157e022f
+
 sources:
 - name: pkgconf
   url: https://distfiles.dereferenced.org/pkgconf/pkgconf-2.2.0.tar.xz
   sha256: b06ff63a83536aa8c2f6422fa80ad45e4833f590266feb14eaddfe1d4c853c69
+
 dependencies:
 - name: bootstrap_tools
   commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
@@ -52,7 +54,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+
 build:
+  profile: [4116:1399, 8233:3331, 8927:3456]
+
   script: |
     tar --no-same-owner -xf /inputs/pkgconf-*.tar.* -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -67,24 +72,41 @@ build:
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - doc
-  - dev
-  - lib
-  - static
-  - bin
-  - man
   dev:
+  - bin
   - dev
   - lib
   - static
+
+  full:
   - bin
+  - dev
+  - doc
+  - lib
+  - man
+  - static
+
 outputs:
-  doc:
+  bin:
     files:
-    - path: /usr/share/doc/pkgconf-2.2.0/AUTHORS
-    - path: /usr/share/doc/pkgconf-2.2.0/README.md
+    - path: /usr/bin/bomtool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpkgconf.so.5
+    - path: /usr/bin/pkg-config
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpkgconf.so.5
+    - path: /usr/bin/pkgconf
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpkgconf.so.5
+
   dev:
     files:
     - path: /usr/include/pkgconf/libpkgconf/bsdstubs.h
@@ -95,6 +117,12 @@ outputs:
     - path: /usr/lib/libpkgconf.la
     - path: /usr/lib/pkgconfig/libpkgconf.pc
     - path: /usr/share/aclocal/pkg.m4
+
+  doc:
+    files:
+    - path: /usr/share/doc/pkgconf-2.2.0/AUTHORS
+    - path: /usr/share/doc/pkgconf-2.2.0/README.md
+
   lib:
     files:
     - path: /usr/lib/libpkgconf.so
@@ -106,26 +134,7 @@ outputs:
     - path: /usr/lib/libpkgconf.so.5.0.0
       needs:
       - /usr/lib/libc.so.6
-  static:
-    files:
-    - path: /usr/lib/libpkgconf.a
-  bin:
-    files:
-    - path: /usr/bin/bomtool
-      needs:
-      - /usr/lib/libpkgconf.so.5
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/pkg-config
-      needs:
-      - /usr/lib/libpkgconf.so.5
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/pkgconf
-      needs:
-      - /usr/lib/libpkgconf.so.5
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
+
   man:
     files:
     - path: /usr/share/man/man1/pkg-config.1
@@ -134,7 +143,11 @@ outputs:
     - path: /usr/share/man/man5/pkgconf-personality.5
     - path: /usr/share/man/man7/pkg.m4.7
 
+  static:
+    files:
+    - path: /usr/lib/libpkgconf.a
+
 resolution:
   /usr/lib/ld-linux-x86-64.so.2: glibc
-  /usr/lib/libpkgconf.so.5: '@self'
   /usr/lib/libc.so.6: glibc
+  /usr/lib/libpkgconf.so.5: self

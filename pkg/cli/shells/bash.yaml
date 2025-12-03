@@ -7,6 +7,7 @@ package:
   description: The GNU Bourne Again shell
   homepage: https://www.gnu.org/software/bash/
   checksum: 274d2e2b3037d4eb6552850a5d5e183f29be38049484590ada7780626800389f
+
 sources:
 - name: bash
   url: https://ftp.gnu.org/gnu/bash/bash-5.2.21.tar.gz
@@ -14,6 +15,7 @@ sources:
 - name: patch
   url: https://www.linuxfromscratch.org/patches/lfs/12.1/bash-5.2.21-upstream_fixes-1.patch
   sha256: 461ef75965a7fc75e2de86816dde160d8440e721595ed20513b1d8ede7c89bdc
+
 dependencies:
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
@@ -63,7 +65,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
 - name: grep
   commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+
 build:
+  profile: [4154:1287, 12366:10842, 25403:17352, 42798:17620, 55318:17652, 68165:17709, 81039:17782, 102307:27564, 123798:29672, 134892:33986]
+
   script: |
     tar --no-same-owner -xf ${SOURCE_bash} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
@@ -82,74 +87,38 @@ build:
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
     2nex_strip_binaries ${OUT_DIR}
+
 bundles:
-  full:
-  - doc
-  - locale
-  - dev
-  - info
-  - man
-  - lib
-  - bin
   dev:
-  - locale
+  - bin
   - dev
   - lib
+  - locale
+
+  full:
   - bin
+  - dev
+  - doc
+  - info
+  - lib
+  - locale
+  - man
+
 outputs:
-  doc:
+  bin:
     files:
-    - path: /usr/share/doc/bash-5.2.21/CHANGES
-    - path: /usr/share/doc/bash-5.2.21/COMPAT
-    - path: /usr/share/doc/bash-5.2.21/FAQ
-    - path: /usr/share/doc/bash-5.2.21/INTRO
-    - path: /usr/share/doc/bash-5.2.21/NEWS
-    - path: /usr/share/doc/bash-5.2.21/POSIX
-    - path: /usr/share/doc/bash-5.2.21/RBASH
-    - path: /usr/share/doc/bash-5.2.21/README
-    - path: /usr/share/doc/bash-5.2.21/bash.html
-    - path: /usr/share/doc/bash-5.2.21/bashref.html
-  locale:
-    files:
-    - path: /usr/share/locale/af/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/bg/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/ca/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/cs/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/da/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/de/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/el/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/en@boldquot/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/en@quot/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/eo/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/es/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/et/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/fi/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/fr/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/ga/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/gl/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/hr/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/hu/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/id/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/it/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/ja/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/ko/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/lt/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/nb/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/nl/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/pl/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/pt/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/pt_BR/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/ro/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/ru/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/sk/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/sl/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/sr/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/sv/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/tr/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/uk/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/vi/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/zh_CN/LC_MESSAGES/bash.mo
-    - path: /usr/share/locale/zh_TW/LC_MESSAGES/bash.mo
+    - path: /usr/bin/bash
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+    - path: /usr/bin/bashbug
+    - path: /usr/bin/sh
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+
   dev:
     files:
     - path: /usr/include/bash/alias.h
@@ -212,14 +181,25 @@ outputs:
     - path: /usr/include/bash/xmalloc.h
     - path: /usr/include/bash/y.tab.h
     - path: /usr/lib/pkgconfig/bash.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/bash-5.2.21/CHANGES
+    - path: /usr/share/doc/bash-5.2.21/COMPAT
+    - path: /usr/share/doc/bash-5.2.21/FAQ
+    - path: /usr/share/doc/bash-5.2.21/INTRO
+    - path: /usr/share/doc/bash-5.2.21/NEWS
+    - path: /usr/share/doc/bash-5.2.21/POSIX
+    - path: /usr/share/doc/bash-5.2.21/RBASH
+    - path: /usr/share/doc/bash-5.2.21/README
+    - path: /usr/share/doc/bash-5.2.21/bash.html
+    - path: /usr/share/doc/bash-5.2.21/bashref.html
+
   info:
     files:
     - path: /usr/share/info/bash.info
     - path: /usr/share/info/dir
-  man:
-    files:
-    - path: /usr/share/man/man1/bash.1
-    - path: /usr/share/man/man1/bashbug.1
+
   lib:
     files:
     - path: /usr/lib/bash/Makefile.inc
@@ -331,21 +311,55 @@ outputs:
     - path: /usr/lib/bash/whoami
       needs:
       - /usr/lib/libc.so.6
-  bin:
+
+  locale:
     files:
-    - path: /usr/bin/bash
-      needs:
-      - /usr/lib/libncursesw.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/bin/bashbug
-    - path: /usr/bin/sh
-      needs:
-      - /usr/lib/libncursesw.so.6
-      - /usr/lib/libc.so.6
-      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/share/locale/af/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/bg/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/en@boldquot/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/en@quot/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/et/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ga/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/lt/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/sl/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/bash.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/bash.1
+    - path: /usr/share/man/man1/bashbug.1
 
 resolution:
-  /usr/lib/libc.so.6: glibc
   /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
   /usr/lib/libncursesw.so.6: ncurses
