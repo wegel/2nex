@@ -406,7 +406,7 @@ fn load_and_validate_manifest(
 
     // validate output/bundle exists
     match &pkg_ref.ref_type {
-        RefType::Output { name } => {
+        RefType::Output { name, .. } => {
             if !manifest.outputs.contains_key(name) {
                 return Err(io::Error::new(
                     io::ErrorKind::NotFound,
@@ -418,7 +418,7 @@ fn load_and_validate_manifest(
                 ));
             }
         }
-        RefType::Bundle { name } => {
+        RefType::Bundle { name, .. } => {
             if !manifest.bundles.contains_key(name) {
                 return Err(io::Error::new(
                     io::ErrorKind::NotFound,

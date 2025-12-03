@@ -640,39 +640,23 @@ fn refresh_bundle_branches(
     Ok(())
 }
 
-// parse commit ref to extract slug, version, and namespace
-// format: x86_64/{namespace}/{slug}/{version}/outputs/{output} or .../bundles/{bundle}
-
 // find manifest file for a given commit reference
 fn find_manifest_for_commit(commit: &str, manifest_dirs: &[PathBuf]) -> io::Result<PathBuf> {
-    // parse commit: x86_64/{namespace}/{slug}/{version}/...
-    // namespace can be multi-part like "pkg/bootstrap/phase3"
-    let parts: Vec<&str> = commit.split('/').collect();
-    let boundary = parts
-        .iter()
-        .position(|part| *part == "outputs" || *part == "bundles")
-        .ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("Invalid commit reference format: {}", commit),
-            )
-        })?;
+    use crate::refs::PackageRef;
 
-    if boundary < 3 {
-        return Err(io::Error::new(
+    let pkg_ref = PackageRef::parse(commit).map_err(|e| {
+        io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("Invalid commit reference format: {}", commit),
-        ));
-    }
+            format!("Invalid commit reference format: {} ({})", commit, e),
+        )
+    })?;
 
-    let slug = parts[boundary - 2];
-    let _version = parts[boundary - 1];
-    // namespace is everything after arch and before slug/version
-    let namespace = parts[1..boundary - 2].join("/");
+    let slug = &pkg_ref.slug;
+    let namespace = &pkg_ref.namespace;
 
     // search in manifest directories
     for base_dir in manifest_dirs {
-        let mut namespace_paths = vec![base_dir.join(&namespace)];
+        let mut namespace_paths = vec![base_dir.join(namespace)];
         if namespace.starts_with("pkg/") && base_dir.ends_with("pkg") {
             namespace_paths.push(base_dir.join(namespace.trim_start_matches("pkg/")));
         }

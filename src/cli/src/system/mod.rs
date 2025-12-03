@@ -371,15 +371,23 @@ pub fn materialize_nex_structure(
     let mut installed_packages: HashMap<String, String> = HashMap::new();
 
     for pkg in packages {
+        use crate::refs::PackageRef;
+
         // parse the commit ref to get package info
-        // format: x86_64/<namespace>/<slug>/<version>/outputs/<output> or .../bundles/<bundle>
-        let (namespace, slug, version) = match parse_package_commit(&pkg.commit) {
-            Some(info) => info,
-            None => {
-                eprintln!("Warning: could not parse package commit: {}", pkg.commit);
+        let pkg_ref = match PackageRef::parse(&pkg.commit) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("Warning: could not parse package commit {}: {}", pkg.commit, e);
                 continue;
             }
         };
+
+        let namespace = &pkg_ref.namespace;
+        let slug = &pkg_ref.slug;
+        let version = &pkg_ref.version;
+
+        // use commit_ref() for metadata lookup (strips internal path if present)
+        let base_commit = pkg_ref.commit_ref();
 
         // check if this is a kernel output (boot or modules) - these need special handling
         let is_boot_output = pkg.commit.contains("/outputs/boot");
@@ -399,10 +407,11 @@ pub fn materialize_nex_structure(
         }
 
         // use manifest hash to group outputs from the same build together
-        let manifest_hash = get_commit_metadata(repo_path, &pkg.commit, "nex.manifest.hash")
+        // use base_commit (without internal path) for metadata lookup
+        let manifest_hash = get_commit_metadata(repo_path, &base_commit, "nex.manifest.hash")
             .unwrap_or_else(|_| {
                 // fallback to commit hash if no manifest hash
-                get_commit_id(repo_path, &pkg.commit).unwrap_or_default()
+                get_commit_id(repo_path, &base_commit).unwrap_or_default()
             });
         let short_hash = &manifest_hash[..8.min(manifest_hash.len())];
 
@@ -417,7 +426,7 @@ pub fn materialize_nex_structure(
             );
         } else {
             println!("Installing package: {}/{}/{}", namespace, slug, version);
-            println!("  Using manifest hash: {} ({})", pkg.commit, short_hash);
+            println!("  Using manifest hash: {} ({})", base_commit, short_hash);
         }
 
         let (install_ref, checksum) = (pkg.commit.clone(), short_hash.to_string());
@@ -581,38 +590,6 @@ fn create_file_symlinks_recursive(
         }
     }
     Ok(())
-}
-
-/// Parse a package commit ref to extract namespace, slug, and version.
-/// Format: x86_64/pkg/<namespace>/<slug>/<version>/outputs/<output>
-/// or: x86_64/pkg/<namespace>/<slug>/<version>/bundles/<bundle>
-/// Returns namespace WITHOUT the leading "pkg/" prefix (since nex_pkg_dir already has it).
-fn parse_package_commit(commit: &str) -> Option<(String, String, String)> {
-    let parts: Vec<&str> = commit.split('/').collect();
-
-    // find the boundary (outputs or bundles)
-    let boundary = parts
-        .iter()
-        .position(|part| *part == "outputs" || *part == "bundles" || *part == "deploy")?;
-
-    if boundary < 4 {
-        return None;
-    }
-
-    // namespace is everything between "pkg" (index 1) and slug/version
-    // skip the "pkg/" prefix since it's already in nex_pkg_dir
-    let namespace_parts = &parts[1..boundary - 2];
-    let namespace = if namespace_parts.first() == Some(&"pkg") {
-        // skip the leading "pkg/"
-        namespace_parts[1..].join("/")
-    } else {
-        namespace_parts.join("/")
-    };
-
-    let slug = parts[boundary - 2].to_string();
-    let version = parts[boundary - 1].to_string();
-
-    Some((namespace, slug, version))
 }
 
 /// Install nex-ld-shim at /lib64/ld-linux-x86-64.so.2 from the packaged bundle.

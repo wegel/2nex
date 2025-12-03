@@ -12,7 +12,7 @@ use super::types::{MaterializeRequest, RuntimeClosure};
 ///
 /// This is the primary resolution method. It reads deps from:
 /// - manifest FileEntry.needs (list of file paths)
-/// - manifest resolution map (file_path -> dependency_name or @self)
+/// - manifest resolution map (file_path -> dependency_name or self)
 ///
 /// No ELF scanning needed at install time.
 pub fn resolve_runtime_deps_precomputed(
@@ -98,8 +98,8 @@ pub fn resolve_runtime_deps_precomputed(
                         }
                     };
 
-                    // skip @self entries - internal libs don't need resolution
-                    if dep_name == "@self" {
+                    // skip self entries - internal libs don't need resolution
+                    if dep_name == "self" {
                         continue;
                     }
 
@@ -193,34 +193,10 @@ fn find_manifest_for_commit<'a>(
     commit: &str,
     index: &'a ManifestIndex,
 ) -> Option<&'a crate::manifest::types::Manifest> {
-    // parse commit: x86_64/pkg/namespace/slug/version/outputs/name
-    let parts: Vec<&str> = commit.split('/').collect();
+    use crate::refs::PackageRef;
 
-    // find "pkg" position
-    let pkg_idx = parts.iter().position(|&p| p == "pkg")?;
-
-    // find "outputs" or "bundles" position
-    let end_idx = parts
-        .iter()
-        .position(|&p| p == "outputs" || p == "bundles")?;
-
-    if end_idx <= pkg_idx + 2 {
-        return None;
-    }
-
-    // namespace is everything between pkg and version (version is second-to-last before outputs)
-    // e.g., pkg/libs/system/glibc/2.39/outputs/lib -> namespace="libs/system", slug="glibc"
-    let version_idx = end_idx - 1;
-    let slug_idx = version_idx - 1;
-
-    if slug_idx <= pkg_idx {
-        return None;
-    }
-
-    let namespace = parts[pkg_idx + 1..slug_idx].join("/");
-    let slug = parts[slug_idx];
-
-    index.get_manifest(&namespace, slug)
+    let pkg_ref = PackageRef::parse(commit).ok()?;
+    index.get_manifest(&pkg_ref.namespace, &pkg_ref.slug)
 }
 
 /// Result of resolving a dependency to a commit.

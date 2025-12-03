@@ -18,10 +18,10 @@ pub struct PackageRef {
 /// the type component of a package reference.
 #[derive(Debug, Clone, PartialEq)]
 pub enum RefType {
-    /// a specific output (e.g., `outputs/bin`)
-    Output { name: String },
-    /// a bundle of outputs (e.g., `bundles/full`)
-    Bundle { name: String },
+    /// a specific output (e.g., `outputs/bin` or `outputs/bin/usr/bin/foo`)
+    Output { name: String, path: Option<String> },
+    /// a bundle of outputs (e.g., `bundles/full` or `bundles/full/usr/bin/foo`)
+    Bundle { name: String, path: Option<String> },
     /// the files tree, optionally with a path (e.g., `files` or `files/usr/bin/foo`)
     Files { path: Option<String> },
 }
@@ -77,14 +77,24 @@ impl PackageRef {
                     .get(anchor_idx + 1)
                     .ok_or_else(|| format!("outputs requires a name: {}", s))?
                     .to_string();
-                RefType::Output { name }
+                let path = if anchor_idx + 2 < parts.len() {
+                    Some(parts[anchor_idx + 2..].join("/"))
+                } else {
+                    None
+                };
+                RefType::Output { name, path }
             }
             "bundles" => {
                 let name = parts
                     .get(anchor_idx + 1)
                     .ok_or_else(|| format!("bundles requires a name: {}", s))?
                     .to_string();
-                RefType::Bundle { name }
+                let path = if anchor_idx + 2 < parts.len() {
+                    Some(parts[anchor_idx + 2..].join("/"))
+                } else {
+                    None
+                };
+                RefType::Bundle { name, path }
             }
             "files" => {
                 let path = if anchor_idx + 1 < parts.len() {
@@ -114,10 +124,35 @@ impl PackageRef {
         );
 
         match &self.ref_type {
-            RefType::Output { name } => format!("{}/outputs/{}", base, name),
-            RefType::Bundle { name } => format!("{}/bundles/{}", base, name),
+            RefType::Output { name, path: None } => format!("{}/outputs/{}", base, name),
+            RefType::Output { name, path: Some(p) } => format!("{}/outputs/{}/{}", base, name, p),
+            RefType::Bundle { name, path: None } => format!("{}/bundles/{}", base, name),
+            RefType::Bundle { name, path: Some(p) } => format!("{}/bundles/{}/{}", base, name, p),
             RefType::Files { path: None } => format!("{}/files", base),
             RefType::Files { path: Some(p) } => format!("{}/files/{}", base, p),
+        }
+    }
+
+    /// get the commit ref (without internal path).
+    pub fn commit_ref(&self) -> String {
+        let base = format!(
+            "{}/pkg/{}/{}/{}",
+            self.arch, self.namespace, self.slug, self.version
+        );
+
+        match &self.ref_type {
+            RefType::Output { name, .. } => format!("{}/outputs/{}", base, name),
+            RefType::Bundle { name, .. } => format!("{}/bundles/{}", base, name),
+            RefType::Files { .. } => format!("{}/files", base),
+        }
+    }
+
+    /// get the internal path (if any).
+    pub fn internal_path(&self) -> Option<&str> {
+        match &self.ref_type {
+            RefType::Output { path, .. } => path.as_deref(),
+            RefType::Bundle { path, .. } => path.as_deref(),
+            RefType::Files { path } => path.as_deref(),
         }
     }
 
@@ -129,8 +164,8 @@ impl PackageRef {
     /// get the output or bundle name, if applicable.
     pub fn output_name(&self) -> Option<&str> {
         match &self.ref_type {
-            RefType::Output { name } => Some(name),
-            RefType::Bundle { name } => Some(name),
+            RefType::Output { name, .. } => Some(name),
+            RefType::Bundle { name, .. } => Some(name),
             RefType::Files { .. } => None,
         }
     }
@@ -140,12 +175,9 @@ impl PackageRef {
         matches!(self.ref_type, RefType::Files { .. })
     }
 
-    /// get the file path for files refs with paths.
-    pub fn file_path(&self) -> Option<&str> {
-        match &self.ref_type {
-            RefType::Files { path: Some(p) } => Some(p),
-            _ => None,
-        }
+    /// check if this ref has an internal path (needs partial extraction).
+    pub fn has_internal_path(&self) -> bool {
+        self.internal_path().is_some()
     }
 }
 
@@ -169,9 +201,26 @@ mod tests {
         assert_eq!(
             r.ref_type,
             RefType::Output {
-                name: "bin".to_string()
+                name: "bin".to_string(),
+                path: None
             }
         );
+        assert_eq!(r.commit_ref(), "x86_64/pkg/libs/compression/bzip2/1.0.8/outputs/bin");
+        assert_eq!(r.internal_path(), None);
+    }
+
+    #[test]
+    fn test_parse_output_with_path() {
+        let r = PackageRef::parse("x86_64/pkg/libs/compression/bzip2/1.0.8/outputs/bin/usr/bin/bzip2").unwrap();
+        assert_eq!(
+            r.ref_type,
+            RefType::Output {
+                name: "bin".to_string(),
+                path: Some("usr/bin/bzip2".to_string())
+            }
+        );
+        assert_eq!(r.commit_ref(), "x86_64/pkg/libs/compression/bzip2/1.0.8/outputs/bin");
+        assert_eq!(r.internal_path(), Some("usr/bin/bzip2"));
     }
 
     #[test]
@@ -183,15 +232,31 @@ mod tests {
         assert_eq!(
             r.ref_type,
             RefType::Bundle {
-                name: "full".to_string()
+                name: "full".to_string(),
+                path: None
             }
         );
+    }
+
+    #[test]
+    fn test_parse_bundle_with_path() {
+        let r = PackageRef::parse("x86_64/pkg/cli/editors/neovim/0.11.0/bundles/full/usr/bin/nvim").unwrap();
+        assert_eq!(
+            r.ref_type,
+            RefType::Bundle {
+                name: "full".to_string(),
+                path: Some("usr/bin/nvim".to_string())
+            }
+        );
+        assert_eq!(r.commit_ref(), "x86_64/pkg/cli/editors/neovim/0.11.0/bundles/full");
+        assert_eq!(r.internal_path(), Some("usr/bin/nvim"));
     }
 
     #[test]
     fn test_parse_files_ref() {
         let r = PackageRef::parse("x86_64/pkg/libs/compression/bzip2/1.0.8/files").unwrap();
         assert_eq!(r.ref_type, RefType::Files { path: None });
+        assert_eq!(r.commit_ref(), "x86_64/pkg/libs/compression/bzip2/1.0.8/files");
     }
 
     #[test]
@@ -204,6 +269,8 @@ mod tests {
                 path: Some("usr/bin/bzip2".to_string())
             }
         );
+        assert_eq!(r.commit_ref(), "x86_64/pkg/libs/compression/bzip2/1.0.8/files");
+        assert_eq!(r.internal_path(), Some("usr/bin/bzip2"));
     }
 
     #[test]
@@ -219,7 +286,9 @@ mod tests {
     fn test_roundtrip() {
         let refs = [
             "x86_64/pkg/libs/compression/bzip2/1.0.8/outputs/bin",
+            "x86_64/pkg/libs/compression/bzip2/1.0.8/outputs/bin/usr/bin/bzip2",
             "x86_64/pkg/cli/editors/neovim/0.11.0/bundles/full",
+            "x86_64/pkg/cli/editors/neovim/0.11.0/bundles/full/usr/bin/nvim",
             "x86_64/pkg/libs/system/glibc/2.39/files",
             "x86_64/pkg/libs/system/glibc/2.39/files/usr/lib/libc.so.6",
         ];

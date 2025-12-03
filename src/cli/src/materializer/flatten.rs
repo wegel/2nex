@@ -6,7 +6,7 @@
 //! Dependencies are resolved transitively: if binary A needs libB.so, and libB.so
 //! needs libC.so, we flatten both libB.so and libC.so into A's capsule.
 //!
-//! The resolution map points file paths to dependency names (or @self for internal).
+//! The resolution map points file paths to dependency names (or self for internal).
 //! The files commit is derived from the dependency's manifest.
 
 use std::collections::{HashMap, HashSet};
@@ -42,7 +42,7 @@ pub fn flatten_capsule_precomputed(
         }
     };
 
-    // get the current package's files commit for @self libs
+    // get the current package's files commit for self libs
     let self_files_commit = derive_files_commit_for_manifest(manifest);
 
     // extract output type and name from commit
@@ -68,10 +68,10 @@ pub fn flatten_capsule_precomputed(
         detect_outputs_in_capsule(pkg_dir, manifest)
     };
 
-    // collect all needed libs (both external deps and @self libs)
-    // for @self libs, we flatten from own {checksum}/files commit
+    // collect all needed libs (both external deps and self libs)
+    // for self libs, we flatten from own {checksum}/files commit
     // for external deps, we resolve transitively
-    let mut self_libs: Vec<String> = Vec::new(); // file paths for @self libs
+    let mut self_libs: Vec<String> = Vec::new(); // file paths for self libs
     let mut external_deps: Vec<(String, String)> = Vec::new(); // (file_path, dep_name)
 
     for output_name in &output_names {
@@ -82,8 +82,8 @@ pub fn flatten_capsule_precomputed(
         for file_entry in &output_spec.files {
             for needed_file in &file_entry.needs {
                 if let Some(dep_name) = manifest.resolution.get(needed_file) {
-                    if dep_name == "@self" {
-                        // @self lib - flatten from own package's files commit
+                    if dep_name == "self" {
+                        // self lib - flatten from own package's files commit
                         self_libs.push(needed_file.clone());
                     } else {
                         // external dependency - resolve transitively
@@ -94,13 +94,13 @@ pub fn flatten_capsule_precomputed(
         }
     }
 
-    // also collect transitive deps from @self libs
-    // (e.g., if libmount.so needs libblkid.so which is also @self)
+    // also collect transitive deps from self libs
+    // (e.g., if libmount.so needs libblkid.so which is also self)
     for self_lib in &self_libs {
         let needs = find_file_needs(self_lib, manifest);
         for needed_file in needs {
             if let Some(dep_name) = manifest.resolution.get(&needed_file) {
-                if dep_name == "@self" {
+                if dep_name == "self" {
                     if !self_libs.contains(&needed_file) {
                         // will be handled by dedup below
                     }
@@ -120,7 +120,7 @@ pub fn flatten_capsule_precomputed(
 
     let mut flattened_count = 0;
 
-    // flatten @self libs from own package's files commit
+    // flatten self libs from own package's files commit
     if let Some(ref self_commit) = self_files_commit {
         for lib_path in &self_libs {
             if flatten_library_from_commit(
@@ -218,8 +218,8 @@ fn resolve_transitive_deps(
             if seen_files.insert(needed_file.clone()) {
                 // resolve using dependency manifest's resolution map
                 if let Some(transitive_dep_name) = dep_manifest.resolution.get(&needed_file) {
-                    // skip @self entries
-                    if transitive_dep_name != "@self" {
+                    // skip self entries
+                    if transitive_dep_name != "self" {
                         queue.push((needed_file, transitive_dep_name.clone(), dep_manifest));
                     }
                 }
@@ -241,7 +241,7 @@ fn find_dependency_by_name<'a>(
         .find(|d| d.name.as_deref() == Some(name))
 }
 
-/// Derive the files commit for the current manifest (for @self libs).
+/// Derive the files commit for the current manifest (for self libs).
 /// Uses {checksum}/files for stable checksums, {git_blob_sha}/files for bootstrap packages.
 fn derive_files_commit_for_manifest(manifest: &crate::manifest::types::Manifest) -> Option<String> {
     let has_stable_checksum =
@@ -361,27 +361,10 @@ fn find_manifest_for_commit<'a>(
     commit: &str,
     index: &'a ManifestIndex,
 ) -> Option<&'a crate::manifest::types::Manifest> {
-    let parts: Vec<&str> = commit.split('/').collect();
-    let pkg_idx = parts.iter().position(|&p| p == "pkg")?;
-    let end_idx = parts
-        .iter()
-        .position(|&p| p == "outputs" || p == "bundles")?;
+    use crate::refs::PackageRef;
 
-    if end_idx <= pkg_idx + 2 {
-        return None;
-    }
-
-    let version_idx = end_idx - 1;
-    let slug_idx = version_idx - 1;
-
-    if slug_idx <= pkg_idx {
-        return None;
-    }
-
-    let namespace = parts[pkg_idx + 1..slug_idx].join("/");
-    let slug = parts[slug_idx];
-
-    index.get_manifest(&namespace, slug)
+    let pkg_ref = PackageRef::parse(commit).ok()?;
+    index.get_manifest(&pkg_ref.namespace, &pkg_ref.slug)
 }
 
 /// Flatten a single library from a store commit into a package's lib/ directory.

@@ -84,37 +84,27 @@ fn fetch_deps_from_manifest(
     commit: &str,
     manifest_index: &ManifestIndex,
 ) -> io::Result<Vec<String>> {
-    // parse commit: x86_64/pkg/namespace/slug/version/outputs/name or .../bundles/name
-    let parts: Vec<&str> = commit.split('/').collect();
+    use crate::refs::{PackageRef, RefType};
 
-    // find "pkg" position
-    let pkg_idx = match parts.iter().position(|&p| p == "pkg") {
-        Some(idx) => idx,
-        None => return Ok(Vec::new()), // not a package commit, no deps
+    let pkg_ref = match PackageRef::parse(commit) {
+        Ok(r) => r,
+        Err(_) => return Ok(Vec::new()), // not a valid package ref, no deps
     };
 
-    // find "outputs" or "bundles" position
-    let end_idx = match parts.iter().position(|&p| p == "outputs" || p == "bundles") {
-        Some(idx) => idx,
-        None => return Ok(Vec::new()), // malformed commit ref
-    };
-
-    if end_idx <= pkg_idx + 2 {
-        return Ok(Vec::new()); // not enough parts
-    }
-
-    // extract namespace, slug, version
-    let version_idx = end_idx - 1;
-    let slug_idx = version_idx - 1;
-
-    if slug_idx <= pkg_idx {
+    // files refs don't have runtime deps to resolve (they're raw file extractions)
+    if pkg_ref.is_files() {
         return Ok(Vec::new());
     }
 
-    let namespace = parts[pkg_idx + 1..slug_idx].join("/");
-    let slug = parts[slug_idx];
-    let commit_type = parts.get(end_idx).copied().unwrap_or("");
-    let commit_name = parts.get(end_idx + 1).copied().unwrap_or("");
+    let namespace = &pkg_ref.namespace;
+    let slug = &pkg_ref.slug;
+
+    // get output/bundle name based on ref type
+    let (commit_type, commit_name) = match &pkg_ref.ref_type {
+        RefType::Output { name, .. } => ("outputs", name.as_str()),
+        RefType::Bundle { name, .. } => ("bundles", name.as_str()),
+        RefType::Files { .. } => return Ok(Vec::new()),
+    };
 
     // find manifest
     let manifest = match manifest_index.get_manifest(&namespace, slug) {
