@@ -529,6 +529,7 @@ fn build_package_to_user_repo(
         verbose: false,
         record_profile: false,
         no_progress: false,
+        multi_progress: None,
     };
 
     build::build_single(&opts)

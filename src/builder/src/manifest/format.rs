@@ -109,7 +109,15 @@ fn format_package(value: &Value) -> io::Result<String> {
     for field in fields {
         let key = Value::String(field.to_string());
         if let Some(val) = mapping.get(&key) {
-            output.push_str(&format!("  {}: {}\n", field, format_scalar(val)));
+            // version is always a string, never quote it even if it looks like a number
+            let formatted = if field == "version" {
+                val.as_str()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| format_scalar(val))
+            } else {
+                format_scalar(val)
+            };
+            output.push_str(&format!("  {}: {}\n", field, formatted));
         }
     }
 
@@ -139,7 +147,15 @@ fn format_system(value: &Value) -> io::Result<String> {
     for field in fields {
         let key = Value::String(field.to_string());
         if let Some(val) = mapping.get(&key) {
-            output.push_str(&format!("  {}: {}\n", field, format_scalar(val)));
+            // version is always a string, never quote it even if it looks like a number
+            let formatted = if field == "version" {
+                val.as_str()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| format_scalar(val))
+            } else {
+                format_scalar(val)
+            };
+            output.push_str(&format!("  {}: {}\n", field, formatted));
         }
     }
 

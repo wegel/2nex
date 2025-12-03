@@ -87,15 +87,17 @@ impl Default for BuildProgressConfig {
 pub struct ProgressResult {
     /// new profile if one was recorded (each element is "bytes:time_ms")
     pub new_profile: Option<Vec<String>>,
-    /// total bytes of stdout processed
+    /// total bytes of output processed
     pub total_bytes: u64,
+    /// captured output for error display (only populated if not verbose)
+    pub captured_output: Option<Vec<u8>>,
 }
 
-/// run a build with progress tracking, consuming stdout
+/// run a build with progress tracking, consuming combined stdout+stderr
 ///
 /// returns the new profile if one was recorded (only when record_profile is true)
 pub fn run_with_progress<R: Read + Send + 'static>(
-    stdout: R,
+    output: R,
     config: &BuildProgressConfig,
 ) -> io::Result<ProgressResult> {
     let should_record = config.record_profile;
@@ -111,7 +113,7 @@ pub fn run_with_progress<R: Read + Send + 'static>(
     // only actually record if --record-profile was requested
     if config.profile.is_empty() || should_record {
         run_recording(
-            stdout,
+            output,
             display_mode,
             package_name,
             &config.multi_progress,
@@ -121,7 +123,7 @@ pub fn run_with_progress<R: Read + Send + 'static>(
         // playback mode - use existing profile
         match BuildProfile::parse(&config.profile) {
             Ok(profile) => run_playback(
-                stdout,
+                output,
                 profile,
                 display_mode,
                 package_name,
@@ -134,7 +136,7 @@ pub fn run_with_progress<R: Read + Send + 'static>(
                     e
                 );
                 run_recording(
-                    stdout,
+                    output,
                     display_mode,
                     package_name,
                     &config.multi_progress,
@@ -158,17 +160,32 @@ fn run_recording<R: Read + Send + 'static>(
     };
 
     let mut recorder = ProfileRecorder::new();
-    let reader = BufReader::new(stdout);
+    let mut reader = BufReader::new(stdout);
     let mut total_bytes = 0u64;
+    let mut line_buf = Vec::new();
+    let capture = !matches!(mode, DisplayMode::Verbose);
+    let mut captured: Vec<u8> = Vec::new();
 
-    for line_result in reader.lines() {
-        let line = line_result?;
-        let bytes = (line.len() + 1) as u64; // +1 for newline
-        total_bytes += bytes;
+    // read lines as bytes to handle non-UTF-8 output (eg progress bars with \r)
+    loop {
+        line_buf.clear();
+        let bytes_read = reader.read_until(b'\n', &mut line_buf)?;
+        if bytes_read == 0 {
+            break;
+        }
+        total_bytes += bytes_read as u64;
+
+        if capture {
+            captured.extend_from_slice(&line_buf);
+        }
+
+        // convert to string lossily (replaces invalid UTF-8 with replacement char)
+        let line = String::from_utf8_lossy(&line_buf);
+        let line = line.trim_end_matches('\n').trim_end_matches('\r');
 
         recorder.record_bytes(total_bytes);
         display.update(&ProgressState::Indeterminate { bytes: total_bytes });
-        display.print_stdout(&line);
+        display.print_stdout(line);
     }
 
     display.finish();
@@ -183,6 +200,7 @@ fn run_recording<R: Read + Send + 'static>(
     Ok(ProgressResult {
         new_profile,
         total_bytes,
+        captured_output: if capture { Some(captured) } else { None },
     })
 }
 
@@ -216,17 +234,30 @@ fn run_playback<R: Read + Send + 'static>(
         })
     };
 
-    // read stdout in main thread
-    let reader = BufReader::new(stdout);
+    // read output in main thread (as bytes to handle non-UTF-8)
+    let mut reader = BufReader::new(stdout);
     let mut total_bytes = 0u64;
+    let mut line_buf = Vec::new();
+    let capture = !matches!(mode, DisplayMode::Verbose);
+    let mut captured: Vec<u8> = Vec::new();
 
-    for line_result in reader.lines() {
-        let line = line_result?;
-        let bytes = (line.len() + 1) as u64;
-        total_bytes += bytes;
+    loop {
+        line_buf.clear();
+        let bytes_read = reader.read_until(b'\n', &mut line_buf)?;
+        if bytes_read == 0 {
+            break;
+        }
+        total_bytes += bytes_read as u64;
 
-        tracker.add_bytes(bytes);
-        display.print_stdout(&line);
+        if capture {
+            captured.extend_from_slice(&line_buf);
+        }
+
+        let line = String::from_utf8_lossy(&line_buf);
+        let line = line.trim_end_matches('\n').trim_end_matches('\r');
+
+        tracker.add_bytes(bytes_read as u64);
+        display.print_stdout(line);
     }
 
     // signal display thread to stop
@@ -238,5 +269,6 @@ fn run_playback<R: Read + Send + 'static>(
     Ok(ProgressResult {
         new_profile: None,
         total_bytes,
+        captured_output: if capture { Some(captured) } else { None },
     })
 }

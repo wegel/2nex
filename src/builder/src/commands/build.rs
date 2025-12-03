@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use clap::Args;
+use indicatif::MultiProgress;
 
 #[derive(Args)]
 pub struct BuildArgs {
@@ -115,6 +118,8 @@ pub struct BuildOpts {
     pub verbose: bool,
     pub record_profile: bool,
     pub no_progress: bool,
+    /// shared MultiProgress for parallel builds (None for single builds)
+    pub multi_progress: Option<Arc<MultiProgress>>,
 }
 
 impl BuildOpts {
@@ -135,6 +140,7 @@ impl BuildOpts {
             verbose: args.verbose,
             record_profile: args.record_profile,
             no_progress: args.no_progress,
+            multi_progress: None,
         }
     }
 }

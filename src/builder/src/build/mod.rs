@@ -437,7 +437,7 @@ pub fn run_build_script_with_progress(
             fi
 
             chmod +x {build_dir}/2nex/tmp/build_script.sh
-            unshare --root={build_dir} /2nex/tmp/build_script.sh
+            unshare --root={build_dir} /2nex/tmp/build_script.sh 2>&1
             "#,
             build_dir = build_dir_str
         )
@@ -451,21 +451,11 @@ pub fn run_build_script_with_progress(
     let mut command = Command::new("unshare");
     command.args(&command_args).envs(&env);
 
-    // configure stdout/stderr based on progress config
-    // when no profile exists, show all output since we can't show meaningful progress
-    let show_output = progress_config
-        .map(|c| c.verbose || c.profile.is_empty())
-        .unwrap_or(true);
-
+    // always pipe stdout (which includes stderr via 2>&1 in launch_script)
+    // we capture everything and only display on verbose or error
     if progress_config.is_some() {
         command.stdout(Stdio::piped());
-        if show_output {
-            // show output mode: stderr goes to terminal
-            command.stderr(Stdio::inherit());
-        } else {
-            // quiet mode: capture stderr for clean progress bar
-            command.stderr(Stdio::piped());
-        }
+        command.stderr(Stdio::piped()); // capture any stderr that escapes 2>&1
     }
 
     println!(
@@ -475,33 +465,38 @@ pub fn run_build_script_with_progress(
     let mut child = command.spawn()?;
 
     // handle progress tracking if configured
-    let (new_profile, captured_stderr) = if let Some(config) = progress_config {
+    let (new_profile, captured_output) = if let Some(config) = progress_config {
         let stdout = child
             .stdout
             .take()
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "failed to capture stdout"))?;
 
-        // capture stderr in a separate thread if in quiet mode (has profile, not verbose)
-        let stderr_handle = if !show_output {
-            let stderr = child.stderr.take();
-            stderr.map(|stderr| {
-                std::thread::spawn(move || {
-                    let mut buf = Vec::new();
-                    let mut reader = std::io::BufReader::new(stderr);
-                    let _ = std::io::Read::read_to_end(&mut reader, &mut buf);
-                    buf
-                })
+        // capture any escaped stderr in background (shouldn't be much due to 2>&1)
+        let stderr_handle = child.stderr.take().map(|stderr| {
+            std::thread::spawn(move || {
+                let mut buf = Vec::new();
+                let mut reader = std::io::BufReader::new(stderr);
+                let _ = std::io::Read::read_to_end(&mut reader, &mut buf);
+                buf
             })
-        } else {
-            None
-        };
+        });
 
         let result = progress::run_with_progress(stdout, config)?;
 
-        // collect stderr if we captured it
-        let stderr_output = stderr_handle.and_then(|h| h.join().ok());
+        // combine captured output from progress tracking with any escaped stderr
+        let mut output = result.captured_output.unwrap_or_default();
+        if let Some(stderr) = stderr_handle.and_then(|h| h.join().ok()) {
+            output.extend(stderr);
+        }
 
-        (result.new_profile, stderr_output)
+        (
+            result.new_profile,
+            if output.is_empty() {
+                None
+            } else {
+                Some(output)
+            },
+        )
     } else {
         (None, None)
     };
@@ -511,12 +506,12 @@ pub fn run_build_script_with_progress(
     if result.success() {
         Ok(BuildScriptResult { new_profile })
     } else {
-        // show captured stderr on failure
-        if let Some(stderr) = captured_stderr {
-            if !stderr.is_empty() {
-                eprintln!("\n--- build stderr ---");
-                let _ = std::io::Write::write_all(&mut std::io::stderr(), &stderr);
-                eprintln!("--- end stderr ---\n");
+        // show captured output on failure
+        if let Some(output) = captured_output {
+            if !output.is_empty() {
+                eprintln!("\n--- build output ---");
+                let _ = std::io::Write::write_all(&mut std::io::stderr(), &output);
+                eprintln!("--- end output ---\n");
             }
         }
         Err(io::Error::new(io::ErrorKind::Other, "Build script failed"))
@@ -691,7 +686,10 @@ pub fn build_single(opts: &BuildOpts) -> io::Result<()> {
             if opts.refresh_metadata {
                 refresh_package_metadata(&opts.repo_path, &manifest, Path::new(&opts.manifest_file))
             } else {
-                println!("Building package: {}", manifest.package.slug);
+                println!(
+                    "Building package: {}/{}",
+                    manifest.package.namespace, manifest.package.slug
+                );
                 let build_dir = opts.build_dir.clone().unwrap_or_else(|| {
                     format!(
                         ".nex/tmp/build_rootfs_{}_{}",
@@ -761,6 +759,7 @@ pub fn build_package_manifest_with_dir(
         // only record if explicitly requested - never auto-modify manifest
         progress_config.record_profile = opts.record_profile;
         progress_config.profile = manifest.build.profile.clone();
+        progress_config.multi_progress = opts.multi_progress.clone();
         run_build_script_with_progress(
             &build_script,
             base_dir,

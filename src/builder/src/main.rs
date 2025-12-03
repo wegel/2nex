@@ -1095,6 +1095,9 @@ fn build_packages_parallel(
     // ensure tmp directory exists
     fs::create_dir_all(".nex/tmp")?;
 
+    // create shared MultiProgress for all parallel builds
+    let multi_progress = Arc::new(indicatif::MultiProgress::new());
+
     let total = build_order.len();
     let completed = Arc::new(Mutex::new(HashSet::new()));
     let build_counter = Arc::new(Mutex::new(0usize));
@@ -1209,6 +1212,7 @@ fn build_packages_parallel(
                             verbose: opts.verbose,
                             record_profile: opts.record_profile,
                             no_progress: opts.no_progress,
+                            multi_progress: Some(multi_progress.clone()),
                         };
 
                         println!(
@@ -1218,9 +1222,11 @@ fn build_packages_parallel(
 
                         // build the package
                         let slug = manifest.package.slug.clone();
-                        if let Err(e) =
-                            build_package_manifest_with_dir(&build_opts, &mut manifest, &build_dir)
-                        {
+                        if let Err(e) = crate::build::build_package_manifest_with_dir(
+                            &build_opts,
+                            &mut manifest,
+                            &build_dir,
+                        ) {
                             return Err(format!("Failed to build {}: {}", slug, e));
                         }
 
@@ -1257,6 +1263,7 @@ fn build_packages_parallel(
                             verbose: opts.verbose,
                             record_profile: opts.record_profile,
                             no_progress: opts.no_progress,
+                            multi_progress: Some(multi_progress.clone()),
                         };
 
                         println!(
@@ -1436,6 +1443,7 @@ fn add_missing_checksums_to_manifests(
                     verbose: opts.verbose,
                     record_profile: opts.record_profile,
                     no_progress: opts.no_progress,
+                    multi_progress: None,
                 };
 
                 build_package_manifest(&build_opts, &mut manifest_copy)?;
