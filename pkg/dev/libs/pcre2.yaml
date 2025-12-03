@@ -6,7 +6,7 @@ package:
   version: "10.44"
   description: Perl Compatible Regular Expressions (revised API)
   homepage: https://www.pcre.org/
-  checksum: 66e59574708d3918677237b7f63bedbbd72b7c35bc104e34d021453eeb7421f3
+  checksum: 58926018e82407ba835db33dc84d776dcb50d9c92705994ad7472fc2639bed1f
 
 sources:
 - name: pcre2
@@ -70,6 +70,12 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: file
+  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
+- name: strip-nondeterminism
+  commit: x86_64/pkg/bootstrap/phase3/strip-nondeterminism/1.13.0/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
 
 build:
   profile: [4096:3522, 8225:4556, 12345:11822, 16484:11828, 20737:11850, 29022:12076, 33166:12087, 41390:12148, 49582:12233, 50862:12248]
@@ -78,23 +84,20 @@ build:
     tar --no-same-owner -xf ${SOURCE_pcre2} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-    # Run autoconf to regenerate configure script
-    autoreconf -fi
-
-    # Configure with options from Buildroot
+    # configure (no autoreconf needed, source has configure)
     ./configure --prefix=/usr \
       --enable-pcre2-8 \
       --enable-pcre2-16 \
       --disable-pcre2-32 \
       --enable-jit
 
-    # Build
+    # build
     make ${MAKEFLAGS}
 
-    # Install
+    # install
     make DESTDIR="${OUT_DIR}" install
 
-    # Set consistent timestamps for reproducible builds
+    # set consistent timestamps for reproducible builds
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
     find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
     2nex_strip_binaries ${OUT_DIR}
@@ -119,7 +122,17 @@ outputs:
     files:
     - path: /usr/bin/pcre2-config
     - path: /usr/bin/pcre2test
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpcre2-8.so.0
+      - /usr/lib/libpcre2-16.so.0
+      - /usr/lib/libpcre2-posix.so.3
     - path: /usr/bin/pcre2grep
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpcre2-8.so.0
 
   dev:
     files:
@@ -248,14 +261,35 @@ outputs:
   lib:
     files:
     - path: /usr/lib/libpcre2-8.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/libpcre2-8.so.0
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/libpcre2-8.so.0.13.0
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/libpcre2-16.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/libpcre2-16.so.0
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/libpcre2-16.so.0.13.0
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/libpcre2-posix.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpcre2-8.so.0
     - path: /usr/lib/libpcre2-posix.so.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpcre2-8.so.0
     - path: /usr/lib/libpcre2-posix.so.3.0.5
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpcre2-8.so.0
 
   man:
     files:
@@ -362,3 +396,10 @@ outputs:
     - path: /usr/lib/libpcre2-8.a
     - path: /usr/lib/libpcre2-16.a
     - path: /usr/lib/libpcre2-posix.a
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libpcre2-8.so.0: self
+  /usr/lib/libpcre2-16.so.0: self
+  /usr/lib/libpcre2-posix.so.3: self

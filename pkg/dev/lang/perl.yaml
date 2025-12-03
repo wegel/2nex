@@ -34,8 +34,6 @@ dependencies:
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: bzip2
   commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
-- name: bootstrap_tools
-  commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
 - name: xz
   commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
 - name: binutils
@@ -51,9 +49,11 @@ dependencies:
 - name: mpc
   commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
 - name: gcc
-  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: file
   commit: x86_64/pkg/bootstrap/phase1/file/5.45/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
 
 build:
   profile: [8208:1637, 29024:18849, 62583:24655, 108619:25977, 141986:26996, 175910:30065, 209106:37261, 262615:37576, 316128:42246, 347600:49793]
@@ -126,7 +126,17 @@ outputs:
     - path: /usr/bin/json_pp
     - path: /usr/bin/libnetcfg
     - path: /usr/bin/perl
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/perl5/5.38/core_perl/CORE/libperl.so
     - path: /usr/bin/perl5.38.2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/perl5/5.38/core_perl/CORE/libperl.so
     - path: /usr/bin/perlbug
     - path: /usr/bin/perldoc
     - path: /usr/bin/perlivp
@@ -201,6 +211,10 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/CORE/keywords.h
     - path: /usr/lib/perl5/5.38/core_perl/CORE/l1_char_class_tab.h
     - path: /usr/lib/perl5/5.38/core_perl/CORE/libperl.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/perl5/5.38/core_perl/CORE/malloc_ctl.h
     - path: /usr/lib/perl5/5.38/core_perl/CORE/metaconfig.h
     - path: /usr/lib/perl5/5.38/core_perl/CORE/mg.h
@@ -930,54 +944,166 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/_charnames.pm
     - path: /usr/lib/perl5/5.38/core_perl/attributes.pm
     - path: /usr/lib/perl5/5.38/core_perl/auto/B/B.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Compress/Raw/Bzip2/Bzip2.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Compress/Raw/Zlib/Zlib.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
     - path: /usr/lib/perl5/5.38/core_perl/auto/Cwd/Cwd.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Data/Dumper/Dumper.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Devel/Peek/Peek.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Digest/MD5/MD5.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Digest/SHA/SHA.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/Byte/Byte.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/CN/CN.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/EBCDIC/EBCDIC.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/Encode.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/JP/JP.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/KR/KR.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/Symbol/Symbol.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/TW/TW.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Encode/Unicode/Unicode.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Fcntl/Fcntl.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/File/DosGlob/DosGlob.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/File/Glob/Glob.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Filter/Util/Call/Call.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Hash/Util/FieldHash/FieldHash.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Hash/Util/Util.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/I18N/Langinfo/Langinfo.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/IO/IO.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/IPC/SysV/SysV.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/List/Util/Util.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/MIME/Base64/Base64.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Math/BigInt/FastCalc/FastCalc.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Opcode/Opcode.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/POSIX/POSIX.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/PerlIO/encoding/encoding.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/PerlIO/mmap/mmap.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/PerlIO/scalar/scalar.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/PerlIO/via/via.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/SDBM_File/SDBM_File.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Socket/Socket.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Storable/Storable.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Sys/Hostname/Hostname.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Sys/Syslog/Syslog.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Time/HiRes/HiRes.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Time/Piece/Piece.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Unicode/Collate/Collate.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/Unicode/Normalize/Normalize.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/attributes/attributes.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/mro/mro.so
+      needs:
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/re/re.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/threads/shared/shared.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/auto/threads/threads.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/lib/perl5/5.38/core_perl/autodie.pm
     - path: /usr/lib/perl5/5.38/core_perl/autodie/Scope/Guard.pm
     - path: /usr/lib/perl5/5.38/core_perl/autodie/Scope/GuardStack.pm
@@ -1809,3 +1935,11 @@ outputs:
     - path: /usr/lib/perl5/5.38/core_perl/vmsish.pm
     - path: /usr/lib/perl5/5.38/core_perl/warnings.pm
     - path: /usr/lib/perl5/5.38/core_perl/warnings/register.pm
+
+resolution:
+  /usr/lib/libbz2.so.1.0: bzip2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/perl5/5.38/core_perl/CORE/libperl.so: self
+  /usr/lib/libz.so.1: zlib
