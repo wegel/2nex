@@ -23,14 +23,15 @@ NC='\033[0m'
 log() { echo -e "${GREEN}===${NC} $1"; }
 error() { echo -e "${RED}ERROR:${NC} $1"; exit 1; }
 
-# check prerequisites
-[ -f "$BOOTLOADER" ] || error "bootloader not found. Build with: cd src/bootloader && cargo build"
+# build bootloader (ensures we test latest version)
+log "Building bootloader..."
+(cd "$ROOT_DIR/src/bootloader" && cargo build) || error "bootloader build failed"
 command -v mke2fs >/dev/null || error "mke2fs not found (install e2fsprogs)"
 command -v mcopy >/dev/null || error "mcopy not found (install mtools)"
 command -v qemu-system-x86_64 >/dev/null || error "qemu-system-x86_64 not found"
 command -v zub >/dev/null || error "zub not found"
 
-zub --repo="$REPO" refs | grep -q "$SYSTEM_REF" || \
+{ zub --repo="$REPO" refs 2>/dev/null || true; } | grep -q "$SYSTEM_REF" || \
     error "$SYSTEM_REF not found. Build with: nex build asm/bootable-systemd-nex.yaml"
 
 # find OVMF firmware
@@ -113,6 +114,7 @@ ln -sf "$DEPLOY_PATH/lib64" "$ROOT_CONTENT/lib64"
 ln -sf "$DEPLOY_PATH/bin" "$ROOT_CONTENT/bin"
 ln -sf "$DEPLOY_PATH/sbin" "$ROOT_CONTENT/sbin"
 ln -sf "$DEPLOY_PATH/etc" "$ROOT_CONTENT/etc"
+ln -sf "$DEPLOY_PATH/var" "$ROOT_CONTENT/var"
 ln -sf "usr/bin/init" "$ROOT_CONTENT/init"
 
 # symlink /nex/pkg and /nex/db from deployment into the root /nex directory

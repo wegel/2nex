@@ -6,7 +6,7 @@ package:
   version: 9.9p1
   description: OpenSSH SSH client and server
   homepage: https://www.openssh.com/
-  checksum: 2a5789ec87a868dd473eedc58a027666bf21b5fb8422202e07653535e6462d2f
+  checksum: d8bc13a650483e371fe53bd09c52f76ccfebc43fdaa851e2da3fd835f00da7a0
 
 sources:
 - name: openssh
@@ -66,8 +66,9 @@ build:
     tar --no-same-owner -xf ${SOURCE_openssh} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-    # create privilege separation directory
+    # create privilege separation directory with marker file (zub doesn't support empty dirs)
     install -v -m700 -d ${OUT_DIR}/var/lib/sshd
+    touch ${OUT_DIR}/var/lib/sshd/.keep
 
     ./configure \
       --prefix=/usr \
@@ -97,6 +98,7 @@ build:
     After=network.target
 
     [Service]
+    ExecStartPre=/usr/bin/install -d -m700 -o root -g root /var/lib/sshd
     ExecStart=/usr/bin/sshd -D
     ExecReload=/bin/kill -HUP $MAINPID
     KillMode=process
@@ -218,6 +220,7 @@ outputs:
     - path: /etc/ssh/sshd_config
     - path: /usr/lib/systemd/system/sshd-keygen.service
     - path: /usr/lib/systemd/system/sshd.service
+    - path: /var/lib/sshd/.keep
 
   man:
     files:

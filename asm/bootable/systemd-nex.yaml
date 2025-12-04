@@ -4,7 +4,7 @@ system:
   slug: bootable-systemd-nex
   version: 0.0.1
   description: Bootable system with systemd init, nex package manager, and /nex/pkg structure
-  checksum: 699bf7101b4c4a5f4458ec3eeabfda1bbe3d821d99d35d57361ce359e6247bf4
+  checksum: f88063e53aeaf38fe0fc1f257307120439c0017805b205d64a319f45db3fecf1
   nex_structure: true
 
 dependencies:
@@ -98,6 +98,12 @@ packages:
   commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/drv-net-virtio
 - name: linux-net-core
   commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/drv-net-core
+- name: linux-modules-meta
+  commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/modules-meta
+- name: kmod-bin
+  commit: x86_64/pkg/core/kernel/kmod/32/outputs/bin
+- name: kmod-lib
+  commit: x86_64/pkg/core/kernel/kmod/32/outputs/lib
 - name: ldd
   commit: x86_64/pkg/libs/system/glibc/2.39/files/usr/bin/ldd
 
@@ -261,6 +267,13 @@ build:
     HostKey /etc/ssh/ssh_host_rsa_key
     HostKey /etc/ssh/ssh_host_ecdsa_key
     Subsystem sftp /usr/libexec/sftp-server
+    EOF
+
+    # auto-load virtio modules for qemu testing
+    mkdir -p /target/etc/modules-load.d
+    mkdir -p /target/etc/modprobe.d
+    cat > /target/etc/modules-load.d/virtio.conf << 'EOF'
+    virtio_net
     EOF
 
     # resolv.conf -> systemd-resolved stub
