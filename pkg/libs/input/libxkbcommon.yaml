@@ -1,0 +1,191 @@
+package:
+  schema: 1
+  name: libxkbcommon
+  slug: libxkbcommon
+  namespace: libs/input
+  version: 1.7.0
+  description: Keyboard keymap handling library
+  homepage: https://xkbcommon.org/
+  checksum: 33f938fb2843221b6dbf9a6da1685563f8293f0db5cc86287c505c39b4e935e0
+
+sources:
+- name: libxkbcommon
+  url: https://xkbcommon.org/download/libxkbcommon-1.7.0.tar.xz
+  sha256: 65782f0a10a4b455af9c6baab7040e2f537520caa2ec2092805cdfd36863b247
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.4.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: wayland
+  commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
+- name: wayland-protocols
+  commit: x86_64/pkg/libs/wayland/wayland-protocols/1.38/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: bison
+  commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
+- name: gettext
+  commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+
+build:
+  profile: [4114:721, 12434:1088, 28964:1088, 45484:1138, 61993:1138, 74395:1254, 91044:1303, 111693:1474, 132415:1474, 146905:1985]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      -Denable-docs=false \
+      -Denable-x11=false \
+      -Denable-wayland=true \
+      -Dxkb-config-root=/usr/share/X11/xkb
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/xkbcli
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/libexec/xkbcommon/xkbcli-compile-compose
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/libexec/xkbcommon/xkbcli-compile-keymap
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/libexec/xkbcommon/xkbcli-how-to-type
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/libexec/xkbcommon/xkbcli-interactive-evdev
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/libexec/xkbcommon/xkbcli-interactive-wayland
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/libexec/xkbcommon/xkbcli-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxkbregistry.so.0
+
+  dev:
+    files:
+    - path: /usr/include/xkbcommon/xkbcommon-compat.h
+    - path: /usr/include/xkbcommon/xkbcommon-compose.h
+    - path: /usr/include/xkbcommon/xkbcommon-keysyms.h
+    - path: /usr/include/xkbcommon/xkbcommon-names.h
+    - path: /usr/include/xkbcommon/xkbcommon.h
+    - path: /usr/include/xkbcommon/xkbregistry.h
+    - path: /usr/lib/pkgconfig/xkbcommon.pc
+    - path: /usr/lib/pkgconfig/xkbregistry.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libxkbcommon.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libxkbcommon.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libxkbcommon.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libxkbregistry.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxml2.so.2
+    - path: /usr/lib/libxkbregistry.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxml2.so.2
+    - path: /usr/lib/libxkbregistry.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxml2.so.2
+
+  man:
+    files:
+    - path: /usr/share/man/man1/xkbcli-compile-compose.1
+    - path: /usr/share/man/man1/xkbcli-compile-keymap.1
+    - path: /usr/share/man/man1/xkbcli-how-to-type.1
+    - path: /usr/share/man/man1/xkbcli-interactive-evdev.1
+    - path: /usr/share/man/man1/xkbcli-interactive-wayland.1
+    - path: /usr/share/man/man1/xkbcli-list.1
+    - path: /usr/share/man/man1/xkbcli.1
+
+  misc:
+    files:
+    - path: /usr/share/bash-completion/completions/xkbcli
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libxml2.so.2: libxml2
+  /usr/lib/libxkbcommon.so.0: self
+  /usr/lib/libxkbregistry.so.0: self
+  /usr/lib/libwayland-client.so.0: wayland

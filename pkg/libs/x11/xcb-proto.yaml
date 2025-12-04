@@ -1,0 +1,153 @@
+package:
+  schema: 1
+  name: xcb-proto
+  slug: xcb-proto
+  namespace: libs/x11
+  version: 1.17.0
+  description: XML-XCB protocol descriptions
+  homepage: https://xcb.freedesktop.org/
+  checksum: 8239492cae55da06a4193a046aa85d9c1f90cd84916e445ab0a805210a8c0c3c
+
+sources:
+- name: xcb-proto
+  url: https://xcb.freedesktop.org/dist/xcb-proto-1.17.0.tar.xz
+  sha256: 2c1bacd2110f4799f74de6ebb714b94cf6f80fb112316b1219480fd22562148c
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+
+build:
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - dev
+  - lib
+  - misc
+
+outputs:
+  dev:
+    files:
+    - path: /usr/share/pkgconfig/xcb-proto.pc
+
+  lib:
+    files:
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__init__.py
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/__init__.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/__init__.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/align.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/align.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/align.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/error.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/error.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/error.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/expr.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/expr.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/expr.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/matcher.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/matcher.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/matcher.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/state.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/state.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/state.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/xtypes.cpython-312.opt-1.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/xtypes.cpython-312.opt-2.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/__pycache__/xtypes.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/xcbgen/align.py
+    - path: /usr/lib/python3.12/site-packages/xcbgen/error.py
+    - path: /usr/lib/python3.12/site-packages/xcbgen/expr.py
+    - path: /usr/lib/python3.12/site-packages/xcbgen/matcher.py
+    - path: /usr/lib/python3.12/site-packages/xcbgen/state.py
+    - path: /usr/lib/python3.12/site-packages/xcbgen/xtypes.py
+
+  misc:
+    files:
+    - path: /usr/share/xcb/bigreq.xml
+    - path: /usr/share/xcb/composite.xml
+    - path: /usr/share/xcb/damage.xml
+    - path: /usr/share/xcb/dbe.xml
+    - path: /usr/share/xcb/dpms.xml
+    - path: /usr/share/xcb/dri2.xml
+    - path: /usr/share/xcb/dri3.xml
+    - path: /usr/share/xcb/ge.xml
+    - path: /usr/share/xcb/glx.xml
+    - path: /usr/share/xcb/present.xml
+    - path: /usr/share/xcb/randr.xml
+    - path: /usr/share/xcb/record.xml
+    - path: /usr/share/xcb/render.xml
+    - path: /usr/share/xcb/res.xml
+    - path: /usr/share/xcb/screensaver.xml
+    - path: /usr/share/xcb/shape.xml
+    - path: /usr/share/xcb/shm.xml
+    - path: /usr/share/xcb/sync.xml
+    - path: /usr/share/xcb/xc_misc.xml
+    - path: /usr/share/xcb/xcb.xsd
+    - path: /usr/share/xcb/xevie.xml
+    - path: /usr/share/xcb/xf86vidmode.xml
+    - path: /usr/share/xcb/xf86dri.xml
+    - path: /usr/share/xcb/xfixes.xml
+    - path: /usr/share/xcb/xinerama.xml
+    - path: /usr/share/xcb/xinput.xml
+    - path: /usr/share/xcb/xkb.xml
+    - path: /usr/share/xcb/xprint.xml
+    - path: /usr/share/xcb/xproto.xml
+    - path: /usr/share/xcb/xselinux.xml
+    - path: /usr/share/xcb/xtest.xml
+    - path: /usr/share/xcb/xv.xml
+    - path: /usr/share/xcb/xvmc.xml

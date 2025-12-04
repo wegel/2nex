@@ -1,0 +1,252 @@
+package:
+  schema: 1
+  name: libxml2
+  slug: libxml2
+  namespace: libs/system
+  version: 2.13.5
+  description: XML C parser and toolkit
+  homepage: https://gitlab.gnome.org/GNOME/libxml2
+  checksum: 1922133f55374c58904a79e4b48cb6768e93cbe811c7ef08c7243c6b735e8dcb
+
+sources:
+- name: libxml2
+  url: https://download.gnome.org/sources/libxml2/2.13/libxml2-2.13.5.tar.xz
+  sha256: 74fc163217a3964257d3be39af943e08861263c4231f9ef5b496b6f6d4c7b2b6
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.4.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: git
+  commit: x86_64/pkg/dev/vcs/git/2.49.0/bundles/dev
+
+build:
+  profile: [4100:850, 8231:5631, 12361:5715, 16489:5853, 20585:5897, 23145:5930]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_libxml2} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure \
+      --prefix=/usr \
+      --disable-static \
+      --without-python \
+      --without-http \
+      --without-ftp
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/xml2-config
+    - path: /usr/bin/xmlcatalog
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxml2.so.2
+    - path: /usr/bin/xmllint
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxml2.so.2
+
+  dev:
+    files:
+    - path: /usr/include/libxml2/libxml/HTMLparser.h
+    - path: /usr/include/libxml2/libxml/HTMLtree.h
+    - path: /usr/include/libxml2/libxml/SAX.h
+    - path: /usr/include/libxml2/libxml/SAX2.h
+    - path: /usr/include/libxml2/libxml/c14n.h
+    - path: /usr/include/libxml2/libxml/catalog.h
+    - path: /usr/include/libxml2/libxml/chvalid.h
+    - path: /usr/include/libxml2/libxml/debugXML.h
+    - path: /usr/include/libxml2/libxml/dict.h
+    - path: /usr/include/libxml2/libxml/encoding.h
+    - path: /usr/include/libxml2/libxml/entities.h
+    - path: /usr/include/libxml2/libxml/globals.h
+    - path: /usr/include/libxml2/libxml/hash.h
+    - path: /usr/include/libxml2/libxml/list.h
+    - path: /usr/include/libxml2/libxml/nanoftp.h
+    - path: /usr/include/libxml2/libxml/nanohttp.h
+    - path: /usr/include/libxml2/libxml/parser.h
+    - path: /usr/include/libxml2/libxml/parserInternals.h
+    - path: /usr/include/libxml2/libxml/pattern.h
+    - path: /usr/include/libxml2/libxml/relaxng.h
+    - path: /usr/include/libxml2/libxml/schemasInternals.h
+    - path: /usr/include/libxml2/libxml/schematron.h
+    - path: /usr/include/libxml2/libxml/threads.h
+    - path: /usr/include/libxml2/libxml/tree.h
+    - path: /usr/include/libxml2/libxml/uri.h
+    - path: /usr/include/libxml2/libxml/valid.h
+    - path: /usr/include/libxml2/libxml/xinclude.h
+    - path: /usr/include/libxml2/libxml/xlink.h
+    - path: /usr/include/libxml2/libxml/xmlIO.h
+    - path: /usr/include/libxml2/libxml/xmlautomata.h
+    - path: /usr/include/libxml2/libxml/xmlerror.h
+    - path: /usr/include/libxml2/libxml/xmlexports.h
+    - path: /usr/include/libxml2/libxml/xmlmemory.h
+    - path: /usr/include/libxml2/libxml/xmlmodule.h
+    - path: /usr/include/libxml2/libxml/xmlreader.h
+    - path: /usr/include/libxml2/libxml/xmlregexp.h
+    - path: /usr/include/libxml2/libxml/xmlsave.h
+    - path: /usr/include/libxml2/libxml/xmlschemas.h
+    - path: /usr/include/libxml2/libxml/xmlschemastypes.h
+    - path: /usr/include/libxml2/libxml/xmlstring.h
+    - path: /usr/include/libxml2/libxml/xmlunicode.h
+    - path: /usr/include/libxml2/libxml/xmlversion.h
+    - path: /usr/include/libxml2/libxml/xmlwriter.h
+    - path: /usr/include/libxml2/libxml/xpath.h
+    - path: /usr/include/libxml2/libxml/xpathInternals.h
+    - path: /usr/include/libxml2/libxml/xpointer.h
+    - path: /usr/lib/libxml2.la
+    - path: /usr/lib/pkgconfig/libxml-2.0.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/libxml2/xmlcatalog.html
+    - path: /usr/share/doc/libxml2/xmllint.html
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/libxml2/libxml2-config.cmake
+    - path: /usr/lib/libxml2.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libxml2.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libxml2.so.2.13.5
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man1/xml2-config.1
+    - path: /usr/share/man/man1/xmlcatalog.1
+    - path: /usr/share/man/man1/xmllint.1
+
+  misc:
+    files:
+    - path: /usr/share/aclocal/libxml.m4
+    - path: /usr/share/gtk-doc/html/libxml2/general.html
+    - path: /usr/share/gtk-doc/html/libxml2/home.png
+    - path: /usr/share/gtk-doc/html/libxml2/index.html
+    - path: /usr/share/gtk-doc/html/libxml2/left.png
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-HTMLparser.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-HTMLtree.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-SAX.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-SAX2.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-c14n.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-catalog.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-chvalid.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-debugXML.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2.devhelp2
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-dict.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-encoding.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-entities.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-globals.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-hash.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-list.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-nanoftp.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-nanohttp.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-parser.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-parserInternals.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-pattern.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-relaxng.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-schemasInternals.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-schematron.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-threads.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-tree.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-uri.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-valid.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xinclude.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xlink.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlIO.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlautomata.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlerror.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlexports.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlmemory.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlmodule.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlreader.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlregexp.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlsave.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlschemas.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlschemastypes.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlstring.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlunicode.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlversion.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xmlwriter.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xpath.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xpathInternals.html
+    - path: /usr/share/gtk-doc/html/libxml2/libxml2-xpointer.html
+    - path: /usr/share/gtk-doc/html/libxml2/right.png
+    - path: /usr/share/gtk-doc/html/libxml2/style.css
+    - path: /usr/share/gtk-doc/html/libxml2/up.png
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libxml2.so.2: self

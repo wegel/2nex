@@ -1,0 +1,136 @@
+package:
+  schema: 1
+  name: fribidi
+  slug: fribidi
+  namespace: libs/text
+  version: 1.0.15
+  description: Free Implementation of the Unicode Bidirectional Algorithm
+  homepage: https://github.com/fribidi/fribidi
+  checksum: 5635d36413148208d69d7ac41f1dfb5a89532bb6759ef0320f8d3084a2b4664e
+
+sources:
+- name: fribidi
+  url: https://github.com/fribidi/fribidi/releases/download/v1.0.15/fribidi-1.0.15.tar.xz
+  sha256: 0bbc7ff633bfa208ae32d7e369cf5a7d20d5d2557a0b067c9aa98bcbf9967587
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+
+build:
+  profile: [4172:803, 8305:1196, 11987:1242]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      -Ddocs=false \
+      -Dtests=false
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/fribidi
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfribidi.so.0
+
+  dev:
+    files:
+    - path: /usr/include/fribidi/fribidi-arabic.h
+    - path: /usr/include/fribidi/fribidi-begindecls.h
+    - path: /usr/include/fribidi/fribidi-bidi-types-list.h
+    - path: /usr/include/fribidi/fribidi-bidi-types.h
+    - path: /usr/include/fribidi/fribidi-bidi.h
+    - path: /usr/include/fribidi/fribidi-brackets.h
+    - path: /usr/include/fribidi/fribidi-char-sets-list.h
+    - path: /usr/include/fribidi/fribidi-char-sets.h
+    - path: /usr/include/fribidi/fribidi-common.h
+    - path: /usr/include/fribidi/fribidi-config.h
+    - path: /usr/include/fribidi/fribidi-deprecated.h
+    - path: /usr/include/fribidi/fribidi-enddecls.h
+    - path: /usr/include/fribidi/fribidi-flags.h
+    - path: /usr/include/fribidi/fribidi-joining-types-list.h
+    - path: /usr/include/fribidi/fribidi-joining-types.h
+    - path: /usr/include/fribidi/fribidi-joining.h
+    - path: /usr/include/fribidi/fribidi-mirroring.h
+    - path: /usr/include/fribidi/fribidi-shape.h
+    - path: /usr/include/fribidi/fribidi-types.h
+    - path: /usr/include/fribidi/fribidi-unicode-version.h
+    - path: /usr/include/fribidi/fribidi-unicode.h
+    - path: /usr/include/fribidi/fribidi.h
+    - path: /usr/lib/pkgconfig/fribidi.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libfribidi.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libfribidi.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libfribidi.so.0.4.0
+      needs:
+      - /usr/lib/libc.so.6
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libfribidi.so.0: self

@@ -1,0 +1,257 @@
+package:
+  schema: 1
+  name: xorgproto
+  slug: xorgproto
+  namespace: libs/x11
+  version: "2024.1"
+  description: X.Org protocol headers
+  homepage: https://gitlab.freedesktop.org/xorg/proto/xorgproto
+  checksum: 43e10497ae36064f42d6739077e5f14daa27ec27bb73b081ca9d0cb307d08afd
+
+sources:
+- name: xorgproto
+  url: https://xorg.freedesktop.org/archive/individual/proto/xorgproto-2024.1.tar.xz
+  sha256: 372225fd40815b8423547f5d890c5debc72e88b91088fbfb13158c20495ccb59
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+
+build:
+  profile: [4121:443, 8296:443, 12451:449, 16581:449, 20682:563, 24778:576, 28874:588, 32970:600, 37066:613, 38666:618]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - dev
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/GL/glxint.h
+    - path: /usr/include/GL/glxmd.h
+    - path: /usr/include/GL/glxproto.h
+    - path: /usr/include/GL/glxtokens.h
+    - path: /usr/include/GL/internal/glcore.h
+    - path: /usr/include/X11/DECkeysym.h
+    - path: /usr/include/X11/HPkeysym.h
+    - path: /usr/include/X11/Sunkeysym.h
+    - path: /usr/include/X11/X.h
+    - path: /usr/include/X11/XF86keysym.h
+    - path: /usr/include/X11/XWDFile.h
+    - path: /usr/include/X11/Xalloca.h
+    - path: /usr/include/X11/Xarch.h
+    - path: /usr/include/X11/Xatom.h
+    - path: /usr/include/X11/Xdefs.h
+    - path: /usr/include/X11/Xfuncproto.h
+    - path: /usr/include/X11/Xfuncs.h
+    - path: /usr/include/X11/Xmd.h
+    - path: /usr/include/X11/Xos.h
+    - path: /usr/include/X11/Xos_r.h
+    - path: /usr/include/X11/Xosdefs.h
+    - path: /usr/include/X11/Xpoll.h
+    - path: /usr/include/X11/Xproto.h
+    - path: /usr/include/X11/Xprotostr.h
+    - path: /usr/include/X11/Xthreads.h
+    - path: /usr/include/X11/Xw32defs.h
+    - path: /usr/include/X11/Xwindows.h
+    - path: /usr/include/X11/Xwinsock.h
+    - path: /usr/include/X11/ap_keysym.h
+    - path: /usr/include/X11/dri/xf86dri.h
+    - path: /usr/include/X11/dri/xf86driproto.h
+    - path: /usr/include/X11/dri/xf86dristr.h
+    - path: /usr/include/X11/extensions/EVI.h
+    - path: /usr/include/X11/extensions/EVIproto.h
+    - path: /usr/include/X11/extensions/XI.h
+    - path: /usr/include/X11/extensions/XI2.h
+    - path: /usr/include/X11/extensions/XI2proto.h
+    - path: /usr/include/X11/extensions/XIproto.h
+    - path: /usr/include/X11/extensions/XKB.h
+    - path: /usr/include/X11/extensions/XKBproto.h
+    - path: /usr/include/X11/extensions/XKBsrv.h
+    - path: /usr/include/X11/extensions/XKBstr.h
+    - path: /usr/include/X11/extensions/XResproto.h
+    - path: /usr/include/X11/extensions/Xv.h
+    - path: /usr/include/X11/extensions/XvMC.h
+    - path: /usr/include/X11/extensions/XvMCproto.h
+    - path: /usr/include/X11/extensions/Xvproto.h
+    - path: /usr/include/X11/extensions/ag.h
+    - path: /usr/include/X11/extensions/agproto.h
+    - path: /usr/include/X11/extensions/applewmconst.h
+    - path: /usr/include/X11/extensions/applewmproto.h
+    - path: /usr/include/X11/extensions/bigreqsproto.h
+    - path: /usr/include/X11/extensions/bigreqstr.h
+    - path: /usr/include/X11/extensions/composite.h
+    - path: /usr/include/X11/extensions/compositeproto.h
+    - path: /usr/include/X11/extensions/cup.h
+    - path: /usr/include/X11/extensions/cupproto.h
+    - path: /usr/include/X11/extensions/damageproto.h
+    - path: /usr/include/X11/extensions/damagewire.h
+    - path: /usr/include/X11/extensions/dbe.h
+    - path: /usr/include/X11/extensions/dbeproto.h
+    - path: /usr/include/X11/extensions/dmx.h
+    - path: /usr/include/X11/extensions/dmxproto.h
+    - path: /usr/include/X11/extensions/dpmsconst.h
+    - path: /usr/include/X11/extensions/dpmsproto.h
+    - path: /usr/include/X11/extensions/dri2tokens.h
+    - path: /usr/include/X11/extensions/dri2proto.h
+    - path: /usr/include/X11/extensions/dri3proto.h
+    - path: /usr/include/X11/extensions/ge.h
+    - path: /usr/include/X11/extensions/geproto.h
+    - path: /usr/include/X11/extensions/lbx.h
+    - path: /usr/include/X11/extensions/lbxproto.h
+    - path: /usr/include/X11/extensions/mitmiscconst.h
+    - path: /usr/include/X11/extensions/mitmiscproto.h
+    - path: /usr/include/X11/extensions/multibufconst.h
+    - path: /usr/include/X11/extensions/multibufproto.h
+    - path: /usr/include/X11/extensions/panoramiXproto.h
+    - path: /usr/include/X11/extensions/presentproto.h
+    - path: /usr/include/X11/extensions/presenttokens.h
+    - path: /usr/include/X11/extensions/randr.h
+    - path: /usr/include/X11/extensions/randrproto.h
+    - path: /usr/include/X11/extensions/recordconst.h
+    - path: /usr/include/X11/extensions/recordproto.h
+    - path: /usr/include/X11/extensions/recordstr.h
+    - path: /usr/include/X11/extensions/render.h
+    - path: /usr/include/X11/extensions/renderproto.h
+    - path: /usr/include/X11/extensions/saver.h
+    - path: /usr/include/X11/extensions/saverproto.h
+    - path: /usr/include/X11/extensions/secur.h
+    - path: /usr/include/X11/extensions/securproto.h
+    - path: /usr/include/X11/extensions/shapeconst.h
+    - path: /usr/include/X11/extensions/shapeproto.h
+    - path: /usr/include/X11/extensions/shapestr.h
+    - path: /usr/include/X11/extensions/shm.h
+    - path: /usr/include/X11/extensions/shmproto.h
+    - path: /usr/include/X11/extensions/shmstr.h
+    - path: /usr/include/X11/extensions/syncconst.h
+    - path: /usr/include/X11/extensions/syncproto.h
+    - path: /usr/include/X11/extensions/syncstr.h
+    - path: /usr/include/X11/extensions/xcmiscproto.h
+    - path: /usr/include/X11/extensions/xcmiscstr.h
+    - path: /usr/include/X11/extensions/xf86dga.h
+    - path: /usr/include/X11/extensions/xf86dga1const.h
+    - path: /usr/include/X11/extensions/xf86dga1proto.h
+    - path: /usr/include/X11/extensions/xf86dga1str.h
+    - path: /usr/include/X11/extensions/xf86dgaconst.h
+    - path: /usr/include/X11/extensions/xf86dgaproto.h
+    - path: /usr/include/X11/extensions/xf86dgastr.h
+    - path: /usr/include/X11/extensions/xf86bigfont.h
+    - path: /usr/include/X11/extensions/xf86bigfproto.h
+    - path: /usr/include/X11/extensions/xf86bigfstr.h
+    - path: /usr/include/X11/extensions/xf86vm.h
+    - path: /usr/include/X11/extensions/xf86vmproto.h
+    - path: /usr/include/X11/extensions/xf86vmstr.h
+    - path: /usr/include/X11/extensions/xfixesproto.h
+    - path: /usr/include/X11/extensions/xfixeswire.h
+    - path: /usr/include/X11/extensions/xtestconst.h
+    - path: /usr/include/X11/extensions/xtestext1const.h
+    - path: /usr/include/X11/extensions/xtestext1proto.h
+    - path: /usr/include/X11/extensions/xtestproto.h
+    - path: /usr/include/X11/extensions/xwaylandproto.h
+    - path: /usr/include/X11/fonts/FS.h
+    - path: /usr/include/X11/fonts/FSproto.h
+    - path: /usr/include/X11/fonts/font.h
+    - path: /usr/include/X11/fonts/fontproto.h
+    - path: /usr/include/X11/fonts/fontstruct.h
+    - path: /usr/include/X11/fonts/fsmasks.h
+    - path: /usr/include/X11/keysym.h
+    - path: /usr/include/X11/keysymdef.h
+    - path: /usr/share/pkgconfig/applewmproto.pc
+    - path: /usr/share/pkgconfig/bigreqsproto.pc
+    - path: /usr/share/pkgconfig/compositeproto.pc
+    - path: /usr/share/pkgconfig/damageproto.pc
+    - path: /usr/share/pkgconfig/dmxproto.pc
+    - path: /usr/share/pkgconfig/dpmsproto.pc
+    - path: /usr/share/pkgconfig/dri2proto.pc
+    - path: /usr/share/pkgconfig/dri3proto.pc
+    - path: /usr/share/pkgconfig/fixesproto.pc
+    - path: /usr/share/pkgconfig/fontsproto.pc
+    - path: /usr/share/pkgconfig/glproto.pc
+    - path: /usr/share/pkgconfig/inputproto.pc
+    - path: /usr/share/pkgconfig/kbproto.pc
+    - path: /usr/share/pkgconfig/presentproto.pc
+    - path: /usr/share/pkgconfig/randrproto.pc
+    - path: /usr/share/pkgconfig/recordproto.pc
+    - path: /usr/share/pkgconfig/renderproto.pc
+    - path: /usr/share/pkgconfig/resourceproto.pc
+    - path: /usr/share/pkgconfig/scrnsaverproto.pc
+    - path: /usr/share/pkgconfig/videoproto.pc
+    - path: /usr/share/pkgconfig/xcmiscproto.pc
+    - path: /usr/share/pkgconfig/xextproto.pc
+    - path: /usr/share/pkgconfig/xf86dgaproto.pc
+    - path: /usr/share/pkgconfig/xf86vidmodeproto.pc
+    - path: /usr/share/pkgconfig/xf86bigfontproto.pc
+    - path: /usr/share/pkgconfig/xf86driproto.pc
+    - path: /usr/share/pkgconfig/xineramaproto.pc
+    - path: /usr/share/pkgconfig/xproto.pc
+    - path: /usr/share/pkgconfig/xwaylandproto.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/xorgproto/compositeproto.txt
+    - path: /usr/share/doc/xorgproto/damageproto.txt
+    - path: /usr/share/doc/xorgproto/dri2proto.txt
+    - path: /usr/share/doc/xorgproto/dri3proto.txt
+    - path: /usr/share/doc/xorgproto/fixesproto.txt
+    - path: /usr/share/doc/xorgproto/presentproto.txt
+    - path: /usr/share/doc/xorgproto/randrproto.txt
+    - path: /usr/share/doc/xorgproto/renderproto.txt
+    - path: /usr/share/doc/xorgproto/resproto.txt
+    - path: /usr/share/doc/xorgproto/xv-protocol-v2.txt
+    - path: /usr/share/doc/xorgproto/xwaylandproto.txt
