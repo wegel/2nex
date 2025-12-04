@@ -11,12 +11,12 @@ mount -t devtmpfs devtmpfs /dev
 # parse cmdline
 ROOT=""
 ROOT_PARTUUID=""
-OSTREE=""
+DEPLOY_PATH=""
 for param in $(cat /proc/cmdline); do
     case "$param" in
         root=PARTUUID=*) ROOT_PARTUUID="${param#root=PARTUUID=}" ;;
         root=/dev/*) ROOT="${param#root=}" ;;
-        ostree=*) OSTREE="${param#ostree=}" ;;
+        zub=*) DEPLOY_PATH="${param#zub=}" ;;
     esac
 done
 
@@ -32,7 +32,7 @@ if [ -n "$ROOT_PARTUUID" ]; then
     done
 fi
 
-echo "root=$ROOT ostree=$OSTREE"
+echo "root=$ROOT zub=$DEPLOY_PATH"
 
 if [ -z "$ROOT" ] || [ ! -b "$ROOT" ]; then
     echo "FATAL: root device not found!"
@@ -45,12 +45,12 @@ fi
 echo "mounting root filesystem..."
 mount -o ro "$ROOT" /mnt/root
 
-if [ -z "$OSTREE" ]; then
-    echo "FATAL: no ostree= parameter!"
+if [ -z "$DEPLOY_PATH" ]; then
+    echo "FATAL: no zub= parameter!"
     exec /bin/sh
 fi
 
-DEPLOY="/mnt/root/$OSTREE"
+DEPLOY="/mnt/root/$DEPLOY_PATH"
 if [ ! -d "$DEPLOY" ]; then
     echo "FATAL: deployment $DEPLOY not found!"
     exec /bin/sh
