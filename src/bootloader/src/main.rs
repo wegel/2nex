@@ -19,6 +19,7 @@ mod kernel;
 mod linux_efi;
 mod luks2;
 mod passphrase;
+mod tpm;
 mod zub;
 
 /// bootloader entry point

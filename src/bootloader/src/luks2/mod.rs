@@ -14,6 +14,7 @@ use uefi::proto::media::block::BlockIO;
 
 use crate::disk::RootPartition;
 use crate::passphrase;
+use crate::tpm;
 
 pub use reader::DecryptingReader;
 
@@ -130,18 +131,6 @@ pub fn unlock(partition: &RootPartition) -> Result<Luks2Volume, Luks2Error> {
 
     let metadata = json::Luks2Metadata::parse(&json_buf[..json_read_size])?;
 
-    // find usable keyslot (prefer argon2id, fall back to pbkdf2)
-    let (slot_id, keyslot) = metadata
-        .find_argon2id_keyslot()
-        .or_else(|| metadata.find_pbkdf2_keyslot())
-        .ok_or(Luks2Error::NoKeyslot)?;
-
-    log::info!(
-        "luks2: using keyslot {} with {} KDF",
-        slot_id,
-        keyslot.kdf.kdf_type
-    );
-
     // get data segment
     let segment = metadata.data_segment().ok_or(Luks2Error::NoSegment)?;
 
@@ -154,6 +143,79 @@ pub fn unlock(partition: &RootPartition) -> Result<Luks2Volume, Luks2Error> {
         "luks2: data segment at offset {}, sector size {}",
         segment.offset,
         segment.sector_size
+    );
+
+    // try TPM first, fall back to passphrase
+    let master_key = if let Some(tpm_key) = tpm::try_unseal_master_key() {
+        // TPM path: got master key directly, just verify it
+        log::info!("luks2: using TPM-provided master key");
+        verify_master_key_against_metadata(&tpm_key, &metadata)?;
+        tpm_key
+    } else {
+        // passphrase path: derive key and decrypt keyslot
+        log::info!("luks2: TPM unavailable, falling back to passphrase");
+        recover_master_key_from_passphrase(&block_io, media_id, block_size, &metadata)?
+    };
+
+    // create decrypting reader
+    let reader = DecryptingReader::new(
+        partition.handle,
+        partition.block_size,
+        &master_key,
+        segment.offset,
+        segment.sector_size,
+        segment.iv_tweak,
+    )?;
+
+    log::info!("luks2: volume unlocked successfully");
+
+    Ok(Luks2Volume { reader })
+}
+
+/// verify master key against any available digest in metadata
+fn verify_master_key_against_metadata(
+    master_key: &[u8],
+    metadata: &json::Luks2Metadata,
+) -> Result<(), Luks2Error> {
+    // find any digest that covers segment 0
+    let digest = metadata.digests.values().find(|d| d.segments.iter().any(|s| s == "0"));
+
+    if let Some(digest) = digest {
+        log::info!("luks2: verifying master key against digest...");
+        let valid = crypto::verify_master_key(
+            master_key,
+            &digest.salt,
+            &digest.digest,
+            digest.iterations,
+            &digest.hash,
+        )?;
+
+        if !valid {
+            return Err(Luks2Error::KeyVerificationFailed);
+        }
+        log::info!("luks2: master key verified");
+    }
+
+    Ok(())
+}
+
+/// recover master key using passphrase + KDF + keyslot decryption
+fn recover_master_key_from_passphrase(
+    block_io: &BlockIO,
+    media_id: u32,
+    block_size: usize,
+    metadata: &json::Luks2Metadata,
+) -> Result<alloc::vec::Vec<u8>, Luks2Error> {
+    // find usable keyslot (prefer argon2id, fall back to pbkdf2)
+    let (slot_id, keyslot) = metadata
+        .find_argon2id_keyslot()
+        .or_else(|| metadata.find_pbkdf2_keyslot())
+        .ok_or(Luks2Error::NoKeyslot)?;
+
+    log::info!(
+        "luks2: using keyslot {} with {} KDF",
+        slot_id,
+        keyslot.kdf.kdf_type
     );
 
     // get passphrase
@@ -212,17 +274,5 @@ pub fn unlock(partition: &RootPartition) -> Result<Luks2Volume, Luks2Error> {
         log::info!("luks2: master key verified");
     }
 
-    // create decrypting reader
-    let reader = DecryptingReader::new(
-        partition.handle,
-        partition.block_size,
-        &master_key,
-        segment.offset,
-        segment.sector_size,
-        segment.iv_tweak,
-    )?;
-
-    log::info!("luks2: volume unlocked successfully");
-
-    Ok(Luks2Volume { reader })
+    Ok(master_key)
 }
