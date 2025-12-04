@@ -5,7 +5,7 @@ use uefi::boot::LoadImageSource;
 use uefi::proto::loaded_image::LoadedImage;
 
 use crate::ext4::Ext4Fs;
-use crate::ostree::{self, Deployment};
+use crate::zub::{self, Deployment};
 use crate::BootError;
 
 /// kernel image data
@@ -14,10 +14,10 @@ pub struct KernelData {
     pub kernel: Vec<u8>,
 }
 
-/// load kernel from an OSTree deployment
+/// load kernel from a zub deployment
 pub fn load_from_deployment(fs: &Ext4Fs, deployment: &Deployment) -> Result<KernelData, BootError> {
     // find kernel path
-    let kernel_path = ostree::find_kernel_path(fs, deployment).ok_or_else(|| {
+    let kernel_path = zub::find_kernel_path(fs, deployment).ok_or_else(|| {
         log::error!("kernel: no vmlinuz found in deployment");
         BootError::KernelNotFound
     })?;

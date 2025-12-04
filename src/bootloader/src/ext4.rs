@@ -90,6 +90,7 @@ impl Ext4Fs {
     }
 
     /// check if a path exists
+    #[allow(dead_code)]
     pub fn exists(&self, path: &str) -> bool {
         self.inner.exists(path).unwrap_or(false)
     }
@@ -112,6 +113,7 @@ pub fn mount(partition: &RootPartition) -> Result<Ext4Fs, Ext4Error> {
 struct UefiBlockReader {
     handle: uefi::Handle,
     block_size: u32,
+    #[allow(dead_code)]
     num_blocks: u64,
 }
 

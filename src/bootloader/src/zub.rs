@@ -1,4 +1,4 @@
-//! OSTree deployment discovery
+//! Zub deployment discovery
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -9,9 +9,10 @@ use crate::BootError;
 const NEX_DEPLOY_DIR: &str = "/nex/deploy";
 const DEFAULT_STATEROOT: &str = "2nex";
 
-/// represents a discovered OSTree deployment
+/// represents a discovered zub deployment
 pub struct Deployment {
     /// stateroot name (e.g., "2nex")
+    #[allow(dead_code)]
     pub stateroot: String,
     /// commit checksum (64 hex chars)
     pub checksum: String,
@@ -21,15 +22,15 @@ pub struct Deployment {
     pub path: String,
 }
 
-/// find the default (most recent) OSTree deployment
+/// find the default (most recent) zub deployment
 pub fn find_default_deployment(fs: &Ext4Fs) -> Result<Deployment, BootError> {
     let deploy_dir = alloc::format!("{}/{}/deploy", NEX_DEPLOY_DIR, DEFAULT_STATEROOT);
 
-    log::debug!("ostree: scanning {}", deploy_dir);
+    log::debug!("zub: scanning {}", deploy_dir);
 
     // read deployment directory
     let entries = fs.read_dir(&deploy_dir).map_err(|e| {
-        log::error!("ostree: failed to read {}: {:?}", deploy_dir, e);
+        log::error!("zub: failed to read {}: {:?}", deploy_dir, e);
         BootError::NoDeployment
     })?;
 
@@ -45,7 +46,7 @@ pub fn find_default_deployment(fs: &Ext4Fs) -> Result<Deployment, BootError> {
         .collect();
 
     if deployments.is_empty() {
-        log::error!("ostree: no valid deployments found in {}", deploy_dir);
+        log::error!("zub: no valid deployments found in {}", deploy_dir);
         return Err(BootError::NoDeployment);
     }
 
@@ -53,7 +54,7 @@ pub fn find_default_deployment(fs: &Ext4Fs) -> Result<Deployment, BootError> {
     deployments.sort_by(|a, b| b.serial.cmp(&a.serial));
 
     log::info!(
-        "ostree: found {} deployment(s), using {}.{}",
+        "zub: found {} deployment(s), using {}.{}",
         deployments.len(),
         deployments[0].checksum,
         deployments[0].serial

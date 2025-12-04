@@ -1,6 +1,6 @@
-//! 2nex OSTree-aware UEFI bootloader
+//! 2nex zub-aware UEFI bootloader
 //!
-//! boots the default OSTree deployment from an ext4 partition.
+//! boots the default zub deployment from an ext4 partition.
 
 #![no_std]
 #![no_main]
@@ -8,12 +8,16 @@
 extern crate alloc;
 
 use alloc::string::String;
+use alloc::vec::Vec;
 use uefi::prelude::*;
 
+mod cpio;
 mod disk;
 mod ext4;
+mod initrd;
 mod kernel;
-mod ostree;
+mod linux_efi;
+mod zub;
 
 /// bootloader entry point
 #[entry]
@@ -46,8 +50,8 @@ fn boot_sequence() -> Result<(), BootError> {
     let fs = ext4::mount(&root_disk)?;
     log::info!("mounted ext4 filesystem");
 
-    // find default OSTree deployment
-    let deployment = ostree::find_default_deployment(&fs)?;
+    // find default zub deployment
+    let deployment = zub::find_default_deployment(&fs)?;
     log::info!(
         "found deployment: {}.{}",
         deployment.checksum,
@@ -58,6 +62,14 @@ fn boot_sequence() -> Result<(), BootError> {
     let kernel_data = kernel::load_from_deployment(&fs, &deployment)?;
     log::info!("loaded kernel ({} bytes)", kernel_data.kernel.len());
 
+    // check for extra boot modules and install initrd protocol if needed
+    if let Some(initramfs) = load_boot_modules(&fs, &deployment) {
+        log::info!("installing initrd protocol ({} bytes)", initramfs.len());
+        if let Err(e) = initrd::install_initrd_protocol(initramfs) {
+            log::warn!("failed to install initrd protocol: {:?}", e);
+        }
+    }
+
     // build kernel command line
     let cmdline = build_cmdline(&root_disk, &deployment);
     log::info!("cmdline: {}", cmdline);
@@ -66,9 +78,66 @@ fn boot_sequence() -> Result<(), BootError> {
     kernel::boot(kernel_data, &cmdline)
 }
 
-fn build_cmdline(disk: &disk::RootPartition, deployment: &ostree::Deployment) -> String {
+/// load extra boot modules from /etc/boot-modules.conf if present
+fn load_boot_modules(fs: &ext4::Ext4Fs, deployment: &zub::Deployment) -> Option<Vec<u8>> {
+    let config_path = alloc::format!("{}/etc/boot-modules.conf", deployment.path);
+
+    // read config file
+    let config_content = match fs.read_file(&config_path) {
+        Ok(data) => data,
+        Err(_) => return None, // no config file, no extra modules needed
+    };
+
+    let config_str = core::str::from_utf8(&config_content).ok()?;
+    log::info!("boot-modules: found config with {} bytes", config_content.len());
+
+    // parse module paths (one per line, skip empty/comments)
+    let module_paths: Vec<&str> = config_str
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .collect();
+
+    if module_paths.is_empty() {
+        return None;
+    }
+
+    log::info!("boot-modules: loading {} module(s)", module_paths.len());
+
+    // load each module
+    let mut modules: Vec<(&str, Vec<u8>)> = Vec::new();
+    for module_path in &module_paths {
+        // module path is relative to deployment root
+        let full_path = if module_path.starts_with('/') {
+            alloc::format!("{}{}", deployment.path, module_path)
+        } else {
+            alloc::format!("{}/{}", deployment.path, module_path)
+        };
+
+        match fs.read_file(&full_path) {
+            Ok(data) => {
+                // extract just the filename for the cpio
+                let filename = module_path.rsplit('/').next().unwrap_or(module_path);
+                log::info!("boot-modules: loaded {} ({} bytes)", filename, data.len());
+                modules.push((filename, data));
+            }
+            Err(e) => {
+                log::warn!("boot-modules: failed to load {}: {:?}", module_path, e);
+            }
+        }
+    }
+
+    if modules.is_empty() {
+        return None;
+    }
+
+    // build cpio archive
+    Some(cpio::build_module_initramfs(&modules))
+}
+
+fn build_cmdline(disk: &disk::RootPartition, deployment: &zub::Deployment) -> String {
     alloc::format!(
-        "root=PARTUUID={} ostree={} ro console=ttyS0,115200n8 earlycon=uart8250,io,0x3f8,115200n8",
+        "root=PARTUUID={} zub={} ro console=ttyS0,115200n8 earlycon=uart8250,io,0x3f8,115200n8",
         disk.partuuid,
         deployment.path
     )
