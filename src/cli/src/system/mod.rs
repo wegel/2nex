@@ -355,14 +355,6 @@ pub fn materialize_nex_structure(
     // deploy manifests to /nex/db for runtime package resolution
     deploy_manifests_to_nex_db(&target_dir)?;
 
-    // create /usr/bin for symlinks
-    let usr_bin_dir = target_dir.join("usr/bin");
-    fs::create_dir_all(&usr_bin_dir)?;
-
-    // create /usr/lib for directory symlinks
-    let usr_lib_dir = target_dir.join("usr/lib");
-    fs::create_dir_all(&usr_lib_dir)?;
-
     // create /lib64 for nex-ld-shim
     let lib64_dir = target_dir.join("lib64");
     fs::create_dir_all(&lib64_dir)?;
@@ -453,73 +445,27 @@ pub fn materialize_nex_structure(
             fs::write(&sentinel_path, format!("{}\n", install_ref))?;
         }
 
-        // create symlinks for binaries
-        let pkg_bin_dir = pkg_install_dir.join("usr/bin");
-        if pkg_bin_dir.exists() {
-            for entry in WalkDir::new(&pkg_bin_dir).max_depth(1) {
-                let entry = entry?;
-                if entry.file_type().is_file() || entry.file_type().is_symlink() {
-                    let filename = entry.file_name().to_string_lossy();
-                    let symlink_path = usr_bin_dir.join(&*filename);
-                    // relative symlink: from /usr/bin/, ../../ reaches /, then nex/pkg/...
-                    let target_path = format!(
-                        "../../nex/pkg/{}/{}/{}/{}/usr/bin/{}",
-                        namespace, slug, version, checksum, filename
-                    );
-
-                    // skip if symlink already exists (first package wins)
-                    if !symlink_path.exists() {
-                        symlink(&target_path, &symlink_path)?;
-                        println!("  Symlink: /usr/bin/{} -> {}", filename, target_path);
-                    }
-                }
+        // create file-level symlinks for all directories in the package
+        // rule: directories are real, files are symlinks (stow-style, first package wins)
+        for entry in fs::read_dir(&pkg_install_dir)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_dir() {
+                continue;
             }
-        }
 
-        // create file-level symlinks for /usr/lib/ contents
-        // rule: directories are real, files are symlinks (stow-style linking)
-        let pkg_lib_dir = pkg_install_dir.join("usr/lib");
-        if pkg_lib_dir.exists() {
+            let dir_name = entry.file_name().to_string_lossy().to_string();
+            let pkg_dir = pkg_install_dir.join(&dir_name);
+            let target_subdir = target_dir.join(&dir_name);
+
+            fs::create_dir_all(&target_subdir)?;
             create_file_symlinks_recursive(
-                &pkg_lib_dir,
-                &usr_lib_dir,
+                &pkg_dir,
+                &target_subdir,
                 &namespace,
                 &slug,
                 &version,
                 &checksum,
-                "usr/lib",
-            )?;
-        }
-
-        // create file-level symlinks for /usr/share/ contents
-        let pkg_share_dir = pkg_install_dir.join("usr/share");
-        if pkg_share_dir.exists() {
-            let usr_share_dir = target_dir.join("usr/share");
-            fs::create_dir_all(&usr_share_dir)?;
-            create_file_symlinks_recursive(
-                &pkg_share_dir,
-                &usr_share_dir,
-                &namespace,
-                &slug,
-                &version,
-                &checksum,
-                "usr/share",
-            )?;
-        }
-
-        // create file-level symlinks for /etc/ contents
-        let pkg_etc_dir = pkg_install_dir.join("etc");
-        if pkg_etc_dir.exists() {
-            let etc_dir = target_dir.join("etc");
-            fs::create_dir_all(&etc_dir)?;
-            create_file_symlinks_recursive(
-                &pkg_etc_dir,
-                &etc_dir,
-                &namespace,
-                &slug,
-                &version,
-                &checksum,
-                "etc",
+                &dir_name,
             )?;
         }
 
@@ -581,9 +527,9 @@ fn create_file_symlinks_recursive(
                 rel_path.display()
             );
 
-            // if symlink already exists, overwrite (last write wins)
+            // skip if symlink already exists (first package wins)
             if dst_path.symlink_metadata().is_ok() {
-                fs::remove_file(&dst_path)?;
+                continue;
             }
 
             symlink(&target_path, &dst_path)?;
