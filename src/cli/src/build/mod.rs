@@ -681,6 +681,20 @@ pub fn build_single(opts: &BuildOpts) -> io::Result<()> {
         }
     }
 
+    // early staleness check for package manifests (unless force or check)
+    if let ManifestData::Package(ref manifest) = manifest_data {
+        if !opts.force && !opts.check && !opts.refresh_metadata {
+            let manifest_path = Path::new(&opts.manifest_file);
+            if let Ok(Some(_commit)) = check_if_built(&opts.repo_path, manifest, manifest_path) {
+                println!(
+                    "Package {}/{} already built, skipping (use --force to rebuild)",
+                    manifest.package.namespace, manifest.package.slug
+                );
+                return Ok(());
+            }
+        }
+    }
+
     match manifest_data {
         ManifestData::Package(mut manifest) => {
             if opts.refresh_metadata {
@@ -1097,6 +1111,52 @@ pub fn compute_manifest_hash(manifest_path: &Path) -> io::Result<String> {
     let mut hasher = Sha256::new();
     hasher.update(&contents);
     Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// check if all outputs of a manifest are already built in the store with current manifest hash.
+/// returns Some(commit_id) if found, None if not built or hash mismatch.
+pub fn check_if_built(
+    repo_path: &str,
+    manifest: &Manifest,
+    manifest_path: &Path,
+) -> io::Result<Option<String>> {
+    let arch = "x86_64"; // TODO: make configurable
+    let slug = &manifest.package.slug;
+    let version = &manifest.package.version;
+    let namespace = manifest.package.namespace_path();
+
+    // compute current manifest hash
+    let current_hash = compute_manifest_hash(manifest_path)?;
+
+    // check all outputs - we'll use the first output to find the commit
+    let mut found_commit: Option<String> = None;
+
+    for (output_name, _spec) in &manifest.outputs {
+        let branch = format!(
+            "{}/{}/{}/{}/outputs/{}",
+            arch, namespace, slug, version, output_name
+        );
+
+        // check if branch exists
+        if ensure_branch_exists(repo_path, &branch).is_err() {
+            return Ok(None);
+        }
+
+        // try to find commit by manifest hash using history search
+        match find_commit_by_manifest_hash(repo_path, &branch, &current_hash)? {
+            Some(commit_id) => {
+                if found_commit.is_none() {
+                    found_commit = Some(commit_id);
+                }
+            }
+            None => {
+                // no commit found with matching hash
+                return Ok(None);
+            }
+        }
+    }
+
+    Ok(found_commit)
 }
 
 /// resolve dependencies to specific commit IDs when they have manifest_ref.
