@@ -109,6 +109,17 @@ pub fn mount(partition: &RootPartition) -> Result<Ext4Fs, Ext4Error> {
     Ok(Ext4Fs { inner })
 }
 
+/// mount an ext4 filesystem from a custom reader (e.g., decrypting reader)
+pub fn mount_from_reader(reader: Box<dyn ext4_view::Ext4Read>) -> Result<Ext4Fs, Ext4Error> {
+    log::info!("ext4: mounting from custom reader");
+
+    let inner = ext4_view::Ext4::load(reader).map_err(|e| Ext4Error::Parse(e))?;
+
+    log::info!("ext4: filesystem mounted successfully");
+
+    Ok(Ext4Fs { inner })
+}
+
 /// UEFI block device reader implementing ext4-view's Ext4Read trait
 struct UefiBlockReader {
     handle: uefi::Handle,

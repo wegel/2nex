@@ -17,6 +17,8 @@ mod ext4;
 mod initrd;
 mod kernel;
 mod linux_efi;
+mod luks2;
+mod passphrase;
 mod zub;
 
 /// bootloader entry point
@@ -42,12 +44,26 @@ fn main() -> Status {
 fn boot_sequence() -> Result<(), BootError> {
     log::info!("searching for root partition...");
 
-    // find ext4 root partition
+    // find root partition (may be LUKS2 encrypted)
     let root_disk = disk::find_root_partition()?;
-    log::info!("found root partition");
+    log::info!("found root partition: {}", root_disk.partuuid);
 
-    // mount ext4 filesystem
-    let fs = ext4::mount(&root_disk)?;
+    // check if partition is LUKS2 encrypted
+    let fs = if luks2::is_luks2(&root_disk).unwrap_or(false) {
+        log::info!("detected LUKS2 encrypted partition");
+
+        // unlock LUKS2 volume
+        let volume = luks2::unlock(&root_disk).map_err(|e| {
+            log::error!("LUKS2 unlock failed: {}", e);
+            BootError::Luks2Error
+        })?;
+
+        // mount ext4 from decrypted volume
+        ext4::mount_from_reader(alloc::boxed::Box::new(volume.reader))?
+    } else {
+        // mount ext4 directly (unencrypted)
+        ext4::mount(&root_disk)?
+    };
     log::info!("mounted ext4 filesystem");
 
     // find default zub deployment
@@ -148,6 +164,7 @@ pub enum BootError {
     DiskNotFound,
     PartitionNotFound,
     Ext4Error(ext4::Ext4Error),
+    Luks2Error,
     NoDeployment,
     KernelNotFound,
     KernelLoadError,
