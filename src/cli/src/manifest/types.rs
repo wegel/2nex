@@ -185,6 +185,12 @@ pub struct Source {
     pub name: String,
     pub url: Option<String>,
     pub file: Option<String>,
+    /// URL or path to Cargo.lock file for automatic vendoring
+    #[serde(default)]
+    pub cargo_lock: Option<String>,
+    /// optional: explicit Cargo.toml URL (defaults to same directory as cargo_lock)
+    #[serde(default)]
+    pub cargo_toml: Option<String>,
     pub sha256: String,
 }
 

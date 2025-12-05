@@ -173,7 +173,9 @@ pub fn handle_inputs(
         };
 
         input_env_vars.insert(format!("SOURCE{}", i), path_str.clone());
-        let var_name = format!("SOURCE_{}", source.name);
+        // replace hyphens with underscores for valid bash variable names
+        let safe_name = source.name.replace('-', "_");
+        let var_name = format!("SOURCE_{}", safe_name);
         input_env_vars.insert(var_name, path_str);
     }
 

@@ -99,6 +99,16 @@ pub fn commit_bundle(
 pub fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Result<PathBuf> {
     println!("Fetching and verifying input: {:?}", input_spec);
 
+    // handle cargo_lock source type (automatic vendoring)
+    if let Some(cargo_lock_ref) = &input_spec.cargo_lock {
+        return crate::cargo_vendor::vendor_from_lock(
+            cargo_lock_ref,
+            input_spec.cargo_toml.as_deref(),
+            &input_spec.sha256,
+            download_dir,
+        );
+    }
+
     // for local files, verify directly from source - no caching
     if let Some(file_path) = &input_spec.file {
         println!("Verifying local file: {}", file_path);

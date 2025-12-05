@@ -15,6 +15,7 @@ use petgraph::algo::toposort;
 use petgraph::graph::{DiGraph, NodeIndex};
 
 pub mod build;
+pub mod cargo_vendor;
 pub mod commands;
 pub mod deps;
 pub mod manifest;
