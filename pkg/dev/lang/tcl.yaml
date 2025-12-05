@@ -6,7 +6,7 @@ package:
   version: 8.6.14
   description: Tool Command Language
   homepage: https://tcl.sourceforge.net/
-  checksum: e1e302374f799b7eb40b97a0cf1c18a3caaefa33fa388bcfbf312aa0aa3d926e
+  checksum: 5698b73a3a2f900280407c02c5ff691d2852865a85a198c7ab1a087353561d11
 
 sources:
 - name: tcl
@@ -65,7 +65,8 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 
 build:
-  profile: [13845:3465, 42012:3468, 93790:3576, 150605:4042, 202276:4256, 254051:4555, 301131:4689, 376487:4887, 453555:46800, 500079:77756]
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [13933:4292, 42232:4295, 94252:4396, 151331:4556, 203244:4690, 255261:4823, 302561:4901, 378269:5007, 453860:12893, 503061:66878]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_tcl} -C "${WORK_DIR}" --strip-components=1
@@ -74,7 +75,7 @@ build:
 
     SRCDIR=$(pwd)
     cd unix
-    ./configure --prefix=/usr --mandir=/usr/share/man
+    ./configure --prefix=/usr --mandir=/usr/share/man LIBS=-lm
     make
 
     sed -e "s|$SRCDIR/unix|/usr/lib|" \
@@ -185,6 +186,7 @@ outputs:
     - path: /usr/lib/sqlite3.44.2/libsqlite3.44.2.so
       needs:
       - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
     - path: /usr/lib/sqlite3.44.2/pkgIndex.tcl
     - path: /usr/lib/tcl8.6/auto.tcl
     - path: /usr/lib/tcl8.6/clock.tcl

@@ -6,7 +6,7 @@ package:
   version: "257.5"
   description: System and Service Manager
   homepage: https://www.freedesktop.org/wiki/Software/systemd/
-  checksum: dd6cd9ba1c7226bdf3fbc30a9e919a4a60c89ffa9280297135bf439ccbdba2f5
+  checksum: 04bd3c4dd76ee310113d6ca28b3a475ae960cb7949a597e2550e01608d53eb5e
 
 sources:
 - name: systemd
@@ -61,7 +61,7 @@ dependencies:
 - name: python3
   commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
 - name: meson
-  commit: x86_64/pkg/core/toolchain/meson/1.4.1/bundles/dev
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
 - name: ninja
   commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
 - name: gettext
@@ -88,7 +88,8 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
 
 build:
-  profile: [8229:3193, 24768:5119, 53783:8379, 86941:12464, 115833:16391, 144731:20411, 173700:20464, 215287:20545, 256850:21031, 284757:23210]
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [8229:3977, 24712:6926, 53744:9387, 86906:11620, 115821:14095, 144745:58170, 173651:58223, 219244:58318, 260642:58843, 288269:61070]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_systemd} -C "${WORK_DIR}" --strip-components=1
@@ -154,6 +155,7 @@ bundles:
   - bin
   - conf
   - dev
+  - hwdb
   - lib
   - locale
 
@@ -267,7 +269,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libcrypto.so.3
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/systemd/libsystemd-shared-257.so
@@ -275,7 +276,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libcrypto.so.3
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/systemd/libsystemd-shared-257.so
@@ -432,7 +432,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libcrypto.so.3
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/systemd/libsystemd-shared-257.so
@@ -605,6 +604,41 @@ outputs:
     - path: /usr/share/doc/systemd/TRANSLATORS.md
     - path: /usr/share/doc/systemd/UIDS-GIDS.md
 
+  hwdb:
+    files:
+    - path: /usr/lib/udev/hwdb.d/20-OUI.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-acpi-vendor.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-bluetooth-vendor-product.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-dmi-id.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-net-ifname.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-pci-classes.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-pci-vendor-model.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-sdio-classes.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-sdio-vendor-model.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-usb-classes.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-usb-vendor-model.hwdb
+    - path: /usr/lib/udev/hwdb.d/20-vmbus-class.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-autosuspend-chromiumos.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-autosuspend-fingerprint-reader.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-autosuspend.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-evdev.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-input-id.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-keyboard.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-seat.hwdb
+    - path: /usr/lib/udev/hwdb.d/60-sensor.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-analyzers.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-av-production.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-cameras.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-hardware-wallets.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-joystick.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-mouse.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-pda.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-pointingstick.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-sound-card.hwdb
+    - path: /usr/lib/udev/hwdb.d/70-touchpad.hwdb
+    - path: /usr/lib/udev/hwdb.d/80-ieee1394-unit-function.hwdb
+    - path: /usr/lib/udev/hwdb.d/README
+
   lib:
     files:
     - path: /usr/lib/environment.d/99-environment.conf
@@ -638,7 +672,6 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcap.so.2
-      - /usr/lib/libcrypt.so.2
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
     - path: /usr/lib/libsystemd.so
@@ -1210,7 +1243,6 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libkmod.so.2
       - /usr/lib/systemd/libsystemd-shared-257.so
     - path: /usr/lib/systemd/systemd-mountfsd
       needs:
@@ -1510,38 +1542,6 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/systemd/libsystemd-shared-257.so
-    - path: /usr/lib/udev/hwdb.d/20-OUI.hwdb
-    - path: /usr/lib/udev/hwdb.d/20-acpi-vendor.hwdb
-    - path: /usr/lib/udev/hwdb.d/20-bluetooth-vendor-product.hwdb
-    - path: /usr/lib/udev/hwdb.d/20-dmi-id.hwdb
-    - path: /usr/lib/udev/hwdb.d/20-net-ifname.hwdb
-    - path: /usr/lib/udev/hwdb.d/20-pci-classes.hwdb
-    - path: /usr/lib/udev/hwdb.d/20-pci-vendor-model.hwdb
-    - path: /usr/lib/udev/hwdb.d/20-sdio-classes.hwdb
-    - path: /usr/lib/udev/hwdb.d/20-sdio-vendor-model.hwdb
-    - path: /usr/lib/udev/hwdb.d/20-usb-classes.hwdb
-    - path: /usr/lib/udev/hwdb.d/20-usb-vendor-model.hwdb
-    - path: /usr/lib/udev/hwdb.d/20-vmbus-class.hwdb
-    - path: /usr/lib/udev/hwdb.d/60-autosuspend-chromiumos.hwdb
-    - path: /usr/lib/udev/hwdb.d/60-autosuspend-fingerprint-reader.hwdb
-    - path: /usr/lib/udev/hwdb.d/60-autosuspend.hwdb
-    - path: /usr/lib/udev/hwdb.d/60-evdev.hwdb
-    - path: /usr/lib/udev/hwdb.d/60-input-id.hwdb
-    - path: /usr/lib/udev/hwdb.d/60-keyboard.hwdb
-    - path: /usr/lib/udev/hwdb.d/60-seat.hwdb
-    - path: /usr/lib/udev/hwdb.d/60-sensor.hwdb
-    - path: /usr/lib/udev/hwdb.d/70-analyzers.hwdb
-    - path: /usr/lib/udev/hwdb.d/70-av-production.hwdb
-    - path: /usr/lib/udev/hwdb.d/70-cameras.hwdb
-    - path: /usr/lib/udev/hwdb.d/70-hardware-wallets.hwdb
-    - path: /usr/lib/udev/hwdb.d/70-joystick.hwdb
-    - path: /usr/lib/udev/hwdb.d/70-mouse.hwdb
-    - path: /usr/lib/udev/hwdb.d/70-pda.hwdb
-    - path: /usr/lib/udev/hwdb.d/70-pointingstick.hwdb
-    - path: /usr/lib/udev/hwdb.d/70-sound-card.hwdb
-    - path: /usr/lib/udev/hwdb.d/70-touchpad.hwdb
-    - path: /usr/lib/udev/hwdb.d/80-ieee1394-unit-function.hwdb
-    - path: /usr/lib/udev/hwdb.d/README
     - path: /usr/lib/udev/iocost
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -1794,4 +1794,3 @@ resolution:
   /usr/lib/libblkid.so.1: util_linux
   /usr/lib/libfdisk.so.1: util_linux
   /usr/lib/libmount.so.1: util_linux
-  /usr/lib/libkmod.so.2: kmod

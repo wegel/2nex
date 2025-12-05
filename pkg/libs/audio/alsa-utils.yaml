@@ -1,0 +1,291 @@
+package:
+  schema: 1
+  name: alsa-utils
+  slug: alsa-utils
+  namespace: libs/audio
+  version: 1.2.14
+  description: ALSA utilities (amixer, aplay, arecord, alsactl, alsamixer)
+  homepage: https://www.alsa-project.org/
+  checksum: f0a3800e8c1c64b50871dbdd0f46b05c85f01225306a522edcc3ed85dfdd0f70
+
+sources:
+- name: alsa-utils
+  url: https://www.alsa-project.org/files/pub/utils/alsa-utils-1.2.14.tar.bz2
+  sha256: 0794c74d33fed943e7c50609c13089e409312b6c403d6ae8984fc429c0960741
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: alsa-lib
+  commit: x86_64/pkg/libs/audio/alsa-lib/1.2.14/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/bootstrap/phase1/file/5.45/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4119:759, 12493:2684, 21043:3546, 34024:4197, 42733:5808, 55548:6606, 64159:7671, 81627:9247, 94139:10131, 104414:10636]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_alsa_utils} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure \
+      --prefix=/usr \
+      --disable-alsaconf \
+      --disable-bat \
+      --disable-xmlto \
+      --with-curses=ncursesw
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - bin
+  - lib
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/aconnect
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/alsaloop
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/alsamixer
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libformw.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libmenuw.so.6
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/libpanelw.so.6
+    - path: /usr/bin/alsatplg
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libatopology.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/alsaucm
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/amidi
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/amixer
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/bin/aplay
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/aplaymidi
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/aplaymidi2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/arecord
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/arecordmidi
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/arecordmidi2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/aseqdump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/aseqnet
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/aseqsend
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/axfer
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/bin/iecset
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/nhlt-dmic-info
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/speaker-test
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+
+  dev:
+    files:
+    - path: /usr/lib/alsa-topology/libalsatplg_module_nhlt.la
+
+  lib:
+    files:
+    - path: /lib/udev/rules.d/90-alsa-restore.rules
+    - path: /usr/lib/alsa-topology/libalsatplg_module_nhlt.so
+      needs:
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+
+  locale:
+    files:
+    - path: /usr/share/locale/de/LC_MESSAGES/alsa-utils.mo
+    - path: /usr/share/locale/eu/LC_MESSAGES/alsa-utils.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/alsa-utils.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/alsa-utils.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/alsa-utils.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/alsa-utils.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/alsa-utils.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/aconnect.1
+    - path: /usr/share/man/man1/alsactl.1
+    - path: /usr/share/man/man1/alsaloop.1
+    - path: /usr/share/man/man1/alsamixer.1
+    - path: /usr/share/man/man1/amidi.1
+    - path: /usr/share/man/man1/amixer.1
+    - path: /usr/share/man/man1/aplay.1
+    - path: /usr/share/man/man1/aplaymidi.1
+    - path: /usr/share/man/man1/aplaymidi2.1
+    - path: /usr/share/man/man1/arecord.1
+    - path: /usr/share/man/man1/arecordmidi.1
+    - path: /usr/share/man/man1/arecordmidi2.1
+    - path: /usr/share/man/man1/aseqdump.1
+    - path: /usr/share/man/man1/aseqnet.1
+    - path: /usr/share/man/man1/aseqsend.1
+    - path: /usr/share/man/man1/axfer-list.1
+    - path: /usr/share/man/man1/axfer-transfer.1
+    - path: /usr/share/man/man1/axfer.1
+    - path: /usr/share/man/man1/iecset.1
+    - path: /usr/share/man/man1/nhlt-dmic-info.1
+    - path: /usr/share/man/man1/speaker-test.1
+    - path: /usr/share/man/man8/alsa-info.sh.8
+
+  misc:
+    files:
+    - path: /usr/sbin/alsa-info.sh
+    - path: /usr/sbin/alsactl
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/share/alsa/init/00main
+    - path: /usr/share/alsa/init/ca0106
+    - path: /usr/share/alsa/init/default
+    - path: /usr/share/alsa/init/hda
+    - path: /usr/share/alsa/init/help
+    - path: /usr/share/alsa/init/info
+    - path: /usr/share/alsa/init/test
+    - path: /usr/share/sounds/alsa/Front_Center.wav
+    - path: /usr/share/sounds/alsa/Front_Left.wav
+    - path: /usr/share/sounds/alsa/Front_Right.wav
+    - path: /usr/share/sounds/alsa/Noise.wav
+    - path: /usr/share/sounds/alsa/Rear_Center.wav
+    - path: /usr/share/sounds/alsa/Rear_Left.wav
+    - path: /usr/share/sounds/alsa/Rear_Right.wav
+    - path: /usr/share/sounds/alsa/Side_Left.wav
+    - path: /usr/share/sounds/alsa/Side_Right.wav
+
+resolution:
+  /usr/lib/libasound.so.2: alsa-lib
+  /usr/lib/libatopology.so.2: alsa-lib
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libformw.so.6: ncurses
+  /usr/lib/libmenuw.so.6: ncurses
+  /usr/lib/libncursesw.so.6: ncurses
+  /usr/lib/libpanelw.so.6: ncurses

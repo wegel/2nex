@@ -1,0 +1,583 @@
+package:
+  schema: 1
+  name: icu
+  slug: icu
+  namespace: libs/system
+  version: "76.1"
+  description: International Components for Unicode library
+  homepage: https://icu.unicode.org/
+  checksum: 1b82e478dacf1b8d11485f8a2aae5ac86c920dae27c17c7d51c66cc17527209a
+
+sources:
+- name: icu
+  url: https://github.com/unicode-org/icu/releases/download/release-76-1/icu4c-76_1-src.tgz
+  sha256: dfacb46bfe4747410472ce3e1144bf28a102feeaa4e3875bac9b4c6cf30f4f3e
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/bootstrap/phase3/pkgconf/2.2.0/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4120:1895, 12319:2718, 24629:7475, 36950:10789, 49053:16428, 62093:22460, 74916:28433, 91434:29045, 112027:29484, 120347:29573]
+
+  script: |
+    tar --no-same-owner -xzf /${SOURCE_icu} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}/source
+
+    # unset TARGET as it conflicts with ICU's build system
+    unset TARGET
+
+    ./configure \
+      --prefix=/usr \
+      --disable-samples \
+      --disable-tests
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/derb
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicuio.so.76
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/genbrk
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/gencfu
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libicui18n.so.76
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/gencnval
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+    - path: /usr/bin/gendict
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/genrb
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicui18n.so.76
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/icu-config
+    - path: /usr/bin/icuexportdata
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/icuinfo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+    - path: /usr/bin/makeconv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/pkgdata
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/uconv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicui18n.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+
+  dev:
+    files:
+    - path: /usr/include/unicode/alphaindex.h
+    - path: /usr/include/unicode/appendable.h
+    - path: /usr/include/unicode/basictz.h
+    - path: /usr/include/unicode/brkiter.h
+    - path: /usr/include/unicode/bytestream.h
+    - path: /usr/include/unicode/bytestrie.h
+    - path: /usr/include/unicode/bytestriebuilder.h
+    - path: /usr/include/unicode/calendar.h
+    - path: /usr/include/unicode/caniter.h
+    - path: /usr/include/unicode/casemap.h
+    - path: /usr/include/unicode/char16ptr.h
+    - path: /usr/include/unicode/chariter.h
+    - path: /usr/include/unicode/choicfmt.h
+    - path: /usr/include/unicode/coleitr.h
+    - path: /usr/include/unicode/coll.h
+    - path: /usr/include/unicode/compactdecimalformat.h
+    - path: /usr/include/unicode/curramt.h
+    - path: /usr/include/unicode/currpinf.h
+    - path: /usr/include/unicode/currunit.h
+    - path: /usr/include/unicode/datefmt.h
+    - path: /usr/include/unicode/dbbi.h
+    - path: /usr/include/unicode/dcfmtsym.h
+    - path: /usr/include/unicode/decimfmt.h
+    - path: /usr/include/unicode/displayoptions.h
+    - path: /usr/include/unicode/docmain.h
+    - path: /usr/include/unicode/dtfmtsym.h
+    - path: /usr/include/unicode/dtintrv.h
+    - path: /usr/include/unicode/dtitvfmt.h
+    - path: /usr/include/unicode/dtitvinf.h
+    - path: /usr/include/unicode/dtptngen.h
+    - path: /usr/include/unicode/dtrule.h
+    - path: /usr/include/unicode/edits.h
+    - path: /usr/include/unicode/enumset.h
+    - path: /usr/include/unicode/errorcode.h
+    - path: /usr/include/unicode/fieldpos.h
+    - path: /usr/include/unicode/filteredbrk.h
+    - path: /usr/include/unicode/fmtable.h
+    - path: /usr/include/unicode/format.h
+    - path: /usr/include/unicode/formattednumber.h
+    - path: /usr/include/unicode/formattedvalue.h
+    - path: /usr/include/unicode/fpositer.h
+    - path: /usr/include/unicode/gender.h
+    - path: /usr/include/unicode/gregocal.h
+    - path: /usr/include/unicode/icudataver.h
+    - path: /usr/include/unicode/icuplug.h
+    - path: /usr/include/unicode/idna.h
+    - path: /usr/include/unicode/listformatter.h
+    - path: /usr/include/unicode/localebuilder.h
+    - path: /usr/include/unicode/localematcher.h
+    - path: /usr/include/unicode/localpointer.h
+    - path: /usr/include/unicode/locdspnm.h
+    - path: /usr/include/unicode/locid.h
+    - path: /usr/include/unicode/measfmt.h
+    - path: /usr/include/unicode/measunit.h
+    - path: /usr/include/unicode/measure.h
+    - path: /usr/include/unicode/messageformat2_arguments.h
+    - path: /usr/include/unicode/messageformat2_data_model.h
+    - path: /usr/include/unicode/messageformat2_data_model_names.h
+    - path: /usr/include/unicode/messageformat2_formattable.h
+    - path: /usr/include/unicode/messageformat2_function_registry.h
+    - path: /usr/include/unicode/messageformat2.h
+    - path: /usr/include/unicode/messagepattern.h
+    - path: /usr/include/unicode/msgfmt.h
+    - path: /usr/include/unicode/normalizer2.h
+    - path: /usr/include/unicode/normlzr.h
+    - path: /usr/include/unicode/nounit.h
+    - path: /usr/include/unicode/numberformatter.h
+    - path: /usr/include/unicode/numberrangeformatter.h
+    - path: /usr/include/unicode/numfmt.h
+    - path: /usr/include/unicode/numsys.h
+    - path: /usr/include/unicode/parseerr.h
+    - path: /usr/include/unicode/parsepos.h
+    - path: /usr/include/unicode/platform.h
+    - path: /usr/include/unicode/plurfmt.h
+    - path: /usr/include/unicode/plurrule.h
+    - path: /usr/include/unicode/ptypes.h
+    - path: /usr/include/unicode/putil.h
+    - path: /usr/include/unicode/rbbi.h
+    - path: /usr/include/unicode/rbnf.h
+    - path: /usr/include/unicode/rbtz.h
+    - path: /usr/include/unicode/regex.h
+    - path: /usr/include/unicode/region.h
+    - path: /usr/include/unicode/reldatefmt.h
+    - path: /usr/include/unicode/rep.h
+    - path: /usr/include/unicode/resbund.h
+    - path: /usr/include/unicode/schriter.h
+    - path: /usr/include/unicode/scientificnumberformatter.h
+    - path: /usr/include/unicode/search.h
+    - path: /usr/include/unicode/selfmt.h
+    - path: /usr/include/unicode/simpleformatter.h
+    - path: /usr/include/unicode/simplenumberformatter.h
+    - path: /usr/include/unicode/simpletz.h
+    - path: /usr/include/unicode/smpdtfmt.h
+    - path: /usr/include/unicode/sortkey.h
+    - path: /usr/include/unicode/std_string.h
+    - path: /usr/include/unicode/strenum.h
+    - path: /usr/include/unicode/stringoptions.h
+    - path: /usr/include/unicode/stringpiece.h
+    - path: /usr/include/unicode/stringtriebuilder.h
+    - path: /usr/include/unicode/stsearch.h
+    - path: /usr/include/unicode/symtable.h
+    - path: /usr/include/unicode/tblcoll.h
+    - path: /usr/include/unicode/timezone.h
+    - path: /usr/include/unicode/tmunit.h
+    - path: /usr/include/unicode/tmutamt.h
+    - path: /usr/include/unicode/tmutfmt.h
+    - path: /usr/include/unicode/translit.h
+    - path: /usr/include/unicode/tzfmt.h
+    - path: /usr/include/unicode/tznames.h
+    - path: /usr/include/unicode/tzrule.h
+    - path: /usr/include/unicode/tztrans.h
+    - path: /usr/include/unicode/ubidi.h
+    - path: /usr/include/unicode/ubiditransform.h
+    - path: /usr/include/unicode/ubrk.h
+    - path: /usr/include/unicode/ucal.h
+    - path: /usr/include/unicode/ucasemap.h
+    - path: /usr/include/unicode/ucat.h
+    - path: /usr/include/unicode/uchar.h
+    - path: /usr/include/unicode/ucharstrie.h
+    - path: /usr/include/unicode/ucharstriebuilder.h
+    - path: /usr/include/unicode/uchriter.h
+    - path: /usr/include/unicode/uclean.h
+    - path: /usr/include/unicode/ucnv.h
+    - path: /usr/include/unicode/ucnv_cb.h
+    - path: /usr/include/unicode/ucnv_err.h
+    - path: /usr/include/unicode/ucnvsel.h
+    - path: /usr/include/unicode/ucol.h
+    - path: /usr/include/unicode/ucoleitr.h
+    - path: /usr/include/unicode/uconfig.h
+    - path: /usr/include/unicode/ucpmap.h
+    - path: /usr/include/unicode/ucptrie.h
+    - path: /usr/include/unicode/ucsdet.h
+    - path: /usr/include/unicode/ucurr.h
+    - path: /usr/include/unicode/udat.h
+    - path: /usr/include/unicode/udata.h
+    - path: /usr/include/unicode/udateintervalformat.h
+    - path: /usr/include/unicode/udatpg.h
+    - path: /usr/include/unicode/udisplaycontext.h
+    - path: /usr/include/unicode/udisplayoptions.h
+    - path: /usr/include/unicode/uenum.h
+    - path: /usr/include/unicode/ufieldpositer.h
+    - path: /usr/include/unicode/uformattable.h
+    - path: /usr/include/unicode/uformattednumber.h
+    - path: /usr/include/unicode/uformattedvalue.h
+    - path: /usr/include/unicode/ugender.h
+    - path: /usr/include/unicode/uidna.h
+    - path: /usr/include/unicode/uiter.h
+    - path: /usr/include/unicode/uldnames.h
+    - path: /usr/include/unicode/ulistformatter.h
+    - path: /usr/include/unicode/uloc.h
+    - path: /usr/include/unicode/ulocale.h
+    - path: /usr/include/unicode/ulocbuilder.h
+    - path: /usr/include/unicode/ulocdata.h
+    - path: /usr/include/unicode/umachine.h
+    - path: /usr/include/unicode/umisc.h
+    - path: /usr/include/unicode/umsg.h
+    - path: /usr/include/unicode/umutablecptrie.h
+    - path: /usr/include/unicode/unifilt.h
+    - path: /usr/include/unicode/unifunct.h
+    - path: /usr/include/unicode/unimatch.h
+    - path: /usr/include/unicode/unirepl.h
+    - path: /usr/include/unicode/uniset.h
+    - path: /usr/include/unicode/unistr.h
+    - path: /usr/include/unicode/unorm.h
+    - path: /usr/include/unicode/unorm2.h
+    - path: /usr/include/unicode/unum.h
+    - path: /usr/include/unicode/unumberformatter.h
+    - path: /usr/include/unicode/unumberoptions.h
+    - path: /usr/include/unicode/unumberrangeformatter.h
+    - path: /usr/include/unicode/unumsys.h
+    - path: /usr/include/unicode/uobject.h
+    - path: /usr/include/unicode/upluralrules.h
+    - path: /usr/include/unicode/uregex.h
+    - path: /usr/include/unicode/uregion.h
+    - path: /usr/include/unicode/ureldatefmt.h
+    - path: /usr/include/unicode/urename.h
+    - path: /usr/include/unicode/urep.h
+    - path: /usr/include/unicode/ures.h
+    - path: /usr/include/unicode/uscript.h
+    - path: /usr/include/unicode/usearch.h
+    - path: /usr/include/unicode/uset.h
+    - path: /usr/include/unicode/usetiter.h
+    - path: /usr/include/unicode/ushape.h
+    - path: /usr/include/unicode/usimplenumberformatter.h
+    - path: /usr/include/unicode/uspoof.h
+    - path: /usr/include/unicode/usprep.h
+    - path: /usr/include/unicode/ustdio.h
+    - path: /usr/include/unicode/ustream.h
+    - path: /usr/include/unicode/ustring.h
+    - path: /usr/include/unicode/ustringtrie.h
+    - path: /usr/include/unicode/utext.h
+    - path: /usr/include/unicode/utf.h
+    - path: /usr/include/unicode/utf8.h
+    - path: /usr/include/unicode/utf16.h
+    - path: /usr/include/unicode/utf32.h
+    - path: /usr/include/unicode/utf_old.h
+    - path: /usr/include/unicode/utmscale.h
+    - path: /usr/include/unicode/utrace.h
+    - path: /usr/include/unicode/utrans.h
+    - path: /usr/include/unicode/utypes.h
+    - path: /usr/include/unicode/uvernum.h
+    - path: /usr/include/unicode/uversion.h
+    - path: /usr/include/unicode/vtzone.h
+    - path: /usr/lib/pkgconfig/icu-i18n.pc
+    - path: /usr/lib/pkgconfig/icu-io.pc
+    - path: /usr/lib/pkgconfig/icu-uc.pc
+
+  lib:
+    files:
+    - path: /usr/lib/icu/76.1/Makefile.inc
+    - path: /usr/lib/icu/76.1/pkgdata.inc
+    - path: /usr/lib/icu/Makefile.inc
+    - path: /usr/lib/icu/current
+    - path: /usr/lib/icu/pkgdata.inc
+    - path: /usr/lib/libicudata.so
+    - path: /usr/lib/libicudata.so.76
+    - path: /usr/lib/libicudata.so.76.1
+    - path: /usr/lib/libicui18n.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libicui18n.so.76
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libicui18n.so.76.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libicuio.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicui18n.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libicuio.so.76
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicui18n.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libicuio.so.76.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicui18n.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libicutest.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libicutest.so.76
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libicutest.so.76.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libicutu.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicui18n.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libicutu.so.76
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicui18n.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libicutu.so.76.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicui18n.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libicuuc.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicudata.so.76
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libicuuc.so.76
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicudata.so.76
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libicuuc.so.76.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicudata.so.76
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man1/derb.1
+    - path: /usr/share/man/man1/genbrk.1
+    - path: /usr/share/man/man1/gencfu.1
+    - path: /usr/share/man/man1/gencnval.1
+    - path: /usr/share/man/man1/gendict.1
+    - path: /usr/share/man/man1/genrb.1
+    - path: /usr/share/man/man1/icu-config.1
+    - path: /usr/share/man/man1/icuexportdata.1
+    - path: /usr/share/man/man1/makeconv.1
+    - path: /usr/share/man/man1/pkgdata.1
+    - path: /usr/share/man/man1/uconv.1
+    - path: /usr/share/man/man8/genccode.8
+    - path: /usr/share/man/man8/gencmn.8
+    - path: /usr/share/man/man8/gensprep.8
+    - path: /usr/share/man/man8/icupkg.8
+
+  misc:
+    files:
+    - path: /usr/sbin/escapesrc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/sbin/genccode
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libicutu.so.76
+    - path: /usr/sbin/gencmn
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libicutu.so.76
+    - path: /usr/sbin/gennorm2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/sbin/gensprep
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libicuuc.so.76
+    - path: /usr/sbin/icupkg
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libicutu.so.76
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/share/icu/76.1/LICENSE
+    - path: /usr/share/icu/76.1/config/mh-linux
+    - path: /usr/share/icu/76.1/install-sh
+    - path: /usr/share/icu/76.1/mkinstalldirs
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libicudata.so.76: self
+  /usr/lib/libicui18n.so.76: self
+  /usr/lib/libicuio.so.76: self
+  /usr/lib/libicutu.so.76: self
+  /usr/lib/libicuuc.so.76: self

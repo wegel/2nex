@@ -74,9 +74,15 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/strip-nondeterminism/1.13.0/bundles/dev
 
 build:
-  profile: [4165:1046, 8281:1807, 16605:2138, 25039:3317, 29222:3317, 37784:4083, 46064:30694, 54349:57791, 66761:83691, 71306:88504]
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4124:1007, 8239:1885, 16673:2343, 25191:3534, 29371:3534, 37733:4162, 46013:28995, 54296:53607, 66708:77717, 71255:82501]
 
   script: |
+    # doesn't build correctly with LTO
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
     tar --no-same-owner -xf ${SOURCE_mold} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 

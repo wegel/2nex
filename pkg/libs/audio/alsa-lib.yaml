@@ -1,0 +1,275 @@
+package:
+  schema: 1
+  name: alsa-lib
+  slug: alsa-lib
+  namespace: libs/audio
+  version: 1.2.14
+  description: ALSA library
+  homepage: https://www.alsa-project.org/
+  checksum: 94dc10bbe87f37676628699b0abc9f872efd9856a9a4322cbb7bb39f87e3bf8a
+
+sources:
+- name: alsa-lib
+  url: https://www.alsa-project.org/files/pub/lib/alsa-lib-1.2.14.tar.bz2
+  sha256: be9c88a0b3604367dd74167a2b754a35e142f670292ae47a2fdef27a2ee97a32
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4146:1860, 8252:4551, 12353:5373, 16452:8875, 20595:9072, 24727:9259, 28872:11354, 32973:11895, 37069:12089, 40461:12275]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_alsa_lib} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure \
+      --prefix=/usr \
+      --without-debug \
+      --disable-python
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - conf
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/aserver
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+
+  conf:
+    files:
+    - path: /usr/share/alsa/alsa.conf
+    - path: /usr/share/alsa/cards/AACI.conf
+    - path: /usr/share/alsa/cards/ATIIXP-MODEM.conf
+    - path: /usr/share/alsa/cards/ATIIXP-SPDMA.conf
+    - path: /usr/share/alsa/cards/ATIIXP.conf
+    - path: /usr/share/alsa/cards/AU8810.conf
+    - path: /usr/share/alsa/cards/AU8820.conf
+    - path: /usr/share/alsa/cards/AU8830.conf
+    - path: /usr/share/alsa/cards/Audigy.conf
+    - path: /usr/share/alsa/cards/Audigy2.conf
+    - path: /usr/share/alsa/cards/Aureon51.conf
+    - path: /usr/share/alsa/cards/Aureon71.conf
+    - path: /usr/share/alsa/cards/CA0106.conf
+    - path: /usr/share/alsa/cards/CMI8338-SWIEC.conf
+    - path: /usr/share/alsa/cards/CMI8338.conf
+    - path: /usr/share/alsa/cards/CMI8738-MC6.conf
+    - path: /usr/share/alsa/cards/CMI8738-MC8.conf
+    - path: /usr/share/alsa/cards/CMI8788.conf
+    - path: /usr/share/alsa/cards/CS46xx.conf
+    - path: /usr/share/alsa/cards/EMU10K1X.conf
+    - path: /usr/share/alsa/cards/EMU10K1.conf
+    - path: /usr/share/alsa/cards/ENS1370.conf
+    - path: /usr/share/alsa/cards/ENS1371.conf
+    - path: /usr/share/alsa/cards/ES1968.conf
+    - path: /usr/share/alsa/cards/Echo_Echo3G.conf
+    - path: /usr/share/alsa/cards/FM801.conf
+    - path: /usr/share/alsa/cards/FWSpeakers.conf
+    - path: /usr/share/alsa/cards/FireWave.conf
+    - path: /usr/share/alsa/cards/GUS.conf
+    - path: /usr/share/alsa/cards/HDA-Intel.conf
+    - path: /usr/share/alsa/cards/HdmiLpeAudio.conf
+    - path: /usr/share/alsa/cards/ICE1712.conf
+    - path: /usr/share/alsa/cards/ICE1724.conf
+    - path: /usr/share/alsa/cards/ICH-MODEM.conf
+    - path: /usr/share/alsa/cards/ICH.conf
+    - path: /usr/share/alsa/cards/ICH4.conf
+    - path: /usr/share/alsa/cards/Loopback.conf
+    - path: /usr/share/alsa/cards/Maestro3.conf
+    - path: /usr/share/alsa/cards/NFORCE.conf
+    - path: /usr/share/alsa/cards/PC-Speaker.conf
+    - path: /usr/share/alsa/cards/PMac.conf
+    - path: /usr/share/alsa/cards/PMacToonie.conf
+    - path: /usr/share/alsa/cards/PS3.conf
+    - path: /usr/share/alsa/cards/RME9636.conf
+    - path: /usr/share/alsa/cards/RME9652.conf
+    - path: /usr/share/alsa/cards/SB-XFi.conf
+    - path: /usr/share/alsa/cards/SI7018.conf
+    - path: /usr/share/alsa/cards/TRID4DWAVENX.conf
+    - path: /usr/share/alsa/cards/USB-Audio.conf
+    - path: /usr/share/alsa/cards/VIA686A.conf
+    - path: /usr/share/alsa/cards/VIA8233A.conf
+    - path: /usr/share/alsa/cards/VIA8233.conf
+    - path: /usr/share/alsa/cards/VIA8237.conf
+    - path: /usr/share/alsa/cards/VX222.conf
+    - path: /usr/share/alsa/cards/VXPocket.conf
+    - path: /usr/share/alsa/cards/VXPocket440.conf
+    - path: /usr/share/alsa/cards/YMF744.conf
+    - path: /usr/share/alsa/cards/aliases.conf
+    - path: /usr/share/alsa/cards/pistachio-card.conf
+    - path: /usr/share/alsa/cards/vc4-hdmi.conf
+    - path: /usr/share/alsa/ctl/default.conf
+    - path: /usr/share/alsa/pcm/center_lfe.conf
+    - path: /usr/share/alsa/pcm/default.conf
+    - path: /usr/share/alsa/pcm/dmix.conf
+    - path: /usr/share/alsa/pcm/dpl.conf
+    - path: /usr/share/alsa/pcm/dsnoop.conf
+    - path: /usr/share/alsa/pcm/front.conf
+    - path: /usr/share/alsa/pcm/hdmi.conf
+    - path: /usr/share/alsa/pcm/iec958.conf
+    - path: /usr/share/alsa/pcm/modem.conf
+    - path: /usr/share/alsa/pcm/rear.conf
+    - path: /usr/share/alsa/pcm/side.conf
+    - path: /usr/share/alsa/pcm/surround21.conf
+    - path: /usr/share/alsa/pcm/surround40.conf
+    - path: /usr/share/alsa/pcm/surround41.conf
+    - path: /usr/share/alsa/pcm/surround50.conf
+    - path: /usr/share/alsa/pcm/surround51.conf
+    - path: /usr/share/alsa/pcm/surround71.conf
+
+  dev:
+    files:
+    - path: /usr/include/alsa/asoundef.h
+    - path: /usr/include/alsa/asoundlib.h
+    - path: /usr/include/alsa/conf.h
+    - path: /usr/include/alsa/control.h
+    - path: /usr/include/alsa/control_external.h
+    - path: /usr/include/alsa/control_plugin.h
+    - path: /usr/include/alsa/error.h
+    - path: /usr/include/alsa/global.h
+    - path: /usr/include/alsa/hwdep.h
+    - path: /usr/include/alsa/input.h
+    - path: /usr/include/alsa/mixer.h
+    - path: /usr/include/alsa/mixer_abst.h
+    - path: /usr/include/alsa/output.h
+    - path: /usr/include/alsa/pcm.h
+    - path: /usr/include/alsa/pcm_external.h
+    - path: /usr/include/alsa/pcm_extplug.h
+    - path: /usr/include/alsa/pcm_ioplug.h
+    - path: /usr/include/alsa/pcm_old.h
+    - path: /usr/include/alsa/pcm_plugin.h
+    - path: /usr/include/alsa/pcm_rate.h
+    - path: /usr/include/alsa/rawmidi.h
+    - path: /usr/include/alsa/seq.h
+    - path: /usr/include/alsa/seq_event.h
+    - path: /usr/include/alsa/seq_midi_event.h
+    - path: /usr/include/alsa/seqmid.h
+    - path: /usr/include/alsa/sound/asoc.h
+    - path: /usr/include/alsa/sound/asound_fm.h
+    - path: /usr/include/alsa/sound/emu10k1.h
+    - path: /usr/include/alsa/sound/hdsp.h
+    - path: /usr/include/alsa/sound/hdspm.h
+    - path: /usr/include/alsa/sound/sb16_csp.h
+    - path: /usr/include/alsa/sound/sscape_ioctl.h
+    - path: /usr/include/alsa/sound/tlv.h
+    - path: /usr/include/alsa/sound/type_compat.h
+    - path: /usr/include/alsa/sound/uapi/asoc.h
+    - path: /usr/include/alsa/sound/uapi/asound_fm.h
+    - path: /usr/include/alsa/sound/uapi/emu10k1.h
+    - path: /usr/include/alsa/sound/uapi/hdsp.h
+    - path: /usr/include/alsa/sound/uapi/hdspm.h
+    - path: /usr/include/alsa/sound/uapi/sb16_csp.h
+    - path: /usr/include/alsa/sound/uapi/sscape_ioctl.h
+    - path: /usr/include/alsa/sound/uapi/tlv.h
+    - path: /usr/include/alsa/timer.h
+    - path: /usr/include/alsa/topology.h
+    - path: /usr/include/alsa/ump.h
+    - path: /usr/include/alsa/ump_msg.h
+    - path: /usr/include/alsa/use-case.h
+    - path: /usr/include/alsa/version.h
+    - path: /usr/include/asoundlib.h
+    - path: /usr/include/sys/asoundlib.h
+    - path: /usr/lib/libasound.la
+    - path: /usr/lib/libatopology.la
+    - path: /usr/lib/pkgconfig/alsa-topology.pc
+    - path: /usr/lib/pkgconfig/alsa.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libasound.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libasound.so.2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libasound.so.2.0.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libatopology.so
+      needs:
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libatopology.so.2
+      needs:
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libatopology.so.2.0.0
+      needs:
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+
+  misc:
+    files:
+    - path: /usr/share/aclocal/alsa.m4
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libasound.so.2: self

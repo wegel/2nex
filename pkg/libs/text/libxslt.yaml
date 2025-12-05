@@ -1,0 +1,244 @@
+package:
+  schema: 1
+  name: libxslt
+  slug: libxslt
+  namespace: libs/text
+  version: 1.1.42
+  description: XSLT C library and tools
+  homepage: https://gitlab.gnome.org/GNOME/libxslt
+  checksum: b819d0a42c8b919c57089aa88643e8facc1f7df083023712c269390c8f93beaa
+
+sources:
+- name: libxslt
+  url: https://download.gnome.org/sources/libxslt/1.1/libxslt-1.1.42.tar.xz
+  sha256: 85ca62cac0d41fc77d3f6033da9df6fd73d20ea2fc18b0a3609ffb4110e1baeb
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+- name: mpc
+  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4099:888, 8225:4062, 12330:5341, 16439:6134, 20563:6164, 24701:6253, 27517:6285]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_libxslt} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --disable-static --without-python
+
+    make
+
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/xslt-config
+    - path: /usr/bin/xsltproc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libexslt.so.0
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libxslt.so.1
+
+  dev:
+    files:
+    - path: /usr/include/libexslt/exslt.h
+    - path: /usr/include/libexslt/exsltconfig.h
+    - path: /usr/include/libexslt/exsltexports.h
+    - path: /usr/include/libxslt/attributes.h
+    - path: /usr/include/libxslt/documents.h
+    - path: /usr/include/libxslt/extensions.h
+    - path: /usr/include/libxslt/extra.h
+    - path: /usr/include/libxslt/functions.h
+    - path: /usr/include/libxslt/imports.h
+    - path: /usr/include/libxslt/keys.h
+    - path: /usr/include/libxslt/namespaces.h
+    - path: /usr/include/libxslt/numbersInternals.h
+    - path: /usr/include/libxslt/pattern.h
+    - path: /usr/include/libxslt/preproc.h
+    - path: /usr/include/libxslt/security.h
+    - path: /usr/include/libxslt/templates.h
+    - path: /usr/include/libxslt/transform.h
+    - path: /usr/include/libxslt/variables.h
+    - path: /usr/include/libxslt/xslt.h
+    - path: /usr/include/libxslt/xsltInternals.h
+    - path: /usr/include/libxslt/xsltconfig.h
+    - path: /usr/include/libxslt/xsltexports.h
+    - path: /usr/include/libxslt/xsltlocale.h
+    - path: /usr/include/libxslt/xsltutils.h
+    - path: /usr/lib/libexslt.la
+    - path: /usr/lib/libxslt.la
+    - path: /usr/lib/pkgconfig/libexslt.pc
+    - path: /usr/lib/pkgconfig/libxslt.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/libxslt/tutorial/images/callouts/1.png
+    - path: /usr/share/doc/libxslt/tutorial/images/callouts/2.png
+    - path: /usr/share/doc/libxslt/tutorial/images/callouts/3.png
+    - path: /usr/share/doc/libxslt/tutorial/images/callouts/4.png
+    - path: /usr/share/doc/libxslt/tutorial/images/callouts/5.png
+    - path: /usr/share/doc/libxslt/tutorial/images/callouts/6.png
+    - path: /usr/share/doc/libxslt/tutorial/images/callouts/7.png
+    - path: /usr/share/doc/libxslt/tutorial/images/callouts/8.png
+    - path: /usr/share/doc/libxslt/tutorial/images/callouts/9.png
+    - path: /usr/share/doc/libxslt/tutorial/images/callouts/10.png
+    - path: /usr/share/doc/libxslt/tutorial/libxslt_tutorial.c
+    - path: /usr/share/doc/libxslt/tutorial/libxslttutorial.html
+    - path: /usr/share/doc/libxslt/tutorial2/libxslt_pipes.c
+    - path: /usr/share/doc/libxslt/tutorial2/libxslt_pipes.html
+    - path: /usr/share/doc/libxslt/xsltproc.html
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/libxslt/FindGcrypt.cmake
+    - path: /usr/lib/cmake/libxslt/libxslt-config.cmake
+    - path: /usr/lib/libexslt.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libxslt.so.1
+    - path: /usr/lib/libexslt.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libxslt.so.1
+    - path: /usr/lib/libexslt.so.0.8.23
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libxslt.so.1
+    - path: /usr/lib/libxslt.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libxml2.so.2
+    - path: /usr/lib/libxslt.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libxml2.so.2
+    - path: /usr/lib/libxslt.so.1.1.42
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libxml2.so.2
+    - path: /usr/lib/xsltConf.sh
+
+  man:
+    files:
+    - path: /usr/share/man/man1/xsltproc.1
+    - path: /usr/share/man/man3/libexslt.3
+    - path: /usr/share/man/man3/libxslt.3
+
+  misc:
+    files:
+    - path: /usr/share/gtk-doc/html/libexslt/general.html
+    - path: /usr/share/gtk-doc/html/libexslt/home.png
+    - path: /usr/share/gtk-doc/html/libexslt/index.html
+    - path: /usr/share/gtk-doc/html/libexslt/left.png
+    - path: /usr/share/gtk-doc/html/libexslt/libexslt-exslt.html
+    - path: /usr/share/gtk-doc/html/libexslt/libexslt-exsltexports.html
+    - path: /usr/share/gtk-doc/html/libexslt/libexslt.devhelp2
+    - path: /usr/share/gtk-doc/html/libexslt/right.png
+    - path: /usr/share/gtk-doc/html/libexslt/style.css
+    - path: /usr/share/gtk-doc/html/libexslt/up.png
+    - path: /usr/share/gtk-doc/html/libxslt/general.html
+    - path: /usr/share/gtk-doc/html/libxslt/home.png
+    - path: /usr/share/gtk-doc/html/libxslt/index.html
+    - path: /usr/share/gtk-doc/html/libxslt/left.png
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-attributes.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-documents.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-extensions.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-extra.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-functions.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-imports.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-keys.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-namespaces.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-numbersInternals.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-pattern.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-preproc.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-security.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-templates.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-transform.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-variables.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-xslt.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-xsltInternals.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-xsltexports.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-xsltlocale.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt-xsltutils.html
+    - path: /usr/share/gtk-doc/html/libxslt/libxslt.devhelp2
+    - path: /usr/share/gtk-doc/html/libxslt/right.png
+    - path: /usr/share/gtk-doc/html/libxslt/style.css
+    - path: /usr/share/gtk-doc/html/libxslt/up.png
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libxml2.so.2: libxml2
+  /usr/lib/libexslt.so.0: self
+  /usr/lib/libxslt.so.1: self

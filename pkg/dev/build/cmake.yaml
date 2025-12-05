@@ -70,9 +70,15 @@ dependencies:
   commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
 
 build:
-  profile: [17594:2385, 57755:6141, 125065:12881, 207940:36129, 278483:74656, 344669:74709, 415118:74761, 518423:74839, 617862:76228, 685905:86032]
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [17685:2395, 57915:6070, 125341:12374, 212276:31985, 278725:64840, 349118:67122, 419572:67172, 522900:67250, 626441:68613, 694540:78462]
 
   script: |
+    # cmake's bundled libraries don't work with LTO
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
     tar --no-same-owner -xf ${SOURCE_cmake} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
     sed -i '/"lib64"/s/64//' Modules/GNUInstallDirs.cmake

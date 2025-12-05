@@ -1,0 +1,248 @@
+package:
+  schema: 1
+  name: spirv-tools
+  slug: spirv-tools
+  namespace: libs/graphics
+  version: 1.4.304.1
+  description: SPIR-V tools from Khronos (assembler, disassembler, validator, optimizer)
+  homepage: https://github.com/KhronosGroup/SPIRV-Tools
+  checksum: 5877f8e0d273b130a85e4ef2fd279cf27706d1f01ade5a32334596cf239aeac8
+
+sources:
+- name: spirv-tools
+  url: https://github.com/KhronosGroup/SPIRV-Tools/archive/refs/tags/vulkan-sdk-1.4.304.1.tar.gz
+  sha256: 9fe736980d424c04f1303ae71b94b18bcc6046ae348909c393344a45e1bd7ff8
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.21.2/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: spirv-headers
+  commit: x86_64/pkg/libs/graphics/spirv-headers/1.4.304.1/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4145:1584, 8283:4020, 12390:11025, 16495:16678, 20675:22885, 24781:25014, 28923:27559, 37261:54602, 41415:57477, 46013:57537]
+
+  script: |
+    tar --no-same-owner -xzf /${SOURCE_spirv_tools} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    cmake -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DSPIRV-Headers_SOURCE_DIR=/usr \
+      -DSPIRV_WERROR=OFF \
+      -DBUILD_SHARED_LIBS=ON \
+      -DSPIRV_TOOLS_BUILD_STATIC=OFF
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/spirv-as
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/spirv-cfg
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/spirv-dis
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/spirv-lesspipe.sh
+    - path: /usr/bin/spirv-link
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPIRV-Tools-link.so
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/spirv-lint
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPIRV-Tools-lint.so
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/spirv-objdump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/spirv-opt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPIRV-Tools-opt.so
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/spirv-reduce
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPIRV-Tools-opt.so
+      - /usr/lib/libSPIRV-Tools-reduce.so
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/spirv-val
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+
+  dev:
+    files:
+    - path: /usr/include/spirv-tools/libspirv.h
+    - path: /usr/include/spirv-tools/libspirv.hpp
+    - path: /usr/include/spirv-tools/linker.hpp
+    - path: /usr/include/spirv-tools/optimizer.hpp
+    - path: /usr/lib/pkgconfig/SPIRV-Tools-shared.pc
+    - path: /usr/lib/pkgconfig/SPIRV-Tools.pc
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/SPIRV-Tools-diff/SPIRV-Tools-diffConfig.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-diff/SPIRV-Tools-diffTargets-release.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-diff/SPIRV-Tools-diffTargets.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-link/SPIRV-Tools-linkConfig.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-link/SPIRV-Tools-linkTargets-release.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-link/SPIRV-Tools-linkTargets.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-lint/SPIRV-Tools-lintConfig.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-lint/SPIRV-Tools-lintTargets-release.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-lint/SPIRV-Tools-lintTargets.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-opt/SPIRV-Tools-optConfig.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-opt/SPIRV-Tools-optTargets-release.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-opt/SPIRV-Tools-optTargets.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-reduce/SPIRV-Tools-reduceConfig.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-reduce/SPIRV-Tools-reduceTarget-release.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-reduce/SPIRV-Tools-reduceTarget.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-tools/SPIRV-Tools-toolsConfig.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-tools/SPIRV-Tools-toolsTargets-release.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools-tools/SPIRV-Tools-toolsTargets.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools/SPIRV-ToolsConfig.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools/SPIRV-ToolsTarget-release.cmake
+    - path: /usr/lib/cmake/SPIRV-Tools/SPIRV-ToolsTarget.cmake
+    - path: /usr/lib/libSPIRV-Tools-diff.so
+      needs:
+      - /usr/lib/libSPIRV-Tools-opt.so
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libSPIRV-Tools-link.so
+      needs:
+      - /usr/lib/libSPIRV-Tools-opt.so
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libSPIRV-Tools-lint.so
+      needs:
+      - /usr/lib/libSPIRV-Tools-opt.so
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libSPIRV-Tools-opt.so
+      needs:
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libSPIRV-Tools-reduce.so
+      needs:
+      - /usr/lib/libSPIRV-Tools-opt.so
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libSPIRV-Tools-shared.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libSPIRV-Tools.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+
+resolution:
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libSPIRV-Tools-link.so: self
+  /usr/lib/libSPIRV-Tools-lint.so: self
+  /usr/lib/libSPIRV-Tools-opt.so: self
+  /usr/lib/libSPIRV-Tools-reduce.so: self
+  /usr/lib/libSPIRV-Tools.so: self

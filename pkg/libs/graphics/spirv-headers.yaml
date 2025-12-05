@@ -1,0 +1,173 @@
+package:
+  schema: 1
+  name: spirv-headers
+  slug: spirv-headers
+  namespace: libs/graphics
+  version: 1.4.304.1
+  description: SPIR-V header files from Khronos
+  homepage: https://github.com/KhronosGroup/SPIRV-Headers
+  checksum: c14d9097e6e9842bef4b2f36c79162c44819432d09aa2512705105ffdb1edc6c
+
+sources:
+- name: spirv-headers
+  url: https://github.com/KhronosGroup/SPIRV-Headers/archive/refs/tags/vulkan-sdk-1.4.304.1.tar.gz
+  sha256: 66e6cec19e7433fc58ace8cdf4040be0d52bb5920e54109967df2dd9598a8d48
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.21.2/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4159:311, 6871:344]
+
+  script: |
+    tar --no-same-owner -xzf /${SOURCE_spirv_headers} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    cmake -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/spirv/1.0/GLSL.std.450.h
+    - path: /usr/include/spirv/1.0/OpenCL.std.h
+    - path: /usr/include/spirv/1.0/extinst.glsl.std.450.grammar.json
+    - path: /usr/include/spirv/1.0/extinst.opencl.std.100.grammar.json
+    - path: /usr/include/spirv/1.0/spirv.core.grammar.json
+    - path: /usr/include/spirv/1.0/spirv.cs
+    - path: /usr/include/spirv/1.0/spirv.h
+    - path: /usr/include/spirv/1.0/spirv.hpp
+    - path: /usr/include/spirv/1.0/spirv.hpp11
+    - path: /usr/include/spirv/1.0/spirv.json
+    - path: /usr/include/spirv/1.0/spirv.lua
+    - path: /usr/include/spirv/1.0/spirv.py
+    - path: /usr/include/spirv/1.1/GLSL.std.450.h
+    - path: /usr/include/spirv/1.1/OpenCL.std.h
+    - path: /usr/include/spirv/1.1/extinst.glsl.std.450.grammar.json
+    - path: /usr/include/spirv/1.1/extinst.opencl.std.100.grammar.json
+    - path: /usr/include/spirv/1.1/spirv.core.grammar.json
+    - path: /usr/include/spirv/1.1/spirv.cs
+    - path: /usr/include/spirv/1.1/spirv.h
+    - path: /usr/include/spirv/1.1/spirv.hpp
+    - path: /usr/include/spirv/1.1/spirv.hpp11
+    - path: /usr/include/spirv/1.1/spirv.json
+    - path: /usr/include/spirv/1.1/spirv.lua
+    - path: /usr/include/spirv/1.1/spirv.py
+    - path: /usr/include/spirv/1.2/GLSL.std.450.h
+    - path: /usr/include/spirv/1.2/OpenCL.std.h
+    - path: /usr/include/spirv/1.2/extinst.glsl.std.450.grammar.json
+    - path: /usr/include/spirv/1.2/extinst.opencl.std.100.grammar.json
+    - path: /usr/include/spirv/1.2/spirv.core.grammar.json
+    - path: /usr/include/spirv/1.2/spirv.cs
+    - path: /usr/include/spirv/1.2/spirv.h
+    - path: /usr/include/spirv/1.2/spirv.hpp
+    - path: /usr/include/spirv/1.2/spirv.hpp11
+    - path: /usr/include/spirv/1.2/spirv.json
+    - path: /usr/include/spirv/1.2/spirv.lua
+    - path: /usr/include/spirv/1.2/spirv.py
+    - path: /usr/include/spirv/spir-v.xml
+    - path: /usr/include/spirv/unified1/AMD_gcn_shader.h
+    - path: /usr/include/spirv/unified1/AMD_shader_ballot.h
+    - path: /usr/include/spirv/unified1/AMD_shader_explicit_vertex_parameter.h
+    - path: /usr/include/spirv/unified1/AMD_shader_trinary_minmax.h
+    - path: /usr/include/spirv/unified1/DebugInfo.h
+    - path: /usr/include/spirv/unified1/GLSL.std.450.h
+    - path: /usr/include/spirv/unified1/NonSemanticClspvReflection.h
+    - path: /usr/include/spirv/unified1/NonSemanticDebugBreak.h
+    - path: /usr/include/spirv/unified1/NonSemanticDebugPrintf.h
+    - path: /usr/include/spirv/unified1/NonSemanticShaderDebugInfo100.h
+    - path: /usr/include/spirv/unified1/NonSemanticVkspReflection.h
+    - path: /usr/include/spirv/unified1/OpenCL.std.h
+    - path: /usr/include/spirv/unified1/OpenCLDebugInfo100.h
+    - path: /usr/include/spirv/unified1/extinst.debuginfo.grammar.json
+    - path: /usr/include/spirv/unified1/extinst.glsl.std.450.grammar.json
+    - path: /usr/include/spirv/unified1/extinst.nonsemantic.clspvreflection.grammar.json
+    - path: /usr/include/spirv/unified1/extinst.nonsemantic.debugbreak.grammar.json
+    - path: /usr/include/spirv/unified1/extinst.nonsemantic.debugprintf.grammar.json
+    - path: /usr/include/spirv/unified1/extinst.nonsemantic.shader.debuginfo.100.grammar.json
+    - path: /usr/include/spirv/unified1/extinst.nonsemantic.vkspreflection.grammar.json
+    - path: /usr/include/spirv/unified1/extinst.opencl.debuginfo.100.grammar.json
+    - path: /usr/include/spirv/unified1/extinst.opencl.std.100.grammar.json
+    - path: /usr/include/spirv/unified1/extinst.spv-amd-gcn-shader.grammar.json
+    - path: /usr/include/spirv/unified1/extinst.spv-amd-shader-ballot.grammar.json
+    - path: /usr/include/spirv/unified1/extinst.spv-amd-shader-explicit-vertex-parameter.grammar.json
+    - path: /usr/include/spirv/unified1/extinst.spv-amd-shader-trinary-minmax.grammar.json
+    - path: /usr/include/spirv/unified1/spirv.bf
+    - path: /usr/include/spirv/unified1/spirv.core.grammar.json
+    - path: /usr/include/spirv/unified1/spirv.cs
+    - path: /usr/include/spirv/unified1/spirv.h
+    - path: /usr/include/spirv/unified1/spirv.hpp
+    - path: /usr/include/spirv/unified1/spirv.hpp11
+    - path: /usr/include/spirv/unified1/spirv.json
+    - path: /usr/include/spirv/unified1/spirv.lua
+    - path: /usr/include/spirv/unified1/spirv.py
+    - path: /usr/include/spirv/unified1/spv.d
+    - path: /usr/share/pkgconfig/SPIRV-Headers.pc
+
+  misc:
+    files:
+    - path: /usr/share/cmake/SPIRV-Headers/SPIRV-HeadersConfig.cmake

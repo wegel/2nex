@@ -6,7 +6,7 @@ package:
   version: "20250127.0"
   description: C++ Common Libraries
   homepage: https://github.com/abseil/abseil-cpp
-  checksum: 8d44a35bc77e9c8305a867394fc9b513204241fb85855fec2851fa51d29b52f5
+  checksum: 3074b2aa39e101bf3913e56d36fa213b30cf013c658a7eb708a6fc706c356c11
 
 sources:
 - name: libabseil_cpp
@@ -68,7 +68,8 @@ dependencies:
   commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
 
 build:
-  profile: [4177:1234, 8344:2210, 16602:3396, 24884:5443, 29015:5449, 37271:5459, 45514:5469, 58006:5479, 66289:5486, 71986:14444]
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4174:1321, 8355:2165, 20761:4416, 29086:6663, 41483:10242, 49732:10253, 58004:10262, 74560:10280, 86905:10290, 95485:20184]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_libabseil_cpp} -C "${WORK_DIR}" --strip-components=1
@@ -83,9 +84,12 @@ build:
       -G Ninja \
       -DCMAKE_INSTALL_PREFIX=/usr \
       -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_C_FLAGS="${CFLAGS}" \
+      -DCMAKE_CXX_FLAGS="${CXXFLAGS}" \
+      -DBUILD_SHARED_LIBS=ON \
       -DABSL_ENABLE_INSTALL=ON \
       -DABSL_USE_GOOGLETEST_HEAD=OFF \
-      -DCMAKE_CXX_STANDARD=14
+      -DCMAKE_CXX_STANDARD=17
 
     # Build
     ninja
@@ -102,12 +106,10 @@ bundles:
   dev:
   - dev
   - lib
-  - static
 
   full:
   - dev
   - lib
-  - static
 
 outputs:
   dev:
@@ -695,98 +697,1149 @@ outputs:
     - path: /usr/lib/cmake/absl/abslConfigVersion.cmake
     - path: /usr/lib/cmake/absl/abslTargets-release.cmake
     - path: /usr/lib/cmake/absl/abslTargets.cmake
+    - path: /usr/lib/libabsl_bad_any_cast_impl.so
+    - path: /usr/lib/libabsl_bad_any_cast_impl.so.2501.0.0
+    - path: /usr/lib/libabsl_bad_optional_access.so
+    - path: /usr/lib/libabsl_bad_optional_access.so.2501.0.0
+    - path: /usr/lib/libabsl_bad_variant_access.so
+    - path: /usr/lib/libabsl_bad_variant_access.so.2501.0.0
+    - path: /usr/lib/libabsl_base.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_base.so.2501.0.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_city.so
+    - path: /usr/lib/libabsl_city.so.2501.0.0
+    - path: /usr/lib/libabsl_civil_time.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_civil_time.so.2501.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_cord.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_cord_internal.so.2501.0.0
+      - /usr/lib/libabsl_cordz_functions.so.2501.0.0
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+      - /usr/lib/libabsl_crc_cord_state.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_cord.so.2501.0.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_cord_internal.so.2501.0.0
+      - /usr/lib/libabsl_cordz_functions.so.2501.0.0
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+      - /usr/lib/libabsl_crc_cord_state.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_cord_internal.so
+      needs:
+      - /usr/lib/libabsl_crc_cord_state.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_cord_internal.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_crc_cord_state.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_cordz_functions.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_exponential_biased.so.2501.0.0
+    - path: /usr/lib/libabsl_cordz_functions.so.2501.0.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_exponential_biased.so.2501.0.0
+    - path: /usr/lib/libabsl_cordz_handle.so
+      needs:
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_cordz_handle.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_cordz_info.so
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_cord_internal.so.2501.0.0
+      - /usr/lib/libabsl_cordz_handle.so.2501.0.0
+      - /usr/lib/libabsl_stacktrace.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_cordz_info.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_cord_internal.so.2501.0.0
+      - /usr/lib/libabsl_cordz_handle.so.2501.0.0
+      - /usr/lib/libabsl_stacktrace.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_cordz_sample_token.so
+      needs:
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+    - path: /usr/lib/libabsl_cordz_sample_token.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+    - path: /usr/lib/libabsl_crc32c.so
+      needs:
+      - /usr/lib/libabsl_crc_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_crc32c.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_crc_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_crc_cord_state.so
+      needs:
+      - /usr/lib/libabsl_crc32c.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_crc_cord_state.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_crc32c.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_crc_cpu_detect.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_crc_cpu_detect.so.2501.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_crc_internal.so
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_crc_internal.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_debugging_internal.so
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libabsl_debugging_internal.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libabsl_decode_rust_punycode.so
+      needs:
+      - /usr/lib/libabsl_utf8_for_code_point.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libabsl_decode_rust_punycode.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_utf8_for_code_point.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libabsl_demangle_internal.so
+      needs:
+      - /usr/lib/libabsl_demangle_rust.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_demangle_internal.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_demangle_rust.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_demangle_rust.so
+      needs:
+      - /usr/lib/libabsl_decode_rust_punycode.so.2501.0.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_demangle_rust.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_decode_rust_punycode.so.2501.0.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_die_if_null.so
+      needs:
+      - /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_die_if_null.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_examine_stack.so
+      needs:
+      - /usr/lib/libabsl_stacktrace.so.2501.0.0
+      - /usr/lib/libabsl_symbolize.so.2501.0.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_examine_stack.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_stacktrace.so.2501.0.0
+      - /usr/lib/libabsl_symbolize.so.2501.0.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_exponential_biased.so
+      needs:
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libabsl_exponential_biased.so.2501.0.0
+      needs:
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libabsl_failure_signal_handler.so
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_examine_stack.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_stacktrace.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_failure_signal_handler.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_examine_stack.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_stacktrace.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_commandlineflag.so
+      needs:
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_commandlineflag.so.2501.0.0
+      needs:
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_commandlineflag_internal.so
+      needs:
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_commandlineflag_internal.so.2501.0.0
+      needs:
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_config.so
+      needs:
+      - /usr/lib/libabsl_flags_program_name.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_config.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_flags_program_name.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_internal.so
+      needs:
+      - /usr/lib/libabsl_flags_commandlineflag.so.2501.0.0
+      - /usr/lib/libabsl_flags_commandlineflag_internal.so.2501.0.0
+      - /usr/lib/libabsl_flags_config.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_internal.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_flags_commandlineflag.so.2501.0.0
+      - /usr/lib/libabsl_flags_commandlineflag_internal.so.2501.0.0
+      - /usr/lib/libabsl_flags_config.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_marshalling.so
+      needs:
+      - /usr/lib/libabsl_int128.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_marshalling.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_int128.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_parse.so
+      needs:
+      - /usr/lib/libabsl_flags_config.so.2501.0.0
+      - /usr/lib/libabsl_flags_internal.so.2501.0.0
+      - /usr/lib/libabsl_flags_marshalling.so.2501.0.0
+      - /usr/lib/libabsl_flags_private_handle_accessor.so.2501.0.0
+      - /usr/lib/libabsl_flags_program_name.so.2501.0.0
+      - /usr/lib/libabsl_flags_reflection.so.2501.0.0
+      - /usr/lib/libabsl_flags_usage.so.2501.0.0
+      - /usr/lib/libabsl_flags_usage_internal.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_parse.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_flags_config.so.2501.0.0
+      - /usr/lib/libabsl_flags_internal.so.2501.0.0
+      - /usr/lib/libabsl_flags_marshalling.so.2501.0.0
+      - /usr/lib/libabsl_flags_private_handle_accessor.so.2501.0.0
+      - /usr/lib/libabsl_flags_program_name.so.2501.0.0
+      - /usr/lib/libabsl_flags_reflection.so.2501.0.0
+      - /usr/lib/libabsl_flags_usage.so.2501.0.0
+      - /usr/lib/libabsl_flags_usage_internal.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_private_handle_accessor.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_flags_private_handle_accessor.so.2501.0.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_flags_program_name.so
+      needs:
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_program_name.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_reflection.so
+      needs:
+      - /usr/lib/libabsl_flags_commandlineflag.so.2501.0.0
+      - /usr/lib/libabsl_flags_config.so.2501.0.0
+      - /usr/lib/libabsl_flags_private_handle_accessor.so.2501.0.0
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_reflection.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_flags_commandlineflag.so.2501.0.0
+      - /usr/lib/libabsl_flags_config.so.2501.0.0
+      - /usr/lib/libabsl_flags_private_handle_accessor.so.2501.0.0
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_usage.so
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_usage.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_usage_internal.so
+      needs:
+      - /usr/lib/libabsl_flags_config.so.2501.0.0
+      - /usr/lib/libabsl_flags_internal.so.2501.0.0
+      - /usr/lib/libabsl_flags_program_name.so.2501.0.0
+      - /usr/lib/libabsl_flags_reflection.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_flags_usage_internal.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_flags_config.so.2501.0.0
+      - /usr/lib/libabsl_flags_internal.so.2501.0.0
+      - /usr/lib/libabsl_flags_program_name.so.2501.0.0
+      - /usr/lib/libabsl_flags_reflection.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_graphcycles_internal.so
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_malloc_internal.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_graphcycles_internal.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_malloc_internal.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_hash.so
+      needs:
+      - /usr/lib/libabsl_city.so.2501.0.0
+      - /usr/lib/libabsl_low_level_hash.so.2501.0.0
+    - path: /usr/lib/libabsl_hash.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_city.so.2501.0.0
+      - /usr/lib/libabsl_low_level_hash.so.2501.0.0
+    - path: /usr/lib/libabsl_hashtablez_sampler.so
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_stacktrace.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_hashtablez_sampler.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_stacktrace.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_int128.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_int128.so.2501.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_kernel_timeout_internal.so
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_kernel_timeout_internal.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_leak_check.so
+    - path: /usr/lib/libabsl_leak_check.so.2501.0.0
+    - path: /usr/lib/libabsl_log_entry.so
+    - path: /usr/lib/libabsl_log_entry.so.2501.0.0
+    - path: /usr/lib/libabsl_log_flags.so
+      needs:
+      - /usr/lib/libabsl_flags_internal.so.2501.0.0
+      - /usr/lib/libabsl_flags_marshalling.so.2501.0.0
+      - /usr/lib/libabsl_flags_reflection.so.2501.0.0
+      - /usr/lib/libabsl_log_globals.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_vlog_config_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_flags.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_flags_internal.so.2501.0.0
+      - /usr/lib/libabsl_flags_marshalling.so.2501.0.0
+      - /usr/lib/libabsl_flags_reflection.so.2501.0.0
+      - /usr/lib/libabsl_log_globals.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_vlog_config_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_globals.so
+      needs:
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_globals.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_initialize.so
+      needs:
+      - /usr/lib/libabsl_log_internal_globals.so.2501.0.0
+      - /usr/lib/libabsl_time_zone.so.2501.0.0
+    - path: /usr/lib/libabsl_log_initialize.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_log_internal_globals.so.2501.0.0
+      - /usr/lib/libabsl_time_zone.so.2501.0.0
+    - path: /usr/lib/libabsl_log_internal_check_op.so
+      needs:
+      - /usr/lib/libabsl_leak_check.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_internal_check_op.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_leak_check.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_internal_conditions.so
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+    - path: /usr/lib/libabsl_log_internal_conditions.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+    - path: /usr/lib/libabsl_log_internal_fnmatch.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_internal_fnmatch.so.2501.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_internal_format.so
+      needs:
+      - /usr/lib/libabsl_log_internal_globals.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_log_internal_format.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_log_internal_globals.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_log_internal_globals.so
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_internal_globals.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_internal_log_sink_set.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_log_globals.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_globals.so.2501.0.0
+      - /usr/lib/libabsl_log_sink.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_internal_log_sink_set.so.2501.0.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_log_globals.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_globals.so.2501.0.0
+      - /usr/lib/libabsl_log_sink.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_internal_message.so
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_examine_stack.so.2501.0.0
+      - /usr/lib/libabsl_log_globals.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_format.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_globals.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_log_sink_set.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_proto.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_structured_proto.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_strerror.so.2501.0.0
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_examine_stack.so.2501.0.0
+      - /usr/lib/libabsl_log_globals.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_format.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_globals.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_log_sink_set.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_proto.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_structured_proto.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_strerror.so.2501.0.0
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_internal_nullguard.so
+    - path: /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+    - path: /usr/lib/libabsl_log_internal_proto.so
+      needs:
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_log_internal_proto.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_log_internal_structured_proto.so
+      needs:
+      - /usr/lib/libabsl_log_internal_proto.so.2501.0.0
+    - path: /usr/lib/libabsl_log_internal_structured_proto.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_log_internal_proto.so.2501.0.0
+    - path: /usr/lib/libabsl_log_severity.so
+      needs:
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_severity.so.2501.0.0
+      needs:
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_sink.so
+      needs:
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_log_sink.so.2501.0.0
+      needs:
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_low_level_hash.so
+    - path: /usr/lib/libabsl_low_level_hash.so.2501.0.0
+    - path: /usr/lib/libabsl_malloc_internal.so
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_malloc_internal.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_periodic_sampler.so
+      needs:
+      - /usr/lib/libabsl_exponential_biased.so.2501.0.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_periodic_sampler.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_exponential_biased.so.2501.0.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_poison.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_poison.so.2501.0.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_random_distributions.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_random_distributions.so.2501.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_random_internal_distribution_test_util.so
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_random_internal_distribution_test_util.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_random_internal_platform.so
+    - path: /usr/lib/libabsl_random_internal_platform.so.2501.0.0
+    - path: /usr/lib/libabsl_random_internal_pool_urbg.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_random_internal_randen.so.2501.0.0
+      - /usr/lib/libabsl_random_internal_randen_hwaes_impl.so.2501.0.0
+      - /usr/lib/libabsl_random_internal_randen_slow.so.2501.0.0
+      - /usr/lib/libabsl_random_internal_seed_material.so.2501.0.0
+      - /usr/lib/libabsl_random_seed_gen_exception.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_random_internal_pool_urbg.so.2501.0.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_random_internal_randen.so.2501.0.0
+      - /usr/lib/libabsl_random_internal_randen_hwaes_impl.so.2501.0.0
+      - /usr/lib/libabsl_random_internal_randen_slow.so.2501.0.0
+      - /usr/lib/libabsl_random_internal_seed_material.so.2501.0.0
+      - /usr/lib/libabsl_random_seed_gen_exception.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_random_internal_randen.so
+      needs:
+      - /usr/lib/libabsl_random_internal_randen_hwaes.so.2501.0.0
+      - /usr/lib/libabsl_random_internal_randen_hwaes_impl.so.2501.0.0
+      - /usr/lib/libabsl_random_internal_randen_slow.so.2501.0.0
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_random_internal_randen.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_random_internal_randen_hwaes.so.2501.0.0
+      - /usr/lib/libabsl_random_internal_randen_hwaes_impl.so.2501.0.0
+      - /usr/lib/libabsl_random_internal_randen_slow.so.2501.0.0
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_random_internal_randen_hwaes.so
+    - path: /usr/lib/libabsl_random_internal_randen_hwaes.so.2501.0.0
+    - path: /usr/lib/libabsl_random_internal_randen_hwaes_impl.so
+      needs:
+      - /usr/lib/libabsl_random_internal_platform.so.2501.0.0
+    - path: /usr/lib/libabsl_random_internal_randen_hwaes_impl.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_random_internal_platform.so.2501.0.0
+    - path: /usr/lib/libabsl_random_internal_randen_slow.so
+      needs:
+      - /usr/lib/libabsl_random_internal_platform.so.2501.0.0
+    - path: /usr/lib/libabsl_random_internal_randen_slow.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_random_internal_platform.so.2501.0.0
+    - path: /usr/lib/libabsl_random_internal_seed_material.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_random_internal_seed_material.so.2501.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_random_seed_gen_exception.so
+      needs:
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_random_seed_gen_exception.so.2501.0.0
+      needs:
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_random_seed_sequences.so
+      needs:
+      - /usr/lib/libabsl_random_internal_pool_urbg.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_random_seed_sequences.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_random_internal_pool_urbg.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_raw_hash_set.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_raw_logging_internal.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_scoped_set_env.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_scoped_set_env.so.2501.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_spinlock_wait.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_stacktrace.so
+      needs:
+      - /usr/lib/libabsl_debugging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_stacktrace.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_debugging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libabsl_status.so
+      needs:
+      - /usr/lib/libabsl_cord.so.2501.0.0
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+      - /usr/lib/libabsl_leak_check.so.2501.0.0
+      - /usr/lib/libabsl_strerror.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_status.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_cord.so.2501.0.0
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+      - /usr/lib/libabsl_leak_check.so.2501.0.0
+      - /usr/lib/libabsl_strerror.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_statusor.so
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_status.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_statusor.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_status.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_str_format_internal.so
+      needs:
+      - /usr/lib/libabsl_int128.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_int128.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_strerror.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_strerror.so.2501.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_string_view.so
+    - path: /usr/lib/libabsl_string_view.so.2501.0.0
+    - path: /usr/lib/libabsl_strings.so
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_strings.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_strings_internal.so
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_strings_internal.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_symbolize.so
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_debugging_internal.so.2501.0.0
+      - /usr/lib/libabsl_demangle_internal.so.2501.0.0
+      - /usr/lib/libabsl_malloc_internal.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_symbolize.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_debugging_internal.so.2501.0.0
+      - /usr/lib/libabsl_demangle_internal.so.2501.0.0
+      - /usr/lib/libabsl_malloc_internal.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_synchronization.so
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_kernel_timeout_internal.so.2501.0.0
+      - /usr/lib/libabsl_malloc_internal.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_stacktrace.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
+      - /usr/lib/libabsl_tracing_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_synchronization.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_kernel_timeout_internal.so.2501.0.0
+      - /usr/lib/libabsl_malloc_internal.so.2501.0.0
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_stacktrace.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
+      - /usr/lib/libabsl_tracing_internal.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_throw_delegate.so
+      needs:
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      needs:
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_time.so
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_time_zone.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_time.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_raw_logging_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_time_zone.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_time_zone.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_time_zone.so.2501.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_tracing_internal.so
+    - path: /usr/lib/libabsl_tracing_internal.so.2501.0.0
+    - path: /usr/lib/libabsl_utf8_for_code_point.so
+    - path: /usr/lib/libabsl_utf8_for_code_point.so.2501.0.0
+    - path: /usr/lib/libabsl_vlog_config_internal.so
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_fnmatch.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libabsl_vlog_config_internal.so.2501.0.0
+      needs:
+      - /usr/lib/libabsl_base.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_fnmatch.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
 
-  static:
-    files:
-    - path: /usr/lib/libabsl_bad_any_cast_impl.a
-    - path: /usr/lib/libabsl_bad_optional_access.a
-    - path: /usr/lib/libabsl_bad_variant_access.a
-    - path: /usr/lib/libabsl_base.a
-    - path: /usr/lib/libabsl_city.a
-    - path: /usr/lib/libabsl_civil_time.a
-    - path: /usr/lib/libabsl_cord.a
-    - path: /usr/lib/libabsl_cord_internal.a
-    - path: /usr/lib/libabsl_cordz_functions.a
-    - path: /usr/lib/libabsl_cordz_handle.a
-    - path: /usr/lib/libabsl_cordz_info.a
-    - path: /usr/lib/libabsl_cordz_sample_token.a
-    - path: /usr/lib/libabsl_crc32c.a
-    - path: /usr/lib/libabsl_crc_cord_state.a
-    - path: /usr/lib/libabsl_crc_cpu_detect.a
-    - path: /usr/lib/libabsl_crc_internal.a
-    - path: /usr/lib/libabsl_debugging_internal.a
-    - path: /usr/lib/libabsl_decode_rust_punycode.a
-    - path: /usr/lib/libabsl_demangle_internal.a
-    - path: /usr/lib/libabsl_demangle_rust.a
-    - path: /usr/lib/libabsl_die_if_null.a
-    - path: /usr/lib/libabsl_examine_stack.a
-    - path: /usr/lib/libabsl_exponential_biased.a
-    - path: /usr/lib/libabsl_failure_signal_handler.a
-    - path: /usr/lib/libabsl_flags_commandlineflag.a
-    - path: /usr/lib/libabsl_flags_commandlineflag_internal.a
-    - path: /usr/lib/libabsl_flags_config.a
-    - path: /usr/lib/libabsl_flags_internal.a
-    - path: /usr/lib/libabsl_flags_marshalling.a
-    - path: /usr/lib/libabsl_flags_parse.a
-    - path: /usr/lib/libabsl_flags_private_handle_accessor.a
-    - path: /usr/lib/libabsl_flags_program_name.a
-    - path: /usr/lib/libabsl_flags_reflection.a
-    - path: /usr/lib/libabsl_flags_usage.a
-    - path: /usr/lib/libabsl_flags_usage_internal.a
-    - path: /usr/lib/libabsl_graphcycles_internal.a
-    - path: /usr/lib/libabsl_hash.a
-    - path: /usr/lib/libabsl_hashtablez_sampler.a
-    - path: /usr/lib/libabsl_int128.a
-    - path: /usr/lib/libabsl_kernel_timeout_internal.a
-    - path: /usr/lib/libabsl_leak_check.a
-    - path: /usr/lib/libabsl_log_entry.a
-    - path: /usr/lib/libabsl_log_flags.a
-    - path: /usr/lib/libabsl_log_globals.a
-    - path: /usr/lib/libabsl_log_initialize.a
-    - path: /usr/lib/libabsl_log_internal_check_op.a
-    - path: /usr/lib/libabsl_log_internal_conditions.a
-    - path: /usr/lib/libabsl_log_internal_fnmatch.a
-    - path: /usr/lib/libabsl_log_internal_format.a
-    - path: /usr/lib/libabsl_log_internal_globals.a
-    - path: /usr/lib/libabsl_log_internal_log_sink_set.a
-    - path: /usr/lib/libabsl_log_internal_message.a
-    - path: /usr/lib/libabsl_log_internal_nullguard.a
-    - path: /usr/lib/libabsl_log_internal_proto.a
-    - path: /usr/lib/libabsl_log_internal_structured_proto.a
-    - path: /usr/lib/libabsl_log_severity.a
-    - path: /usr/lib/libabsl_log_sink.a
-    - path: /usr/lib/libabsl_low_level_hash.a
-    - path: /usr/lib/libabsl_malloc_internal.a
-    - path: /usr/lib/libabsl_periodic_sampler.a
-    - path: /usr/lib/libabsl_poison.a
-    - path: /usr/lib/libabsl_random_distributions.a
-    - path: /usr/lib/libabsl_random_internal_distribution_test_util.a
-    - path: /usr/lib/libabsl_random_internal_platform.a
-    - path: /usr/lib/libabsl_random_internal_pool_urbg.a
-    - path: /usr/lib/libabsl_random_internal_randen.a
-    - path: /usr/lib/libabsl_random_internal_randen_hwaes.a
-    - path: /usr/lib/libabsl_random_internal_randen_hwaes_impl.a
-    - path: /usr/lib/libabsl_random_internal_randen_slow.a
-    - path: /usr/lib/libabsl_random_internal_seed_material.a
-    - path: /usr/lib/libabsl_random_seed_gen_exception.a
-    - path: /usr/lib/libabsl_random_seed_sequences.a
-    - path: /usr/lib/libabsl_raw_hash_set.a
-    - path: /usr/lib/libabsl_raw_logging_internal.a
-    - path: /usr/lib/libabsl_scoped_set_env.a
-    - path: /usr/lib/libabsl_spinlock_wait.a
-    - path: /usr/lib/libabsl_stacktrace.a
-    - path: /usr/lib/libabsl_status.a
-    - path: /usr/lib/libabsl_statusor.a
-    - path: /usr/lib/libabsl_str_format_internal.a
-    - path: /usr/lib/libabsl_strerror.a
-    - path: /usr/lib/libabsl_string_view.a
-    - path: /usr/lib/libabsl_strings.a
-    - path: /usr/lib/libabsl_strings_internal.a
-    - path: /usr/lib/libabsl_symbolize.a
-    - path: /usr/lib/libabsl_synchronization.a
-    - path: /usr/lib/libabsl_throw_delegate.a
-    - path: /usr/lib/libabsl_time.a
-    - path: /usr/lib/libabsl_time_zone.a
-    - path: /usr/lib/libabsl_tracing_internal.a
-    - path: /usr/lib/libabsl_utf8_for_code_point.a
-    - path: /usr/lib/libabsl_vlog_config_internal.a
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libabsl_base.so.2501.0.0: self
+  /usr/lib/libabsl_city.so.2501.0.0: self
+  /usr/lib/libabsl_cord.so.2501.0.0: self
+  /usr/lib/libabsl_cord_internal.so.2501.0.0: self
+  /usr/lib/libabsl_cordz_functions.so.2501.0.0: self
+  /usr/lib/libabsl_cordz_handle.so.2501.0.0: self
+  /usr/lib/libabsl_cordz_info.so.2501.0.0: self
+  /usr/lib/libabsl_crc32c.so.2501.0.0: self
+  /usr/lib/libabsl_crc_cord_state.so.2501.0.0: self
+  /usr/lib/libabsl_crc_internal.so.2501.0.0: self
+  /usr/lib/libabsl_debugging_internal.so.2501.0.0: self
+  /usr/lib/libabsl_decode_rust_punycode.so.2501.0.0: self
+  /usr/lib/libabsl_demangle_internal.so.2501.0.0: self
+  /usr/lib/libabsl_demangle_rust.so.2501.0.0: self
+  /usr/lib/libabsl_examine_stack.so.2501.0.0: self
+  /usr/lib/libabsl_exponential_biased.so.2501.0.0: self
+  /usr/lib/libabsl_flags_commandlineflag.so.2501.0.0: self
+  /usr/lib/libabsl_flags_commandlineflag_internal.so.2501.0.0: self
+  /usr/lib/libabsl_flags_config.so.2501.0.0: self
+  /usr/lib/libabsl_flags_internal.so.2501.0.0: self
+  /usr/lib/libabsl_flags_marshalling.so.2501.0.0: self
+  /usr/lib/libabsl_flags_private_handle_accessor.so.2501.0.0: self
+  /usr/lib/libabsl_flags_program_name.so.2501.0.0: self
+  /usr/lib/libabsl_flags_reflection.so.2501.0.0: self
+  /usr/lib/libabsl_flags_usage.so.2501.0.0: self
+  /usr/lib/libabsl_flags_usage_internal.so.2501.0.0: self
+  /usr/lib/libabsl_hash.so.2501.0.0: self
+  /usr/lib/libabsl_int128.so.2501.0.0: self
+  /usr/lib/libabsl_kernel_timeout_internal.so.2501.0.0: self
+  /usr/lib/libabsl_leak_check.so.2501.0.0: self
+  /usr/lib/libabsl_log_globals.so.2501.0.0: self
+  /usr/lib/libabsl_log_internal_fnmatch.so.2501.0.0: self
+  /usr/lib/libabsl_log_internal_format.so.2501.0.0: self
+  /usr/lib/libabsl_log_internal_globals.so.2501.0.0: self
+  /usr/lib/libabsl_log_internal_log_sink_set.so.2501.0.0: self
+  /usr/lib/libabsl_log_internal_message.so.2501.0.0: self
+  /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0: self
+  /usr/lib/libabsl_log_internal_proto.so.2501.0.0: self
+  /usr/lib/libabsl_log_internal_structured_proto.so.2501.0.0: self
+  /usr/lib/libabsl_log_sink.so.2501.0.0: self
+  /usr/lib/libabsl_low_level_hash.so.2501.0.0: self
+  /usr/lib/libabsl_malloc_internal.so.2501.0.0: self
+  /usr/lib/libabsl_random_internal_platform.so.2501.0.0: self
+  /usr/lib/libabsl_random_internal_pool_urbg.so.2501.0.0: self
+  /usr/lib/libabsl_random_internal_randen.so.2501.0.0: self
+  /usr/lib/libabsl_random_internal_randen_hwaes.so.2501.0.0: self
+  /usr/lib/libabsl_random_internal_randen_hwaes_impl.so.2501.0.0: self
+  /usr/lib/libabsl_random_internal_randen_slow.so.2501.0.0: self
+  /usr/lib/libabsl_random_internal_seed_material.so.2501.0.0: self
+  /usr/lib/libabsl_random_seed_gen_exception.so.2501.0.0: self
+  /usr/lib/libabsl_raw_hash_set.so.2501.0.0: self
+  /usr/lib/libabsl_raw_logging_internal.so.2501.0.0: self
+  /usr/lib/libabsl_spinlock_wait.so.2501.0.0: self
+  /usr/lib/libabsl_stacktrace.so.2501.0.0: self
+  /usr/lib/libabsl_status.so.2501.0.0: self
+  /usr/lib/libabsl_str_format_internal.so.2501.0.0: self
+  /usr/lib/libabsl_strerror.so.2501.0.0: self
+  /usr/lib/libabsl_strings.so.2501.0.0: self
+  /usr/lib/libabsl_strings_internal.so.2501.0.0: self
+  /usr/lib/libabsl_symbolize.so.2501.0.0: self
+  /usr/lib/libabsl_synchronization.so.2501.0.0: self
+  /usr/lib/libabsl_throw_delegate.so.2501.0.0: self
+  /usr/lib/libabsl_time.so.2501.0.0: self
+  /usr/lib/libabsl_time_zone.so.2501.0.0: self
+  /usr/lib/libabsl_tracing_internal.so.2501.0.0: self
+  /usr/lib/libabsl_utf8_for_code_point.so.2501.0.0: self
+  /usr/lib/libabsl_vlog_config_internal.so.2501.0.0: self

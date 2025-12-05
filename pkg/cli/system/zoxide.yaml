@@ -1,0 +1,111 @@
+package:
+  schema: 1
+  name: zoxide
+  slug: zoxide
+  namespace: cli/system
+  version: 0.9.8
+  description: A smarter cd command
+  homepage: https://github.com/ajeetdsouza/zoxide
+  checksum: 4e647ee7c58351e4be2a5a5cfa499115c0820582e2f2a51b11c33c42fa7547ca
+
+sources:
+- name: zoxide
+  url: https://github.com/ajeetdsouza/zoxide/archive/refs/tags/v0.9.8.tar.gz
+  sha256: 1b276edbf328aafc86afe1ebce41f45ccba3a3125412e89c8c5d8e825b0c7407
+- name: vendor
+  sha256: 03f9b197bd49d9531d76e8496011b20ebd6bdf0dc6331999449448014769a473
+  cargo_lock: https://raw.githubusercontent.com/ajeetdsouza/zoxide/v0.9.8/Cargo.lock
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: rust-bin
+  commit: x86_64/pkg/dev/lang/rust-bin/1.91.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4033:10295]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_zoxide} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    tar --no-same-owner -xf /./${SOURCE_vendor} -C "${WORK_DIR}"
+
+    export CARGO_HOME="${WORK_DIR}/.cargo"
+    mkdir -p "${CARGO_HOME}"
+
+    cat > "${CARGO_HOME}/config.toml" << EOF
+    [source.crates-io]
+    replace-with = "vendored-sources"
+
+    [source.vendored-sources]
+    directory = "vendor"
+    EOF
+
+    mkdir -p /usr/local/bin
+    ln -sf /usr/bin/gcc /usr/local/bin/cc
+    ln -sf /usr/bin/ld.bfd /usr/local/bin/ld
+    export PATH="/usr/local/bin:${PATH}"
+    export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc
+    export RUSTFLAGS="-C codegen-units=1 -C embed-bitcode=yes -C debuginfo=0"
+
+    cargo build --release --offline --target x86_64-unknown-linux-gnu
+
+    mkdir -p ${OUT_DIR}/usr/bin
+    install -m 755 target/x86_64-unknown-linux-gnu/release/zoxide ${OUT_DIR}/usr/bin/zoxide
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/zoxide
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc

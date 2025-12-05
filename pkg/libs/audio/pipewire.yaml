@@ -1,0 +1,907 @@
+package:
+  schema: 1
+  name: pipewire
+  slug: pipewire
+  namespace: libs/audio
+  version: 1.4.9
+  description: Low-latency audio/video router and processor
+  homepage: https://pipewire.org/
+  checksum: edb7a26702e85536934365abe89f45df69b03016495dabb3999fe7feb12e1974
+
+sources:
+- name: pipewire
+  url: https://gitlab.freedesktop.org/pipewire/pipewire/-/archive/1.4.9/pipewire-1.4.9.tar.gz
+  sha256: 8066a7b220069e4c6e3b02bd2b6ea303bba66df255023c07c99323449ba8fe3c
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/bootstrap/phase3/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gettext
+  commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+- name: alsa-lib
+  commit: x86_64/pkg/libs/audio/alsa-lib/1.2.14/bundles/dev
+- name: dbus-broker
+  commit: x86_64/pkg/core/ipc/dbus-broker/37/bundles/full
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: dbus
+  commit: x86_64/pkg/core/ipc/dbus/1.16.2/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4174:932, 16523:1625, 37206:2727, 58001:3331, 74688:4090, 95403:5591, 111956:16618, 141075:16663, 165782:17026, 183638:17219]
+
+  script: |
+    tar --no-same-owner -xzf /${SOURCE_pipewire} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      -Dsystemd=enabled \
+      -Dalsa=enabled \
+      -Dpipewire-alsa=enabled \
+      -Djack=disabled \
+      -Dpipewire-jack=disabled \
+      -Dv4l2=enabled \
+      -Dlibpulse=disabled \
+      -Dpipewire-v4l2=enabled \
+      -Dbluez5=disabled \
+      -Dtests=disabled \
+      -Dinstalled_tests=disabled \
+      -Dgstreamer=disabled \
+      -Dlibcamera=disabled \
+      -Dvolume=disabled \
+      -Dvulkan=disabled \
+      -Dsdl2=disabled \
+      -Droc=disabled \
+      -Davahi=disabled \
+      -Decho-cancel-webrtc=disabled \
+      -Dlibusb=disabled \
+      -Draop=disabled \
+      -Dlv2=disabled \
+      -Dx11=disabled \
+      -Dx11-xfixes=disabled \
+      -Dlibcanberra=disabled \
+      -Dflatpak=disabled \
+      -Dudevrulesdir=/usr/lib/udev/rules.d \
+      -Dsession-managers=[]
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - bin
+  - conf
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/pipewire
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pipewire-aes67
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pipewire-avb
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pipewire-pulse
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pw-cli
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pw-config
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pw-container
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pw-dot
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pw-dump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pw-link
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pw-loopback
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pw-metadata
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pw-mididump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pw-mon
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pw-profiler
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pw-reserve
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pw-top
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/bin/pw-v4l2
+    - path: /usr/bin/spa-acp-tool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/bin/spa-inspect
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/spa-json-dump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/spa-monitor
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  conf:
+    files:
+    - path: /etc/security/limits.d/25-pw-rlimits.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-aux.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-dock-mic.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-fm.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-front-mic.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-headphone-mic.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-headset-mic.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-internal-mic-always.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-internal-mic.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-linein.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-mic-line.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-mic.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-rear-mic.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-tvtuner.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-video.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-output-chat.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-output-headphones-2.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-output-headphones.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-output-lineout.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-output-mono.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-output-speaker-always.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-output-speaker.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-output.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/audigy-analog-output-mirror.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/audigy-analog-output.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/hdmi-output-0.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/hdmi-output-1.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/hdmi-output-2.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/hdmi-output-3.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/hdmi-output-4.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/hdmi-output-5.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/hdmi-output-6.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/hdmi-output-7.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/hdmi-output-8.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/hdmi-output-9.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/hdmi-output-10.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/iec958-stereo-input.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/iec958-stereo-output.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/steelseries-arctis-output-chat-common.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/steelseries-arctis-output-game-common.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/usb-gaming-headset-input.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/usb-gaming-headset-output-mono.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/usb-gaming-headset-output-stereo.conf
+    - path: /usr/share/alsa-card-profile/mixer/paths/virtual-surround-7.1.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/9999-custom.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/analog-only.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/asus-xonar-se.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/audigy.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/cmedia-high-speed-true-hdaudio.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/default.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/dell-dock-tb16-usb-audio.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/force-speaker-and-int-mic.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/force-speaker.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/hdmi-ac3.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/hp-tbt-dock-120w-g2.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/hp-tbt-dock-audio-module.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/kinect-audio.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/maudio-fasttrack-pro.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/native-instruments-audio4dj.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/native-instruments-audio8dj.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/native-instruments-komplete-audio6.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/native-instruments-korecontroller.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/native-instruments-traktor-audio2.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/native-instruments-traktor-audio6.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/native-instruments-traktor-audio10.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/native-instruments-traktorkontrol-s4.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/sb-omni-surround-5.1.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/sennheiser-gsx.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/simple-headphones-mic.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/steelseries-arctis-common-usb-audio.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/texas-instruments-pcm2902.conf
+    - path: /usr/share/alsa-card-profile/mixer/profile-sets/usb-gaming-headset.conf
+    - path: /usr/share/alsa/alsa.conf.d/50-pipewire.conf
+    - path: /usr/share/alsa/alsa.conf.d/99-pipewire-default.conf
+    - path: /usr/share/pipewire/client.conf
+    - path: /usr/share/pipewire/client.conf.avail/20-upmix.conf
+    - path: /usr/share/pipewire/filter-chain.conf
+    - path: /usr/share/pipewire/filter-chain/demonic.conf
+    - path: /usr/share/pipewire/filter-chain/sink-dolby-surround.conf
+    - path: /usr/share/pipewire/filter-chain/sink-eq6.conf
+    - path: /usr/share/pipewire/filter-chain/sink-make-LFE.conf
+    - path: /usr/share/pipewire/filter-chain/sink-matrix-spatialiser.conf
+    - path: /usr/share/pipewire/filter-chain/sink-mix-FL-FR.conf
+    - path: /usr/share/pipewire/filter-chain/sink-upmix-5.1-filter.conf
+    - path: /usr/share/pipewire/filter-chain/sink-virtual-surround-5.1-kemar.conf
+    - path: /usr/share/pipewire/filter-chain/sink-virtual-surround-7.1-hesuvi.conf
+    - path: /usr/share/pipewire/filter-chain/source-duplicate-FL.conf
+    - path: /usr/share/pipewire/filter-chain/source-rnnoise.conf
+    - path: /usr/share/pipewire/jack.conf
+    - path: /usr/share/pipewire/minimal.conf
+    - path: /usr/share/pipewire/pipewire-aes67.conf
+    - path: /usr/share/pipewire/pipewire-avb.conf
+    - path: /usr/share/pipewire/pipewire-pulse.conf
+    - path: /usr/share/pipewire/pipewire-pulse.conf.avail/20-upmix.conf
+    - path: /usr/share/pipewire/pipewire.conf
+    - path: /usr/share/pipewire/pipewire.conf.avail/10-rates.conf
+    - path: /usr/share/pipewire/pipewire.conf.avail/20-upmix.conf
+    - path: /usr/share/pipewire/pipewire.conf.avail/50-raop.conf
+
+  dev:
+    files:
+    - path: /usr/include/pipewire-0.3/pipewire/array.h
+    - path: /usr/include/pipewire-0.3/pipewire/buffers.h
+    - path: /usr/include/pipewire-0.3/pipewire/client.h
+    - path: /usr/include/pipewire-0.3/pipewire/conf.h
+    - path: /usr/include/pipewire-0.3/pipewire/context.h
+    - path: /usr/include/pipewire-0.3/pipewire/control.h
+    - path: /usr/include/pipewire-0.3/pipewire/core.h
+    - path: /usr/include/pipewire-0.3/pipewire/data-loop.h
+    - path: /usr/include/pipewire-0.3/pipewire/device.h
+    - path: /usr/include/pipewire-0.3/pipewire/extensions/client-node.h
+    - path: /usr/include/pipewire-0.3/pipewire/extensions/metadata.h
+    - path: /usr/include/pipewire-0.3/pipewire/extensions/profiler.h
+    - path: /usr/include/pipewire-0.3/pipewire/extensions/protocol-native.h
+    - path: /usr/include/pipewire-0.3/pipewire/extensions/security-context.h
+    - path: /usr/include/pipewire-0.3/pipewire/extensions/session-manager.h
+    - path: /usr/include/pipewire-0.3/pipewire/extensions/session-manager/impl-interfaces.h
+    - path: /usr/include/pipewire-0.3/pipewire/extensions/session-manager/interfaces.h
+    - path: /usr/include/pipewire-0.3/pipewire/extensions/session-manager/introspect-funcs.h
+    - path: /usr/include/pipewire-0.3/pipewire/extensions/session-manager/introspect.h
+    - path: /usr/include/pipewire-0.3/pipewire/extensions/session-manager/keys.h
+    - path: /usr/include/pipewire-0.3/pipewire/factory.h
+    - path: /usr/include/pipewire-0.3/pipewire/filter.h
+    - path: /usr/include/pipewire-0.3/pipewire/global.h
+    - path: /usr/include/pipewire-0.3/pipewire/i18n.h
+    - path: /usr/include/pipewire-0.3/pipewire/impl-client.h
+    - path: /usr/include/pipewire-0.3/pipewire/impl-core.h
+    - path: /usr/include/pipewire-0.3/pipewire/impl-device.h
+    - path: /usr/include/pipewire-0.3/pipewire/impl-factory.h
+    - path: /usr/include/pipewire-0.3/pipewire/impl-link.h
+    - path: /usr/include/pipewire-0.3/pipewire/impl-metadata.h
+    - path: /usr/include/pipewire-0.3/pipewire/impl-module.h
+    - path: /usr/include/pipewire-0.3/pipewire/impl-node.h
+    - path: /usr/include/pipewire-0.3/pipewire/impl-port.h
+    - path: /usr/include/pipewire-0.3/pipewire/impl.h
+    - path: /usr/include/pipewire-0.3/pipewire/keys.h
+    - path: /usr/include/pipewire-0.3/pipewire/link.h
+    - path: /usr/include/pipewire-0.3/pipewire/log.h
+    - path: /usr/include/pipewire-0.3/pipewire/loop.h
+    - path: /usr/include/pipewire-0.3/pipewire/main-loop.h
+    - path: /usr/include/pipewire-0.3/pipewire/map.h
+    - path: /usr/include/pipewire-0.3/pipewire/mem.h
+    - path: /usr/include/pipewire-0.3/pipewire/module.h
+    - path: /usr/include/pipewire-0.3/pipewire/node.h
+    - path: /usr/include/pipewire-0.3/pipewire/permission.h
+    - path: /usr/include/pipewire-0.3/pipewire/pipewire.h
+    - path: /usr/include/pipewire-0.3/pipewire/port.h
+    - path: /usr/include/pipewire-0.3/pipewire/properties.h
+    - path: /usr/include/pipewire-0.3/pipewire/protocol.h
+    - path: /usr/include/pipewire-0.3/pipewire/proxy.h
+    - path: /usr/include/pipewire-0.3/pipewire/resource.h
+    - path: /usr/include/pipewire-0.3/pipewire/stream.h
+    - path: /usr/include/pipewire-0.3/pipewire/thread-loop.h
+    - path: /usr/include/pipewire-0.3/pipewire/thread.h
+    - path: /usr/include/pipewire-0.3/pipewire/type.h
+    - path: /usr/include/pipewire-0.3/pipewire/utils.h
+    - path: /usr/include/pipewire-0.3/pipewire/version.h
+    - path: /usr/include/pipewire-0.3/pipewire/work-queue.h
+    - path: /usr/include/spa-0.2/spa/buffer/alloc.h
+    - path: /usr/include/spa-0.2/spa/buffer/buffer.h
+    - path: /usr/include/spa-0.2/spa/buffer/meta.h
+    - path: /usr/include/spa-0.2/spa/buffer/type-info.h
+    - path: /usr/include/spa-0.2/spa/control/control.h
+    - path: /usr/include/spa-0.2/spa/control/type-info.h
+    - path: /usr/include/spa-0.2/spa/control/ump-utils.h
+    - path: /usr/include/spa-0.2/spa/debug/buffer.h
+    - path: /usr/include/spa-0.2/spa/debug/context.h
+    - path: /usr/include/spa-0.2/spa/debug/dict.h
+    - path: /usr/include/spa-0.2/spa/debug/file.h
+    - path: /usr/include/spa-0.2/spa/debug/format.h
+    - path: /usr/include/spa-0.2/spa/debug/log.h
+    - path: /usr/include/spa-0.2/spa/debug/mem.h
+    - path: /usr/include/spa-0.2/spa/debug/node.h
+    - path: /usr/include/spa-0.2/spa/debug/pod.h
+    - path: /usr/include/spa-0.2/spa/debug/types.h
+    - path: /usr/include/spa-0.2/spa/filter-graph/filter-graph.h
+    - path: /usr/include/spa-0.2/spa/graph/graph.h
+    - path: /usr/include/spa-0.2/spa/interfaces/audio/aec.h
+    - path: /usr/include/spa-0.2/spa/monitor/device.h
+    - path: /usr/include/spa-0.2/spa/monitor/event.h
+    - path: /usr/include/spa-0.2/spa/monitor/type-info.h
+    - path: /usr/include/spa-0.2/spa/monitor/utils.h
+    - path: /usr/include/spa-0.2/spa/node/command.h
+    - path: /usr/include/spa-0.2/spa/node/event.h
+    - path: /usr/include/spa-0.2/spa/node/io.h
+    - path: /usr/include/spa-0.2/spa/node/keys.h
+    - path: /usr/include/spa-0.2/spa/node/node.h
+    - path: /usr/include/spa-0.2/spa/node/type-info.h
+    - path: /usr/include/spa-0.2/spa/node/utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/aac-types.h
+    - path: /usr/include/spa-0.2/spa/param/audio/aac-utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/aac.h
+    - path: /usr/include/spa-0.2/spa/param/audio/alac-utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/alac.h
+    - path: /usr/include/spa-0.2/spa/param/audio/amr-types.h
+    - path: /usr/include/spa-0.2/spa/param/audio/amr-utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/amr.h
+    - path: /usr/include/spa-0.2/spa/param/audio/ape-utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/ape.h
+    - path: /usr/include/spa-0.2/spa/param/audio/compressed.h
+    - path: /usr/include/spa-0.2/spa/param/audio/dsd-utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/dsd.h
+    - path: /usr/include/spa-0.2/spa/param/audio/dsp-utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/dsp.h
+    - path: /usr/include/spa-0.2/spa/param/audio/flac-utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/flac.h
+    - path: /usr/include/spa-0.2/spa/param/audio/format-utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/format.h
+    - path: /usr/include/spa-0.2/spa/param/audio/iec958.h
+    - path: /usr/include/spa-0.2/spa/param/audio/iec958-types.h
+    - path: /usr/include/spa-0.2/spa/param/audio/iec958-utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/layout.h
+    - path: /usr/include/spa-0.2/spa/param/audio/mp3.h
+    - path: /usr/include/spa-0.2/spa/param/audio/mp3-types.h
+    - path: /usr/include/spa-0.2/spa/param/audio/mp3-utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/opus.h
+    - path: /usr/include/spa-0.2/spa/param/audio/ra-utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/ra.h
+    - path: /usr/include/spa-0.2/spa/param/audio/raw-json.h
+    - path: /usr/include/spa-0.2/spa/param/audio/raw-types.h
+    - path: /usr/include/spa-0.2/spa/param/audio/raw-utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/raw.h
+    - path: /usr/include/spa-0.2/spa/param/audio/type-info.h
+    - path: /usr/include/spa-0.2/spa/param/audio/vorbis-utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/vorbis.h
+    - path: /usr/include/spa-0.2/spa/param/audio/wma-types.h
+    - path: /usr/include/spa-0.2/spa/param/audio/wma-utils.h
+    - path: /usr/include/spa-0.2/spa/param/audio/wma.h
+    - path: /usr/include/spa-0.2/spa/param/bluetooth/audio.h
+    - path: /usr/include/spa-0.2/spa/param/bluetooth/type-info.h
+    - path: /usr/include/spa-0.2/spa/param/buffers-types.h
+    - path: /usr/include/spa-0.2/spa/param/buffers.h
+    - path: /usr/include/spa-0.2/spa/param/format-types.h
+    - path: /usr/include/spa-0.2/spa/param/format-utils.h
+    - path: /usr/include/spa-0.2/spa/param/format.h
+    - path: /usr/include/spa-0.2/spa/param/latency-types.h
+    - path: /usr/include/spa-0.2/spa/param/latency-utils.h
+    - path: /usr/include/spa-0.2/spa/param/latency.h
+    - path: /usr/include/spa-0.2/spa/param/param-types.h
+    - path: /usr/include/spa-0.2/spa/param/param.h
+    - path: /usr/include/spa-0.2/spa/param/port-config-types.h
+    - path: /usr/include/spa-0.2/spa/param/port-config.h
+    - path: /usr/include/spa-0.2/spa/param/profile-types.h
+    - path: /usr/include/spa-0.2/spa/param/profile.h
+    - path: /usr/include/spa-0.2/spa/param/profiler-types.h
+    - path: /usr/include/spa-0.2/spa/param/profiler.h
+    - path: /usr/include/spa-0.2/spa/param/props-types.h
+    - path: /usr/include/spa-0.2/spa/param/props.h
+    - path: /usr/include/spa-0.2/spa/param/route-types.h
+    - path: /usr/include/spa-0.2/spa/param/route.h
+    - path: /usr/include/spa-0.2/spa/param/tag-types.h
+    - path: /usr/include/spa-0.2/spa/param/tag-utils.h
+    - path: /usr/include/spa-0.2/spa/param/tag.h
+    - path: /usr/include/spa-0.2/spa/param/type-info.h
+    - path: /usr/include/spa-0.2/spa/param/video/chroma.h
+    - path: /usr/include/spa-0.2/spa/param/video/color.h
+    - path: /usr/include/spa-0.2/spa/param/video/dsp-utils.h
+    - path: /usr/include/spa-0.2/spa/param/video/dsp.h
+    - path: /usr/include/spa-0.2/spa/param/video/encoded.h
+    - path: /usr/include/spa-0.2/spa/param/video/format-utils.h
+    - path: /usr/include/spa-0.2/spa/param/video/format.h
+    - path: /usr/include/spa-0.2/spa/param/video/h264.h
+    - path: /usr/include/spa-0.2/spa/param/video/h264-utils.h
+    - path: /usr/include/spa-0.2/spa/param/video/mjpg-utils.h
+    - path: /usr/include/spa-0.2/spa/param/video/mjpg.h
+    - path: /usr/include/spa-0.2/spa/param/video/multiview.h
+    - path: /usr/include/spa-0.2/spa/param/video/raw-types.h
+    - path: /usr/include/spa-0.2/spa/param/video/raw-utils.h
+    - path: /usr/include/spa-0.2/spa/param/video/raw.h
+    - path: /usr/include/spa-0.2/spa/param/video/type-info.h
+    - path: /usr/include/spa-0.2/spa/pod/builder.h
+    - path: /usr/include/spa-0.2/spa/pod/command.h
+    - path: /usr/include/spa-0.2/spa/pod/compare.h
+    - path: /usr/include/spa-0.2/spa/pod/dynamic.h
+    - path: /usr/include/spa-0.2/spa/pod/event.h
+    - path: /usr/include/spa-0.2/spa/pod/filter.h
+    - path: /usr/include/spa-0.2/spa/pod/iter.h
+    - path: /usr/include/spa-0.2/spa/pod/parser.h
+    - path: /usr/include/spa-0.2/spa/pod/pod.h
+    - path: /usr/include/spa-0.2/spa/pod/vararg.h
+    - path: /usr/include/spa-0.2/spa/support/cpu.h
+    - path: /usr/include/spa-0.2/spa/support/dbus.h
+    - path: /usr/include/spa-0.2/spa/support/i18n.h
+    - path: /usr/include/spa-0.2/spa/support/log-impl.h
+    - path: /usr/include/spa-0.2/spa/support/log.h
+    - path: /usr/include/spa-0.2/spa/support/loop.h
+    - path: /usr/include/spa-0.2/spa/support/plugin-loader.h
+    - path: /usr/include/spa-0.2/spa/support/plugin.h
+    - path: /usr/include/spa-0.2/spa/support/system.h
+    - path: /usr/include/spa-0.2/spa/support/thread.h
+    - path: /usr/include/spa-0.2/spa/utils/ansi.h
+    - path: /usr/include/spa-0.2/spa/utils/atomic.h
+    - path: /usr/include/spa-0.2/spa/utils/cleanup.h
+    - path: /usr/include/spa-0.2/spa/utils/defs.h
+    - path: /usr/include/spa-0.2/spa/utils/dict.h
+    - path: /usr/include/spa-0.2/spa/utils/dll.h
+    - path: /usr/include/spa-0.2/spa/utils/endian.h
+    - path: /usr/include/spa-0.2/spa/utils/enum-types.h
+    - path: /usr/include/spa-0.2/spa/utils/hook.h
+    - path: /usr/include/spa-0.2/spa/utils/json-core.h
+    - path: /usr/include/spa-0.2/spa/utils/json-pod.h
+    - path: /usr/include/spa-0.2/spa/utils/json.h
+    - path: /usr/include/spa-0.2/spa/utils/keys.h
+    - path: /usr/include/spa-0.2/spa/utils/list.h
+    - path: /usr/include/spa-0.2/spa/utils/names.h
+    - path: /usr/include/spa-0.2/spa/utils/ratelimit.h
+    - path: /usr/include/spa-0.2/spa/utils/result.h
+    - path: /usr/include/spa-0.2/spa/utils/ringbuffer.h
+    - path: /usr/include/spa-0.2/spa/utils/string.h
+    - path: /usr/include/spa-0.2/spa/utils/type-info.h
+    - path: /usr/include/spa-0.2/spa/utils/type.h
+    - path: /usr/lib/pkgconfig/libpipewire-0.3.pc
+    - path: /usr/lib/pkgconfig/libspa-0.2.pc
+
+  lib:
+    files:
+    - path: /usr/lib/alsa-lib/libasound_module_ctl_pipewire.so
+      needs:
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/alsa-lib/libasound_module_pcm_pipewire.so
+      needs:
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/libpipewire-0.3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libpipewire-0.3.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libpipewire-0.3.so.0.1409.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-access.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-adapter.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-avb.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-client-device.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-client-node.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+      - /usr/lib/pipewire-0.3/libpipewire-module-protocol-native.so
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-combine-stream.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-echo-cancel.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-fallback-sink.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-filter-chain.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-link-factory.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-loopback.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-metadata.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-netjack2-driver.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-netjack2-manager.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-parametric-equalizer.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-pipe-tunnel.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-portal.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-profiler.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-protocol-native.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpipewire-0.3.so.0
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-protocol-pulse.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-protocol-simple.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-rt.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-rtkit.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-rtp-sap.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-rtp-sink.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-rtp-source.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-session-manager.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-spa-device-factory.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-spa-device.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-spa-node-factory.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-spa-node.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-vban-recv.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/libpipewire-module-vban-send.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/pipewire-0.3/v4l2/libpw-v4l2.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/spa-0.2/aec/libspa-aec-null.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/spa-0.2/alsa/libspa-alsa.so
+      needs:
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libudev.so.1
+    - path: /usr/lib/spa-0.2/audioconvert/libspa-audioconvert.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/spa-0.2/audiomixer/libspa-audiomixer.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/spa-0.2/audiotestsrc/libspa-audiotestsrc.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/spa-0.2/avb/libspa-avb.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/spa-0.2/control/libspa-control.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/spa-0.2/filter-graph/libspa-filter-graph-plugin-builtin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/spa-0.2/filter-graph/libspa-filter-graph-plugin-ladspa.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/spa-0.2/filter-graph/libspa-filter-graph.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/spa-0.2/libspa.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/spa-0.2/support/libspa-dbus.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/lib/spa-0.2/support/libspa-journal.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/spa-0.2/support/libspa-support.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/spa-0.2/v4l2/libspa-v4l2.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libsystemd.so.0
+      - /usr/lib/libudev.so.1
+    - path: /usr/lib/spa-0.2/videoconvert/libspa-videoconvert.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/spa-0.2/videotestsrc/libspa-videotestsrc.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/systemd/user/filter-chain.service
+    - path: /usr/lib/systemd/user/pipewire-pulse.service
+    - path: /usr/lib/systemd/user/pipewire-pulse.socket
+    - path: /usr/lib/systemd/user/pipewire.service
+    - path: /usr/lib/systemd/user/pipewire.socket
+    - path: /usr/lib/udev/rules.d/90-pipewire-alsa.rules
+
+  locale:
+    files:
+    - path: /usr/share/locale/af/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/as/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/be/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/bg/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/bn_IN/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/de_CH/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/gu/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/he/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/hi/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/kk/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/kn/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/lt/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/ml/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/mr/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/my/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/nn/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/oc/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/or/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/pa/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/si/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/sl/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/sr@latin/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/ta/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/te/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/pipewire.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/pipewire.mo
+
+  misc:
+    files:
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-mic.conf.common
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-input.conf.common
+    - path: /usr/share/alsa-card-profile/mixer/paths/analog-output.conf.common
+
+resolution:
+  /usr/lib/libasound.so.2: alsa-lib
+  /usr/lib/libdbus-1.so.3: dbus
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libncursesw.so.6: ncurses
+  /usr/lib/libpipewire-0.3.so.0: self
+  /usr/lib/pipewire-0.3/libpipewire-module-protocol-native.so: self
+  /usr/lib/libsystemd.so.0: systemd
+  /usr/lib/libudev.so.1: systemd

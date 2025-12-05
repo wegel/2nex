@@ -1,0 +1,99 @@
+package:
+  schema: 1
+  name: zmx
+  slug: zmx
+  namespace: cli/system
+  version: 0.0.2
+  description: Session persistence for terminal processes
+  homepage: https://github.com/neurosnap/zmx
+  checksum: 31b63f0742934123923ddbbec771a601174fc34792da8d134bf4b52d5e2c4f0b
+
+sources:
+- name: zmx
+  url: https://github.com/neurosnap/zmx/archive/4d70b4c97d254aa058e4774b6cb53a3ee9d3992d.tar.gz
+  sha256: b4992c987cb92b8c638245a8f64ab1496a4af4d46fb1ca59e5e56d0e9c630a33
+- name: zig-deps
+  zig_zon: https://raw.githubusercontent.com/neurosnap/zmx/main/build.zig.zon
+  sha256: 940b93da319105e921444d5dd08f942750c718d81b5e08fea7f42c43f32fed8f
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: zig-bin
+  commit: x86_64/pkg/dev/lang/zig-bin/0.15.2/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: file
+  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [161:30637]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_zmx} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    # set up zig global cache with vendored dependencies
+    export ZIG_GLOBAL_CACHE_DIR="${WORK_DIR}/.zig-cache"
+    export ZIG_LOCAL_CACHE_DIR="${WORK_DIR}/.zig-local-cache"
+    mkdir -p "${ZIG_GLOBAL_CACHE_DIR}" "${ZIG_LOCAL_CACHE_DIR}"
+    tar --no-same-owner -xf /${SOURCE_zig_deps} -C "${ZIG_GLOBAL_CACHE_DIR}"
+
+    # patch ghostty's GhosttyDist.zig to use cwd().access instead of accessAbsolute
+    # this is a workaround for a bug when ghostty is used as a dependency
+    GHOSTTY_DIST="${ZIG_GLOBAL_CACHE_DIR}/p/ghostty-"*/src/build/GhosttyDist.zig
+    if [ -f $GHOSTTY_DIST ]; then
+        sed -i 's/std\.fs\.accessAbsolute(b\.pathFromRoot/std.fs.cwd().access(b.pathFromRoot/g' $GHOSTTY_DIST
+    fi
+
+    zig build -Doptimize=ReleaseSafe --prefix "${OUT_DIR}/usr" \
+      --global-cache-dir "${ZIG_GLOBAL_CACHE_DIR}" \
+      --cache-dir "${ZIG_LOCAL_CACHE_DIR}"
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/zmx
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

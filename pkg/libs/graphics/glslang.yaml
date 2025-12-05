@@ -1,0 +1,238 @@
+package:
+  schema: 1
+  name: glslang
+  slug: glslang
+  namespace: libs/graphics
+  version: 14.3.0
+  description: Khronos GLSL/ESSL front-end and SPIR-V generator
+  homepage: https://github.com/KhronosGroup/glslang
+  checksum: a7f0ee66af8eacafdd9d37d5b16ca6f47850ccc77b7bcbbcbe50af65227d94c8
+
+sources:
+- name: glslang
+  url: https://github.com/KhronosGroup/glslang/archive/refs/tags/14.3.0.tar.gz
+  sha256: be6339048e20280938d9cb399fcdd06e04f8654d43e170e8cce5a56c9a754284
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.21.2/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: spirv-headers
+  commit: x86_64/pkg/libs/graphics/spirv-headers/1.4.304.1/bundles/dev
+- name: spirv-tools
+  commit: x86_64/pkg/libs/graphics/spirv-tools/1.4.304.1/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4127:7959, 8235:11489, 12382:18152, 13342:18162]
+
+  script: |
+    # glslang doesn't build correctly with LTO
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
+    tar --no-same-owner -xzf /${SOURCE_glslang} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    cmake -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DALLOW_EXTERNAL_SPIRV_TOOLS=ON \
+      -DBUILD_SHARED_LIBS=ON \
+      -DENABLE_OPT=ON
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/glslang
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPIRV.so.14
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglslang-default-resource-limits.so.14
+      - /usr/lib/libglslang.so.14
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/glslangValidator
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPIRV.so.14
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglslang-default-resource-limits.so.14
+      - /usr/lib/libglslang.so.14
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/spirv-remap
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPVRemapper.so.14
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+
+  dev:
+    files:
+    - path: /usr/include/glslang/Include/ResourceLimits.h
+    - path: /usr/include/glslang/Include/glslang_c_interface.h
+    - path: /usr/include/glslang/Include/glslang_c_shader_types.h
+    - path: /usr/include/glslang/MachineIndependent/Versions.h
+    - path: /usr/include/glslang/Public/ResourceLimits.h
+    - path: /usr/include/glslang/Public/ShaderLang.h
+    - path: /usr/include/glslang/Public/resource_limits_c.h
+    - path: /usr/include/glslang/SPIRV/GlslangToSpv.h
+    - path: /usr/include/glslang/SPIRV/Logger.h
+    - path: /usr/include/glslang/SPIRV/SPVRemapper.h
+    - path: /usr/include/glslang/SPIRV/disassemble.h
+    - path: /usr/include/glslang/SPIRV/spirv.hpp
+    - path: /usr/include/glslang/build_info.h
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/glslang/glslang-config-version.cmake
+    - path: /usr/lib/cmake/glslang/glslang-config.cmake
+    - path: /usr/lib/cmake/glslang/glslang-targets-release.cmake
+    - path: /usr/lib/cmake/glslang/glslang-targets.cmake
+    - path: /usr/lib/libSPIRV.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPIRV-Tools-opt.so
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libSPIRV.so.14
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPIRV-Tools-opt.so
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libSPIRV.so.14.3.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libSPIRV-Tools-opt.so
+      - /usr/lib/libSPIRV-Tools.so
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libSPVRemapper.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libSPVRemapper.so.14
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libSPVRemapper.so.14.3.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libglslang-default-resource-limits.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libglslang-default-resource-limits.so.14
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libglslang-default-resource-limits.so.14.3.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libglslang.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libglslang.so.14
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libglslang.so.14.3.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+
+resolution:
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libSPIRV.so.14: self
+  /usr/lib/libSPVRemapper.so.14: self
+  /usr/lib/libglslang-default-resource-limits.so.14: self
+  /usr/lib/libglslang.so.14: self
+  /usr/lib/libSPIRV-Tools-opt.so: spirv-tools
+  /usr/lib/libSPIRV-Tools.so: spirv-tools

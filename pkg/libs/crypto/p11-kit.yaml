@@ -1,0 +1,186 @@
+package:
+  schema: 1
+  name: p11-kit
+  slug: p11-kit
+  namespace: libs/crypto
+  version: 0.25.5
+  description: "PKCS#11 module management library"
+  homepage: https://p11-glue.github.io/p11-glue/p11-kit.html
+  checksum: ef203c07b8bf0c1d3870a37091ef6f112637b8186d2fc9e47a85ddd5dadb0b76
+
+sources:
+- name: p11-kit
+  url: https://github.com/p11-glue/p11-kit/releases/download/0.25.5/p11-kit-0.25.5.tar.xz
+  sha256: 04d0a86450cdb1be018f26af6699857171a188ac6d5b8c90786a60854e1198e5
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+- name: mpc
+  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: libtasn1
+  commit: x86_64/pkg/libs/crypto/libtasn1/4.19.0/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4110:1761, 8237:1888, 12360:2102, 16458:2295, 20560:2502, 24672:5032, 28792:20156, 32956:21871, 34675:21916]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_p11_kit} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    meson setup builddir \
+      --prefix=/usr \
+      --buildtype=release \
+      -Dtrust_paths=/etc/pki/anchors
+
+    ninja -C builddir
+
+    DESTDIR="${OUT_DIR}" ninja -C builddir install
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/p11-kit
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libp11-kit.so.0
+      - /usr/lib/libtasn1.so.6
+    - path: /usr/bin/trust
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libp11-kit.so.0
+      - /usr/lib/libtasn1.so.6
+    - path: /usr/libexec/p11-kit/p11-kit-remote
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libp11-kit.so.0
+    - path: /usr/libexec/p11-kit/p11-kit-server
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libp11-kit.so.0
+    - path: /usr/libexec/p11-kit/trust-extract-compat
+
+  conf:
+    files:
+    - path: /etc/pkcs11/pkcs11.conf.example
+
+  dev:
+    files:
+    - path: /usr/include/p11-kit-1/p11-kit/deprecated.h
+    - path: /usr/include/p11-kit-1/p11-kit/iter.h
+    - path: /usr/include/p11-kit-1/p11-kit/p11-kit.h
+    - path: /usr/include/p11-kit-1/p11-kit/pin.h
+    - path: /usr/include/p11-kit-1/p11-kit/pkcs11x.h
+    - path: /usr/include/p11-kit-1/p11-kit/pkcs11.h
+    - path: /usr/include/p11-kit-1/p11-kit/remote.h
+    - path: /usr/include/p11-kit-1/p11-kit/uri.h
+    - path: /usr/include/p11-kit-1/p11-kit/version.h
+    - path: /usr/lib/pkgconfig/p11-kit-1.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libp11-kit.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libffi.so.8
+    - path: /usr/lib/libp11-kit.so.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libffi.so.8
+    - path: /usr/lib/libp11-kit.so.0.4.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libffi.so.8
+    - path: /usr/lib/p11-kit-proxy.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libffi.so.8
+    - path: /usr/lib/pkcs11/p11-kit-client.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libffi.so.8
+    - path: /usr/lib/pkcs11/p11-kit-trust.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtasn1.so.6
+
+  misc:
+    files:
+    - path: /usr/share/p11-kit/modules/p11-kit-trust.module
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libffi.so.8: libffi
+  /usr/lib/libtasn1.so.6: libtasn1
+  /usr/lib/libp11-kit.so.0: self

@@ -1,0 +1,420 @@
+package:
+  schema: 1
+  name: xkeyboard-config
+  slug: xkeyboard-config
+  namespace: libs/input
+  version: "2.43"
+  description: X Keyboard Extension configuration database
+  homepage: https://www.freedesktop.org/wiki/Software/XKeyboardConfig/
+  checksum: 964b0cce1eccecff42da8d7c0899b0b5c199ea75963a4628a841009d7336f777
+
+sources:
+- name: xkeyboard-config
+  url: https://xorg.freedesktop.org/archive/individual/data/xkeyboard-config/xkeyboard-config-2.43.tar.xz
+  sha256: c810f362c82a834ee89da81e34cd1452c99789339f46f6037f4b9e227dd06c01
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/bootstrap/phase3/pkgconf/2.2.0/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: gettext
+  commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+- name: xorgproto
+  commit: x86_64/pkg/libs/x11/xorgproto/2024.1/bundles/dev
+- name: libx11
+  commit: x86_64/pkg/libs/x11/libx11/1.8.10/bundles/dev
+- name: libxcb
+  commit: x86_64/pkg/libs/x11/libxcb/1.17.0/bundles/dev
+- name: libxau
+  commit: x86_64/pkg/libs/x11/libxau/1.0.12/bundles/dev
+- name: libxdmcp
+  commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4156:1099, 8325:1100, 12488:1111, 16618:1112, 20765:1121, 24921:1121, 29073:1345, 37265:1458, 41361:1517, 45649:1581]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_xkeyboard_config} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --buildtype=release \
+      -Dxorg-rules-symlinks=true \
+      -Dxkb-base=/usr/share/X11/xkb \
+      -Dnls=false
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - dev
+  - misc
+
+outputs:
+  dev:
+    files:
+    - path: /usr/share/pkgconfig/xkeyboard-config.pc
+
+  misc:
+    files:
+    - path: /usr/share/X11/xkb/compat/README
+    - path: /usr/share/X11/xkb/compat/accessx
+    - path: /usr/share/X11/xkb/compat/basic
+    - path: /usr/share/X11/xkb/compat/caps
+    - path: /usr/share/X11/xkb/compat/complete
+    - path: /usr/share/X11/xkb/compat/grab
+    - path: /usr/share/X11/xkb/compat/grp_led
+    - path: /usr/share/X11/xkb/compat/iso9995
+    - path: /usr/share/X11/xkb/compat/japan
+    - path: /usr/share/X11/xkb/compat/ledcaps
+    - path: /usr/share/X11/xkb/compat/ledcompose
+    - path: /usr/share/X11/xkb/compat/lednum
+    - path: /usr/share/X11/xkb/compat/ledscroll
+    - path: /usr/share/X11/xkb/compat/level5
+    - path: /usr/share/X11/xkb/compat/misc
+    - path: /usr/share/X11/xkb/compat/mod_led
+    - path: /usr/share/X11/xkb/compat/mousekeys
+    - path: /usr/share/X11/xkb/compat/olpc
+    - path: /usr/share/X11/xkb/compat/pc
+    - path: /usr/share/X11/xkb/compat/pc98
+    - path: /usr/share/X11/xkb/compat/xfree86
+    - path: /usr/share/X11/xkb/compat/xtest
+    - path: /usr/share/X11/xkb/geometry/README
+    - path: /usr/share/X11/xkb/geometry/amiga
+    - path: /usr/share/X11/xkb/geometry/ataritt
+    - path: /usr/share/X11/xkb/geometry/chicony
+    - path: /usr/share/X11/xkb/geometry/dell
+    - path: /usr/share/X11/xkb/geometry/digital_vndr/lk
+    - path: /usr/share/X11/xkb/geometry/digital_vndr/pc
+    - path: /usr/share/X11/xkb/geometry/digital_vndr/unix
+    - path: /usr/share/X11/xkb/geometry/everex
+    - path: /usr/share/X11/xkb/geometry/fujitsu
+    - path: /usr/share/X11/xkb/geometry/hhk
+    - path: /usr/share/X11/xkb/geometry/hp
+    - path: /usr/share/X11/xkb/geometry/keytronic
+    - path: /usr/share/X11/xkb/geometry/kinesis
+    - path: /usr/share/X11/xkb/geometry/macintosh
+    - path: /usr/share/X11/xkb/geometry/microsoft
+    - path: /usr/share/X11/xkb/geometry/nec
+    - path: /usr/share/X11/xkb/geometry/northgate
+    - path: /usr/share/X11/xkb/geometry/pc
+    - path: /usr/share/X11/xkb/geometry/sanwa
+    - path: /usr/share/X11/xkb/geometry/sgi_vndr/O2
+    - path: /usr/share/X11/xkb/geometry/sgi_vndr/indigo
+    - path: /usr/share/X11/xkb/geometry/sgi_vndr/indy
+    - path: /usr/share/X11/xkb/geometry/sony
+    - path: /usr/share/X11/xkb/geometry/steelseries
+    - path: /usr/share/X11/xkb/geometry/sun
+    - path: /usr/share/X11/xkb/geometry/teck
+    - path: /usr/share/X11/xkb/geometry/thinkpad
+    - path: /usr/share/X11/xkb/geometry/typematrix
+    - path: /usr/share/X11/xkb/geometry/winbook
+    - path: /usr/share/X11/xkb/keycodes/README
+    - path: /usr/share/X11/xkb/keycodes/aliases
+    - path: /usr/share/X11/xkb/keycodes/amiga
+    - path: /usr/share/X11/xkb/keycodes/ataritt
+    - path: /usr/share/X11/xkb/keycodes/digital_vndr/lk
+    - path: /usr/share/X11/xkb/keycodes/digital_vndr/pc
+    - path: /usr/share/X11/xkb/keycodes/empty
+    - path: /usr/share/X11/xkb/keycodes/evdev
+    - path: /usr/share/X11/xkb/keycodes/fujitsu
+    - path: /usr/share/X11/xkb/keycodes/hp
+    - path: /usr/share/X11/xkb/keycodes/ibm
+    - path: /usr/share/X11/xkb/keycodes/jolla
+    - path: /usr/share/X11/xkb/keycodes/macintosh
+    - path: /usr/share/X11/xkb/keycodes/olpc
+    - path: /usr/share/X11/xkb/keycodes/sgi_vndr/indigo
+    - path: /usr/share/X11/xkb/keycodes/sgi_vndr/indy
+    - path: /usr/share/X11/xkb/keycodes/sgi_vndr/iris
+    - path: /usr/share/X11/xkb/keycodes/sony
+    - path: /usr/share/X11/xkb/keycodes/sun
+    - path: /usr/share/X11/xkb/keycodes/xfree86
+    - path: /usr/share/X11/xkb/keycodes/xfree98
+    - path: /usr/share/X11/xkb/rules/README
+    - path: /usr/share/X11/xkb/rules/base
+    - path: /usr/share/X11/xkb/rules/base.extras.xml
+    - path: /usr/share/X11/xkb/rules/base.lst
+    - path: /usr/share/X11/xkb/rules/base.xml
+    - path: /usr/share/X11/xkb/rules/evdev
+    - path: /usr/share/X11/xkb/rules/evdev.extras.xml
+    - path: /usr/share/X11/xkb/rules/evdev.lst
+    - path: /usr/share/X11/xkb/rules/evdev.xml
+    - path: /usr/share/X11/xkb/rules/xfree98
+    - path: /usr/share/X11/xkb/rules/xkb.dtd
+    - path: /usr/share/X11/xkb/rules/xorg
+    - path: /usr/share/X11/xkb/rules/xorg.lst
+    - path: /usr/share/X11/xkb/rules/xorg.xml
+    - path: /usr/share/X11/xkb/symbols/af
+    - path: /usr/share/X11/xkb/symbols/al
+    - path: /usr/share/X11/xkb/symbols/altwin
+    - path: /usr/share/X11/xkb/symbols/am
+    - path: /usr/share/X11/xkb/symbols/ancient
+    - path: /usr/share/X11/xkb/symbols/apl
+    - path: /usr/share/X11/xkb/symbols/ara
+    - path: /usr/share/X11/xkb/symbols/at
+    - path: /usr/share/X11/xkb/symbols/au
+    - path: /usr/share/X11/xkb/symbols/az
+    - path: /usr/share/X11/xkb/symbols/ba
+    - path: /usr/share/X11/xkb/symbols/bd
+    - path: /usr/share/X11/xkb/symbols/be
+    - path: /usr/share/X11/xkb/symbols/bg
+    - path: /usr/share/X11/xkb/symbols/bqn
+    - path: /usr/share/X11/xkb/symbols/br
+    - path: /usr/share/X11/xkb/symbols/brai
+    - path: /usr/share/X11/xkb/symbols/bt
+    - path: /usr/share/X11/xkb/symbols/bw
+    - path: /usr/share/X11/xkb/symbols/by
+    - path: /usr/share/X11/xkb/symbols/ca
+    - path: /usr/share/X11/xkb/symbols/capslock
+    - path: /usr/share/X11/xkb/symbols/cd
+    - path: /usr/share/X11/xkb/symbols/ch
+    - path: /usr/share/X11/xkb/symbols/cm
+    - path: /usr/share/X11/xkb/symbols/cn
+    - path: /usr/share/X11/xkb/symbols/compose
+    - path: /usr/share/X11/xkb/symbols/ctrl
+    - path: /usr/share/X11/xkb/symbols/cz
+    - path: /usr/share/X11/xkb/symbols/de
+    - path: /usr/share/X11/xkb/symbols/digital_vndr/lk
+    - path: /usr/share/X11/xkb/symbols/digital_vndr/pc
+    - path: /usr/share/X11/xkb/symbols/digital_vndr/us
+    - path: /usr/share/X11/xkb/symbols/digital_vndr/vt
+    - path: /usr/share/X11/xkb/symbols/dk
+    - path: /usr/share/X11/xkb/symbols/dz
+    - path: /usr/share/X11/xkb/symbols/ee
+    - path: /usr/share/X11/xkb/symbols/eg
+    - path: /usr/share/X11/xkb/symbols/empty
+    - path: /usr/share/X11/xkb/symbols/epo
+    - path: /usr/share/X11/xkb/symbols/es
+    - path: /usr/share/X11/xkb/symbols/et
+    - path: /usr/share/X11/xkb/symbols/eu
+    - path: /usr/share/X11/xkb/symbols/eurosign
+    - path: /usr/share/X11/xkb/symbols/fi
+    - path: /usr/share/X11/xkb/symbols/fkeys
+    - path: /usr/share/X11/xkb/symbols/fo
+    - path: /usr/share/X11/xkb/symbols/fr
+    - path: /usr/share/X11/xkb/symbols/fujitsu_vndr/jp
+    - path: /usr/share/X11/xkb/symbols/fujitsu_vndr/us
+    - path: /usr/share/X11/xkb/symbols/gb
+    - path: /usr/share/X11/xkb/symbols/ge
+    - path: /usr/share/X11/xkb/symbols/gh
+    - path: /usr/share/X11/xkb/symbols/gn
+    - path: /usr/share/X11/xkb/symbols/gr
+    - path: /usr/share/X11/xkb/symbols/grab
+    - path: /usr/share/X11/xkb/symbols/group
+    - path: /usr/share/X11/xkb/symbols/hp_vndr/us
+    - path: /usr/share/X11/xkb/symbols/hr
+    - path: /usr/share/X11/xkb/symbols/hu
+    - path: /usr/share/X11/xkb/symbols/id
+    - path: /usr/share/X11/xkb/symbols/ie
+    - path: /usr/share/X11/xkb/symbols/il
+    - path: /usr/share/X11/xkb/symbols/in
+    - path: /usr/share/X11/xkb/symbols/inet
+    - path: /usr/share/X11/xkb/symbols/iq
+    - path: /usr/share/X11/xkb/symbols/ir
+    - path: /usr/share/X11/xkb/symbols/is
+    - path: /usr/share/X11/xkb/symbols/it
+    - path: /usr/share/X11/xkb/symbols/jolla_vndr/sbj
+    - path: /usr/share/X11/xkb/symbols/jp
+    - path: /usr/share/X11/xkb/symbols/ke
+    - path: /usr/share/X11/xkb/symbols/keypad
+    - path: /usr/share/X11/xkb/symbols/kg
+    - path: /usr/share/X11/xkb/symbols/kh
+    - path: /usr/share/X11/xkb/symbols/kpdl
+    - path: /usr/share/X11/xkb/symbols/kr
+    - path: /usr/share/X11/xkb/symbols/kz
+    - path: /usr/share/X11/xkb/symbols/la
+    - path: /usr/share/X11/xkb/symbols/latam
+    - path: /usr/share/X11/xkb/symbols/latin
+    - path: /usr/share/X11/xkb/symbols/level2
+    - path: /usr/share/X11/xkb/symbols/level3
+    - path: /usr/share/X11/xkb/symbols/level5
+    - path: /usr/share/X11/xkb/symbols/lk
+    - path: /usr/share/X11/xkb/symbols/lt
+    - path: /usr/share/X11/xkb/symbols/lv
+    - path: /usr/share/X11/xkb/symbols/ma
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/apple
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/ch
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/de
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/dk
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/fi
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/fr
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/gb
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/is
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/it
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/jp
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/latam
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/nl
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/no
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/pt
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/se
+    - path: /usr/share/X11/xkb/symbols/macintosh_vndr/us
+    - path: /usr/share/X11/xkb/symbols/md
+    - path: /usr/share/X11/xkb/symbols/me
+    - path: /usr/share/X11/xkb/symbols/mk
+    - path: /usr/share/X11/xkb/symbols/ml
+    - path: /usr/share/X11/xkb/symbols/mm
+    - path: /usr/share/X11/xkb/symbols/mn
+    - path: /usr/share/X11/xkb/symbols/mt
+    - path: /usr/share/X11/xkb/symbols/mv
+    - path: /usr/share/X11/xkb/symbols/my
+    - path: /usr/share/X11/xkb/symbols/nbsp
+    - path: /usr/share/X11/xkb/symbols/nec_vndr/jp
+    - path: /usr/share/X11/xkb/symbols/ng
+    - path: /usr/share/X11/xkb/symbols/nl
+    - path: /usr/share/X11/xkb/symbols/no
+    - path: /usr/share/X11/xkb/symbols/np
+    - path: /usr/share/X11/xkb/symbols/nz
+    - path: /usr/share/X11/xkb/symbols/olpc
+    - path: /usr/share/X11/xkb/symbols/parens
+    - path: /usr/share/X11/xkb/symbols/pc
+    - path: /usr/share/X11/xkb/symbols/ph
+    - path: /usr/share/X11/xkb/symbols/pk
+    - path: /usr/share/X11/xkb/symbols/pl
+    - path: /usr/share/X11/xkb/symbols/pt
+    - path: /usr/share/X11/xkb/symbols/ro
+    - path: /usr/share/X11/xkb/symbols/rs
+    - path: /usr/share/X11/xkb/symbols/ru
+    - path: /usr/share/X11/xkb/symbols/rupeesign
+    - path: /usr/share/X11/xkb/symbols/scrolllock
+    - path: /usr/share/X11/xkb/symbols/se
+    - path: /usr/share/X11/xkb/symbols/sgi_vndr/jp
+    - path: /usr/share/X11/xkb/symbols/sharp_vndr/sl-c3x00
+    - path: /usr/share/X11/xkb/symbols/sharp_vndr/ws003sh
+    - path: /usr/share/X11/xkb/symbols/sharp_vndr/ws007sh
+    - path: /usr/share/X11/xkb/symbols/sharp_vndr/ws011sh
+    - path: /usr/share/X11/xkb/symbols/sharp_vndr/ws020sh
+    - path: /usr/share/X11/xkb/symbols/shift
+    - path: /usr/share/X11/xkb/symbols/si
+    - path: /usr/share/X11/xkb/symbols/sk
+    - path: /usr/share/X11/xkb/symbols/sn
+    - path: /usr/share/X11/xkb/symbols/sony_vndr/us
+    - path: /usr/share/X11/xkb/symbols/srvr_ctrl
+    - path: /usr/share/X11/xkb/symbols/srvrkeys
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/ara
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/be
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/br
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/ca
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/ch
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/cz
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/de
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/dk
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/ee
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/es
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/fi
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/fr
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/gb
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/gr
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/it
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/jp
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/kr
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/lt
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/lv
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/nl
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/no
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/pl
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/pt
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/ro
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/ru
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/se
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/sk
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/solaris
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/tr
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/tw
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/ua
+    - path: /usr/share/X11/xkb/symbols/sun_vndr/us
+    - path: /usr/share/X11/xkb/symbols/sy
+    - path: /usr/share/X11/xkb/symbols/terminate
+    - path: /usr/share/X11/xkb/symbols/tg
+    - path: /usr/share/X11/xkb/symbols/th
+    - path: /usr/share/X11/xkb/symbols/tj
+    - path: /usr/share/X11/xkb/symbols/tm
+    - path: /usr/share/X11/xkb/symbols/tr
+    - path: /usr/share/X11/xkb/symbols/trans
+    - path: /usr/share/X11/xkb/symbols/tw
+    - path: /usr/share/X11/xkb/symbols/typo
+    - path: /usr/share/X11/xkb/symbols/tz
+    - path: /usr/share/X11/xkb/symbols/ua
+    - path: /usr/share/X11/xkb/symbols/us
+    - path: /usr/share/X11/xkb/symbols/uz
+    - path: /usr/share/X11/xkb/symbols/vn
+    - path: /usr/share/X11/xkb/symbols/xfree68_vndr/amiga
+    - path: /usr/share/X11/xkb/symbols/xfree68_vndr/ataritt
+    - path: /usr/share/X11/xkb/symbols/za
+    - path: /usr/share/X11/xkb/types/README
+    - path: /usr/share/X11/xkb/types/basic
+    - path: /usr/share/X11/xkb/types/cancel
+    - path: /usr/share/X11/xkb/types/caps
+    - path: /usr/share/X11/xkb/types/complete
+    - path: /usr/share/X11/xkb/types/default
+    - path: /usr/share/X11/xkb/types/extra
+    - path: /usr/share/X11/xkb/types/iso9995
+    - path: /usr/share/X11/xkb/types/level5
+    - path: /usr/share/X11/xkb/types/mousekeys
+    - path: /usr/share/X11/xkb/types/numpad
+    - path: /usr/share/X11/xkb/types/pc

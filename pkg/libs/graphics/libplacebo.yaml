@@ -1,0 +1,161 @@
+package:
+  schema: 1
+  name: libplacebo
+  slug: libplacebo
+  namespace: libs/graphics
+  version: 7.351.0
+  description: Reusable library for GPU-accelerated video/image rendering
+  homepage: https://libplacebo.org/
+  checksum: f7fc9fa72bca948b4deae5a4c3048ded17f45999c7bfa74c8145d3deb68c70b2
+
+sources:
+- name: libplacebo
+  url: https://github.com/haasn/libplacebo/archive/refs/tags/v7.351.0.tar.gz
+  sha256: 716954501d9b76e6906fddda66febc5886493d0673dd265ec1e6e52f4e5cd7c6
+- name: glad
+  url: https://github.com/Dav1dde/glad/archive/refs/tags/v2.0.8.tar.gz
+  sha256: 44f06f9195427c7017f5028d0894f57eb216b0a8f7c4eda7ce883732aeb2d0fc
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: jinja2
+  commit: x86_64/pkg/dev/python/jinja2/3.1.3/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: mesa
+  commit: x86_64/pkg/libs/graphics/mesa/24.2.7/bundles/dev
+- name: libdrm
+  commit: x86_64/pkg/libs/graphics/libdrm/2.4.123/bundles/dev
+- name: vulkan-headers
+  commit: x86_64/pkg/libs/graphics/vulkan-headers/1.4.328.1/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4123:1381, 8255:7060, 12411:7094, 16187:7104]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_libplacebo} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    # extract glad into 3rdparty where libplacebo expects it
+    mkdir -p 3rdparty/glad
+    tar --no-same-owner -xf /${SOURCE_glad} -C 3rdparty/glad --strip-components=1
+
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      -Dvulkan=disabled \
+      -Dopengl=enabled \
+      -Dd3d11=disabled \
+      -Ddemos=false \
+      -Dtests=false \
+      -Dbench=false \
+      -Dfuzz=false
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/libplacebo/cache.h
+    - path: /usr/include/libplacebo/colorspace.h
+    - path: /usr/include/libplacebo/common.h
+    - path: /usr/include/libplacebo/config.h
+    - path: /usr/include/libplacebo/d3d11.h
+    - path: /usr/include/libplacebo/dispatch.h
+    - path: /usr/include/libplacebo/dither.h
+    - path: /usr/include/libplacebo/dummy.h
+    - path: /usr/include/libplacebo/filters.h
+    - path: /usr/include/libplacebo/gamut_mapping.h
+    - path: /usr/include/libplacebo/gpu.h
+    - path: /usr/include/libplacebo/log.h
+    - path: /usr/include/libplacebo/opengl.h
+    - path: /usr/include/libplacebo/options.h
+    - path: /usr/include/libplacebo/renderer.h
+    - path: /usr/include/libplacebo/shaders.h
+    - path: /usr/include/libplacebo/shaders/colorspace.h
+    - path: /usr/include/libplacebo/shaders/custom.h
+    - path: /usr/include/libplacebo/shaders/deinterlacing.h
+    - path: /usr/include/libplacebo/shaders/dithering.h
+    - path: /usr/include/libplacebo/shaders/film_grain.h
+    - path: /usr/include/libplacebo/shaders/icc.h
+    - path: /usr/include/libplacebo/shaders/lut.h
+    - path: /usr/include/libplacebo/shaders/sampling.h
+    - path: /usr/include/libplacebo/swapchain.h
+    - path: /usr/include/libplacebo/tone_mapping.h
+    - path: /usr/include/libplacebo/utils/dav1d.h
+    - path: /usr/include/libplacebo/utils/dav1d_internal.h
+    - path: /usr/include/libplacebo/utils/dolbyvision.h
+    - path: /usr/include/libplacebo/utils/frame_queue.h
+    - path: /usr/include/libplacebo/utils/libav.h
+    - path: /usr/include/libplacebo/utils/libav_internal.h
+    - path: /usr/include/libplacebo/utils/upload.h
+    - path: /usr/include/libplacebo/vulkan.h
+    - path: /usr/lib/pkgconfig/libplacebo.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libplacebo.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libplacebo.so.351
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc

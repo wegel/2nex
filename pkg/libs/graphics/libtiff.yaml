@@ -1,0 +1,626 @@
+package:
+  schema: 1
+  name: libtiff
+  slug: libtiff
+  namespace: libs/graphics
+  version: 4.7.1
+  description: Library for reading and writing TIFF image files
+  homepage: http://libtiff.gitlab.io/libtiff/
+  checksum: 41123c07ba12b19a112dc3267f078c3aed3078209ee04a323a9b8822ba87a60a
+
+sources:
+- name: libtiff
+  url: https://download.osgeo.org/libtiff/tiff-4.7.1.tar.gz
+  sha256: f698d94f3103da8ca7438d84e0344e453fe0ba3b7486e04c5bf7a9a3fabe9b69
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.21.2/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: libjpeg-turbo
+  commit: x86_64/pkg/libs/graphics/libjpeg-turbo/3.1.2/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4137:7120, 8296:7498, 16566:24377, 24885:24415, 33095:24432, 41323:24460, 49610:24482, 57826:25853, 70114:26529, 76770:26955]
+
+  script: |
+    tar --no-same-owner -xzf /${SOURCE_libtiff} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    cmake -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR=lib
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/fax2tiff
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/fax2ps
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/pal2rgb
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/ppm2tiff
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/raw2tiff
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/tiff2pdf
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/tiff2rgba
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/tiff2ps
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/tiff2bw
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/tiffcmp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/tiffcp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/tiffcrop
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/tiffdither
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/tiffdump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/tiffinfo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/tiffmedian
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/tiffset
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/bin/tiffsplit
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libtiff.so.6
+
+  dev:
+    files:
+    - path: /usr/include/tiff.h
+    - path: /usr/include/tiffconf.h
+    - path: /usr/include/tiffio.h
+    - path: /usr/include/tiffio.hxx
+    - path: /usr/include/tiffvers.h
+    - path: /usr/lib/pkgconfig/libtiff-4.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/tiff/manual/html/.buildinfo
+    - path: /usr/share/doc/tiff/manual/html/_images/bali.jpg
+    - path: /usr/share/doc/tiff/manual/html/_images/cat.gif
+    - path: /usr/share/doc/tiff/manual/html/_images/cover.jpg
+    - path: /usr/share/doc/tiff/manual/html/_images/cramps.gif
+    - path: /usr/share/doc/tiff/manual/html/_images/dave.gif
+    - path: /usr/share/doc/tiff/manual/html/_images/esri.png
+    - path: /usr/share/doc/tiff/manual/html/_images/jim.gif
+    - path: /usr/share/doc/tiff/manual/html/_images/leica.png
+    - path: /usr/share/doc/tiff/manual/html/_images/quad.jpg
+    - path: /usr/share/doc/tiff/manual/html/_images/ring.gif
+    - path: /usr/share/doc/tiff/manual/html/_images/safe.png
+    - path: /usr/share/doc/tiff/manual/html/_images/smallliz.jpg
+    - path: /usr/share/doc/tiff/manual/html/_images/strike.gif
+    - path: /usr/share/doc/tiff/manual/html/_images/weogeo.png
+    - path: /usr/share/doc/tiff/manual/html/_sources/addingtags.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/build.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/contrib.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFAccessTagMethods.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFClientInfo.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFClose.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFCreateDirectory.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFCustomDirectory.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFCustomTagList.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFDataWidth.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFDeferStrileArrayWriting.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFError.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFFieldDataType.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFFieldName.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFFieldPassCount.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFFieldQuery.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFFieldReadCount.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFFieldTag.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFFieldWriteCount.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFFlush.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFGetField.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFMergeFieldInfo.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFOpen.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFOpenOptions.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFPrintDirectory.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFProcFunctions.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFRGBAImage.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFReadDirectory.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFReadEncodedStrip.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFReadEncodedTile.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFReadFromUserBuffer.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFReadRGBAImage.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFReadRGBAStrip.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFReadRGBATile.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFReadRawStrip.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFReadRawTile.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFReadScanline.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFReadTile.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFSetDirectory.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFSetField.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFSetTagExtender.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFStrileQuery.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFWarning.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFWriteDirectory.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFWriteEncodedStrip.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFWriteEncodedTile.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFWriteRawStrip.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFWriteRawTile.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFWriteScanline.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFWriteTile.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFbuffer.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFcodec.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFcolor.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFmemory.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFquery.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFsize.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFstrip.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFswab.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/TIFFtile.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/_TIFFRewriteField.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/_TIFFauxiliary.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/functions/libtiff.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/images.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/index.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/internals.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/libtiff.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/multi_page.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/project/acknowledgements.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/project/bugs.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/project/index.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/project/license.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/project/mailinglist.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/project/psc.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/historical.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/index.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.4beta007.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.4beta016.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.4beta018.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.4beta024.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.4beta028.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.4beta029.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.4beta031.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.4beta032.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.4beta033.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.4beta034.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.4beta035.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.4beta036.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.5.1.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.5.2.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.5.3.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.5.4.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.5.5.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.5.6beta.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.5.7.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.6.0.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.6.1.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.7.0beta.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.7.0beta2.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.7.0alpha.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.7.0.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.7.1.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.7.2.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.7.3.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.7.4.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.8.0.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.8.1.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.8.2.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.9.0beta.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.9.0.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.9.1.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.9.2.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.9.3.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.9.4.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v3.9.5.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.0.0.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.0.1.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.0.2.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.0.3.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.0.4beta.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.0.4.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.0.5.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.0.6.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.0.7.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.0.8.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.0.9.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.0.10.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.1.0.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.2.0.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.3.0.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.4.0.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.5.0.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.5.1.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.6.0.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.7.0.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/releases/v4.7.1.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/rfcs/index.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/rfcs/rfc1_psc.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/rfcs/rfc2_restoring_needed_tools.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/specification/bigtiff.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/specification/coverage-bigtiff.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/specification/coverage.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/specification/index.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/specification/technote2.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/terms.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/fax2tiff.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/fax2ps.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/pal2rgb.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/ppm2tiff.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/raw2tiff.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/rgb2ycbcr.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/thumbnail.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/tiff2pdf.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/tiff2rgba.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/tiff2ps.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/tiff2bw.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/tiffcmp.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/tiffcp.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/tiffcrop.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/tiffdither.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/tiffdump.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/tiffgt.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/tiffinfo.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/tiffmedian.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/tiffset.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_sources/tools/tiffsplit.rst.txt
+    - path: /usr/share/doc/tiff/manual/html/_static/basic.css
+    - path: /usr/share/doc/tiff/manual/html/_static/contents.png
+    - path: /usr/share/doc/tiff/manual/html/_static/doctools.js
+    - path: /usr/share/doc/tiff/manual/html/_static/documentation_options.js
+    - path: /usr/share/doc/tiff/manual/html/_static/file.png
+    - path: /usr/share/doc/tiff/manual/html/_static/language_data.js
+    - path: /usr/share/doc/tiff/manual/html/_static/minus.png
+    - path: /usr/share/doc/tiff/manual/html/_static/navigation.png
+    - path: /usr/share/doc/tiff/manual/html/_static/plus.png
+    - path: /usr/share/doc/tiff/manual/html/_static/pygments.css
+    - path: /usr/share/doc/tiff/manual/html/_static/searchtools.js
+    - path: /usr/share/doc/tiff/manual/html/_static/sphinx_highlight.js
+    - path: /usr/share/doc/tiff/manual/html/_static/sphinxdoc.css
+    - path: /usr/share/doc/tiff/manual/html/addingtags.html
+    - path: /usr/share/doc/tiff/manual/html/build.html
+    - path: /usr/share/doc/tiff/manual/html/contrib.html
+    - path: /usr/share/doc/tiff/manual/html/functions.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFAccessTagMethods.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFClientInfo.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFClose.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFCreateDirectory.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFCustomDirectory.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFCustomTagList.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFDataWidth.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFDeferStrileArrayWriting.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFError.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFFieldDataType.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFFieldName.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFFieldPassCount.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFFieldQuery.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFFieldReadCount.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFFieldTag.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFFieldWriteCount.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFFlush.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFGetField.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFMergeFieldInfo.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFOpen.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFOpenOptions.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFPrintDirectory.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFProcFunctions.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFRGBAImage.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFReadDirectory.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFReadEncodedStrip.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFReadEncodedTile.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFReadFromUserBuffer.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFReadRGBAImage.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFReadRGBAStrip.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFReadRGBATile.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFReadRawStrip.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFReadRawTile.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFReadScanline.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFReadTile.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFSetDirectory.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFSetField.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFSetTagExtender.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFStrileQuery.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFWarning.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFWriteDirectory.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFWriteEncodedStrip.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFWriteEncodedTile.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFWriteRawStrip.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFWriteRawTile.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFWriteScanline.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFWriteTile.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFbuffer.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFcodec.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFcolor.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFmemory.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFquery.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFsize.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFstrip.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFswab.html
+    - path: /usr/share/doc/tiff/manual/html/functions/TIFFtile.html
+    - path: /usr/share/doc/tiff/manual/html/functions/_TIFFRewriteField.html
+    - path: /usr/share/doc/tiff/manual/html/functions/_TIFFauxiliary.html
+    - path: /usr/share/doc/tiff/manual/html/functions/libtiff.html
+    - path: /usr/share/doc/tiff/manual/html/genindex.html
+    - path: /usr/share/doc/tiff/manual/html/images.html
+    - path: /usr/share/doc/tiff/manual/html/index.html
+    - path: /usr/share/doc/tiff/manual/html/internals.html
+    - path: /usr/share/doc/tiff/manual/html/libtiff.html
+    - path: /usr/share/doc/tiff/manual/html/multi_page.html
+    - path: /usr/share/doc/tiff/manual/html/objects.inv
+    - path: /usr/share/doc/tiff/manual/html/project/acknowledgements.html
+    - path: /usr/share/doc/tiff/manual/html/project/bugs.html
+    - path: /usr/share/doc/tiff/manual/html/project/index.html
+    - path: /usr/share/doc/tiff/manual/html/project/license.html
+    - path: /usr/share/doc/tiff/manual/html/project/mailinglist.html
+    - path: /usr/share/doc/tiff/manual/html/project/psc.html
+    - path: /usr/share/doc/tiff/manual/html/releases/historical.html
+    - path: /usr/share/doc/tiff/manual/html/releases/index.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.4beta007.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.4beta016.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.4beta018.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.4beta024.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.4beta028.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.4beta029.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.4beta031.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.4beta032.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.4beta033.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.4beta034.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.4beta035.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.4beta036.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.5.1.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.5.2.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.5.3.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.5.4.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.5.5.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.5.6beta.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.5.7.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.6.0.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.6.1.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.7.0beta.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.7.0beta2.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.7.0.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.7.0alpha.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.7.1.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.7.2.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.7.3.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.7.4.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.8.0.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.8.1.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.8.2.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.9.0beta.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.9.0.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.9.1.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.9.2.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.9.3.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.9.4.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v3.9.5.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.0.0.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.0.1.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.0.2.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.0.3.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.0.4beta.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.0.4.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.0.5.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.0.6.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.0.7.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.0.8.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.0.9.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.0.10.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.1.0.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.2.0.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.3.0.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.4.0.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.5.0.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.5.1.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.6.0.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.7.0.html
+    - path: /usr/share/doc/tiff/manual/html/releases/v4.7.1.html
+    - path: /usr/share/doc/tiff/manual/html/rfcs/index.html
+    - path: /usr/share/doc/tiff/manual/html/rfcs/rfc1_psc.html
+    - path: /usr/share/doc/tiff/manual/html/rfcs/rfc2_restoring_needed_tools.html
+    - path: /usr/share/doc/tiff/manual/html/search.html
+    - path: /usr/share/doc/tiff/manual/html/searchindex.js
+    - path: /usr/share/doc/tiff/manual/html/specification/bigtiff.html
+    - path: /usr/share/doc/tiff/manual/html/specification/coverage-bigtiff.html
+    - path: /usr/share/doc/tiff/manual/html/specification/coverage.html
+    - path: /usr/share/doc/tiff/manual/html/specification/index.html
+    - path: /usr/share/doc/tiff/manual/html/specification/technote2.html
+    - path: /usr/share/doc/tiff/manual/html/terms.html
+    - path: /usr/share/doc/tiff/manual/html/tools.html
+    - path: /usr/share/doc/tiff/manual/html/tools/fax2tiff.html
+    - path: /usr/share/doc/tiff/manual/html/tools/fax2ps.html
+    - path: /usr/share/doc/tiff/manual/html/tools/pal2rgb.html
+    - path: /usr/share/doc/tiff/manual/html/tools/ppm2tiff.html
+    - path: /usr/share/doc/tiff/manual/html/tools/raw2tiff.html
+    - path: /usr/share/doc/tiff/manual/html/tools/rgb2ycbcr.html
+    - path: /usr/share/doc/tiff/manual/html/tools/thumbnail.html
+    - path: /usr/share/doc/tiff/manual/html/tools/tiff2pdf.html
+    - path: /usr/share/doc/tiff/manual/html/tools/tiff2rgba.html
+    - path: /usr/share/doc/tiff/manual/html/tools/tiff2ps.html
+    - path: /usr/share/doc/tiff/manual/html/tools/tiff2bw.html
+    - path: /usr/share/doc/tiff/manual/html/tools/tiffcmp.html
+    - path: /usr/share/doc/tiff/manual/html/tools/tiffcp.html
+    - path: /usr/share/doc/tiff/manual/html/tools/tiffcrop.html
+    - path: /usr/share/doc/tiff/manual/html/tools/tiffdither.html
+    - path: /usr/share/doc/tiff/manual/html/tools/tiffdump.html
+    - path: /usr/share/doc/tiff/manual/html/tools/tiffgt.html
+    - path: /usr/share/doc/tiff/manual/html/tools/tiffinfo.html
+    - path: /usr/share/doc/tiff/manual/html/tools/tiffmedian.html
+    - path: /usr/share/doc/tiff/manual/html/tools/tiffset.html
+    - path: /usr/share/doc/tiff/manual/html/tools/tiffsplit.html
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/tiff/TiffConfig.cmake
+    - path: /usr/lib/cmake/tiff/TiffConfigVersion.cmake
+    - path: /usr/lib/cmake/tiff/TiffTargets-release.cmake
+    - path: /usr/lib/cmake/tiff/TiffTargets.cmake
+    - path: /usr/lib/libtiff.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libtiff.so.6
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libtiff.so.6.2.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libtiffxx.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/lib/libtiffxx.so.6
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libtiff.so.6
+    - path: /usr/lib/libtiffxx.so.6.2.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libtiff.so.6
+
+resolution:
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libjpeg.so.8: libjpeg-turbo
+  /usr/lib/libtiff.so.6: self
+  /usr/lib/liblzma.so.5: xz
+  /usr/lib/libz.so.1: zlib
+  /usr/lib/libzstd.so.1: zstd

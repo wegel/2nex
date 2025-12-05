@@ -1,0 +1,230 @@
+package:
+  schema: 1
+  name: nettle
+  slug: nettle
+  namespace: libs/crypto
+  version: "3.1"
+  description: Low-level cryptographic library
+  homepage: https://www.lysator.liu.se/~nisse/nettle/
+  checksum: b2e3b2d17ccd23b2bd2250a9e92c5bd6d8514d5743e89fb77c1c955ec62ff2a0
+
+sources:
+- name: nettle
+  url: https://ftp.gnu.org/gnu/nettle/nettle-3.10.tar.gz
+  sha256: b4c518adb174e484cb4acea54118f02380c7133771e7e9beb98a0787194ee47c
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+- name: mpc
+  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [8564:1776, 21496:1791, 51699:1883, 82770:1986, 107886:2051, 134236:2129, 161193:2214, 201314:2377, 243949:5838, 266998:6563]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_nettle} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --disable-static --enable-shared
+
+    make
+
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/nettle-hash
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnettle.so.8
+    - path: /usr/bin/nettle-lfib-stream
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnettle.so.8
+    - path: /usr/bin/nettle-pbkdf2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnettle.so.8
+    - path: /usr/bin/pkcs1-conv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libhogweed.so.6
+      - /usr/lib/libnettle.so.8
+    - path: /usr/bin/sexp-conv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnettle.so.8
+
+  dev:
+    files:
+    - path: /usr/include/nettle/aes.h
+    - path: /usr/include/nettle/arcfour.h
+    - path: /usr/include/nettle/arctwo.h
+    - path: /usr/include/nettle/asn1.h
+    - path: /usr/include/nettle/balloon.h
+    - path: /usr/include/nettle/base16.h
+    - path: /usr/include/nettle/base64.h
+    - path: /usr/include/nettle/bignum.h
+    - path: /usr/include/nettle/blowfish.h
+    - path: /usr/include/nettle/buffer.h
+    - path: /usr/include/nettle/camellia.h
+    - path: /usr/include/nettle/cast128.h
+    - path: /usr/include/nettle/cbc.h
+    - path: /usr/include/nettle/ccm.h
+    - path: /usr/include/nettle/cfb.h
+    - path: /usr/include/nettle/chacha-poly1305.h
+    - path: /usr/include/nettle/chacha.h
+    - path: /usr/include/nettle/cmac.h
+    - path: /usr/include/nettle/ctr.h
+    - path: /usr/include/nettle/curve448.h
+    - path: /usr/include/nettle/curve25519.h
+    - path: /usr/include/nettle/des.h
+    - path: /usr/include/nettle/drbg-ctr.h
+    - path: /usr/include/nettle/dsa-compat.h
+    - path: /usr/include/nettle/dsa.h
+    - path: /usr/include/nettle/eax.h
+    - path: /usr/include/nettle/ecc-curve.h
+    - path: /usr/include/nettle/ecc.h
+    - path: /usr/include/nettle/ecdsa.h
+    - path: /usr/include/nettle/eddsa.h
+    - path: /usr/include/nettle/gcm.h
+    - path: /usr/include/nettle/gostdsa.h
+    - path: /usr/include/nettle/gosthash94.h
+    - path: /usr/include/nettle/hkdf.h
+    - path: /usr/include/nettle/hmac.h
+    - path: /usr/include/nettle/knuth-lfib.h
+    - path: /usr/include/nettle/macros.h
+    - path: /usr/include/nettle/md2.h
+    - path: /usr/include/nettle/md4.h
+    - path: /usr/include/nettle/md5-compat.h
+    - path: /usr/include/nettle/md5.h
+    - path: /usr/include/nettle/memops.h
+    - path: /usr/include/nettle/memxor.h
+    - path: /usr/include/nettle/nettle-meta.h
+    - path: /usr/include/nettle/nettle-types.h
+    - path: /usr/include/nettle/nist-keywrap.h
+    - path: /usr/include/nettle/ocb.h
+    - path: /usr/include/nettle/pbkdf2.h
+    - path: /usr/include/nettle/pgp.h
+    - path: /usr/include/nettle/pkcs1.h
+    - path: /usr/include/nettle/poly1305.h
+    - path: /usr/include/nettle/pss-mgf1.h
+    - path: /usr/include/nettle/pss.h
+    - path: /usr/include/nettle/realloc.h
+    - path: /usr/include/nettle/ripemd160.h
+    - path: /usr/include/nettle/rsa.h
+    - path: /usr/include/nettle/salsa20.h
+    - path: /usr/include/nettle/serpent.h
+    - path: /usr/include/nettle/sexp.h
+    - path: /usr/include/nettle/sha.h
+    - path: /usr/include/nettle/sha1.h
+    - path: /usr/include/nettle/sha2.h
+    - path: /usr/include/nettle/sha3.h
+    - path: /usr/include/nettle/siv-cmac.h
+    - path: /usr/include/nettle/siv-gcm.h
+    - path: /usr/include/nettle/sm3.h
+    - path: /usr/include/nettle/sm4.h
+    - path: /usr/include/nettle/streebog.h
+    - path: /usr/include/nettle/twofish.h
+    - path: /usr/include/nettle/umac.h
+    - path: /usr/include/nettle/version.h
+    - path: /usr/include/nettle/xts.h
+    - path: /usr/include/nettle/yarrow.h
+    - path: /usr/lib/pkgconfig/hogweed.pc
+    - path: /usr/lib/pkgconfig/nettle.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libhogweed.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libnettle.so.8
+    - path: /usr/lib/libhogweed.so.6
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libnettle.so.8
+    - path: /usr/lib/libhogweed.so.6.9
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libnettle.so.8
+    - path: /usr/lib/libnettle.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnettle.so.8
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnettle.so.8.9
+      needs:
+      - /usr/lib/libc.so.6
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libgmp.so.10: gmp
+  /usr/lib/libhogweed.so.6: self
+  /usr/lib/libnettle.so.8: self

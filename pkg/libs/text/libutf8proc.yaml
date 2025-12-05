@@ -1,0 +1,111 @@
+package:
+  schema: 1
+  name: libutf8proc
+  slug: libutf8proc
+  namespace: libs/text
+  version: 2.10.0
+  description: Clean C library for processing UTF-8 Unicode data
+  homepage: https://github.com/JuliaStrings/utf8proc
+  checksum: 2d26eeff2059846a2ed4e6cb455278476d33912f2abdd876e7eb519c36da7ada
+
+sources:
+- name: utf8proc
+  url: https://github.com/JuliaStrings/utf8proc/archive/refs/tags/v2.10.0.tar.gz
+  sha256: 6f4f1b639daa6dca9f80bc5db1233e9cbaa31a67790887106160b33ef743f136
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: file
+  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: strip-nondeterminism
+  commit: x86_64/pkg/bootstrap/phase3/strip-nondeterminism/1.13.0/bundles/dev
+- name: perl
+  commit: x86_64/pkg/bootstrap/phase2/perl/5.38.2/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [1978:498]
+
+  script: |
+    tar --no-same-owner -xzf /${SOURCE_utf8proc} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    make CC=gcc prefix=/usr
+    make CC=gcc prefix=/usr DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/utf8proc.h
+    - path: /usr/lib/pkgconfig/libutf8proc.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libutf8proc.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libutf8proc.so.3
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libutf8proc.so.3.1.0
+      needs:
+      - /usr/lib/libc.so.6
+
+  static:
+    files:
+    - path: /usr/lib/libutf8proc.a
+
+resolution:
+  /usr/lib/libc.so.6: glibc

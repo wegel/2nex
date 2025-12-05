@@ -29,9 +29,9 @@ dependencies:
 - name: mpc
   commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
 - name: attr
-  commit: x86_64/pkg/bootstrap/phase3/attr/2.5.2/bundles/dev
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: acl
-  commit: x86_64/pkg/bootstrap/phase3/acl/2.3.2/bundles/dev
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
 - name: gcc
   commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
 - name: linux-headers
@@ -60,10 +60,16 @@ dependencies:
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 
 build:
-  profile: [4146:2360, 16551:2362, 37172:2365, 61900:2369, 82511:4465, 103141:4468, 123820:7506, 157091:12023, 184754:25520, 205083:27287]
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4102:1324, 16515:1326, 33045:1328, 57814:1331, 74356:2862, 90884:2864, 111518:2867, 136162:5583, 165014:9061, 178998:10012]
 
   script: |
-    set -eux
+    set -eu
+
+    # doesn't build correctly with LTO
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
 
     tar --no-same-owner -xf "${SOURCE_busybox}" -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"

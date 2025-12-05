@@ -81,11 +81,16 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/libxcrypt/4.4.36/bundles/dev
 
 build:
-  profile: [118136:16924, 460100:23555, 1029951:34435, 1713459:60614, 2285541:169987, 2854447:318943, 3425704:323596, 4290124:356092, 5139480:388798, 5708750:423557]
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [118001:12702, 458383:18773, 1031326:29276, 1715169:52348, 2287946:155727, 2857356:303168, 3428791:308010, 4293498:340972, 5143051:374074, 5712421:409842]
 
   script: |
+    # gcc's build system doesn't use gcc-ar/gcc-ranlib consistently, so disable LTO
     CFLAGS=${CFLAGS/-Werror=format-security/}
+    CFLAGS=${CFLAGS/-flto=auto/}
     CXXFLAGS=${CXXFLAGS/-Werror=format-security/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
 
     tar --no-same-owner -xf ${SOURCE_gcc} -C "${WORK_DIR}" --strip-components=1
 

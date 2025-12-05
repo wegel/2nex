@@ -1,0 +1,67 @@
+package:
+  schema: 1
+  name: Zig (Binary)
+  slug: zig-bin
+  namespace: dev/lang
+  version: 0.15.2
+  description: A general-purpose programming language and build system
+  homepage: https://ziglang.org/
+  checksum: 9889d0d6b4641a46e6c974afddc83481ec28242058048bafffc6b0f2c09ae1b4
+
+sources:
+- name: zig_binary
+  url: https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz
+  sha256: 02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: phase3
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [33:9337]
+
+  script: |
+    mkdir -p "${WORK_DIR}/zig"
+    tar --no-same-owner -xf ${SOURCE_zig_binary} -C "${WORK_DIR}/zig" --strip-components=1
+    cd "${WORK_DIR}/zig"
+
+    mkdir -p ${OUT_DIR}/usr/bin
+    mkdir -p ${OUT_DIR}/usr/lib/zig
+
+    install -m 755 zig ${OUT_DIR}/usr/bin/zig
+    cp -r lib/* ${OUT_DIR}/usr/lib/zig/
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/zig
+
+  lib:
+    files:
+    - path: /usr/lib/zig

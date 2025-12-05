@@ -6,7 +6,7 @@ package:
   version: 0.1.0
   description: Simple tiling Wayland compositor based on dwl
   homepage: https://github.com/wegel/vwl
-  checksum: 74f6c7f667a3b9bd9b60b46e52d57d3154a901498e03ee1449be48f2648e4cc3
+  checksum: 5ed5d824b3776c383101b4117b6aedb01b4bcbd60b8df4d2db37f9b2f6560d21
 
 sources:
 - name: vwl
@@ -49,13 +49,13 @@ dependencies:
 - name: wayland
   commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
 - name: wayland-protocols
-  commit: x86_64/pkg/libs/wayland/wayland-protocols/1.41/bundles/dev
+  commit: x86_64/pkg/libs/wayland/wayland-protocols/1.46/bundles/dev
 - name: libxkbcommon
   commit: x86_64/pkg/libs/input/libxkbcommon/1.7.0/bundles/dev
 - name: libinput
   commit: x86_64/pkg/libs/input/libinput/1.30.0/bundles/dev
 - name: pixman
-  commit: x86_64/pkg/libs/graphics/pixman/0.43.4/bundles/dev
+  commit: x86_64/pkg/libs/graphics/pixman/0.46.4/bundles/dev
 - name: libdrm
   commit: x86_64/pkg/libs/graphics/libdrm/2.4.123/bundles/dev
 - name: mesa
@@ -75,9 +75,9 @@ dependencies:
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: cairo
-  commit: x86_64/pkg/libs/graphics/cairo/1.18.0/bundles/dev
+  commit: x86_64/pkg/libs/graphics/cairo/1.18.4/bundles/dev
 - name: pango
-  commit: x86_64/pkg/libs/text/pango/1.54.0/bundles/dev
+  commit: x86_64/pkg/libs/text/pango/1.57.0/bundles/dev
 - name: glib2
   commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
 - name: freetype
@@ -118,11 +118,19 @@ dependencies:
   commit: x86_64/pkg/libs/x11/libxau/1.0.12/bundles/dev
 - name: libxdmcp
   commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
+- name: elfutils
+  commit: x86_64/pkg/dev/util/elfutils/0.191/bundles/dev
 
 build:
-  profile: [4179:28, 6037:665]
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4316:28, 6333:747]
 
   script: |
+    # doesn't build correctly with LTO
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
     tar --no-same-owner -xzf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 

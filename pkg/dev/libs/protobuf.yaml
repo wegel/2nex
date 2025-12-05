@@ -6,7 +6,7 @@ package:
   version: "30.2"
   description: Google's data interchange format
   homepage: https://protobuf.dev/
-  checksum: f67de969a99b97782cf6a46f38b4e641f82a14a3702b045bedc9499fd88dd0db
+  checksum: 54085b21f17c300d902d187706bfdbbb36e6a54faceb8b89cc98803fdcac3294
 
 sources:
 - name: protobuf
@@ -68,9 +68,15 @@ dependencies:
   commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
 
 build:
-  profile: [4163:4739, 8296:7143, 20718:23054, 33160:37192, 41504:44893, 49971:51286, 62447:62055, 74833:62070, 91353:62250, 97366:62959]
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4146:4087, 8242:7624, 20751:28145, 33289:33168, 41776:39849, 50211:46305, 62603:57820, 75019:57833, 91552:57997, 98557:58592]
 
   script: |
+    # protobuf's internal library linking breaks with LTO
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
     tar --no-same-owner -xf ${SOURCE_protobuf} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
@@ -83,10 +89,14 @@ build:
     cmake .. \
     -G Ninja \
     -DCMAKE_INSTALL_PREFIX=/usr \
+    -DCMAKE_PREFIX_PATH=/usr \
     -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_FLAGS="${CFLAGS}" \
+    -DCMAKE_CXX_FLAGS="${CXXFLAGS}" \
+    -DBUILD_SHARED_LIBS=ON \
     -Dprotobuf_ALLOW_CCACHE=ON \
     -Dprotobuf_BUILD_CONFORMANCE=OFF \
-    -Dprotobuf_BUILD_LIBPROTOC=OFF \
+    -Dprotobuf_BUILD_LIBPROTOC=ON \
     -Dprotobuf_BUILD_LIBUPB=ON \
     -Dprotobuf_BUILD_PROTOBUF_BINARIES=ON \
     -Dprotobuf_BUILD_PROTOC_BINARIES=ON \
@@ -94,7 +104,7 @@ build:
     -Dprotobuf_DISABLE_RTTI=OFF \
     -Dprotobuf_INSTALL=ON \
     -Dprotobuf_WITH_ZLIB=ON \
-    -DCMAKE_EXE_LINKER_FLAGS="-Wl,--allow-multiple-definition"
+    -Dprotobuf_LOCAL_DEPENDENCIES_ONLY=ON
 
     # Build
     ninja
@@ -126,61 +136,163 @@ outputs:
     - path: /usr/bin/protoc
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_log_initialize.so.2501.0.0
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libm.so.6
+      - /usr/lib/libprotoc.so.30.2.0
       - /usr/lib/libstdc++.so.6
-      - /usr/lib/libz.so.1
     - path: /usr/bin/protoc-30.2.0
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_log_initialize.so.2501.0.0
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libm.so.6
+      - /usr/lib/libprotoc.so.30.2.0
       - /usr/lib/libstdc++.so.6
-      - /usr/lib/libz.so.1
     - path: /usr/bin/protoc-gen-upb
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_cord.so.2501.0.0
+      - /usr/lib/libabsl_cord_internal.so.2501.0.0
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_check_op.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_conditions.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_status.so.2501.0.0
+      - /usr/lib/libabsl_statusor.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libm.so.6
       - /usr/lib/libstdc++.so.6
+      - /usr/lib/libutf8_validity.so.30.2.0
     - path: /usr/bin/protoc-gen-upb-30.2.0
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_cord.so.2501.0.0
+      - /usr/lib/libabsl_cord_internal.so.2501.0.0
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_check_op.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_conditions.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_status.so.2501.0.0
+      - /usr/lib/libabsl_statusor.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libm.so.6
       - /usr/lib/libstdc++.so.6
+      - /usr/lib/libutf8_validity.so.30.2.0
     - path: /usr/bin/protoc-gen-upb_minitable
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_cord.so.2501.0.0
+      - /usr/lib/libabsl_cord_internal.so.2501.0.0
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_check_op.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_conditions.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_status.so.2501.0.0
+      - /usr/lib/libabsl_statusor.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libm.so.6
       - /usr/lib/libstdc++.so.6
+      - /usr/lib/libutf8_validity.so.30.2.0
     - path: /usr/bin/protoc-gen-upb_minitable-30.2.0
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_cord.so.2501.0.0
+      - /usr/lib/libabsl_cord_internal.so.2501.0.0
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_check_op.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_conditions.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_status.so.2501.0.0
+      - /usr/lib/libabsl_statusor.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libm.so.6
       - /usr/lib/libstdc++.so.6
+      - /usr/lib/libutf8_validity.so.30.2.0
     - path: /usr/bin/protoc-gen-upbdefs
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_cord.so.2501.0.0
+      - /usr/lib/libabsl_cord_internal.so.2501.0.0
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_check_op.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_conditions.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_status.so.2501.0.0
+      - /usr/lib/libabsl_statusor.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libm.so.6
       - /usr/lib/libstdc++.so.6
+      - /usr/lib/libutf8_validity.so.30.2.0
     - path: /usr/bin/protoc-gen-upbdefs-30.2.0
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_cord.so.2501.0.0
+      - /usr/lib/libabsl_cord_internal.so.2501.0.0
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_check_op.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_conditions.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_status.so.2501.0.0
+      - /usr/lib/libabsl_statusor.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
-      - /usr/lib/libm.so.6
       - /usr/lib/libstdc++.so.6
+      - /usr/lib/libutf8_validity.so.30.2.0
 
   dev:
     files:
@@ -484,20 +596,173 @@ outputs:
     - path: /usr/lib/cmake/utf8_range/utf8_range-config.cmake
     - path: /usr/lib/cmake/utf8_range/utf8_range-targets-release.cmake
     - path: /usr/lib/cmake/utf8_range/utf8_range-targets.cmake
+    - path: /usr/lib/libprotobuf-lite.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_cord.so.2501.0.0
+      - /usr/lib/libabsl_cord_internal.so.2501.0.0
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_check_op.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libutf8_validity.so.30.2.0
+    - path: /usr/lib/libprotobuf-lite.so.30.2.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_cord.so.2501.0.0
+      - /usr/lib/libabsl_cord_internal.so.2501.0.0
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_check_op.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libutf8_validity.so.30.2.0
+    - path: /usr/lib/libprotobuf.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_cord.so.2501.0.0
+      - /usr/lib/libabsl_cord_internal.so.2501.0.0
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+      - /usr/lib/libabsl_die_if_null.so.2501.0.0
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_check_op.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_conditions.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_status.so.2501.0.0
+      - /usr/lib/libabsl_statusor.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
+      - /usr/lib/libabsl_time_zone.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libutf8_validity.so.30.2.0
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libprotobuf.so.30.2.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_cord.so.2501.0.0
+      - /usr/lib/libabsl_cord_internal.so.2501.0.0
+      - /usr/lib/libabsl_cordz_info.so.2501.0.0
+      - /usr/lib/libabsl_die_if_null.so.2501.0.0
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_check_op.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_conditions.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      - /usr/lib/libabsl_spinlock_wait.so.2501.0.0
+      - /usr/lib/libabsl_status.so.2501.0.0
+      - /usr/lib/libabsl_statusor.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libabsl_time.so.2501.0.0
+      - /usr/lib/libabsl_time_zone.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libutf8_validity.so.30.2.0
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libprotoc.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_die_if_null.so.2501.0.0
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_check_op.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_conditions.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      - /usr/lib/libabsl_status.so.2501.0.0
+      - /usr/lib/libabsl_statusor.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libprotobuf.so.30.2.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libprotoc.so.30.2.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libabsl_die_if_null.so.2501.0.0
+      - /usr/lib/libabsl_hash.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_check_op.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_conditions.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_message.so.2501.0.0
+      - /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0
+      - /usr/lib/libabsl_raw_hash_set.so.2501.0.0
+      - /usr/lib/libabsl_status.so.2501.0.0
+      - /usr/lib/libabsl_statusor.so.2501.0.0
+      - /usr/lib/libabsl_str_format_internal.so.2501.0.0
+      - /usr/lib/libabsl_strings.so.2501.0.0
+      - /usr/lib/libabsl_synchronization.so.2501.0.0
+      - /usr/lib/libabsl_throw_delegate.so.2501.0.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libprotobuf.so.30.2.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libutf8_range.so
+    - path: /usr/lib/libutf8_range.so.30.2.0
+    - path: /usr/lib/libutf8_validity.so
+    - path: /usr/lib/libutf8_validity.so.30.2.0
 
   static:
     files:
-    - path: /usr/lib/libprotobuf-lite.a
-    - path: /usr/lib/libprotobuf.a
-    - path: /usr/lib/libprotoc.a
     - path: /usr/lib/libupb.a
-    - path: /usr/lib/libutf8_range.a
-    - path: /usr/lib/libutf8_validity.a
 
 resolution:
   /usr/lib/libgcc_s.so.1: gcc
   /usr/lib/libstdc++.so.6: gcc
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
-  /usr/lib/libm.so.6: glibc
+  /usr/lib/libabsl_cord.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_cord_internal.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_cordz_info.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_die_if_null.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_hash.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_log_initialize.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_log_internal_check_op.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_log_internal_conditions.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_log_internal_message.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_log_internal_nullguard.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_raw_hash_set.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_spinlock_wait.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_status.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_statusor.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_str_format_internal.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_strings.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_synchronization.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_throw_delegate.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_time.so.2501.0.0: libabseil-cpp
+  /usr/lib/libabsl_time_zone.so.2501.0.0: libabseil-cpp
+  /usr/lib/libprotobuf.so.30.2.0: self
+  /usr/lib/libprotoc.so.30.2.0: self
+  /usr/lib/libutf8_validity.so.30.2.0: self
   /usr/lib/libz.so.1: zlib

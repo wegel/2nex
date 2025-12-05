@@ -5,12 +5,12 @@ package:
   namespace: core/nex
   version: 0.1.0
   description: 2nex package builder and manager
-  checksum: 08d2b0548cb1d790d2c40b9487b344363ed5716ba11225ece8b13372010800b5
+  checksum: 26ecac9b25e2c03a3ec4a655a18a8841494f2901c16e83447be04314fa23c580
 
 sources:
 - name: nex_src
   file: pkg/core/nex/nex-builder-src.tar.gz
-  sha256: 68ba40081f6de0e8546b25ef357b794cd002a5527ef937246a09efdc637ceee6
+  sha256: d3fb7ee5d4e9dde0523b0e4a18c7fcccbb408bc76ed8841481c838bd8fe6bb2e
 
 dependencies:
 - name: bash
@@ -43,9 +43,16 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
 
 build:
-  profile: [3168:22173]
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [3390:23285]
 
   script: |
+
+    # doesn't build correctly with LTO
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
     # extract source
     tar --no-same-owner -xzf ${SOURCE_nex_src} -C ${WORK_DIR} --strip-components=1
     cd ${WORK_DIR}
@@ -84,8 +91,10 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
 
 resolution:
   /usr/lib/libgcc_s.so.1: gcc
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc

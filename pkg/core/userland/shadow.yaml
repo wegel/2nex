@@ -6,7 +6,7 @@ package:
   version: 4.15.1
   description: Shadow password file utilities
   homepage: https://github.com/shadow-maint/shadow
-  checksum: 47224c697da95a40fc8d24c958fe613bb8e35d2dd31703c98cf5152ec80b1f11
+  checksum: 2fcee820fa5a68e3b94218804b8b08d4f1ab6746caa22a1929e68698246b8378
 
 sources:
 - name: shadow
@@ -79,15 +79,16 @@ dependencies:
   commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
 
 build:
-  profile: [4147:677, 8267:2403, 12373:4229, 16553:5492, 24841:7344, 28977:7418, 33092:7493, 41342:7560, 49679:7620, 54794:20746]
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4102:702, 8222:2882, 12333:4151, 16549:4701, 24831:6554, 28955:6632, 33085:6692, 41314:6754, 49854:6821, 54453:19446]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_shadow} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-    patch -Np1 -i /inputs/0001-Disable-replaced-tools-their-man-pages-and-PAM-integ.patch
-    patch -Np1 -i /inputs/0002-Adapt-login.defs-for-PAM-and-util-linux.patch
-    patch -Np1 -i /inputs/0003-Add-Arch-Linux-defaults-for-login.defs.patch
+    patch -Np1 -i /${SOURCE1}
+    patch -Np1 -i /${SOURCE2}
+    patch -Np1 -i /${SOURCE3}
 
     sed -i "s/groups\$(EXEEXT) //" src/Makefile.in
     find man -name Makefile.in -exec sed -i "s/groups\.1 / /"   {} \;
@@ -318,22 +319,13 @@ outputs:
     files:
     - path: /usr/lib/libsubid.so
       needs:
-      - /usr/lib/libacl.so.1
-      - /usr/lib/libattr.so.1
       - /usr/lib/libc.so.6
-      - /usr/lib/libcrypt.so.2
     - path: /usr/lib/libsubid.so.4
       needs:
-      - /usr/lib/libacl.so.1
-      - /usr/lib/libattr.so.1
       - /usr/lib/libc.so.6
-      - /usr/lib/libcrypt.so.2
     - path: /usr/lib/libsubid.so.4.0.0
       needs:
-      - /usr/lib/libacl.so.1
-      - /usr/lib/libattr.so.1
       - /usr/lib/libc.so.6
-      - /usr/lib/libcrypt.so.2
 
   locale:
     files:

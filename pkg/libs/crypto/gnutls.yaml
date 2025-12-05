@@ -1,0 +1,283 @@
+package:
+  schema: 1
+  name: gnutls
+  slug: gnutls
+  namespace: libs/crypto
+  version: 3.8.8
+  description: Secure communications library implementing SSL, TLS and DTLS
+  homepage: https://www.gnutls.org/
+  checksum: b8bc5eb3b3291c5d352583bae4d5aee9352d1e2a62ddaf2d4bdc9cf472d395c9
+
+sources:
+- name: gnutls
+  url: https://www.gnupg.org/ftp/gcrypt/gnutls/v3.8/gnutls-3.8.8.tar.xz
+  sha256: ac4f020e583880b51380ed226e59033244bc536cad2623f2e26f5afa2939d8fb
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+- name: mpc
+  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: nettle
+  commit: x86_64/pkg/libs/crypto/nettle/3.1/bundles/dev
+- name: libtasn1
+  commit: x86_64/pkg/libs/crypto/libtasn1/4.19.0/bundles/dev
+- name: p11-kit
+  commit: x86_64/pkg/libs/crypto/p11-kit/0.25.5/bundles/dev
+- name: libidn2
+  commit: x86_64/pkg/libs/text/libidn2/2.3.7/bundles/dev
+- name: libunistring
+  commit: x86_64/pkg/libs/text/libunistring/1.3/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [490747:68830, 1950766:69825, 4390116:70926, 7313926:72354, 9750722:73310, 12188380:118377, 14624535:133999, 18283271:171035, 21937333:173216, 24373870:178330]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_gnutls} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr \
+      --disable-static \
+      --with-default-trust-store-pkcs11="pkcs11:" \
+      --without-tpm \
+      --disable-guile \
+      --disable-doc
+
+    make
+
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/certtool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libtasn1.so.6
+    - path: /usr/bin/gnutls-cli
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libm.so.6
+    - path: /usr/bin/gnutls-cli-debug
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+    - path: /usr/bin/gnutls-serv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+    - path: /usr/bin/ocsptool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+    - path: /usr/bin/p11tool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+    - path: /usr/bin/psktool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+
+  dev:
+    files:
+    - path: /usr/include/gnutls/abstract.h
+    - path: /usr/include/gnutls/compat.h
+    - path: /usr/include/gnutls/crypto.h
+    - path: /usr/include/gnutls/dtls.h
+    - path: /usr/include/gnutls/gnutls.h
+    - path: /usr/include/gnutls/gnutlsxx.h
+    - path: /usr/include/gnutls/ocsp.h
+    - path: /usr/include/gnutls/openpgp.h
+    - path: /usr/include/gnutls/pkcs7.h
+    - path: /usr/include/gnutls/pkcs11.h
+    - path: /usr/include/gnutls/pkcs12.h
+    - path: /usr/include/gnutls/self-test.h
+    - path: /usr/include/gnutls/socket.h
+    - path: /usr/include/gnutls/system-keys.h
+    - path: /usr/include/gnutls/tpm.h
+    - path: /usr/include/gnutls/urls.h
+    - path: /usr/include/gnutls/x509-ext.h
+    - path: /usr/include/gnutls/x509.h
+    - path: /usr/lib/libgnutls.la
+    - path: /usr/lib/libgnutlsxx.la
+    - path: /usr/lib/pkgconfig/gnutls.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libgnutls.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libhogweed.so.6
+      - /usr/lib/libidn2.so.0
+      - /usr/lib/libnettle.so.8
+      - /usr/lib/libp11-kit.so.0
+      - /usr/lib/libtasn1.so.6
+      - /usr/lib/libunistring.so.5
+    - path: /usr/lib/libgnutls.so.30
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libhogweed.so.6
+      - /usr/lib/libidn2.so.0
+      - /usr/lib/libnettle.so.8
+      - /usr/lib/libp11-kit.so.0
+      - /usr/lib/libtasn1.so.6
+      - /usr/lib/libunistring.so.5
+    - path: /usr/lib/libgnutls.so.30.40.2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libhogweed.so.6
+      - /usr/lib/libidn2.so.0
+      - /usr/lib/libnettle.so.8
+      - /usr/lib/libp11-kit.so.0
+      - /usr/lib/libtasn1.so.6
+      - /usr/lib/libunistring.so.5
+    - path: /usr/lib/libgnutlsxx.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libhogweed.so.6
+      - /usr/lib/libidn2.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnettle.so.8
+      - /usr/lib/libp11-kit.so.0
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libtasn1.so.6
+      - /usr/lib/libunistring.so.5
+    - path: /usr/lib/libgnutlsxx.so.30
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libhogweed.so.6
+      - /usr/lib/libidn2.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnettle.so.8
+      - /usr/lib/libp11-kit.so.0
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libtasn1.so.6
+      - /usr/lib/libunistring.so.5
+    - path: /usr/lib/libgnutlsxx.so.30.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libhogweed.so.6
+      - /usr/lib/libidn2.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnettle.so.8
+      - /usr/lib/libp11-kit.so.0
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libtasn1.so.6
+      - /usr/lib/libunistring.so.5
+
+  locale:
+    files:
+    - path: /usr/share/locale/cs/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/gnutls.mo
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libgmp.so.10: gmp
+  /usr/lib/libidn2.so.0: libidn2
+  /usr/lib/libtasn1.so.6: libtasn1
+  /usr/lib/libunistring.so.5: libunistring
+  /usr/lib/libhogweed.so.6: nettle
+  /usr/lib/libnettle.so.8: nettle
+  /usr/lib/libp11-kit.so.0: p11-kit
+  /usr/lib/libgnutls.so.30: self

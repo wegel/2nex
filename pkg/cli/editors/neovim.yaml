@@ -126,9 +126,15 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 
 build:
-  profile: [4097:432, 8227:438, 20660:1265, 28911:3182, 41239:5204, 49521:5440, 57806:5626, 74399:6432, 86806:13123, 95866:56763]
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4109:435, 8265:441, 20708:1041, 28952:3082, 41318:5082, 49546:5300, 57822:5479, 74343:6238, 86860:12473, 95960:55903]
 
   script: |
+    # neovim doesn't build correctly with LTO
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
     tar --no-same-owner -xf ${SOURCE_neovim} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
@@ -289,14 +295,13 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libluajit-5.1.so.2
       - /usr/lib/libm.so.6
 
   lib:
     files:
     - path: /usr/lib/nvim/parser/c.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/nvim/parser/lua.so
       needs:
       - /usr/lib/libc.so.6
@@ -307,14 +312,10 @@ outputs:
       needs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/nvim/parser/query.so
-      needs:
-      - /usr/lib/libc.so.6
     - path: /usr/lib/nvim/parser/vim.so
       needs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/nvim/parser/vimdoc.so
-      needs:
-      - /usr/lib/libc.so.6
 
   man:
     files:
@@ -2347,6 +2348,7 @@ outputs:
     - path: /usr/share/nvim/runtime/tutor/tutor.tutor.json
 
 resolution:
+  /usr/lib/libgcc_s.so.1: gcc
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
   /usr/lib/libm.so.6: glibc

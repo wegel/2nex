@@ -6,7 +6,7 @@ package:
   version: 24.1.4
   description: X server running as Wayland client
   homepage: https://wayland.freedesktop.org/xserver.html
-  checksum: 146d3063584326bb3323084368868e4e012a3097c596498b81a8fa546fece9df
+  checksum: 0826e282fedb09d21af55b592f080bcb7e6aac0bd5ff9d99a473ea2885d6279b
 
 sources:
 - name: xwayland
@@ -61,9 +61,9 @@ dependencies:
 - name: wayland
   commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
 - name: wayland-protocols
-  commit: x86_64/pkg/libs/wayland/wayland-protocols/1.41/bundles/dev
+  commit: x86_64/pkg/libs/wayland/wayland-protocols/1.46/bundles/dev
 - name: pixman
-  commit: x86_64/pkg/libs/graphics/pixman/0.43.4/bundles/dev
+  commit: x86_64/pkg/libs/graphics/pixman/0.46.4/bundles/dev
 - name: xorgproto
   commit: x86_64/pkg/libs/x11/xorgproto/2024.1/bundles/dev
 - name: libxcb
@@ -108,9 +108,20 @@ dependencies:
   commit: x86_64/pkg/libs/graphics/libepoxy/1.5.10/bundles/dev
 - name: zstd
   commit: x86_64/pkg/bootstrap/phase3/zstd/1.5.6/bundles/dev
+- name: elfutils
+  commit: x86_64/pkg/dev/util/elfutils/0.191/bundles/dev
 
 build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4098:1598, 8222:1599, 12335:2242, 16507:2623, 20610:3065, 24747:3554, 28889:3555, 37189:4094, 41345:4336, 44150:5029]
+
   script: |
+
+    # doesn't build correctly with LTO
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 

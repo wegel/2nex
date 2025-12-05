@@ -1,0 +1,239 @@
+package:
+  schema: 1
+  name: dbus
+  slug: dbus
+  namespace: core/ipc
+  version: 1.16.2
+  description: D-Bus message bus system
+  homepage: https://dbus.freedesktop.org/
+  checksum: c6de55ea9722d9598ad79b991d5dc5c7eb59d6542a0bead872cfa30ec768a655
+
+sources:
+- name: dbus
+  url: https://dbus.freedesktop.org/releases/dbus/dbus-1.16.2.tar.xz
+  sha256: 0ba2a1a4b16afe7bceb2c07e9ce99a8c2c3508e5dec290dbb643384bd6beb7e2
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/bootstrap/phase3/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: 2nex-utilities
+  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4126:2793, 8266:3024, 12407:3025, 16538:3101, 20676:3231, 24828:3367, 28962:3456, 33060:7871, 37176:7937, 39992:7969]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_dbus} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      -Dmodular_tests=disabled \
+      -Dapparmor=disabled \
+      -Dselinux=disabled \
+      -Dqt_help=disabled \
+      -Ddoxygen_docs=disabled \
+      -Dxml_docs=disabled \
+      -Dducktype_docs=disabled \
+      -Dsystemd=enabled \
+      -Dsystemd_system_unitdir=/usr/lib/systemd/system \
+      -Dsystemd_user_unitdir=/usr/lib/systemd/user
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    2nex_strip_binaries ${OUT_DIR}
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/dbus-cleanup-sockets
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/dbus-daemon
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+      - /usr/lib/libexpat.so.1
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/bin/dbus-launch
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/bin/dbus-monitor
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/bin/dbus-run-session
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/bin/dbus-send
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/bin/dbus-test-tool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/bin/dbus-update-activation-environment
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/bin/dbus-uuidgen
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/libexec/dbus-daemon-launch-helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+      - /usr/lib/libexpat.so.1
+
+  conf:
+    files:
+    - path: /etc/dbus-1/session.conf
+    - path: /etc/dbus-1/system.conf
+    - path: /usr/share/dbus-1/session.conf
+    - path: /usr/share/dbus-1/system.conf
+
+  dev:
+    files:
+    - path: /usr/include/dbus-1.0/dbus/dbus-address.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-bus.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-connection.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-errors.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-macros.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-memory.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-message.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-misc.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-pending-call.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-protocol.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-server.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-shared.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-signature.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-syntax.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-threads.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-types.h
+    - path: /usr/include/dbus-1.0/dbus/dbus.h
+    - path: /usr/lib/dbus-1.0/include/dbus/dbus-arch-deps.h
+    - path: /usr/lib/pkgconfig/dbus-1.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/dbus/diagram.png
+    - path: /usr/share/doc/dbus/diagram.svg
+    - path: /usr/share/doc/dbus/examples/GetAllMatchRules.py
+    - path: /usr/share/doc/dbus/examples/example-session-disable-stats.conf
+    - path: /usr/share/doc/dbus/examples/example-system-enable-stats.conf
+    - path: /usr/share/doc/dbus/examples/example-system-hardening-without-traditional-activation.conf
+    - path: /usr/share/doc/dbus/index.html
+    - path: /usr/share/doc/dbus/system-activation.txt
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/DBus1/DBus1Config.cmake
+    - path: /usr/lib/cmake/DBus1/DBus1ConfigVersion.cmake
+    - path: /usr/lib/libdbus-1.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/libdbus-1.so.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/libdbus-1.so.3.38.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/systemd/system/dbus.service
+    - path: /usr/lib/systemd/system/dbus.socket
+    - path: /usr/lib/systemd/system/multi-user.target.wants/dbus.service
+    - path: /usr/lib/systemd/system/sockets.target.wants/dbus.socket
+    - path: /usr/lib/systemd/user/dbus.service
+    - path: /usr/lib/systemd/user/dbus.socket
+    - path: /usr/lib/systemd/user/sockets.target.wants/dbus.socket
+    - path: /usr/lib/sysusers.d/dbus.conf
+    - path: /usr/lib/tmpfiles.d/dbus.conf
+
+  misc:
+    files:
+    - path: /usr/share/xml/dbus-1/busconfig.dtd
+    - path: /usr/share/xml/dbus-1/catalog.xml
+    - path: /usr/share/xml/dbus-1/introspect.dtd
+
+resolution:
+  /usr/lib/libexpat.so.1: expat
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libdbus-1.so.3: self
+  /usr/lib/libsystemd.so.0: systemd
