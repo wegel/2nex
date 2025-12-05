@@ -312,13 +312,16 @@ pub fn run_build_script_with_progress(
             "/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
         );
         env.insert("RUSTC_BOOTSTRAP".to_string(), "1".to_string());
-        env.insert("CFLAGS".to_string(), "-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions -Wp,-D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -fstack-clash-protection -fcf-protection -fPIC -fno-common -fno-omit-frame-pointer -frandom-seed=424242".to_string());
-        env.insert("CXXFLAGS".to_string(), "-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions -Wp,-D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -fstack-clash-protection -fcf-protection -Wp,-D_GLIBCXX_ASSERTIONS -fPIC -fno-common -fno-omit-frame-pointer -frandom-seed=424242".to_string());
+        // LTO enabled by default for smaller binaries; use gcc-ar/gcc-nm/gcc-ranlib for LTO-aware static libs
+        env.insert("CFLAGS".to_string(), "-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions -Wp,-D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -fstack-clash-protection -fcf-protection -fPIC -fno-common -fno-omit-frame-pointer -frandom-seed=424242 -flto=auto".to_string());
+        env.insert("CXXFLAGS".to_string(), "-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions -Wp,-D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -fstack-clash-protection -fcf-protection -Wp,-D_GLIBCXX_ASSERTIONS -fPIC -fno-common -fno-omit-frame-pointer -frandom-seed=424242 -flto=auto".to_string());
         env.insert(
             "LDFLAGS".to_string(),
-            "-Wl,-O1,--sort-common,--as-needed,-z,relro,-z,now".to_string(),
+            "-Wl,-O1,--sort-common,--as-needed,-z,relro,-z,now -flto=auto".to_string(),
         );
-        env.insert("LTOFLAGS".to_string(), "-flto=auto".to_string());
+        env.insert("AR".to_string(), "gcc-ar".to_string());
+        env.insert("NM".to_string(), "gcc-nm".to_string());
+        env.insert("RANLIB".to_string(), "gcc-ranlib".to_string());
         env.insert("RUSTFLAGS".to_string(), "-C codegen-units=1 -C embed-bitcode=yes -C debuginfo=0 -C link-args=-fuse-ld=lld -C target-feature=+crt-static -C link-args=-frandom-seed=424242".to_string());
         env.insert("DEBUG_CFLAGS".to_string(), "-g".to_string());
         env.insert("DEBUG_CXXFLAGS".to_string(), "-g".to_string());

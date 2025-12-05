@@ -15,7 +15,7 @@ cli:
 init:
 	@echo "Initializing zub repository at $(REPO)..."
 	@mkdir -p $(dir $(REPO))
-	./zub init $(REPO)
+	zub init $(REPO)
 
 # legacy target for compatibility
 bootstrap_store:
@@ -27,11 +27,12 @@ clean:
 	cargo clean --manifest-path src/cli/Cargo.toml
 
 # build all package manifests sequentially
+# usage: make build-all [ARGS="--force --update-checksum"]
 build-all:
 	@echo "Building all manifests..."
 	@for manifest in $$(find pkg -name "*.yaml" | sort); do \
 		echo "=== Building $$manifest ==="; \
-		./src/cli/target/debug/nex build "$$manifest" || exit 1; \
+		./src/cli/target/debug/nex build "$$manifest" $(ARGS) || exit 1; \
 	done
 
 # format all package manifests

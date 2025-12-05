@@ -99,6 +99,13 @@ enum Command {
 
     /// Generate ref completions for shell auto-completion
     Complete(commands::complete::CompleteArgs),
+
+    /// Remote helper for SSH transport (internal use)
+    #[clap(name = "zub-remote")]
+    ZubRemote {
+        /// Repository path
+        path: PathBuf,
+    },
 }
 
 // re-export BuildOpts for internal use
@@ -126,6 +133,7 @@ fn main() -> io::Result<()> {
         Command::ComputeDeps(args) => commands::compute_deps::run(&args),
         Command::Format(args) => commands::format::run(&args),
         Command::Complete(args) => commands::complete::run(&args),
+        Command::ZubRemote { path } => run_zub_remote(&path),
     }
 }
 
@@ -655,10 +663,16 @@ fn find_manifest_for_commit(commit: &str, manifest_dirs: &[PathBuf]) -> io::Resu
     let namespace = &pkg_ref.namespace;
 
     // search in manifest directories
+    // note: PackageRef.namespace does NOT include "pkg/" prefix, so we need to try both
+    // base_dir/pkg/{namespace} and base_dir/{namespace}
     for base_dir in manifest_dirs {
-        let mut namespace_paths = vec![base_dir.join(namespace)];
-        if namespace.starts_with("pkg/") && base_dir.ends_with("pkg") {
-            namespace_paths.push(base_dir.join(namespace.trim_start_matches("pkg/")));
+        let mut namespace_paths = vec![
+            base_dir.join("pkg").join(namespace), // try with pkg/ prefix first
+            base_dir.join(namespace),             // then without
+        ];
+        // also handle case where base_dir already ends with "pkg"
+        if base_dir.ends_with("pkg") {
+            namespace_paths.push(base_dir.join(namespace));
         }
 
         for namespace_path in namespace_paths {
@@ -1703,6 +1717,14 @@ impl fmt::Display for Package {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}/{}", self.namespace, self.slug)
     }
+}
+
+/// run the zub remote helper protocol (server side of SSH transport)
+fn run_zub_remote(repo_path: &Path) -> io::Result<()> {
+    let repo = zub::Repo::open(repo_path)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    zub::transport::serve_remote(&repo)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
 }
 
 /// Pin all dependencies in a manifest to their current git blob SHAs.

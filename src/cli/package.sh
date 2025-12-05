@@ -7,17 +7,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 OUTPUT="$REPO_ROOT/pkg/core/nex/nex-builder-src.tar.gz"
+ZUB_SRC="/home/wegel/work/perso/zub"
 
 cd "$SCRIPT_DIR"
-
-# copy zub into builder directory for packaging
-rm -rf zub
-cp -r ../zub zub
-# remove zub's target directory if present
-rm -rf zub/target
-
-# update Cargo.toml to use local zub path (for tarball)
-sed -i 's|path = "../zub"|path = "zub"|' Cargo.toml
 
 # re-vendor dependencies (ensures Cargo.lock is up to date)
 rm -rf vendor
@@ -26,7 +18,7 @@ cargo vendor vendor > /dev/null 2>&1
 # set reproducible timestamp (matches SOURCE_DATE_EPOCH in build)
 TIMESTAMP="2024-01-01T00:00:00Z"
 
-# create tarball with zub path pointing to embedded copy
+# create reproducible tarball
 (
     find . -type d | grep -v '^\./\.git' | grep -v '^\./target'
     find . -type f -o -type l | grep -v '^\./\.git' | grep -v '^\./target'
@@ -40,12 +32,6 @@ TIMESTAMP="2024-01-01T00:00:00Z"
         --no-recursion \
         --files-from=- | \
     gzip -n -9 > "$OUTPUT"
-
-# restore Cargo.toml to use original path (for local development)
-sed -i 's|path = "zub"|path = "../zub"|' Cargo.toml
-
-# clean up copied zub directory
-rm -rf zub
 
 SHA256=$(sha256sum "$OUTPUT" | cut -d' ' -f1)
 echo "Created: $OUTPUT"

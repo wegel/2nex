@@ -18,7 +18,12 @@ use crate::store::Store;
 #[derive(Args)]
 pub struct InstallArgs {
     /// Package ref (e.g., x86_64/pkg/cli/editors/neovim/0.11.0/bundles/full)
+    /// or manifest path (e.g., pkg/cli/archive/bzip2.yaml)
     pub package_ref: String,
+
+    /// Output or bundle to install when using manifest path form
+    /// (e.g., "outputs/bin" or "bundles/full")
+    pub target: Option<String>,
 
     /// Repository path (auto-detected if not specified)
     #[clap(long)]
@@ -55,6 +60,43 @@ pub struct InstallArgs {
 }
 
 pub fn run(args: &InstallArgs) -> io::Result<()> {
+    // check if first arg is a manifest path (ends with .yaml)
+    let package_ref = if args.package_ref.ends_with(".yaml") {
+        // manifest path form: nex install path/to/pkg.yaml outputs/bin
+        let target = args.target.as_ref().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "When using manifest path form, you must specify an output or bundle target\n\
+                 Usage: nex install path/to/manifest.yaml outputs/bin\n\
+                        nex install path/to/manifest.yaml bundles/full",
+            )
+        })?;
+
+        // load manifest to get namespace, slug, version
+        let manifest_data = load_manifest(&args.package_ref)?;
+        let manifest = match manifest_data {
+            ManifestData::Package(m) => m,
+            ManifestData::System(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Cannot install a system manifest directly",
+                ))
+            }
+        };
+
+        // construct the full ref: x86_64/pkg/<namespace>/<slug>/<version>/<target>
+        format!(
+            "x86_64/{}/{}/{}/{}",
+            manifest.package.namespace_path(),
+            manifest.package.slug,
+            manifest.package.version,
+            target
+        )
+    } else {
+        // legacy form: full package ref
+        args.package_ref.clone()
+    };
+
     // detect context: user install vs system install
     let ctx = detect_context(args.system)?;
 
@@ -112,10 +154,10 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     let mut state = InstalledState::load_for_context(&ctx).unwrap_or_default();
 
     // parse the package ref
-    let pkg_ref = PackageRef::parse(&args.package_ref).map_err(|e| {
+    let pkg_ref = PackageRef::parse(&package_ref).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("Invalid package ref '{}': {}", args.package_ref, e),
+            format!("Invalid package ref '{}': {}", package_ref, e),
         )
     })?;
 
@@ -131,11 +173,11 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
 
     // check if ref exists and is fresh in cache
     let store = Store::open_with_fallback_chain(&repo_path, &ctx.fallback_repos).ok();
-    let is_cached = check_cache_freshness(store.as_ref(), &args.package_ref, &manifest_hash);
+    let is_cached = check_cache_freshness(store.as_ref(), &package_ref, &manifest_hash);
 
     // build if not cached or stale
     if !is_cached {
-        println!("Building {}...", args.package_ref);
+        println!("Building {}...", package_ref);
         build_package_to_user_repo(
             &repo_path,
             &ctx.fallback_repos,
@@ -144,13 +186,13 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
         )?;
     }
 
-    println!("Installing {}...", args.package_ref);
+    println!("Installing {}...", package_ref);
 
     // get checksum from zub (now guaranteed to exist after build)
     let checksum = get_commit_short_hash_with_fallback(
         &repo_path,
         ctx.fallback_repo().map(|p| p.as_path()),
-        &args.package_ref,
+        &package_ref,
     )?;
 
     let pkg_info = PackageInfo {
@@ -243,7 +285,7 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     };
 
     let requests = vec![MaterializeRequest::Bundle {
-        commit: args.package_ref.clone(),
+        commit: package_ref.clone(),
     }];
 
     let result = materialize(&config, &requests)?;
@@ -331,7 +373,7 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
         &pkg_info.version,
         &pkg_info.checksum,
         binaries,
-        &args.package_ref,
+        &package_ref,
         should_create_symlinks,
     );
 
