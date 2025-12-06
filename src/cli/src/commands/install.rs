@@ -557,7 +557,6 @@ fn build_package_to_user_repo(
         manifest_file: manifest_path.to_string_lossy().to_string(),
         check: false,
         update_checksum: false,
-        bootstrap: false,
         compute_deps: false,
         runtime_deps_verbose: false,
         refresh_metadata: false,

@@ -103,8 +103,6 @@ pub struct Package {
     pub namespace: String,
     pub checksum: Option<String>,
     pub stable_checksum: Option<bool>,
-    #[serde(default)]
-    pub bootstrap: bool,
 }
 
 impl Package {
@@ -200,8 +198,45 @@ pub struct Source {
     pub sha256: String,
 }
 
+/// Execution configuration for build environment
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct ExecutionConfig {
+    /// whether to chroot into the build directory (false = run on host filesystem)
+    #[serde(default = "default_true")]
+    pub chroot: bool,
+    /// whether to use a fixed build directory name (for GCC sysroot compatibility)
+    #[serde(default)]
+    pub fixed_build_dir: bool,
+    /// whether to force sequential builds (no parallel execution)
+    #[serde(default)]
+    pub sequential: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Build environment definition loaded from external YAML file
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct BuildEnvironment {
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    /// execution mode configuration
+    #[serde(default)]
+    pub execution: ExecutionConfig,
+    /// environment variables to set during build
+    #[serde(default)]
+    pub env: HashMap<String, String>,
+    /// script to run before the build script (device mounts, FHS setup, etc.)
+    #[serde(default)]
+    pub preamble: String,
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Build {
+    /// git blob SHA1 of the environment definition file
+    pub environment: String,
     pub script: String,
     /// progress profile for build time estimation
     /// each element is "bytes:time_ms"

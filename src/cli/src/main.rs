@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::process;
 use std::sync::{Arc, Mutex};
 
 use clap::{Parser, Subcommand};
@@ -103,6 +102,10 @@ enum Command {
     /// Generate ref completions for shell auto-completion
     Complete(commands::complete::CompleteArgs),
 
+    /// Get git blob SHA1 for a file
+    #[clap(name = "git-sha1")]
+    GitSha1(commands::git_sha1::GitSha1Args),
+
     /// Remote helper for SSH transport (internal use)
     #[clap(name = "zub-remote")]
     ZubRemote {
@@ -136,6 +139,7 @@ fn main() -> io::Result<()> {
         Command::ComputeDeps(args) => commands::compute_deps::run(&args),
         Command::Format(args) => commands::format::run(&args),
         Command::Complete(args) => commands::complete::run(&args),
+        Command::GitSha1(args) => commands::git_sha1::run(&args),
         Command::ZubRemote { path } => run_zub_remote(&path),
     }
 }
@@ -302,192 +306,30 @@ fn hydrate_dependencies(_repo_path: &str, manifest_file: &str) -> io::Result<()>
     Ok(())
 }
 
-fn build_package_manifest(opts: &BuildOpts, manifest: &mut Manifest) -> io::Result<()> {
-    build_package_manifest_with_dir(opts, manifest, ".nex/tmp/build_rootfs")
+/// Check if a package manifest requires sequential building (based on its environment)
+fn requires_sequential_build(manifest: &Manifest, repo_path: &str) -> bool {
+    match load_environment(repo_path, &manifest.build.environment) {
+        Ok(env) => env.execution.sequential,
+        Err(_) => false, // if we can't load the environment, assume non-sequential
+    }
 }
 
-fn build_package_manifest_with_dir(
-    opts: &BuildOpts,
-    manifest: &mut Manifest,
-    base_dir: &str,
-) -> io::Result<()> {
-    let download_dir = "./inputs_cache";
-    fs::create_dir_all(download_dir)?;
+/// Get the build directory for a package based on its environment settings
+fn get_build_dir_for_package(manifest: &Manifest, repo_path: &str) -> String {
+    let use_fixed = match load_environment(repo_path, &manifest.build.environment) {
+        Ok(env) => env.execution.fixed_build_dir,
+        Err(_) => false,
+    };
 
-    // resolve dependencies to specific commit IDs when they have manifest_ref
-    let dependency_commits = resolve_dependency_commits(&manifest.dependencies, &opts.repo_path)?;
-
-    setup_composite_rootfs(
-        base_dir,
-        &opts.repo_path,
-        &opts.fallback_repos,
-        &dependency_commits,
-    )?;
-    let input_env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
-
-    let package_name = &manifest.package.name;
-    let package_version = &manifest.package.version;
-    let package_namespace = &manifest.package.namespace;
-
-    println!(
-        "Building {} {} in namespace {}",
-        package_name, package_version, package_namespace
-    );
-
-    let mut env_vars = HashMap::new();
-    env_vars.extend(input_env_vars);
-    let build_script = manifest.build.script.clone();
-
-    run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
-
-    // if generate_outputs is enabled, write auto-detected outputs to manifest
-    if opts.generate_outputs {
-        let out_dir = Path::new(base_dir).join("2nex/out");
-        let categorized = categorize_files(&out_dir);
-        crate::manifest::update::write_auto_outputs_to_manifest(&opts.manifest_file, &categorized)?;
-
-        // reload the manifest to pick up the new outputs
-        let reloaded = load_manifest(&opts.manifest_file)?;
-        if let ManifestData::Package(reloaded_manifest) = reloaded {
-            *manifest = reloaded_manifest;
-        }
+    if use_fixed {
+        ".nex/tmp/build_rootfs".to_string()
+    } else {
+        format!(
+            ".nex/tmp/build_rootfs_{}_{}",
+            manifest.package.slug.replace("/", "_"),
+            manifest.package.namespace.replace("/", "_")
+        )
     }
-
-    verify_and_commit_outputs(
-        manifest,
-        base_dir,
-        &opts.repo_path,
-        Path::new(&opts.manifest_file),
-    )?;
-
-    create_and_commit_bundles(
-        manifest,
-        base_dir,
-        &opts.repo_path,
-        Path::new(&opts.manifest_file),
-    )?;
-
-    println!("Build, packaging, and commit completed for all outputs.");
-
-    let output_dir = Path::new(base_dir).join("2nex/out");
-    let checksum = calculate_output_checksum(&output_dir)?;
-    println!("Build output checksum: {}", checksum);
-
-    match manifest.package.checksum.as_ref() {
-        Some(expected_checksum) => {
-            if checksum != *expected_checksum {
-                if opts.update_checksum {
-                    println!(
-                        "Checksum mismatch (expected {}, calculated {}). Updating manifest.",
-                        expected_checksum, checksum
-                    );
-                    update_manifest_checksum_field(
-                        &opts.manifest_file,
-                        ManifestKind::Package,
-                        &checksum,
-                    )?;
-                    manifest.package.checksum = Some(checksum.clone());
-                    // refresh store metadata with new manifest hash
-                    refresh_package_metadata(
-                        &opts.repo_path,
-                        manifest,
-                        Path::new(&opts.manifest_file),
-                    )?;
-                } else if !opts.check {
-                    eprintln!(
-                        "Checksum mismatch. Expected: {}, Calculated: {}",
-                        expected_checksum, checksum
-                    );
-                    process::exit(-2);
-                } else {
-                    println!(
-                        "Note: checksum differs from manifest (expected {}, got {}). Proceeding with reproducibility check.",
-                        expected_checksum, checksum
-                    );
-                }
-            } else {
-                println!("Checksum verified successfully.");
-            }
-        }
-        None => {
-            if opts.update_checksum {
-                println!(
-                    "Manifest {} does not record a checksum. Storing {}.",
-                    opts.manifest_file, checksum
-                );
-                update_manifest_checksum_field(
-                    &opts.manifest_file,
-                    ManifestKind::Package,
-                    &checksum,
-                )?;
-                manifest.package.checksum = Some(checksum.clone());
-                // refresh store metadata with new manifest hash
-                refresh_package_metadata(
-                    &opts.repo_path,
-                    manifest,
-                    Path::new(&opts.manifest_file),
-                )?;
-            }
-        }
-    }
-
-    // create {hash}/files commit (union of all outputs) for dependency resolution
-    create_files_commit_for_package(manifest, &opts.repo_path, Path::new(&opts.manifest_file))?;
-
-    // compute runtime dependencies (opt-in, modifies manifest)
-    if opts.compute_deps {
-        commands::compute_deps::compute_deps_for_manifest(
-            manifest,
-            &opts.repo_path,
-            Path::new(&opts.manifest_file),
-            opts.runtime_deps_verbose,
-            false, // never dry_run during build
-        )?;
-        // refresh store metadata since compute_deps modified the manifest
-        refresh_package_metadata(&opts.repo_path, manifest, Path::new(&opts.manifest_file))?;
-    }
-
-    if opts.check {
-        println!("Validating build reproducibility by building the package a second time.");
-        fs::remove_dir_all(base_dir)?;
-        setup_composite_rootfs(
-            base_dir,
-            &opts.repo_path,
-            &opts.fallback_repos,
-            &dependency_commits,
-        )?;
-        handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
-        run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
-        verify_and_commit_outputs(
-            manifest,
-            base_dir,
-            &opts.repo_path,
-            Path::new(&opts.manifest_file),
-        )?;
-        create_and_commit_bundles(
-            manifest,
-            base_dir,
-            &opts.repo_path,
-            Path::new(&opts.manifest_file),
-        )?;
-
-        let second_checksum = calculate_output_checksum(&output_dir)?;
-        println!("Second build output checksum: {}", second_checksum);
-
-        if checksum == second_checksum {
-            println!("Build is reproducible. Checksums match.");
-        } else {
-            println!("Build is not reproducible. Checksums do not match.");
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Build is not reproducible.",
-            ));
-        }
-    }
-
-    append_checksum_file(&manifest.package, &checksum, &Path::new("checksums.txt"))?;
-
-    Ok(())
 }
 
 fn refresh_package_metadata(
@@ -1140,31 +982,31 @@ fn build_packages_parallel(
             ));
         }
 
-        // bootstrap packages must build sequentially (they share .nex/tmp/build_rootfs directory)
-        // if this wave contains bootstrap packages, only build one at a time
-        let has_bootstrap = wave.iter().any(|&node_idx| {
+        // packages with sequential execution requirement must build one at a time
+        // (they share .nex/tmp/build_rootfs directory due to fixed_build_dir setting)
+        let has_sequential = wave.iter().any(|&node_idx| {
             let source = &graph[node_idx];
-            if let Ok(manifest_data) = load_manifest_from_source(source) {
-                matches!(manifest_data, ManifestData::Package(m) if m.package.bootstrap)
+            if let Ok(ManifestData::Package(m)) = load_manifest_from_source(source) {
+                requires_sequential_build(&m, &opts.repo_path)
             } else {
                 false
             }
         });
 
-        if has_bootstrap {
-            // find the first bootstrap package and build only that one
-            let bootstrap_idx = wave
+        if has_sequential {
+            // find the first sequential package and build only that one
+            let sequential_idx = wave
                 .iter()
                 .position(|&node_idx| {
                     let source = &graph[node_idx];
-                    if let Ok(manifest_data) = load_manifest_from_source(source) {
-                        matches!(manifest_data, ManifestData::Package(m) if m.package.bootstrap)
+                    if let Ok(ManifestData::Package(m)) = load_manifest_from_source(source) {
+                        requires_sequential_build(&m, &opts.repo_path)
                     } else {
                         false
                     }
                 })
                 .unwrap();
-            wave = vec![wave[bootstrap_idx]];
+            wave = vec![wave[sequential_idx]];
         }
 
         println!("Building wave of {} package(s) in parallel...", wave.len());
@@ -1189,16 +1031,8 @@ fn build_packages_parallel(
 
                 let result = match manifest_data {
                     ManifestData::Package(mut manifest) => {
-                        // bootstrap packages must use fixed directory name so GCC's hardcoded sysroot path remains valid
-                        let build_dir = if manifest.package.bootstrap {
-                            ".nex/tmp/build_rootfs".to_string()
-                        } else {
-                            format!(
-                                ".nex/tmp/build_rootfs_{}_{}",
-                                manifest.package.slug.replace("/", "_"),
-                                manifest.package.namespace.replace("/", "_")
-                            )
-                        };
+                        // get build directory based on environment settings
+                        let build_dir = get_build_dir_for_package(&manifest, &opts.repo_path);
 
                         // create opts for this build
                         let build_opts = BuildOpts {
@@ -1206,7 +1040,6 @@ fn build_packages_parallel(
                             manifest_file: path.to_str().unwrap().to_string(),
                             check: opts.check,
                             update_checksum: opts.update_checksum,
-                            bootstrap: manifest.package.bootstrap,
                             compute_deps: opts.compute_deps,
                             runtime_deps_verbose: opts.runtime_deps_verbose,
                             refresh_metadata: opts.refresh_metadata,
@@ -1257,7 +1090,6 @@ fn build_packages_parallel(
                             manifest_file: path.to_str().unwrap().to_string(),
                             check: opts.check,
                             update_checksum: opts.update_checksum,
-                            bootstrap: opts.bootstrap,
                             compute_deps: opts.compute_deps,
                             runtime_deps_verbose: opts.runtime_deps_verbose,
                             refresh_metadata: opts.refresh_metadata,
@@ -1432,12 +1264,12 @@ fn add_missing_checksums_to_manifests(
 
                 // build to get checksum
                 let mut manifest_copy = manifest.clone();
+                let build_dir = get_build_dir_for_package(&manifest, repo_path);
                 let build_opts = BuildOpts {
                     repo_path: repo_path.to_string(),
                     manifest_file: manifest_path.to_str().unwrap().to_string(),
                     check: false,
                     update_checksum: true, // enable checksum updating
-                    bootstrap: manifest.package.bootstrap,
                     compute_deps: opts.compute_deps,
                     runtime_deps_verbose: opts.runtime_deps_verbose,
                     refresh_metadata: false,
@@ -1451,7 +1283,7 @@ fn add_missing_checksums_to_manifests(
                     multi_progress: None,
                 };
 
-                build_package_manifest(&build_opts, &mut manifest_copy)?;
+                crate::build::build_package_manifest_with_dir(&build_opts, &mut manifest_copy, &build_dir)?;
                 println!("  Built and checksummed");
             }
             ManifestData::System(_) => {
@@ -1808,15 +1640,67 @@ fn link_manifest_dependencies(manifest_file: &str) -> io::Result<()> {
         }
     }
 
+    // pin environment reference if it's a path (not already a SHA1)
+    let env_ref = match &manifest_data {
+        ManifestData::Package(m) => Some(m.build.environment.clone()),
+        ManifestData::System(s) => Some(s.build.environment.clone()),
+    };
+
+    if let Some(env) = env_ref {
+        // check if it's a path (not a SHA1)
+        if !env.chars().all(|c| c.is_ascii_hexdigit()) || env.len() != 40 {
+            // it's a path, pin it to SHA1
+            let env_path = Path::new(&env);
+            if env_path.exists() {
+                // verify the file is tracked by git (staged or committed)
+                let git_check = std::process::Command::new("git")
+                    .args(["ls-files", &env])
+                    .output()?;
+                let is_tracked = !String::from_utf8_lossy(&git_check.stdout).trim().is_empty();
+
+                if !is_tracked {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!(
+                            "Environment file '{}' is not tracked by git. Run 'git add {}' first.",
+                            env, env
+                        ),
+                    ));
+                }
+
+                let env_sha = hash_file_content(env_path)?;
+                println!("  environment: {} -> {}", env, env_sha);
+
+                // replace environment value in manifest
+                // handle both "environment: path" and "environment: 'path'" forms
+                let patterns = [
+                    format!("environment: {}", env),
+                    format!("environment: '{}'", env),
+                    format!("environment: \"{}\"", env),
+                ];
+
+                for pattern in &patterns {
+                    if updated_content.contains(pattern) {
+                        updated_content = updated_content.replace(pattern, &format!("environment: {}", env_sha));
+                        linked_count += 1;
+                        break;
+                    }
+                }
+            } else {
+                eprintln!("  Warning: environment file not found: {}", env);
+            }
+        }
+    }
+
     // write updated content
     if linked_count > 0 {
         fs::write(manifest_file, updated_content)?;
         println!(
-            "\nLinked {} dependencies in {}",
+            "\nLinked {} references in {}",
             linked_count, manifest_file
         );
     } else {
-        println!("\nNo dependencies to link or all already linked");
+        println!("\nNo references to link or all already linked");
     }
 
     Ok(())

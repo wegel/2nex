@@ -20,10 +20,6 @@ pub struct BuildArgs {
     #[clap(long, default_value = ".")]
     pub manifest_dir: String,
 
-    /// Run the build script on the host's filesystem (for bootstrapping)
-    #[clap(long)]
-    pub bootstrap: bool,
-
     /// Compute runtime dependencies (needs/resolution) and update manifest
     #[clap(long)]
     pub compute_deps: bool,
@@ -107,7 +103,6 @@ pub struct BuildOpts {
     pub manifest_file: String,
     pub check: bool,
     pub update_checksum: bool,
-    pub bootstrap: bool,
     pub compute_deps: bool,
     pub runtime_deps_verbose: bool,
     pub refresh_metadata: bool,
@@ -129,7 +124,6 @@ impl BuildOpts {
             manifest_file: args.manifest.clone(),
             check: args.check,
             update_checksum: args.update_checksum,
-            bootstrap: args.bootstrap,
             compute_deps: args.compute_deps,
             runtime_deps_verbose: args.runtime_deps_verbose,
             refresh_metadata: args.refresh_metadata,

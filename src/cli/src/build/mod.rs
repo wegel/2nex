@@ -10,12 +10,79 @@ use sha2::{Digest, Sha256};
 
 use crate::commands::build::BuildOpts;
 use crate::manifest::*;
+use crate::manifest::types::BuildEnvironment;
 use crate::outputs::*;
 use crate::progress::{self, BuildProgressConfig};
 use crate::store::{
     checkout_into, checkout_into_with_fallbacks, commit_tree, ensure_branch_exists,
     find_commit_by_manifest_hash, rewrite_branch_metadata,
 };
+
+/// Check if a string looks like a git SHA1 (40 hex characters)
+fn is_sha1(s: &str) -> bool {
+    s.len() == 40 && s.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Load a build environment from a git blob SHA1 or file path
+pub fn load_environment(repo_path: &str, env_ref: &str) -> io::Result<BuildEnvironment> {
+    let content = if is_sha1(env_ref) {
+        // load from git blob
+        let output = Command::new("git")
+            .args(["-C", repo_path, "cat-file", "blob", env_ref])
+            .output()?;
+
+        if !output.status.success() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!(
+                    "Failed to load environment blob {}: {}",
+                    env_ref,
+                    String::from_utf8_lossy(&output.stderr)
+                ),
+            ));
+        }
+
+        String::from_utf8_lossy(&output.stdout).to_string()
+    } else {
+        // load from file path
+        fs::read_to_string(env_ref).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("Failed to load environment file {}: {}", env_ref, e),
+            )
+        })?
+    };
+
+    let env: BuildEnvironment = serde_yaml::from_str(&content).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Failed to parse environment YAML: {}", e),
+        )
+    })?;
+
+    Ok(env)
+}
+
+/// Expand template variables in a string
+/// Supported: {num_cpus}, {build_dir}, {bootstrap_tools}, {bootstrap_sysroot}
+pub fn expand_env_templates(
+    value: &str,
+    num_cpus: usize,
+    build_dir: &str,
+    bootstrap_tools: Option<&str>,
+    bootstrap_sysroot: Option<&str>,
+) -> String {
+    let mut result = value.to_string();
+    result = result.replace("{num_cpus}", &num_cpus.to_string());
+    result = result.replace("{build_dir}", build_dir);
+    if let Some(tools) = bootstrap_tools {
+        result = result.replace("{bootstrap_tools}", tools);
+    }
+    if let Some(sysroot) = bootstrap_sysroot {
+        result = result.replace("{bootstrap_sysroot}", sysroot);
+    }
+    result
+}
 
 pub fn append_checksum_file(package: &Package, checksum: &str, file_path: &Path) -> io::Result<()> {
     // Step 1: Calculate the maximum width of the first column
@@ -151,7 +218,7 @@ pub fn handle_inputs(
     sources: &[Source],
     download_dir: &str,
     build_dir: &str,
-    is_bootstrap: bool,
+    use_absolute_paths: bool,
 ) -> io::Result<HashMap<String, String>> {
     println!("Handling inputs");
 
@@ -165,7 +232,8 @@ pub fn handle_inputs(
         let input_path = inputs_dir.join(input.file_name().unwrap());
         fs::copy(input.clone(), &input_path)?;
 
-        let path_str = if is_bootstrap {
+        // when not using chroot, we need absolute paths; with chroot, use relative paths
+        let path_str = if use_absolute_paths {
             current_dir.join(&input_path).to_str().unwrap().to_string()
         } else {
             let relative_path = Path::new("./inputs").join(input_path.file_name().unwrap());
@@ -188,38 +256,18 @@ pub struct BuildScriptResult {
     pub new_profile: Option<Vec<String>>,
 }
 
-pub fn run_build_script(
+/// Run a build script using the specified environment definition
+pub fn run_build_script_with_env(
     build_script: &str,
     build_dir: &str,
-    env_vars: &HashMap<String, String>,
-    bootstrap: bool,
-) -> io::Result<()> {
-    // legacy mode: no progress tracking
-    run_build_script_with_progress(build_script, build_dir, env_vars, bootstrap, None)?;
-    Ok(())
-}
-
-pub fn run_build_script_with_progress(
-    build_script: &str,
-    build_dir: &str,
-    env_vars: &HashMap<String, String>,
-    bootstrap: bool,
+    input_env_vars: &HashMap<String, String>,
+    build_env: &BuildEnvironment,
     progress_config: Option<&BuildProgressConfig>,
 ) -> io::Result<BuildScriptResult> {
-    println!("Running build script in an isolated environment using unshare");
-
-    let mut env = HashMap::new();
-    env.insert("HOME".to_string(), "/homeless/deterministic".to_string());
-    env.insert("LC_ALL".to_string(), "C".to_string());
-    env.insert("TZ".to_string(), "UTC".to_string());
-    env.insert("LANG".to_string(), "en_US.UTF-8".to_string());
-    env.insert("SOURCE_DATE_EPOCH".to_string(), "1704067200".to_string());
-    env.insert(
-        "GLIBC_TUNABLES".to_string(),
-        "glibc.cpu.hwcaps=-RNDRAND".to_string(),
+    println!(
+        "Running build script in isolated environment using '{}' environment",
+        build_env.name
     );
-    let num_cpus = num_cpus::get();
-    env.insert("MAKEFLAGS".to_string(), format!("-j{num_cpus}"));
 
     let current_dir = env::current_dir().expect("Failed to get current directory");
     let build_dir_path = Path::new(build_dir);
@@ -236,6 +284,40 @@ pub fn run_build_script_with_progress(
         .to_string();
     let tmpdir_path = build_dir_abs.join("2nex").join("tmp");
     std::fs::create_dir_all(&tmpdir_path)?;
+
+    // compute template variable values
+    let num_cpus = num_cpus::get();
+    let bootstrap_sysroot_path = build_dir_abs.join("bootstrap");
+    let bootstrap_tools_path = bootstrap_sysroot_path.join("tools");
+    let bootstrap_tools_str = bootstrap_tools_path.to_str().unwrap();
+    let bootstrap_sysroot_str = bootstrap_sysroot_path.to_str().unwrap();
+
+    // build environment variables from the environment definition
+    let mut env = HashMap::new();
+
+    // for non-chroot mode, unset all host environment variables first
+    if !build_env.execution.chroot {
+        for (key, _) in std::env::vars() {
+            std::env::remove_var(key);
+        }
+    }
+
+    // apply env vars from the environment definition with template expansion
+    for (key, value) in &build_env.env {
+        let expanded = expand_env_templates(
+            value,
+            num_cpus,
+            &build_dir_str,
+            Some(bootstrap_tools_str),
+            Some(bootstrap_sysroot_str),
+        );
+        env.insert(key.clone(), expanded);
+    }
+
+    // add input env vars (SOURCE_*, etc.) - these override environment defaults
+    for (key, value) in input_env_vars {
+        env.insert(key.clone(), value.clone());
+    }
 
     let unshare_command = vec![
         "unshare",
@@ -256,205 +338,52 @@ pub fn run_build_script_with_progress(
     ];
 
     let mut command_args = unshare_command.clone();
-    let launch_script = if bootstrap {
-        let bootstrap_sysroot_path = build_dir_abs.join("bootstrap");
-        let bootstrap_tools_path = bootstrap_sysroot_path.join("tools");
-        let bootstrap_tools_path_display = bootstrap_tools_path.display();
-        let workdir_path = build_dir_abs.join("2nex").join("work");
-        let outdir_path = build_dir_abs.join("2nex").join("out");
 
-        println!("Bootstrap mode.");
-
-        // Unset all environment variables
-        for (key, _) in std::env::vars() {
-            std::env::remove_var(key);
-        }
-
-        env.insert(
-            "PATH".to_string(),
-            format!("{bootstrap_tools_path_display}/bin:/usr/bin").to_string(),
-        );
-        env.insert("TARGET".to_string(), "x86_64-2nex-linux-gnu".to_string());
-        env.insert(
-            "WORK_DIR".to_string(),
-            workdir_path.to_str().unwrap().to_string(),
-        );
-        env.insert(
-            "OUT_DIR".to_string(),
-            outdir_path.to_str().unwrap().to_string(),
-        );
-        env.insert(
-            "BOOTSTRAP_TOOLS".to_string(),
-            bootstrap_tools_path.to_str().unwrap().to_string(),
-        );
-        env.insert(
-            "BOOTSTRAP_SYSROOT".to_string(),
-            bootstrap_sysroot_path.to_str().unwrap().to_string(),
-        );
-        env.insert(
-            "CFLAGS".to_string(),
-            "-march=x86-64 -mtune=generic -O2 -frandom-seed=424242".to_string(),
-        );
-        env.insert(
-            "CXXFLAGS".to_string(),
-            "-march=x86-64 -mtune=generic -O2 -frandom-seed=424242".to_string(),
-        );
-        env.insert(
-            "LDFLAGS".to_string(),
-            "-L/bootstrap/usr/lib -Wl,-O1,--sort-common,--as-needed,-z,now".to_string(),
-        );
-
-        format!(
-            r#"
-            {build_script}"#
-        )
-    } else {
-        env.insert(
-            "PATH".to_string(),
-            "/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
-        );
-        env.insert("RUSTC_BOOTSTRAP".to_string(), "1".to_string());
-        // LTO enabled by default for smaller binaries; use gcc-ar/gcc-nm/gcc-ranlib for LTO-aware static libs
-        env.insert("CFLAGS".to_string(), "-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions -Wp,-D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -fstack-clash-protection -fcf-protection -fPIC -fno-common -fno-omit-frame-pointer -frandom-seed=424242 -flto=auto".to_string());
-        env.insert("CXXFLAGS".to_string(), "-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -fexceptions -Wp,-D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -fstack-clash-protection -fcf-protection -Wp,-D_GLIBCXX_ASSERTIONS -fPIC -fno-common -fno-omit-frame-pointer -frandom-seed=424242 -flto=auto".to_string());
-        env.insert(
-            "LDFLAGS".to_string(),
-            "-Wl,-O1,--sort-common,--as-needed,-z,relro,-z,now -flto=auto".to_string(),
-        );
-        env.insert("AR".to_string(), "gcc-ar".to_string());
-        env.insert("NM".to_string(), "gcc-nm".to_string());
-        env.insert("RANLIB".to_string(), "gcc-ranlib".to_string());
-        env.insert("RUSTFLAGS".to_string(), "-C codegen-units=1 -C embed-bitcode=yes -C debuginfo=0 -C link-args=-fuse-ld=lld -C target-feature=+crt-static -C link-args=-frandom-seed=424242".to_string());
-        env.insert("DEBUG_CFLAGS".to_string(), "-g".to_string());
-        env.insert("DEBUG_CXXFLAGS".to_string(), "-g".to_string());
-        env.insert("DEBUG_RUSTFLAGS".to_string(), "-C debuginfo=2".to_string());
-        env.insert("TARGET".to_string(), "x86_64-pc-linux-gnu".to_string());
-        env.insert("WORK_DIR".to_string(), "/2nex/work".to_string());
-        env.insert("OUT_DIR".to_string(), "/2nex/out".to_string());
-
+    // construct the launch script based on execution mode
+    let launch_script = if build_env.execution.chroot {
+        // chroot mode: write build script to file, run preamble, then chroot and execute
         let temp_file_path = tmpdir_path.join("build_script.sh");
         let mut temp_file = std::fs::File::create(&temp_file_path)?;
-
-        // Write the build_script content to the temporary file
         temp_file.write_all(b"#!/usr/bin/bash -eu\n")?;
         temp_file.write_all(build_script.as_bytes())?;
 
+        // expand preamble templates
+        let preamble = expand_env_templates(
+            &build_env.preamble,
+            num_cpus,
+            &build_dir_str,
+            Some(bootstrap_tools_str),
+            Some(bootstrap_sysroot_str),
+        );
+
         format!(
             r#"
-            if ! read -r current_hostname < /proc/sys/kernel/hostname; then
-                echo 'Warning: Could not read current hostname; forcing to 2nex-builder' >&2
-                current_hostname=""
-            fi
+{preamble}
 
-            if [ "$current_hostname" != "2nex-builder" ]; then
-                # Can't write /proc/sys/kernel/hostname inside a user namespace,
-                # so set it here via the host's hostname binary before chrooting.
-                echo 'Setting hostname to 2nex-builder'
-                if ! hostname 2nex-builder; then
-                    echo 'Warning: Failed to run hostname command' >&2
-                fi
-            fi
-
-            mkdir -p {build_dir}/dev
-            for D in null zero random urandom tty console full; do
-                touch {build_dir}/dev/$D
-                mount --bind /dev/$D {build_dir}/dev/$D
-            done
-
-            mkdir -p {build_dir}/dev/pts
-            mount -t devpts devpts {build_dir}/dev/pts
-            ln -sf /dev/pts/ptmx {build_dir}/dev/ptmx
-
-            mkdir -p {build_dir}/proc
-            mount -t proc proc {build_dir}/proc
-
-            # remove symlinks for usrmerge compatibility (only remove if symlink, not dir)
-            if [ -L {build_dir}/lib ]; then
-                rm -f {build_dir}/lib
-            fi
-
-            if [ -L {build_dir}/lib64 ]; then
-                rm -f {build_dir}/lib64
-            fi
-
-            if [ -L {build_dir}/sbin ]; then
-                rm -f {build_dir}/sbin
-            fi
-
-            if [ -L {build_dir}/usr/lib64 ]; then
-                rm -f {build_dir}/usr/lib64
-            fi
-
-            if [ -L {build_dir}/usr/sbin ]; then
-                rm -f {build_dir}/usr/sbin
-            fi
-
-            mkdir -p {build_dir}/usr
-
-            if [ ! -e {build_dir}/bin ]; then
-                ln -sf /usr/bin {build_dir}/bin
-            fi
-
-            if [ ! -e {build_dir}/lib ]; then
-                ln -sf /usr/lib {build_dir}/lib
-            fi
-
-            if [ ! -e {build_dir}/sbin ]; then
-                ln -sf /usr/bin {build_dir}/sbin
-            fi
-
-            if [ ! -e {build_dir}/lib64 ]; then
-                ln -sf /usr/lib {build_dir}/lib64
-            fi
-
-            if [ ! -e {build_dir}/usr/lib64 ]; then
-                ln -sf lib {build_dir}/usr/lib64
-            fi
-
-            if [ ! -e {build_dir}/usr/sbin ]; then
-                ln -sf bin {build_dir}/usr/sbin
-            fi
-
-            # create same FHS symlinks in /target for system builds
-            if [ -d {build_dir}/target ]; then
-                mkdir -p {build_dir}/target/usr
-
-                if [ ! -e {build_dir}/target/bin ]; then
-                    ln -sf /usr/bin {build_dir}/target/bin
-                fi
-
-                if [ ! -e {build_dir}/target/lib ]; then
-                    ln -sf /usr/lib {build_dir}/target/lib
-                fi
-
-                if [ ! -e {build_dir}/target/sbin ]; then
-                    ln -sf /usr/bin {build_dir}/target/sbin
-                fi
-
-                if [ ! -e {build_dir}/target/lib64 ]; then
-                    ln -sf /usr/lib {build_dir}/target/lib64
-                fi
-
-                if [ ! -e {build_dir}/target/usr/lib64 ]; then
-                    ln -sf lib {build_dir}/target/usr/lib64
-                fi
-
-                if [ ! -e {build_dir}/target/usr/sbin ]; then
-                    ln -sf bin {build_dir}/target/usr/sbin
-                fi
-            fi
-
-            chmod +x {build_dir}/2nex/tmp/build_script.sh
-            unshare --root={build_dir} /2nex/tmp/build_script.sh 2>&1
-            "#,
+chmod +x {build_dir}/2nex/tmp/build_script.sh
+unshare --root={build_dir} /2nex/tmp/build_script.sh 2>&1
+"#,
+            preamble = preamble,
             build_dir = build_dir_str
         )
+    } else {
+        // non-chroot mode: run script directly on host filesystem
+        // preamble runs first (if any), then the build script
+        let preamble = expand_env_templates(
+            &build_env.preamble,
+            num_cpus,
+            &build_dir_str,
+            Some(bootstrap_tools_str),
+            Some(bootstrap_sysroot_str),
+        );
+
+        if preamble.trim().is_empty() {
+            format!("{build_script}")
+        } else {
+            format!("{preamble}\n{build_script}")
+        }
     };
     command_args.push(&launch_script);
-
-    for (key, value) in env_vars {
-        env.insert(key.to_string(), value.to_string());
-    }
 
     let mut command = Command::new("unshare");
     command.args(&command_args).envs(&env);
@@ -463,7 +392,7 @@ pub fn run_build_script_with_progress(
     // we capture everything and only display on verbose or error
     if progress_config.is_some() {
         command.stdout(Stdio::piped());
-        command.stderr(Stdio::piped()); // capture any stderr that escapes 2>&1
+        command.stderr(Stdio::piped());
     }
 
     println!(
@@ -479,7 +408,7 @@ pub fn run_build_script_with_progress(
             .take()
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "failed to capture stdout"))?;
 
-        // capture any escaped stderr in background (shouldn't be much due to 2>&1)
+        // capture any escaped stderr in background
         let stderr_handle = child.stderr.take().map(|stderr| {
             std::thread::spawn(move || {
                 let mut buf = Vec::new();
@@ -744,6 +673,9 @@ pub fn build_package_manifest_with_dir(
     let download_dir = "./inputs_cache";
     fs::create_dir_all(download_dir)?;
 
+    // load build environment from manifest
+    let build_env = load_environment(&opts.repo_path, &manifest.build.environment)?;
+
     // resolve dependencies to specific commit IDs when they have manifest_ref
     let dependency_commits = resolve_dependency_commits(&manifest.dependencies, &opts.repo_path)?;
 
@@ -753,25 +685,24 @@ pub fn build_package_manifest_with_dir(
         &opts.fallback_repos,
         &dependency_commits,
     )?;
-    let input_env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
+
+    // use_absolute_paths = !chroot (when not using chroot, we need absolute paths)
+    let input_env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, !build_env.execution.chroot)?;
 
     let package_name = &manifest.package.name;
     let package_version = &manifest.package.version;
     let package_namespace = &manifest.package.namespace;
 
     println!(
-        "Building {} {} in namespace {}",
-        package_name, package_version, package_namespace
+        "Building {} {} in namespace {} using '{}' environment",
+        package_name, package_version, package_namespace, build_env.name
     );
 
-    let mut env_vars = HashMap::new();
-    env_vars.extend(input_env_vars);
     let build_script = manifest.build.script.clone();
 
     // run build with progress tracking if enabled
     let build_result = if opts.no_progress {
-        run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
-        BuildScriptResult { new_profile: None }
+        run_build_script_with_env(&build_script, base_dir, &input_env_vars, &build_env, None)?
     } else {
         let mut progress_config = BuildProgressConfig::new(&format!(
             "{}/{}",
@@ -782,11 +713,11 @@ pub fn build_package_manifest_with_dir(
         progress_config.record_profile = opts.record_profile;
         progress_config.profile = manifest.build.profile.clone();
         progress_config.multi_progress = opts.multi_progress.clone();
-        run_build_script_with_progress(
+        run_build_script_with_env(
             &build_script,
             base_dir,
-            &env_vars,
-            opts.bootstrap,
+            &input_env_vars,
+            &build_env,
             Some(&progress_config),
         )?
     };
@@ -917,8 +848,8 @@ pub fn build_package_manifest_with_dir(
             &opts.fallback_repos,
             &dependency_commits,
         )?;
-        handle_inputs(&manifest.sources, download_dir, base_dir, opts.bootstrap)?;
-        run_build_script(&build_script, base_dir, &env_vars, opts.bootstrap)?;
+        let input_env_vars_2 = handle_inputs(&manifest.sources, download_dir, base_dir, !build_env.execution.chroot)?;
+        run_build_script_with_env(&build_script, base_dir, &input_env_vars_2, &build_env, None)?;
         verify_and_commit_outputs(
             manifest,
             base_dir,

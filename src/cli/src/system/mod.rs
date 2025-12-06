@@ -71,14 +71,18 @@ pub fn build_system_manifest_with_dir(
         )?;
     }
 
-    let env_vars = build_system_env_vars(manifest, download_dir, base_dir, opts.bootstrap)?;
+    // load build environment from git blob
+    let build_env = load_environment(&opts.repo_path, &manifest.build.environment)?;
+    let use_absolute_paths = !build_env.execution.chroot;
+
+    let env_vars = build_system_env_vars(manifest, download_dir, base_dir, use_absolute_paths)?;
 
     println!(
         "Building system {} {}",
         manifest.system.slug, manifest.system.version
     );
 
-    run_build_script(&manifest.build.script, base_dir, &env_vars, opts.bootstrap)?;
+    run_build_script_with_env(&manifest.build.script, base_dir, &env_vars, &build_env, None)?;
 
     let target_dir = Path::new(base_dir).join("target");
     let checksum = calculate_output_checksum(&target_dir)?;
@@ -165,8 +169,8 @@ pub fn build_system_manifest_with_dir(
             )?;
         }
 
-        let env_vars = build_system_env_vars(manifest, download_dir, base_dir, opts.bootstrap)?;
-        run_build_script(&manifest.build.script, base_dir, &env_vars, opts.bootstrap)?;
+        let env_vars = build_system_env_vars(manifest, download_dir, base_dir, use_absolute_paths)?;
+        run_build_script_with_env(&manifest.build.script, base_dir, &env_vars, &build_env, None)?;
 
         let second_checksum = calculate_output_checksum(&target_dir)?;
         println!("Second build checksum: {}", second_checksum);
@@ -198,9 +202,9 @@ pub fn build_system_env_vars(
     manifest: &SystemManifest,
     download_dir: &str,
     base_dir: &str,
-    bootstrap: bool,
+    use_absolute_paths: bool,
 ) -> io::Result<HashMap<String, String>> {
-    let mut env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, bootstrap)?;
+    let mut env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, use_absolute_paths)?;
     env_vars.insert("SYSTEM_NAME".to_string(), manifest.system.name.clone());
     env_vars.insert("SYSTEM_SLUG".to_string(), manifest.system.slug.clone());
     env_vars.insert(
