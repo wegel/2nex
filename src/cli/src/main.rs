@@ -96,6 +96,10 @@ enum Command {
     /// Compute and store runtime dependencies in manifest
     ComputeDeps(commands::compute_deps::ComputeDepsArgs),
 
+    /// Show full transitive dependency graph of a manifest
+    #[clap(name = "dep-graph")]
+    DepGraph(commands::dep_graph::DepGraphArgs),
+
     /// Format manifest files
     Format(commands::format::FormatArgs),
 
@@ -137,6 +141,7 @@ fn main() -> io::Result<()> {
         Command::Rollback(args) => commands::rollback::run(&args),
         Command::Resolve(args) => commands::resolve::run(&args),
         Command::ComputeDeps(args) => commands::compute_deps::run(&args),
+        Command::DepGraph(args) => commands::dep_graph::run(&args),
         Command::Format(args) => commands::format::run(&args),
         Command::Complete(args) => commands::complete::run(&args),
         Command::GitSha1(args) => commands::git_sha1::run(&args),
@@ -348,108 +353,6 @@ fn refresh_package_metadata(
     Ok(())
 }
 
-/// create {hash}/files commit as in-store union of all outputs.
-fn create_files_commit_for_package(
-    manifest: &Manifest,
-    repo_path: &str,
-    manifest_path: &Path,
-) -> io::Result<()> {
-    // determine address hash: checksum if stable, else manifest git blob SHA
-    let has_stable_checksum =
-        manifest.package.checksum.is_some() && manifest.package.stable_checksum.unwrap_or(true);
-
-    let address_hash = if has_stable_checksum {
-        manifest.package.checksum.clone().unwrap()
-    } else {
-        utils::hash_file_content(manifest_path)?
-    };
-
-    let files_ref = format!("{}/files", address_hash);
-
-    // build output refs
-    let output_refs: Vec<String> = manifest
-        .outputs
-        .keys()
-        .filter(|k| *k != "discard")
-        .map(|name| {
-            format!(
-                "x86_64/{}/{}/{}/outputs/{}",
-                manifest.package.namespace_path(),
-                manifest.package.slug,
-                manifest.package.version,
-                name
-            )
-        })
-        .collect();
-
-    if output_refs.is_empty() {
-        return Ok(());
-    }
-
-    println!("Creating files commit: {}", files_ref);
-
-    let repo = zub::Repo::open(Path::new(repo_path))
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-
-    let ref_strs: Vec<&str> = output_refs.iter().map(|s| s.as_str()).collect();
-    zub::ops::union_trees(
-        &repo,
-        &ref_strs,
-        &files_ref,
-        zub::ops::UnionOptions {
-            on_conflict: zub::ops::ConflictResolution::Last,
-            ..Default::default()
-        },
-    )
-    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-
-    // attach metadata
-    let metadata = vec![
-        ("nex.address_hash".to_string(), address_hash.clone()),
-        (
-            "nex.package".to_string(),
-            format!(
-                "{}/{}/{}",
-                manifest.package.namespace_path(),
-                manifest.package.slug,
-                manifest.package.version
-            ),
-        ),
-    ];
-    rewrite_branch_metadata(repo_path, &files_ref, &metadata)?;
-
-    // create semantic files ref (x86_64/pkg/{namespace}/{slug}/{version}/files)
-    let semantic_files_ref = format!(
-        "x86_64/{}/{}/{}/files",
-        manifest.package.namespace_path(),
-        manifest.package.slug,
-        manifest.package.version
-    );
-
-    // resolve the commit hash from the checksum-based ref
-    let commit_hash = zub::resolve_ref(&repo, &files_ref)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-
-    // write the semantic ref pointing to the same commit
-    zub::write_ref(&repo, &semantic_files_ref, &commit_hash)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-
-    // attach manifest hash to semantic ref for staleness checks
-    let manifest_hash = compute_manifest_hash(manifest_path)?;
-    rewrite_branch_metadata(
-        repo_path,
-        &semantic_files_ref,
-        &[
-            ("nex.manifest.hash".to_string(), manifest_hash),
-            ("nex.address_hash".to_string(), address_hash),
-        ],
-    )?;
-
-    println!("Created semantic ref: {}", semantic_files_ref);
-
-    Ok(())
-}
-
 fn refresh_output_branches(
     repo_path: &str,
     manifest: &Manifest,
@@ -562,59 +465,6 @@ fn compute_manifest_hash(manifest_path: &Path) -> io::Result<String> {
     let mut hasher = Sha256::new();
     hasher.update(&contents);
     Ok(format!("{:x}", hasher.finalize()))
-}
-
-/// Resolve dependencies to specific commit IDs when they have manifest_ref.
-/// Returns a list of (commit_ref_or_id, original_branch) pairs.
-fn resolve_dependency_commits(
-    dependencies: &[Dependency],
-    repo_path: &str,
-) -> io::Result<Vec<String>> {
-    let git_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let mut resolved = Vec::new();
-
-    for dep in dependencies {
-        if let Some(ref blob_sha) = dep.manifest_ref {
-            // fetch blob content and compute its hash
-            match crate::utils::fetch_git_blob(&git_root, blob_sha) {
-                Ok(content) => {
-                    let content_hash = format!("{:x}", Sha256::digest(content.as_bytes()));
-
-                    // search store history for matching build
-                    match find_commit_by_manifest_hash(repo_path, &dep.commit, &content_hash) {
-                        Ok(Some(commit_id)) => {
-                            // use the specific commit ID instead of branch name
-                            resolved.push(commit_id);
-                            continue;
-                        }
-                        Ok(None) => {
-                            // fall back to branch name
-                            eprintln!(
-                                "Warning: no matching commit found for {} with manifest_ref {}",
-                                dep.commit, blob_sha
-                            );
-                        }
-                        Err(e) => {
-                            eprintln!(
-                                "Warning: failed to search history for {}: {}",
-                                dep.commit, e
-                            );
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!(
-                        "Warning: failed to fetch blob {} for {}: {}",
-                        blob_sha, dep.commit, e
-                    );
-                }
-            }
-        }
-        // no manifest_ref or resolution failed - use branch name
-        resolved.push(dep.commit.clone());
-    }
-
-    Ok(resolved)
 }
 
 // check if all outputs of a manifest are already built in the store with current manifest hash

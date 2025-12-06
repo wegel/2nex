@@ -172,6 +172,7 @@ fn parse_go_mod(content: &str) -> io::Result<(HashSet<String>, HashSet<String>)>
 struct GoModule {
     path: String,
     version: String,
+    #[allow(dead_code)]
     hash: String,
 }
 
@@ -335,7 +336,7 @@ fn escape_module_path(path: &str) -> String {
 
 /// create vendor/modules.txt file
 /// lists all packages (directories with .go files) for each module
-fn create_modules_txt(modules: &[GoModule], vendor_dir: &Path, direct_deps: &HashSet<String>) -> io::Result<()> {
+fn create_modules_txt(modules: &[GoModule], vendor_dir: &Path, _direct_deps: &HashSet<String>) -> io::Result<()> {
     let mut lines = Vec::new();
 
     // sort modules for reproducibility

@@ -3,6 +3,7 @@ pub mod check;
 pub mod commit;
 pub mod complete;
 pub mod compute_deps;
+pub mod dep_graph;
 pub mod discard;
 pub mod git_sha1;
 pub mod format;
