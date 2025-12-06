@@ -1,6 +1,12 @@
-use std::io;
+use std::fs::{self, File};
+use std::io::{self, Read};
 use std::path::Path;
 use std::process::Command;
+
+use flate2::write::GzEncoder;
+use flate2::Compression;
+use tar::Builder;
+use walkdir::WalkDir;
 
 /// Classifies an output path into the manifest output category the builder
 /// expects. The logic matches the manifest schema so both the runtime scanner
@@ -81,6 +87,140 @@ pub fn hash_file_content(path: &Path) -> io::Result<String> {
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
+
+/// recursively copy a directory
+pub fn copy_dir_recursive(src: &Path, dst: &Path) -> io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let dest_path = dst.join(entry.file_name());
+        if path.is_dir() {
+            copy_dir_recursive(&path, &dest_path)?;
+        } else {
+            fs::copy(&path, &dest_path)?;
+        }
+    }
+    Ok(())
+}
+
+/// fetch file content from URL or local path
+pub fn fetch_url_or_file(url_or_path: &str) -> io::Result<String> {
+    if url_or_path.starts_with("http://") || url_or_path.starts_with("https://") {
+        let output = Command::new("curl")
+            .args(["-L", "-f", "-s", url_or_path])
+            .output()?;
+
+        if !output.status.success() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Failed to download {}", url_or_path),
+            ));
+        }
+
+        String::from_utf8(output.stdout).map_err(|e| {
+            io::Error::new(io::ErrorKind::InvalidData, format!("Invalid UTF-8: {}", e))
+        })
+    } else {
+        fs::read_to_string(url_or_path)
+    }
+}
+
+/// create a deterministic tarball from a directory.
+/// uses fixed mtime, uid/gid 0, sorted file order, and gzip -9.
+pub fn create_deterministic_tarball(source_dir: &Path, output_path: &Path) -> io::Result<()> {
+    use std::path::PathBuf;
+
+    // fixed timestamp: 2024-01-01 00:00:00 UTC
+    let mtime = 1704067200u64;
+
+    // collect and sort all entries
+    let mut entries: Vec<PathBuf> = Vec::new();
+
+    for entry in WalkDir::new(source_dir).min_depth(0).into_iter() {
+        let entry = entry.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        entries.push(entry.path().to_path_buf());
+    }
+
+    // sort entries (directories before their contents, lexicographic)
+    entries.sort();
+
+    // create tarball
+    let file = File::create(output_path)?;
+    let encoder = GzEncoder::new(file, Compression::best());
+    let mut tar = Builder::new(encoder);
+
+    // get parent for relative path calculation
+    let parent = source_dir.parent().unwrap_or(source_dir);
+
+    for path in &entries {
+        let relative = path
+            .strip_prefix(parent)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+        if relative.as_os_str().is_empty() {
+            continue;
+        }
+
+        let metadata = fs::symlink_metadata(path)?;
+
+        if metadata.is_dir() {
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Directory);
+            header.set_size(0);
+            header.set_mtime(mtime);
+            header.set_uid(0);
+            header.set_gid(0);
+            header.set_mode(0o755);
+            tar.append_data(&mut header, relative, io::empty())?;
+        } else if metadata.is_symlink() {
+            let link_target = fs::read_link(path)?;
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Symlink);
+            header.set_size(0);
+            header.set_mtime(mtime);
+            header.set_uid(0);
+            header.set_gid(0);
+            header.set_mode(0o777);
+            tar.append_link(&mut header, relative, &link_target)?;
+        } else if metadata.is_file() {
+            let mut file = File::open(path)?;
+            let mut contents = Vec::new();
+            file.read_to_end(&mut contents)?;
+
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Regular);
+            header.set_size(contents.len() as u64);
+            header.set_mtime(mtime);
+            header.set_uid(0);
+            header.set_gid(0);
+            // preserve executable bit
+            let mode = if metadata.permissions().mode() & 0o111 != 0 {
+                0o755
+            } else {
+                0o644
+            };
+            header.set_mode(mode);
+            tar.append_data(&mut header, relative, &contents[..])?;
+        }
+    }
+
+    tar.finish()?;
+    Ok(())
+}
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
+#[cfg(not(unix))]
+trait PermissionsExt {
+    fn mode(&self) -> u32 {
+        0o644
+    }
+}
+
+#[cfg(not(unix))]
+impl PermissionsExt for std::fs::Permissions {}
 
 #[cfg(test)]
 mod tests {

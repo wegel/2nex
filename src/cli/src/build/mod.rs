@@ -365,6 +365,9 @@ pub fn run_build_script_with_progress(
             mount -t devpts devpts {build_dir}/dev/pts
             ln -sf /dev/pts/ptmx {build_dir}/dev/ptmx
 
+            mkdir -p {build_dir}/proc
+            mount -t proc proc {build_dir}/proc
+
             # remove symlinks for usrmerge compatibility (only remove if symlink, not dir)
             if [ -L {build_dir}/lib ]; then
                 rm -f {build_dir}/lib

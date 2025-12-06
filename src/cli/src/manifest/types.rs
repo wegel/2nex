@@ -191,6 +191,12 @@ pub struct Source {
     /// optional: explicit Cargo.toml URL (defaults to same directory as cargo_lock)
     #[serde(default)]
     pub cargo_toml: Option<String>,
+    /// URL or path to go.sum file for automatic Go module vendoring
+    #[serde(default)]
+    pub go_sum: Option<String>,
+    /// URL or path to build.zig.zon file for automatic Zig dependency vendoring
+    #[serde(default)]
+    pub zig_zon: Option<String>,
     pub sha256: String,
 }
 
