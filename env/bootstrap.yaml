@@ -14,14 +14,17 @@ env:
   SOURCE_DATE_EPOCH: "1704067200"
   GLIBC_TUNABLES: glibc.cpu.hwcaps=-RNDRAND
   MAKEFLAGS: "-j{num_cpus}"
-  PATH: "{bootstrap_tools}/bin:/usr/bin"
+  PATH: "/tmp/bootstrap/bootstrap/tools/bin:/usr/bin"
   TARGET: x86_64-2nex-linux-gnu
-  WORK_DIR: "{build_dir}/2nex/work"
-  OUT_DIR: "{build_dir}/2nex/out"
-  BOOTSTRAP_TOOLS: "{bootstrap_tools}"
-  BOOTSTRAP_SYSROOT: "{bootstrap_sysroot}"
+  WORK_DIR: "/tmp/bootstrap/2nex/work"
+  OUT_DIR: "/tmp/bootstrap/2nex/out"
+  BOOTSTRAP_TOOLS: "/tmp/bootstrap/bootstrap/tools"
+  BOOTSTRAP_SYSROOT: "/tmp/bootstrap/bootstrap"
   CFLAGS: "-march=x86-64 -mtune=generic -O2 -frandom-seed=424242"
   CXXFLAGS: "-march=x86-64 -mtune=generic -O2 -frandom-seed=424242"
-  LDFLAGS: "-L/bootstrap/usr/lib -Wl,-O1,--sort-common,--as-needed,-z,now"
+  LDFLAGS: "-L/tmp/bootstrap/usr/lib -Wl,-O1,--sort-common,--as-needed,-z,now"
 
-preamble: ""
+preamble: |
+  mount -t tmpfs tmpfs /tmp
+  mkdir /tmp/bootstrap
+  mount --bind {build_dir} /tmp/bootstrap
