@@ -216,6 +216,17 @@ fn default_true() -> bool {
     true
 }
 
+/// Paths configuration for build directories (relative to build_dir)
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct BuildPaths {
+    /// relative path for work directory (e.g., "2nex/work")
+    pub work: String,
+    /// relative path for output directory (e.g., "2nex/out")
+    pub out: String,
+    /// relative path for inputs directory (e.g., "inputs")
+    pub inputs: String,
+}
+
 /// Build environment definition loaded from external YAML file
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct BuildEnvironment {
@@ -231,6 +242,8 @@ pub struct BuildEnvironment {
     /// script to run before the build script (device mounts, FHS setup, etc.)
     #[serde(default)]
     pub preamble: String,
+    /// directory structure paths (relative to build_dir)
+    pub paths: BuildPaths,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

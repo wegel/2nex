@@ -10,7 +10,7 @@ use sha2::{Digest, Sha256};
 
 use crate::commands::build::BuildOpts;
 use crate::manifest::*;
-use crate::manifest::types::BuildEnvironment;
+use crate::manifest::types::{BuildEnvironment, BuildPaths};
 use crate::outputs::*;
 use crate::progress::{self, BuildProgressConfig};
 use crate::store::{
@@ -121,12 +121,13 @@ pub fn stage_existing_outputs(
     manifest: &Manifest,
     base_dir: &str,
     repo_path: &str,
+    paths: &BuildPaths,
 ) -> io::Result<()> {
     let base_path = Path::new(base_dir);
     if base_path.exists() {
         fs::remove_dir_all(base_path)?;
     }
-    let out_dir = base_path.join("2nex/out");
+    let out_dir = base_path.join(&paths.out);
     fs::create_dir_all(&out_dir)?;
 
     for category in manifest.outputs.keys() {
@@ -153,6 +154,7 @@ pub fn setup_composite_rootfs(
     repo_path: &str,
     fallback_repos: &[String],
     dependency_commits: &[String],
+    paths: &BuildPaths,
 ) -> io::Result<()> {
     println!("Setting up composite rootfs at {}", base_dir);
     if Path::new(base_dir).exists() {
@@ -160,8 +162,8 @@ pub fn setup_composite_rootfs(
     }
     fs::create_dir_all(base_dir)?;
 
-    let work_dir = Path::new(base_dir).join("2nex/work");
-    let out_dir = Path::new(base_dir).join("2nex/out");
+    let work_dir = Path::new(base_dir).join(&paths.work);
+    let out_dir = Path::new(base_dir).join(&paths.out);
     let tmp_dir = Path::new(base_dir).join("tmp");
 
     for dir in &[&work_dir, &out_dir, &tmp_dir] {
@@ -219,25 +221,27 @@ pub fn handle_inputs(
     download_dir: &str,
     build_dir: &str,
     use_absolute_paths: bool,
+    paths: &BuildPaths,
+    canonical_prefix: Option<&str>,
 ) -> io::Result<HashMap<String, String>> {
     println!("Handling inputs");
 
     let mut input_env_vars = HashMap::new();
-    let current_dir = env::current_dir().expect("Failed to get current directory");
 
     for (i, source) in sources.iter().enumerate() {
         let input = fetch_and_verify_input(source, download_dir)?;
-        let inputs_dir = Path::new(build_dir).join("inputs");
+        let inputs_dir = Path::new(build_dir).join(&paths.inputs);
         fs::create_dir_all(&inputs_dir)?;
         let input_path = inputs_dir.join(input.file_name().unwrap());
         fs::copy(input.clone(), &input_path)?;
 
-        // when not using chroot, we need absolute paths; with chroot, use relative paths
+        // non-chroot builds use canonical prefix path for portability
+        // chroot builds use relative paths
         let path_str = if use_absolute_paths {
-            current_dir.join(&input_path).to_str().unwrap().to_string()
+            let prefix = canonical_prefix.unwrap_or("/tmp/bootstrap");
+            format!("{}/{}/{}", prefix, paths.inputs, input_path.file_name().unwrap().to_str().unwrap())
         } else {
-            let relative_path = Path::new("./inputs").join(input_path.file_name().unwrap());
-            relative_path.to_str().unwrap().to_string()
+            format!("./{}/{}", paths.inputs, input_path.file_name().unwrap().to_str().unwrap())
         };
 
         input_env_vars.insert(format!("SOURCE{}", i), path_str.clone());
@@ -460,6 +464,7 @@ pub fn verify_and_commit_outputs(
     base_dir: &str,
     repo_path: &str,
     manifest_path: &Path,
+    paths: &BuildPaths,
 ) -> io::Result<()> {
     println!("Verifying and committing outputs to store branches");
 
@@ -467,7 +472,7 @@ pub fn verify_and_commit_outputs(
     let manifest_hash = crate::compute_manifest_hash(manifest_path)?;
 
     let output_specs = &manifest.outputs;
-    let out_dir = Path::new(base_dir).join("2nex/out");
+    let out_dir = Path::new(base_dir).join(&paths.out);
 
     let all_out_files: Vec<String> = WalkDir::new(&out_dir)
         .into_iter()
@@ -684,10 +689,24 @@ pub fn build_package_manifest_with_dir(
         &opts.repo_path,
         &opts.fallback_repos,
         &dependency_commits,
+        &build_env.paths,
     )?;
 
     // use_absolute_paths = !chroot (when not using chroot, we need absolute paths)
-    let input_env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, !build_env.execution.chroot)?;
+    // for non-chroot builds, use canonical /tmp/bootstrap prefix for portability
+    let canonical_prefix = if !build_env.execution.chroot {
+        Some("/tmp/bootstrap")
+    } else {
+        None
+    };
+    let input_env_vars = handle_inputs(
+        &manifest.sources,
+        download_dir,
+        base_dir,
+        !build_env.execution.chroot,
+        &build_env.paths,
+        canonical_prefix,
+    )?;
 
     let package_name = &manifest.package.name;
     let package_version = &manifest.package.version;
@@ -732,7 +751,7 @@ pub fn build_package_manifest_with_dir(
 
     // if generate_outputs is enabled, write auto-detected outputs to manifest
     if opts.generate_outputs {
-        let out_dir = Path::new(base_dir).join("2nex/out");
+        let out_dir = Path::new(base_dir).join(&build_env.paths.out);
         let categorized = categorize_files(&out_dir);
         crate::manifest::update::write_auto_outputs_to_manifest(&opts.manifest_file, &categorized)?;
 
@@ -748,6 +767,7 @@ pub fn build_package_manifest_with_dir(
         base_dir,
         &opts.repo_path,
         Path::new(&opts.manifest_file),
+        &build_env.paths,
     )?;
 
     create_and_commit_bundles(
@@ -759,7 +779,7 @@ pub fn build_package_manifest_with_dir(
 
     println!("Build, packaging, and commit completed for all outputs.");
 
-    let output_dir = Path::new(base_dir).join("2nex/out");
+    let output_dir = Path::new(base_dir).join(&build_env.paths.out);
     let checksum = calculate_output_checksum(&output_dir)?;
     println!("Build output checksum: {}", checksum);
 
@@ -847,14 +867,23 @@ pub fn build_package_manifest_with_dir(
             &opts.repo_path,
             &opts.fallback_repos,
             &dependency_commits,
+            &build_env.paths,
         )?;
-        let input_env_vars_2 = handle_inputs(&manifest.sources, download_dir, base_dir, !build_env.execution.chroot)?;
+        let input_env_vars_2 = handle_inputs(
+            &manifest.sources,
+            download_dir,
+            base_dir,
+            !build_env.execution.chroot,
+            &build_env.paths,
+            canonical_prefix,
+        )?;
         run_build_script_with_env(&build_script, base_dir, &input_env_vars_2, &build_env, None)?;
         verify_and_commit_outputs(
             manifest,
             base_dir,
             &opts.repo_path,
             Path::new(&opts.manifest_file),
+            &build_env.paths,
         )?;
         create_and_commit_bundles(
             manifest,

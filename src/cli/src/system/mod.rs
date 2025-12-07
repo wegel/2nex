@@ -10,6 +10,7 @@ use walkdir::WalkDir;
 use crate::build::*;
 use crate::deps::*;
 use crate::manifest::*;
+use crate::manifest::types::BuildPaths;
 use crate::materializer::resolver::resolve_runtime_deps_precomputed;
 use crate::materializer::types::MaterializeRequest;
 use crate::materializer::{checkout_files, flatten_capsule_precomputed};
@@ -43,11 +44,15 @@ pub fn build_system_manifest_with_dir(
     let package_dependency_specs = dependencies_from_system_packages(&manifest.packages);
     let package_commits = resolve_dependency_closure(&package_dependency_specs, &manifest_index)?;
 
+    // load build environment from git blob (needed for paths)
+    let build_env = load_environment(&opts.repo_path, &manifest.build.environment)?;
+
     setup_composite_rootfs(
         base_dir,
         &opts.repo_path,
         &opts.fallback_repos,
         &dependency_commits,
+        &build_env.paths,
     )?;
     layer_commits_into_rootfs(
         base_dir,
@@ -71,11 +76,9 @@ pub fn build_system_manifest_with_dir(
         )?;
     }
 
-    // load build environment from git blob
-    let build_env = load_environment(&opts.repo_path, &manifest.build.environment)?;
     let use_absolute_paths = !build_env.execution.chroot;
 
-    let env_vars = build_system_env_vars(manifest, download_dir, base_dir, use_absolute_paths)?;
+    let env_vars = build_system_env_vars(manifest, download_dir, base_dir, use_absolute_paths, &build_env.paths)?;
 
     println!(
         "Building system {} {}",
@@ -150,6 +153,7 @@ pub fn build_system_manifest_with_dir(
             &opts.repo_path,
             &opts.fallback_repos,
             &dependency_commits,
+            &build_env.paths,
         )?;
         layer_commits_into_rootfs(
             base_dir,
@@ -169,7 +173,7 @@ pub fn build_system_manifest_with_dir(
             )?;
         }
 
-        let env_vars = build_system_env_vars(manifest, download_dir, base_dir, use_absolute_paths)?;
+        let env_vars = build_system_env_vars(manifest, download_dir, base_dir, use_absolute_paths, &build_env.paths)?;
         run_build_script_with_env(&manifest.build.script, base_dir, &env_vars, &build_env, None)?;
 
         let second_checksum = calculate_output_checksum(&target_dir)?;
@@ -203,8 +207,10 @@ pub fn build_system_env_vars(
     download_dir: &str,
     base_dir: &str,
     use_absolute_paths: bool,
+    paths: &BuildPaths,
 ) -> io::Result<HashMap<String, String>> {
-    let mut env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, use_absolute_paths)?;
+    // system builds are always chroot, so no canonical prefix needed
+    let mut env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, use_absolute_paths, paths, None)?;
     env_vars.insert("SYSTEM_NAME".to_string(), manifest.system.name.clone());
     env_vars.insert("SYSTEM_SLUG".to_string(), manifest.system.slug.clone());
     env_vars.insert(
