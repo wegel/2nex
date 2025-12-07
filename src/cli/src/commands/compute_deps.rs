@@ -522,9 +522,18 @@ fn find_or_create_files_commit(
         ))
     };
 
-    if let Ok(manifest_data) =
-        load_manifest_from_source(&ManifestSource::Path(manifest_path.clone()))
-    {
+    let manifest_result = load_manifest_from_source(&ManifestSource::Path(manifest_path.clone()));
+    if let Err(ref e) = manifest_result {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "Failed to parse manifest for {}: {} (path: {})",
+                provider_key, e, manifest_path.display()
+            ),
+        ));
+    }
+
+    if let Ok(manifest_data) = manifest_result {
         if let crate::manifest::types::ManifestData::Package(dep_manifest) = manifest_data {
             // determine address hash: use checksum if stable, else use manifest git blob SHA
             let has_stable_checksum = dep_manifest.package.checksum.is_some()
@@ -550,6 +559,7 @@ fn find_or_create_files_commit(
             }
 
             // doesn't exist yet - create it using outputs from manifest
+            // use direct filesystem check to avoid stale cache issues
             let output_refs: Vec<String> = dep_manifest
                 .outputs
                 .keys()
@@ -559,7 +569,10 @@ fn find_or_create_files_commit(
                         namespace_path, slug, version, output_name
                     )
                 })
-                .filter(|r| store.exists(r))
+                .filter(|r| {
+                    let ref_path = Path::new(repo_path).join("refs/heads").join(r);
+                    ref_path.exists()
+                })
                 .collect();
 
             if !output_refs.is_empty() {
@@ -582,9 +595,24 @@ fn find_or_create_files_commit(
         }
     }
 
+    // build better error message
+    let manifest_path_str = if manifest_base_dir.is_empty() {
+        format!("pkg/{}/{}.yaml", namespace_path, slug)
+    } else {
+        format!("{}/pkg/{}/{}.yaml", manifest_base_dir, namespace_path, slug)
+    };
+    let manifest_exists = std::path::Path::new(&manifest_path_str).exists();
+
+    // check what outputs would be looked for
+    let sample_ref = format!("x86_64/pkg/{}/{}/{}/outputs/lib", namespace_path, slug, version);
+    let ref_path = Path::new(repo_path).join("refs/heads").join(&sample_ref);
+
     Err(io::Error::new(
         io::ErrorKind::NotFound,
-        format!("Could not find manifest or outputs for {}", provider_key),
+        format!(
+            "Could not find manifest or outputs for {} (manifest={}, exists={}, sample_ref_path={}, ref_exists={})",
+            provider_key, manifest_path_str, manifest_exists, ref_path.display(), ref_path.exists()
+        ),
     ))
 }
 
@@ -817,11 +845,11 @@ fn update_manifest_file(
         .unwrap()
         .remove(&serde_yaml::Value::String("providers".to_string()));
 
-    // write back with blank line before resolution section
+    // write back, formatted
     let yaml_content = serde_yaml::to_string(&doc)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
 
-    let new_content = yaml_content.replace("\nresolution:\n", "\n\nresolution:\n");
+    let new_content = crate::manifest::format::format_manifest_string(&yaml_content)?;
 
     fs::write(manifest_path, new_content)?;
 
