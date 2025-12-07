@@ -288,6 +288,7 @@ pub fn update_build_profile(manifest_path: &str, new_profile: &[String]) -> io::
     let mut in_build = false;
     let mut build_indent: Option<String> = None;
     let mut profile_line_idx = None;
+    let mut profile_sequence_end = None;
     let mut script_line_idx = None;
 
     for (idx, line) in lines.iter().enumerate() {
@@ -320,6 +321,18 @@ pub fn update_build_profile(manifest_path: &str, new_profile: &[String]) -> io::
 
             if trimmed.starts_with("profile:") {
                 profile_line_idx = Some(idx);
+                // check if this is a multi-line sequence (profile: with no value on same line)
+                if trimmed == "profile:" {
+                    // find where the sequence ends (next non-sequence-item line)
+                    for (seq_idx, seq_line) in lines.iter().enumerate().skip(idx + 1) {
+                        let seq_trimmed = seq_line.trim();
+                        if seq_trimmed.starts_with("- ") {
+                            profile_sequence_end = Some(seq_idx);
+                        } else if !seq_trimmed.is_empty() {
+                            break;
+                        }
+                    }
+                }
             }
             if trimmed.starts_with("script:") {
                 script_line_idx = Some(idx);
@@ -333,6 +346,19 @@ pub fn update_build_profile(manifest_path: &str, new_profile: &[String]) -> io::
     let profile_yaml = format!("[{}]", new_profile.join(", "));
 
     if let Some(idx) = profile_line_idx {
+        // remove old sequence items if profile was multi-line
+        if let Some(end_idx) = profile_sequence_end {
+            for _ in idx + 1..=end_idx {
+                lines.remove(idx + 1);
+            }
+            // adjust script_line_idx if it was after the removed lines
+            if let Some(ref mut s_idx) = script_line_idx {
+                let removed_count = end_idx - idx;
+                if *s_idx > idx {
+                    *s_idx = s_idx.saturating_sub(removed_count);
+                }
+            }
+        }
         // update existing profile line
         lines[idx] = format!("{}profile: {}", indent, profile_yaml);
     } else if let Some(script_idx) = script_line_idx {
