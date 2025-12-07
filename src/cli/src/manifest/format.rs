@@ -333,7 +333,15 @@ fn format_build(value: &Value) -> io::Result<String> {
 
     let mut output = String::from("build:\n");
 
-    // profile comes first (if present)
+    // environment comes first
+    let env_key = Value::String("environment".to_string());
+    if let Some(env) = mapping.get(&env_key) {
+        if let Some(s) = env.as_str() {
+            output.push_str(&format!("  environment: {}\n", s));
+        }
+    }
+
+    // profile comes next (if present)
     let profile_key = Value::String("profile".to_string());
     if let Some(profile) = mapping.get(&profile_key) {
         if let Some(seq) = profile.as_sequence() {
@@ -345,7 +353,7 @@ fn format_build(value: &Value) -> io::Result<String> {
     // blank line before script
     let script_key = Value::String("script".to_string());
     if let Some(script) = mapping.get(&script_key) {
-        if mapping.contains_key(&profile_key) {
+        if mapping.contains_key(&profile_key) || mapping.contains_key(&env_key) {
             output.push('\n');
         }
         if let Some(s) = script.as_str() {

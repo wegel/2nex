@@ -21,6 +21,7 @@ pub fn resolve_dependency_closure(
     let mut resolved = Vec::new();
     let mut seen = HashSet::new();
     let mut visiting = HashSet::new();
+    let mut visiting_packages = HashSet::new();
     let mut stack = Vec::new();
 
     for dep in dependencies {
@@ -29,6 +30,7 @@ pub fn resolve_dependency_closure(
             manifest_index,
             &mut seen,
             &mut visiting,
+            &mut visiting_packages,
             &mut stack,
             &mut resolved,
         )?;
@@ -37,12 +39,19 @@ pub fn resolve_dependency_closure(
     Ok(resolved)
 }
 
+/// extract package identity (namespace, slug) from a commit ref.
+fn get_package_identity(commit: &str) -> Option<(String, String)> {
+    use crate::refs::PackageRef;
+    PackageRef::parse(commit).ok().map(|r| (r.namespace, r.slug))
+}
+
 /// visit a commit in dependency graph traversal (DFS with cycle detection).
 fn visit_commit(
     commit: &str,
     manifest_index: &ManifestIndex,
     seen: &mut HashSet<String>,
     visiting: &mut HashSet<String>,
+    visiting_packages: &mut HashSet<(String, String)>,
     stack: &mut Vec<String>,
     resolved: &mut Vec<String>,
 ) -> io::Result<()> {
@@ -58,6 +67,22 @@ fn visit_commit(
         ));
     }
 
+    // check for package identity cycle (same namespace/slug, different version)
+    let identity = get_package_identity(commit);
+    if let Some((ref ns, ref slug)) = identity {
+        if visiting_packages.contains(&(ns.clone(), slug.clone())) {
+            let cycle_path = build_cycle_path(stack, commit);
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "package cycle: {}/{} appears in its own dependency chain: {}",
+                    ns, slug, cycle_path
+                ),
+            ));
+        }
+        visiting_packages.insert((ns.clone(), slug.clone()));
+    }
+
     visiting.insert(commit.to_string());
     stack.push(commit.to_string());
 
@@ -65,11 +90,22 @@ fn visit_commit(
     let transitive_deps = fetch_deps_from_manifest(commit, manifest_index)?;
 
     for dep_commit in &transitive_deps {
-        visit_commit(dep_commit, manifest_index, seen, visiting, stack, resolved)?;
+        visit_commit(
+            dep_commit,
+            manifest_index,
+            seen,
+            visiting,
+            visiting_packages,
+            stack,
+            resolved,
+        )?;
     }
 
     stack.pop();
     visiting.remove(commit);
+    if let Some((ns, slug)) = identity {
+        visiting_packages.remove(&(ns, slug));
+    }
     seen.insert(commit.to_string());
     resolved.push(commit.to_string());
 
