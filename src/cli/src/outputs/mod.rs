@@ -158,107 +158,59 @@ pub fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Re
         return Ok(resolved_path.to_path_buf());
     }
 
-    // for URL downloads, check cache first via hash symlink
-    let hash_link_path = Path::new(download_dir).join(format!("sha256-{}", input_spec.sha256));
-    if hash_link_path.exists() {
-        // If the symbolic link exists, check that the target file also exists
-        if let Ok(target_filename) = std::fs::read_link(&hash_link_path) {
-            // Handle the relative path properly - the symlink points to a file in the same directory
-            let full_target_path = Path::new(download_dir).join(&target_filename);
-            if full_target_path.exists() {
-                println!(
-                    "Found existing file via hash link: {} -> {}",
-                    hash_link_path.display(),
-                    full_target_path.display()
-                );
-
-                // Always verify the hash even if found via symlink
-                let mut file = fs::File::open(&full_target_path)?;
-                let mut contents = Vec::new();
-                file.read_to_end(&mut contents)?;
-
-                let calculated_hash = hex::encode(Sha256::digest(&contents));
-                if calculated_hash == input_spec.sha256 {
-                    println!("Hash verified for file found via symlink");
-                    return Ok(full_target_path);
-                } else {
-                    println!(
-                        "Hash mismatch for file found via symlink. Expected: {}, Got: {}",
-                        input_spec.sha256, calculated_hash
-                    );
-                    println!("Removing invalid symlink: {}", hash_link_path.display());
-                    std::fs::remove_file(&hash_link_path)?;
-                    // Continue with normal download/verification process
-                }
-            } else {
-                println!(
-                    "Hash link target doesn't exist, removing stale link: {}",
-                    hash_link_path.display()
-                );
-                std::fs::remove_file(&hash_link_path)?;
-            }
-        }
-    }
-
+    // for URL downloads, use content hash as filename (content-addressable cache)
     if let Some(url) = &input_spec.url {
-        println!("Fetching input from URL: {}", url);
+        let dst_path = Path::new(download_dir).join(&input_spec.sha256);
 
-        // Extract a reasonable filename from the URL
-        let url_path = url.split('/').last().unwrap_or("downloaded_file");
-        let expected_filename = url_path.split('?').next().unwrap_or(url_path);
-        let dst_path = Path::new(download_dir).join(expected_filename);
-
-        // Download the file using curl
-        if !dst_path.exists() {
-            println!("Downloading {} using curl", dst_path.display());
-
-            let status = std::process::Command::new("curl")
-                .args([
-                    "-L", // Follow redirects
-                    "-f", // Fail on server errors
-                    "-s", // Silent mode
-                    "--output",
-                    dst_path.to_str().unwrap(),
-                    url,
-                ])
-                .status()?;
-
-            if !status.success() {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("curl download failed with status: {}", status),
-                ));
-            }
-        } else {
-            println!("File already exists: {}", dst_path.display());
+        if dst_path.exists() {
+            println!("Cache hit: {}", input_spec.sha256);
+            return Ok(dst_path);
         }
 
-        // Verify the downloaded file
-        let mut file = fs::File::open(&dst_path)?;
-        let mut contents = Vec::new();
-        file.read_to_end(&mut contents)?;
+        println!("Downloading from {}", url);
 
-        // Check hash before creating the symlink
-        let sha256_hash = hex::encode(Sha256::digest(&contents));
-        if sha256_hash != input_spec.sha256 {
+        // download to a temp file first, then rename after verification
+        let tmp_path = Path::new(download_dir).join(format!("{}.tmp", input_spec.sha256));
+
+        let status = std::process::Command::new("curl")
+            .args([
+                "-L", // follow redirects
+                "-f", // fail on server errors
+                "-s", // silent mode
+                "--output",
+                tmp_path.to_str().unwrap(),
+                url,
+            ])
+            .status()?;
+
+        if !status.success() {
+            let _ = std::fs::remove_file(&tmp_path);
             return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("SHA256 hash mismatch for downloaded input: {}", sha256_hash),
+                io::ErrorKind::Other,
+                format!("curl download failed with status: {}", status),
             ));
         }
 
-        // Create a symbolic link from the hash to the file
-        let hash_link_path = Path::new(download_dir).join(format!("sha256-{}", input_spec.sha256));
-        if !hash_link_path.exists() {
-            // Create relative path for the symlink to avoid including inputs_cache itself
-            let filename = dst_path.file_name().unwrap();
-            println!(
-                "Creating hash symbolic link: {} -> {}",
-                hash_link_path.display(),
-                filename.to_string_lossy()
-            );
-            std::os::unix::fs::symlink(&filename, &hash_link_path)?;
+        // verify the downloaded file
+        let mut file = fs::File::open(&tmp_path)?;
+        let mut contents = Vec::new();
+        file.read_to_end(&mut contents)?;
+
+        let sha256_hash = hex::encode(Sha256::digest(&contents));
+        if sha256_hash != input_spec.sha256 {
+            let _ = std::fs::remove_file(&tmp_path);
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "SHA256 mismatch: expected {}, got {}",
+                    input_spec.sha256, sha256_hash
+                ),
+            ));
         }
+
+        // rename to final content-addressed filename
+        std::fs::rename(&tmp_path, &dst_path)?;
+        println!("Cached as {}", input_spec.sha256);
 
         Ok(dst_path)
     } else {
