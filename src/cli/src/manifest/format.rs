@@ -49,8 +49,49 @@ fn extract_version_from_text(contents: &str) -> Option<String> {
     None
 }
 
+/// check if manifest has unstable checksums (bootstrap or stable_checksum: false)
+fn has_unstable_checksum(mapping: &Mapping) -> bool {
+    let pkg_key = Value::String("package".to_string());
+    let sys_key = Value::String("system".to_string());
+
+    let header = mapping.get(&pkg_key).or_else(|| mapping.get(&sys_key));
+
+    if let Some(Value::Mapping(pkg)) = header {
+        // bootstrap: true means unstable
+        let bootstrap_key = Value::String("bootstrap".to_string());
+        if let Some(Value::Bool(true)) = pkg.get(&bootstrap_key) {
+            return true;
+        }
+        // stable_checksum: false means unstable
+        let stable_key = Value::String("stable_checksum".to_string());
+        if let Some(Value::Bool(false)) = pkg.get(&stable_key) {
+            return true;
+        }
+    }
+    false
+}
+
+/// check if manifest is in a bootstrap namespace
+fn is_bootstrap_namespace(mapping: &Mapping) -> bool {
+    let pkg_key = Value::String("package".to_string());
+    let sys_key = Value::String("system".to_string());
+
+    let header = mapping.get(&pkg_key).or_else(|| mapping.get(&sys_key));
+
+    if let Some(Value::Mapping(pkg)) = header {
+        let ns_key = Value::String("namespace".to_string());
+        if let Some(Value::String(ns)) = pkg.get(&ns_key) {
+            return ns.starts_with("bootstrap/");
+        }
+    }
+    false
+}
+
 fn format_root(mapping: &Mapping, is_system: bool, original_version: Option<&str>) -> io::Result<String> {
     let mut output = String::new();
+    let unstable = has_unstable_checksum(mapping);
+    let bootstrap_ns = is_bootstrap_namespace(mapping);
+    let skip_needs = unstable || bootstrap_ns;
 
     // top-level section order (system manifests use "system" instead of "package")
     let sections: &[&str] = if is_system {
@@ -78,6 +119,11 @@ fn format_root(mapping: &Mapping, is_system: bool, original_version: Option<&str
 
     let mut first = true;
     for &section in sections {
+        // skip resolution for unstable or bootstrap manifests
+        if skip_needs && section == "resolution" {
+            continue;
+        }
+
         let key = Value::String(section.to_string());
         if let Some(value) = mapping.get(&key) {
             if !first {
@@ -86,14 +132,14 @@ fn format_root(mapping: &Mapping, is_system: bool, original_version: Option<&str
             first = false;
 
             match section {
-                "package" => output.push_str(&format_package(value, original_version)?),
-                "system" => output.push_str(&format_system(value, original_version)?),
+                "package" => output.push_str(&format_package(value, original_version, unstable)?),
+                "system" => output.push_str(&format_system(value, original_version, unstable)?),
                 "sources" => output.push_str(&format_sources(value)?),
                 "dependencies" => output.push_str(&format_dependencies(value)?),
                 "packages" => output.push_str(&format_packages(value)?),
                 "build" => output.push_str(&format_build(value)?),
                 "bundles" => output.push_str(&format_bundles(value)?),
-                "outputs" => output.push_str(&format_outputs(value)?),
+                "outputs" => output.push_str(&format_outputs(value, skip_needs)?),
                 "resolution" => output.push_str(&format_resolution(value)?),
                 _ => {}
             }
@@ -107,7 +153,7 @@ fn format_root(mapping: &Mapping, is_system: bool, original_version: Option<&str
     Ok(output)
 }
 
-fn format_package(value: &Value, original_version: Option<&str>) -> io::Result<String> {
+fn format_package(value: &Value, original_version: Option<&str>, unstable: bool) -> io::Result<String> {
     let mapping = value
         .as_mapping()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "package must be a mapping"))?;
@@ -129,6 +175,11 @@ fn format_package(value: &Value, original_version: Option<&str>) -> io::Result<S
     ];
 
     for field in fields {
+        // skip checksum for unstable manifests
+        if unstable && field == "checksum" {
+            continue;
+        }
+
         let key = Value::String(field.to_string());
         if let Some(val) = mapping.get(&key) {
             let formatted = if field == "version" {
@@ -143,7 +194,7 @@ fn format_package(value: &Value, original_version: Option<&str>) -> io::Result<S
     Ok(output)
 }
 
-fn format_system(value: &Value, original_version: Option<&str>) -> io::Result<String> {
+fn format_system(value: &Value, original_version: Option<&str>, unstable: bool) -> io::Result<String> {
     let mapping = value
         .as_mapping()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "system must be a mapping"))?;
@@ -164,6 +215,11 @@ fn format_system(value: &Value, original_version: Option<&str>) -> io::Result<St
     ];
 
     for field in fields {
+        // skip checksum for unstable manifests
+        if unstable && field == "checksum" {
+            continue;
+        }
+
         let key = Value::String(field.to_string());
         if let Some(val) = mapping.get(&key) {
             let formatted = if field == "version" {
@@ -421,7 +477,7 @@ fn format_bundles(value: &Value) -> io::Result<String> {
     Ok(output)
 }
 
-fn format_outputs(value: &Value) -> io::Result<String> {
+fn format_outputs(value: &Value, skip_needs: bool) -> io::Result<String> {
     let mapping = value
         .as_mapping()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "outputs must be a mapping"))?;
@@ -478,17 +534,20 @@ fn format_outputs(value: &Value) -> io::Result<String> {
                                         format_scalar(path)
                                     ));
 
-                                    if let Some(needs) = file_map.get(&needs_key) {
-                                        if let Some(needs_seq) = needs.as_sequence() {
-                                            output.push_str("      needs:\n");
-                                            // sort needs alphabetically
-                                            let mut needs_list: Vec<&str> = needs_seq
-                                                .iter()
-                                                .filter_map(|v| v.as_str())
-                                                .collect();
-                                            needs_list.sort_by(|a, b| natural_cmp(a, b));
-                                            for need in needs_list {
-                                                output.push_str(&format!("      - {}\n", need));
+                                    // skip needs for unstable/bootstrap manifests
+                                    if !skip_needs {
+                                        if let Some(needs) = file_map.get(&needs_key) {
+                                            if let Some(needs_seq) = needs.as_sequence() {
+                                                output.push_str("      needs:\n");
+                                                // sort needs alphabetically
+                                                let mut needs_list: Vec<&str> = needs_seq
+                                                    .iter()
+                                                    .filter_map(|v| v.as_str())
+                                                    .collect();
+                                                needs_list.sort_by(|a, b| natural_cmp(a, b));
+                                                for need in needs_list {
+                                                    output.push_str(&format!("      - {}\n", need));
+                                                }
                                             }
                                         }
                                     }
