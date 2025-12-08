@@ -1,0 +1,51 @@
+package:
+  schema: 1
+  name: Bootstrap Test
+  slug: test
+  namespace: bootstrap/phase1
+  version: "1.0"
+  description: Test that phase0 toolchain works in chroot
+  homepage: https://example.com
+  checksum: 5b9e9ee26ea6a1c10786554c383b7d95fe7eb45048bd3f570361d469b55c7df8
+  seed: true
+
+sources: []
+
+dependencies:
+- name: toolchain
+  commit: x86_64/pkg/bootstrap/phase0/toolchain/1.0/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase0/m4/1.4.19/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase0/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase0/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase0/findutils/4.9.0/bundles/dev
+
+build:
+  environment: env/bootstrap-phase1.yaml
+
+  script: |
+    echo "Testing chroot environment..."
+    echo "PATH: $PATH"
+    ls -la /usr/bin/gcc /usr/bin/x86_64-2nex-linux-gnu-gcc 2>&1 || true
+
+    echo "Creating test program..."
+    echo '#include <stdio.h>' > ${WORK_DIR}/hello.c
+    echo 'int main() { printf("Hello from bootstrap!\\n"); return 0; }' >> ${WORK_DIR}/hello.c
+
+    x86_64-2nex-linux-gnu-gcc -o ${OUT_DIR}/hello ${WORK_DIR}/hello.c
+
+    echo "Test binary created"
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /hello

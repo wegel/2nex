@@ -6,7 +6,7 @@ package:
   version: 0.9.1
   description: Disk Usage/Free Utility - a better 'df' alternative
   homepage: https://github.com/muesli/duf
-  checksum: c4308ba0466f0549b0af3b83a73176bde59308094635a82b3adf4508d653567f
+  checksum: 0b10dd69c725d6d06cf10972659df9a3247f71bb37e70a07a7fe49fa5b962831
 
 sources:
 - name: duf
@@ -23,16 +23,14 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: go
   commit: x86_64/pkg/dev/lang/go/1.23.8/bundles/dev
 - name: ncurses
@@ -41,12 +39,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
 - name: attr
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [161:2401]
+  profile: [33:2165]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_duf} -C "${WORK_DIR}" --strip-components=1
@@ -66,8 +62,9 @@ build:
     mkdir -p ${OUT_DIR}/usr/bin
     install -m 755 duf ${OUT_DIR}/usr/bin/duf
 
+    strip --strip-all ${OUT_DIR}/usr/bin/duf
+
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

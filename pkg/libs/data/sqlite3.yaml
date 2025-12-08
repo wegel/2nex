@@ -6,7 +6,7 @@ package:
   version: 3.51.1
   description: Self-contained SQL database engine
   homepage: https://www.sqlite.org/
-  checksum: f4f8c493e13449b48bd9ae87ff4996733e09ab7916eecc505e631a8c84168c71
+  checksum: 90a1f4f7f7d4a828b0134f52f024ae2db0429f81b1601e8eb208ecc054f6a8cc
 
 sources:
 - name: sqlite3
@@ -18,14 +18,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: ncurses
@@ -36,24 +32,14 @@ dependencies:
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
-- name: xz
-  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: coreutils
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
-- name: sed
-  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
-- name: grep
-  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
 - name: gzip
@@ -63,7 +49,7 @@ dependencies:
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4098:1723, 6833:8978]
+  profile: [4271:1633, 6269:7990]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_sqlite3} -C "${WORK_DIR}" --strip-components=1
@@ -78,8 +64,9 @@ build:
     make
     make DESTDIR="${OUT_DIR}" install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

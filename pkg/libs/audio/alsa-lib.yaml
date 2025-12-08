@@ -6,7 +6,7 @@ package:
   version: 1.2.14
   description: ALSA library
   homepage: https://www.alsa-project.org/
-  checksum: 94dc10bbe87f37676628699b0abc9f872efd9856a9a4322cbb7bb39f87e3bf8a
+  checksum: 6c16b589c0fea703fcff1d6c3bf5120ec4533fbcb78ff5ba9fde0e1d9297091c
 
 sources:
 - name: alsa-lib
@@ -20,12 +20,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: libcap
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: ncurses
@@ -36,8 +34,6 @@ dependencies:
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
-- name: xz
-  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: bzip2
@@ -46,10 +42,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: make
@@ -61,7 +55,7 @@ dependencies:
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4146:1860, 8252:4551, 12353:5373, 16452:8875, 20595:9072, 24727:9259, 28872:11354, 32973:11895, 37069:12089, 40461:12275]
+  profile: [4146:1169, 8286:2751, 12389:3594, 16494:6433, 20626:6485, 24761:6536, 28866:7333, 31595:7458]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_alsa_lib} -C "${WORK_DIR}" --strip-components=1
@@ -75,8 +69,9 @@ build:
     make
     make DESTDIR="${OUT_DIR}" install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

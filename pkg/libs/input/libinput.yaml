@@ -6,7 +6,7 @@ package:
   version: 1.30.0
   description: Input device management and event handling library
   homepage: https://www.freedesktop.org/wiki/Software/libinput/
-  checksum: f115bd7bc80900dbf8920c698038c8b6b676fe8740bd7d5d909845216a62b84f
+  checksum: c9b35b9123aaa8cdd62beeb0537f3ef13e5bd80b9b6fc8d7ebbef7492b4c5a9b
 
 sources:
 - name: libinput
@@ -20,12 +20,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: libcap
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: meson
   commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
 - name: ninja
@@ -52,10 +50,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: libevdev
   commit: x86_64/pkg/libs/input/libevdev/1.13.3/bundles/dev
 - name: mtdev
@@ -65,7 +61,7 @@ dependencies:
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4100:771, 8243:1039, 12360:1220, 16468:5159, 20639:5281, 24776:5281, 28878:5349, 32974:5359, 37070:5370, 38862:5375]
+  profile: [4100:777, 8202:1039, 12330:1176, 16468:4916, 20639:5030, 24776:5031, 25422:5119]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -82,8 +78,9 @@ build:
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

@@ -6,7 +6,7 @@ package:
   version: 2.1.8
   description: A container monitor for podman and other OCI container runtimes
   homepage: https://github.com/containers/conmon
-  checksum: 12104935af7b22c21f797cbc84728e89b40b45adfdbabdab0b9588c6aa1b50fb
+  checksum: 4293ae4d33595b41b0efcaee69f9054b3739cb844a5b422ff44187724d3269fc
 
 sources:
 - name: conmon
@@ -23,8 +23,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: phase3
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: make
@@ -32,7 +32,7 @@ dependencies:
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gcc
@@ -45,16 +45,12 @@ dependencies:
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: acl
   commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: glib2
   commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
 - name: libseccomp
@@ -62,7 +58,7 @@ dependencies:
 - name: patch
   commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: pkgconf
-  commit: x86_64/pkg/bootstrap/phase3/pkgconf/2.2.0/bundles/dev
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: pcre2
   commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
 
@@ -90,7 +86,8 @@ build:
 
     # Set consistent timestamps for reproducible builds
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
 
 bundles:
   dev:

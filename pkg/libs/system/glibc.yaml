@@ -6,7 +6,8 @@ package:
   version: "2.39"
   description: The GNU C Library project provides the core libraries for the GNU system and GNU/Linux systems.
   homepage: https://www.gnu.org/software/libc/
-  checksum: dd0e5e5d360ab5a7c7e6311c295b53b37f90ccb4706c610f8c6bb58925b556c2
+  checksum: 0b07991d3a441a76a9718ebcbd1488dc32429f31bea62424eca781f598ebafef
+  seed: true
 
 sources:
 - name: glibc
@@ -20,20 +21,20 @@ sources:
   sha256: 0d0434459acbd2059a7a8da1f3304a84a86591f6ed69c6248fffa502b6edffe3
 
 dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/bootstrap/phase1/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
-- name: glibc-bootstrap
-  commit: x86_64/pkg/bootstrap/phase3/glibc-bootstrap/2.39/outputs/lib
-- name: gmp-bootstrap
-  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/outputs/lib
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/outputs/lib
-- name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
-- name: m4
-  commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
 - name: gawk
@@ -51,31 +52,15 @@ dependencies:
 - name: tar
   commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
 - name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
-- name: zlib
-  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/outputs/lib
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/outputs/lib
+  commit: x86_64/pkg/bootstrap/phase1/xz/5.4.6/bundles/dev
 - name: bison
-  commit: x86_64/pkg/bootstrap/phase2/bison/3.8.2/bundles/dev
-- name: ncurses
-  commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
-- name: gettext
-  commit: x86_64/pkg/bootstrap/phase2/gettext/0.22.5/bundles/dev
-- name: perl
-  commit: x86_64/pkg/bootstrap/phase2/perl/5.38.2/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/outputs/bin
+  commit: x86_64/pkg/bootstrap/phase1/bison/3.8.2/bundles/dev
 - name: python3
-  commit: x86_64/pkg/bootstrap/phase2/python3/3.12.2/bundles/dev
-- name: texinfo
-  commit: x86_64/pkg/bootstrap/phase2/texinfo/7.1/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/python3/3.12.2/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [283285:5125, 1132819:6747, 2551026:11203, 4245360:15122, 5661302:18188, 7078017:21972, 8492085:29693, 10615222:34405, 12739782:40527, 14150926:65331]
+  profile: [283457:5063, 1132917:6718, 2546215:11187, 4240581:15055, 5650907:18008, 7063810:21719, 8476367:29162, 10596583:33605, 12713673:39548, 14125833:56166]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_glibc} -C "${WORK_DIR}" --strip-components=1
@@ -176,7 +161,6 @@ bundles:
   - bin
   - conf
   - dev
-  - info
   - lib
   - locale
   - static
@@ -218,7 +202,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-    - path: /usr/bin/mtrace
     - path: /usr/bin/pcprofiledump
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -258,6 +241,7 @@ outputs:
 
   conf:
     files:
+    - path: /etc/nsswitch.conf
     - path: /etc/rpc
 
   dev:
@@ -740,7 +724,912 @@ outputs:
     - path: /usr/include/wctype.h
     - path: /usr/include/wordexp.h
 
-  i18n:
+  lib:
+    files:
+    - path: /etc/ld.so.cache
+    - path: /usr/bin/ld.so
+    - path: /usr/lib/Mcrt1.o
+    - path: /usr/lib/Scrt1.o
+    - path: /usr/lib/audit/sotruss-lib.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/crt1.o
+    - path: /usr/lib/crti.o
+    - path: /usr/lib/crtn.o
+    - path: /usr/lib/gconv/ANSI_X3.110.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ARMSCII-8.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ASMO_449.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/BIG5HKSCS.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/BIG5.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/BRF.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP737.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP770.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP771.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP772.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP773.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP774.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP775.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP932.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP1125.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP1250.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP1251.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP1252.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP1253.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP1254.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP1255.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP1256.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP1257.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP1258.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CP10007.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CSN_369103.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/CWI.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/DEC-MCS.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-AT-DE-A.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-AT-DE.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-CA-FR.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-DK-NO-A.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-DK-NO.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-ES-A.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-ES-S.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-ES.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-FI-SE-A.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-FI-SE.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-FR.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-IS-FRISS.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-IT.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-PT.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-UK.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EBCDIC-US.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ECMA-CYRILLIC.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EUC-CN.so
+      needs:
+      - /usr/lib/gconv/libGB.so
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EUC-JISX0213.so
+      needs:
+      - /usr/lib/gconv/libJISX0213.so
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EUC-JP-MS.so
+      needs:
+      - /usr/lib/gconv/libJIS.so
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EUC-JP.so
+      needs:
+      - /usr/lib/gconv/libJIS.so
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EUC-KR.so
+      needs:
+      - /usr/lib/gconv/libKSC.so
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/EUC-TW.so
+      needs:
+      - /usr/lib/gconv/libCNS.so
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/GB18030.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/GBBIG5.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/GBGBK.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/GBK.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/GEORGIAN-ACADEMY.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/GEORGIAN-PS.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/GOST_19768-74.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/GREEK-CCITT.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/GREEK7-OLD.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/GREEK7.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/HP-GREEK8.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/HP-ROMAN8.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/HP-ROMAN9.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/HP-THAI8.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/HP-TURKISH8.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM037.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM038.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM256.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM273.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM274.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM275.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM277.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM278.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM280.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM281.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM284.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM285.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM290.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM297.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM420.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM423.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM424.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM437.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM500.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM803.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM850.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM851.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM852.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM855.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM856.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM857.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM858.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM860.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM861.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM862.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM863.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM864.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM865.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM866NAV.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM866.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM868.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM869.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM870.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM871.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM874.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM875.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM880.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM891.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM901.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM902.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM903.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM904.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM905.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM918.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM921.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM922.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM930.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM932.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM933.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM935.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM937.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM939.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM943.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1004.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1008_420.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1008.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1025.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1026.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1046.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1047.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1097.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1112.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1122.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1123.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1124.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1129.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1130.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1132.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1133.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1137.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1140.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1141.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1142.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1143.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1144.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1145.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1146.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1147.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1148.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1149.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1153.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1154.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1155.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1156.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1157.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1158.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1160.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1161.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1162.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1163.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1164.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1166.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1167.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1364.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1371.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1388.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1390.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM1399.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM4517.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM4899.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM4909.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM4971.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM5347.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM9030.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM9066.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM9448.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM12712.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IBM16804.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/IEC_P27-1.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/INIS-8.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/INIS-CYRILLIC.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/INIS.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISIRI-3342.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO-2022-CN-EXT.so
+      needs:
+      - /usr/lib/gconv/libCNS.so
+      - /usr/lib/gconv/libGB.so
+      - /usr/lib/gconv/libISOIR165.so
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO-2022-CN.so
+      needs:
+      - /usr/lib/gconv/libCNS.so
+      - /usr/lib/gconv/libGB.so
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO-2022-JP-3.so
+      needs:
+      - /usr/lib/gconv/libJIS.so
+      - /usr/lib/gconv/libJISX0213.so
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO-2022-JP.so
+      needs:
+      - /usr/lib/gconv/libGB.so
+      - /usr/lib/gconv/libJIS.so
+      - /usr/lib/gconv/libKSC.so
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO-2022-KR.so
+      needs:
+      - /usr/lib/gconv/libKSC.so
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO-IR-197.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO-IR-209.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO646.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-1.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-2.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-3.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-4.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-5.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-6.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-7.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-8.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-9E.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-9.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-10.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-11.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-13.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-14.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-15.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO8859-16.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO_2033.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO_5427-EXT.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO_5427.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO_5428.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO_6937-2.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO_6937.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO_10367-BOX.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/ISO_11548-1.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/JOHAB.so
+      needs:
+      - /usr/lib/gconv/libKSC.so
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/KOI-8.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/KOI8-R.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/KOI8-RU.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/KOI8-T.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/KOI8-U.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/LATIN-GREEK-1.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/LATIN-GREEK.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/MAC-CENTRALEUROPE.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/MAC-IS.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/MAC-SAMI.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/MAC-UK.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/MACINTOSH.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/MIK.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/NATS-DANO.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/NATS-SEFI.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/PT154.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/RK1048.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/SAMI-WS2.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/SHIFT_JISX0213.so
+      needs:
+      - /usr/lib/gconv/libJISX0213.so
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/SJIS.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/T.61.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/TCVN5712-1.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/TIS-620.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/TSCII.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/UHC.so
+      needs:
+      - /usr/lib/gconv/libKSC.so
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/UNICODE.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/UTF-7.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/UTF-16.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/UTF-32.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/VISCII.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/gconv-modules
+    - path: /usr/lib/gconv/gconv-modules.d/gconv-modules-extra.conf
+    - path: /usr/lib/gconv/libCNS.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/libGB.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/libISOIR165.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/libJIS.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/libJISX0213.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gconv/libKSC.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/gcrt1.o
+    - path: /usr/lib/grcrt1.o
+    - path: /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/lib/libBrokenLocale.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libBrokenLocale.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libanl.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libanl.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libc.so
+    - path: /usr/lib/libc.so.6
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+    - path: /usr/lib/libc_malloc_debug.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libc_malloc_debug.so.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libdl.so.2
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libm.so
+    - path: /usr/lib/libm.so.6
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libmemusage.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libmvec.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libmvec.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libnsl.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnss_compat.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnss_compat.so.2
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnss_db.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnss_db.so.2
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnss_dns.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libnss_files.so.2
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnss_hesiod.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnss_files.so.2
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libnss_hesiod.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnss_files.so.2
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libpcprofile.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libpthread.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libresolv.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libresolv.so.2
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/librt.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libthread_db.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libthread_db.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libutil.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/rcrt1.o
+    - path: /var/lib/nss_db/Makefile
+
+  locale:
+    files:
+    - path: /usr/share/locale/locale.alias
+
+  misc:
     files:
     - path: /usr/share/i18n/charmaps/ANSI_X3.4-1968.gz
     - path: /usr/share/i18n/charmaps/ANSI_X3.110-1983.gz
@@ -1342,193 +2231,6 @@ outputs:
     - path: /usr/share/i18n/locales/zh_TW
     - path: /usr/share/i18n/locales/zu_ZA
 
-  info:
-    files:
-    - path: /usr/share/info/dir
-    - path: /usr/share/info/libc.info
-    - path: /usr/share/info/libc.info-1
-    - path: /usr/share/info/libc.info-2
-    - path: /usr/share/info/libc.info-3
-    - path: /usr/share/info/libc.info-4
-    - path: /usr/share/info/libc.info-5
-    - path: /usr/share/info/libc.info-6
-    - path: /usr/share/info/libc.info-7
-    - path: /usr/share/info/libc.info-8
-    - path: /usr/share/info/libc.info-9
-    - path: /usr/share/info/libc.info-10
-    - path: /usr/share/info/libc.info-11
-    - path: /usr/share/info/libc.info-12
-    - path: /usr/share/info/libc.info-13
-    - path: /usr/share/info/libc.info-14
-    - path: /usr/share/info/libc.info-15
-    - path: /usr/share/info/libc.info-16
-    - path: /usr/share/info/libc.info-17
-    - path: /usr/share/info/libc.info-18
-    - path: /usr/share/info/libc.info-19
-
-  lib:
-    files:
-    - path: /etc/ld.so.cache
-    - path: /usr/bin/ld.so
-    - path: /usr/lib/Mcrt1.o
-    - path: /usr/lib/Scrt1.o
-    - path: /usr/lib/audit/sotruss-lib.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/crt1.o
-    - path: /usr/lib/crti.o
-    - path: /usr/lib/crtn.o
-    - path: /usr/lib/gcrt1.o
-    - path: /usr/lib/grcrt1.o
-    - path: /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libBrokenLocale.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libBrokenLocale.so.1
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libanl.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libanl.so.1
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libc.so
-    - path: /usr/lib/libc.so.6
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-    - path: /usr/lib/libc_malloc_debug.so
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libc_malloc_debug.so.0
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libdl.so.2
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libm.so
-    - path: /usr/lib/libm.so.6
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libmemusage.so
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libmvec.so
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/libm.so.6
-    - path: /usr/lib/libmvec.so.1
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/libm.so.6
-    - path: /usr/lib/libnsl.so.1
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libnss_compat.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libnss_compat.so.2
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libnss_db.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libnss_db.so.2
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libnss_dns.so.2
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/libresolv.so.2
-    - path: /usr/lib/libnss_files.so.2
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libnss_hesiod.so
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/libnss_files.so.2
-      - /usr/lib/libresolv.so.2
-    - path: /usr/lib/libnss_hesiod.so.2
-      needs:
-      - /usr/lib/libc.so.6
-      - /usr/lib/libnss_files.so.2
-      - /usr/lib/libresolv.so.2
-    - path: /usr/lib/libpcprofile.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libpthread.so.0
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libresolv.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libresolv.so.2
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/librt.so.1
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libthread_db.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libthread_db.so.1
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libutil.so.1
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/rcrt1.o
-    - path: /var/lib/nss_db/Makefile
-
-  locale:
-    files:
-    - path: /usr/share/locale/be/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/bg/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/ca/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/cs/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/da/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/de/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/el/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/en_GB/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/eo/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/es/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/fi/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/fr/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/gl/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/hr/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/hu/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/ia/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/id/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/it/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/ja/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/ka/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/ko/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/locale.alias
-    - path: /usr/share/locale/lt/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/nb/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/nl/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/pl/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/pt/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/pt_BR/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/ro/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/ru/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/rw/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/sk/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/sl/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/sr/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/sv/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/tr/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/uk/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/vi/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/zh_CN/LC_MESSAGES/libc.mo
-    - path: /usr/share/locale/zh_TW/LC_MESSAGES/libc.mo
-
   static:
     files:
     - path: /usr/lib/libBrokenLocale.a
@@ -1547,6 +2249,12 @@ outputs:
     - path: /usr/lib/libutil.a
 
 resolution:
+  /usr/lib/gconv/libCNS.so: self
+  /usr/lib/gconv/libGB.so: self
+  /usr/lib/gconv/libISOIR165.so: self
+  /usr/lib/gconv/libJIS.so: self
+  /usr/lib/gconv/libJISX0213.so: self
+  /usr/lib/gconv/libKSC.so: self
   /usr/lib/ld-linux-x86-64.so.2: self
   /usr/lib/libc.so.6: self
   /usr/lib/libm.so.6: self

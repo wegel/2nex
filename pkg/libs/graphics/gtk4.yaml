@@ -18,14 +18,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: ncurses
@@ -44,16 +40,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
-- name: sed
-  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
-- name: grep
-  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: bzip2
   commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
 - name: meson
@@ -63,7 +51,7 @@ dependencies:
 - name: python3
   commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
 - name: pkgconf
-  commit: x86_64/pkg/bootstrap/phase3/pkgconf/2.2.0/bundles/dev
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: glib2
   commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
 - name: libffi
@@ -116,10 +104,6 @@ dependencies:
   commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
 - name: librsvg
   commit: x86_64/pkg/libs/graphics/librsvg/2.61.3/bundles/dev
-- name: libjpeg-turbo
-  commit: x86_64/pkg/libs/graphics/libjpeg-turbo/3.1.2/bundles/dev
-- name: libtiff
-  commit: x86_64/pkg/libs/graphics/libtiff/4.7.1/bundles/dev
 - name: libxml2
   commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
 - name: xorgproto
@@ -132,12 +116,10 @@ dependencies:
   commit: x86_64/pkg/libs/x11/libxau/1.0.12/bundles/dev
 - name: libxdmcp
   commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
-- name: file
-  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [8243:2430, 20610:2864, 41225:3902, 70096:6581, 90736:9158, 115509:12281, 136177:14546, 169287:73788, 202282:74058, 224490:74294]
+  profile: [4134:2144, 16492:2778, 37232:3448, 62073:5942, 82767:8050, 99326:10115, 119941:12616, 148738:15813, 177644:71875, 197098:72118]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_gtk4} -C "${WORK_DIR}" --strip-components=1
@@ -168,9 +150,9 @@ build:
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
-    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

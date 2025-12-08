@@ -6,7 +6,7 @@ package:
   version: 0.1.0
   description: Simple tiling Wayland compositor based on dwl
   homepage: https://github.com/wegel/vwl
-  checksum: 5ed5d824b3776c383101b4117b6aedb01b4bcbd60b8df4d2db37f9b2f6560d21
+  checksum: e3b23618b48276924af968a4bbb58aa5bce830df562360c6d1cc72ed46274683
 
 sources:
 - name: vwl
@@ -19,7 +19,7 @@ dependencies:
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
 - name: pkgconf
@@ -40,10 +40,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: wlroots
   commit: x86_64/pkg/libs/wayland/wlroots/0.19.2/bundles/dev
 - name: wayland
@@ -123,7 +121,7 @@ dependencies:
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4316:28, 6333:747]
+  profile: [4275:30, 5915:763]
 
   script: |
     # doesn't build correctly with LTO
@@ -138,8 +136,9 @@ build:
 
     make PREFIX=/usr DESTDIR="${OUT_DIR}" install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

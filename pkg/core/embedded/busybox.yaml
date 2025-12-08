@@ -14,54 +14,46 @@ sources:
   sha256: b8cc24c9574d809e7279c3be349795c5d5ceb6fdf19ca709f80cde50e47de314
 
 dependencies:
-- name: phase3
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
-- name: zlib
-  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
-- name: bzip2
-  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: gmp-bootstrap
-  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
-- name: attr
-  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
-- name: acl
-  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
-- name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
-- name: ncurses
-  commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
-- name: sed
-  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
-- name: grep
-  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
-- name: bash
-  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
-- name: findutils
-  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
-- name: make
-  commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
-- name: tar
-  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
-- name: diffutils
-  commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4102:1324, 16515:1326, 33045:1328, 57814:1331, 74356:2862, 90884:2864, 111518:2867, 136162:5583, 165014:9061, 178998:10012]
+  profile: [4102:1464, 16515:1464, 33045:1465, 53686:1465, 74356:3103, 90884:3104, 107391:3104, 136268:6047, 165150:9503, 178925:10639]
 
   script: |
     set -eu
@@ -103,8 +95,9 @@ build:
     mkdir -p "${OUT_DIR}"/{etc,proc,sys,dev,tmp,run}
     chmod 1777 "${OUT_DIR}/tmp"
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries "${OUT_DIR}"
 
 bundles:
   bin:

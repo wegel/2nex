@@ -6,7 +6,7 @@ package:
   version: 2.14.1
   description: FreeType font rendering library
   homepage: https://freetype.org/
-  checksum: 5dafef0db1a4898d4691adc46c216d0ef9d70da5171c303f6e342acc71d125a1
+  checksum: 086189ed86a5f31c6d4e2a480248206a3c3960521309a0d6cab664c4263d39cb
 
 sources:
 - name: freetype
@@ -18,14 +18,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: meson
   commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
 - name: ninja
@@ -52,10 +48,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: libpng
   commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
 - name: bzip2
@@ -63,7 +57,7 @@ dependencies:
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4151:2498, 8257:11093, 12414:11167, 16510:11180, 18174:11186]
+  profile: [4151:866, 8257:8093, 10750:8141]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -78,8 +72,9 @@ build:
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

@@ -6,7 +6,7 @@ package:
   version: 1.1.42
   description: XSLT C library and tools
   homepage: https://gitlab.gnome.org/GNOME/libxslt
-  checksum: b819d0a42c8b919c57089aa88643e8facc1f7df083023712c269390c8f93beaa
+  checksum: 51580debecfb2979957c7c825fb7ede217ac9a51effbac0cc9b80251c58fb08f
 
 sources:
 - name: libxslt
@@ -20,10 +20,6 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
-- name: gzip
-  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: xz
@@ -33,13 +29,11 @@ dependencies:
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
-- name: pkgconf
-  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: sed
   commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
 - name: gawk
@@ -59,15 +53,11 @@ dependencies:
 - name: libcap
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
 - name: gmp
-  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4099:888, 8225:4062, 12330:5341, 16439:6134, 20563:6164, 24701:6253, 27517:6285]
+  profile: [4099:925, 8207:3334, 12304:4247, 16408:5449, 20535:5479, 21531:5542]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_libxslt} -C "${WORK_DIR}" --strip-components=1
@@ -79,8 +69,9 @@ build:
 
     make DESTDIR="${OUT_DIR}" install
 
-    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
   dev:

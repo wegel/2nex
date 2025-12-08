@@ -7,6 +7,7 @@ package:
   description: A stream editor
   homepage: https://www.gnu.org/software/sed/
   checksum: 5c465fe1239358cd6370a104969397bf27e95bb79f8fec4c2a8ddf2685546d2a
+  seed: true
 
 sources:
 - name: sed
@@ -14,12 +15,30 @@ sources:
   sha256: 6e226b732e1cd739464ad6862bd1a1aba42d7982922da7a53519631d24975181
 
 dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/bootstrap/phase1/zlib/1.3.1/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: texinfo
+  commit: x86_64/pkg/cli/text/texinfo/7.1/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
-- name: phase3
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: gawk
   commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
 - name: grep
@@ -30,42 +49,12 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
 - name: tar
   commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
-- name: perl
-  commit: x86_64/pkg/bootstrap/phase2/perl/5.38.2/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
-- name: texinfo
-  commit: x86_64/pkg/bootstrap/phase2/texinfo/7.1/bundles/dev
 - name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
-- name: bzip2
-  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
-- name: zlib
-  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
-- name: file
-  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: gmp-bootstrap
-  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
-- name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
-- name: glibc
-  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
-- name: attr
-  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
-- name: acl
-  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/xz/5.4.6/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4106:2709, 8229:5811, 12329:7865, 16435:11517, 20559:17695, 24685:20321, 28824:22124, 32881:22483]
+  profile: [4106:2603, 8229:5657, 12329:7621, 16435:9734, 20559:14576, 24677:16538, 28824:18238, 32826:18463]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_sed} -C "${WORK_DIR}" --strip-components=1
@@ -79,8 +68,9 @@ build:
     install -d -m755           ${OUT_DIR}/usr/share/doc/sed-4.9
     install -m644 doc/sed.html ${OUT_DIR}/usr/share/doc/sed-4.9
 
-    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
 bundles:
   dev:

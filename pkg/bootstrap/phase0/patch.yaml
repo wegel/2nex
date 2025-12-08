@@ -1,0 +1,66 @@
+package:
+  schema: 1
+  name: Patch
+  slug: patch
+  namespace: bootstrap/phase0
+  version: 2.7.6
+  description: A utility to apply patch files to original sources
+  homepage: https://savannah.gnu.org/projects/patch/
+  stable_checksum: false
+  seed: true
+
+sources:
+- name: patch
+  url: https://ftp.gnu.org/gnu/patch/patch-2.7.6.tar.xz
+  sha256: ac610bda97abe0d9f6b7c963255a11dcb196c25e337c61f94e4778d632f1d8fd
+
+dependencies:
+- name: toolchain
+  commit: x86_64/pkg/bootstrap/phase0/toolchain/1.0/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase0/m4/1.4.19/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase0/coreutils/9.5/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/bootstrap/phase0/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/bootstrap/phase0/file/5.45/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase0/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase0/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase0/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/bootstrap/phase0/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase0/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase0/sed/4.9/bundles/dev
+
+build:
+  environment: env/bootstrap.yaml
+
+  profile: [4112:1663, 8242:2839, 12342:4047, 16454:4693, 20600:5800, 24707:6595, 28808:7855, 32914:9035, 35365:9088]
+  script: |
+    tar --no-same-owner -xf ${SOURCE_patch} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr   \
+      --host=${TARGET} \
+      --build=$(build-aux/config.guess)
+
+    make
+    make DESTDIR=${OUT_DIR} install
+    rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/patch

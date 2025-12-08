@@ -1,0 +1,47 @@
+package:
+  schema: 1
+  name: M4
+  slug: m4
+  namespace: bootstrap/phase0
+  version: 1.4.19
+  description: A macro processor
+  homepage: https://www.gnu.org/software/m4/
+  stable_checksum: false
+  seed: true
+
+sources:
+- name: m4
+  url: https://ftp.gnu.org/gnu/m4/m4-1.4.19.tar.xz
+  sha256: 63aede5c6d33b6d9b13511cd0be2cac046f2e70fd0a07aa9573a04a82783af96
+
+dependencies:
+- name: toolchain
+  commit: x86_64/pkg/bootstrap/phase0/toolchain/1.0/bundles/dev
+
+build:
+  environment: env/bootstrap.yaml
+
+  profile: [4109:3809, 8229:5619, 12355:6689, 16459:7847, 20568:8459, 24689:9061, 28785:9555, 36979:12382, 41096:12673, 43872:12791]
+  script: |
+    tar --no-same-owner -xf ${SOURCE_m4} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr   \
+                --host=${TARGET} \
+                --build=$(build-aux/config.guess)
+
+    make -j$(nproc --ignore=1)
+    make DESTDIR=${OUT_DIR} install
+
+    rm -rf ${OUT_DIR}/usr/share
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/m4

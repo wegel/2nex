@@ -6,7 +6,7 @@ package:
   version: 1.13.3
   description: Wrapper library for evdev devices
   homepage: https://www.freedesktop.org/wiki/Software/libevdev/
-  checksum: d2d97e6bd2155bf3d0c342fa5c087e32a7c248c84ad3c35d176151205230746f
+  checksum: 7efa7fcfae76488673ee4971838b685df8accb5abd32203d0da14cf8256134c0
 
 sources:
 - name: libevdev
@@ -19,15 +19,13 @@ dependencies:
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: meson
   commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
 - name: ninja
   commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
 - name: python3
   commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
-- name: pkgconf
-  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: ncurses
@@ -46,14 +44,12 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4120:1247, 4376:1250]
+  profile: [2968:1063]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -68,8 +64,9 @@ build:
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

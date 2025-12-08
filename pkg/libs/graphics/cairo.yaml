@@ -6,7 +6,7 @@ package:
   version: 1.18.4
   description: 2D graphics library with support for multiple output devices
   homepage: https://cairographics.org/
-  checksum: a318df1ed1a7b92f5a4bea46d93dac50d009d5314e34ed7e5d9ba2fa0c8b4067
+  checksum: 3819690b2758e67077f7ee74a214aedf962ef66628615b0d7ce3f0f2f9622dcb
 
 sources:
 - name: cairo
@@ -18,14 +18,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: meson
   commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
 - name: ninja
@@ -52,10 +48,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: pixman
   commit: x86_64/pkg/libs/graphics/pixman/0.46.4/bundles/dev
 - name: freetype
@@ -70,18 +64,14 @@ dependencies:
   commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
 - name: glib2
   commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: pcre2
   commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
 - name: libffi
   commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
-- name: util-linux
-  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4126:3350, 8251:3484, 12347:4254, 16470:4787, 20590:5288, 24711:16022, 28810:16023, 37040:17133, 41172:17345, 45000:17388]
+  profile: [4126:2786, 8251:2837, 12356:3116, 16477:3345, 20594:3572, 24711:13220, 28810:13220, 32924:13220, 41172:14555, 41288:14603]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -100,8 +90,9 @@ build:
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

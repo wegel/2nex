@@ -6,7 +6,7 @@ package:
   version: 0.3.0
   description: EDID and DisplayID library
   homepage: https://gitlab.freedesktop.org/emersion/libdisplay-info
-  checksum: 0bff6ec68b06124231493b35a438752503c1f8c91864773fe083baba9ac54a03
+  checksum: 1794573febd6fa6985431981a8813a67f88f9969cf87605eebc58a78b141f359
 
 sources:
 - name: libdisplay-info
@@ -19,15 +19,13 @@ dependencies:
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: meson
   commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
 - name: ninja
   commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
 - name: python3
   commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
-- name: pkgconf
-  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: ncurses
@@ -46,16 +44,14 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: hwdata
   commit: x86_64/pkg/libs/graphics/hwdata/0.402/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4124:2355, 6213:2384]
+  profile: [4130:2937, 4811:2966]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -68,8 +64,9 @@ build:
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

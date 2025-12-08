@@ -6,7 +6,7 @@ package:
   version: 1.5.0
   description: Select a region in a Wayland compositor
   homepage: https://github.com/emersion/slurp
-  checksum: 7187b68fb6f4546b67c079eb927c6ecff1b978ab05aed421d02ad0838826776c
+  checksum: 61ec1ac7cb66d7d572907723fa75111a0b3ecf64e8ad96a76d23d9fc7555bec4
 
 sources:
 - name: slurp
@@ -16,12 +16,8 @@ sources:
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
@@ -38,10 +34,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
 - name: attr
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: meson
@@ -96,8 +92,9 @@ build:
     ninja -C build
     DESTDIR=${OUT_DIR} ninja -C build install
 
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/slurp
+
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:
@@ -107,3 +104,18 @@ outputs:
   bin:
     files:
     - path: /usr/bin/slurp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcairo.so.2
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libxkbcommon.so.0
+
+resolution:
+  /usr/lib/libcairo.so.2: cairo
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libxkbcommon.so.0: libxkbcommon
+  /usr/lib/libwayland-client.so.0: wayland
+  /usr/lib/libwayland-cursor.so.0: wayland

@@ -6,7 +6,7 @@ package:
   version: "1.23"
   description: GNU dbm is a set of database routines that use extensible hashing
   homepage: https://www.gnu.org/software/gdbm/
-  checksum: ec70248e0f148dacbb474fa0854d7ba870e0e3f62b256ba2afd4d635c777e9f1
+  checksum: b02f8b63425ae7991ee8ab5b9ae8d320ec4133daf0b8e5d569aa6fa76e225881
 
 sources:
 - name: gdbm
@@ -14,58 +14,48 @@ sources:
   sha256: 74b1081d21fff13ae4bd7c16e5d6e504a4c26f7cde1dca0d963a484174bbcacd
 
 dependencies:
-- name: bash
-  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
-- name: sed
-  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
-- name: grep
-  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
-- name: findutils
-  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
-- name: phase3
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
-- name: gzip
-  commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
-- name: make
-  commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
-- name: tar
-  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
-- name: texinfo
-  commit: x86_64/pkg/bootstrap/phase2/texinfo/7.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: zlib
-  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
-- name: bzip2
-  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
-- name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
-- name: file
-  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: gmp-bootstrap
-  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
 - name: attr
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: acl
   commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: gcc
-  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
-- name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
-- name: glibc
-  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4097:848, 8205:2112, 12306:3896, 16486:4106, 18309:4191]
+  profile: [4148:922, 8261:2970, 12391:4933, 16506:5185, 17682:5233]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -77,8 +67,9 @@ build:
     make
     make DESTDIR=$OUT_DIR install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:
@@ -123,7 +114,6 @@ outputs:
 
   info:
     files:
-    - path: /usr/share/info/dir
     - path: /usr/share/info/gdbm.info
 
   lib:

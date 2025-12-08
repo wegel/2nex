@@ -66,16 +66,8 @@ dependencies:
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: acl
   commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
 - name: coreutils
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
-- name: phase3
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
-- name: grep
-  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
 - name: sed
@@ -83,15 +75,11 @@ dependencies:
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: gmp-bootstrap
-  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: xz
@@ -99,35 +87,31 @@ dependencies:
 - name: ncurses
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
 - name: cmake
-  commit: x86_64/pkg/dev/build/cmake/3.21.2/bundles/dev
-- name: ninja
-  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
-- name: diffutils
-  commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
-- name: gettext
-  commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: bzip2
   commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
 - name: zstd
   commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
-- name: expat
-  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
-- name: perl
-  commit: x86_64/pkg/bootstrap/phase2/perl/5.38.2/bundles/dev
-- name: strip-nondeterminism
-  commit: x86_64/pkg/bootstrap/phase3/strip-nondeterminism/1.13.0/bundles/dev
 - name: luajit
   commit: x86_64/pkg/dev/lang/luajit/2.1-20241113/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: file
-  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/dev
+- name: libarchive
+  commit: x86_64/pkg/libs/archive/libarchive/3.8.4/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4109:435, 8265:441, 20708:1041, 28952:3082, 41318:5082, 49546:5300, 57822:5479, 74343:6238, 86860:12473, 95960:55903]
+  profile: [4106:517, 8229:523, 20580:1197, 29059:3215, 41462:5422, 49699:5638, 57933:5816, 74452:6565, 86839:12556, 94830:19406]
 
   script: |
     # neovim doesn't build correctly with LTO
@@ -277,8 +261,8 @@ build:
     make DESTDIR="${OUT_DIR}" install
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
-    2nex_strip_binaries ${OUT_DIR}
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
 
 bundles:
   dev:

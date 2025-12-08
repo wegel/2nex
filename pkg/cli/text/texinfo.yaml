@@ -6,7 +6,8 @@ package:
   version: "7.1"
   description: GNU documentation system for online information and printed output
   homepage: https://www.gnu.org/software/texinfo/
-  checksum: 610f52b5b9fa0641ccb0f37cce6edcd37ea70b551ddcd3920283aacae85f0ddb
+  checksum: 6918936ed121de0df1ad62bc529969af71f65881a8dd67a614db78a4b23b2086
+  seed: true
 
 sources:
 - name: texinfo
@@ -14,52 +15,42 @@ sources:
   sha256: deeec9f19f159e046fdf8ad22231981806dac332cc372f1c763504ad82b30953
 
 dependencies:
-- name: phase3
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
-- name: file
-  commit: x86_64/pkg/bootstrap/phase1/file/5.45/bundles/dev
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
-- name: gmp
-  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
-- name: sed
-  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
-- name: grep
-  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
-- name: bash
-  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
-- name: perl
-  commit: x86_64/pkg/bootstrap/phase2/perl/5.38.2/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
-- name: findutils
-  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
-- name: make
-  commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
-- name: tar
-  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
-- name: ncurses
-  commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
 - name: zlib
-  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
 - name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/xz/5.4.6/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4129:2178, 16475:7746, 28838:8139, 49398:8147, 65975:8157, 79502:8183, 97801:8222, 123373:8406, 144454:12027, 158986:13710]
+  profile: [8240:6707, 24716:12257, 49447:13304, 82429:13323, 113381:13382, 138306:13910, 167363:13945, 206731:14095, 249395:14942, 274459:16668]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -69,8 +60,9 @@ build:
     make
     make DESTDIR=$OUT_DIR install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:
@@ -101,6 +93,12 @@ outputs:
     - path: /usr/bin/texi2dvi
     - path: /usr/bin/texindex
 
+  dev:
+    files:
+    - path: /usr/lib/texinfo/MiscXS.la
+    - path: /usr/lib/texinfo/Parsetexi.la
+    - path: /usr/lib/texinfo/XSParagraph.la
+
   info:
     files:
     - path: /usr/share/info/info-stnd.info
@@ -113,6 +111,18 @@ outputs:
 
   lib:
     files:
+    - path: /usr/lib/texinfo/MiscXS.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/texinfo/Parsetexi.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/texinfo/XSParagraph.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x0a.pm
     - path: /usr/share/texinfo/lib/Text-Unidecode/lib/Text/Unidecode/x0b.pm
@@ -622,6 +632,7 @@ outputs:
     - path: /usr/share/texinfo/Texinfo/Convert/Unicode.pm
     - path: /usr/share/texinfo/Texinfo/Convert/Utils.pm
     - path: /usr/share/texinfo/Texinfo/Documentlanguages.pm
+    - path: /usr/share/texinfo/Texinfo/MiscXS.pm
     - path: /usr/share/texinfo/Texinfo/ModulePath.pm
     - path: /usr/share/texinfo/Texinfo/Parser.pm
     - path: /usr/share/texinfo/Texinfo/ParserNonXS.pm
@@ -629,6 +640,7 @@ outputs:
     - path: /usr/share/texinfo/Texinfo/Structuring.pm
     - path: /usr/share/texinfo/Texinfo/Transformations.pm
     - path: /usr/share/texinfo/Texinfo/Translations.pm
+    - path: /usr/share/texinfo/Texinfo/XS/parsetexi/Parsetexi.pm
     - path: /usr/share/texinfo/Texinfo/XSLoader.pm
     - path: /usr/share/texinfo/ext/epub3.pm
     - path: /usr/share/texinfo/ext/highlight_syntax.pm

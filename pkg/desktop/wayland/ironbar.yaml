@@ -6,7 +6,7 @@ package:
   version: 0.18.0-git
   description: Customizable GTK4 status bar for Wayland compositors
   homepage: https://github.com/JakeStanger/ironbar
-  checksum: 1c9785094cd782b6551dfea3bd81a100b5259646628f1c5dc95a00a04e8157c3
+  checksum: 7a0d4d55fbc29981a10ae07b25bd06e6f24ca02ae4f79ef23fe805f0a81781f5
 
 sources:
 - name: ironbar
@@ -23,8 +23,6 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
@@ -45,14 +43,14 @@ dependencies:
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: pkgconf
-  commit: x86_64/pkg/bootstrap/phase3/pkgconf/2.2.0/bundles/dev
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
 - name: gtk4
   commit: x86_64/pkg/libs/graphics/gtk4/4.20.3/bundles/dev
 - name: gtk4-layer-shell
@@ -174,8 +172,9 @@ build:
     mkdir -p ${OUT_DIR}/usr/bin
     install -m 755 target/x86_64-unknown-linux-gnu/release/ironbar ${OUT_DIR}/usr/bin/ironbar
 
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/ironbar
+
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

@@ -6,7 +6,7 @@ package:
   version: 24.1.4
   description: X server running as Wayland client
   homepage: https://wayland.freedesktop.org/xserver.html
-  checksum: 0826e282fedb09d21af55b592f080bcb7e6aac0bd5ff9d99a473ea2885d6279b
+  checksum: e5e8b1139c359d8ae05456adba577d71782e1b60b738837e61f30a36d070c9b9
 
 sources:
 - name: xwayland
@@ -18,14 +18,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: meson
   commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
 - name: ninja
@@ -52,12 +48,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: wayland
   commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
 - name: wayland-protocols
@@ -107,13 +99,13 @@ dependencies:
 - name: libepoxy
   commit: x86_64/pkg/libs/graphics/libepoxy/1.5.10/bundles/dev
 - name: zstd
-  commit: x86_64/pkg/bootstrap/phase3/zstd/1.5.6/bundles/dev
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
 - name: elfutils
   commit: x86_64/pkg/dev/util/elfutils/0.191/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4098:1598, 8222:1599, 12335:2242, 16507:2623, 20610:3065, 24747:3554, 28889:3555, 37189:4094, 41345:4336, 44150:5029]
+  profile: [4098:1674, 8222:1674, 12327:2288, 16432:2688, 20532:3069, 24682:3570, 28816:3588, 32976:3988, 41273:4290, 43382:4997]
 
   script: |
 
@@ -144,8 +136,9 @@ build:
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

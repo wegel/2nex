@@ -6,7 +6,8 @@ package:
   version: 1.2.1
   description: Multiple Precision Complex Library
   homepage: https://www.multiprecision.org/mpc/
-  checksum: 78e1b2497e5a8f569c72f0405735722bcd6a6d09452587112609e332c38b7723
+  checksum: a6c0156986d3116ceb5827d2e89bf63115728460d9b5008238b7574c178ed7e2
+  seed: true
 
 sources:
 - name: mpc
@@ -14,14 +15,18 @@ sources:
   sha256: ab642492f5cf882b74aa0cb730cd410a81edcdbec895183ce930e706c1c759b8
 
 dependencies:
-- name: bootstrap_tools
-  commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities-bootstrap
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: gawk
   commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
 - name: grep
@@ -34,26 +39,12 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
 - name: tar
   commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/outputs/lib
-- name: coreutils
-  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/outputs/bin
-- name: texinfo
-  commit: x86_64/pkg/bootstrap/phase2/texinfo/7.1/bundles/dev
 - name: zlib
-  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
-- name: bzip2
-  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/outputs/lib
+  commit: x86_64/pkg/bootstrap/phase1/zlib/1.3.1/bundles/dev
 - name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/outputs/lib
-- name: file
-  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: glibc
-  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/xz/5.4.6/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: mpfr
@@ -76,8 +67,9 @@ build:
     make check
     make DESTDIR="${OUT_DIR}" install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:
@@ -99,7 +91,6 @@ outputs:
 
   info:
     files:
-    - path: /usr/share/info/dir
     - path: /usr/share/info/mpc.info
 
   lib:

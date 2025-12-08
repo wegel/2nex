@@ -4,7 +4,7 @@ system:
   slug: bootable-systemd-nex
   version: 0.0.1
   description: Bootable system with systemd init, nex package manager, and /nex/pkg structure
-  checksum: f88063e53aeaf38fe0fc1f257307120439c0017805b205d64a319f45db3fecf1
+  checksum: 64a57e4496e37c2e18d2ff2bdc23cefc36ec6322802f783b970e14348efcb173
   nex_structure: true
 
 dependencies:
@@ -17,9 +17,7 @@ dependencies:
 - name: gcc-libs
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/outputs/lib
 - name: ncurses
-  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/outputs/lib
-- name: ncurses-terminfo
-  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/outputs/terminfo
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/runtime
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/outputs/lib
 - name: xz
@@ -40,28 +38,20 @@ dependencies:
   commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/outputs/lib
 - name: openssl
   commit: x86_64/pkg/dev/libs/openssl3/3.3.1/outputs/lib
-- name: util_linux-lib
-  commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/lib
 - name: nex-ld-shim
   commit: x86_64/pkg/core/nex/nex-ld-shim/0.0.1/outputs/lib
 
 packages:
-- name: systemd-bin
-  commit: x86_64/pkg/core/init/systemd/257.5/outputs/bin
-- name: systemd-lib
-  commit: x86_64/pkg/core/init/systemd/257.5/outputs/lib
-- name: systemd-conf
-  commit: x86_64/pkg/core/init/systemd/257.5/outputs/conf
-- name: dbus-broker-bin
-  commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/bin
-- name: dbus-broker-conf
-  commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/conf
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/minimal
+- name: dbus-broker
+  commit: x86_64/pkg/core/ipc/dbus-broker/37/bundles/full
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
 - name: coreutils
   commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
-- name: util-linux
-  commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/bin
+- name: util_linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/runtime
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/outputs/bin
 - name: grep
@@ -70,24 +60,20 @@ packages:
   commit: x86_64/pkg/cli/text/sed/4.9/outputs/bin
 - name: shadow
   commit: x86_64/pkg/core/userland/shadow/4.15.1/outputs/bin
-- name: kmod
-  commit: x86_64/pkg/core/kernel/kmod/32/outputs/bin
 - name: kbd
   commit: x86_64/pkg/core/userland/kbd/2.9.0/bundles/full
+- name: kmod
+  commit: x86_64/pkg/core/kernel/kmod/32/bundles/runtime
 - name: nex
   commit: x86_64/pkg/core/nex/nex/0.1.0/outputs/bin
-- name: git
-  commit: x86_64/pkg/dev/vcs/git/2.49.0/outputs/bin
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/outputs/bin
 - name: curl
   commit: x86_64/pkg/cli/net/curl/8.17.0/outputs/bin
 - name: ca-certificates
   commit: x86_64/pkg/apps/misc/ca-certificates/20251104/outputs/certs
-- name: openssh-bin
-  commit: x86_64/pkg/cli/net/openssh/9.9p1/outputs/bin
-- name: openssh-conf
-  commit: x86_64/pkg/cli/net/openssh/9.9p1/outputs/conf
+- name: openssh
+  commit: x86_64/pkg/cli/net/openssh/9.9p1/bundles/dev
 - name: linux-kernel
   commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/boot
 - name: linux-overlay
@@ -100,14 +86,11 @@ packages:
   commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/drv-net-core
 - name: linux-modules-meta
   commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/modules-meta
-- name: kmod-bin
-  commit: x86_64/pkg/core/kernel/kmod/32/outputs/bin
-- name: kmod-lib
-  commit: x86_64/pkg/core/kernel/kmod/32/outputs/lib
 - name: ldd
   commit: x86_64/pkg/libs/system/glibc/2.39/files/usr/bin/ldd
 
 build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
   script: |
     set -eux
     mkdir -p /target/etc

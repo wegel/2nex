@@ -1,0 +1,108 @@
+name: bootstrap-phase1
+description: Chroot environment for building deterministic phase1 bootstrap
+
+execution:
+  chroot: true
+
+paths:
+  work: 2nex/work
+  out: 2nex/out
+  inputs: inputs
+
+env:
+  HOME: /homeless/deterministic
+  LC_ALL: C
+  TZ: UTC
+  LANG: en_US.UTF-8
+  SOURCE_DATE_EPOCH: "1704067200"
+  GLIBC_TUNABLES: glibc.cpu.hwcaps=-RNDRAND
+  MAKEFLAGS: "-j{num_cpus}"
+  PATH: /usr/bin:/bin
+  TARGET: x86_64-2nex-linux-gnu
+  WORK_DIR: /2nex/work
+  OUT_DIR: /2nex/out
+  AR: gcc-ar
+  NM: gcc-nm
+  RANLIB: gcc-ranlib
+  CFLAGS: "-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -frandom-seed=424242 -flto=auto"
+  CXXFLAGS: "-march=x86-64 -mtune=generic -O2 -pipe -fno-plt -frandom-seed=424242 -flto=auto"
+  LDFLAGS: "-Wl,-O1,--sort-common,--as-needed,-z,relro,-z,now -flto=auto"
+
+preamble: |
+  if ! read -r current_hostname < /proc/sys/kernel/hostname; then
+      echo 'Warning: Could not read current hostname; forcing to 2nex-builder' >&2
+      current_hostname=""
+  fi
+
+  if [ "$current_hostname" != "2nex-builder" ]; then
+      echo 'Setting hostname to 2nex-builder'
+      if ! hostname 2nex-builder; then
+          echo 'Warning: Failed to run hostname command' >&2
+      fi
+  fi
+
+  mkdir -p {build_dir}/dev
+  for D in null zero random urandom tty console full; do
+      touch {build_dir}/dev/$D
+      mount --bind /dev/$D {build_dir}/dev/$D
+  done
+
+  mkdir -p {build_dir}/dev/pts
+  mount -t devpts devpts {build_dir}/dev/pts
+  ln -sf /dev/pts/ptmx {build_dir}/dev/ptmx
+
+  mkdir -p {build_dir}/proc
+  mount -t proc proc {build_dir}/proc
+
+  if [ -L {build_dir}/lib ]; then
+      rm -f {build_dir}/lib
+  fi
+
+  if [ -L {build_dir}/lib64 ] || [ -d {build_dir}/lib64 ]; then
+      rm -rf {build_dir}/lib64
+  fi
+
+  if [ -L {build_dir}/sbin ]; then
+      rm -f {build_dir}/sbin
+  fi
+
+  if [ -L {build_dir}/usr/lib64 ]; then
+      rm -f {build_dir}/usr/lib64
+  fi
+
+  if [ -L {build_dir}/usr/sbin ]; then
+      rm -f {build_dir}/usr/sbin
+  fi
+
+  mkdir -p {build_dir}/usr
+
+  if [ ! -e {build_dir}/bin ]; then
+      ln -sf /usr/bin {build_dir}/bin
+  fi
+
+  if [ ! -e {build_dir}/lib ]; then
+      ln -sf /usr/lib {build_dir}/lib
+  fi
+
+  if [ ! -e {build_dir}/sbin ]; then
+      ln -sf /usr/bin {build_dir}/sbin
+  fi
+
+  if [ ! -e {build_dir}/lib64 ]; then
+      ln -sf /usr/lib {build_dir}/lib64
+  fi
+
+  if [ ! -e {build_dir}/usr/lib64 ]; then
+      ln -sf lib {build_dir}/usr/lib64
+  fi
+
+  if [ ! -e {build_dir}/usr/sbin ]; then
+      ln -sf bin {build_dir}/usr/sbin
+  fi
+
+  # fix missing execute permissions on binaries
+  chmod -R +x {build_dir}/usr/bin {build_dir}/usr/libexec 2>/dev/null || true
+
+  # phase0 tools have /tmp/bootstrap paths hardcoded - symlink to root
+  mkdir -p {build_dir}/tmp
+  ln -sf / {build_dir}/tmp/bootstrap

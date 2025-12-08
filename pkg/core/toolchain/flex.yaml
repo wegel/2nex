@@ -6,7 +6,7 @@ package:
   version: 2.6.4
   description: A utility for generating programs that recognize patterns in text
   homepage: https://github.com/westes/flex
-  checksum: e946cdf4dc60f29f83e527c0c36b6d3d30a75b4137e9f51fb4767fa66c70ab7f
+  checksum: 48ed406ffcc2e7d3034c50d0a0962a75591021ab321151545299573e42882683
 
 sources:
 - name: flex
@@ -14,56 +14,52 @@ sources:
   sha256: e87aae032bf07c26f85ac0ed3250998c37621d95f8bd748b31f15b33c45ee995
 
 dependencies:
-- name: bootstrap_tools
-  commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
-- name: gmp-bootstrap
-  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
-- name: bash
-  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
-- name: findutils
-  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
-- name: grep
-  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
-- name: gzip
-  commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
-- name: make
-  commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
-- name: sed
-  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
-- name: tar
-  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
-- name: texinfo
-  commit: x86_64/pkg/bootstrap/phase2/texinfo/7.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: zlib
-  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
-- name: phase3
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
-- name: bzip2
-  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
-- name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
-- name: file
-  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: m4
-  commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+- name: texinfo
+  commit: x86_64/pkg/cli/text/texinfo/7.1/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [8207:2617, 17073:4261, 38047:6619, 63486:6679, 84642:6870, 106039:7070, 127076:7227, 156747:7629, 190144:7990, 208701:8803]
+  profile: [8232:2164, 16784:3171, 37783:5231, 63116:5287, 84272:5488, 105593:5701, 127092:5882, 156765:6238, 190172:6651, 208029:7400]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_flex} -C "${WORK_DIR}" --strip-components=1
@@ -77,8 +73,9 @@ build:
     ln -sfv flex   "${OUT_DIR}/usr/bin/lex"
     ln -sfv flex.1 "${OUT_DIR}/usr/share/man/man1/lex.1"
 
-    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries "${OUT_DIR}"
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
   dev:

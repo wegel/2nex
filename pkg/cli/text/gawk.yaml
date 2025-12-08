@@ -6,7 +6,8 @@ package:
   version: 5.3.0
   description: GNU awk, a pattern scanning and processing language
   homepage: https://www.gnu.org/software/gawk/
-  checksum: 9fbdcc5829e9b83db9b323c48bc4b5c6973fa58c3ea49c36d3b8b2dda02d0eec
+  checksum: 7b898cbaa319155fd1c3a9f0f39a9ded011efa26574d9d10f2fbdfe382a7f945
+  seed: true
 
 sources:
 - name: gawk
@@ -14,52 +15,38 @@ sources:
   sha256: ca9c16d3d11d0ff8c69d79dc0b47267e1329a69b39b799895604ed447d3ca90b
 
 dependencies:
-- name: findutils
-  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
-- name: bash
-  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
-- name: phase3
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
-- name: make
-  commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
-- name: tar
-  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
-- name: bootstrap_tools
-  commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
-- name: texinfo
-  commit: x86_64/pkg/bootstrap/phase2/texinfo/7.1/bundles/dev
-- name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
-- name: bzip2
-  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
-- name: zlib
-  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
-- name: file
-  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
-- name: sed
-  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
-- name: grep
-  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
 - name: gcc
-  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
-- name: gmp
-  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/bundles/dev
+- name: texinfo
+  commit: x86_64/pkg/cli/text/texinfo/7.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase1/xz/5.4.6/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4104:1160, 8220:4558, 16703:6858, 25181:7097, 33460:7105, 42314:7107, 50829:8376, 63896:8465, 76291:8953, 82455:9500]
+  profile: [4104:1228, 8219:4819, 16644:7206, 25122:7432, 33401:7443, 42255:7445, 50758:8760, 63801:8839, 76119:9333, 81098:9676]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_gawk} -C "${WORK_DIR}" --strip-components=1
@@ -71,8 +58,9 @@ build:
     make
     make DESTDIR=${OUT_DIR} install
 
-    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
 bundles:
   dev:
@@ -98,23 +86,17 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgmp.so.10
       - /usr/lib/libm.so.6
-      - /usr/lib/libmpfr.so.6
     - path: /usr/bin/gawk
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgmp.so.10
       - /usr/lib/libm.so.6
-      - /usr/lib/libmpfr.so.6
     - path: /usr/bin/gawk-5.3.0
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgmp.so.10
       - /usr/lib/libm.so.6
-      - /usr/lib/libmpfr.so.6
     - path: /usr/bin/gawkbug
     - path: /usr/libexec/awk/grcat
       needs:
@@ -165,9 +147,7 @@ outputs:
     - path: /usr/lib/gawk/intdiv.so
       needs:
       - /usr/lib/libc.so.6
-      - /usr/lib/libgmp.so.10
       - /usr/lib/libm.so.6
-      - /usr/lib/libmpfr.so.6
     - path: /usr/lib/gawk/ordchr.so
       needs:
       - /usr/lib/libc.so.6
@@ -191,9 +171,7 @@ outputs:
     - path: /usr/lib/gawk/rwarray.so
       needs:
       - /usr/lib/libc.so.6
-      - /usr/lib/libgmp.so.10
       - /usr/lib/libm.so.6
-      - /usr/lib/libmpfr.so.6
     - path: /usr/lib/gawk/time.so
       needs:
       - /usr/lib/libc.so.6
@@ -277,5 +255,3 @@ resolution:
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
   /usr/lib/libm.so.6: glibc
-  /usr/lib/libgmp.so.10: gmp
-  /usr/lib/libmpfr.so.6: mpfr

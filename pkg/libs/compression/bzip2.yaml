@@ -6,7 +6,8 @@ package:
   version: 1.0.8
   description: A freely available, patent free, high-quality data compressor
   homepage: https://sourceware.org/bzip2/
-  checksum: 147f373f24da362dec62dbe4ca1c76fb53b288ee95da351c18984c2b817c24dd
+  checksum: 9e9c454b7a50662e8802478365b72dcfb6b0787ef8d244d5f2d6ee32fda0e96c
+  seed: true
 
 sources:
 - name: bzip2
@@ -17,50 +18,32 @@ sources:
   sha256: 35e3bbd9642af51fef2a8a83afba040d272da42d7e3a251d8e43255a7b496702
 
 dependencies:
-- name: gmp-bootstrap
-  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/outputs/lib
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/outputs/lib
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/bundles/dev
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
 - name: coreutils
   commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
 - name: diffutils
   commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
-- name: bzip2
-  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/outputs/lib
-- name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/outputs/lib
-- name: zlib
-  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/outputs/lib
-- name: file
-  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
-- name: grep
-  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
 - name: gzip
   commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
 - name: make
   commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
-- name: patch
-  commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
 - name: sed
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+- name: patch
+  commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
 - name: tar
   commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/outputs/lib
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
-- name: 2nex-utilities-bootstrap
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
-- name: glibc
-  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
-- name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
@@ -86,8 +69,9 @@ build:
       ln -sfv bzip2 $i
     done
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

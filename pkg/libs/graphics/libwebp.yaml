@@ -6,7 +6,7 @@ package:
   version: 1.6.0
   description: WebP image format library
   homepage: https://developers.google.com/speed/webp
-  checksum: e9956a035b11464e8036f79e30cac1c0f980a281660937ca9e1822e56a24d91e
+  checksum: 47defa6492e58b7027a574ad86190deed3787352710fc0c2dc5093adc1989916
 
 sources:
 - name: libwebp
@@ -18,14 +18,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: ncurses
@@ -40,22 +36,12 @@ dependencies:
   commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
-- name: sed
-  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
-- name: grep
-  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: zstd
   commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
 - name: bzip2
@@ -63,7 +49,7 @@ dependencies:
 - name: openssl3
   commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
 - name: cmake
-  commit: x86_64/pkg/dev/build/cmake/3.21.2/bundles/dev
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
 - name: ninja
   commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
 - name: libjpeg-turbo
@@ -72,10 +58,18 @@ dependencies:
   commit: x86_64/pkg/libs/graphics/libtiff/4.7.1/bundles/dev
 - name: libpng
   commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/dev
+- name: libarchive
+  commit: x86_64/pkg/libs/archive/libarchive/3.8.4/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4128:699, 8275:994, 12426:1323, 16578:1556, 20731:2241, 24854:2288, 25174:2292]
+  profile: [4169:893, 8338:1198, 12481:1515, 16592:1732, 20691:2366, 23263:2406]
 
   script: |
     # disable LTO due to linking issues with libwebp extras
@@ -97,8 +91,9 @@ build:
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

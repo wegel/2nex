@@ -7,6 +7,7 @@ package:
   description: A package of M4 macros that produce shell scripts to automatically configure software source code packages
   homepage: https://www.gnu.org/software/autoconf/
   checksum: e99442d9082eb21dae8b3d01867e91df9bc002184f1640a0cbb7a29ff6d2cd38
+  seed: true
 
 sources:
 - name: autoconf
@@ -14,43 +15,39 @@ sources:
   sha256: ba885c1319578d6c94d46e9b0dceb4014caafe2490e437a0dbca3f270a223f5a
 
 dependencies:
-- name: findutils
-  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
-- name: bash
-  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
-- name: 2nex-utilities-bootstrap
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
-- name: make
-  commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
-- name: tar
-  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/outputs/bin
-- name: texinfo
-  commit: x86_64/pkg/bootstrap/phase2/texinfo/7.1/bundles/dev
-- name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
-- name: m4
-  commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
-- name: sed
-  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
-- name: grep
-  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
-- name: perl
-  commit: x86_64/pkg/bootstrap/phase2/perl/5.38.2/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: texinfo
+  commit: x86_64/pkg/cli/text/texinfo/7.1/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase1/xz/5.4.6/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4696:1204, 9421:1205, 13539:1217, 17658:1297, 21765:1312, 25863:1400, 26631:1411]
+  profile: [4660:1198, 8761:1200, 12862:1207, 16998:1279, 21210:1290, 22535:1337]
 
   script: |
-    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    tar --no-same-owner -xf ${SOURCE_autoconf} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
     ./configure --prefix=/usr
@@ -58,7 +55,6 @@ build:
     make DESTDIR=$OUT_DIR install
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

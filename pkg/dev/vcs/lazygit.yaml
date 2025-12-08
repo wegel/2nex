@@ -6,7 +6,7 @@ package:
   version: 0.44.1
   description: Simple terminal UI for git commands
   homepage: https://github.com/jesseduffield/lazygit
-  checksum: 8f74a3c71bf5edb2ba2b1e1e4e97960dbbd9aaf0c93ad12f1bb55b56817ff11e
+  checksum: 9b0814f11e72499bbb457a79b5334f5a708948c7e65c08adcb913e0c021717f9
 
 sources:
 - name: lazygit
@@ -23,16 +23,14 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: go
   commit: x86_64/pkg/dev/lang/go/1.23.8/bundles/dev
 - name: ncurses
@@ -41,10 +39,6 @@ dependencies:
   commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
 - name: attr
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: zlib
-  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
@@ -68,8 +62,9 @@ build:
     mkdir -p ${OUT_DIR}/usr/bin
     install -m 755 lazygit ${OUT_DIR}/usr/bin/lazygit
 
+    strip --strip-all ${OUT_DIR}/usr/bin/lazygit
+
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

@@ -1,8 +1,8 @@
 #!/bin/sh
-set -eux
+set -eu
 
 LOCAL_REPO=${REPO:-.nex/repo}
-ZUB=${ZUB:-./src/zub/target/debug/zub}
+ZUB=${ZUB:-zub}
 REF="${1}"
 # example: x86_64/pkg/cli/editors/neovim/0.11.0/outputs/bin
 

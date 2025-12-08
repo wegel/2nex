@@ -6,7 +6,7 @@ package:
   version: 1.9.0
   description: Lightweight Wayland notification daemon
   homepage: https://github.com/emersion/mako
-  checksum: ece73a459fefa4a35d1d9315f81bf51da5b459a6470e9e5658d80a41c5f7c78a
+  checksum: 18ecc132fd00b5e67483b0274c278eb2536c2bb1fb01725a13253dba3f67cbd8
 
 sources:
 - name: mako
@@ -16,12 +16,8 @@ sources:
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
@@ -41,7 +37,9 @@ dependencies:
 - name: libcap
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: meson
@@ -110,8 +108,9 @@ build:
     ninja -C build
     DESTDIR=${OUT_DIR} ninja -C build install
 
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/mako
+
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

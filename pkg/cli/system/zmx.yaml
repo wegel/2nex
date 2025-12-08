@@ -6,15 +6,15 @@ package:
   version: 0.0.2
   description: Session persistence for terminal processes
   homepage: https://github.com/neurosnap/zmx
-  checksum: 31b63f0742934123923ddbbec771a601174fc34792da8d134bf4b52d5e2c4f0b
+  checksum: d76d008603bd22818cead0dfdccef3b64739f5b343b26e37daa34be592ba869b
 
 sources:
 - name: zmx
   url: https://github.com/neurosnap/zmx/archive/4d70b4c97d254aa058e4774b6cb53a3ee9d3992d.tar.gz
   sha256: b4992c987cb92b8c638245a8f64ab1496a4af4d46fb1ca59e5e56d0e9c630a33
 - name: zig-deps
-  zig_zon: https://raw.githubusercontent.com/neurosnap/zmx/main/build.zig.zon
   sha256: 940b93da319105e921444d5dd08f942750c718d81b5e08fea7f42c43f32fed8f
+  zig_zon: https://raw.githubusercontent.com/neurosnap/zmx/main/build.zig.zon
 
 dependencies:
 - name: bash
@@ -23,8 +23,6 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: gzip
@@ -43,16 +41,14 @@ dependencies:
   commit: x86_64/pkg/dev/lang/zig-bin/0.15.2/bundles/dev
 - name: sed
   commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
-- name: file
-  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 - name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
 - name: bzip2
-  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
 - name: grep
-  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
@@ -75,12 +71,18 @@ build:
         sed -i 's/std\.fs\.accessAbsolute(b\.pathFromRoot/std.fs.cwd().access(b.pathFromRoot/g' $GHOSTTY_DIST
     fi
 
+    # zig needs C++ standard library headers for highway lib compilation
+    # note: do NOT add gcc's intrinsic headers (/usr/lib/gcc/.../include) - they conflict with zig's clang
+    export CPLUS_INCLUDE_PATH=/usr/include/c++/13.2.0:/usr/include/c++/13.2.0/x86_64-pc-linux-gnu:/usr/include
+
     zig build -Doptimize=ReleaseSafe --prefix "${OUT_DIR}/usr" \
+      --search-prefix /usr \
       --global-cache-dir "${ZIG_GLOBAL_CACHE_DIR}" \
       --cache-dir "${ZIG_LOCAL_CACHE_DIR}"
 
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/zmx
+
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

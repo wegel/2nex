@@ -6,7 +6,7 @@ package:
   version: 25.01.1
   description: A post-modern modal text editor
   homepage: https://helix-editor.com
-  checksum: ef1edc7eef0231fa8999520fc8e06911346500a6e5aeabb0b118df065351c9bd
+  checksum: de220aa827bc60ea8486ce33c2252b0c2fcf601420bad1446b6c0a1da2f372be
 
 sources:
 - name: helix
@@ -23,14 +23,12 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gcc
@@ -43,16 +41,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
 - name: attr
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
-- name: gmp
-  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
@@ -93,8 +85,9 @@ build:
     install -m 755 target/x86_64-unknown-linux-gnu/release/hx ${OUT_DIR}/usr/bin/hx
     cp -r runtime ${OUT_DIR}/usr/lib/helix/
 
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/hx
+
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

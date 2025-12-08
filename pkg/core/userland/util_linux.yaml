@@ -6,7 +6,7 @@ package:
   version: "2.40"
   description: A suite of essential utilities for any Linux system
   homepage: https://git.kernel.org/pub/scm/utils/util-linux/util-linux.git
-  checksum: 49ab7ee651c8df3391af16f3fffbfc22b8fdb9f3b5895b6465882a9396f54f1e
+  checksum: 5bacd33ed588511b6084d36696e60f4850ab0dd7e194bd87d6b7b71a7c18469d
 
 sources:
 - name: util_linux
@@ -14,54 +14,52 @@ sources:
   sha256: d57a626081f9ead02fa44c63a6af162ec19c58f53e993f206ab7c3a6641c2cd7
 
 dependencies:
-- name: bash
-  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
-- name: 2nex-utilities-bootstrap
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
-- name: bootstrap_tools
-  commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
-- name: strip-nondeterminism
-  commit: x86_64/pkg/bootstrap/phase3/strip-nondeterminism/1.13.0/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
-- name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
-- name: bzip2
-  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/outputs/lib
-- name: file
-  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: gmp-bootstrap
-  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/outputs/lib
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/outputs/lib
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/outputs/lib
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
-- name: sed
-  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
-- name: grep
-  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
-- name: perl
-  commit: x86_64/pkg/bootstrap/phase2/perl/5.38.2/bundles/dev
 - name: coreutils
-  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
-  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
-- name: make
-  commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
-- name: tar
-  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4141:1250, 8262:2135, 16504:9497, 24706:12306, 32953:13165, 41185:17383, 49534:17859, 61896:18022, 75279:25711, 80901:25885]
+  profile: [4141:1121, 8262:1922, 16504:7433, 24753:10210, 32986:10956, 41290:14723, 45393:14948, 57987:15007, 72055:15881, 75213:17035]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -90,9 +88,9 @@ build:
     mv ${OUT_DIR}/usr/sbin/* ${OUT_DIR}/usr/bin/
     rmdir ${OUT_DIR}/usr/sbin
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:
@@ -109,6 +107,10 @@ bundles:
   - locale
   - man
   - misc
+
+  runtime:
+  - bin
+  - lib
 
 outputs:
   bin:
@@ -147,6 +149,15 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+    - path: /usr/bin/cfdisk
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfdisk.so.1
+      - /usr/lib/libmount.so.1
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/libsmartcols.so.1
     - path: /usr/bin/chcpu
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -192,6 +203,7 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
     - path: /usr/bin/eject
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -218,6 +230,7 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libfdisk.so.1
+      - /usr/lib/libncursesw.so.6
       - /usr/lib/libsmartcols.so.1
     - path: /usr/bin/fincore
       needs:
@@ -276,6 +289,7 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
     - path: /usr/bin/hwclock
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -301,6 +315,12 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+    - path: /usr/bin/irqtop
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/libsmartcols.so.1
     - path: /usr/bin/isosize
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -348,6 +368,7 @@ outputs:
       - /usr/lib/libblkid.so.1
       - /usr/lib/libc.so.6
       - /usr/lib/libmount.so.1
+      - /usr/lib/libncursesw.so.6
       - /usr/lib/libsmartcols.so.1
     - path: /usr/bin/lsclocks
       needs:
@@ -427,6 +448,12 @@ outputs:
       - /usr/lib/libblkid.so.1
       - /usr/lib/libc.so.6
       - /usr/lib/libuuid.so.1
+    - path: /usr/bin/more
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmagic.so.1
+      - /usr/lib/libncursesw.so.6
     - path: /usr/bin/mount
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -517,11 +544,17 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+    - path: /usr/bin/setterm
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
     - path: /usr/bin/sfdisk
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libfdisk.so.1
+      - /usr/lib/libncursesw.so.6
       - /usr/lib/libsmartcols.so.1
     - path: /usr/bin/swaplabel
       needs:
@@ -554,6 +587,11 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+    - path: /usr/bin/ul
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
     - path: /usr/bin/umount
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -763,6 +801,7 @@ outputs:
     - path: /usr/share/man/man1/ipcmk.1
     - path: /usr/share/man/man1/ipcrm.1
     - path: /usr/share/man/man1/ipcs.1
+    - path: /usr/share/man/man1/irqtop.1
     - path: /usr/share/man/man1/kill.1
     - path: /usr/share/man/man1/last.1
     - path: /usr/share/man/man1/lastb.1
@@ -777,6 +816,7 @@ outputs:
     - path: /usr/share/man/man1/lsmem.1
     - path: /usr/share/man/man1/mcookie.1
     - path: /usr/share/man/man1/mesg.1
+    - path: /usr/share/man/man1/more.1
     - path: /usr/share/man/man1/mountpoint.1
     - path: /usr/share/man/man1/namei.1
     - path: /usr/share/man/man1/nsenter.1
@@ -790,8 +830,10 @@ outputs:
     - path: /usr/share/man/man1/scriptreplay.1
     - path: /usr/share/man/man1/setpgid.1
     - path: /usr/share/man/man1/setsid.1
+    - path: /usr/share/man/man1/setterm.1
     - path: /usr/share/man/man1/taskset.1
     - path: /usr/share/man/man1/uclampset.1
+    - path: /usr/share/man/man1/ul.1
     - path: /usr/share/man/man1/unshare.1
     - path: /usr/share/man/man1/utmpdump.1
     - path: /usr/share/man/man1/uuidgen.1
@@ -823,6 +865,7 @@ outputs:
     - path: /usr/share/man/man8/blkpr.8
     - path: /usr/share/man/man8/blkzone.8
     - path: /usr/share/man/man8/blockdev.8
+    - path: /usr/share/man/man8/cfdisk.8
     - path: /usr/share/man/man8/chcpu.8
     - path: /usr/share/man/man8/chmem.8
     - path: /usr/share/man/man8/ctrlaltdel.8
@@ -874,6 +917,7 @@ outputs:
     - path: /usr/share/bash-completion/completions/blkzone
     - path: /usr/share/bash-completion/completions/blockdev
     - path: /usr/share/bash-completion/completions/cal
+    - path: /usr/share/bash-completion/completions/cfdisk
     - path: /usr/share/bash-completion/completions/chcpu
     - path: /usr/share/bash-completion/completions/chmem
     - path: /usr/share/bash-completion/completions/chrt
@@ -907,6 +951,7 @@ outputs:
     - path: /usr/share/bash-completion/completions/ipcmk
     - path: /usr/share/bash-completion/completions/ipcrm
     - path: /usr/share/bash-completion/completions/ipcs
+    - path: /usr/share/bash-completion/completions/irqtop
     - path: /usr/share/bash-completion/completions/isosize
     - path: /usr/share/bash-completion/completions/last
     - path: /usr/share/bash-completion/completions/lastb
@@ -930,6 +975,7 @@ outputs:
     - path: /usr/share/bash-completion/completions/mkfs.cramfs
     - path: /usr/share/bash-completion/completions/mkfs.minix
     - path: /usr/share/bash-completion/completions/mkswap
+    - path: /usr/share/bash-completion/completions/more
     - path: /usr/share/bash-completion/completions/mount
     - path: /usr/share/bash-completion/completions/mountpoint
     - path: /usr/share/bash-completion/completions/namei
@@ -951,12 +997,14 @@ outputs:
     - path: /usr/share/bash-completion/completions/setarch
     - path: /usr/share/bash-completion/completions/setpgid
     - path: /usr/share/bash-completion/completions/setsid
+    - path: /usr/share/bash-completion/completions/setterm
     - path: /usr/share/bash-completion/completions/sfdisk
     - path: /usr/share/bash-completion/completions/swaplabel
     - path: /usr/share/bash-completion/completions/swapoff
     - path: /usr/share/bash-completion/completions/swapon
     - path: /usr/share/bash-completion/completions/taskset
     - path: /usr/share/bash-completion/completions/uclampset
+    - path: /usr/share/bash-completion/completions/ul
     - path: /usr/share/bash-completion/completions/umount
     - path: /usr/share/bash-completion/completions/unshare
     - path: /usr/share/bash-completion/completions/utmpdump
@@ -971,9 +1019,11 @@ outputs:
     - path: /usr/share/bash-completion/completions/zramctl
 
 resolution:
+  /usr/lib/libmagic.so.1: file
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
   /usr/lib/libm.so.6: glibc
+  /usr/lib/libncursesw.so.6: ncurses
   /usr/lib/libblkid.so.1: self
   /usr/lib/libfdisk.so.1: self
   /usr/lib/libmount.so.1: self

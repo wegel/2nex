@@ -6,7 +6,7 @@ package:
   version: 1.5.10
   description: Library for handling OpenGL function pointer management
   homepage: https://github.com/anholt/libepoxy
-  checksum: 892a5311fbd8fd440ddfc887eb03276a9b97ad988f5c956b8bcf1f88d0d945a1
+  checksum: 5ec57f32ccdbd3d54b65960b67361315c0ec1fb01b4f22ef1bb236d5cfaf95fd
 
 sources:
 - name: libepoxy
@@ -20,12 +20,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: libcap
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: meson
   commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
 - name: ninja
@@ -52,10 +50,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: expat
@@ -77,7 +73,7 @@ dependencies:
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4133:9862, 6227:10094]
+  profile: [4133:6936, 5075:7072]
 
   script: |
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -92,8 +88,9 @@ build:
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

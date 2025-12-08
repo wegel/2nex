@@ -6,7 +6,7 @@ package:
   version: 9.9p1
   description: OpenSSH SSH client and server
   homepage: https://www.openssh.com/
-  checksum: 7cad19d4716e5f7357f69b43b3bda600ecf7d22d52ff07be6b1dde4a91ab8eea
+  checksum: 57547eb47c98ab909089866cf15318dcb6e5c458e64a7005f9051cac416cb63a
 
 sources:
 - name: openssh
@@ -30,8 +30,6 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: grep
   commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: gawk
@@ -45,23 +43,21 @@ dependencies:
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: ncurses
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: openssl
   commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [8230:4333, 29488:18475, 63381:18480, 104177:18534, 140213:18644, 176576:18747, 207344:18847, 259166:18989, 315065:19213, 345513:21622]
+  profile: [8230:4728, 29447:20756, 63340:20760, 106121:20817, 138270:20915, 173824:21028, 209450:21133, 258149:21292, 313765:21509, 343108:23760]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_openssh} -C "${WORK_DIR}" --strip-components=1
@@ -131,17 +127,20 @@ build:
     WantedBy=multi-user.target
     EOF
 
-    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
   dev:
   - bin
   - conf
+  - lib
 
   full:
   - bin
   - conf
+  - lib
   - man
 
 outputs:
@@ -219,6 +218,9 @@ outputs:
     - path: /etc/ssh/moduli
     - path: /etc/ssh/ssh_config
     - path: /etc/ssh/sshd_config
+
+  lib:
+    files:
     - path: /usr/lib/systemd/system/sshd-keygen.service
     - path: /usr/lib/systemd/system/sshd.service
     - path: /var/lib/sshd/.keep

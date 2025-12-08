@@ -6,7 +6,7 @@ package:
   version: 1.1.3
   description: XKB file handling library
   homepage: https://xorg.freedesktop.org/
-  checksum: 19ce50610e022103ed6fd752c71e56a5c6e5a06d2ba372d5df5406849023dc6f
+  checksum: 545e398b98dddf2135aa740f2f4bc20a4a2c0800f5d071ea670ae11694570bb2
 
 sources:
 - name: libxkbfile
@@ -20,12 +20,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: libcap
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
 - name: pkgconf
@@ -48,10 +46,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: sed
@@ -71,7 +67,7 @@ dependencies:
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4139:963, 8257:2826, 12388:2830, 16515:2831, 20716:2833, 24837:2836, 27853:3779]
+  profile: [4139:1209, 8260:2991, 12440:2994, 16597:2996, 20710:2998, 24818:3001, 27115:3943]
 
   script: |
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -83,7 +79,8 @@ build:
     make DESTDIR="${OUT_DIR}" install
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
 
 bundles:
   dev:

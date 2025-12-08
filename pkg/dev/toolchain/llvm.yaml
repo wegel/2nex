@@ -6,7 +6,7 @@ package:
   version: 18.1.8
   description: LLVM compiler infrastructure (clang, lld)
   homepage: https://llvm.org/
-  checksum: 5bb1a7c32fd5043a95cf18804aba55471c06339790887564494665d3f767eff0
+  checksum: 0045da0e3f0670c2a2bbaae949ebcbb6c7c5759a6e2b723dfc1073d9d164f65a
 
 sources:
 - name: llvm
@@ -32,8 +32,6 @@ dependencies:
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: grep
@@ -43,15 +41,11 @@ dependencies:
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: gmp
-  commit: x86_64/pkg/bootstrap/phase3/gmp-bootstrap/6.3.0/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: xz
@@ -59,7 +53,7 @@ dependencies:
 - name: bzip2
   commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
 - name: cmake
-  commit: x86_64/pkg/dev/build/cmake/3.21.2/bundles/dev
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
 - name: ninja
   commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
 - name: python3
@@ -68,12 +62,22 @@ dependencies:
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
 - name: zstd
   commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
-- name: strip_nondeterminism
-  commit: x86_64/pkg/bootstrap/phase3/strip-nondeterminism/1.13.0/bundles/dev
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/dev
+- name: libarchive
+  commit: x86_64/pkg/libs/archive/libarchive/3.8.4/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [28951:20725, 103336:71546, 223900:224124, 373979:399280, 498615:524428, 623133:655786, 747116:657504, 933408:659235, 1123032:660577, 1243544:661816]
+  profile: [20687:12172, 70525:37727, 157554:137809, 261150:286156, 344197:397845, 432224:442616, 519675:584446, 648653:689277, 776731:690854, 859750:698015]
 
   script: |
     # doesn't build correctly with LTO
@@ -111,9 +115,9 @@ build:
     cmake --build build
     DESTDIR=${OUT_DIR} cmake --install build
 
-    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
-    2nex_strip_binaries ${OUT_DIR}
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
   dev:
@@ -170,6 +174,7 @@ outputs:
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libstdc++.so.6
+      - /usr/lib/libxml2.so.2
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
     - path: /usr/bin/clang
@@ -323,6 +328,7 @@ outputs:
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libstdc++.so.6
+      - /usr/lib/libxml2.so.2
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
     - path: /usr/bin/ld64.lld
@@ -332,6 +338,7 @@ outputs:
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libstdc++.so.6
+      - /usr/lib/libxml2.so.2
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
     - path: /usr/bin/llc
@@ -350,6 +357,7 @@ outputs:
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libstdc++.so.6
+      - /usr/lib/libxml2.so.2
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
     - path: /usr/bin/lld-link
@@ -359,6 +367,7 @@ outputs:
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libstdc++.so.6
+      - /usr/lib/libxml2.so.2
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
     - path: /usr/bin/lli
@@ -725,6 +734,7 @@ outputs:
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libstdc++.so.6
+      - /usr/lib/libxml2.so.2
     - path: /usr/bin/llvm-nm
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -1025,6 +1035,7 @@ outputs:
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libstdc++.so.6
+      - /usr/lib/libxml2.so.2
       - /usr/lib/libz.so.1
       - /usr/lib/libzstd.so.1
     - path: /usr/bin/yaml-bench
@@ -4269,6 +4280,7 @@ resolution:
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
   /usr/lib/libm.so.6: glibc
+  /usr/lib/libxml2.so.2: libxml2
   /usr/lib/libclang.so.18.1: self
   /usr/lib/libz.so.1: zlib
   /usr/lib/libzstd.so.1: zstd

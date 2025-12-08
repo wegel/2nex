@@ -6,7 +6,7 @@ package:
   version: 1.0.3
   description: Library for GTK4 Wayland layer shell support
   homepage: https://github.com/wmww/gtk4-layer-shell
-  checksum: f926dce3f15390306604c93a6c831ec7d4ecbdea4864864b3cec100a775c30f5
+  checksum: e399e5488681aa48309999a4e793773d2a22e38f49aa7442e676797bbb814099
 
 sources:
 - name: gtk4-layer-shell
@@ -16,12 +16,8 @@ sources:
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
@@ -33,7 +29,7 @@ dependencies:
 - name: binutils
   commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: ncurses
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
 - name: acl
@@ -74,8 +70,6 @@ dependencies:
   commit: x86_64/pkg/libs/system/shared-mime-info/2.4/bundles/dev
 - name: graphene
   commit: x86_64/pkg/libs/graphics/graphene/1.10.8/bundles/dev
-- name: libepoxy
-  commit: x86_64/pkg/libs/graphics/libepoxy/1.5.10/bundles/dev
 - name: harfbuzz
   commit: x86_64/pkg/libs/text/harfbuzz/10.1.0/bundles/dev
 - name: fontconfig
@@ -94,16 +88,10 @@ dependencies:
   commit: x86_64/pkg/libs/text/fribidi/1.0.15/bundles/dev
 - name: pixman
   commit: x86_64/pkg/libs/graphics/pixman/0.46.4/bundles/dev
-- name: mesa
-  commit: x86_64/pkg/libs/graphics/mesa/24.2.7/bundles/dev
-- name: libdrm
-  commit: x86_64/pkg/libs/graphics/libdrm/2.4.123/bundles/dev
-- name: libxkbcommon
-  commit: x86_64/pkg/libs/input/libxkbcommon/1.7.0/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [2974:1052]
+  profile: [2590:4935]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_gtk4_layer_shell} -C "${WORK_DIR}" --strip-components=1
@@ -124,8 +112,9 @@ build:
     ninja -C build
     DESTDIR=${OUT_DIR} ninja -C build install
 
-    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
   dev:

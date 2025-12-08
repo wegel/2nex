@@ -6,8 +6,8 @@ package:
   version: "4.9"
   description: A stream editor
   homepage: https://www.gnu.org/software/sed/
-  stable_checksum: false
-  bootstrap: true
+  checksum: 1749437fadf257954256602d461feba51f54e72d2862793ba3fe9f58d7294ae1
+  seed: true
 
 sources:
 - name: sed
@@ -15,98 +15,65 @@ sources:
   sha256: 6e226b732e1cd739464ad6862bd1a1aba42d7982922da7a53519631d24975181
 
 dependencies:
-- name: bootstrap_tools
-  commit: x86_64/pkg/bootstrap/phase0/bootstrap-tools/2.42/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/bootstrap/phase1/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/bundles/dev
 - name: m4
-  commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
-- name: ncurses
-  commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase0/m4/1.4.19/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase0/bash/5.2.21/bundles/dev
 - name: coreutils
-  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase0/coreutils/9.5/bundles/dev
 - name: diffutils
-  commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase0/diffutils/3.10/bundles/dev
 - name: file
-  commit: x86_64/pkg/bootstrap/phase1/file/5.45/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase0/file/5.45/bundles/dev
 - name: findutils
-  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase0/findutils/4.9.0/bundles/dev
 - name: gawk
-  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase0/gawk/5.3.0/bundles/dev
 - name: grep
-  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase0/grep/3.11/bundles/dev
 - name: gzip
-  commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase0/gzip/1.13/bundles/dev
 - name: make
-  commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
-- name: patch
-  commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase0/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase0/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase0/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase0/xz/5.4.6/bundles/dev
 
 build:
-  environment: 9eb9f3c79e8aed36b00daea9698f6605ee6e3bba
-  profile: [4117:2800, 8218:5482, 12340:7993, 16459:9315, 20609:10550, 24719:11445, 28898:17140, 33007:17290, 33778:17415]
+  environment: env/bootstrap-phase1.yaml
 
+  profile: [4104:3172, 8225:6687, 12325:9022, 16476:11311, 20576:19111, 24695:22403, 28826:24641, 28919:24650]
   script: |
-    tar --no-same-owner -xf ${SOURCE_sed} -C "${WORK_DIR}" --strip-components=1
+    tar --no-same-owner -xf /${SOURCE_sed} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-    ./configure --prefix=/usr   \
-        --host=${TARGET} \
-        --build=$(./build-aux/config.guess)
-
+    ./configure --prefix=/usr --disable-nls
     make
     make DESTDIR=${OUT_DIR} install
-    rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
 
-    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
+    rm -rf ${OUT_DIR}/usr/share/locale
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
 bundles:
   dev:
   - bin
-  - locale
 
 outputs:
   bin:
     files:
     - path: /usr/bin/sed
-
-  locale:
-    files:
-    - path: /usr/share/locale/af/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/ast/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/bg/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/ca/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/cs/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/da/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/de/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/el/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/eo/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/es/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/et/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/eu/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/fi/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/fr/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/ga/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/gl/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/he/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/hr/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/hu/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/id/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/it/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/ja/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/ka/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/ko/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/nb/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/nl/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/pl/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/pt/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/pt_BR/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/ro/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/ru/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/sk/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/sl/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/sr/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/sv/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/tr/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/uk/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/vi/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/zh_CN/LC_MESSAGES/sed.mo
-    - path: /usr/share/locale/zh_TW/LC_MESSAGES/sed.mo

@@ -6,7 +6,7 @@ package:
   version: 2.9.2
   description: NCurses Disk Usage analyzer
   homepage: https://dev.yorhel.nl/ncdu
-  checksum: 33f6b5700e3d5dffd44359c7fbac3e8401d35cbac1eba6c46da15b6fb44fd36a
+  checksum: 85f5206d2ea78744785d0a7e22959302a4541f7920bfc73891346db156202fa7
 
 sources:
 - name: ncdu
@@ -20,8 +20,6 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
@@ -39,19 +37,25 @@ dependencies:
 - name: zig-bin
   commit: x86_64/pkg/dev/lang/zig-bin/0.15.2/bundles/dev
 - name: zstd
-  commit: x86_64/pkg/bootstrap/phase3/zstd/1.5.6/bundles/dev
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
 - name: file
-  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
 - name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
 - name: bzip2
-  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
 - name: zlib
-  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: grep
-  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
@@ -61,13 +65,19 @@ build:
     tar --no-same-owner -xf ${SOURCE_ncdu} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-    export ZIG_LIB_DIR=/usr/lib/zig
     export ZIG_GLOBAL_CACHE_DIR=/tmp/.zig-cache
+    export PKG_CONFIG_PATH=/usr/lib/pkgconfig
+    export CC=gcc
+    export C_INCLUDE_PATH=/usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include:/usr/include
     mkdir -p /tmp/.zig-cache
-    zig build -Doptimize=ReleaseSafe --prefix ${OUT_DIR}/usr --zig-lib-dir /usr/lib/zig
+    zig build -Doptimize=ReleaseSafe --prefix ${OUT_DIR}/usr \
+      --search-prefix /usr \
+      --search-prefix /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0 \
+      --global-cache-dir "${ZIG_GLOBAL_CACHE_DIR}"
 
-    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
   dev:

@@ -6,7 +6,7 @@ package:
   version: "76.1"
   description: International Components for Unicode library
   homepage: https://icu.unicode.org/
-  checksum: 1b82e478dacf1b8d11485f8a2aae5ac86c920dae27c17c7d51c66cc17527209a
+  checksum: f3f2aff15d2e742873811435480701343991fa97813139cca5c6ea89fa088c55
 
 sources:
 - name: icu
@@ -20,12 +20,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: libcap
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: ncurses
@@ -38,18 +36,14 @@ dependencies:
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
-- name: xz
-  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: coreutils
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: sed
@@ -58,12 +52,10 @@ dependencies:
   commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
-- name: pkgconf
-  commit: x86_64/pkg/bootstrap/phase3/pkgconf/2.2.0/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4120:1895, 12319:2718, 24629:7475, 36950:10789, 49053:16428, 62093:22460, 74916:28433, 91434:29045, 112027:29484, 120347:29573]
+  profile: [4120:1770, 12318:2641, 20514:5186, 32844:7772, 44785:12699, 53066:16412, 66449:23084, 78931:28061, 95428:28209, 103998:32230]
 
   script: |
     tar --no-same-owner -xzf /${SOURCE_icu} -C "${WORK_DIR}" --strip-components=1
@@ -80,8 +72,9 @@ build:
     make
     make DESTDIR="${OUT_DIR}" install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

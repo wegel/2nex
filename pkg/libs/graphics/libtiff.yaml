@@ -6,7 +6,7 @@ package:
   version: 4.7.1
   description: Library for reading and writing TIFF image files
   homepage: http://libtiff.gitlab.io/libtiff/
-  checksum: 41123c07ba12b19a112dc3267f078c3aed3078209ee04a323a9b8822ba87a60a
+  checksum: b3e0a4afb6dcf51b7c9c473ad454048dbeb1c80e25e521094253fac7b94ee4fa
 
 sources:
 - name: libtiff
@@ -18,14 +18,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: ncurses
@@ -40,22 +36,12 @@ dependencies:
   commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
-- name: sed
-  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
-- name: grep
-  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: zstd
   commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
 - name: bzip2
@@ -63,7 +49,15 @@ dependencies:
 - name: openssl3
   commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
 - name: cmake
-  commit: x86_64/pkg/dev/build/cmake/3.21.2/bundles/dev
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/dev
+- name: libarchive
+  commit: x86_64/pkg/libs/archive/libarchive/3.8.4/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
 - name: ninja
   commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
 - name: libjpeg-turbo
@@ -71,7 +65,7 @@ dependencies:
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4137:7120, 8296:7498, 16566:24377, 24885:24415, 33095:24432, 41323:24460, 49610:24482, 57826:25853, 70114:26529, 76770:26955]
+  profile: [4131:1701, 8234:1845, 12370:1968, 16486:9076, 24740:9086, 28876:9089, 32988:9091, 41263:9098, 49554:9105, 51909:9301]
 
   script: |
     tar --no-same-owner -xzf /${SOURCE_libtiff} -C "${WORK_DIR}" --strip-components=1
@@ -85,8 +79,9 @@ build:
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

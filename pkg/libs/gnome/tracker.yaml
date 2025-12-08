@@ -6,7 +6,7 @@ package:
   version: 3.7.3
   description: GNOME metadata database and indexer
   homepage: https://gnome.pages.gitlab.gnome.org/tracker/
-  checksum: 91950a340a3c8a1a81437ee0f2c2d09b5630f98269520f1122c1c0ba13c0b1db
+  checksum: 7976fee4ccad68e15c5a53767e872d4e86c54756e53a3f40eee190682406be18
 
 sources:
 - name: tracker
@@ -20,12 +20,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: libcap
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: ncurses
@@ -44,10 +42,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: sed
@@ -61,7 +57,7 @@ dependencies:
 - name: python3
   commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
 - name: pkgconf
-  commit: x86_64/pkg/bootstrap/phase3/pkgconf/2.2.0/bundles/dev
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: glib2
   commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
 - name: libffi
@@ -129,7 +125,8 @@ build:
     DESTDIR="${OUT_DIR}" ninja -C build install
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
 
 bundles:
   dev:

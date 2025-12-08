@@ -6,7 +6,7 @@ package:
   version: 1.7.2
   description: Screen locker for Wayland
   homepage: https://github.com/swaywm/swaylock
-  checksum: ece84915e9483f668d9aad71f95b7d5a96c790c8ce2ed03de245286becc93220
+  checksum: df85871c331fd44002e7522ffeffba9f6e8100c5302c04c78c2a6205994d7c8a
 
 sources:
 - name: swaylock
@@ -16,12 +16,8 @@ sources:
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
@@ -39,7 +35,9 @@ dependencies:
 - name: attr
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: meson
@@ -84,8 +82,6 @@ dependencies:
   commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
 - name: libjpeg-turbo
   commit: x86_64/pkg/libs/graphics/libjpeg-turbo/3.1.2/bundles/dev
-- name: libtiff
-  commit: x86_64/pkg/libs/graphics/libtiff/4.7.1/bundles/dev
 - name: shared-mime-info
   commit: x86_64/pkg/libs/system/shared-mime-info/2.4/bundles/dev
 - name: libxcrypt
@@ -113,8 +109,9 @@ build:
     ninja -C build
     DESTDIR=${OUT_DIR} ninja -C build install
 
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/swaylock
+
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

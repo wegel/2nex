@@ -6,7 +6,7 @@ package:
   version: 1.9.6
   description: C++ library for interacting with JSON
   homepage: https://github.com/open-source-parsers/jsoncpp
-  checksum: 53cbf3b578cebb9f6260213453ef8bc8d95a21f74cb4c6f2f423f5e099ce70ce
+  checksum: ab76580d191918ffd5e7dd016c20788161ff9a8b9caf69cbdbf21b8a22a91a15
 
 sources:
 - name: jsoncpp
@@ -14,38 +14,28 @@ sources:
   sha256: f93b6dd7ce796b13d02c108bc9f79812245a82e577581c4c9aabe57075c90ea2
 
 dependencies:
-- name: bash
-  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
-- name: findutils
-  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: phase3
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
-- name: gzip
-  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
-- name: tar
-  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: ncurses
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
-- name: inetutils
-  commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
-- name: attr
-  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: acl
   commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: zlib
@@ -79,8 +69,8 @@ build:
 
     # Set consistent timestamps for reproducible builds
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
-    2nex_strip_binaries ${OUT_DIR}
+
+    find ${OUT_DIR}/usr/lib -name "*.so*" -exec strip --strip-unneeded {} \; 2>/dev/null || true
 
 bundles:
   dev:

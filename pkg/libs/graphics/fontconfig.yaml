@@ -6,7 +6,7 @@ package:
   version: 2.17.1
   description: Font configuration and customization library
   homepage: https://www.freedesktop.org/wiki/Software/fontconfig/
-  checksum: a62ea05ac44e463cd84d91cfe879b345b9d3be096888b5819892f5cf6623e858
+  checksum: 7da5c4153b20558529e041d5d3fcddce176715514d412378d12aa90fdd513283
 
 sources:
 - name: fontconfig
@@ -18,14 +18,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: meson
   commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
 - name: ninja
@@ -52,10 +48,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: freetype
   commit: x86_64/pkg/libs/graphics/freetype/2.14.1/bundles/dev
 - name: libpng
@@ -64,14 +58,12 @@ dependencies:
   commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
 - name: expat
   commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: gperf
   commit: x86_64/pkg/core/toolchain/gperf/3.1/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4115:2116, 8245:2767, 12343:5875, 16506:6136, 20629:6196, 24725:6209, 27349:6217]
+  profile: [4115:3065, 8266:3722, 12407:7935, 16506:8175, 19285:8242]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -86,8 +78,9 @@ build:
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

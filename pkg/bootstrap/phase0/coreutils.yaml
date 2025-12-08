@@ -1,0 +1,158 @@
+package:
+  schema: 1
+  name: Coreutils
+  slug: coreutils
+  namespace: bootstrap/phase0
+  version: "9.5"
+  description: A set of basic GNU tools commonly used in shell scripts
+  homepage: https://www.gnu.org/software/coreutils/
+  stable_checksum: false
+  seed: true
+
+sources:
+- name: coreutils
+  url: https://ftp.gnu.org/gnu/coreutils/coreutils-9.5.tar.xz
+  sha256: cd328edeac92f6a665de9f323c93b712af1858bc2e0d88f3f7100469470a1b8a
+
+dependencies:
+- name: toolchain
+  commit: x86_64/pkg/bootstrap/phase0/toolchain/1.0/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase0/m4/1.4.19/bundles/dev
+
+build:
+  environment: env/bootstrap.yaml
+
+  profile: [4096:1525, 8204:3976, 16474:6267, 28841:10524, 37082:12560, 45301:14786, 53543:17731, 65854:19030, 78255:20588, 85915:21447]
+  script: |
+    tar --no-same-owner -xf ${SOURCE_coreutils} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    FORCE_UNSAFE_CONFIGURE=1 ./configure --prefix=/usr                     \
+                --host=${TARGET}                   \
+                --build=$(build-aux/config.guess) \
+                --enable-install-program=hostname \
+                --enable-no-install-program=kill,uptime
+    make
+    make DESTDIR=${OUT_DIR} install
+    rm -rf ${OUT_DIR}/usr/share/man ${OUT_DIR}/usr/share/info
+    rm -rf ${OUT_DIR}/usr/share/locale
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/[
+    - path: /usr/bin/b2sum
+    - path: /usr/bin/base32
+    - path: /usr/bin/base64
+    - path: /usr/bin/basename
+    - path: /usr/bin/basenc
+    - path: /usr/bin/cat
+    - path: /usr/bin/chcon
+    - path: /usr/bin/chgrp
+    - path: /usr/bin/chmod
+    - path: /usr/bin/chown
+    - path: /usr/bin/chroot
+    - path: /usr/bin/cksum
+    - path: /usr/bin/comm
+    - path: /usr/bin/cp
+    - path: /usr/bin/csplit
+    - path: /usr/bin/cut
+    - path: /usr/bin/date
+    - path: /usr/bin/dd
+    - path: /usr/bin/df
+    - path: /usr/bin/dir
+    - path: /usr/bin/dircolors
+    - path: /usr/bin/dirname
+    - path: /usr/bin/du
+    - path: /usr/bin/echo
+    - path: /usr/bin/env
+    - path: /usr/bin/expand
+    - path: /usr/bin/expr
+    - path: /usr/bin/factor
+    - path: /usr/bin/false
+    - path: /usr/bin/fmt
+    - path: /usr/bin/fold
+    - path: /usr/bin/groups
+    - path: /usr/bin/head
+    - path: /usr/bin/hostid
+    - path: /usr/bin/hostname
+    - path: /usr/bin/id
+    - path: /usr/bin/install
+    - path: /usr/bin/join
+    - path: /usr/bin/link
+    - path: /usr/bin/ln
+    - path: /usr/bin/logname
+    - path: /usr/bin/ls
+    - path: /usr/bin/md5sum
+    - path: /usr/bin/mkdir
+    - path: /usr/bin/mkfifo
+    - path: /usr/bin/mknod
+    - path: /usr/bin/mktemp
+    - path: /usr/bin/mv
+    - path: /usr/bin/nice
+    - path: /usr/bin/nl
+    - path: /usr/bin/nohup
+    - path: /usr/bin/nproc
+    - path: /usr/bin/numfmt
+    - path: /usr/bin/od
+    - path: /usr/bin/paste
+    - path: /usr/bin/pathchk
+    - path: /usr/bin/pinky
+    - path: /usr/bin/pr
+    - path: /usr/bin/printenv
+    - path: /usr/bin/printf
+    - path: /usr/bin/ptx
+    - path: /usr/bin/pwd
+    - path: /usr/bin/readlink
+    - path: /usr/bin/realpath
+    - path: /usr/bin/rm
+    - path: /usr/bin/rmdir
+    - path: /usr/bin/runcon
+    - path: /usr/bin/seq
+    - path: /usr/bin/sha1sum
+    - path: /usr/bin/sha224sum
+    - path: /usr/bin/sha256sum
+    - path: /usr/bin/sha384sum
+    - path: /usr/bin/sha512sum
+    - path: /usr/bin/shred
+    - path: /usr/bin/shuf
+    - path: /usr/bin/sleep
+    - path: /usr/bin/sort
+    - path: /usr/bin/split
+    - path: /usr/bin/stat
+    - path: /usr/bin/stdbuf
+    - path: /usr/bin/stty
+    - path: /usr/bin/sum
+    - path: /usr/bin/sync
+    - path: /usr/bin/tac
+    - path: /usr/bin/tail
+    - path: /usr/bin/tee
+    - path: /usr/bin/test
+    - path: /usr/bin/timeout
+    - path: /usr/bin/touch
+    - path: /usr/bin/tr
+    - path: /usr/bin/true
+    - path: /usr/bin/truncate
+    - path: /usr/bin/tsort
+    - path: /usr/bin/tty
+    - path: /usr/bin/uname
+    - path: /usr/bin/unexpand
+    - path: /usr/bin/uniq
+    - path: /usr/bin/unlink
+    - path: /usr/bin/users
+    - path: /usr/bin/vdir
+    - path: /usr/bin/wc
+    - path: /usr/bin/who
+    - path: /usr/bin/whoami
+    - path: /usr/bin/yes
+
+  lib:
+    files:
+    - path: /usr/libexec/coreutils/libstdbuf.so

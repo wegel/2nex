@@ -6,7 +6,7 @@ package:
   version: 0.4.2
   description: XCB window manager utilities
   homepage: https://xcb.freedesktop.org/
-  checksum: 8df92f856ac68988e747ed96320801a3cc4de403be4c4c9b987ed0715ea9e2dc
+  checksum: 900c8b684c2dbf5c86d8ac956f0703c6ee1e7945f9777bbdd2fc180fda804b09
 
 sources:
 - name: xcb-util-wm
@@ -20,12 +20,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: libcap
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
 - name: pkgconf
@@ -48,10 +46,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: sed
@@ -67,11 +63,11 @@ dependencies:
 - name: xorgproto
   commit: x86_64/pkg/libs/x11/xorgproto/2024.1/bundles/dev
 - name: m4
-  commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4097:891, 8230:2915, 12342:3358, 13293:3377]
+  profile: [4097:966, 8205:2905, 12310:3459, 12619:3476]
 
   script: |
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -82,8 +78,9 @@ build:
     make
     make DESTDIR="${OUT_DIR}" install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

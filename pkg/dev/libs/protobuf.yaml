@@ -6,7 +6,7 @@ package:
   version: "30.2"
   description: Google's data interchange format
   homepage: https://protobuf.dev/
-  checksum: 54085b21f17c300d902d187706bfdbbb36e6a54faceb8b89cc98803fdcac3294
+  checksum: 7c99dfeed8cda87c1aee5dc939f56007906510a193779820c685d8f6c4374511
 
 sources:
 - name: protobuf
@@ -20,16 +20,12 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: phase3
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
-- name: grep
-  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gcc
@@ -37,39 +33,41 @@ dependencies:
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: cmake
-  commit: x86_64/pkg/dev/build/cmake/3.21.2/bundles/dev
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
 - name: ninja
   commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
 - name: libabseil-cpp
   commit: x86_64/pkg/dev/libs/libabseil-cpp/20250127.0/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: ncurses
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
-- name: inetutils
-  commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
 - name: attr
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: acl
   commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: file
-  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
 - name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
 - name: bzip2
-  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
 - name: zstd
   commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/dev
+- name: libarchive
+  commit: x86_64/pkg/libs/archive/libarchive/3.8.4/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4146:4087, 8242:7624, 20751:28145, 33289:33168, 41776:39849, 50211:46305, 62603:57820, 75019:57833, 91552:57997, 98557:58592]
+  profile: [4190:4452, 8300:7639, 16602:21616, 24908:28913, 33153:33269, 41432:38954, 49701:45075, 62073:57012, 74427:57025, 80256:57582]
 
   script: |
     # protobuf's internal library linking breaks with LTO
@@ -112,10 +110,9 @@ build:
     # Install
     DESTDIR="${OUT_DIR}" ninja install
 
-    # Set consistent timestamps for reproducible builds
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \; || true
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

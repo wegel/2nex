@@ -6,7 +6,8 @@ package:
   version: 13.2.0
   description: The GNU Compiler Collection includes front ends for C, C++, Objective-C, Fortran, Ada, Go, and D, as well as libraries for these languages.
   homepage: https://gcc.gnu.org/
-  checksum: 9002fa460d32aade925ceb06966b1c9644f5e01a479cb6759ca0f37e3f3d0e2c
+  checksum: a51d0220df1f78f4b622aa87b7f486916ad024bb1fc8e7cf02d5799422097e78
+  seed: true
 
 sources:
 - name: gcc
@@ -29,10 +30,18 @@ sources:
   sha256: ab642492f5cf882b74aa0cb730cd410a81edcdbec895183ce930e706c1c759b8
 
 dependencies:
-- name: bootstrap_tools
-  commit: x86_64/pkg/bootstrap/phase1/bootstrap_tools/0.0.1/bundles/dev
-- name: ncurses
-  commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: libxcrypt
+  commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/bundles/dev
 - name: bash
   commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
 - name: coreutils
@@ -41,12 +50,14 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/core/userland/2nex-utilities/0.0.1/bundles/dev
 - name: gawk
   commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
 - name: grep
   commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
 - name: make
   commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
 - name: patch
@@ -55,34 +66,12 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
 - name: tar
   commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
-- name: gzip
-  commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/bundles/dev
-- name: gettext
-  commit: x86_64/pkg/bootstrap/phase2/gettext/0.22.5/bundles/dev
-- name: perl
-  commit: x86_64/pkg/bootstrap/phase2/perl/5.38.2/bundles/dev
-- name: strip_nondeterminism
-  commit: x86_64/pkg/bootstrap/phase3/strip-nondeterminism/1.13.0/bundles/dev
-- name: glibc
-  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
-- name: zlib
-  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
-- name: bzip2
-  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
 - name: xz
-  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
-- name: file
-  commit: x86_64/pkg/bootstrap/phase3/file/5.45/bundles/dev
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
-- name: libxcrypt
-  commit: x86_64/pkg/bootstrap/phase3/libxcrypt/4.4.36/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/xz/5.4.6/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [118001:12702, 458383:18773, 1031326:29276, 1715169:52348, 2287946:155727, 2857356:303168, 3428791:308010, 4293498:340972, 5143051:374074, 5712421:409842]
+  profile: [118240:9791, 458947:13356, 1031604:19557, 1715024:32483, 2286319:69162, 2860738:119606, 3429052:124343, 4292955:158012, 5142500:191734, 5712469:208012]
 
   script: |
     # gcc's build system doesn't use gcc-ar/gcc-ranlib consistently, so disable LTO
@@ -125,14 +114,11 @@ build:
     make
     make DESTDIR=${OUT_DIR} install
     ln -svr /usr/bin/cpp ${OUT_DIR}/usr/lib
-    ln -sv gcc.1 ${OUT_DIR}/usr/share/man/man1/cc.1
-    #mkdir -p ${OUT_DIR}/usr/lib/bfd-plugins && ln -sfv ../../libexec/gcc/$(gcc -dumpmachine)/13.2.0/liblto_plugin.so ${OUT_DIR}/usr/lib/bfd-plugins/
-
-    rm -rf ${OUT_DIR}/usr/share/info
 
     mkdir -pv ${OUT_DIR}/usr/share/gdb/auto-load/usr/lib
     mv -v ${OUT_DIR}/usr/lib/*gdb.py ${OUT_DIR}/usr/share/gdb/auto-load/usr/lib
     find "${OUT_DIR}" -name "*.la" -delete
+
 
     # strip runtime libraries (but not .o files or plugins)
     find "${OUT_DIR}/usr/lib" -type f -name "*.so.*" -exec strip {} \;
@@ -141,9 +127,8 @@ build:
     find "${OUT_DIR}/usr/bin" -type f -executable -exec strip {} \;
     find "${OUT_DIR}/usr/libexec/gcc" -type f -executable -exec strip {} \;
 
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    find "${OUT_DIR}" ! -type d -exec strip-nondeterminism -T 1704067200 --normalizers +all {} \;
-    # TODO: the output contains /2nex/* in a lot of binaries
 
 bundles:
   dev:
@@ -1697,11 +1682,12 @@ outputs:
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/wide-int-print.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/wide-int.h
     - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/xcoff.h
-    - path: /usr/share/gcc-13.2.0/python/libstdcxx/__init__.py
-    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/__init__.py
-    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/printers.py
-    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/xmethods.py
-    - path: /usr/share/gdb/auto-load/usr/lib/libstdc++.so.6.0.32-gdb.py
+
+  info:
+    files:
+    - path: /usr/share/info/libgomp.info
+    - path: /usr/share/info/libitm.info
+    - path: /usr/share/info/libquadmath.info
 
   lib:
     files:
@@ -1956,6 +1942,7 @@ outputs:
     - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/liblto_plugin.so
       needs:
       - /usr/lib/libc.so.6
+    - path: /usr/share/gdb/auto-load/usr/lib/libstdc++.so.6.0.32-gdb.py
 
   locale:
     files:
@@ -1966,7 +1953,6 @@ outputs:
     - path: /usr/share/locale/da/LC_MESSAGES/gcc.mo
     - path: /usr/share/locale/de/LC_MESSAGES/cpplib.mo
     - path: /usr/share/locale/de/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/de/LC_MESSAGES/libstdc++.mo
     - path: /usr/share/locale/el/LC_MESSAGES/cpplib.mo
     - path: /usr/share/locale/el/LC_MESSAGES/gcc.mo
     - path: /usr/share/locale/eo/LC_MESSAGES/cpplib.mo
@@ -1976,7 +1962,6 @@ outputs:
     - path: /usr/share/locale/fi/LC_MESSAGES/gcc.mo
     - path: /usr/share/locale/fr/LC_MESSAGES/cpplib.mo
     - path: /usr/share/locale/fr/LC_MESSAGES/gcc.mo
-    - path: /usr/share/locale/fr/LC_MESSAGES/libstdc++.mo
     - path: /usr/share/locale/hr/LC_MESSAGES/gcc.mo
     - path: /usr/share/locale/id/LC_MESSAGES/cpplib.mo
     - path: /usr/share/locale/id/LC_MESSAGES/gcc.mo
@@ -2006,7 +1991,6 @@ outputs:
 
   man:
     files:
-    - path: /usr/share/man/man1/cc.1
     - path: /usr/share/man/man1/cpp.1
     - path: /usr/share/man/man1/g++.1
     - path: /usr/share/man/man1/gcc.1
@@ -2017,6 +2001,13 @@ outputs:
     - path: /usr/share/man/man7/fsf-funding.7
     - path: /usr/share/man/man7/gfdl.7
     - path: /usr/share/man/man7/gpl.7
+
+  misc:
+    files:
+    - path: /usr/share/gcc-13.2.0/python/libstdcxx/__init__.py
+    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/__init__.py
+    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/printers.py
+    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/xmethods.py
 
   static:
     files:

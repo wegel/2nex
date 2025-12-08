@@ -20,8 +20,6 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: phase3
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: grep
   commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: gzip
@@ -30,8 +28,6 @@ dependencies:
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: sed
   commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
 - name: acl
@@ -40,16 +36,12 @@ dependencies:
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/bootstrap/phase3/mpfr/4.2.1/bundles/dev
-- name: mpc
-  commit: x86_64/pkg/bootstrap/phase3/mpc/1.2.1/bundles/dev
 - name: ncurses
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4116:7090, 8212:7129, 11540:7163]
+  profile: [660:7220]
 
   script: |
     # Extract the Rust archive
@@ -61,8 +53,9 @@ build:
     ./install.sh --prefix=${OUT_DIR}/usr --without=rust-docs
 
     # Set consistent timestamps for reproducible builds
-    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
   dev:
@@ -89,7 +82,6 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libdl.so.2
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/librt.so.1
@@ -97,21 +89,18 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libpthread.so.0
       - /usr/lib/librustc_driver-39b12c59623303e4.so
     - path: /usr/bin/cargo-fmt
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libpthread.so.0
     - path: /usr/bin/clippy-driver
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libdl.so.2
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libpthread.so.0
       - /usr/lib/librt.so.1
       - /usr/lib/librustc_driver-39b12c59623303e4.so
@@ -120,7 +109,6 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libdl.so.2
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/librustc_driver-39b12c59623303e4.so
@@ -140,7 +128,6 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libdl.so.2
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libpthread.so.0
       - /usr/lib/librt.so.1
       - /usr/lib/librustc_driver-39b12c59623303e4.so
@@ -148,7 +135,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/librustc_driver-39b12c59623303e4.so
@@ -156,31 +142,26 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libpthread.so.0
     - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld/ld64.lld
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libpthread.so.0
     - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld/lld-link
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libpthread.so.0
     - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld/wasm-ld
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libpthread.so.0
     - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/llc
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -188,7 +169,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -196,7 +176,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -204,7 +183,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -212,7 +190,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -220,7 +197,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -228,7 +204,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -236,7 +211,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -244,7 +218,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -252,7 +225,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -260,7 +232,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -268,7 +239,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -276,7 +246,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -284,7 +253,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -292,7 +260,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -300,7 +267,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
@@ -308,7 +274,6 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libpthread.so.0
       - /usr/lib/librt.so.1
     - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/wasm-component-ld
@@ -316,7 +281,6 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libdl.so.2
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libpthread.so.0
       - /usr/lib/librt.so.1
     - path: /usr/libexec/rust-analyzer-proc-macro-srv
@@ -324,7 +288,6 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libdl.so.2
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libpthread.so.0
       - /usr/lib/librustc_driver-39b12c59623303e4.so
 
@@ -378,7 +341,6 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libdl.so.2
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/librt.so.1
@@ -387,7 +349,6 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libdl.so.2
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/librt.so.1
@@ -420,7 +381,6 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libdl.so.2
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
       - /usr/lib/libpthread.so.0
       - /usr/lib/librt.so.1
@@ -452,7 +412,6 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libdl.so.2
-      - /usr/lib/libgcc_s.so.1
       - /usr/lib/libpthread.so.0
       - /usr/lib/librt.so.1
     - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd_detect-866c9680e50cd51f.rlib
@@ -515,7 +474,6 @@ outputs:
     - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc-stable_rt.tsan.a
 
 resolution:
-  /usr/lib/libgcc_s.so.1: gcc
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
   /usr/lib/libdl.so.2: glibc

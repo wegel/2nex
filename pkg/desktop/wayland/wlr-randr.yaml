@@ -6,7 +6,7 @@ package:
   version: 0.4.1
   description: Utility to manage outputs of a Wayland compositor
   homepage: https://sr.ht/~emersion/wlr-randr
-  checksum: 5bf31dcfd30cd6550cc8715905047c567ba30c10edd5ff44f563ae7d5dffdcf0
+  checksum: e63d0b95262defd85ebb66d71699750a091f1b06f354c6ff467175535894110e
 
 sources:
 - name: wlr-randr
@@ -16,12 +16,8 @@ sources:
 dependencies:
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
@@ -39,7 +35,9 @@ dependencies:
 - name: attr
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: meson
@@ -77,8 +75,9 @@ build:
     ninja -C build
     DESTDIR=${OUT_DIR} ninja -C build install
 
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/wlr-randr
+
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

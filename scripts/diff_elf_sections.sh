@@ -6,7 +6,7 @@ set -eu
 # example: diff_elf_sections.sh x86_64/pkg/cli/editors/neovim/0.11.0/outputs/bin /usr/bin/nvim
 
 LOCAL_REPO=${REPO:-.nex/repo}
-ZUB=${ZUB:-./src/zub/target/debug/zub}
+ZUB=${ZUB:-zub}
 REF="${1}"
 BINARY="${2:-}"
 
@@ -44,8 +44,8 @@ if [ -z "$BINARY" ]; then
     BINARY="${BINARY#$dir1}"
 fi
 
-bin1="${dir1}${BINARY}"
-bin2="${dir2}${BINARY}"
+bin1="${dir1}/${BINARY}"
+bin2="${dir2}/${BINARY}"
 
 echo ""
 echo "Comparing: ${BINARY}"

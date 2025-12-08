@@ -6,7 +6,7 @@ package:
   version: 1.13.1
   description: Application launcher for wlroots-based Wayland compositors
   homepage: https://codeberg.org/dnkl/fuzzel
-  checksum: f0549b6baa0df1aae9005e32cf9097df7ea86e30807f0eec8b0972e914ee008c
+  checksum: 55492a3fc4564ac55ea1d19c365f7924814cde8bc1439b88043b02dc06509133
 
 sources:
 - name: fuzzel
@@ -20,8 +20,6 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
@@ -38,10 +36,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
 - name: attr
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: meson
@@ -110,8 +108,9 @@ build:
     ninja -C build
     DESTDIR=${OUT_DIR} ninja -C build install
 
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/fuzzel
+
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

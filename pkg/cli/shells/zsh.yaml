@@ -6,7 +6,7 @@ package:
   version: "5.9"
   description: A very advanced and programmable command interpreter (shell) for UNIX
   homepage: https://www.zsh.org/
-  checksum: aaf064ec5c34487857f28b0884eeb1ca3f121989f214f338b12281ca31198e2f
+  checksum: 82d374246a1d67f6967511e0d856a0264fc4fa6d8b6ed77e12b191d7c92d4dbb
 
 sources:
 - name: zsh
@@ -20,12 +20,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: libcap
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
 - name: bash
@@ -38,8 +36,6 @@ dependencies:
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
-- name: gzip
-  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: xz
   commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
 - name: zlib
@@ -48,12 +44,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
-- name: pcre2
-  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: sed
   commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
 - name: grep
@@ -63,7 +55,7 @@ dependencies:
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [4103:1641, 16475:11148, 37062:12256, 57724:12703, 78377:18084, 99078:27299, 115473:29971, 144145:30267, 172817:30562, 191889:30760]
+  profile: [4103:1726, 12337:9649, 20584:11988, 32922:12960, 45243:13263, 53585:13441, 65908:15839, 82498:21061, 94924:26555, 105391:31521]
 
   script: |
     tar --no-same-owner -xJf /${SOURCE_zsh} -C "${WORK_DIR}" --strip-components=1
@@ -80,8 +72,9 @@ build:
     make
     make DESTDIR="${OUT_DIR}" install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

@@ -6,7 +6,7 @@ package:
   version: 14.1.1
   description: Line-oriented search tool that recursively searches directories for a regex pattern
   homepage: https://github.com/BurntSushi/ripgrep
-  checksum: 1572503683d222e3a517fed427c046783c85970608828f6c4a96d56fca5a089a
+  checksum: a963ea0d1cb83dd580d821bab5489f68049f2fe3d194696771896d606161658e
 
 sources:
 - name: ripgrep
@@ -23,14 +23,12 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gcc
@@ -43,14 +41,8 @@ dependencies:
   commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
 - name: attr
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
-- name: gmp
-  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
-- name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
@@ -88,8 +80,9 @@ build:
     mkdir -p ${OUT_DIR}/usr/bin
     install -m 755 target/x86_64-unknown-linux-gnu/release/rg ${OUT_DIR}/usr/bin/rg
 
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/rg
+
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:

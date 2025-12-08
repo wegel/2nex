@@ -6,7 +6,7 @@ package:
   version: 24.2.7
   description: Open-source OpenGL/Vulkan graphics drivers
   homepage: https://mesa3d.org/
-  checksum: 9b8c1e32faaaed5dbeedaa298986da2c10d27e67ce4bd8de5975d2c20a5b85f2
+  checksum: 632a383f7cb73dd51fb448783afc8f4832df648e6684cd153285b8b3aabed739
 
 sources:
 - name: mesa
@@ -29,12 +29,10 @@ dependencies:
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: libcap
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
-- name: mpfr
-  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: meson
   commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
 - name: ninja
@@ -61,10 +59,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: 2nex-utilities
-  commit: x86_64/pkg/bootstrap/phase3/2nex-utilities-bootstrap/0.0.1/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: libdrm
@@ -82,7 +78,7 @@ dependencies:
 - name: expat
   commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
 - name: flex
-  commit: x86_64/pkg/bootstrap/phase3/flex/2.6.4/bundles/dev
+  commit: x86_64/pkg/core/toolchain/flex/2.6.4/bundles/dev
 - name: bison
   commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
 - name: libffi
@@ -96,7 +92,7 @@ dependencies:
 - name: gettext
   commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
 - name: m4
-  commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
 - name: libxml2
   commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
 - name: sed
@@ -108,7 +104,7 @@ dependencies:
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
-  profile: [8276:430, 20805:649, 41466:7044, 66362:9138, 87055:12212, 107895:15873, 128661:17254, 161741:20150, 190774:25438, 211017:230831]
+  profile: [4138:274, 16692:568, 37359:6152, 62134:8312, 82930:10613, 103564:14800, 124181:16259, 157401:19091, 186321:23864, 206281:223569]
 
   script: |
     # install python dependencies for mesa code generation first (before cd)
@@ -164,8 +160,9 @@ build:
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-    2nex_strip_binaries ${OUT_DIR}
 
 bundles:
   dev:
