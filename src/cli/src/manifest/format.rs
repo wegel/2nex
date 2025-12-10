@@ -171,6 +171,7 @@ fn format_package(value: &Value, original_version: Option<&str>, unstable: bool)
         "homepage",
         "checksum",
         "stable_checksum",
+        "seed",
         "bootstrap",
     ];
 

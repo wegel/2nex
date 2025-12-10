@@ -33,24 +33,46 @@ pub fn run(args: &CheckArgs) -> io::Result<()> {
             has_errors = true;
         }
 
-        // check 2: no bootstrap dependencies in resolution
+        // check 2: no bootstrap dependencies unless seed package
         let manifest_data = load_manifest(file)?;
 
         if let ManifestData::Package(ref manifest) = manifest_data {
-            // build a set of bootstrap dependency names
-            let bootstrap_deps: std::collections::HashSet<&str> = manifest
+            // find all bootstrap dependencies (both /bootstrap/ and /new-bootstrap/)
+            let bootstrap_deps: Vec<&str> = manifest
                 .dependencies
                 .iter()
-                .filter(|dep| dep.commit.contains("/bootstrap/"))
+                .filter(|dep| {
+                    dep.commit.contains("/bootstrap/") || dep.commit.contains("/new-bootstrap/")
+                })
+                .map(|dep| dep.commit.as_str())
+                .collect();
+
+            // error if non-seed package has bootstrap dependencies
+            if !manifest.package.seed && !bootstrap_deps.is_empty() {
+                for dep in &bootstrap_deps {
+                    eprintln!(
+                        "  error: bootstrap dependency '{}' not allowed (missing seed: true)",
+                        dep
+                    );
+                }
+                has_errors = true;
+            }
+
+            // also check resolution values don't point to bootstrap deps
+            let bootstrap_dep_names: std::collections::HashSet<&str> = manifest
+                .dependencies
+                .iter()
+                .filter(|dep| {
+                    dep.commit.contains("/bootstrap/") || dep.commit.contains("/new-bootstrap/")
+                })
                 .filter_map(|dep| dep.name.as_deref())
                 .collect();
 
-            // check resolution values
             for (file_path, dep_name) in &manifest.resolution {
                 if dep_name == "self" {
                     continue;
                 }
-                if bootstrap_deps.contains(dep_name.as_str()) {
+                if bootstrap_dep_names.contains(dep_name.as_str()) {
                     eprintln!(
                         "  error: resolution '{}' -> '{}' points to bootstrap dependency",
                         file_path, dep_name

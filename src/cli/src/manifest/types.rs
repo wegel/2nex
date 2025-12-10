@@ -103,6 +103,9 @@ pub struct Package {
     pub namespace: String,
     pub checksum: Option<String>,
     pub stable_checksum: Option<bool>,
+    /// when true, bootstrap dependencies are allowed (seed packages bootstrap the system)
+    #[serde(default)]
+    pub seed: bool,
 }
 
 impl Package {
