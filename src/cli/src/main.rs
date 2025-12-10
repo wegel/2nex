@@ -30,7 +30,6 @@ pub mod system;
 
 mod utils;
 
-use build::*;
 use deps::*;
 use manifest::*;
 use outputs::*;
@@ -311,30 +310,13 @@ fn hydrate_dependencies(_repo_path: &str, manifest_file: &str) -> io::Result<()>
     Ok(())
 }
 
-/// Check if a package manifest requires sequential building (based on its environment)
-fn requires_sequential_build(manifest: &Manifest, repo_path: &str) -> bool {
-    match load_environment(repo_path, &manifest.build.environment) {
-        Ok(env) => env.execution.sequential,
-        Err(_) => false, // if we can't load the environment, assume non-sequential
-    }
-}
-
-/// Get the build directory for a package based on its environment settings
-fn get_build_dir_for_package(manifest: &Manifest, repo_path: &str) -> String {
-    let use_fixed = match load_environment(repo_path, &manifest.build.environment) {
-        Ok(env) => env.execution.fixed_build_dir,
-        Err(_) => false,
-    };
-
-    if use_fixed {
-        ".nex/tmp/build_rootfs".to_string()
-    } else {
-        format!(
-            ".nex/tmp/build_rootfs_{}_{}",
-            manifest.package.slug.replace("/", "_"),
-            manifest.package.namespace.replace("/", "_")
-        )
-    }
+/// Get the build directory for a package (unique per package for parallel builds)
+fn get_build_dir_for_package(manifest: &Manifest) -> String {
+    format!(
+        ".nex/tmp/build_rootfs_{}_{}",
+        manifest.package.slug.replace("/", "_"),
+        manifest.package.namespace.replace("/", "_")
+    )
 }
 
 fn refresh_package_metadata(
@@ -814,7 +796,7 @@ fn build_packages_parallel(
 
     while !remaining.is_empty() {
         // find all packages that can be built in this wave
-        let mut wave: Vec<NodeIndex> = remaining
+        let wave: Vec<NodeIndex> = remaining
             .iter()
             .filter(|&&node| {
                 let deps = &dependencies[&node];
@@ -830,33 +812,6 @@ fn build_packages_parallel(
                 io::ErrorKind::Other,
                 "Cannot make progress: all remaining packages have unmet dependencies",
             ));
-        }
-
-        // packages with sequential execution requirement must build one at a time
-        // (they share .nex/tmp/build_rootfs directory due to fixed_build_dir setting)
-        let has_sequential = wave.iter().any(|&node_idx| {
-            let source = &graph[node_idx];
-            if let Ok(ManifestData::Package(m)) = load_manifest_from_source(source) {
-                requires_sequential_build(&m, &opts.repo_path)
-            } else {
-                false
-            }
-        });
-
-        if has_sequential {
-            // find the first sequential package and build only that one
-            let sequential_idx = wave
-                .iter()
-                .position(|&node_idx| {
-                    let source = &graph[node_idx];
-                    if let Ok(ManifestData::Package(m)) = load_manifest_from_source(source) {
-                        requires_sequential_build(&m, &opts.repo_path)
-                    } else {
-                        false
-                    }
-                })
-                .unwrap();
-            wave = vec![wave[sequential_idx]];
         }
 
         println!("Building wave of {} package(s) in parallel...", wave.len());
@@ -882,7 +837,7 @@ fn build_packages_parallel(
                 let result = match manifest_data {
                     ManifestData::Package(mut manifest) => {
                         // get build directory based on environment settings
-                        let build_dir = get_build_dir_for_package(&manifest, &opts.repo_path);
+                        let build_dir = get_build_dir_for_package(&manifest);
 
                         // create opts for this build
                         let build_opts = BuildOpts {
@@ -1114,7 +1069,7 @@ fn add_missing_checksums_to_manifests(
 
                 // build to get checksum
                 let mut manifest_copy = manifest.clone();
-                let build_dir = get_build_dir_for_package(&manifest, repo_path);
+                let build_dir = get_build_dir_for_package(&manifest);
                 let build_opts = BuildOpts {
                     repo_path: repo_path.to_string(),
                     manifest_file: manifest_path.to_str().unwrap().to_string(),

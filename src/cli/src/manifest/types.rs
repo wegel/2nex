@@ -207,12 +207,6 @@ pub struct ExecutionConfig {
     /// whether to chroot into the build directory (false = run on host filesystem)
     #[serde(default = "default_true")]
     pub chroot: bool,
-    /// whether to use a fixed build directory name (for GCC sysroot compatibility)
-    #[serde(default)]
-    pub fixed_build_dir: bool,
-    /// whether to force sequential builds (no parallel execution)
-    #[serde(default)]
-    pub sequential: bool,
 }
 
 fn default_true() -> bool {
