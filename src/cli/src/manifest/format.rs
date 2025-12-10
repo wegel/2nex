@@ -49,7 +49,7 @@ fn extract_version_from_text(contents: &str) -> Option<String> {
     None
 }
 
-/// check if manifest has unstable checksums (bootstrap or stable_checksum: false)
+/// check if manifest has unstable checksums (stable_checksum: false)
 fn has_unstable_checksum(mapping: &Mapping) -> bool {
     let pkg_key = Value::String("package".to_string());
     let sys_key = Value::String("system".to_string());
@@ -57,12 +57,6 @@ fn has_unstable_checksum(mapping: &Mapping) -> bool {
     let header = mapping.get(&pkg_key).or_else(|| mapping.get(&sys_key));
 
     if let Some(Value::Mapping(pkg)) = header {
-        // bootstrap: true means unstable
-        let bootstrap_key = Value::String("bootstrap".to_string());
-        if let Some(Value::Bool(true)) = pkg.get(&bootstrap_key) {
-            return true;
-        }
-        // stable_checksum: false means unstable
         let stable_key = Value::String("stable_checksum".to_string());
         if let Some(Value::Bool(false)) = pkg.get(&stable_key) {
             return true;
@@ -81,7 +75,7 @@ fn is_bootstrap_namespace(mapping: &Mapping) -> bool {
     if let Some(Value::Mapping(pkg)) = header {
         let ns_key = Value::String("namespace".to_string());
         if let Some(Value::String(ns)) = pkg.get(&ns_key) {
-            return ns.starts_with("bootstrap/");
+            return ns.contains("bootstrap/");
         }
     }
     false
@@ -172,7 +166,6 @@ fn format_package(value: &Value, original_version: Option<&str>, unstable: bool)
         "checksum",
         "stable_checksum",
         "seed",
-        "bootstrap",
     ];
 
     for field in fields {

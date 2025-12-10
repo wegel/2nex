@@ -37,13 +37,11 @@ pub fn run(args: &CheckArgs) -> io::Result<()> {
         let manifest_data = load_manifest(file)?;
 
         if let ManifestData::Package(ref manifest) = manifest_data {
-            // find all bootstrap dependencies (both /bootstrap/ and /new-bootstrap/)
+            // find all bootstrap dependencies
             let bootstrap_deps: Vec<&str> = manifest
                 .dependencies
                 .iter()
-                .filter(|dep| {
-                    dep.commit.contains("/bootstrap/") || dep.commit.contains("/new-bootstrap/")
-                })
+                .filter(|dep| dep.commit.contains("/bootstrap/"))
                 .map(|dep| dep.commit.as_str())
                 .collect();
 
@@ -62,9 +60,7 @@ pub fn run(args: &CheckArgs) -> io::Result<()> {
             let bootstrap_dep_names: std::collections::HashSet<&str> = manifest
                 .dependencies
                 .iter()
-                .filter(|dep| {
-                    dep.commit.contains("/bootstrap/") || dep.commit.contains("/new-bootstrap/")
-                })
+                .filter(|dep| dep.commit.contains("/bootstrap/"))
                 .filter_map(|dep| dep.name.as_deref())
                 .collect();
 
