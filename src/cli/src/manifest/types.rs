@@ -157,7 +157,32 @@ pub struct SystemManifest {
     pub dependencies: Vec<Dependency>,
     #[serde(default)]
     pub sources: Vec<Source>,
+    #[serde(default)]
+    pub overlays: Vec<PathBuf>,
     pub build: Build,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct Overlay {
+    #[serde(default)]
+    pub files: Vec<OverlayEntry>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct OverlayEntry {
+    pub path: PathBuf,
+    #[serde(default)]
+    pub mode: Option<u32>,
+    #[serde(default)]
+    pub content: Option<String>,
+    #[serde(default)]
+    pub source: Option<PathBuf>,
+    #[serde(default)]
+    pub symlink: Option<PathBuf>,
+    #[serde(default)]
+    pub directory: bool,
+    #[serde(default)]
+    pub replace: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

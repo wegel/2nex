@@ -19,7 +19,6 @@ pub mod commands;
 pub mod deps;
 pub mod go_vendor;
 pub mod manifest;
-pub mod zig_vendor;
 pub mod materializer;
 pub mod outputs;
 pub mod progress;
@@ -27,6 +26,7 @@ pub mod refs;
 pub mod repo;
 pub mod store;
 pub mod system;
+pub mod zig_vendor;
 
 mod utils;
 
@@ -1088,7 +1088,11 @@ fn add_missing_checksums_to_manifests(
                     multi_progress: None,
                 };
 
-                crate::build::build_package_manifest_with_dir(&build_opts, &mut manifest_copy, &build_dir)?;
+                crate::build::build_package_manifest_with_dir(
+                    &build_opts,
+                    &mut manifest_copy,
+                    &build_dir,
+                )?;
                 println!("  Built and checksummed");
             }
             ManifestData::System(_) => {
@@ -1486,7 +1490,8 @@ fn link_manifest_dependencies(manifest_file: &str) -> io::Result<()> {
 
                 for pattern in &patterns {
                     if updated_content.contains(pattern) {
-                        updated_content = updated_content.replace(pattern, &format!("environment: {}", env_sha));
+                        updated_content =
+                            updated_content.replace(pattern, &format!("environment: {}", env_sha));
                         linked_count += 1;
                         break;
                     }
@@ -1500,10 +1505,7 @@ fn link_manifest_dependencies(manifest_file: &str) -> io::Result<()> {
     // write updated content
     if linked_count > 0 {
         fs::write(manifest_file, updated_content)?;
-        println!(
-            "\nLinked {} references in {}",
-            linked_count, manifest_file
-        );
+        println!("\nLinked {} references in {}", linked_count, manifest_file);
     } else {
         println!("\nNo references to link or all already linked");
     }

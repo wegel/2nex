@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use std::fs;
-use std::io;
-use std::os::unix::fs::symlink;
+use std::fs::{self, Permissions};
+use std::io::{self, Write};
+use std::os::unix::fs::{symlink, PermissionsExt};
 use std::path::Path;
 use std::process;
 
@@ -9,8 +9,8 @@ use walkdir::WalkDir;
 
 use crate::build::*;
 use crate::deps::*;
-use crate::manifest::*;
 use crate::manifest::types::BuildPaths;
+use crate::manifest::*;
 use crate::materializer::resolver::resolve_runtime_deps_precomputed;
 use crate::materializer::types::MaterializeRequest;
 use crate::materializer::{checkout_files, flatten_capsule_precomputed};
@@ -76,16 +76,30 @@ pub fn build_system_manifest_with_dir(
         )?;
     }
 
+    apply_overlays(&manifest.overlays, base_dir)?;
+
     let use_absolute_paths = !build_env.execution.chroot;
 
-    let env_vars = build_system_env_vars(manifest, download_dir, base_dir, use_absolute_paths, &build_env.paths)?;
+    let env_vars = build_system_env_vars(
+        manifest,
+        download_dir,
+        base_dir,
+        use_absolute_paths,
+        &build_env.paths,
+    )?;
 
     println!(
         "Building system {} {}",
         manifest.system.slug, manifest.system.version
     );
 
-    run_build_script_with_env(&manifest.build.script, base_dir, &env_vars, &build_env, None)?;
+    run_build_script_with_env(
+        &manifest.build.script,
+        base_dir,
+        &env_vars,
+        &build_env,
+        None,
+    )?;
 
     let target_dir = Path::new(base_dir).join("target");
     let checksum = calculate_output_checksum(&target_dir)?;
@@ -173,8 +187,22 @@ pub fn build_system_manifest_with_dir(
             )?;
         }
 
-        let env_vars = build_system_env_vars(manifest, download_dir, base_dir, use_absolute_paths, &build_env.paths)?;
-        run_build_script_with_env(&manifest.build.script, base_dir, &env_vars, &build_env, None)?;
+        apply_overlays(&manifest.overlays, base_dir)?;
+
+        let env_vars = build_system_env_vars(
+            manifest,
+            download_dir,
+            base_dir,
+            use_absolute_paths,
+            &build_env.paths,
+        )?;
+        run_build_script_with_env(
+            &manifest.build.script,
+            base_dir,
+            &env_vars,
+            &build_env,
+            None,
+        )?;
 
         let second_checksum = calculate_output_checksum(&target_dir)?;
         println!("Second build checksum: {}", second_checksum);
@@ -210,7 +238,14 @@ pub fn build_system_env_vars(
     paths: &BuildPaths,
 ) -> io::Result<HashMap<String, String>> {
     // system builds are always chroot, so no canonical prefix needed
-    let mut env_vars = handle_inputs(&manifest.sources, download_dir, base_dir, use_absolute_paths, paths, None)?;
+    let mut env_vars = handle_inputs(
+        &manifest.sources,
+        download_dir,
+        base_dir,
+        use_absolute_paths,
+        paths,
+        None,
+    )?;
     env_vars.insert("SYSTEM_NAME".to_string(), manifest.system.name.clone());
     env_vars.insert("SYSTEM_SLUG".to_string(), manifest.system.slug.clone());
     env_vars.insert(
@@ -393,9 +428,8 @@ pub fn materialize_nex_structure(
 
         // check if this is a kernel output (boot or modules) - these need special handling
         let is_boot_output = commit.contains("/outputs/boot");
-        let is_kernel_module_output = commit.contains("/kernel/linux/")
-            && commit.contains("/outputs/")
-            && !is_boot_output;
+        let is_kernel_module_output =
+            commit.contains("/kernel/linux/") && commit.contains("/outputs/") && !is_boot_output;
 
         // kernel module outputs are layered directly into /target/usr/lib/modules/
         // they don't go through the /nex/pkg/ structure
@@ -663,6 +697,146 @@ fn create_target_fhs_symlinks(target_dir: &Path) -> io::Result<()> {
     let usr_sbin = target_dir.join("usr/sbin");
     if !usr_sbin.exists() {
         symlink("bin", &usr_sbin)?;
+    }
+
+    Ok(())
+}
+
+/// Apply overlay YAML files to /target.
+fn apply_overlays(overlays: &[std::path::PathBuf], base_dir: &str) -> io::Result<()> {
+    use crate::manifest::types::Overlay;
+
+    if overlays.is_empty() {
+        return Ok(());
+    }
+
+    let target_dir = Path::new(base_dir).join("target");
+
+    for overlay_path in overlays {
+        if !overlay_path.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("overlay not found: {}", overlay_path.display()),
+            ));
+        }
+
+        println!("  Applying overlay: {}", overlay_path.display());
+
+        let overlay_content = fs::read_to_string(overlay_path).map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("failed to read {}: {}", overlay_path.display(), e),
+            )
+        })?;
+
+        let overlay: Overlay = serde_yaml::from_str(&overlay_content).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("failed to parse {}: {}", overlay_path.display(), e),
+            )
+        })?;
+
+        let overlay_dir = overlay_path.parent().unwrap_or(Path::new("."));
+
+        for entry in &overlay.files {
+            let rel_path = entry.path.strip_prefix("/").unwrap_or(&entry.path);
+            let dst = target_dir.join(rel_path);
+
+            // handle existing paths
+            if dst.symlink_metadata().is_ok() {
+                if dst.is_dir() && !dst.is_symlink() {
+                    // existing directory
+                    if entry.replace {
+                        // replace: true - remove the directory
+                        fs::remove_dir_all(&dst).map_err(|e| {
+                            io::Error::new(
+                                e.kind(),
+                                format!("failed to remove dir {}: {}", dst.display(), e),
+                            )
+                        })?;
+                    } else if !entry.directory {
+                        // can't replace dir with non-dir without replace: true
+                        return Err(io::Error::new(
+                            io::ErrorKind::AlreadyExists,
+                            format!("overlay wants to replace directory {} with non-directory (use replace: true)", dst.display()),
+                        ));
+                    }
+                    // else: directory exists, entry is directory - just proceed
+                } else {
+                    // existing file or symlink - remove it
+                    fs::remove_file(&dst).map_err(|e| {
+                        io::Error::new(
+                            e.kind(),
+                            format!("failed to remove existing {}: {}", dst.display(), e),
+                        )
+                    })?;
+                }
+            }
+
+            // create parent directories if needed
+            if let Some(parent) = dst.parent() {
+                if !parent.exists() {
+                    fs::create_dir_all(parent).map_err(|e| {
+                        io::Error::new(
+                            e.kind(),
+                            format!("failed to create parent dir for {}: {}", dst.display(), e),
+                        )
+                    })?;
+                }
+            }
+
+            if entry.directory {
+                fs::create_dir_all(&dst)?;
+                if let Some(mode) = entry.mode {
+                    fs::set_permissions(&dst, Permissions::from_mode(mode))?;
+                }
+            } else if let Some(ref target) = entry.symlink {
+                symlink(target, &dst).map_err(|e| {
+                    io::Error::new(
+                        e.kind(),
+                        format!(
+                            "failed to create symlink {} -> {}: {}",
+                            dst.display(),
+                            target.display(),
+                            e
+                        ),
+                    )
+                })?;
+            } else if let Some(ref content) = entry.content {
+                let mut file = fs::File::create(&dst).map_err(|e| {
+                    io::Error::new(
+                        e.kind(),
+                        format!("failed to create file {}: {}", dst.display(), e),
+                    )
+                })?;
+                file.write_all(content.as_bytes())?;
+                if let Some(mode) = entry.mode {
+                    fs::set_permissions(&dst, Permissions::from_mode(mode))?;
+                }
+            } else if let Some(ref source) = entry.source {
+                let src = overlay_dir.join(source);
+                fs::copy(&src, &dst).map_err(|e| {
+                    io::Error::new(
+                        e.kind(),
+                        format!(
+                            "failed to copy {} -> {}: {}",
+                            src.display(),
+                            dst.display(),
+                            e
+                        ),
+                    )
+                })?;
+                if let Some(mode) = entry.mode {
+                    fs::set_permissions(&dst, Permissions::from_mode(mode))?;
+                }
+            } else {
+                // empty file
+                fs::File::create(&dst)?;
+                if let Some(mode) = entry.mode {
+                    fs::set_permissions(&dst, Permissions::from_mode(mode))?;
+                }
+            }
+        }
     }
 
     Ok(())

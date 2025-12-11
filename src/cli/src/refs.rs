@@ -125,9 +125,15 @@ impl PackageRef {
 
         match &self.ref_type {
             RefType::Output { name, path: None } => format!("{}/outputs/{}", base, name),
-            RefType::Output { name, path: Some(p) } => format!("{}/outputs/{}/{}", base, name, p),
+            RefType::Output {
+                name,
+                path: Some(p),
+            } => format!("{}/outputs/{}/{}", base, name, p),
             RefType::Bundle { name, path: None } => format!("{}/bundles/{}", base, name),
-            RefType::Bundle { name, path: Some(p) } => format!("{}/bundles/{}/{}", base, name, p),
+            RefType::Bundle {
+                name,
+                path: Some(p),
+            } => format!("{}/bundles/{}/{}", base, name, p),
             RefType::Files { path: None } => format!("{}/files", base),
             RefType::Files { path: Some(p) } => format!("{}/files/{}", base, p),
         }
@@ -205,13 +211,18 @@ mod tests {
                 path: None
             }
         );
-        assert_eq!(r.commit_ref(), "x86_64/pkg/libs/compression/bzip2/1.0.8/outputs/bin");
+        assert_eq!(
+            r.commit_ref(),
+            "x86_64/pkg/libs/compression/bzip2/1.0.8/outputs/bin"
+        );
         assert_eq!(r.internal_path(), None);
     }
 
     #[test]
     fn test_parse_output_with_path() {
-        let r = PackageRef::parse("x86_64/pkg/libs/compression/bzip2/1.0.8/outputs/bin/usr/bin/bzip2").unwrap();
+        let r =
+            PackageRef::parse("x86_64/pkg/libs/compression/bzip2/1.0.8/outputs/bin/usr/bin/bzip2")
+                .unwrap();
         assert_eq!(
             r.ref_type,
             RefType::Output {
@@ -219,7 +230,10 @@ mod tests {
                 path: Some("usr/bin/bzip2".to_string())
             }
         );
-        assert_eq!(r.commit_ref(), "x86_64/pkg/libs/compression/bzip2/1.0.8/outputs/bin");
+        assert_eq!(
+            r.commit_ref(),
+            "x86_64/pkg/libs/compression/bzip2/1.0.8/outputs/bin"
+        );
         assert_eq!(r.internal_path(), Some("usr/bin/bzip2"));
     }
 
@@ -240,7 +254,8 @@ mod tests {
 
     #[test]
     fn test_parse_bundle_with_path() {
-        let r = PackageRef::parse("x86_64/pkg/cli/editors/neovim/0.11.0/bundles/full/usr/bin/nvim").unwrap();
+        let r = PackageRef::parse("x86_64/pkg/cli/editors/neovim/0.11.0/bundles/full/usr/bin/nvim")
+            .unwrap();
         assert_eq!(
             r.ref_type,
             RefType::Bundle {
@@ -248,7 +263,10 @@ mod tests {
                 path: Some("usr/bin/nvim".to_string())
             }
         );
-        assert_eq!(r.commit_ref(), "x86_64/pkg/cli/editors/neovim/0.11.0/bundles/full");
+        assert_eq!(
+            r.commit_ref(),
+            "x86_64/pkg/cli/editors/neovim/0.11.0/bundles/full"
+        );
         assert_eq!(r.internal_path(), Some("usr/bin/nvim"));
     }
 
@@ -256,7 +274,10 @@ mod tests {
     fn test_parse_files_ref() {
         let r = PackageRef::parse("x86_64/pkg/libs/compression/bzip2/1.0.8/files").unwrap();
         assert_eq!(r.ref_type, RefType::Files { path: None });
-        assert_eq!(r.commit_ref(), "x86_64/pkg/libs/compression/bzip2/1.0.8/files");
+        assert_eq!(
+            r.commit_ref(),
+            "x86_64/pkg/libs/compression/bzip2/1.0.8/files"
+        );
     }
 
     #[test]
@@ -269,7 +290,10 @@ mod tests {
                 path: Some("usr/bin/bzip2".to_string())
             }
         );
-        assert_eq!(r.commit_ref(), "x86_64/pkg/libs/compression/bzip2/1.0.8/files");
+        assert_eq!(
+            r.commit_ref(),
+            "x86_64/pkg/libs/compression/bzip2/1.0.8/files"
+        );
         assert_eq!(r.internal_path(), Some("usr/bin/bzip2"));
     }
 

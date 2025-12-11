@@ -391,7 +391,11 @@ fn download_and_prepare_dep(
         return Ok(Vec::new());
     }
 
-    println!("  Downloading {} ({})", dep.name, &dep.hash[..30.min(dep.hash.len())]);
+    println!(
+        "  Downloading {} ({})",
+        dep.name,
+        &dep.hash[..30.min(dep.hash.len())]
+    );
 
     // download to cache (use sanitized name for cache dir to avoid path issues)
     let cache_name = dep.hash.replace('/', "_");
@@ -520,7 +524,14 @@ fn download_url_dep(url: &str, dest: &Path) -> io::Result<()> {
     let tmp_archive = dest.with_extension("tar.gz");
 
     let status = Command::new("curl")
-        .args(["-L", "-f", "-s", "--output", tmp_archive.to_str().unwrap(), url])
+        .args([
+            "-L",
+            "-f",
+            "-s",
+            "--output",
+            tmp_archive.to_str().unwrap(),
+            url,
+        ])
         .status()?;
 
     if !status.success() {
@@ -575,7 +586,14 @@ fn try_download_archive(url: &str, dest: &Path) -> io::Result<bool> {
     let tmp_archive = dest.with_extension("tar.gz");
 
     let status = Command::new("curl")
-        .args(["-L", "-f", "-s", "--output", tmp_archive.to_str().unwrap(), url])
+        .args([
+            "-L",
+            "-f",
+            "-s",
+            "--output",
+            tmp_archive.to_str().unwrap(),
+            url,
+        ])
         .status()?;
 
     if !status.success() {

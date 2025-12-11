@@ -42,7 +42,9 @@ pub fn resolve_dependency_closure(
 /// extract package identity (namespace, slug) from a commit ref.
 fn get_package_identity(commit: &str) -> Option<(String, String)> {
     use crate::refs::PackageRef;
-    PackageRef::parse(commit).ok().map(|r| (r.namespace, r.slug))
+    PackageRef::parse(commit)
+        .ok()
+        .map(|r| (r.namespace, r.slug))
 }
 
 /// visit a commit in dependency graph traversal (DFS with cycle detection).

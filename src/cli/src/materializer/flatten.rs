@@ -192,13 +192,19 @@ fn resolve_transitive_deps(
             (dep_name.clone(), false)
         };
 
-        eprintln!("[FLATTEN] Processing: {} from {} (self_cont={})", file_path, actual_dep_name, is_self_continuation);
+        eprintln!(
+            "[FLATTEN] Processing: {} from {} (self_cont={})",
+            file_path, actual_dep_name, is_self_continuation
+        );
 
         // find the dependency by name in source manifest
         let dep = match find_dependency_by_name(source_manifest, &actual_dep_name) {
             Some(d) => d,
             None => {
-                eprintln!("[FLATTEN]   SKIP: dep {} not found in source manifest (pkg={})", actual_dep_name, source_manifest.package.slug);
+                eprintln!(
+                    "[FLATTEN]   SKIP: dep {} not found in source manifest (pkg={})",
+                    actual_dep_name, source_manifest.package.slug
+                );
                 continue;
             }
         };
@@ -211,7 +217,11 @@ fn resolve_transitive_deps(
 
         // only add to results if not a self-continuation (already added when queued)
         if !is_self_continuation {
-            result.push((file_path.clone(), actual_dep_name.clone(), files_commit.clone()));
+            result.push((
+                file_path.clone(),
+                actual_dep_name.clone(),
+                files_commit.clone(),
+            ));
         }
 
         // look up the dependency's manifest to get transitive deps
@@ -237,13 +247,24 @@ fn resolve_transitive_deps(
             if seen_files.insert(needed_file.clone()) {
                 // resolve using dependency manifest's resolution map
                 if let Some(transitive_dep_name) = dep_manifest.resolution.get(&needed_file) {
-                    eprintln!("[FLATTEN]     {} -> {} (resolution)", needed_file, transitive_dep_name);
+                    eprintln!(
+                        "[FLATTEN]     {} -> {} (resolution)",
+                        needed_file, transitive_dep_name
+                    );
                     if transitive_dep_name == "self" {
                         // "self" means from the same package we're currently processing
                         // add to results and queue for further resolution using same dep context
-                        result.push((needed_file.clone(), actual_dep_name.clone(), files_commit.clone()));
+                        result.push((
+                            needed_file.clone(),
+                            actual_dep_name.clone(),
+                            files_commit.clone(),
+                        ));
                         // queue with source_manifest (which has this package as a dep), not dep_manifest
-                        queue.push((needed_file, format!("__self:{}", actual_dep_name), source_manifest));
+                        queue.push((
+                            needed_file,
+                            format!("__self:{}", actual_dep_name),
+                            source_manifest,
+                        ));
                     } else {
                         queue.push((needed_file, transitive_dep_name.clone(), dep_manifest));
                     }

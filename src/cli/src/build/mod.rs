@@ -9,8 +9,8 @@ use walkdir::WalkDir;
 use sha2::{Digest, Sha256};
 
 use crate::commands::build::BuildOpts;
-use crate::manifest::*;
 use crate::manifest::types::{BuildEnvironment, BuildPaths};
+use crate::manifest::*;
 use crate::outputs::*;
 use crate::progress::{self, BuildProgressConfig};
 use crate::store::{
@@ -239,9 +239,18 @@ pub fn handle_inputs(
         // chroot builds use relative paths
         let path_str = if use_absolute_paths {
             let prefix = canonical_prefix.unwrap_or("/tmp/bootstrap");
-            format!("{}/{}/{}", prefix, paths.inputs, input_path.file_name().unwrap().to_str().unwrap())
+            format!(
+                "{}/{}/{}",
+                prefix,
+                paths.inputs,
+                input_path.file_name().unwrap().to_str().unwrap()
+            )
         } else {
-            format!("./{}/{}", paths.inputs, input_path.file_name().unwrap().to_str().unwrap())
+            format!(
+                "./{}/{}",
+                paths.inputs,
+                input_path.file_name().unwrap().to_str().unwrap()
+            )
         };
 
         input_env_vars.insert(format!("SOURCE{}", i), path_str.clone());

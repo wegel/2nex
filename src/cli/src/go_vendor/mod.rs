@@ -53,7 +53,11 @@ pub fn vendor_from_sum(
 
     // parse go.mod to get required modules (direct and indirect)
     let (direct_deps, indirect_deps) = parse_go_mod(&go_mod_content)?;
-    let all_required: HashSet<String> = direct_deps.iter().chain(indirect_deps.iter()).cloned().collect();
+    let all_required: HashSet<String> = direct_deps
+        .iter()
+        .chain(indirect_deps.iter())
+        .cloned()
+        .collect();
 
     // parse go.sum and filter to only modules in go.mod
     let all_modules = parse_go_sum(&go_sum_content)?;
@@ -138,7 +142,11 @@ fn parse_go_mod(content: &str) -> io::Result<(HashSet<String>, HashSet<String>)>
 
         // handle single-line require: require github.com/foo/bar v1.0.0
         if line.starts_with("require ") && !line.contains("(") {
-            let parts: Vec<&str> = line.strip_prefix("require ").unwrap().split_whitespace().collect();
+            let parts: Vec<&str> = line
+                .strip_prefix("require ")
+                .unwrap()
+                .split_whitespace()
+                .collect();
             if !parts.is_empty() {
                 let is_indirect = line.contains("// indirect");
                 if is_indirect {
@@ -336,7 +344,11 @@ fn escape_module_path(path: &str) -> String {
 
 /// create vendor/modules.txt file
 /// lists all packages (directories with .go files) for each module
-fn create_modules_txt(modules: &[GoModule], vendor_dir: &Path, _direct_deps: &HashSet<String>) -> io::Result<()> {
+fn create_modules_txt(
+    modules: &[GoModule],
+    vendor_dir: &Path,
+    _direct_deps: &HashSet<String>,
+) -> io::Result<()> {
     let mut lines = Vec::new();
 
     // sort modules for reproducibility
@@ -405,12 +417,10 @@ fn find_go_packages(dir: &Path, base_path: &str) -> io::Result<Vec<String>> {
     }
 
     // check if this directory has .go files
-    let has_go_files = fs::read_dir(dir)?
-        .filter_map(|e| e.ok())
-        .any(|e| {
-            e.path().extension().map_or(false, |ext| ext == "go")
-                && !e.file_name().to_string_lossy().ends_with("_test.go")
-        });
+    let has_go_files = fs::read_dir(dir)?.filter_map(|e| e.ok()).any(|e| {
+        e.path().extension().map_or(false, |ext| ext == "go")
+            && !e.file_name().to_string_lossy().ends_with("_test.go")
+    });
 
     if has_go_files {
         packages.push(base_path.to_string());

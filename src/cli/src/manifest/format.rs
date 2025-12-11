@@ -81,7 +81,11 @@ fn is_bootstrap_namespace(mapping: &Mapping) -> bool {
     false
 }
 
-fn format_root(mapping: &Mapping, is_system: bool, original_version: Option<&str>) -> io::Result<String> {
+fn format_root(
+    mapping: &Mapping,
+    is_system: bool,
+    original_version: Option<&str>,
+) -> io::Result<String> {
     let mut output = String::new();
     let unstable = has_unstable_checksum(mapping);
     let bootstrap_ns = is_bootstrap_namespace(mapping);
@@ -147,7 +151,11 @@ fn format_root(mapping: &Mapping, is_system: bool, original_version: Option<&str
     Ok(output)
 }
 
-fn format_package(value: &Value, original_version: Option<&str>, unstable: bool) -> io::Result<String> {
+fn format_package(
+    value: &Value,
+    original_version: Option<&str>,
+    unstable: bool,
+) -> io::Result<String> {
     let mapping = value
         .as_mapping()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "package must be a mapping"))?;
@@ -188,7 +196,11 @@ fn format_package(value: &Value, original_version: Option<&str>, unstable: bool)
     Ok(output)
 }
 
-fn format_system(value: &Value, original_version: Option<&str>, unstable: bool) -> io::Result<String> {
+fn format_system(
+    value: &Value,
+    original_version: Option<&str>,
+    unstable: bool,
+) -> io::Result<String> {
     let mapping = value
         .as_mapping()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "system must be a mapping"))?;
@@ -272,7 +284,16 @@ fn format_sources(value: &Value) -> io::Result<String> {
             let mut first = true;
 
             // order: name, url, file, sha256, then auto-vendoring fields
-            for field in ["name", "url", "file", "sha256", "cargo_lock", "cargo_toml", "go_sum", "zig_zon"] {
+            for field in [
+                "name",
+                "url",
+                "file",
+                "sha256",
+                "cargo_lock",
+                "cargo_toml",
+                "go_sum",
+                "zig_zon",
+            ] {
                 let key = Value::String(field.to_string());
                 if let Some(val) = mapping.get(&key) {
                     if first {

@@ -294,7 +294,11 @@ fn download_and_extract_git_crate(
     let cached_dir = cache_dir.join(&pkg.commit_sha);
 
     if !cached_dir.exists() {
-        println!("  Downloading {} (git: {})", crate_dir_name, &pkg.commit_sha[..12]);
+        println!(
+            "  Downloading {} (git: {})",
+            crate_dir_name,
+            &pkg.commit_sha[..12]
+        );
 
         // try GitHub-style archive URL first
         let archive_url = if pkg.repo_url.contains("github.com") {
@@ -390,7 +394,13 @@ fn download_git_clone(pkg: &GitPackage, dest_dir: &Path) -> io::Result<()> {
 
     // shallow clone at specific commit
     let status = Command::new("git")
-        .args(["clone", "--depth", "1", &pkg.repo_url, tmp_clone.to_str().unwrap()])
+        .args([
+            "clone",
+            "--depth",
+            "1",
+            &pkg.repo_url,
+            tmp_clone.to_str().unwrap(),
+        ])
         .status()?;
 
     if !status.success() {
@@ -403,20 +413,36 @@ fn download_git_clone(pkg: &GitPackage, dest_dir: &Path) -> io::Result<()> {
 
     // fetch specific commit (shallow clone might not have it)
     let status = Command::new("git")
-        .args(["-C", tmp_clone.to_str().unwrap(), "fetch", "--depth", "1", "origin", &pkg.commit_sha])
+        .args([
+            "-C",
+            tmp_clone.to_str().unwrap(),
+            "fetch",
+            "--depth",
+            "1",
+            "origin",
+            &pkg.commit_sha,
+        ])
         .status()?;
 
     if !status.success() {
         fs::remove_dir_all(&tmp_clone).ok();
         return Err(io::Error::new(
             io::ErrorKind::Other,
-            format!("Failed to fetch commit {} from {}", pkg.commit_sha, pkg.repo_url),
+            format!(
+                "Failed to fetch commit {} from {}",
+                pkg.commit_sha, pkg.repo_url
+            ),
         ));
     }
 
     // checkout the commit
     let status = Command::new("git")
-        .args(["-C", tmp_clone.to_str().unwrap(), "checkout", &pkg.commit_sha])
+        .args([
+            "-C",
+            tmp_clone.to_str().unwrap(),
+            "checkout",
+            &pkg.commit_sha,
+        ])
         .status()?;
 
     if !status.success() {

@@ -111,20 +111,12 @@ pub fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Re
 
     // handle go_sum source type (automatic Go module vendoring)
     if let Some(go_sum_ref) = &input_spec.go_sum {
-        return crate::go_vendor::vendor_from_sum(
-            go_sum_ref,
-            &input_spec.sha256,
-            download_dir,
-        );
+        return crate::go_vendor::vendor_from_sum(go_sum_ref, &input_spec.sha256, download_dir);
     }
 
     // handle zig_zon source type (automatic Zig dependency vendoring)
     if let Some(zig_zon_ref) = &input_spec.zig_zon {
-        return crate::zig_vendor::vendor_from_zon(
-            zig_zon_ref,
-            &input_spec.sha256,
-            download_dir,
-        );
+        return crate::zig_vendor::vendor_from_zon(zig_zon_ref, &input_spec.sha256, download_dir);
     }
 
     // for local files, verify directly from source - no caching

@@ -12,8 +12,8 @@ use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use zub;
 use nix::unistd::Uid;
+use zub;
 
 /// detect the appropriate repo path based on environment.
 /// checks in order: .nex/repo (local build-time) -> /nex/repo (runtime)

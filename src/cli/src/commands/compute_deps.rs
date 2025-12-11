@@ -528,7 +528,9 @@ fn find_or_create_files_commit(
             io::ErrorKind::InvalidData,
             format!(
                 "Failed to parse manifest for {}: {} (path: {})",
-                provider_key, e, manifest_path.display()
+                provider_key,
+                e,
+                manifest_path.display()
             ),
         ));
     }
@@ -604,7 +606,10 @@ fn find_or_create_files_commit(
     let manifest_exists = std::path::Path::new(&manifest_path_str).exists();
 
     // check what outputs would be looked for
-    let sample_ref = format!("x86_64/pkg/{}/{}/{}/outputs/lib", namespace_path, slug, version);
+    let sample_ref = format!(
+        "x86_64/pkg/{}/{}/{}/outputs/lib",
+        namespace_path, slug, version
+    );
     let ref_path = Path::new(repo_path).join("refs/heads").join(&sample_ref);
 
     Err(io::Error::new(
