@@ -788,8 +788,8 @@ fn trace_commit_recursive(
 ) -> io::Result<bool> {
     let matches_pattern = commit.contains(pattern);
 
-    let pkg_name = if let Some((slug, version, namespace)) = parse_commit_ref(commit) {
-        format!("{}/{}/{}", namespace, slug, version)
+    let pkg_name = if let Ok(pkg_ref) = crate::refs::PackageRef::parse(commit) {
+        format!("{}/{}/{}", pkg_ref.namespace, pkg_ref.slug, pkg_ref.version)
     } else {
         commit.to_string()
     };
