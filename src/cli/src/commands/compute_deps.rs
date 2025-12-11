@@ -74,7 +74,7 @@ pub fn run(args: &ComputeDepsArgs) -> io::Result<()> {
 
     // refresh store metadata if not dry-run (manifest was updated)
     if !args.dry_run {
-        crate::refresh_package_metadata(&repo_path, &manifest, manifest_path)?;
+        crate::build::refresh_package_metadata(&repo_path, &manifest, manifest_path)?;
     }
 
     Ok(())

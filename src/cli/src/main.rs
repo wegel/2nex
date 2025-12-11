@@ -6,7 +6,6 @@ use std::sync::{Arc, Mutex};
 
 use clap::{Parser, Subcommand};
 use rayon::prelude::*;
-use sha2::{Digest, Sha256};
 
 use std::fmt;
 
@@ -30,9 +29,9 @@ pub mod zig_vendor;
 
 mod utils;
 
+use build::{check_if_built, compute_manifest_hash};
 use deps::*;
 use manifest::*;
-use outputs::*;
 use store::*;
 #[derive(Parser)]
 #[clap(
@@ -319,65 +318,6 @@ fn get_build_dir_for_package(manifest: &Manifest) -> String {
     )
 }
 
-fn refresh_package_metadata(
-    repo_path: &str,
-    manifest: &Manifest,
-    manifest_path: &Path,
-) -> io::Result<()> {
-    println!(
-        "Refreshing store metadata for {}/{} ({})",
-        manifest.package.slug, manifest.package.version, manifest.package.namespace
-    );
-    let manifest_hash = compute_manifest_hash(manifest_path)?;
-    refresh_output_branches(repo_path, manifest, &manifest_hash)?;
-    refresh_bundle_branches(repo_path, manifest, &manifest_hash)?;
-    println!("Finished refreshing metadata for {}", manifest.package.slug);
-    Ok(())
-}
-
-fn refresh_output_branches(
-    repo_path: &str,
-    manifest: &Manifest,
-    manifest_hash: &str,
-) -> io::Result<()> {
-    for (category, spec) in &manifest.outputs {
-        if category == "discard" {
-            continue;
-        }
-        let branch_name = format!(
-            "x86_64/{}/{}/{}/outputs/{}",
-            manifest.package.namespace_path(),
-            manifest.package.slug,
-            manifest.package.version,
-            category
-        );
-        ensure_branch_exists(repo_path, &branch_name)?;
-        let metadata = output_branch_metadata(manifest, spec, manifest_hash)?;
-        rewrite_branch_metadata(repo_path, &branch_name, &metadata)?;
-    }
-    Ok(())
-}
-
-fn refresh_bundle_branches(
-    repo_path: &str,
-    manifest: &Manifest,
-    manifest_hash: &str,
-) -> io::Result<()> {
-    for (bundle_name, bundle) in &manifest.bundles {
-        let branch_name = format!(
-            "x86_64/{}/{}/{}/bundles/{}",
-            manifest.package.namespace_path(),
-            manifest.package.slug,
-            manifest.package.version,
-            bundle_name
-        );
-        ensure_branch_exists(repo_path, &branch_name)?;
-        let metadata = bundle_branch_metadata(manifest, bundle, manifest_hash)?;
-        rewrite_branch_metadata(repo_path, &branch_name, &metadata)?;
-    }
-    Ok(())
-}
-
 // find manifest file for a given commit reference
 fn find_manifest_for_commit(commit: &str, manifest_dirs: &[PathBuf]) -> io::Result<PathBuf> {
     use crate::refs::PackageRef;
@@ -439,64 +379,6 @@ fn find_manifest_for_commit(commit: &str, manifest_dirs: &[PathBuf]) -> io::Resu
             commit, slug, namespace
         ),
     ))
-}
-
-// compute SHA256 hash of manifest file
-fn compute_manifest_hash(manifest_path: &Path) -> io::Result<String> {
-    let contents = fs::read(manifest_path)?;
-    let mut hasher = Sha256::new();
-    hasher.update(&contents);
-    Ok(format!("{:x}", hasher.finalize()))
-}
-
-// check if all outputs of a manifest are already built in the store with current manifest hash
-// returns Some(commit_id) if found, None if not built or hash mismatch
-fn check_if_built(
-    repo_path: &str,
-    manifest: &Manifest,
-    manifest_path: &Path,
-) -> io::Result<Option<String>> {
-    let arch = "x86_64"; // TODO: make configurable
-    let slug = &manifest.package.slug;
-    let version = &manifest.package.version;
-    let namespace = manifest.package.namespace_path();
-
-    // compute current manifest hash
-    let current_hash = compute_manifest_hash(manifest_path)?;
-
-    // check all outputs - we'll use the first output to find the commit
-    let mut found_commit: Option<String> = None;
-
-    for (output_name, _spec) in &manifest.outputs {
-        let branch = format!(
-            "{}/{}/{}/{}/outputs/{}",
-            arch, namespace, slug, version, output_name
-        );
-
-        // check if branch exists
-        if ensure_branch_exists(repo_path, &branch).is_err() {
-            return Ok(None);
-        }
-
-        // try to find commit by manifest hash using history search
-        match find_commit_by_manifest_hash(repo_path, &branch, &current_hash)? {
-            Some(commit_id) => {
-                if found_commit.is_none() {
-                    found_commit = Some(commit_id);
-                }
-            }
-            None => {
-                // no commit found with matching hash
-                println!(
-                    "  Manifest {} has changed or no matching commit in history, rebuilding",
-                    manifest_path.display()
-                );
-                return Ok(None);
-            }
-        }
-    }
-
-    Ok(found_commit)
 }
 
 // recursively collect dependencies and build graph
