@@ -182,10 +182,22 @@ fn resolve_transitive_deps(
         HashMap::new();
 
     while let Some((file_path, dep_name, source_manifest)) = queue.pop() {
+        // handle __self: prefix for continuing resolution within same package
+        let (actual_dep_name, is_self_continuation) = if dep_name.starts_with("__self:") {
+            (dep_name.strip_prefix("__self:").unwrap().to_string(), true)
+        } else {
+            (dep_name.clone(), false)
+        };
+
+        eprintln!("[FLATTEN] Processing: {} from {} (self_cont={})", file_path, actual_dep_name, is_self_continuation);
+
         // find the dependency by name in source manifest
-        let dep = match find_dependency_by_name(source_manifest, &dep_name) {
+        let dep = match find_dependency_by_name(source_manifest, &actual_dep_name) {
             Some(d) => d,
-            None => continue, // dependency not found
+            None => {
+                eprintln!("[FLATTEN]   SKIP: dep {} not found in source manifest (pkg={})", actual_dep_name, source_manifest.package.slug);
+                continue;
+            }
         };
 
         // derive files commit for this dependency
@@ -194,14 +206,17 @@ fn resolve_transitive_deps(
             None => continue, // can't derive files commit
         };
 
-        result.push((file_path.clone(), dep_name.clone(), files_commit));
+        // only add to results if not a self-continuation (already added when queued)
+        if !is_self_continuation {
+            result.push((file_path.clone(), actual_dep_name.clone(), files_commit.clone()));
+        }
 
         // look up the dependency's manifest to get transitive deps
-        let dep_manifest = if let Some(cached) = dep_manifest_cache.get(&dep_name) {
+        let dep_manifest = if let Some(cached) = dep_manifest_cache.get(&actual_dep_name) {
             *cached
         } else {
             let m = find_manifest_for_dependency(dep, manifest_index);
-            dep_manifest_cache.insert(dep_name.clone(), m);
+            dep_manifest_cache.insert(actual_dep_name.clone(), m);
             m
         };
 
@@ -214,15 +229,26 @@ fn resolve_transitive_deps(
         let file_needs = find_file_needs(&file_path, dep_manifest);
 
         // queue up transitive deps
+        eprintln!("[FLATTEN]   file_needs for {}: {:?}", file_path, file_needs);
         for needed_file in file_needs {
             if seen_files.insert(needed_file.clone()) {
                 // resolve using dependency manifest's resolution map
                 if let Some(transitive_dep_name) = dep_manifest.resolution.get(&needed_file) {
-                    // skip self entries
-                    if transitive_dep_name != "self" {
+                    eprintln!("[FLATTEN]     {} -> {} (resolution)", needed_file, transitive_dep_name);
+                    if transitive_dep_name == "self" {
+                        // "self" means from the same package we're currently processing
+                        // add to results and queue for further resolution using same dep context
+                        result.push((needed_file.clone(), actual_dep_name.clone(), files_commit.clone()));
+                        // queue with source_manifest (which has this package as a dep), not dep_manifest
+                        queue.push((needed_file, format!("__self:{}", actual_dep_name), source_manifest));
+                    } else {
                         queue.push((needed_file, transitive_dep_name.clone(), dep_manifest));
                     }
+                } else {
+                    eprintln!("[FLATTEN]     {} -> NOT IN RESOLUTION", needed_file);
                 }
+            } else {
+                eprintln!("[FLATTEN]     {} -> already seen", needed_file);
             }
         }
     }
