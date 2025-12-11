@@ -473,13 +473,7 @@ pub fn get_commit_metadata(repo_path: &str, commit: &str, key: &str) -> io::Resu
 }
 
 /// checkout a commit into a directory
-pub fn checkout_into(
-    repo_path: &str,
-    commit: &str,
-    dest: &Path,
-    union: bool,
-    _allow_noent: bool,
-) -> io::Result<()> {
+pub fn checkout_into(repo_path: &str, commit: &str, dest: &Path, union: bool) -> io::Result<()> {
     checkout_into_with_fallbacks(repo_path, &[], commit, dest, union)
 }
 

@@ -148,7 +148,7 @@ pub fn stage_existing_outputs(
             branch_name,
             out_dir.display()
         );
-        checkout_into(repo_path, &branch_name, &out_dir, true, false)?;
+        checkout_into(repo_path, &branch_name, &out_dir, true)?;
     }
 
     Ok(())

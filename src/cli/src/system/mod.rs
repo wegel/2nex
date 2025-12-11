@@ -318,7 +318,7 @@ pub fn materialize_system_packages(
             checkout_files(repo_path, commit, &files_vec, &target_dir, &[])?;
         } else {
             // full checkout for root commits
-            checkout_into(repo_path, commit, &target_dir, true, false)?;
+            checkout_into(repo_path, commit, &target_dir, true)?;
         }
     }
 
@@ -435,7 +435,7 @@ pub fn materialize_nex_structure(
                 "Installing kernel modules: {}/{}/{} (direct layer)",
                 namespace, slug, version
             );
-            checkout_into(repo_path, commit, &target_dir, true, false)?;
+            checkout_into(repo_path, commit, &target_dir, true)?;
             continue;
         }
 
@@ -478,7 +478,7 @@ pub fn materialize_nex_structure(
 
         // checkout package using --union to merge multiple outputs of the same package
         // this allows bin and lib outputs to coexist in the same directory
-        checkout_into(repo_path, &install_ref, &pkg_install_dir, true, false)?;
+        checkout_into(repo_path, &install_ref, &pkg_install_dir, true)?;
 
         // write .nex-app-root sentinel for nex-ld-shim to find the package root
         let sentinel_path = pkg_install_dir.join(".nex-app-root");
