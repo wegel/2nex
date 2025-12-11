@@ -185,17 +185,7 @@ fn run_build(args: &commands::build::BuildArgs) -> io::Result<()> {
         build::build_single(&opts)
     } else {
         // default: build with full dependency resolution
-        build_with_dependencies(
-            &repo_path,
-            manifest_path,
-            &manifest_dirs,
-            &opts,
-            args.dry_run,
-            args.add_checksums,
-            args.show_dep_paths,
-            args.force,
-            args.trace_dependency.as_deref(),
-        )
+        build_with_dependencies(manifest_path, &manifest_dirs, &opts)
     }
 }
 

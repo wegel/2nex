@@ -570,6 +570,10 @@ fn build_package_to_user_repo(
         verbose: false,
         record_profile: false,
         no_progress: false,
+        dry_run: false,
+        add_checksums: false,
+        show_dep_paths: false,
+        trace_dependency: None,
         multi_progress: None,
     };
 

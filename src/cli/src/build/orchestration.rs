@@ -498,6 +498,10 @@ fn build_packages_parallel(
                             verbose: opts.verbose,
                             record_profile: opts.record_profile,
                             no_progress: opts.no_progress,
+                            dry_run: opts.dry_run,
+                            add_checksums: opts.add_checksums,
+                            show_dep_paths: opts.show_dep_paths,
+                            trace_dependency: opts.trace_dependency.clone(),
                             multi_progress: Some(multi_progress.clone()),
                         };
 
@@ -546,6 +550,10 @@ fn build_packages_parallel(
                             verbose: opts.verbose,
                             record_profile: opts.record_profile,
                             no_progress: opts.no_progress,
+                            dry_run: opts.dry_run,
+                            add_checksums: opts.add_checksums,
+                            show_dep_paths: opts.show_dep_paths,
+                            trace_dependency: opts.trace_dependency.clone(),
                             multi_progress: Some(multi_progress.clone()),
                         };
 
@@ -715,6 +723,10 @@ fn add_missing_checksums_to_manifests(
                     verbose: opts.verbose,
                     record_profile: opts.record_profile,
                     no_progress: opts.no_progress,
+                    dry_run: false,
+                    add_checksums: false,
+                    show_dep_paths: false,
+                    trace_dependency: None,
                     multi_progress: None,
                 };
 
@@ -979,17 +991,11 @@ pub fn link_manifest_dependencies(manifest_file: &str) -> io::Result<()> {
 
 /// Build a manifest and all its missing dependencies
 pub fn build_with_dependencies(
-    repo_path: &str,
     manifest_path: &Path,
     manifest_dirs: &[PathBuf],
     opts: &BuildOpts,
-    dry_run: bool,
-    add_checksums: bool,
-    show_dep_paths: bool,
-    force: bool,
-    trace_dependency: Option<&str>,
 ) -> io::Result<()> {
-    if dry_run {
+    if opts.dry_run {
         println!(
             "DRY RUN: Analyzing dependency graph for {}",
             manifest_path.display()
@@ -1005,16 +1011,16 @@ pub fn build_with_dependencies(
     let root_source = ManifestSource::Path(manifest_path.to_path_buf());
     collect_dependencies_recursive(
         &root_source,
-        repo_path,
+        &opts.repo_path,
         manifest_dirs,
         &mut graph,
         &mut manifest_map,
-        force || add_checksums,
+        opts.force || opts.add_checksums,
         &mut ref_cache,
     )?;
 
-    if let Some(pattern) = trace_dependency {
-        trace_dependency_chains(repo_path, manifest_path, manifest_dirs, pattern)?;
+    if let Some(ref pattern) = opts.trace_dependency {
+        trace_dependency_chains(&opts.repo_path, manifest_path, manifest_dirs, pattern)?;
         return Ok(());
     }
 
@@ -1033,7 +1039,7 @@ pub fn build_with_dependencies(
         valid_nodes.len()
     );
 
-    if show_dep_paths {
+    if opts.show_dep_paths {
         println!("\nDependency paths:");
         show_dependency_paths(&graph, &manifest_map, manifest_path);
     }
@@ -1055,14 +1061,14 @@ pub fn build_with_dependencies(
         .filter(|&idx| !graph[idx].is_skip())
         .collect();
 
-    if add_checksums {
+    if opts.add_checksums {
         println!("\nAdding missing checksums...");
-        add_missing_checksums_to_manifests(&build_order, &graph, repo_path, opts)?;
+        add_missing_checksums_to_manifests(&build_order, &graph, &opts.repo_path, opts)?;
         println!("Checksums updated!");
         return Ok(());
     }
 
-    if dry_run {
+    if opts.dry_run {
         println!("\nDRY RUN: Parallel execution plan:");
         show_parallel_execution_plan(&graph, &build_order, false);
         println!("\nDRY RUN: Would build {} packages", build_order.len());

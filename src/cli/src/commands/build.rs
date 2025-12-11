@@ -113,6 +113,10 @@ pub struct BuildOpts {
     pub verbose: bool,
     pub record_profile: bool,
     pub no_progress: bool,
+    pub dry_run: bool,
+    pub add_checksums: bool,
+    pub show_dep_paths: bool,
+    pub trace_dependency: Option<String>,
     /// shared MultiProgress for parallel builds (None for single builds)
     pub multi_progress: Option<Arc<MultiProgress>>,
 }
@@ -134,6 +138,10 @@ impl BuildOpts {
             verbose: args.verbose,
             record_profile: args.record_profile,
             no_progress: args.no_progress,
+            dry_run: args.dry_run,
+            add_checksums: args.add_checksums,
+            show_dep_paths: args.show_dep_paths,
+            trace_dependency: args.trace_dependency.clone(),
             multi_progress: None,
         }
     }
