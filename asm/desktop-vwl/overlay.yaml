@@ -1,0 +1,310 @@
+files:
+# users and groups
+- path: /etc/passwd
+  mode: 420
+  content: |
+    root:x:0:0:root:/root:/bin/bash
+    testuser:x:1000:1000:Test User:/home/testuser:/bin/zsh
+    systemd-network:x:192:192:systemd Network Management:/:/usr/sbin/nologin
+    systemd-resolve:x:193:193:systemd Resolver:/:/usr/sbin/nologin
+    systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/sbin/nologin
+    sshd:x:74:74:Privilege-separated SSH:/var/lib/sshd:/usr/sbin/nologin
+
+- path: /etc/group
+  mode: 420
+  content: |
+    root:x:0:
+    testuser:x:1000:
+    systemd-network:x:192:
+    systemd-resolve:x:193:
+    systemd-timesync:x:194:
+    systemd-journal:x:190:
+    sshd:x:74:
+    audio:x:29:testuser
+    video:x:39:testuser
+    input:x:97:testuser
+    render:x:998:testuser
+    seat:x:999:testuser
+    utmp:x:22:
+
+- path: /etc/shadow
+  mode: 384
+  content: |
+    root::19735:0:99999:7:::
+    testuser::19735:0:99999:7:::
+    systemd-network:!*:19735::::::
+    systemd-resolve:!*:19735::::::
+    systemd-timesync:!*:19735::::::
+
+- path: /etc/subuid
+  mode: 420
+  content: |
+    testuser:100000:65536
+
+- path: /etc/subgid
+  mode: 420
+  content: |
+    testuser:100000:65536
+
+# system config
+- path: /etc/os-release
+  mode: 420
+  content: |
+    NAME="2nex"
+    PRETTY_NAME="2nex Desktop"
+    ID=2nex
+    VERSION_ID=0.0.1
+
+- path: /etc/fstab
+  mode: 420
+
+- path: /etc/sysctl.conf
+  mode: 420
+
+- path: /etc/machine-id
+  mode: 420
+
+- path: /etc/environment
+  mode: 420
+  content: |
+    LANG=en_US.UTF-8
+    XDG_SESSION_TYPE=wayland
+    MOZ_ENABLE_WAYLAND=1
+    QT_QPA_PLATFORM=wayland
+    SDL_VIDEODRIVER=wayland
+    _JAVA_AWT_WM_NONREPARENTING=1
+
+# systemd
+- path: /etc/systemd/network/80-dhcp.network
+  mode: 420
+  content: |
+    [Match]
+    Name=en*
+
+    [Network]
+    DHCP=yes
+
+- path: /etc/systemd/logind.conf
+  mode: 420
+  content: |
+    [Login]
+    HandleLidSwitch=suspend
+    HandlePowerKey=poweroff
+    NAutoVTs=6
+    ReserveVT=6
+
+- path: /etc/systemd/system/systemd-logind.service.d/dbus-ordering.conf
+  mode: 420
+  content: |
+    [Unit]
+    After=dbus-broker.service
+    Wants=dbus-broker.service
+
+- path: /etc/modules-load.d/virtio.conf
+  mode: 420
+  content: |
+    virtio_net
+
+# tmpfiles
+- path: /etc/tmpfiles.d/home-testuser.conf
+  mode: 420
+  content: |
+    d /home/testuser 0755 testuser testuser -
+
+- path: /etc/tmpfiles.d/xdg-runtime.conf
+  mode: 420
+  content: |
+    d /run/user/1000 0700 testuser testuser -
+    d /run/user/0 0700 root root -
+
+# udev
+- path: /etc/udev/rules.d/70-seat.rules
+  mode: 420
+  content: |
+    # allow seat group access to input devices
+    SUBSYSTEM=="input", GROUP="input", MODE="0660"
+    # allow seat group access to drm devices
+    SUBSYSTEM=="drm", GROUP="video", MODE="0660"
+    # allow seat group access to graphics
+    KERNEL=="card[0-9]*", SUBSYSTEM=="drm", GROUP="video", MODE="0660"
+    KERNEL=="renderD*", SUBSYSTEM=="drm", GROUP="render", MODE="0660"
+
+# ssh
+- path: /etc/ssh/sshd_config
+  mode: 420
+  content: |
+    PermitRootLogin yes
+    PermitEmptyPasswords yes
+    PasswordAuthentication yes
+    PubkeyAuthentication yes
+    AuthorizedKeysFile none
+    AuthorizedKeysCommand /usr/local/bin/accept-any-key %t %k
+    AuthorizedKeysCommandUser root
+    HostKey /etc/ssh/ssh_host_ed25519_key
+    HostKey /etc/ssh/ssh_host_rsa_key
+    HostKey /etc/ssh/ssh_host_ecdsa_key
+    Subsystem sftp /usr/libexec/sftp-server
+
+- path: /usr/local/bin/accept-any-key
+  mode: 493
+  content: |
+    #!/bin/bash
+    echo "$1 $2"
+
+# PAM
+- path: /etc/pam.d/system-auth
+  mode: 420
+  content: |
+    auth      sufficient pam_unix.so nullok
+    auth      required   pam_deny.so
+
+    account   required   pam_nologin.so
+    account   sufficient pam_unix.so
+    account   required   pam_permit.so
+
+    password  sufficient pam_unix.so sha512 shadow try_first_pass
+    password  required   pam_deny.so
+
+    -session  optional   pam_loginuid.so
+    session   required   pam_systemd.so
+    session   required   pam_unix.so
+
+- path: /etc/pam.d/login
+  mode: 420
+  content: |
+    auth       include   system-auth
+    account    include   system-auth
+    password   include   system-auth
+    session    include   system-auth
+
+- path: /etc/pam.d/other
+  mode: 420
+  content: |
+    auth      required pam_deny.so
+    account   required pam_deny.so
+    password  required pam_deny.so
+    session   required pam_deny.so
+
+# user dotfiles
+- path: /home/testuser/.zshrc
+  mode: 420
+  content: |
+    # history
+    HISTFILE=~/.zsh_history
+    HISTSIZE=10000
+    SAVEHIST=10000
+    setopt appendhistory sharehistory
+
+    # modern tool aliases
+    alias ls='eza --icons'
+    alias ll='eza -la --icons'
+    alias cat='bat --paging=never'
+    alias find='fd'
+    alias grep='rg'
+    alias top='btm'
+    alias du='dust'
+    alias df='duf'
+
+    # fzf integration
+    export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
+
+    # zoxide
+    eval "$(zoxide init zsh)"
+
+    # starship prompt
+    eval "$(starship init zsh)"
+
+    # locale
+    export LANG=en_US.UTF-8
+
+    # wayland environment
+    export XDG_RUNTIME_DIR=/run/user/1000
+    export XDG_SESSION_TYPE=wayland
+    export WAYLAND_DISPLAY=wayland-1
+
+    # auto-start vwl on tty1
+    if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+        exec vwl
+    fi
+
+- path: /home/testuser/.config/starship.toml
+  mode: 420
+  content: |
+    [character]
+    success_symbol = "[>](bold green)"
+    error_symbol = "[>](bold red)"
+
+- path: /home/testuser/.config/foot/foot.ini
+  mode: 420
+  content: |
+    [main]
+    font=JetBrainsMono Nerd Font:size=11
+    [colors]
+    background=1a1b26
+    foreground=c0caf5
+
+- path: /home/testuser/.config/vwl
+  directory: true
+
+- path: /root/.bashrc
+  mode: 420
+  content: |
+    export XDG_RUNTIME_DIR=/run/user/0
+
+# directories
+- path: /var/lib/sshd
+  directory: true
+  mode: 448
+
+# symlinks
+- path: /var/run
+  symlink: /run
+
+- path: /etc/mtab
+  symlink: /proc/self/mounts
+
+- path: /usr/lib/os-release
+  symlink: ../../etc/os-release
+
+- path: /etc/resolv.conf
+  symlink: /run/systemd/resolve/stub-resolv.conf
+
+- path: /init
+  symlink: usr/bin/init
+
+# dbus.service alias
+- path: /usr/lib/systemd/system/dbus.service
+  symlink: dbus-broker.service
+  replace: true
+
+# systemd service enablement
+- path: /etc/systemd/system/multi-user.target.wants/systemd-networkd.service
+  symlink: /usr/lib/systemd/system/systemd-networkd.service
+
+- path: /etc/systemd/system/multi-user.target.wants/systemd-resolved.service
+  symlink: /usr/lib/systemd/system/systemd-resolved.service
+
+- path: /etc/systemd/system/getty.target.wants/getty@tty1.service
+  symlink: /usr/lib/systemd/system/getty@.service
+
+- path: /etc/systemd/system/multi-user.target.wants/sshd-keygen.service
+  symlink: /usr/lib/systemd/system/sshd-keygen.service
+
+- path: /etc/systemd/system/multi-user.target.wants/sshd.service
+  symlink: /usr/lib/systemd/system/sshd.service
+
+- path: /etc/systemd/system/sockets.target.wants/dbus.socket
+  symlink: /usr/lib/systemd/system/dbus.socket
+
+- path: /etc/systemd/user/default.target.wants/pipewire.socket
+  symlink: /usr/lib/systemd/user/pipewire.socket
+
+- path: /etc/systemd/user/default.target.wants/wireplumber.service
+  symlink: /usr/lib/systemd/user/wireplumber.service
+
+# gsettings overrides
+- path: /usr/share/glib-2.0/schemas/90_2nex.gschema.override
+  mode: 420
+  content: |
+    [org.gnome.TextEditor]
+    spellcheck=false

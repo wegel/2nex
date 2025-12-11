@@ -6,7 +6,7 @@ package:
   version: 0.1.0
   description: Simple tiling Wayland compositor based on dwl
   homepage: https://github.com/wegel/vwl
-  checksum: e3b23618b48276924af968a4bbb58aa5bce830df562360c6d1cc72ed46274683
+  checksum: 7da670b3017ad2397653f3cdce5fc7d4641b321107e5bd1675ed0652d22ea9da
 
 sources:
 - name: vwl
@@ -118,6 +118,8 @@ dependencies:
   commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
 - name: elfutils
   commit: x86_64/pkg/dev/util/elfutils/0.191/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
@@ -131,6 +133,9 @@ build:
 
     tar --no-same-owner -xzf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    # use ctrl+alt as mod key instead of logo/super
+    sed -i 's/#define MODKEY WLR_MODIFIER_LOGO/#define MODKEY (WLR_MODIFIER_CTRL|WLR_MODIFIER_ALT)/' config.def.h
 
     make CC=gcc PREFIX=/usr XWAYLAND=-DXWAYLAND XLIBS="xcb xcb-icccm"
 

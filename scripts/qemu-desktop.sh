@@ -1,0 +1,203 @@
+#!/bin/sh
+# EFI boot test with Wayland desktop and GL acceleration
+#
+# usage: ./qemu-desktop.sh [system-ref]
+#   system-ref: zub ref to boot (default: systems/desktop-vwl/0.0.1)
+set -eux
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+REPO="$ROOT_DIR/.nex/repo"
+BOOTLOADER="$ROOT_DIR/src/bootloader/target/x86_64-unknown-uefi/debug/nex-bootloader.efi"
+OUTPUT="$ROOT_DIR/build/desktop-disk.img"
+SYSTEM_REF="${1:-systems/desktop-vwl/0.0.1}"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+log() { printf "${GREEN}===${NC} %s\n" "$1"; }
+error() { printf "${RED}ERROR:${NC} %s\n" "$1"; exit 1; }
+
+log "Building bootloader..."
+(cd "$ROOT_DIR/src/bootloader" && cargo build) || error "bootloader build failed"
+command -v mke2fs >/dev/null || error "mke2fs not found (install e2fsprogs)"
+command -v mcopy >/dev/null || error "mcopy not found (install mtools)"
+command -v qemu-system-x86_64 >/dev/null || error "qemu-system-x86_64 not found"
+command -v zub >/dev/null || error "zub not found"
+
+{ zub --repo="$REPO" refs 2>/dev/null || true; } | grep -q "$SYSTEM_REF" || \
+    error "$SYSTEM_REF not found. Build with: nex build asm/bootable/desktop-vwl.yaml"
+
+find_ovmf() {
+    for p in \
+        "/usr/share/edk2/x64/OVMF_CODE.4m.fd" \
+        "/usr/share/edk2/x64/OVMF_CODE.fd" \
+        "/usr/share/edk2-ovmf/x64/OVMF_CODE.fd" \
+        "/usr/share/OVMF/OVMF_CODE.fd" \
+        "/usr/share/qemu/OVMF.fd"
+    do
+        [ -f "$p" ] && echo "$p" && return 0
+    done
+    return 1
+}
+
+OVMF_CODE=$(find_ovmf) || error "OVMF firmware not found. Install edk2-ovmf"
+
+mkdir -p "$ROOT_DIR/build"
+TMPDIR=$(mktemp -d "$ROOT_DIR/build/tmp.XXXXXX")
+trap "rm -rf $TMPDIR" EXIT
+
+DISK_SIZE_MB=4096
+ESP_SIZE_MB=64
+ROOT_SIZE_MB=$((DISK_SIZE_MB - ESP_SIZE_MB - 1))
+
+log "Creating ${DISK_SIZE_MB}MB disk image..."
+dd if=/dev/zero of="$OUTPUT" bs=1M count=$DISK_SIZE_MB status=none
+
+log "Creating GPT partition table..."
+parted -s "$OUTPUT" \
+    mklabel gpt \
+    mkpart ESP fat32 1MiB ${ESP_SIZE_MB}MiB \
+    set 1 esp on \
+    mkpart root ext4 ${ESP_SIZE_MB}MiB 100%
+
+log "Creating ESP with bootloader..."
+ESP_IMG="$TMPDIR/esp.img"
+dd if=/dev/zero of="$ESP_IMG" bs=1M count=$((ESP_SIZE_MB - 1)) status=none
+mkfs.vfat -F 32 "$ESP_IMG" >/dev/null
+mmd -i "$ESP_IMG" ::/EFI
+mmd -i "$ESP_IMG" ::/EFI/BOOT
+mcopy -i "$ESP_IMG" "$BOOTLOADER" ::/EFI/BOOT/BOOTX64.EFI
+dd if="$ESP_IMG" of="$OUTPUT" bs=1M seek=1 conv=notrunc status=none
+
+log "Building root filesystem..."
+ROOT_CONTENT="$TMPDIR/root"
+mkdir -p "$ROOT_CONTENT"
+
+SYSTEM_CHECKSUM=$(zub --repo="$REPO" show "$SYSTEM_REF" 2>/dev/null | grep "nex.system.checksum:" | awk '{print $2}')
+if [ -z "$SYSTEM_CHECKSUM" ]; then
+    SYSTEM_CHECKSUM=$(zub --repo="$REPO" rev-parse "$SYSTEM_REF")
+fi
+
+DEPLOY_PATH="nex/deploy/2nex/deploy/${SYSTEM_CHECKSUM}.0"
+DEPLOY_DIR="$ROOT_CONTENT/$DEPLOY_PATH"
+
+log "Extracting $SYSTEM_REF..."
+mkdir -p "$(dirname "$DEPLOY_DIR")"
+zub --repo="$REPO" checkout "$SYSTEM_REF" "$DEPLOY_DIR"
+
+mkdir -p "$ROOT_CONTENT/nex/deploy/2nex/var"
+
+log "Initializing repo with remote (SSH to host)..."
+rm -rf "$ROOT_CONTENT/nex/repo"
+zub init "$ROOT_CONTENT/nex/repo"
+
+HOST_USER="$USER"
+HOST_REPO_PATH="$REPO"
+cat > "$ROOT_CONTENT/nex/repo/config.toml" << EOF
+[namespace]
+uid_map = []
+gid_map = []
+
+[[remotes]]
+name = "origin"
+url = "ssh://${HOST_USER}@10.0.2.2${HOST_REPO_PATH}"
+EOF
+
+log "Remote configured: ${HOST_USER}@10.0.2.2:${HOST_REPO_PATH}"
+
+log "Copying SSH keys for remote access..."
+mkdir -p "$ROOT_CONTENT/root/.ssh"
+chmod 700 "$ROOT_CONTENT/root/.ssh"
+if [ -f "$HOME/.ssh/id_ed25519" ]; then
+    cp "$HOME/.ssh/id_ed25519" "$ROOT_CONTENT/root/.ssh/"
+    cp "$HOME/.ssh/id_ed25519.pub" "$ROOT_CONTENT/root/.ssh/"
+elif [ -f "$HOME/.ssh/id_rsa" ]; then
+    cp "$HOME/.ssh/id_rsa" "$ROOT_CONTENT/root/.ssh/"
+    cp "$HOME/.ssh/id_rsa.pub" "$ROOT_CONTENT/root/.ssh/"
+else
+    error "No SSH key found in ~/.ssh (need id_ed25519 or id_rsa)"
+fi
+chmod 600 "$ROOT_CONTENT/root/.ssh/"id_*
+
+cat > "$ROOT_CONTENT/root/.ssh/config" << 'EOF'
+Host 10.0.2.2
+    StrictHostKeyChecking accept-new
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
+EOF
+chmod 600 "$ROOT_CONTENT/root/.ssh/config"
+
+log "Creating root symlinks to deployment..."
+ln -sf "$DEPLOY_PATH/usr" "$ROOT_CONTENT/usr"
+ln -sf "$DEPLOY_PATH/lib" "$ROOT_CONTENT/lib"
+ln -sf "$DEPLOY_PATH/lib64" "$ROOT_CONTENT/lib64"
+ln -sf "$DEPLOY_PATH/bin" "$ROOT_CONTENT/bin"
+ln -sf "$DEPLOY_PATH/sbin" "$ROOT_CONTENT/sbin"
+ln -sf "$DEPLOY_PATH/etc" "$ROOT_CONTENT/etc"
+ln -sf "$DEPLOY_PATH/var" "$ROOT_CONTENT/var"
+ln -sf "usr/bin/init" "$ROOT_CONTENT/init"
+
+ln -sfn "/$DEPLOY_PATH/nex/pkg" "$ROOT_CONTENT/nex/pkg"
+ln -sfn "/$DEPLOY_PATH/nex/db" "$ROOT_CONTENT/nex/db"
+ln -sfn "/$DEPLOY_PATH/nex/env" "$ROOT_CONTENT/nex/env"
+
+log "Creating /nex/users directory..."
+mkdir -p "$ROOT_CONTENT/nex/users"
+chmod 1777 "$ROOT_CONTENT/nex/users"
+
+log "Deployment structure:"
+ls -la "$DEPLOY_DIR/" | head -15
+echo ""
+log "Packages installed:"
+ls "$DEPLOY_DIR/nex/pkg/" 2>/dev/null | head -10 || echo "(none)"
+
+log "Creating ext4 filesystem..."
+ROOT_IMG="$TMPDIR/root.img"
+if command -v fakeroot >/dev/null; then
+    fakeroot -- sh -c "chown -R 0:0 '$ROOT_CONTENT' && mke2fs -t ext4 -d '$ROOT_CONTENT' '$ROOT_IMG' ${ROOT_SIZE_MB}M"
+else
+    log "WARNING: fakeroot not found - SSH keys may have wrong ownership in VM"
+    mke2fs -t ext4 -d "$ROOT_CONTENT" "$ROOT_IMG" ${ROOT_SIZE_MB}M
+fi
+dd if="$ROOT_IMG" of="$OUTPUT" bs=1M seek=$ESP_SIZE_MB conv=notrunc status=none
+
+log "Disk image created: $OUTPUT"
+log "Starting QEMU with GL-accelerated display..."
+echo ""
+
+OVMF_VARS_TEMPLATE="${OVMF_CODE%OVMF_CODE*}OVMF_VARS${OVMF_CODE#*OVMF_CODE}"
+OVMF_VARS="$TMPDIR/OVMF_VARS.fd"
+[ -f "$OVMF_VARS_TEMPLATE" ] && cp "$OVMF_VARS_TEMPLATE" "$OVMF_VARS"
+
+log "Network: SSH available on localhost:10022 (ssh -p 10022 root@localhost)"
+log "Display: GTK window with virtio-vga-gl (GL acceleration)"
+log "Remote fetch: VM will SSH to ${HOST_USER}@10.0.2.2 for artifacts"
+
+echo "--- QEMU output (close window or Ctrl-C to exit) ---"
+echo ""
+
+OVMF_VARS_ARG=""
+[ -f "$OVMF_VARS" ] && OVMF_VARS_ARG="-drive if=pflash,format=raw,file=$OVMF_VARS"
+
+qemu-system-x86_64 \
+    -enable-kvm \
+    -machine q35 \
+    -cpu host \
+    -m 8G \
+    -smp $(nproc) \
+    -drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE" \
+    $OVMF_VARS_ARG \
+    -drive "file=$OUTPUT,format=raw,if=virtio" \
+    -device virtio-vga-gl \
+    -display gtk,gl=on \
+    -netdev user,id=net0,hostfwd=tcp::10022-:22 \
+    -device virtio-net-pci,netdev=net0 \
+    -device virtio-keyboard-pci \
+    -device virtio-mouse-pci \
+    -serial mon:stdio \
+    -no-reboot
+
+echo ""
+log "QEMU exited"

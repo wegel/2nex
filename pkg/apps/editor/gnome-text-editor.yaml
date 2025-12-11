@@ -6,7 +6,7 @@ package:
   version: "47.4"
   description: Simple text editor for GNOME
   homepage: https://apps.gnome.org/TextEditor/
-  checksum: bc7c5d2713bdb9ad5972b22046bfda80fa7cb8de3a04af74e88f1454d5fc0c88
+  checksum: 4c4e7368d69bfb350bbb400975e5e9de7a931a4a1bf366c3550799b687b5d73a
 
 sources:
 - name: gnome-text-editor
@@ -150,12 +150,15 @@ build:
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
+    # compile gsettings schemas
+    glib-compile-schemas ${OUT_DIR}/usr/share/glib-2.0/schemas/
+
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
-  dev:
+  full:
   - bin
   - misc
 
@@ -238,6 +241,7 @@ outputs:
     - path: /usr/share/applications/org.gnome.TextEditor.desktop
     - path: /usr/share/dbus-1/services/org.gnome.TextEditor.service
     - path: /usr/share/glib-2.0/schemas/org.gnome.TextEditor.gschema.xml
+    - path: /usr/share/glib-2.0/schemas/gschemas.compiled
     - path: /usr/share/gnome-text-editor/styles/builder-dark.xml
     - path: /usr/share/gnome-text-editor/styles/builder.xml
     - path: /usr/share/gnome-text-editor/styles/peninsula-dark.xml

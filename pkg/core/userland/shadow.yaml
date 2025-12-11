@@ -6,7 +6,7 @@ package:
   version: 4.15.1
   description: Shadow password file utilities
   homepage: https://github.com/shadow-maint/shadow
-  checksum: 75a4aa14268e74c57ba284944d411c25740de5b5588a14d0539210b1f22d67fe
+  checksum: 6ad948d16b970c29f65e8f350403ecc63714f6a1a6c94501732e240d7d932230
 
 sources:
 - name: shadow
@@ -65,6 +65,8 @@ dependencies:
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
 - name: libxcrypt
   commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
+- name: linux-pam
+  commit: x86_64/pkg/libs/security/linux-pam/1.7.1/bundles/dev
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
@@ -106,7 +108,8 @@ build:
       --without-bcrypt \
       --without-libbsd \
       --without-nscd \
-      --without-selinux
+      --without-selinux \
+      --with-libpam
 
     sed -i -e "s/ -shared / -Wl,-O1,--as-needed\0/g" libtool
     make DESTDIR="${OUT_DIR}" install
@@ -147,7 +150,8 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libpam_misc.so.0
     - path: /usr/bin/chgpasswd
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -158,11 +162,13 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcrypt.so.2
+      - /usr/lib/libpam.so.0
     - path: /usr/bin/chsh
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libpam_misc.so.0
     - path: /usr/bin/expiry
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -193,6 +199,8 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libpam_misc.so.0
     - path: /usr/bin/groupmod
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -213,7 +221,8 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libpam_misc.so.0
     - path: /usr/bin/logoutd
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -235,7 +244,7 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libpam.so.0
     - path: /usr/bin/nologin
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -245,6 +254,8 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcrypt.so.2
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libpam_misc.so.0
     - path: /usr/bin/pwck
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -266,7 +277,8 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libpam_misc.so.0
     - path: /usr/bin/useradd
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -294,9 +306,15 @@ outputs:
 
   conf:
     files:
-    - path: /etc/limits
-    - path: /etc/login.access
     - path: /etc/login.defs
+    - path: /etc/pam.d/chfn
+    - path: /etc/pam.d/chpasswd
+    - path: /etc/pam.d/chsh
+    - path: /etc/pam.d/groupmems
+    - path: /etc/pam.d/login
+    - path: /etc/pam.d/newusers
+    - path: /etc/pam.d/passwd
+    - path: /etc/pam.d/su
 
   dev:
     files:
@@ -394,10 +412,7 @@ outputs:
     - path: /usr/share/man/de/man3/shadow.3
     - path: /usr/share/man/de/man5/faillog.5
     - path: /usr/share/man/de/man5/gshadow.5
-    - path: /usr/share/man/de/man5/limits.5
-    - path: /usr/share/man/de/man5/login.access.5
     - path: /usr/share/man/de/man5/login.defs.5
-    - path: /usr/share/man/de/man5/porttime.5
     - path: /usr/share/man/de/man5/shadow.5
     - path: /usr/share/man/de/man5/suauth.5
     - path: /usr/share/man/de/man8/chgpasswd.8
@@ -439,10 +454,7 @@ outputs:
     - path: /usr/share/man/fr/man3/shadow.3
     - path: /usr/share/man/fr/man5/faillog.5
     - path: /usr/share/man/fr/man5/gshadow.5
-    - path: /usr/share/man/fr/man5/limits.5
-    - path: /usr/share/man/fr/man5/login.access.5
     - path: /usr/share/man/fr/man5/login.defs.5
-    - path: /usr/share/man/fr/man5/porttime.5
     - path: /usr/share/man/fr/man5/shadow.5
     - path: /usr/share/man/fr/man5/suauth.5
     - path: /usr/share/man/fr/man5/subgid.5
@@ -491,10 +503,7 @@ outputs:
     - path: /usr/share/man/it/man3/shadow.3
     - path: /usr/share/man/it/man5/faillog.5
     - path: /usr/share/man/it/man5/gshadow.5
-    - path: /usr/share/man/it/man5/limits.5
-    - path: /usr/share/man/it/man5/login.access.5
     - path: /usr/share/man/it/man5/login.defs.5
-    - path: /usr/share/man/it/man5/porttime.5
     - path: /usr/share/man/it/man5/shadow.5
     - path: /usr/share/man/it/man5/suauth.5
     - path: /usr/share/man/it/man8/chgpasswd.8
@@ -529,10 +538,7 @@ outputs:
     - path: /usr/share/man/ja/man1/sg.1
     - path: /usr/share/man/ja/man1/su.1
     - path: /usr/share/man/ja/man5/faillog.5
-    - path: /usr/share/man/ja/man5/limits.5
-    - path: /usr/share/man/ja/man5/login.access.5
     - path: /usr/share/man/ja/man5/login.defs.5
-    - path: /usr/share/man/ja/man5/porttime.5
     - path: /usr/share/man/ja/man5/shadow.5
     - path: /usr/share/man/ja/man5/suauth.5
     - path: /usr/share/man/ja/man8/chpasswd.8
@@ -575,10 +581,7 @@ outputs:
     - path: /usr/share/man/man3/shadow.3
     - path: /usr/share/man/man5/faillog.5
     - path: /usr/share/man/man5/gshadow.5
-    - path: /usr/share/man/man5/limits.5
-    - path: /usr/share/man/man5/login.access.5
     - path: /usr/share/man/man5/login.defs.5
-    - path: /usr/share/man/man5/porttime.5
     - path: /usr/share/man/man5/shadow.5
     - path: /usr/share/man/man5/suauth.5
     - path: /usr/share/man/man5/subgid.5
@@ -611,7 +614,6 @@ outputs:
     - path: /usr/share/man/pl/man1/sg.1
     - path: /usr/share/man/pl/man3/shadow.3
     - path: /usr/share/man/pl/man5/faillog.5
-    - path: /usr/share/man/pl/man5/porttime.5
     - path: /usr/share/man/pl/man8/faillog.8
     - path: /usr/share/man/pl/man8/groupadd.8
     - path: /usr/share/man/pl/man8/groupdel.8
@@ -641,10 +643,7 @@ outputs:
     - path: /usr/share/man/ru/man3/shadow.3
     - path: /usr/share/man/ru/man5/faillog.5
     - path: /usr/share/man/ru/man5/gshadow.5
-    - path: /usr/share/man/ru/man5/limits.5
-    - path: /usr/share/man/ru/man5/login.access.5
     - path: /usr/share/man/ru/man5/login.defs.5
-    - path: /usr/share/man/ru/man5/porttime.5
     - path: /usr/share/man/ru/man5/shadow.5
     - path: /usr/share/man/ru/man5/suauth.5
     - path: /usr/share/man/ru/man8/chgpasswd.8
@@ -677,8 +676,6 @@ outputs:
     - path: /usr/share/man/sv/man3/shadow.3
     - path: /usr/share/man/sv/man5/faillog.5
     - path: /usr/share/man/sv/man5/gshadow.5
-    - path: /usr/share/man/sv/man5/limits.5
-    - path: /usr/share/man/sv/man5/porttime.5
     - path: /usr/share/man/sv/man5/suauth.5
     - path: /usr/share/man/sv/man8/faillog.8
     - path: /usr/share/man/sv/man8/groupadd.8
@@ -717,9 +714,7 @@ outputs:
     - path: /usr/share/man/uk/man3/shadow.3
     - path: /usr/share/man/uk/man5/faillog.5
     - path: /usr/share/man/uk/man5/gshadow.5
-    - path: /usr/share/man/uk/man5/login.access.5
     - path: /usr/share/man/uk/man5/login.defs.5
-    - path: /usr/share/man/uk/man5/porttime.5
     - path: /usr/share/man/uk/man5/shadow.5
     - path: /usr/share/man/uk/man5/suauth.5
     - path: /usr/share/man/uk/man8/chgpasswd.8
@@ -756,10 +751,7 @@ outputs:
     - path: /usr/share/man/zh_CN/man3/shadow.3
     - path: /usr/share/man/zh_CN/man5/faillog.5
     - path: /usr/share/man/zh_CN/man5/gshadow.5
-    - path: /usr/share/man/zh_CN/man5/limits.5
-    - path: /usr/share/man/zh_CN/man5/login.access.5
     - path: /usr/share/man/zh_CN/man5/login.defs.5
-    - path: /usr/share/man/zh_CN/man5/porttime.5
     - path: /usr/share/man/zh_CN/man5/shadow.5
     - path: /usr/share/man/zh_CN/man5/suauth.5
     - path: /usr/share/man/zh_CN/man8/chgpasswd.8
@@ -805,4 +797,6 @@ resolution:
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
   /usr/lib/libcrypt.so.2: libxcrypt
+  /usr/lib/libpam.so.0: linux-pam
+  /usr/lib/libpam_misc.so.0: linux-pam
   /usr/lib/libsubid.so.4: self

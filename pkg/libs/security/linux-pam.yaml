@@ -1,0 +1,348 @@
+package:
+  schema: 1
+  name: linux-pam
+  slug: linux-pam
+  namespace: libs/security
+  version: 1.7.1
+  description: Pluggable Authentication Modules for Linux
+  homepage: https://github.com/linux-pam/linux-pam
+  checksum: 3cdccca30ea50068643e5d4270b9ab2b0c032ddd05576e76fec9ed754710b0e5
+
+sources:
+- name: linux-pam
+  url: https://github.com/linux-pam/linux-pam/releases/download/v1.7.1/Linux-PAM-1.7.1.tar.xz
+  sha256: 21dbcec6e01dd578f14789eac9024a18941e6f2702a05cf91b28c232eeb26ab0
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: libxcrypt
+  commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  profile: [4113:2054, 8242:2199, 12364:2311, 16529:2415, 20674:3107, 24793:3512, 28217:3602]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      -Ddocs=disabled \
+      -Dexamples=false
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # setuid for unix_chkpwd (needed for non-root password checks)
+    chmod 4755 "${OUT_DIR}/usr/sbin/unix_chkpwd"
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+  - misc
+
+outputs:
+  conf:
+    files:
+    - path: /etc/environment
+    - path: /etc/security/access.conf
+    - path: /etc/security/faillock.conf
+    - path: /etc/security/group.conf
+    - path: /etc/security/limits.conf
+    - path: /etc/security/namespace.conf
+    - path: /etc/security/namespace.init
+    - path: /etc/security/pam_env.conf
+    - path: /etc/security/pwhistory.conf
+    - path: /etc/security/time.conf
+
+  dev:
+    files:
+    - path: /usr/include/security/_pam_compat.h
+    - path: /usr/include/security/_pam_macros.h
+    - path: /usr/include/security/_pam_types.h
+    - path: /usr/include/security/pam_appl.h
+    - path: /usr/include/security/pam_client.h
+    - path: /usr/include/security/pam_ext.h
+    - path: /usr/include/security/pam_filter.h
+    - path: /usr/include/security/pam_misc.h
+    - path: /usr/include/security/pam_modules.h
+    - path: /usr/include/security/pam_modutil.h
+    - path: /usr/lib/pkgconfig/pam.pc
+    - path: /usr/lib/pkgconfig/pam_misc.pc
+    - path: /usr/lib/pkgconfig/pamc.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libpam.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libpam.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libpam.so.0.85.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libpam_misc.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/libpam_misc.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/libpam_misc.so.0.82.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/libpamc.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libpamc.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libpamc.so.0.82.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/security/pam_access.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_canonicalize_user.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_debug.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_deny.so
+    - path: /usr/lib/security/pam_echo.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_env.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_exec.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_faildelay.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_faillock.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_filter.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_filter/upperLOWER
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_ftp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_group.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_issue.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_keyinit.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_limits.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_listfile.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_localuser.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_loginuid.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_mail.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_mkhomedir.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_motd.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_namespace.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_nologin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_permit.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_pwhistory.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_rhosts.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_rootok.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_securetty.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_setquota.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_shells.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_stress.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_succeed_if.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_time.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_timestamp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_umask.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_unix.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_usertype.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_warn.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_wheel.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_xauth.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/systemd/system/pam_namespace.service
+
+  misc:
+    files:
+    - path: /usr/sbin/faillock
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/sbin/mkhomedir_helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/sbin/pam_namespace_helper
+    - path: /usr/sbin/pam_timestamp_check
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/sbin/pwhistory_helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+    - path: /usr/sbin/unix_chkpwd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libcrypt.so.2: libxcrypt
+  /usr/lib/libpam.so.0: self
