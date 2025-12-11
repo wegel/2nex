@@ -224,7 +224,7 @@ pub fn compute_deps_for_manifest(
     for output_ref in &all_refs {
         // extract output name from ref (e.g., "x86_64/.../outputs/bin" -> "bin")
         let output_name = output_ref.split('/').last().unwrap_or("unknown");
-        if output_name == "discard" {
+        if output_name == crate::build::OUTPUT_DISCARD {
             continue;
         }
 

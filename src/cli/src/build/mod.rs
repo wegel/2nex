@@ -9,6 +9,9 @@ use walkdir::WalkDir;
 use sha2::{Digest, Sha256};
 
 use crate::commands::build::BuildOpts;
+
+/// Output category name for files that should be discarded (not committed to store)
+pub const OUTPUT_DISCARD: &str = "discard";
 use crate::manifest::types::{BuildEnvironment, BuildPaths};
 use crate::manifest::*;
 use crate::outputs::*;
@@ -504,7 +507,7 @@ pub fn verify_and_commit_outputs(
     print_outputs(&outputs);
 
     for (output_type, spec) in output_specs {
-        if output_type == "discard" {
+        if output_type == OUTPUT_DISCARD {
             continue;
         }
 
@@ -959,7 +962,7 @@ fn create_files_commit_for_package(
     let output_refs: Vec<String> = manifest
         .outputs
         .keys()
-        .filter(|k| *k != "discard")
+        .filter(|k| *k != OUTPUT_DISCARD)
         .map(|name| {
             format!(
                 "x86_64/{}/{}/{}/outputs/{}",
@@ -1045,7 +1048,7 @@ fn refresh_output_branches(
     manifest_hash: &str,
 ) -> io::Result<()> {
     for (category, spec) in &manifest.outputs {
-        if category == "discard" {
+        if category == OUTPUT_DISCARD {
             continue;
         }
         let branch_name = format!(
