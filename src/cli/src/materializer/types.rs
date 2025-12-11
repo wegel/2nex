@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::PathBuf;
 
-// HashSet used by RuntimeClosure
+use indexmap::IndexSet;
 
 use crate::repo::detect_repo_path;
 
@@ -82,8 +82,9 @@ impl Default for MaterializeConfig {
 /// Result of resolving runtime dependencies for a set of requests.
 #[derive(Clone, Debug, Default)]
 pub struct RuntimeClosure {
-    /// Commits that need to be materialized, in dependency order (roots first)
-    pub commits: Vec<String>,
+    /// Commits that need to be materialized, in dependency order (roots first).
+    /// Uses IndexSet for O(1) membership checks while preserving insertion order.
+    pub commits: IndexSet<String>,
     /// Root commits (explicitly requested, not transitive deps)
     pub roots: HashSet<String>,
     /// Detailed reasons for why each commit was included (commit -> set of reasons)
@@ -97,9 +98,7 @@ pub struct RuntimeClosure {
 impl RuntimeClosure {
     /// Add a commit to the closure with a reason.
     pub fn add(&mut self, commit: &str, reason: String) {
-        if !self.commits.contains(&commit.to_string()) {
-            self.commits.push(commit.to_string());
-        }
+        self.commits.insert(commit.to_string());
         self.reasons
             .entry(commit.to_string())
             .or_default()
@@ -131,8 +130,8 @@ impl RuntimeClosure {
     }
 
     /// Get all commits in the closure.
-    pub fn all_commits(&self) -> &[String] {
-        &self.commits
+    pub fn all_commits(&self) -> impl Iterator<Item = &String> {
+        self.commits.iter()
     }
 
     /// Check if empty (no commits to materialize).
