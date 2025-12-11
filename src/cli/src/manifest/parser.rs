@@ -20,6 +20,10 @@ pub fn load_manifest_from_source(source: &ManifestSource) -> io::Result<Manifest
             })?;
             load_manifest_from_str(&content)
         }
+        ManifestSource::Skip => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "cannot load manifest from Skip marker",
+        )),
     }
 }
 
@@ -33,6 +37,12 @@ pub fn compute_manifest_hash_from_source(source: &ManifestSource) -> io::Result<
             let git_root =
                 std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
             crate::utils::fetch_git_blob(&git_root, sha)?.into_bytes()
+        }
+        ManifestSource::Skip => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "cannot compute hash for Skip marker",
+            ))
         }
     };
 

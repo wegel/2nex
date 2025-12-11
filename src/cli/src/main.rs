@@ -416,7 +416,7 @@ fn collect_dependencies_recursive(
         if let ManifestData::Package(ref manifest) = manifest_data {
             if check_if_built(repo_path, manifest, manifest_path)?.is_some() {
                 println!("Package {} already built, skipping", manifest.package.slug);
-                let node = graph.add_node(ManifestSource::Path(PathBuf::new())); // empty = skip
+                let node = graph.add_node(ManifestSource::Skip);
                 manifest_map.insert(manifest_path.to_path_buf(), node);
                 return Ok(node);
             }
@@ -518,7 +518,7 @@ fn collect_dependencies_recursive(
                 if manifest_map.contains_key(&dep_manifest_path) {
                     // already processed, just get the node for edge creation
                     let dep_node = manifest_map[&dep_manifest_path];
-                    if !graph[dep_node].is_empty() {
+                    if !graph[dep_node].is_skip() {
                         graph.add_edge(dep_node, node, ());
                     }
                     continue;
@@ -553,7 +553,7 @@ fn collect_dependencies_recursive(
                 // add edge: dep must be built before current
                 // edge direction: dep_node -> node (dep comes before dependent)
                 // only add edge if dep_node is a real node (not empty marker)
-                if !graph[dep_node].is_empty() {
+                if !graph[dep_node].is_skip() {
                     graph.add_edge(dep_node, node, ());
                 }
             }
@@ -580,7 +580,7 @@ fn show_parallel_execution_plan(
     for &node in build_order {
         let deps: Vec<NodeIndex> = graph
             .neighbors_directed(node, petgraph::Direction::Incoming)
-            .filter(|&dep| !graph[dep].is_empty())
+            .filter(|&dep| !graph[dep].is_skip())
             .collect();
         dependencies.insert(node, deps);
     }
@@ -668,7 +668,7 @@ fn build_packages_parallel(
     for &node in build_order {
         let deps: Vec<NodeIndex> = graph
             .neighbors_directed(node, petgraph::Direction::Incoming)
-            .filter(|&dep| !graph[dep].is_empty())
+            .filter(|&dep| !graph[dep].is_skip())
             .collect();
         dependencies.insert(node, deps);
     }
@@ -854,8 +854,8 @@ fn show_dependency_paths(
 
     // for each node in the graph, show the path from root to that node
     for (path, &node) in manifest_map.iter() {
-        if path == root_path || *path == PathBuf::new() {
-            continue; // skip root and empty markers
+        if path == root_path || graph[node].is_skip() {
+            continue; // skip root and skip markers
         }
 
         // find a path from root to this node using DFS
@@ -1162,10 +1162,10 @@ fn build_with_dependencies(
         return Ok(());
     }
 
-    // filter out empty markers (already-built packages)
+    // filter out skip markers (already-built packages)
     let valid_nodes: Vec<NodeIndex> = graph
         .node_indices()
-        .filter(|&idx| !graph[idx].is_empty())
+        .filter(|&idx| !graph[idx].is_skip())
         .collect();
 
     if valid_nodes.is_empty() {
@@ -1200,7 +1200,7 @@ fn build_with_dependencies(
     // filter build order to only include valid nodes
     let build_order: Vec<NodeIndex> = build_order
         .into_iter()
-        .filter(|&idx| !graph[idx].is_empty())
+        .filter(|&idx| !graph[idx].is_skip())
         .collect();
 
     // if add_checksums mode, process manifests to add missing checksums
