@@ -62,12 +62,8 @@ impl InstalledState {
         // ensure directory exists
         fs::create_dir_all(NEX_VAR_DIR)?;
 
-        let content = serde_json::to_string_pretty(self).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Failed to serialize state: {}", e),
-            )
-        })?;
+        let content = serde_json::to_string_pretty(self)
+            .map_err(|e| io::Error::other(format!("Failed to serialize state: {}", e)))?;
 
         fs::write(STATE_FILE, content)
     }
@@ -93,12 +89,8 @@ impl InstalledState {
         fs::create_dir_all(var_path)?;
 
         let path = var_path.join("installed.json");
-        let content = serde_json::to_string_pretty(self).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Failed to serialize state: {}", e),
-            )
-        })?;
+        let content = serde_json::to_string_pretty(self)
+            .map_err(|e| io::Error::other(format!("Failed to serialize state: {}", e)))?;
 
         fs::write(&path, content)
     }

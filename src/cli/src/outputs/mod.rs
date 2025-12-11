@@ -75,8 +75,8 @@ pub fn commit_bundle(
 
     // Build bundle commit by merging output commits directly in the store.
     // Use "last wins" semantics to match union checkouts during bundling.
-    let repo = zub::Repo::open(Path::new(repo_path))
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    let repo =
+        zub::Repo::open(Path::new(repo_path)).map_err(|e| io::Error::other(e.to_string()))?;
 
     let ref_strs: Vec<&str> = output_commits.iter().map(|s| s.as_str()).collect();
     zub::ops::union_trees(
@@ -88,7 +88,7 @@ pub fn commit_bundle(
             ..Default::default()
         },
     )
-    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    .map_err(|e| io::Error::other(e.to_string()))?;
 
     // Attach bundle metadata (manifest hash, outputs) without changing the tree.
     rewrite_branch_metadata(repo_path, &bundle_branch, &metadata)?;
@@ -131,7 +131,7 @@ pub fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Re
             ));
         }
 
-        let mut file = fs::File::open(&resolved_path)?;
+        let mut file = fs::File::open(resolved_path)?;
         let mut contents = Vec::new();
         file.read_to_end(&mut contents)?;
 
@@ -177,10 +177,10 @@ pub fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Re
 
         if !status.success() {
             let _ = std::fs::remove_file(&tmp_path);
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("curl download failed with status: {}", status),
-            ));
+            return Err(io::Error::other(format!(
+                "curl download failed with status: {}",
+                status
+            )));
         }
 
         // verify the downloaded file

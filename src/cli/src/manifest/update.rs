@@ -126,7 +126,8 @@ pub fn ensure_output_mapping(value: &mut Value) -> io::Result<(&mut Mapping, boo
 pub fn normalize_output_keys(mapping: &mut Mapping) {
     let mut entries: Vec<(Value, Value)> = Vec::new();
     // preserve key ordering: files first, then everything else
-    for key in ["files"] {
+    {
+        let key = "files";
         let key_value = Value::String(key.to_string());
         if let Some(value) = mapping.remove(&key_value) {
             entries.push((Value::String(key.to_string()), value));

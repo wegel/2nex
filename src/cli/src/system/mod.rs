@@ -211,10 +211,7 @@ pub fn build_system_manifest_with_dir(
             println!("Build is reproducible. Checksums match.");
         } else {
             println!("Build is not reproducible. Checksums do not match.");
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Build is not reproducible.",
-            ));
+            return Err(io::Error::other("Build is not reproducible."));
         }
 
         commit_system_rootfs(
@@ -469,9 +466,9 @@ pub fn materialize_nex_structure(
 
         // create package directory: /nex/pkg/<ns>/<slug>/<version>/<checksum>/
         let pkg_install_dir = nex_pkg_dir
-            .join(&namespace)
-            .join(&slug)
-            .join(&version)
+            .join(namespace)
+            .join(slug)
+            .join(version)
             .join(&checksum);
 
         // create parent directories (checkout will create the final directory)
@@ -505,9 +502,9 @@ pub fn materialize_nex_structure(
             create_file_symlinks_recursive(
                 &pkg_dir,
                 &target_subdir,
-                &namespace,
-                &slug,
-                &version,
+                namespace,
+                slug,
+                version,
                 &checksum,
                 &dir_name,
             )?;
@@ -876,7 +873,7 @@ fn deploy_manifests_to_nex_db(target_dir: &Path) -> io::Result<()> {
             fs::create_dir_all(&dst_path)?;
         } else if src_path
             .extension()
-            .map_or(false, |ext| ext == "yaml" || ext == "yml")
+            .is_some_and(|ext| ext == "yaml" || ext == "yml")
         {
             if let Some(parent) = dst_path.parent() {
                 fs::create_dir_all(parent)?;

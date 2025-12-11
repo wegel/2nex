@@ -27,7 +27,7 @@ pub fn format_manifest_string(contents: &str) -> io::Result<String> {
         .as_mapping()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "manifest must be a mapping"))?;
 
-    let is_system = mapping.contains_key(&Value::String("system".to_string()));
+    let is_system = mapping.contains_key(Value::String("system".to_string()));
     format_root(mapping, is_system, original_version.as_deref())
 }
 
@@ -416,7 +416,7 @@ fn format_build(value: &Value) -> io::Result<String> {
     let profile_key = Value::String("profile".to_string());
     if let Some(profile) = mapping.get(&profile_key) {
         if let Some(seq) = profile.as_sequence() {
-            let items: Vec<String> = seq.iter().map(|v| format_scalar(v)).collect();
+            let items: Vec<String> = seq.iter().map(format_scalar).collect();
             output.push_str(&format!("  profile: [{}]\n", items.join(", ")));
         }
     }

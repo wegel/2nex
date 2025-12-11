@@ -83,7 +83,7 @@ pub fn run(args: &RemoveArgs) -> io::Result<()> {
         }
 
         // remove all version directories
-        for (version_key, _info) in &pkg_state.versions {
+        for version_key in pkg_state.versions.keys() {
             let (version, checksum) = parse_version_key(version_key)?;
             let pkg_dir = format!(
                 "{}/{}/{}/{}/{}",

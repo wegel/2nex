@@ -74,7 +74,7 @@ pub fn run(args: &InfoArgs) -> io::Result<()> {
             "unknown"
         };
 
-        let ref_name = ref_path.split('/').last().unwrap_or("?");
+        let ref_name = ref_path.split('/').next_back().unwrap_or("?");
         println!("  {}: {}", ref_type, ref_name);
 
         // show metadata for this ref

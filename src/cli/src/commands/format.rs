@@ -35,10 +35,7 @@ pub fn run(args: &FormatArgs) -> io::Result<()> {
     }
 
     if args.check && needs_formatting {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "some files need formatting",
-        ));
+        return Err(io::Error::other("some files need formatting"));
     }
 
     Ok(())

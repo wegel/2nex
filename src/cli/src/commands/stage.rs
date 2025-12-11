@@ -120,10 +120,10 @@ fn mount_overlay(lower: &str, upper: &str, work: &str, target: &str) -> io::Resu
         .status()?;
 
     if !status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to mount overlay on {}", target),
-        ));
+        return Err(io::Error::other(format!(
+            "Failed to mount overlay on {}",
+            target
+        )));
     }
 
     Ok(())

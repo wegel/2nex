@@ -105,10 +105,10 @@ pub fn resolve_repo_path(repo_arg: Option<&str>) -> io::Result<String> {
 
     // canonicalize to absolute path for use in unshare/bubblewrap contexts
     let abs_path = path.canonicalize().map_err(|e| {
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to canonicalize repo path {}: {}", repo_path, e),
-        )
+        io::Error::other(format!(
+            "Failed to canonicalize repo path {}: {}",
+            repo_path, e
+        ))
     })?;
 
     Ok(abs_path.to_string_lossy().to_string())
@@ -248,12 +248,8 @@ pub fn ensure_user_dirs(ctx: &NexContext) -> io::Result<()> {
     let config_path = ctx.repo_path.join("config.toml");
     if !config_path.exists() {
         fs::create_dir_all(&ctx.repo_path)?;
-        zub::Repo::init(&ctx.repo_path).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("failed to initialize user repo: {}", e),
-            )
-        })?;
+        zub::Repo::init(&ctx.repo_path)
+            .map_err(|e| io::Error::other(format!("failed to initialize user repo: {}", e)))?;
     }
 
     // create other directories

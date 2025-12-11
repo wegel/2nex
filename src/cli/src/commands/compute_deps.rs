@@ -161,7 +161,7 @@ pub fn compute_deps_for_manifest(
 
     // build output refs from manifest (we know exactly what outputs exist)
     let arch = "x86_64";
-    let store = Store::open(&repo_path)?;
+    let store = Store::open(repo_path)?;
 
     let mut all_refs: Vec<String> = Vec::new();
     for output_name in manifest.outputs.keys() {
@@ -223,7 +223,7 @@ pub fn compute_deps_for_manifest(
 
     for output_ref in &all_refs {
         // extract output name from ref (e.g., "x86_64/.../outputs/bin" -> "bin")
-        let output_name = output_ref.split('/').last().unwrap_or("unknown");
+        let output_name = output_ref.split('/').next_back().unwrap_or("unknown");
         if output_name == crate::build::OUTPUT_DISCARD {
             continue;
         }
@@ -522,78 +522,76 @@ fn find_or_create_files_commit(
         ))
     };
 
-    let manifest_result = load_manifest_from_source(&ManifestSource::Path(manifest_path.clone()));
-    if let Err(ref e) = manifest_result {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!(
-                "Failed to parse manifest for {}: {} (path: {})",
-                provider_key,
-                e,
-                manifest_path.display()
-            ),
-        ));
-    }
+    let manifest_data = load_manifest_from_source(&ManifestSource::Path(manifest_path.clone()))
+        .map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Failed to parse manifest for {}: {} (path: {})",
+                    provider_key,
+                    e,
+                    manifest_path.display()
+                ),
+            )
+        })?;
 
-    if let Ok(manifest_data) = manifest_result {
-        if let crate::manifest::types::ManifestData::Package(dep_manifest) = manifest_data {
-            // determine address hash: use checksum if stable, else use manifest git blob SHA
-            let has_stable_checksum = dep_manifest.package.checksum.is_some()
-                && dep_manifest.package.stable_checksum.unwrap_or(true);
+    if let crate::manifest::types::ManifestData::Package(dep_manifest) = manifest_data {
+        // determine address hash: use checksum if stable, else use manifest git blob SHA
+        let has_stable_checksum = dep_manifest.package.checksum.is_some()
+            && dep_manifest.package.stable_checksum.unwrap_or(true);
 
-            let address_hash = if has_stable_checksum {
-                dep_manifest.package.checksum.clone().unwrap()
-            } else {
-                // fallback: use manifest's git blob SHA (input-addressed)
-                hash_file_content(&manifest_path)?
-            };
+        let address_hash = if has_stable_checksum {
+            dep_manifest.package.checksum.clone().unwrap()
+        } else {
+            // fallback: use manifest's git blob SHA (input-addressed)
+            hash_file_content(&manifest_path)?
+        };
 
-            // content-addressed: {hash}/files
-            let files_ref = format!("{}/files", address_hash);
-            let store = Store::open(repo_path)?;
+        // content-addressed: {hash}/files
+        let files_ref = format!("{}/files", address_hash);
+        let store = Store::open(repo_path)?;
 
-            // check if it exists
-            if store.resolve_ref(&files_ref).is_ok() {
-                if verbose {
-                    println!("    Using files commit: {}", files_ref);
-                }
-                return Ok(files_ref);
+        // check if it exists
+        if store.resolve_ref(&files_ref).is_ok() {
+            if verbose {
+                println!("    Using files commit: {}", files_ref);
             }
+            return Ok(files_ref);
+        }
 
-            // doesn't exist yet - create it using outputs from manifest
-            // use direct filesystem check to avoid stale cache issues
-            let output_refs: Vec<String> = dep_manifest
-                .outputs
-                .keys()
-                .map(|output_name| {
-                    format!(
-                        "x86_64/pkg/{}/{}/{}/outputs/{}",
-                        namespace_path, slug, version, output_name
-                    )
-                })
-                .filter(|r| {
-                    let ref_path = Path::new(repo_path).join("refs/heads").join(r);
-                    ref_path.exists()
-                })
-                .collect();
+        // doesn't exist yet - create it using outputs from manifest
+        // use direct filesystem check to avoid stale cache issues
+        let output_refs: Vec<String> = dep_manifest
+            .outputs
+            .keys()
+            .map(|output_name| {
+                format!(
+                    "x86_64/pkg/{}/{}/{}/outputs/{}",
+                    namespace_path, slug, version, output_name
+                )
+            })
+            .filter(|r| {
+                let ref_path = Path::new(repo_path).join("refs/heads").join(r);
+                ref_path.exists()
+            })
+            .collect();
 
-            if !output_refs.is_empty() {
-                if verbose {
-                    println!(
-                        "    Creating files commit for {} ({} outputs)",
-                        provider_key,
-                        output_refs.len()
-                    );
-                }
-                return create_files_commit(
-                    repo_path,
-                    &output_refs,
-                    &address_hash,
-                    &namespace_path,
-                    slug,
-                    version,
+        if !output_refs.is_empty() {
+            if verbose {
+                println!(
+                    "    Creating files commit for {} ({} outputs)",
+                    provider_key,
+                    output_refs.len()
                 );
             }
+            return create_files_commit(
+                repo_path,
+                &output_refs,
+                &address_hash,
+                &namespace_path,
+                slug,
+                version,
+            );
         }
     }
 
@@ -665,8 +663,8 @@ fn create_files_commit(
     let files_ref = format!("{}/files", address_hash);
 
     // use in-store union (no filesystem checkout)
-    let repo = zub::Repo::open(Path::new(repo_path))
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    let repo =
+        zub::Repo::open(Path::new(repo_path)).map_err(|e| io::Error::other(e.to_string()))?;
 
     let ref_strs: Vec<&str> = output_refs.iter().map(|s| s.as_str()).collect();
     zub::ops::union_trees(
@@ -678,7 +676,7 @@ fn create_files_commit(
             ..Default::default()
         },
     )
-    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    .map_err(|e| io::Error::other(e.to_string()))?;
 
     // attach metadata without changing the tree
     let metadata = vec![
@@ -787,13 +785,13 @@ fn update_manifest_file(
             for (_output_key, output_value) in outputs_map.iter_mut() {
                 if let serde_yaml::Value::Mapping(output_map) = output_value {
                     if let Some(serde_yaml::Value::Sequence(files)) =
-                        output_map.get_mut(&serde_yaml::Value::String("files".to_string()))
+                        output_map.get_mut(serde_yaml::Value::String("files".to_string()))
                     {
                         for file_entry in files.iter_mut() {
                             if let serde_yaml::Value::Mapping(file_map) = file_entry {
                                 // get the path of this file
                                 let path = file_map
-                                    .get(&serde_yaml::Value::String("path".to_string()))
+                                    .get(serde_yaml::Value::String("path".to_string()))
                                     .and_then(|v| v.as_str())
                                     .map(|s| s.to_string());
 
@@ -801,11 +799,10 @@ fn update_manifest_file(
                                     // look up the computed needs for this file
                                     if let Some(needs) = needs_lookup.get(&path) {
                                         // remove old needs/deps
-                                        file_map.remove(&serde_yaml::Value::String(
-                                            "needs".to_string(),
-                                        ));
                                         file_map
-                                            .remove(&serde_yaml::Value::String("deps".to_string()));
+                                            .remove(serde_yaml::Value::String("needs".to_string()));
+                                        file_map
+                                            .remove(serde_yaml::Value::String("deps".to_string()));
 
                                         // add new needs if non-empty
                                         if !needs.is_empty() {
@@ -848,7 +845,7 @@ fn update_manifest_file(
     // remove providers if present (no longer used)
     doc.as_mapping_mut()
         .unwrap()
-        .remove(&serde_yaml::Value::String("providers".to_string()));
+        .remove(serde_yaml::Value::String("providers".to_string()));
 
     // write back, formatted
     let yaml_content = serde_yaml::to_string(&doc)

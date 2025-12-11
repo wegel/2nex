@@ -64,15 +64,12 @@ pub fn find_manifest_for_commit(commit: &str, manifest_dirs: &[PathBuf]) -> io::
             // try with -slug suffix: {namespace}/*-{slug}.yaml
             if namespace_path.exists() && namespace_path.is_dir() {
                 if let Ok(entries) = fs::read_dir(&namespace_path) {
-                    for entry in entries {
-                        if let Ok(entry) = entry {
-                            let path = entry.path();
-                            if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
-                                let filename =
-                                    path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                                if filename.ends_with(&format!("-{}", slug)) {
-                                    return Ok(path);
-                                }
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+                            let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                            if filename.ends_with(&format!("-{}", slug)) {
+                                return Ok(path);
                             }
                         }
                     }
@@ -127,15 +124,15 @@ pub fn hydrate_dependencies(_repo_path: &str, manifest_file: &str) -> io::Result
     for (i, line) in lines.iter().enumerate() {
         if line.starts_with("dependencies:") {
             dep_start = Some(i);
-        } else if dep_start.is_some() && dep_end.is_none() {
-            if !line.is_empty()
-                && !line.starts_with(' ')
-                && !line.starts_with('\t')
-                && !line.starts_with('-')
-            {
-                dep_end = Some(i);
-                break;
-            }
+        } else if dep_start.is_some()
+            && dep_end.is_none()
+            && !line.is_empty()
+            && !line.starts_with(' ')
+            && !line.starts_with('\t')
+            && !line.starts_with('-')
+        {
+            dep_end = Some(i);
+            break;
         }
     }
 
@@ -455,8 +452,7 @@ fn build_packages_parallel(
             .collect();
 
         if wave.is_empty() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(io::Error::other(
                 "Cannot make progress: all remaining packages have unmet dependencies",
             ));
         }
@@ -593,7 +589,7 @@ fn build_packages_parallel(
                     completed.lock().unwrap().insert(wave[i]);
                 }
                 Err(e) => {
-                    return Err(io::Error::new(io::ErrorKind::Other, e.clone()));
+                    return Err(io::Error::other(e.clone()));
                 }
             }
         }
@@ -1046,14 +1042,11 @@ pub fn build_with_dependencies(
 
     let build_order = toposort(&graph, None).map_err(|cycle| {
         let node_source = &graph[cycle.node_id()];
-        io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "Circular dependency detected at node {:?}: {}",
-                cycle.node_id(),
-                node_source.path().display()
-            ),
-        )
+        io::Error::other(format!(
+            "Circular dependency detected at node {:?}: {}",
+            cycle.node_id(),
+            node_source.path().display()
+        ))
     })?;
 
     let build_order: Vec<NodeIndex> = build_order

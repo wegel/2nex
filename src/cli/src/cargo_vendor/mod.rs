@@ -228,10 +228,7 @@ fn download_and_extract_registry_crate(
             .status()?;
 
         if !status.success() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("Failed to download {}", url),
-            ));
+            return Err(io::Error::other(format!("Failed to download {}", url)));
         }
     }
 
@@ -263,10 +260,10 @@ fn download_and_extract_registry_crate(
         .status()?;
 
     if !status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to extract {}", crate_dir_name),
-        ));
+        return Err(io::Error::other(format!(
+            "Failed to extract {}",
+            crate_dir_name
+        )));
     }
 
     // create .cargo-checksum.json
@@ -354,10 +351,10 @@ fn download_and_extract_git_crate(
 
         if !status.success() {
             fs::remove_dir_all(&tmp_extract).ok();
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("Failed to extract git archive for {}", pkg.name),
-            ));
+            return Err(io::Error::other(format!(
+                "Failed to extract git archive for {}",
+                pkg.name
+            )));
         }
 
         // GitHub extracts to repo-sha/ directory, find and rename it
@@ -405,10 +402,10 @@ fn download_git_clone(pkg: &GitPackage, dest_dir: &Path) -> io::Result<()> {
 
     if !status.success() {
         fs::remove_dir_all(&tmp_clone).ok();
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to clone {}", pkg.repo_url),
-        ));
+        return Err(io::Error::other(format!(
+            "Failed to clone {}",
+            pkg.repo_url
+        )));
     }
 
     // fetch specific commit (shallow clone might not have it)
@@ -426,13 +423,10 @@ fn download_git_clone(pkg: &GitPackage, dest_dir: &Path) -> io::Result<()> {
 
     if !status.success() {
         fs::remove_dir_all(&tmp_clone).ok();
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "Failed to fetch commit {} from {}",
-                pkg.commit_sha, pkg.repo_url
-            ),
-        ));
+        return Err(io::Error::other(format!(
+            "Failed to fetch commit {} from {}",
+            pkg.commit_sha, pkg.repo_url
+        )));
     }
 
     // checkout the commit
@@ -447,10 +441,10 @@ fn download_git_clone(pkg: &GitPackage, dest_dir: &Path) -> io::Result<()> {
 
     if !status.success() {
         fs::remove_dir_all(&tmp_clone).ok();
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to checkout commit {}", pkg.commit_sha),
-        ));
+        return Err(io::Error::other(format!(
+            "Failed to checkout commit {}",
+            pkg.commit_sha
+        )));
     }
 
     // remove .git directory

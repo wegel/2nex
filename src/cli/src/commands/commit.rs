@@ -96,10 +96,10 @@ fn copy_dir_contents(src: &str, dst: &str) -> io::Result<()> {
         .status()?;
 
     if !status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to copy {} to {}", src, dst),
-        ));
+        return Err(io::Error::other(format!(
+            "Failed to copy {} to {}",
+            src, dst
+        )));
     }
 
     Ok(())

@@ -269,10 +269,7 @@ fn download_and_extract_module(
             .status()?;
 
         if !status.success() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("Failed to download {}", url),
-            ));
+            return Err(io::Error::other(format!("Failed to download {}", url)));
         }
     }
 
@@ -296,10 +293,10 @@ fn download_and_extract_module(
 
     if !status.success() {
         fs::remove_dir_all(&tmp_extract).ok();
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to extract {}@{}", module.path, module.version),
-        ));
+        return Err(io::Error::other(format!(
+            "Failed to extract {}@{}",
+            module.path, module.version
+        )));
     }
 
     // Go module zip structure: modulepath@version/files...
@@ -309,13 +306,10 @@ fn download_and_extract_module(
 
     if !extracted_dir.exists() {
         fs::remove_dir_all(&tmp_extract).ok();
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "Expected directory {} not found in zip for {}@{}",
-                versioned_path, module.path, module.version
-            ),
-        ));
+        return Err(io::Error::other(format!(
+            "Expected directory {} not found in zip for {}@{}",
+            versioned_path, module.path, module.version
+        )));
     }
 
     // create destination and copy contents (not the directory itself)
@@ -418,7 +412,7 @@ fn find_go_packages(dir: &Path, base_path: &str) -> io::Result<Vec<String>> {
 
     // check if this directory has .go files
     let has_go_files = fs::read_dir(dir)?.filter_map(|e| e.ok()).any(|e| {
-        e.path().extension().map_or(false, |ext| ext == "go")
+        e.path().extension().is_some_and(|ext| ext == "go")
             && !e.file_name().to_string_lossy().ends_with("_test.go")
     });
 

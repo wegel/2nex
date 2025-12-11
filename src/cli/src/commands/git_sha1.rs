@@ -26,13 +26,10 @@ pub fn run(args: &GitSha1Args) -> io::Result<()> {
         .output()?;
 
     if !output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "git hash-object failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            ),
-        ));
+        return Err(io::Error::other(format!(
+            "git hash-object failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )));
     }
 
     let sha1 = String::from_utf8_lossy(&output.stdout).trim().to_string();

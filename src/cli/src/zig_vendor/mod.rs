@@ -477,10 +477,7 @@ fn download_git_dep(url: &str, rev: &str, dest: &Path) -> io::Result<()> {
 
     if !status.success() {
         fs::remove_dir_all(&tmp_dir).ok();
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to clone {}", url),
-        ));
+        return Err(io::Error::other(format!("Failed to clone {}", url)));
     }
 
     // fetch specific commit
@@ -506,10 +503,10 @@ fn download_git_dep(url: &str, rev: &str, dest: &Path) -> io::Result<()> {
 
     if !status.success() {
         fs::remove_dir_all(&tmp_dir).ok();
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to checkout {} from {}", rev, url),
-        ));
+        return Err(io::Error::other(format!(
+            "Failed to checkout {} from {}",
+            rev, url
+        )));
     }
 
     // remove .git directory
@@ -535,10 +532,7 @@ fn download_url_dep(url: &str, dest: &Path) -> io::Result<()> {
         .status()?;
 
     if !status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to download {}", url),
-        ));
+        return Err(io::Error::other(format!("Failed to download {}", url)));
     }
 
     // extract
@@ -559,10 +553,7 @@ fn download_url_dep(url: &str, dest: &Path) -> io::Result<()> {
 
     if !status.success() {
         fs::remove_dir_all(&tmp_extract).ok();
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("Failed to extract {}", url),
-        ));
+        return Err(io::Error::other(format!("Failed to extract {}", url)));
     }
 
     // GitHub-style archives extract to repo-sha/, move contents up
@@ -626,7 +617,7 @@ pub fn compute_zig_hash(dir: &Path) -> io::Result<String> {
 
     // combine all hashes in sorted order
     let mut combined_hasher = Sha256::new();
-    for (_path, hash) in &file_hashes {
+    for hash in file_hashes.values() {
         combined_hasher.update(hash);
     }
 
@@ -648,9 +639,7 @@ fn collect_file_hashes(
         let file_type = entry.file_type()?;
 
         // get relative path from base, normalized with forward slashes
-        let rel_path = path
-            .strip_prefix(base)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let rel_path = path.strip_prefix(base).map_err(|e| io::Error::other(e))?;
         let normalized = rel_path
             .components()
             .map(|c| c.as_os_str().to_string_lossy())

@@ -31,8 +31,7 @@ pub fn run(args: &DiscardArgs) -> io::Result<()> {
             .unwrap_or(false);
 
         if has_nex_changes || has_bin_changes {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
+            return Err(io::Error::other(
                 "Uncommitted changes exist. Use --force to discard them, or 'nex commit' to save.",
             ));
         }

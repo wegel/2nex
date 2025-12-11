@@ -88,7 +88,7 @@ pub fn run(args: &CheckArgs) -> io::Result<()> {
     }
 
     if has_errors {
-        Err(io::Error::new(io::ErrorKind::Other, "check failed"))
+        Err(io::Error::other("check failed"))
     } else {
         println!("all checks passed");
         Ok(())

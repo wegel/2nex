@@ -55,7 +55,7 @@ pub fn fetch_git_blob(repo_root: &Path, sha: &str) -> io::Result<String> {
         .arg("-p")
         .arg(sha)
         .output()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("failed to run git: {}", e)))?;
+        .map_err(|e| io::Error::other(format!("failed to run git: {}", e)))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -75,14 +75,15 @@ pub fn hash_file_content(path: &Path) -> io::Result<String> {
         .arg("hash-object")
         .arg(path)
         .output()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("failed to run git: {}", e)))?;
+        .map_err(|e| io::Error::other(format!("failed to run git: {}", e)))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("failed to hash file {}: {}", path.display(), stderr),
-        ));
+        return Err(io::Error::other(format!(
+            "failed to hash file {}: {}",
+            path.display(),
+            stderr
+        )));
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
@@ -112,10 +113,10 @@ pub fn fetch_url_or_file(url_or_path: &str) -> io::Result<String> {
             .output()?;
 
         if !output.status.success() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("Failed to download {}", url_or_path),
-            ));
+            return Err(io::Error::other(format!(
+                "Failed to download {}",
+                url_or_path
+            )));
         }
 
         String::from_utf8(output.stdout).map_err(|e| {
@@ -138,7 +139,7 @@ pub fn create_deterministic_tarball(source_dir: &Path, output_path: &Path) -> io
     let mut entries: Vec<PathBuf> = Vec::new();
 
     for entry in WalkDir::new(source_dir).min_depth(0).into_iter() {
-        let entry = entry.map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        let entry = entry.map_err(|e| io::Error::other(e.to_string()))?;
         entries.push(entry.path().to_path_buf());
     }
 
@@ -156,7 +157,7 @@ pub fn create_deterministic_tarball(source_dir: &Path, output_path: &Path) -> io
     for path in &entries {
         let relative = path
             .strip_prefix(parent)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| io::Error::other(e.to_string()))?;
 
         if relative.as_os_str().is_empty() {
             continue;

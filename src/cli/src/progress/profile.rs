@@ -95,12 +95,10 @@ impl BuildProfile {
     /// find the checkpoint just after the given byte offset
     /// returns None if bytes is past all checkpoints
     pub fn checkpoint_after(&self, bytes: u64) -> Option<&Checkpoint> {
-        for cp in &self.checkpoints {
-            if cp.bytes > bytes {
-                return Some(cp);
-            }
-        }
-        None
+        self.checkpoints
+            .iter()
+            .find(|&cp| cp.bytes > bytes)
+            .map(|v| v as _)
     }
 
     /// check if the profile seems valid for the observed byte count

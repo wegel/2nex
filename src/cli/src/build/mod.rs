@@ -97,7 +97,7 @@ pub fn append_checksum_file(package: &Package, checksum: &str, file_path: &Path)
         for line in io::BufReader::new(file).lines() {
             let line = line?;
             let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 1 {
+            if !parts.is_empty() {
                 max_first_column_width = max_first_column_width.max(parts[0].len());
             }
         }
@@ -396,7 +396,7 @@ unshare --root={build_dir} /2nex/tmp/build_script.sh 2>&1
         );
 
         if preamble.trim().is_empty() {
-            format!("{build_script}")
+            build_script.to_string()
         } else {
             format!("{preamble}\n{build_script}")
         }
@@ -424,7 +424,7 @@ unshare --root={build_dir} /2nex/tmp/build_script.sh 2>&1
         let stdout = child
             .stdout
             .take()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "failed to capture stdout"))?;
+            .ok_or_else(|| io::Error::other("failed to capture stdout"))?;
 
         // capture any escaped stderr in background
         let stderr_handle = child.stderr.take().map(|stderr| {
@@ -469,7 +469,7 @@ unshare --root={build_dir} /2nex/tmp/build_script.sh 2>&1
                 eprintln!("--- end output ---\n");
             }
         }
-        Err(io::Error::new(io::ErrorKind::Other, "Build script failed"))
+        Err(io::Error::other("Build script failed"))
     }
 }
 
@@ -913,14 +913,11 @@ pub fn build_package_manifest_with_dir(
             println!("Build is reproducible. Checksums match.");
         } else {
             println!("Build is not reproducible. Checksums do not match.");
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Build is not reproducible.",
-            ));
+            return Err(io::Error::other("Build is not reproducible."));
         }
     }
 
-    append_checksum_file(&manifest.package, &checksum, &Path::new("checksums.txt"))?;
+    append_checksum_file(&manifest.package, &checksum, Path::new("checksums.txt"))?;
 
     Ok(())
 }
@@ -982,8 +979,8 @@ fn create_files_commit_for_package(
 
     println!("Creating files commit: {}", files_ref);
 
-    let repo = zub::Repo::open(Path::new(repo_path))
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    let repo =
+        zub::Repo::open(Path::new(repo_path)).map_err(|e| io::Error::other(e.to_string()))?;
 
     let ref_strs: Vec<&str> = output_refs.iter().map(|s| s.as_str()).collect();
     zub::ops::union_trees(
@@ -995,7 +992,7 @@ fn create_files_commit_for_package(
             ..Default::default()
         },
     )
-    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    .map_err(|e| io::Error::other(e.to_string()))?;
 
     // attach metadata
     let metadata = vec![
@@ -1021,12 +1018,12 @@ fn create_files_commit_for_package(
     );
 
     // resolve the commit hash from the checksum-based ref
-    let commit_hash = zub::resolve_ref(&repo, &files_ref)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    let commit_hash =
+        zub::resolve_ref(&repo, &files_ref).map_err(|e| io::Error::other(e.to_string()))?;
 
     // write the semantic ref pointing to the same commit
     zub::write_ref(&repo, &semantic_files_ref, &commit_hash)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        .map_err(|e| io::Error::other(e.to_string()))?;
 
     // attach manifest hash to semantic ref for staleness checks
     let manifest_hash = compute_manifest_hash(manifest_path)?;
@@ -1113,7 +1110,7 @@ pub fn check_if_built(
     // check all outputs - we'll use the first output to find the commit
     let mut found_commit: Option<String> = None;
 
-    for (output_name, _spec) in &manifest.outputs {
+    for output_name in manifest.outputs.keys() {
         let branch = format!(
             "{}/{}/{}/{}/outputs/{}",
             arch, namespace, slug, version, output_name

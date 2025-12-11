@@ -63,10 +63,10 @@ fn visit_commit(
 
     if visiting.contains(commit) {
         let cycle_path = build_cycle_path(stack, commit);
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("circular dependency detected: {}", cycle_path),
-        ));
+        return Err(io::Error::other(format!(
+            "circular dependency detected: {}",
+            cycle_path
+        )));
     }
 
     // check for package identity cycle (same namespace/slug, different version)
@@ -74,13 +74,10 @@ fn visit_commit(
     if let Some((ref ns, ref slug)) = identity {
         if visiting_packages.contains(&(ns.clone(), slug.clone())) {
             let cycle_path = build_cycle_path(stack, commit);
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "package cycle: {}/{} appears in its own dependency chain: {}",
-                    ns, slug, cycle_path
-                ),
-            ));
+            return Err(io::Error::other(format!(
+                "package cycle: {}/{} appears in its own dependency chain: {}",
+                ns, slug, cycle_path
+            )));
         }
         visiting_packages.insert((ns.clone(), slug.clone()));
     }
@@ -145,7 +142,7 @@ fn fetch_deps_from_manifest(
     };
 
     // find manifest
-    let manifest = match manifest_index.get_manifest(&namespace, slug) {
+    let manifest = match manifest_index.get_manifest(namespace, slug) {
         Some(m) => m,
         None => {
             return Err(io::Error::new(

@@ -165,12 +165,7 @@ fn run_build(args: &commands::build::BuildArgs) -> io::Result<()> {
         rayon::ThreadPoolBuilder::new()
             .num_threads(num_jobs)
             .build_global()
-            .map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Failed to configure thread pool: {}", e),
-                )
-            })?;
+            .map_err(|e| io::Error::other(format!("Failed to configure thread pool: {}", e)))?;
     }
 
     let manifest_path = Path::new(&args.manifest);
@@ -197,10 +192,8 @@ impl fmt::Display for Package {
 
 /// run the zub remote helper protocol (server side of SSH transport)
 fn run_zub_remote(repo_path: &Path) -> io::Result<()> {
-    let repo = zub::Repo::open(repo_path)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-    zub::transport::serve_remote(&repo)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    let repo = zub::Repo::open(repo_path).map_err(|e| io::Error::other(e.to_string()))?;
+    zub::transport::serve_remote(&repo).map_err(|e| io::Error::other(e.to_string()))
 }
 
 /// Verifies and commits outputs to store branches based on the manifest.
