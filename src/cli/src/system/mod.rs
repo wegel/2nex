@@ -66,7 +66,7 @@ pub fn build_system_manifest_with_dir(
         manifest.packages.iter().map(|p| p.commit.clone()).collect();
 
     if manifest.system.nex_structure {
-        materialize_nex_structure(base_dir, &opts.repo_path, &manifest.packages)?;
+        materialize_nex_structure(base_dir, &opts.repo_path, &original_package_commits)?;
     } else {
         materialize_system_packages(
             base_dir,
@@ -163,7 +163,7 @@ pub fn build_system_manifest_with_dir(
         )?;
 
         if manifest.system.nex_structure {
-            materialize_nex_structure(base_dir, &opts.repo_path, &manifest.packages)?;
+            materialize_nex_structure(base_dir, &opts.repo_path, &package_commits)?;
         } else {
             materialize_system_packages(
                 base_dir,
@@ -350,7 +350,7 @@ pub fn commit_system_rootfs(
 pub fn materialize_nex_structure(
     base_dir: &str,
     repo_path: &str,
-    packages: &[SystemPackage],
+    package_commits: &[String],
 ) -> io::Result<()> {
     let target_dir = Path::new(base_dir).join("target");
     if target_dir.exists() {
@@ -372,14 +372,14 @@ pub fn materialize_nex_structure(
     // track which packages we've installed (by slug) to avoid duplicates
     let mut installed_packages: HashMap<String, String> = HashMap::new();
 
-    for pkg in packages {
+    for commit in package_commits {
         use crate::refs::PackageRef;
 
         // parse the commit ref to get package info
-        let pkg_ref = match PackageRef::parse(&pkg.commit) {
+        let pkg_ref = match PackageRef::parse(commit) {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("Warning: could not parse package commit {}: {}", pkg.commit, e);
+                eprintln!("Warning: could not parse package commit {}: {}", commit, e);
                 continue;
             }
         };
@@ -392,9 +392,9 @@ pub fn materialize_nex_structure(
         let base_commit = pkg_ref.commit_ref();
 
         // check if this is a kernel output (boot or modules) - these need special handling
-        let is_boot_output = pkg.commit.contains("/outputs/boot");
-        let is_kernel_module_output = pkg.commit.contains("/kernel/linux/")
-            && pkg.commit.contains("/outputs/")
+        let is_boot_output = commit.contains("/outputs/boot");
+        let is_kernel_module_output = commit.contains("/kernel/linux/")
+            && commit.contains("/outputs/")
             && !is_boot_output;
 
         // kernel module outputs are layered directly into /target/usr/lib/modules/
@@ -404,7 +404,7 @@ pub fn materialize_nex_structure(
                 "Installing kernel modules: {}/{}/{} (direct layer)",
                 namespace, slug, version
             );
-            checkout_into(repo_path, &pkg.commit, &target_dir, true, false)?;
+            checkout_into(repo_path, commit, &target_dir, true, false)?;
             continue;
         }
 
@@ -431,7 +431,7 @@ pub fn materialize_nex_structure(
             println!("  Using manifest hash: {} ({})", base_commit, short_hash);
         }
 
-        let (install_ref, checksum) = (pkg.commit.clone(), short_hash.to_string());
+        let (install_ref, checksum) = (commit.clone(), short_hash.to_string());
 
         // create package directory: /nex/pkg/<ns>/<slug>/<version>/<checksum>/
         let pkg_install_dir = nex_pkg_dir
@@ -479,17 +479,19 @@ pub fn materialize_nex_structure(
             )?;
         }
 
-        installed_packages.insert(pkg_key, pkg.commit.clone());
+        installed_packages.insert(pkg_key, commit.clone());
     }
 
-    // flatten runtime dependencies into each package's lib/ directory
-    // use manifests deployed to /nex/db/pkg for precomputed deps
+    // flatten runtime dependencies into each package capsule
     let nex_db_pkg = target_dir.join("nex/db/pkg");
     if nex_db_pkg.exists() {
         flatten_package_dependencies(repo_path, &nex_pkg_dir, &nex_db_pkg)?;
     } else {
         println!("  Skipping dependency flattening: /nex/db/pkg not found");
     }
+
+    // symlink flattened libs to /usr/lib/ (first-come-first-own)
+    symlink_flattened_libs_to_usr(&nex_pkg_dir, &target_dir)?;
 
     // install nex-ld-shim at /lib64/ld-linux-x86-64.so.2
     install_nex_ld_shim(repo_path, &lib64_dir)?;
@@ -501,6 +503,61 @@ pub fn materialize_nex_structure(
         "Materialized {} packages to /nex/pkg/ structure",
         installed_packages.len()
     );
+
+    Ok(())
+}
+
+/// Symlink flattened libraries from package capsules to /usr/lib/ (first-come-first-own).
+fn symlink_flattened_libs_to_usr(nex_pkg_dir: &Path, target_dir: &Path) -> io::Result<()> {
+    let usr_lib = target_dir.join("usr/lib");
+    fs::create_dir_all(&usr_lib)?;
+
+    for entry in WalkDir::new(nex_pkg_dir).min_depth(1) {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+
+        let path = entry.path();
+
+        // look for usr/lib/ directories inside package capsules
+        if !path.is_dir() {
+            continue;
+        }
+
+        let path_str = path.to_string_lossy();
+        if !path_str.ends_with("/usr/lib") {
+            continue;
+        }
+
+        // found a usr/lib/ in a capsule - symlink its contents to /usr/lib/
+        for lib_entry in WalkDir::new(path).min_depth(1).max_depth(1) {
+            let lib_entry = match lib_entry {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+
+            let lib_path = lib_entry.path();
+            let lib_name = match lib_path.file_name() {
+                Some(n) => n,
+                None => continue,
+            };
+
+            let target_path = usr_lib.join(lib_name);
+
+            // first-come-first-own: skip if already exists
+            if target_path.exists() || target_path.symlink_metadata().is_ok() {
+                continue;
+            }
+
+            // compute relative path: /usr/lib -> /nex/pkg/.../usr/lib/file
+            // relative path is ../../nex/pkg/{rel_from_nex_pkg}/usr/lib/{file}
+            if let Ok(rel_from_nex_pkg) = lib_path.strip_prefix(nex_pkg_dir) {
+                let symlink_target = Path::new("../../nex/pkg").join(rel_from_nex_pkg);
+                let _ = symlink(&symlink_target, &target_path);
+            }
+        }
+    }
 
     Ok(())
 }

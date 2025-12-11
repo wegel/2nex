@@ -115,22 +115,21 @@ pub fn flatten_capsule_precomputed(
     self_libs.sort();
     self_libs.dedup();
 
-    let pkg_lib_dir = pkg_dir.join("lib");
-    fs::create_dir_all(&pkg_lib_dir)?;
-
     let mut flattened_count = 0;
+    let mut flattened_files: Vec<String> = Vec::new();
 
     // flatten self libs from own package's files commit
     if let Some(ref self_commit) = self_files_commit {
         for lib_path in &self_libs {
-            if flatten_library_from_commit(
+            if flatten_library_preserving_path(
                 repo_path,
                 self_commit,
                 lib_path,
-                &pkg_lib_dir,
+                pkg_dir,
                 fallback_repos,
             )? {
                 flattened_count += 1;
+                flattened_files.push(lib_path.clone());
             }
         }
     }
@@ -139,17 +138,21 @@ pub fn flatten_capsule_precomputed(
     if !external_deps.is_empty() {
         let all_deps = resolve_transitive_deps(&external_deps, manifest, manifest_index);
         for (file_path, _provider_key, provider_commit) in all_deps {
-            if flatten_library_from_commit(
+            if flatten_library_preserving_path(
                 repo_path,
                 &provider_commit,
                 &file_path,
-                &pkg_lib_dir,
+                pkg_dir,
                 fallback_repos,
             )? {
                 flattened_count += 1;
+                flattened_files.push(file_path.clone());
             }
         }
     }
+
+    // create lib/ld-linux-x86-64.so.2 symlink for nex-ld-shim loader lookup
+    ensure_loader_symlink(pkg_dir, &flattened_files)?;
 
     Ok(flattened_count)
 }
@@ -393,26 +396,21 @@ fn find_manifest_for_commit<'a>(
     index.get_manifest(&pkg_ref.namespace, &pkg_ref.slug)
 }
 
-/// Flatten a single library from a store commit into a package's lib/ directory.
-fn flatten_library_from_commit(
+/// Flatten a single library from a store commit, preserving original path structure.
+fn flatten_library_preserving_path(
     repo_path: &str,
     commit: &str,
     lib_path: &str,
-    pkg_lib_dir: &Path,
+    pkg_dir: &Path,
     fallback_repos: &[PathBuf],
 ) -> io::Result<bool> {
-    let basename = Path::new(lib_path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid library path"))?;
+    let rel_path = lib_path.trim_start_matches('/');
+    let dest = pkg_dir.join(rel_path);
 
-    let dest = pkg_lib_dir.join(basename);
     if dest.exists() {
-        return Ok(false); // already flattened
+        return Ok(false);
     }
 
-    // checkout the whole commit to extract the library
-    // must be on same filesystem as repo for hardlinks to work
     let staging_dir = Path::new("/nex/staging");
     let temp_parent = if staging_dir.exists() || fs::create_dir_all(staging_dir).is_ok() {
         staging_dir
@@ -425,30 +423,51 @@ fn flatten_library_from_commit(
     let store = Store::open_with_fallback_chain(repo_path, fallback_repos)?;
     store.checkout(commit, &checkout_dir, true)?;
 
-    let src = checkout_dir.join(lib_path.trim_start_matches('/'));
+    let src = checkout_dir.join(rel_path);
     if !src.exists() {
         return Ok(false);
     }
 
-    fs::create_dir_all(pkg_lib_dir)?;
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)?;
+    }
     hardlink_or_symlink(&src, &dest)?;
 
     // handle symlink targets (e.g., libc.so.6 -> libc-2.39.so)
     if src.symlink_metadata()?.file_type().is_symlink() {
         let link_target = fs::read_link(&src)?;
         if !link_target.is_absolute() {
-            let target_name = link_target.file_name().and_then(|n| n.to_str());
-            if let Some(target_name) = target_name {
-                let target_src = src.parent().unwrap().join(&link_target);
-                let target_dest = pkg_lib_dir.join(target_name);
-                if target_src.exists() && !target_dest.exists() {
-                    hardlink_or_symlink(&target_src, &target_dest)?;
-                }
+            let target_src = src.parent().unwrap().join(&link_target);
+            let target_dest = dest.parent().unwrap().join(&link_target);
+            if target_src.exists() && !target_dest.exists() {
+                hardlink_or_symlink(&target_src, &target_dest)?;
             }
         }
     }
 
     Ok(true)
+}
+
+/// Create lib/ld-linux-x86-64.so.2 symlink for nex-ld-shim loader lookup.
+fn ensure_loader_symlink(pkg_dir: &Path, flattened_files: &[String]) -> io::Result<()> {
+    let loader_name = "ld-linux-x86-64.so.2";
+    let has_loader = flattened_files.iter().any(|f| f.ends_with(loader_name));
+
+    if !has_loader {
+        return Ok(());
+    }
+
+    let lib_dir = pkg_dir.join("lib");
+    let loader_symlink = lib_dir.join(loader_name);
+
+    if loader_symlink.exists() || loader_symlink.symlink_metadata().is_ok() {
+        return Ok(());
+    }
+
+    fs::create_dir_all(&lib_dir)?;
+    symlink(format!("../usr/lib/{}", loader_name), &loader_symlink)?;
+
+    Ok(())
 }
 
 /// Hardlink a file or recreate a symlink.
