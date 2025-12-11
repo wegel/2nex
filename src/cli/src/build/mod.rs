@@ -1,3 +1,5 @@
+pub mod orchestration;
+
 use std::collections::HashMap;
 use std::env;
 use std::fs::{self, File, OpenOptions};
@@ -481,7 +483,7 @@ pub fn verify_and_commit_outputs(
     println!("Verifying and committing outputs to store branches");
 
     // compute manifest hash once
-    let manifest_hash = crate::compute_manifest_hash(manifest_path)?;
+    let manifest_hash = compute_manifest_hash(manifest_path)?;
 
     let output_specs = &manifest.outputs;
     let out_dir = Path::new(base_dir).join(&paths.out);
@@ -597,7 +599,7 @@ pub fn create_and_commit_bundles(
 ) -> io::Result<()> {
     println!("Processing bundles");
 
-    let manifest_hash = crate::compute_manifest_hash(manifest_path)?;
+    let manifest_hash = compute_manifest_hash(manifest_path)?;
     let bundles = &manifest.bundles;
 
     for (bundle_name, bundle) in bundles {
