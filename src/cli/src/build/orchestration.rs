@@ -185,6 +185,7 @@ pub fn collect_dependencies_recursive(
     manifest_map: &mut HashMap<PathBuf, NodeIndex>,
     force: bool,
     ref_cache: &mut HashMap<String, bool>,
+    store: Option<&Store>,
 ) -> io::Result<NodeIndex> {
     let manifest_path = manifest_source.path();
 
@@ -223,48 +224,92 @@ pub fn collect_dependencies_recursive(
 
     for dep in &dependencies {
         if let Some(ref blob_sha) = dep.manifest_ref {
-            match crate::utils::fetch_git_blob(&git_root, blob_sha) {
-                Ok(content) => {
-                    use sha2::{Digest, Sha256};
-                    let content_hash = format!("{:x}", Sha256::digest(content.as_bytes()));
-
-                    match find_commit_by_manifest_hash(repo_path, &dep.commit, &content_hash) {
-                        Ok(Some(commit_id)) => {
-                            println!("  [{}] {} skipping", &commit_id[..12], dep.commit);
-                            continue;
-                        }
-                        Ok(None) => {
-                            println!(
-                                "  [needs build] {} (pinned to {})",
-                                dep.commit,
-                                &blob_sha[..12]
-                            );
-                        }
-                        Err(e) => {
-                            eprintln!(
-                                "  Warning: failed to search history for {}: {}",
-                                dep.commit, e
-                            );
-                        }
+            // ensure ref exists locally (try remote pull if needed)
+            let ref_available = ref_cache.entry(dep.commit.clone()).or_insert_with(|| {
+                if ensure_branch_exists(repo_path, &dep.commit).is_ok() {
+                    return true;
+                }
+                if let Some(s) = store {
+                    if s.pull_from_remote(&dep.commit).unwrap_or(false) {
+                        return true;
                     }
                 }
-                Err(e) => {
-                    eprintln!(
-                        "  Warning: failed to fetch blob {} for {}: {}",
-                        blob_sha, dep.commit, e
-                    );
+                false
+            });
+
+            if !*ref_available {
+                // ref not available locally or remotely, needs build
+                println!(
+                    "  [needs build] {} (pinned to {}, not in store)",
+                    dep.commit,
+                    &blob_sha[..12]
+                );
+            } else {
+                match crate::utils::fetch_git_blob(&git_root, blob_sha) {
+                    Ok(content) => {
+                        use sha2::{Digest, Sha256};
+                        let content_hash = format!("{:x}", Sha256::digest(content.as_bytes()));
+
+                        match find_commit_by_manifest_hash(repo_path, &dep.commit, &content_hash) {
+                            Ok(Some(commit_id)) => {
+                                println!("  [{}] {} skipping", &commit_id[..12], dep.commit);
+                                continue;
+                            }
+                            Ok(None) => {
+                                println!(
+                                    "  [needs build] {} (pinned to {})",
+                                    dep.commit,
+                                    &blob_sha[..12]
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "  Warning: failed to search history for {}: {}",
+                                    dep.commit, e
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "  Warning: failed to fetch blob {} for {}: {}",
+                            blob_sha, dep.commit, e
+                        );
+                    }
                 }
             }
         } else {
-            let branch_exists = ref_cache
-                .entry(dep.commit.clone())
-                .or_insert_with(|| ensure_branch_exists(repo_path, &dep.commit).is_ok());
+            // for refs with internal paths (e.g., files/usr/bin/ldd), check the base ref
+            use crate::refs::PackageRef;
+            let ref_to_check = if let Ok(pkg_ref) = PackageRef::parse(&dep.commit) {
+                if pkg_ref.has_internal_path() {
+                    pkg_ref.commit_ref()
+                } else {
+                    dep.commit.clone()
+                }
+            } else {
+                dep.commit.clone()
+            };
+
+            let branch_exists = ref_cache.entry(ref_to_check.clone()).or_insert_with(|| {
+                if ensure_branch_exists(repo_path, &ref_to_check).is_ok() {
+                    return true;
+                }
+                // try pulling from remote if not found locally
+                if let Some(s) = store {
+                    if s.pull_from_remote(&ref_to_check).unwrap_or(false) {
+                        return true;
+                    }
+                }
+                false
+            });
 
             if *branch_exists {
                 match find_manifest_for_commit(&dep.commit, manifest_dirs) {
                     Ok(dep_manifest_path) => {
                         let manifest_hash = compute_manifest_hash(&dep_manifest_path)?;
-                        match find_commit_by_manifest_hash(repo_path, &dep.commit, &manifest_hash) {
+                        // use base ref for manifest hash lookup (strips internal paths)
+                        match find_commit_by_manifest_hash(repo_path, &ref_to_check, &manifest_hash) {
                             Ok(Some(_)) => {
                                 println!("  [floating] {} skipping", dep.commit);
                                 continue;
@@ -323,6 +368,7 @@ pub fn collect_dependencies_recursive(
                     manifest_map,
                     force,
                     ref_cache,
+                    store,
                 )?;
 
                 if !graph[dep_node].is_skip() {
@@ -1004,6 +1050,10 @@ pub fn build_with_dependencies(
     let mut manifest_map = HashMap::new();
     let mut ref_cache = HashMap::new();
 
+    // open store with remotes for pulling missing refs during planning
+    let fallback_paths: Vec<PathBuf> = opts.fallback_repos.iter().map(PathBuf::from).collect();
+    let store = Store::open_with_fallback_chain(&opts.repo_path, &fallback_paths).ok();
+
     let root_source = ManifestSource::Path(manifest_path.to_path_buf());
     collect_dependencies_recursive(
         &root_source,
@@ -1013,6 +1063,7 @@ pub fn build_with_dependencies(
         &mut manifest_map,
         opts.force || opts.add_checksums,
         &mut ref_cache,
+        store.as_ref(),
     )?;
 
     if let Some(ref pattern) = opts.trace_dependency {
