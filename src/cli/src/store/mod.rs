@@ -678,6 +678,7 @@ pub fn read_checksum_from_commit(repo_path: &str, commit: &str) -> io::Result<St
 }
 
 /// find a commit in history by its manifest hash.
+/// checks HEAD commit first, then walks history if available.
 pub fn find_commit_by_manifest_hash(
     repo_path: &str,
     branch: &str,
@@ -686,13 +687,27 @@ pub fn find_commit_by_manifest_hash(
     let repo = Repo::open(Path::new(repo_path))
         .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
 
-    // get commit log for the branch
-    let log = match zub::ops::log(&repo, branch, None) {
-        Ok(entries) => entries,
+    // resolve branch to commit hash
+    let head_hash = match zub::resolve_ref(&repo, branch) {
+        Ok(h) => h,
         Err(_) => return Ok(None), // branch doesn't exist
     };
 
-    // check each commit's manifest hash
+    // check HEAD commit directly (most common case, avoids history walk)
+    if let Ok(commit) = zub::read_commit(&repo, &head_hash) {
+        if let Some(hash) = commit.metadata.get("nex.manifest.hash") {
+            if hash == target_hash {
+                return Ok(Some(head_hash.to_hex()));
+            }
+        }
+    }
+
+    // walk history only if HEAD didn't match (handles rebuilds with different manifest)
+    let log = match zub::ops::log(&repo, branch, None) {
+        Ok(entries) => entries,
+        Err(_) => return Ok(None), // history incomplete, HEAD already checked
+    };
+
     for entry in log {
         if let Some(hash) = entry.commit.metadata.get("nex.manifest.hash") {
             if hash == target_hash {
