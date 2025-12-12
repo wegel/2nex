@@ -1,6 +1,6 @@
-//! content-addressed store operations using bog.
+//! content-addressed store operations using zub.
 //!
-//! this module provides the interface between the nex builder and the bog
+//! this module provides the interface between the nex builder and the zub
 //! content-addressed filesystem store. it replaces the previous ostree-based
 //! implementation.
 //!
@@ -44,7 +44,7 @@ pub struct ParsedRemote {
     pub path: PathBuf,  // repo path on remote
 }
 
-/// bog-backed content store for nex packages.
+/// zub-backed content store for nex packages.
 /// supports multiple fallback repos for layered search and remote fetching.
 pub struct Store {
     pub path: PathBuf,

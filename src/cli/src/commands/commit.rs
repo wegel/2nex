@@ -136,7 +136,7 @@ fn create_deployment(message: &str) -> io::Result<()> {
 
     // commit the new tree
     println!("  Creating new commit...");
-    let new_ref = format!("2nex/deployments/{}", timestamp_id());
+    let new_ref = format!("nex/deployments/{}", timestamp_id());
 
     let metadata = vec![
         ("nex.deployment.message".to_string(), message.to_string()),
@@ -156,15 +156,15 @@ fn create_deployment(message: &str) -> io::Result<()> {
 fn get_current_deployment_ref() -> io::Result<String> {
     // try to find the latest deployment ref
     let store = store::Store::open(NEX_REPO)?;
-    let refs = store.refs(Some("2nex/deployments/"))?;
+    let refs = store.refs(Some("nex/deployments/"))?;
 
     if let Some(latest) = refs.iter().max() {
         return Ok(latest.clone());
     }
 
-    // fallback: try 2nex/base
-    if store.exists("2nex/base") {
-        return Ok("2nex/base".to_string());
+    // fallback: try nex/base
+    if store.exists("nex/base") {
+        return Ok("nex/base".to_string());
     }
 
     Err(io::Error::new(

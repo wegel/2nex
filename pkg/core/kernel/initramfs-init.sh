@@ -1,8 +1,8 @@
 #!/bin/sh
-# 2nex initramfs init
+# nex initramfs init
 export PATH=/bin:/sbin
 
-echo "2nex initramfs starting... (v3)"
+echo "nex initramfs starting... (v3)"
 
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys

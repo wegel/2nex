@@ -243,9 +243,9 @@ fn default_true() -> bool {
 /// Paths configuration for build directories (relative to build_dir)
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct BuildPaths {
-    /// relative path for work directory (e.g., "2nex/work")
+    /// relative path for work directory (e.g., "nex/work")
     pub work: String,
-    /// relative path for output directory (e.g., "2nex/out")
+    /// relative path for output directory (e.g., "nex/out")
     pub out: String,
     /// relative path for inputs directory (e.g., "inputs")
     pub inputs: String,

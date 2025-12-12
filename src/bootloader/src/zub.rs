@@ -7,11 +7,11 @@ use crate::ext4::Ext4Fs;
 use crate::BootError;
 
 const NEX_DEPLOY_DIR: &str = "/nex/deploy";
-const DEFAULT_STATEROOT: &str = "2nex";
+const DEFAULT_STATEROOT: &str = "nex";
 
 /// represents a discovered zub deployment
 pub struct Deployment {
-    /// stateroot name (e.g., "2nex")
+    /// stateroot name (e.g., "nex")
     #[allow(dead_code)]
     pub stateroot: String,
     /// commit checksum (64 hex chars)

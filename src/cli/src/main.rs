@@ -29,7 +29,7 @@ use manifest::*;
 #[clap(
     name = "nex",
     version = "1.0",
-    about = "2nex package builder and manager"
+    about = "nex package builder and manager"
 )]
 struct Cli {
     #[clap(subcommand)]

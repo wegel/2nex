@@ -1,4 +1,4 @@
-//! JIT Materializer for 2nex packages.
+//! JIT Materializer for nex packages.
 //!
 //! This module handles Just-In-Time resolution and checkout of packages
 //! from the content store. Instead of pre-computing runtime dependencies at build time,

@@ -6,7 +6,7 @@ package:
   version: "2.39"
   description: The GNU C Library project provides the core libraries for the GNU system
   homepage: https://www.gnu.org/software/libc/
-  checksum: fe92e90d07d9a8926971c5e50502591cded7667d5cca1b4399f24944f0d14b5f
+  checksum: 7bbb5d73be97c393dc0ddc4c847f7afc5758b10364a14daa6915a1719666d3d6
   seed: true
 
 sources:
@@ -58,13 +58,13 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
 
 build:
-  environment: env/bootstrap-phase1.yaml
+  environment: eeeb4cd406953b12ddf019ae34e4f0704a1b944a
 
   profile: [237874:4650, 942114:6083, 2114163:9806, 3525181:13537, 4695127:16261, 5870311:18691, 7044928:24599, 8806944:29816, 10566880:34993, 11737072:47692]
   script: |
     # create symlinks so glibc build finds gcc
-    ln -s x86_64-2nex-linux-gnu-gcc /usr/bin/gcc
-    ln -s x86_64-2nex-linux-gnu-g++ /usr/bin/g++
+    ln -s x86_64-nex-linux-gnu-gcc /usr/bin/gcc
+    ln -s x86_64-nex-linux-gnu-g++ /usr/bin/g++
 
     # create stub libgcc_s for test programs (phase0 only has static libgcc)
     echo 'INPUT(-lgcc)' > /usr/lib/libgcc_s.so
@@ -113,8 +113,8 @@ build:
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
     for F in libBrokenLocale.a libc.a libc_nonshared.a libg.a libm-2.39.a libmvec.a libresolv.a; do
-      x86_64-2nex-linux-gnu-strip --strip-debug ${OUT_DIR}/usr/lib/$F
-      x86_64-2nex-linux-gnu-objcopy --enable-deterministic-archives ${OUT_DIR}/usr/lib/$F
+      x86_64-nex-linux-gnu-strip --strip-debug ${OUT_DIR}/usr/lib/$F
+      x86_64-nex-linux-gnu-objcopy --enable-deterministic-archives ${OUT_DIR}/usr/lib/$F
     done
 
 bundles:

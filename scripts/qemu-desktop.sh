@@ -80,14 +80,14 @@ if [ -z "$SYSTEM_CHECKSUM" ]; then
     SYSTEM_CHECKSUM=$(zub --repo="$REPO" rev-parse "$SYSTEM_REF")
 fi
 
-DEPLOY_PATH="nex/deploy/2nex/deploy/${SYSTEM_CHECKSUM}.0"
+DEPLOY_PATH="nex/deploy/nex/deploy/${SYSTEM_CHECKSUM}.0"
 DEPLOY_DIR="$ROOT_CONTENT/$DEPLOY_PATH"
 
 log "Extracting $SYSTEM_REF..."
 mkdir -p "$(dirname "$DEPLOY_DIR")"
 zub --repo="$REPO" checkout "$SYSTEM_REF" "$DEPLOY_DIR"
 
-mkdir -p "$ROOT_CONTENT/nex/deploy/2nex/var"
+mkdir -p "$ROOT_CONTENT/nex/deploy/nex/var"
 
 log "Initializing repo with remote (SSH to host)..."
 rm -rf "$ROOT_CONTENT/nex/repo"

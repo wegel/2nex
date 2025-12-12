@@ -1,4 +1,4 @@
-//! 2nex zub-aware UEFI bootloader
+//! nex zub-aware UEFI bootloader
 //!
 //! boots the default zub deployment from an ext4 partition.
 
@@ -28,7 +28,7 @@ fn main() -> Status {
     // initialize UEFI services and allocator
     uefi::helpers::init().expect("failed to init UEFI helpers");
 
-    log::info!("2nex bootloader v{}", env!("CARGO_PKG_VERSION"));
+    log::info!("nex bootloader v{}", env!("CARGO_PKG_VERSION"));
 
     match boot_sequence() {
         Ok(()) => Status::SUCCESS,

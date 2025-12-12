@@ -32,21 +32,26 @@ build-all:
 	@echo "Building all manifests..."
 	@for manifest in $$(find pkg -name "*.yaml" | sort); do \
 		echo "=== Building $$manifest ==="; \
-		./src/cli/target/debug/nex build "$$manifest" $(ARGS) || exit 1; \
+		./nex build "$$manifest" $(ARGS) || exit 1; \
+	done
+
+compute-deps-all:
+	@echo "Running compute-deps on all manifests..."
+	@for manifest in $$(find pkg -name "*.yaml" | grep -v bootstrap | sort); do \
+		echo "=== Building $$manifest ==="; \
+		./nex compute-deps "$$manifest" $(ARGS) || exit 1; \
 	done
 
 # format all package manifests
 format-all:
 	@echo "Formatting all manifests..."
-	@for manifest in $$(find pkg -name "*.yaml" | sort); do \
-		./src/cli/target/debug/nex format "$$manifest"; \
-	done
+	./nex --help >/dev/null
+	find pkg -name "*.yaml" | sort | parallel --halt now,fail=1 ./src/cli/target/debug/nex format {}
 	@echo "Done formatting all manifests."
 
 # check all package manifests
 check-all:
 	@echo "Checking all manifests..."
-	@for manifest in $$(find pkg -name "*.yaml" | sort); do \
-		./src/cli/target/debug/nex check "$$manifest" || exit 1; \
-	done
+	./nex --help >/dev/null
+	find pkg -name "*.yaml" | sort | parallel --halt now,fail=1 ./src/cli/target/debug/nex check {}
 	@echo "All manifests passed checks."

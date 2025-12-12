@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3 -u
 """
 Dependency Minimizer
 
@@ -88,8 +88,8 @@ def parse_args():
         default="dependencies",
         help="Manifest section to minimize (default: dependencies)",
     )
-    parser.add_argument("--repo", default="bootstrap_store",
-                        help="OSTree repo path for hydration (default: bootstrap_store)")
+    parser.add_argument("--repo", default=".nex/repo",
+                        help="zub repo path for hydration (default: bootstrap_store)")
     return parser.parse_args()
 
 
@@ -179,7 +179,7 @@ def test_build(manifest_file, builder_path, timeout):
         shutil.rmtree(build_dir)
     
     # Run the build command with --single --force to avoid cache issues
-    cmd = [builder_path, "bootstrap_store", "--single", "--force", manifest_file]
+    cmd = [builder_path, "build", "--single", "--force", manifest_file]
     try:
         current_process = subprocess.Popen(
             cmd, 

@@ -55,8 +55,8 @@ mkdir -p "$ROOT_DIR/build"
 TMPDIR=$(mktemp -d "$ROOT_DIR/build/tmp.XXXXXX")
 trap "rm -rf $TMPDIR" EXIT
 
-# disk layout: 6GB (repo is ~3.5GB, need room for zub repo copy + deployment)
-DISK_SIZE_MB=6144
+# disk layout: 2GB (no repo copy - uses SSH remote fetch)
+DISK_SIZE_MB=2048
 ESP_SIZE_MB=64
 ROOT_SIZE_MB=$((DISK_SIZE_MB - ESP_SIZE_MB - 1))
 
@@ -92,18 +92,59 @@ if [ -z "$SYSTEM_CHECKSUM" ]; then
     SYSTEM_CHECKSUM=$(zub --repo="$REPO" rev-parse "$SYSTEM_REF")
 fi
 
-DEPLOY_PATH="nex/deploy/2nex/deploy/${SYSTEM_CHECKSUM}.0"
+DEPLOY_PATH="nex/deploy/nex/deploy/${SYSTEM_CHECKSUM}.0"
 DEPLOY_DIR="$ROOT_CONTENT/$DEPLOY_PATH"
 
 log "Extracting $SYSTEM_REF..."
 mkdir -p "$(dirname "$DEPLOY_DIR")"
 zub --repo="$REPO" checkout "$SYSTEM_REF" "$DEPLOY_DIR"
 
-mkdir -p "$ROOT_CONTENT/nex/deploy/2nex/var"
+mkdir -p "$ROOT_CONTENT/nex/deploy/nex/var"
 
-# copy zub repo to disk
-log "Copying repo to disk (this may take a while)..."
-cp -a "$REPO" "$ROOT_CONTENT/nex/repo"
+# initialize empty zub repo with remote pointing to host
+log "Initializing repo with remote (SSH to host)..."
+rm -rf "$ROOT_CONTENT/nex/repo"
+zub init "$ROOT_CONTENT/nex/repo"
+
+# configure remote to fetch from host via SSH
+# VM sees host at 10.0.2.2 (QEMU user-mode networking)
+HOST_USER="$USER"
+HOST_REPO_PATH="$REPO"
+cat > "$ROOT_CONTENT/nex/repo/config.toml" << EOF
+[namespace]
+uid_map = []
+gid_map = []
+
+[[remotes]]
+name = "origin"
+url = "ssh://${HOST_USER}@10.0.2.2${HOST_REPO_PATH}"
+EOF
+
+log "Remote configured: ${HOST_USER}@10.0.2.2:${HOST_REPO_PATH}"
+
+# copy SSH keys so VM can authenticate to host
+log "Copying SSH keys for remote access..."
+mkdir -p "$ROOT_CONTENT/root/.ssh"
+chmod 700 "$ROOT_CONTENT/root/.ssh"
+if [ -f "$HOME/.ssh/id_ed25519" ]; then
+    cp "$HOME/.ssh/id_ed25519" "$ROOT_CONTENT/root/.ssh/"
+    cp "$HOME/.ssh/id_ed25519.pub" "$ROOT_CONTENT/root/.ssh/"
+elif [ -f "$HOME/.ssh/id_rsa" ]; then
+    cp "$HOME/.ssh/id_rsa" "$ROOT_CONTENT/root/.ssh/"
+    cp "$HOME/.ssh/id_rsa.pub" "$ROOT_CONTENT/root/.ssh/"
+else
+    error "No SSH key found in ~/.ssh (need id_ed25519 or id_rsa)"
+fi
+chmod 600 "$ROOT_CONTENT/root/.ssh/"id_*
+
+# add host key acceptance for 10.0.2.2
+cat > "$ROOT_CONTENT/root/.ssh/config" << 'EOF'
+Host 10.0.2.2
+    StrictHostKeyChecking accept-new
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
+EOF
+chmod 600 "$ROOT_CONTENT/root/.ssh/config"
 
 # create root-level symlinks to the deployment
 # these are needed because binaries have PT_INTERP=/lib64/ld-linux-x86-64.so.2
@@ -117,26 +158,11 @@ ln -sf "$DEPLOY_PATH/etc" "$ROOT_CONTENT/etc"
 ln -sf "$DEPLOY_PATH/var" "$ROOT_CONTENT/var"
 ln -sf "usr/bin/init" "$ROOT_CONTENT/init"
 
-# symlink /nex/pkg and /nex/db from deployment into the root /nex directory
+# symlink /nex/pkg, /nex/db, /nex/env from deployment into the root /nex directory
 # (we don't symlink /nex itself because /nex/repo and /nex/deploy are real directories)
 ln -sfn "/$DEPLOY_PATH/nex/pkg" "$ROOT_CONTENT/nex/pkg"
 ln -sfn "/$DEPLOY_PATH/nex/db" "$ROOT_CONTENT/nex/db"
-
-# copy manifests git repo for user builds (enables git worktrees)
-log "Copying manifests repo for user builds..."
-if [ -d "$ROOT_DIR/pkg" ]; then
-    mkdir -p "$ROOT_CONTENT/nex/manifests"
-    # copy pkg/ contents as a git repo (need .git for worktrees)
-    cp -a "$ROOT_DIR/pkg/." "$ROOT_CONTENT/nex/manifests/"
-    # if parent is a git repo, initialize manifests as a proper git repo
-    if [ -d "$ROOT_DIR/.git" ]; then
-        # create a standalone repo from the pkg/ subtree
-        (cd "$ROOT_CONTENT/nex/manifests" && \
-         git init -q && \
-         git add -A && \
-         git commit -q -m "Initial manifests" 2>/dev/null || true)
-    fi
-fi
+ln -sfn "/$DEPLOY_PATH/nex/env" "$ROOT_CONTENT/nex/env"
 
 # create /nex/users directory with sticky bit for user environments
 log "Creating /nex/users directory..."
@@ -150,10 +176,15 @@ log "Packages installed:"
 ls "$DEPLOY_DIR/nex/pkg/" 2>/dev/null | head -10 || echo "(none)"
 
 # create ext4 filesystem
+# use fakeroot so files are owned by root (uid 0) in the image
 log "Creating ext4 filesystem..."
 ROOT_IMG="$TMPDIR/root.img"
-# -i 4096 = one inode per 4KB (vs default ~16KB) - needed for zub's many small object files
-mke2fs -t ext4 -d "$ROOT_CONTENT" -i 4096 "$ROOT_IMG" ${ROOT_SIZE_MB}M
+if command -v fakeroot >/dev/null; then
+    fakeroot -- sh -c "chown -R 0:0 '$ROOT_CONTENT' && mke2fs -t ext4 -d '$ROOT_CONTENT' '$ROOT_IMG' ${ROOT_SIZE_MB}M"
+else
+    log "WARNING: fakeroot not found - SSH keys may have wrong ownership in VM"
+    mke2fs -t ext4 -d "$ROOT_CONTENT" "$ROOT_IMG" ${ROOT_SIZE_MB}M
+fi
 dd if="$ROOT_IMG" of="$OUTPUT" bs=1M seek=$ESP_SIZE_MB conv=notrunc status=none
 
 log "Disk image created: $OUTPUT"
@@ -183,6 +214,8 @@ QEMU_ARGS+=(
 )
 
 log "Network: SSH available on localhost:10022 (ssh -p 10022 root@localhost)"
+log "Remote fetch: VM will SSH to ${HOST_USER}@10.0.2.2 for artifacts"
+log "NOTE: Ensure SSH server is running on host and accepts key auth from $USER"
 
 echo "--- QEMU output (Ctrl-A X to exit) ---"
 echo ""

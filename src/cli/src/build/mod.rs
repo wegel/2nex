@@ -300,7 +300,7 @@ pub fn run_build_script_with_env(
             io::Error::new(io::ErrorKind::InvalidInput, "build_dir must be valid UTF-8")
         })?
         .to_string();
-    let tmpdir_path = build_dir_abs.join("2nex").join("tmp");
+    let tmpdir_path = build_dir_abs.join("nex").join("tmp");
     std::fs::create_dir_all(&tmpdir_path)?;
 
     // compute template variable values
@@ -378,8 +378,8 @@ pub fn run_build_script_with_env(
             r#"
 {preamble}
 
-chmod +x {build_dir}/2nex/tmp/build_script.sh
-unshare --root={build_dir} /2nex/tmp/build_script.sh 2>&1
+chmod +x {build_dir}/nex/tmp/build_script.sh
+unshare --root={build_dir} /nex/tmp/build_script.sh 2>&1
 "#,
             preamble = preamble,
             build_dir = build_dir_str
@@ -583,7 +583,7 @@ pub fn verify_and_commit_outputs(
         .collect();
     if !unaccounted_files.is_empty() {
         println!(
-            "The following files in /2nex/out are not accounted for in the manifest outputs: {:?}",
+            "The following files in /nex/out are not accounted for in the manifest outputs: {:?}",
             unaccounted_files
         );
     }

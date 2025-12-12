@@ -1,4 +1,4 @@
-# 2nex
+# nex
 
 Reproducible, source-bootstrappable Linux distribution.
 
@@ -6,7 +6,7 @@ Reproducible, source-bootstrappable Linux distribution.
 
 I'm doing a (free) reproducible build system/distro (just a hobby, won't be big and professional like Guix or Nix) for Linux. This has been brewing for a few months, and is starting to get ready.
 
-Nix and Guix use DSLs for build scripts. 2nex uses YAML manifests and bash. Build a reproducible GNU toolchain, then build everything else reproducibly from there. Any x64 gcc system can bootstrap the whole thing.
+Nix and Guix use DSLs for build scripts. nex uses YAML manifests and bash. Build a reproducible GNU toolchain, then build everything else reproducibly from there. Any x64 gcc system can bootstrap the whole thing.
 
 ## Architecture
 

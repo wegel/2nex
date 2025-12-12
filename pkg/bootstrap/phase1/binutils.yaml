@@ -6,7 +6,7 @@ package:
   version: "2.42"
   description: GNU Binutils
   homepage: https://www.gnu.org/software/binutils/
-  checksum: 4267e04a7908c9cb7fabed04c7747e8eb6b14980282c7ef33fc57061565d8527
+  checksum: 01a5bef143f45a645113daeee3b3c316bce3a196390910a5a1a7e295cdb4fbe9
   seed: true
 
 sources:
@@ -53,7 +53,7 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/glibc/2.39/bundles/dev
 
 build:
-  environment: env/bootstrap-phase1.yaml
+  environment: eeeb4cd406953b12ddf019ae34e4f0704a1b944a
 
   profile: [8247:2225, 20582:2714, 41144:3188, 65798:7676, 87050:7723, 108306:7776, 129624:7837, 158945:13827, 191941:34950, 211461:37064]
   script: |
@@ -61,12 +61,12 @@ build:
     unset AR NM RANLIB
 
     # create symlinks so configure finds tools
-    ln -s x86_64-2nex-linux-gnu-gcc /usr/bin/gcc
-    ln -s x86_64-2nex-linux-gnu-g++ /usr/bin/g++
-    ln -s x86_64-2nex-linux-gnu-ar /usr/bin/ar
-    ln -s x86_64-2nex-linux-gnu-ranlib /usr/bin/ranlib
-    ln -s x86_64-2nex-linux-gnu-nm /usr/bin/nm
-    ln -s x86_64-2nex-linux-gnu-strip /usr/bin/strip
+    ln -s x86_64-nex-linux-gnu-gcc /usr/bin/gcc
+    ln -s x86_64-nex-linux-gnu-g++ /usr/bin/g++
+    ln -s x86_64-nex-linux-gnu-ar /usr/bin/ar
+    ln -s x86_64-nex-linux-gnu-ranlib /usr/bin/ranlib
+    ln -s x86_64-nex-linux-gnu-nm /usr/bin/nm
+    ln -s x86_64-nex-linux-gnu-strip /usr/bin/strip
 
     tar --no-same-owner -xf ${SOURCE_binutils} -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}" && mkdir -p build && cd build
@@ -90,11 +90,11 @@ build:
     rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
 
     # strip binaries
-    find ${OUT_DIR} -type f -executable -exec x86_64-2nex-linux-gnu-strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -type f -executable -exec x86_64-nex-linux-gnu-strip --strip-unneeded {} \; 2>/dev/null || true
 
     # make static archives deterministic
     for A in ${OUT_DIR}/usr/lib/*.a; do
-      x86_64-2nex-linux-gnu-objcopy --enable-deterministic-archives "$A"
+      x86_64-nex-linux-gnu-objcopy --enable-deterministic-archives "$A"
     done
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;

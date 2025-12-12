@@ -1,5 +1,5 @@
 #!/bin/bash
-# test 2nex bootloader in QEMU with OVMF
+# test nex bootloader in QEMU with OVMF
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
