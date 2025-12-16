@@ -372,17 +372,84 @@ fn build_provider_lookup(
     }
 
     // find or create files commit for each package
+    // first pass: collect packages that need building
     let mut files_commits: HashMap<String, String> = HashMap::new();
+    let mut needs_build: Vec<String> = Vec::new();
+
     for (provider_key, commits) in &packages {
-        // check if files commit already exists for this package
-        let files_commit = find_or_create_files_commit(
+        match find_or_create_files_commit(
             repo_path,
             provider_key,
             commits,
             manifest_base_dir,
             verbose,
-        )?;
-        files_commits.insert(provider_key.clone(), files_commit);
+        ) {
+            Ok(files_commit) => {
+                files_commits.insert(provider_key.clone(), files_commit);
+            }
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.starts_with("NEEDS_BUILD:") {
+                    let manifest_path = msg.strip_prefix("NEEDS_BUILD:").unwrap();
+                    needs_build.push(manifest_path.to_string());
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    // if any packages need building, build them with --generate-outputs
+    if !needs_build.is_empty() {
+        println!(
+            "Building {} missing dependencies with --generate-outputs...",
+            needs_build.len()
+        );
+        for manifest_path in &needs_build {
+            println!("  Building: {}", manifest_path);
+            let build_opts = super::build::BuildOpts {
+                repo_path: repo_path.to_string(),
+                manifest_file: manifest_path.clone(),
+                check: false,
+                update_checksum: false,
+                compute_deps: false, // avoid recursion
+                runtime_deps_verbose: false,
+                refresh_metadata: false,
+                force: false,
+                build_dir: None,
+                generate_outputs: true,
+                fallback_repos: vec![],
+                verbose,
+                record_profile: false,
+                no_progress: true,
+                dry_run: false,
+                add_checksums: false,
+                show_dep_paths: false,
+                trace_dependency: None,
+                multi_progress: None,
+            };
+            let manifest_dirs = vec![PathBuf::from(".")];
+            crate::build::orchestration::build_with_dependencies(
+                Path::new(manifest_path),
+                &manifest_dirs,
+                &build_opts,
+            )?;
+        }
+
+        // retry finding files commits
+        for (provider_key, commits) in &packages {
+            if files_commits.contains_key(provider_key) {
+                continue;
+            }
+            let files_commit = find_or_create_files_commit(
+                repo_path,
+                provider_key,
+                commits,
+                manifest_base_dir,
+                verbose,
+            )?;
+            files_commits.insert(provider_key.clone(), files_commit);
+        }
     }
 
     // process in REVERSE order - last dep wins (matches --union checkout behavior)
@@ -551,8 +618,9 @@ fn find_or_create_files_commit(
         let files_ref = format!("{}/files", address_hash);
         let store = Store::open(repo_path)?;
 
-        // check if it exists
-        if store.resolve_ref(&files_ref).is_ok() {
+        // check if files commit exists locally (don't try to pull - it won't exist on remote)
+        let files_ref_path = Path::new(repo_path).join("refs/heads").join(&files_ref);
+        if files_ref_path.exists() {
             if verbose {
                 println!("    Using files commit: {}", files_ref);
             }
@@ -560,8 +628,8 @@ fn find_or_create_files_commit(
         }
 
         // doesn't exist yet - create it using outputs from manifest
-        // use direct filesystem check to avoid stale cache issues
-        let output_refs: Vec<String> = dep_manifest
+        // first check what outputs exist locally
+        let all_output_refs: Vec<String> = dep_manifest
             .outputs
             .keys()
             .map(|output_name| {
@@ -570,11 +638,28 @@ fn find_or_create_files_commit(
                     namespace_path, slug, version, output_name
                 )
             })
+            .collect();
+
+        let mut output_refs: Vec<String> = all_output_refs
+            .iter()
             .filter(|r| {
                 let ref_path = Path::new(repo_path).join("refs/heads").join(r);
                 ref_path.exists()
             })
+            .cloned()
             .collect();
+
+        // if no local outputs, try to pull from remote
+        if output_refs.is_empty() && !all_output_refs.is_empty() {
+            if verbose {
+                println!("    No local outputs for {}, trying remote...", provider_key);
+            }
+            for output_ref in &all_output_refs {
+                if store.pull_from_remote(output_ref).unwrap_or(false) {
+                    output_refs.push(output_ref.clone());
+                }
+            }
+        }
 
         if !output_refs.is_empty() {
             if verbose {
@@ -610,13 +695,22 @@ fn find_or_create_files_commit(
     );
     let ref_path = Path::new(repo_path).join("refs/heads").join(&sample_ref);
 
-    Err(io::Error::new(
-        io::ErrorKind::NotFound,
-        format!(
-            "Could not find manifest or outputs for {} (manifest={}, exists={}, sample_ref_path={}, ref_exists={})",
-            provider_key, manifest_path_str, manifest_exists, ref_path.display(), ref_path.exists()
-        ),
-    ))
+    if manifest_exists {
+        // use a special error kind to signal that this package needs building
+        // format: "NEEDS_BUILD:{manifest_path}"
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("NEEDS_BUILD:{}", manifest_path_str),
+        ))
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "Could not find manifest for {} (expected at {}, sample_ref_path={}, ref_exists={})",
+                provider_key, manifest_path_str, ref_path.display(), ref_path.exists()
+            ),
+        ))
+    }
 }
 
 /// Extract provider key from commit ref.
