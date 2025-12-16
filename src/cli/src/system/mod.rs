@@ -369,7 +369,8 @@ pub fn commit_system_rootfs(
         metadata.push(("nex.system.dependencies".to_string(), encoded));
     }
 
-    commit_tree(repo_path, &branch_name, &target_dir, &metadata)
+    commit_tree(repo_path, &branch_name, &target_dir, &metadata)?;
+    Ok(())
 }
 
 /// Materialize packages using the /nex/pkg/ structure with deploy bundles.
@@ -575,6 +576,12 @@ fn symlink_flattened_libs_to_usr(nex_pkg_dir: &Path, target_dir: &Path) -> io::R
             };
 
             let target_path = usr_lib.join(lib_name);
+
+            // skip ld-linux - it's handled specially by nex-ld-shim at /lib64/
+            let lib_name_str = lib_name.to_string_lossy();
+            if lib_name_str.starts_with("ld-linux") || lib_name_str == "ld.so" {
+                continue;
+            }
 
             // first-come-first-own: skip if already exists
             if target_path.exists() || target_path.symlink_metadata().is_ok() {
