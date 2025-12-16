@@ -92,14 +92,15 @@ if [ -z "$SYSTEM_CHECKSUM" ]; then
     SYSTEM_CHECKSUM=$(zub --repo="$REPO" rev-parse "$SYSTEM_REF")
 fi
 
-DEPLOY_PATH="nex/deploy/nex/deploy/${SYSTEM_CHECKSUM}.0"
+DEPLOY_PATH="nex/deployments/${SYSTEM_CHECKSUM}.0"
 DEPLOY_DIR="$ROOT_CONTENT/$DEPLOY_PATH"
 
 log "Extracting $SYSTEM_REF..."
 mkdir -p "$(dirname "$DEPLOY_DIR")"
 zub --repo="$REPO" checkout "$SYSTEM_REF" "$DEPLOY_DIR"
 
-mkdir -p "$ROOT_CONTENT/nex/deploy/nex/var"
+# create /nex/current symlink to active deployment
+ln -sfn "deployments/${SYSTEM_CHECKSUM}.0" "$ROOT_CONTENT/nex/current"
 
 # initialize empty zub repo with remote pointing to host
 log "Initializing repo with remote (SSH to host)..."
@@ -158,11 +159,10 @@ ln -sf "$DEPLOY_PATH/etc" "$ROOT_CONTENT/etc"
 ln -sf "$DEPLOY_PATH/var" "$ROOT_CONTENT/var"
 ln -sf "usr/bin/init" "$ROOT_CONTENT/init"
 
-# symlink /nex/pkg, /nex/db, /nex/env from deployment into the root /nex directory
-# (we don't symlink /nex itself because /nex/repo and /nex/deploy are real directories)
-ln -sfn "/$DEPLOY_PATH/nex/pkg" "$ROOT_CONTENT/nex/pkg"
-ln -sfn "/$DEPLOY_PATH/nex/db" "$ROOT_CONTENT/nex/db"
-ln -sfn "/$DEPLOY_PATH/nex/env" "$ROOT_CONTENT/nex/env"
+# symlink /nex/pkg, /nex/db, /nex/env from current deployment
+ln -sfn "current/nex/pkg" "$ROOT_CONTENT/nex/pkg"
+ln -sfn "current/nex/db" "$ROOT_CONTENT/nex/db"
+ln -sfn "current/nex/env" "$ROOT_CONTENT/nex/env"
 
 # create /nex/users directory with sticky bit for user environments
 log "Creating /nex/users directory..."

@@ -6,14 +6,10 @@ use alloc::vec::Vec;
 use crate::ext4::Ext4Fs;
 use crate::BootError;
 
-const NEX_DEPLOY_DIR: &str = "/nex/deploy";
-const DEFAULT_STATEROOT: &str = "nex";
+const NEX_DEPLOYMENTS_DIR: &str = "/nex/deployments";
 
 /// represents a discovered zub deployment
 pub struct Deployment {
-    /// stateroot name (e.g., "nex")
-    #[allow(dead_code)]
-    pub stateroot: String,
     /// commit checksum (64 hex chars)
     pub checksum: String,
     /// deployment serial (for rollback ordering)
@@ -24,13 +20,11 @@ pub struct Deployment {
 
 /// find the default (most recent) zub deployment
 pub fn find_default_deployment(fs: &Ext4Fs) -> Result<Deployment, BootError> {
-    let deploy_dir = alloc::format!("{}/{}/deploy", NEX_DEPLOY_DIR, DEFAULT_STATEROOT);
-
-    log::debug!("zub: scanning {}", deploy_dir);
+    log::debug!("zub: scanning {}", NEX_DEPLOYMENTS_DIR);
 
     // read deployment directory
-    let entries = fs.read_dir(&deploy_dir).map_err(|e| {
-        log::error!("zub: failed to read {}: {:?}", deploy_dir, e);
+    let entries = fs.read_dir(NEX_DEPLOYMENTS_DIR).map_err(|e| {
+        log::error!("zub: failed to read {}: {:?}", NEX_DEPLOYMENTS_DIR, e);
         BootError::NoDeployment
     })?;
 
@@ -41,12 +35,12 @@ pub fn find_default_deployment(fs: &Ext4Fs) -> Result<Deployment, BootError> {
             if !entry.is_dir {
                 return None;
             }
-            parse_deployment_name(&entry.name, &deploy_dir)
+            parse_deployment_name(&entry.name)
         })
         .collect();
 
     if deployments.is_empty() {
-        log::error!("zub: no valid deployments found in {}", deploy_dir);
+        log::error!("zub: no valid deployments found in {}", NEX_DEPLOYMENTS_DIR);
         return Err(BootError::NoDeployment);
     }
 
@@ -65,7 +59,7 @@ pub fn find_default_deployment(fs: &Ext4Fs) -> Result<Deployment, BootError> {
 
 /// parse a deployment directory name into a Deployment struct
 /// format: <checksum>.<serial> where checksum is 64 hex chars
-fn parse_deployment_name(name: &str, base_dir: &str) -> Option<Deployment> {
+fn parse_deployment_name(name: &str) -> Option<Deployment> {
     // find the last dot
     let dot_pos = name.rfind('.')?;
 
@@ -84,10 +78,9 @@ fn parse_deployment_name(name: &str, base_dir: &str) -> Option<Deployment> {
     let serial: u32 = serial_str.parse().ok()?;
 
     Some(Deployment {
-        stateroot: String::from(DEFAULT_STATEROOT),
         checksum: String::from(checksum),
         serial,
-        path: alloc::format!("{}/{}", base_dir, name),
+        path: alloc::format!("{}/{}", NEX_DEPLOYMENTS_DIR, name),
     })
 }
 
