@@ -7,13 +7,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 OUTPUT="$REPO_ROOT/pkg/core/nex/nex-builder-src.tar.gz"
-ZUB_SRC="/home/wegel/work/perso/zub"
 
 cd "$SCRIPT_DIR"
 
-# re-vendor dependencies (ensures Cargo.lock is up to date)
+# re-vendor dependencies and generate cargo config
 rm -rf vendor
-cargo vendor vendor > /dev/null 2>&1
+mkdir -p .cargo
+cargo vendor vendor 2>/dev/null > .cargo/config.toml
 
 # set reproducible timestamp (matches SOURCE_DATE_EPOCH in build)
 TIMESTAMP="2024-01-01T00:00:00Z"
