@@ -1,13 +1,28 @@
 use serde_yaml::Value;
 use std::fs;
 use std::io;
+use std::path::Path;
 
+use super::inheritance;
 use super::types::*;
 
 /// Load manifest from a ManifestSource (path or blob)
+/// For system manifests loaded from path, inheritance is resolved
 pub fn load_manifest_from_source(source: &ManifestSource) -> io::Result<ManifestData> {
     match source {
-        ManifestSource::Path(path) => load_manifest(path.to_str().unwrap()),
+        ManifestSource::Path(path) => {
+            // check if it's a system manifest to resolve inheritance
+            let content = fs::read_to_string(path)?;
+            let doc: Value = serde_yaml::from_str(&content)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+            if detect_manifest_kind(&doc) == ManifestKind::System {
+                let resolved = load_system_manifest_resolved(path)?;
+                Ok(ManifestData::System(resolved))
+            } else {
+                load_manifest_from_str(&content)
+            }
+        }
         ManifestSource::Blob { sha, path } => {
             // find git repo root
             let git_root =
@@ -18,6 +33,7 @@ pub fn load_manifest_from_source(source: &ManifestSource) -> io::Result<Manifest
                     format!("failed to fetch blob {} for {}: {}", sha, path.display(), e),
                 )
             })?;
+            // note: blob manifests don't support inheritance
             load_manifest_from_str(&content)
         }
         ManifestSource::Skip => Err(io::Error::new(
@@ -102,4 +118,11 @@ pub fn load_manifest_from_str(manifest_str: &str) -> io::Result<ManifestData> {
             Ok(ManifestData::System(sys))
         }
     }
+}
+
+/// Load a system manifest with inheritance resolution
+pub fn load_system_manifest_resolved(file_path: &Path) -> io::Result<SystemManifest> {
+    let resolved = inheritance::resolve_inheritance(file_path)?;
+    validate_system_manifest(&resolved)?;
+    Ok(resolved)
 }

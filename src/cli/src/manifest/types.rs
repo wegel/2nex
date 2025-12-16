@@ -146,6 +146,9 @@ pub struct SystemMeta {
     /// when true, packages are installed to /nex/pkg/ with symlink forest in /usr/bin/
     #[serde(default)]
     pub nex_structure: bool,
+    /// path to base assembly manifest to extend (relative to repo root)
+    #[serde(default)]
+    pub extends: Option<PathBuf>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -162,6 +165,26 @@ pub struct SystemManifest {
     #[serde(default)]
     pub overlays: Vec<PathBuf>,
     pub build: Build,
+    /// items to exclude from parent assembly when extending
+    #[serde(default)]
+    pub exclude: Option<ExcludeConfig>,
+}
+
+/// configuration for excluding items from parent assembly
+#[derive(Clone, Serialize, Deserialize, Debug, Default)]
+pub struct ExcludeConfig {
+    #[serde(default)]
+    pub packages: Vec<ExcludeSpec>,
+    #[serde(default)]
+    pub dependencies: Vec<ExcludeSpec>,
+}
+
+/// specifies an item to exclude by name or commit
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(untagged)]
+pub enum ExcludeSpec {
+    ByName { name: String },
+    ByCommit { commit: String },
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

@@ -623,7 +623,18 @@ pub fn build_single(opts: &BuildOpts) -> io::Result<()> {
     // ensure tmp directory exists
     fs::create_dir_all(".nex/tmp")?;
 
-    let manifest_data = load_manifest(&opts.manifest_file)?;
+    // detect manifest kind first to use inheritance for system manifests
+    let manifest_str = fs::read_to_string(&opts.manifest_file)?;
+    let doc: serde_yaml::Value = serde_yaml::from_str(&manifest_str)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    let manifest_data = if detect_manifest_kind(&doc) == ManifestKind::System {
+        // use inheritance resolution for system manifests
+        let resolved = load_system_manifest_resolved(Path::new(&opts.manifest_file))?;
+        ManifestData::System(resolved)
+    } else {
+        load_manifest(&opts.manifest_file)?
+    };
 
     // validate flags for refresh_metadata
     if opts.refresh_metadata {
