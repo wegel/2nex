@@ -15,8 +15,34 @@ use crate::commands::build::BuildOpts;
 use crate::deps::*;
 use crate::manifest::types::{Dependency, Manifest, ManifestSource};
 use crate::manifest::*;
+use crate::refs::PackageRef;
 use crate::store::*;
 use crate::system;
+
+/// check if a build output exists for a manifest hash.
+/// tries artifact lookup first (O(1)), then falls back to commit search (O(n)).
+fn build_exists_for_manifest(
+    repo_path: &str,
+    commit_ref: &str,
+    manifest_hash: &str,
+) -> io::Result<bool> {
+    // parse ref to get artifact output path
+    if let Ok(pkg_ref) = PackageRef::parse(commit_ref) {
+        let artifact_output = pkg_ref.artifact_output();
+
+        // try artifact lookup first (O(1))
+        if let Ok(Some(_tree)) = lookup_artifact(repo_path, manifest_hash, &artifact_output) {
+            return Ok(true);
+        }
+    }
+
+    // fall back to commit search (O(n))
+    match find_commit_by_manifest_hash(repo_path, commit_ref, manifest_hash) {
+        Ok(Some(_)) => Ok(true),
+        Ok(None) => Ok(false),
+        Err(e) => Err(e),
+    }
+}
 
 /// Get the build directory for a package (unique per package for parallel builds)
 pub fn get_build_dir_for_package(manifest: &Manifest) -> String {
@@ -250,12 +276,12 @@ pub fn collect_dependencies_recursive(
                         use sha2::{Digest, Sha256};
                         let content_hash = format!("{:x}", Sha256::digest(content.as_bytes()));
 
-                        match find_commit_by_manifest_hash(repo_path, &dep.commit, &content_hash) {
-                            Ok(Some(commit_id)) => {
-                                println!("  [{}] {} skipping", &commit_id[..12], dep.commit);
+                        match build_exists_for_manifest(repo_path, &dep.commit, &content_hash) {
+                            Ok(true) => {
+                                println!("  [cached] {} skipping (pinned)", dep.commit);
                                 continue;
                             }
-                            Ok(None) => {
+                            Ok(false) => {
                                 println!(
                                     "  [needs build] {} (pinned to {})",
                                     dep.commit,
@@ -308,13 +334,13 @@ pub fn collect_dependencies_recursive(
                 match find_manifest_for_commit(&dep.commit, manifest_dirs) {
                     Ok(dep_manifest_path) => {
                         let manifest_hash = compute_manifest_hash(&dep_manifest_path)?;
-                        // use base ref for manifest hash lookup (strips internal paths)
-                        match find_commit_by_manifest_hash(repo_path, &ref_to_check, &manifest_hash) {
-                            Ok(Some(_)) => {
+                        // use artifact lookup (O(1)) or commit search
+                        match build_exists_for_manifest(repo_path, &ref_to_check, &manifest_hash) {
+                            Ok(true) => {
                                 println!("  [floating] {} skipping", dep.commit);
                                 continue;
                             }
-                            Ok(None) => {
+                            Ok(false) => {
                                 println!(
                                     "  [floating/stale] {} manifest changed, rebuilding",
                                     dep.commit

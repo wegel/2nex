@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::manifest::*;
-use crate::store::{encode_metadata_list, rewrite_branch_metadata};
+use crate::store::{create_artifact, encode_metadata_list, get_branch_tree, rewrite_branch_metadata};
 use crate::utils::determine_category;
 
 pub fn output_branch_metadata(
@@ -92,6 +92,11 @@ pub fn commit_bundle(
 
     // Attach bundle metadata (manifest hash, outputs) without changing the tree.
     rewrite_branch_metadata(repo_path, &bundle_branch, &metadata)?;
+
+    // create artifact for this bundle
+    let tree_hash = get_branch_tree(repo_path, &bundle_branch)?;
+    let artifact_output = format!("bundles/{}", bundle_name);
+    create_artifact(repo_path, &tree_hash, manifest_hash, &artifact_output)?;
 
     Ok(())
 }

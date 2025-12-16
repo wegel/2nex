@@ -185,6 +185,15 @@ impl PackageRef {
     pub fn has_internal_path(&self) -> bool {
         self.internal_path().is_some()
     }
+
+    /// get the artifact output path (e.g., "outputs/bin", "bundles/dev", "files")
+    pub fn artifact_output(&self) -> String {
+        match &self.ref_type {
+            RefType::Output { name, .. } => format!("outputs/{}", name),
+            RefType::Bundle { name, .. } => format!("bundles/{}", name),
+            RefType::Files { .. } => "files".to_string(),
+        }
+    }
 }
 
 impl fmt::Display for PackageRef {

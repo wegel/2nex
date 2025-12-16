@@ -19,8 +19,8 @@ use crate::manifest::*;
 use crate::outputs::*;
 use crate::progress::{self, BuildProgressConfig};
 use crate::store::{
-    checkout_into, checkout_into_with_fallbacks, commit_tree, ensure_branch_exists,
-    find_commit_by_manifest_hash, rewrite_branch_metadata,
+    checkout_into, checkout_into_with_fallbacks, commit_tree, create_artifact,
+    ensure_branch_exists, find_commit_by_manifest_hash, lookup_artifact, rewrite_branch_metadata,
 };
 
 /// Check if a string looks like a git SHA1 (40 hex characters)
@@ -574,7 +574,11 @@ pub fn verify_and_commit_outputs(
         let commit_output_dir = out_dir.join(output_type);
 
         let metadata = output_branch_metadata(manifest, spec, &manifest_hash)?;
-        commit_tree(repo_path, &branch_name, &commit_output_dir, &metadata)?;
+        let tree_hash = commit_tree(repo_path, &branch_name, &commit_output_dir, &metadata)?;
+
+        // create artifact for this output
+        let artifact_output = format!("outputs/{}", output_type);
+        create_artifact(repo_path, &tree_hash, &manifest_hash, &artifact_output)?;
     }
 
     let unaccounted_files: Vec<String> = all_out_files
@@ -1116,12 +1120,21 @@ pub fn check_if_built(
             arch, namespace, slug, version, output_name
         );
 
+        // try artifact lookup first (O(1))
+        let artifact_output = format!("outputs/{}", output_name);
+        if let Ok(Some(_tree)) = lookup_artifact(repo_path, &current_hash, &artifact_output) {
+            if found_commit.is_none() {
+                found_commit = Some("artifact".to_string());
+            }
+            continue;
+        }
+
         // check if branch exists
         if ensure_branch_exists(repo_path, &branch).is_err() {
             return Ok(None);
         }
 
-        // try to find commit by manifest hash using history search
+        // fall back to commit history search
         match find_commit_by_manifest_hash(repo_path, &branch, &current_hash)? {
             Some(commit_id) => {
                 if found_commit.is_none() {

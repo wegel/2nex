@@ -597,12 +597,13 @@ pub fn export_path(
 }
 
 /// commit a directory to the store
+/// returns the tree hash for artifact creation
 pub fn commit_tree(
     repo_path: &str,
     branch: &str,
     tree_path: &Path,
     metadata: &[(String, String)],
-) -> io::Result<()> {
+) -> io::Result<Hash> {
     println!("Committing {} to branch {}", tree_path.display(), branch);
 
     let repo = Repo::open(Path::new(repo_path))
@@ -614,10 +615,15 @@ pub fn commit_tree(
         .map(|(k, v)| (k.as_str(), v.as_str()))
         .collect();
 
-    zub::ops::commit_with_metadata(&repo, tree_path, branch, Some(""), None, &metadata_refs)
+    let commit_hash =
+        zub::ops::commit_with_metadata(&repo, tree_path, branch, Some(""), None, &metadata_refs)
+            .map_err(|e| io::Error::other(e.to_string()))?;
+
+    // get tree hash from the commit
+    let commit = zub::read_commit(&repo, &commit_hash)
         .map_err(|e| io::Error::other(e.to_string()))?;
 
-    Ok(())
+    Ok(commit.tree)
 }
 
 /// rewrite branch metadata without changing the tree
@@ -655,6 +661,91 @@ pub fn rewrite_branch_metadata(
     zub::write_ref(&repo, branch, &new_hash).map_err(|e| io::Error::other(e.to_string()))?;
 
     Ok(())
+}
+
+/// create an artifact linking a manifest to its build output tree
+pub fn create_artifact(
+    repo_path: &str,
+    tree_hash: &Hash,
+    manifest_hash: &str,
+    output: &str,
+) -> io::Result<Hash> {
+    let repo = Repo::open(Path::new(repo_path))
+        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
+
+    let manifest_hash_obj = Hash::from_hex(manifest_hash)
+        .map_err(|e| io::Error::other(format!("invalid manifest hash: {}", e)))?;
+
+    let artifact = zub::Artifact::new(*tree_hash, manifest_hash_obj, output);
+    let artifact_hash = zub::write_artifact(&repo, &artifact)
+        .map_err(|e| io::Error::other(e.to_string()))?;
+
+    // write the artifact ref for O(1) lookup
+    zub::write_artifact_ref(&repo, manifest_hash, output, &artifact_hash)
+        .map_err(|e| io::Error::other(e.to_string()))?;
+
+    println!("Created artifact: {} -> {}", output, artifact_hash);
+    Ok(artifact_hash)
+}
+
+/// get tree hash from an existing branch
+pub fn get_branch_tree(repo_path: &str, branch: &str) -> io::Result<Hash> {
+    let repo = Repo::open(Path::new(repo_path))
+        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
+
+    let commit_hash = zub::resolve_ref(&repo, branch)
+        .map_err(|e| io::Error::other(e.to_string()))?;
+
+    let commit = zub::read_commit(&repo, &commit_hash)
+        .map_err(|e| io::Error::other(e.to_string()))?;
+
+    Ok(commit.tree)
+}
+
+/// lookup an artifact by manifest_hash and output, returning the tree hash if found
+pub fn lookup_artifact(repo_path: &str, manifest_hash: &str, output: &str) -> io::Result<Option<Hash>> {
+    let repo = Repo::open(Path::new(repo_path))
+        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
+
+    if !zub::artifact_ref_exists(&repo, manifest_hash, output) {
+        return Ok(None);
+    }
+
+    let artifact_hash = zub::read_artifact_ref(&repo, manifest_hash, output)
+        .map_err(|e| io::Error::other(e.to_string()))?;
+
+    let artifact = zub::read_artifact(&repo, &artifact_hash)
+        .map_err(|e| io::Error::other(e.to_string()))?;
+
+    Ok(Some(artifact.tree))
+}
+
+/// checkout an artifact directly to a target directory
+pub fn checkout_artifact(
+    repo_path: &str,
+    manifest_hash: &str,
+    output: &str,
+    target: &Path,
+    force: bool,
+) -> io::Result<bool> {
+    let repo = Repo::open(Path::new(repo_path))
+        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
+
+    let tree_hash = match lookup_artifact(repo_path, manifest_hash, output)? {
+        Some(h) => h,
+        None => return Ok(false),
+    };
+
+    let opts = zub::ops::CheckoutOptions {
+        force,
+        hardlink: true,
+        preserve_sparse: false,
+    };
+
+    zub::ops::checkout_from_tree_hash(&repo, &tree_hash, target, opts)
+        .map_err(|e| io::Error::other(e.to_string()))?;
+
+    Ok(true)
 }
 
 /// get metadata value from a branch
