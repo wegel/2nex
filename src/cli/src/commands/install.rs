@@ -11,27 +11,22 @@ use super::state::InstalledState;
 use crate::build;
 use crate::manifest::{load_manifest, ManifestData};
 use crate::materializer::{materialize, MaterializeConfig, MaterializeMode, MaterializeRequest};
-use crate::refs::{PackageRef, RefType};
+use crate::refs::PackageRef;
 use crate::repo::{detect_context, ensure_user_dirs, resolve_repo_path};
 use crate::store::Store;
 
 #[derive(Args)]
 pub struct InstallArgs {
-    /// Package ref (e.g., x86_64/pkg/cli/editors/neovim/0.11.0/bundles/full)
-    /// or manifest path (e.g., pkg/cli/archive/bzip2.yaml)
-    pub package_ref: String,
+    /// Manifest path (e.g., /nex/db/pkg/cli/editors/neovim.yaml)
+    pub manifest: String,
 
-    /// Output or bundle to install when using manifest path form
-    /// (e.g., "outputs/bin" or "bundles/full")
-    pub target: Option<String>,
+    /// Target to install: bundles/full (default), outputs/bin, files/usr/lib/x.so
+    #[clap(default_value = "bundles/full")]
+    pub target: String,
 
     /// Repository path (auto-detected if not specified)
     #[clap(long)]
     pub repo: Option<String>,
-
-    /// Manifest directory (auto-detected if not specified)
-    #[clap(long)]
-    pub manifest_dir: Option<String>,
 
     /// Commit immediately after installing (stage, install, commit in one step)
     #[clap(long)]
@@ -60,42 +55,34 @@ pub struct InstallArgs {
 }
 
 pub fn run(args: &InstallArgs) -> io::Result<()> {
-    // check if first arg is a manifest path (ends with .yaml)
-    let package_ref = if args.package_ref.ends_with(".yaml") {
-        // manifest path form: nex install path/to/pkg.yaml outputs/bin
-        let target = args.target.as_ref().ok_or_else(|| {
-            io::Error::new(
+    // load manifest
+    let manifest_path = Path::new(&args.manifest);
+    if !manifest_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Manifest not found: {}", args.manifest),
+        ));
+    }
+
+    let manifest_data = load_manifest(&args.manifest)?;
+    let manifest = match manifest_data {
+        ManifestData::Package(m) => m,
+        ManifestData::System(_) => {
+            return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "When using manifest path form, you must specify an output or bundle target\n\
-                 Usage: nex install path/to/manifest.yaml outputs/bin\n\
-                        nex install path/to/manifest.yaml bundles/full",
-            )
-        })?;
-
-        // load manifest to get namespace, slug, version
-        let manifest_data = load_manifest(&args.package_ref)?;
-        let manifest = match manifest_data {
-            ManifestData::Package(m) => m,
-            ManifestData::System(_) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "Cannot install a system manifest directly",
-                ))
-            }
-        };
-
-        // construct the full ref: x86_64/pkg/<namespace>/<slug>/<version>/<target>
-        format!(
-            "x86_64/{}/{}/{}/{}",
-            manifest.package.namespace_path(),
-            manifest.package.slug,
-            manifest.package.version,
-            target
-        )
-    } else {
-        // legacy form: full package ref
-        args.package_ref.clone()
+                "Cannot install a system manifest directly",
+            ))
+        }
     };
+
+    // construct package ref from manifest + target
+    let package_ref = format!(
+        "x86_64/{}/{}/{}/{}",
+        manifest.package.namespace_path(),
+        manifest.package.slug,
+        manifest.package.version,
+        args.target
+    );
 
     // detect context: user install vs system install
     let ctx = detect_context(args.system)?;
@@ -116,22 +103,10 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
         ctx.repo_path.to_string_lossy().to_string()
     };
 
-    // use explicit manifest-dir if provided, otherwise use context-determined paths
-    let manifest_dirs = if let Some(ref m) = args.manifest_dir {
-        vec![PathBuf::from(m)]
-    } else if ctx.manifest_dirs.is_empty() {
-        // fallback: try common locations
-        let mut dirs = Vec::new();
-        if Path::new("/nex/db/pkg").exists() {
-            dirs.push(PathBuf::from("/nex/db/pkg"));
-        }
-        if dirs.is_empty() {
-            eprintln!("Warning: No manifest directories found. Use --manifest-dir to specify.");
-        }
-        dirs
-    } else {
-        ctx.manifest_dirs.clone()
-    };
+    // derive manifest db path from manifest location for dependency resolution
+    let manifest_db_paths = derive_manifest_db_path(manifest_path)
+        .map(|p| vec![p])
+        .unwrap_or_else(|| ctx.manifest_dirs.clone());
 
     // system installs require staging mode (unless build-time or --no-stage-check)
     if ctx.is_system && ctx.needs_staging {
@@ -153,7 +128,7 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     // load current state (context-aware)
     let mut state = InstalledState::load_for_context(&ctx).unwrap_or_default();
 
-    // parse the package ref
+    // parse the package ref (for checksum lookup etc)
     let pkg_ref = PackageRef::parse(&package_ref).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -161,14 +136,11 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
         )
     })?;
 
-    // find manifest using direct path lookup
-    let manifest_path = find_manifest_by_ref(&manifest_dirs, &pkg_ref)?;
-
-    // load and validate manifest (validates version and output/bundle exists)
-    let _manifest = load_and_validate_manifest(&manifest_path, &pkg_ref)?;
+    // validate target exists in manifest
+    validate_target(&manifest, &args.target)?;
 
     // compute manifest hash for staleness check
-    let manifest_content = fs::read_to_string(&manifest_path)?;
+    let manifest_content = fs::read_to_string(&args.manifest)?;
     let manifest_hash = format!("{:x}", Sha256::digest(manifest_content.as_bytes()));
 
     // check if ref exists and is fresh in cache
@@ -181,8 +153,7 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
         build_package_to_user_repo(
             &repo_path,
             &ctx.fallback_repos,
-            &manifest_dirs,
-            &manifest_path,
+            manifest_path,
         )?;
     }
 
@@ -277,7 +248,7 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
         physical_root,
         mode,
         resolve_deps: !args.no_deps,
-        manifest_db_paths: manifest_dirs.clone(),
+        manifest_db_paths: manifest_db_paths.clone(),
         fallback_repo_paths: ctx.fallback_repos.clone(),
         pkg_dir_override: pkg_override,
         env_dir_override: env_override,
@@ -398,69 +369,19 @@ struct PackageInfo {
     checksum: String,
 }
 
-/// find manifest file using ref's namespace and slug (direct path lookup)
-fn find_manifest_by_ref(manifest_dirs: &[PathBuf], pkg_ref: &PackageRef) -> io::Result<PathBuf> {
-    let rel_path = pkg_ref.manifest_rel_path();
-
-    for base in manifest_dirs {
-        let full_path = base.join(&rel_path);
-        if full_path.exists() {
-            return Ok(full_path);
-        }
-    }
-
-    Err(io::Error::new(
-        io::ErrorKind::NotFound,
-        format!(
-            "Manifest not found: {} (searched in {:?})",
-            rel_path, manifest_dirs
-        ),
-    ))
-}
-
-/// load manifest and validate version/output/bundle exists
-fn load_and_validate_manifest(
-    manifest_path: &Path,
-    pkg_ref: &PackageRef,
-) -> io::Result<crate::manifest::Manifest> {
-    let manifest_data = load_manifest(&manifest_path.to_string_lossy())?;
-
-    let manifest = match manifest_data {
-        ManifestData::Package(m) => m,
-        ManifestData::System(_) => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "Cannot install a system manifest directly",
-            ))
-        }
-    };
-
-    // validate version
-    if manifest.package.version != pkg_ref.version {
+/// validate that target (bundles/full, outputs/bin, files/...) exists in manifest
+fn validate_target(manifest: &crate::manifest::Manifest, target: &str) -> io::Result<()> {
+    let parts: Vec<&str> = target.splitn(2, '/').collect();
+    if parts.len() != 2 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!(
-                "Version mismatch: ref specifies '{}' but manifest has '{}'",
-                pkg_ref.version, manifest.package.version
-            ),
+            format!("Invalid target '{}': expected format like bundles/full or outputs/bin", target),
         ));
     }
 
-    // validate output/bundle exists
-    match &pkg_ref.ref_type {
-        RefType::Output { name, .. } => {
-            if !manifest.outputs.contains_key(name) {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    format!(
-                        "Output '{}' not found in manifest (available: {:?})",
-                        name,
-                        manifest.outputs.keys().collect::<Vec<_>>()
-                    ),
-                ));
-            }
-        }
-        RefType::Bundle { name, .. } => {
+    let (kind, name) = (parts[0], parts[1]);
+    match kind {
+        "bundles" => {
             if !manifest.bundles.contains_key(name) {
                 return Err(io::Error::new(
                     io::ErrorKind::NotFound,
@@ -472,12 +393,44 @@ fn load_and_validate_manifest(
                 ));
             }
         }
-        RefType::Files { .. } => {
-            // files ref is always valid if manifest exists
+        "outputs" => {
+            if !manifest.outputs.contains_key(name) {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    format!(
+                        "Output '{}' not found in manifest (available: {:?})",
+                        name,
+                        manifest.outputs.keys().collect::<Vec<_>>()
+                    ),
+                ));
+            }
+        }
+        "files" => {
+            // files are always valid if path makes sense
+        }
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Invalid target kind '{}': expected bundles, outputs, or files", kind),
+            ));
         }
     }
+    Ok(())
+}
 
-    Ok(manifest)
+/// derive manifest db path from a manifest file path
+/// e.g., /nex/db/pkg/cli/editors/neovim.yaml -> /nex/db/pkg
+fn derive_manifest_db_path(manifest_path: &Path) -> Option<PathBuf> {
+    let path_str = manifest_path.to_string_lossy();
+    // find /pkg/ in the path and return everything up to and including it
+    if let Some(idx) = path_str.find("/pkg/") {
+        return Some(PathBuf::from(&path_str[..idx + 4]));
+    }
+    // fallback: if path starts with pkg/, use pkg/
+    if path_str.starts_with("pkg/") {
+        return Some(PathBuf::from("pkg"));
+    }
+    None
 }
 
 /// check if ref is cached and manifest hash matches (not stale)
@@ -547,7 +500,6 @@ fn get_binaries_from_dir(pkg_dir: &str) -> io::Result<Vec<String>> {
 fn build_package_to_user_repo(
     repo_path: &str,
     fallback_repos: &[PathBuf],
-    _manifest_dirs: &[PathBuf],
     manifest_path: &Path,
 ) -> io::Result<()> {
     println!("Building from manifest: {}", manifest_path.display());
