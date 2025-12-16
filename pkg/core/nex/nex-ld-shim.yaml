@@ -5,7 +5,7 @@ package:
   namespace: core/nex
   version: 0.0.1
   description: Minimal PT_INTERP shim using raw syscalls (no libc dependency)
-  checksum: 748fe59db63e4f9d79fd3b984b1cb7ef8c218c58729de24541309e49dbfc9f5d
+  checksum: fec20585cc8f54746ba902b482edb7a64dbdcdbf54dfeecb10c49c836572a2b5
 
 sources:
 - name: shim
@@ -48,9 +48,12 @@ build:
     #   -fno-builtin: don't use builtin functions (they may call libc)
     #   -fno-stack-protector: stack canary requires %fs segment (set by libc)
     #   -static -O2: static binary, optimized
+    #   -Wl,-Ttext-segment=0x200000: load at 0x200000 to avoid conflict with
+    #     non-PIE executables that default to 0x400000
     gcc -nostdlib -nostartfiles -static \
         -fno-builtin -fno-stack-protector \
         -O2 -Wall -Wextra \
+        -Wl,-Ttext-segment=0x200000 \
         -o ${OUT_DIR}/usr/lib/nex-ld-shim \
         ${SOURCE_shim}
 

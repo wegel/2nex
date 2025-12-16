@@ -6,7 +6,7 @@ package:
   version: 6.12.58
   description: Linux kernel with granular module outputs
   homepage: https://www.kernel.org/
-  checksum: 4cb4c339544e1bad09fe655bd68f05256e4984ade74ebb7d10ffae6e86ff38e9
+  checksum: 63d4825195f60168aefd6abc8fe15e104d7cca10d071c37ede7c61d97bb7c730
 
 sources:
 - name: kernel
@@ -14,7 +14,7 @@ sources:
   sha256: 5f1c4c546660a6a81046fdfa6195306bad2c8d17c0d69876dc100a85ad4613ac
 - name: config_fragment
   file: pkg/core/kernel/kernel-config-fragment-6.12.58.txt
-  sha256: 907bfedb30e4c6dc7ccaf1daec8c6a012b2af859e9c73664c14936792c5e0521
+  sha256: 8c856ffdc10cb0f1d4c50218e3caa077ebfd424a916cf09364401e5e41025d4f
 
 dependencies:
 - name: libcap
@@ -34,7 +34,7 @@ dependencies:
 - name: texinfo
   commit: x86_64/pkg/cli/text/texinfo/7.1/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/core/toolchain/binutils/2.45.1/bundles/dev
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: libxcrypt
@@ -91,7 +91,7 @@ dependencies:
   commit: x86_64/pkg/core/kernel/initramfs/1.0.0/outputs/boot
 
 build:
-  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  environment: env/linux-kernel.yaml
   profile: [8265:25170, 24717:37448, 49420:66483, 82274:103828, 111080:131283, 139832:161919, 164530:191298, 205662:240191, 246883:275903, 273268:307092]
 
   script: |
@@ -134,11 +134,11 @@ build:
     ln -sf /usr/bin/kmod /tmp/depmod
     /tmp/depmod -b ${OUT_DIR}/usr 6.12.58
 
-    # deterministic timestamps
-    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
-
     # strip kernel modules with --strip-debug to preserve symbols needed by modprobe
     find "${OUT_DIR}" -name "*.ko" -exec strip --strip-debug {} \;
+
+    # deterministic timestamps
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
   block-ahci:
@@ -160,6 +160,7 @@ bundles:
   - drv-virtio-core
   - fs-btrfs
   - fs-xfs
+  - lib
   - modules-meta
 
   desktop:
@@ -167,6 +168,7 @@ bundles:
   - drv-block-ahci
   - drv-block-core
   - drv-block-nvme
+  - drv-bluetooth
   - drv-gpu-amd
   - drv-gpu-core
   - drv-gpu-intel
@@ -181,20 +183,28 @@ bundles:
   - drv-usb-hid
   - drv-usb-host
   - drv-usb-storage
+  - drv-wireless-atheros
+  - drv-wireless-broadcom
   - drv-wireless-core
+  - drv-wireless-intel
+  - drv-wireless-mediatek
+  - drv-wireless-realtek
   - fs-btrfs
   - fs-overlay
   - fs-vfat
+  - lib
   - modules-meta
 
   ethernet-intel:
   - drv-net-core
   - drv-net-intel
+  - lib
   - modules-meta
 
   ethernet-realtek:
   - drv-net-core
   - drv-net-realtek
+  - lib
   - modules-meta
 
   gpu-amd:
@@ -230,6 +240,7 @@ bundles:
   - drv-usb-storage
   - fs-btrfs
   - fs-xfs
+  - lib
   - modules-meta
 
   usb-storage:
@@ -237,6 +248,13 @@ bundles:
   - drv-usb-core
   - drv-usb-host
   - drv-usb-storage
+  - modules-meta
+
+  vm:
+  - drv-gpu-virtio
+  - drv-input-virtio
+  - drv-net-virtio
+  - drv-virtio-core
   - modules-meta
 
 outputs:
@@ -274,6 +292,22 @@ outputs:
     - path: /usr/lib/modules/6.12.58/kernel/drivers/nvme/host/nvme-core.ko
     - path: /usr/lib/modules/6.12.58/kernel/drivers/nvme/host/nvme.ko
 
+  drv-bluetooth:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/crypto/ecc.ko
+    - path: /usr/lib/modules/6.12.58/kernel/crypto/ecdh_generic.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/bluetooth/btbcm.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/bluetooth/btintel.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/bluetooth/btmrvl.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/bluetooth/btmtk.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/bluetooth/btrtl.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/bluetooth/btusb.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/bluetooth/hci_uart.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/bluetooth/bluetooth.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/bluetooth/bnep/bnep.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/bluetooth/hidp/hidp.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/bluetooth/rfcomm/rfcomm.ko
+
   drv-gpu-amd:
     files:
     - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/amd/amdgpu/amdgpu.ko
@@ -308,16 +342,76 @@ outputs:
     files:
     - path: /usr/lib/modules/6.12.58/kernel/drivers/gpu/drm/virtio/virtio-gpu.ko
 
+  drv-input-virtio:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/virtio/virtio_input.ko
+
   drv-net-core:
     files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/macvlan.ko
     - path: /usr/lib/modules/6.12.58/kernel/drivers/net/mdio.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/veth.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/vxlan/vxlan.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/802/p8022.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/802/psnap.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/802/stp.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/bridge/br_netfilter.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/bridge/bridge.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/bridge/netfilter/nft_meta_bridge.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/bridge/netfilter/nft_reject_bridge.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv4/netfilter/ip_tables.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv4/netfilter/ipt_REJECT.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv4/netfilter/iptable_filter.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv4/netfilter/iptable_mangle.ko
     - path: /usr/lib/modules/6.12.58/kernel/net/ipv4/netfilter/iptable_nat.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv4/netfilter/nf_defrag_ipv4.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv4/netfilter/nf_socket_ipv4.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv4/netfilter/nft_fib_ipv4.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv4/netfilter/nft_reject_ipv4.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv4/udp_tunnel.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv6/ip6_udp_tunnel.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv6/netfilter/ip6t_REJECT.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv6/netfilter/ip6t_ipv6header.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv6/netfilter/ip6table_filter.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv6/netfilter/ip6table_mangle.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv6/netfilter/ip6table_nat.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv6/netfilter/ip6_tables.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv6/netfilter/nf_defrag_ipv6.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv6/netfilter/nf_socket_ipv6.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv6/netfilter/nft_fib_ipv6.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/ipv6/netfilter/nft_reject_ipv6.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/llc/llc.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nf_conntrack.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nf_conntrack_ftp.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nf_conntrack_irc.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nf_conntrack_netlink.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nf_conntrack_sip.ko
     - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nf_log_syslog.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nf_nat.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nf_nat_ftp.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nf_nat_irc.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nf_nat_sip.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nf_tables.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nft_chain_nat.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nft_ct.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nft_fib.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nft_fib_inet.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nft_limit.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nft_log.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nft_masq.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nft_nat.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nft_numgen.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nft_reject.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nft_reject_inet.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/nft_socket.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_CONNSECMARK.ko
     - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_LOG.ko
     - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_MASQUERADE.ko
     - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_addrtype.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_conntrack.ko
     - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_mark.ko
     - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_nat.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/netfilter/xt_state.ko
 
   drv-net-intel:
     files:
@@ -398,11 +492,81 @@ outputs:
     files:
     - path: /usr/lib/modules/6.12.58/kernel/drivers/virtio/virtio_dma_buf.ko
 
+  drv-wireless-atheros:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/bus/mhi/host/mhi.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/ath/ath.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/ath/ath9k/ath9k.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/ath/ath9k/ath9k_common.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/ath/ath9k/ath9k_htc.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/ath/ath9k/ath9k_hw.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/ath/ath10k/ath10k_core.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/ath/ath10k/ath10k_pci.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/ath/ath10k/ath10k_usb.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/ath/ath11k/ath11k.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/ath/ath11k/ath11k_pci.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/ath/ath12k/ath12k.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/soc/qcom/qmi_helpers.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/qrtr/qrtr-mhi.ko
+    - path: /usr/lib/modules/6.12.58/kernel/net/qrtr/qrtr.ko
+
+  drv-wireless-broadcom:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/bca/brcmfmac-bca.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/cyw/brcmfmac-cyw.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/wcc/brcmfmac-wcc.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/broadcom/brcm80211/brcmutil/brcmutil.ko
+
   drv-wireless-core:
     files:
     - path: /usr/lib/modules/6.12.58/kernel/lib/crypto/libarc4.ko
     - path: /usr/lib/modules/6.12.58/kernel/net/mac80211/mac80211.ko
     - path: /usr/lib/modules/6.12.58/kernel/net/wireless/cfg80211.ko
+
+  drv-wireless-intel:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/intel/iwlwifi/dvm/iwldvm.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/intel/iwlwifi/iwlwifi.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/intel/iwlwifi/mvm/iwlmvm.ko
+
+  drv-wireless-mediatek:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/mediatek/mt76/mt76-connac-lib.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/mediatek/mt76/mt76.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/mediatek/mt76/mt76-usb.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/mediatek/mt76/mt792x-lib.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/mediatek/mt76/mt792x-usb.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/mediatek/mt76/mt7921/mt7921e.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/mediatek/mt76/mt7921/mt7921u.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/mediatek/mt76/mt7921/mt7921-common.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/mediatek/mt76/mt7925/mt7925e.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/mediatek/mt76/mt7925/mt7925u.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/mediatek/mt76/mt7925/mt7925-common.ko
+
+  drv-wireless-realtek:
+    files:
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtl8xxxu/rtl8xxxu.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw88/rtw88_8723d.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw88/rtw88_8723x.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw88/rtw88_8723de.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw88/rtw88_8821c.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw88/rtw88_8821ce.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw88/rtw88_8822b.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw88/rtw88_8822c.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw88/rtw88_8822be.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw88/rtw88_8822ce.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw88/rtw88_core.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw88/rtw88_pci.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw89/rtw89_8852a.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw89/rtw89_8852b.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw89/rtw89_8852c.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw89/rtw89_8852b_common.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw89/rtw89_8852ae.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw89/rtw89_8852be.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw89/rtw89_8852ce.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw89/rtw89_core.ko
+    - path: /usr/lib/modules/6.12.58/kernel/drivers/net/wireless/realtek/rtw89/rtw89_pci.ko
 
   fs-btrfs:
     files:
@@ -434,6 +598,9 @@ outputs:
   fs-xfs:
     files:
     - path: /usr/lib/modules/6.12.58/kernel/fs/xfs/xfs.ko
+
+  lib:
+    files:
     - path: /usr/lib/modules/6.12.58/kernel/lib/libcrc32c.ko
 
   modules-meta:

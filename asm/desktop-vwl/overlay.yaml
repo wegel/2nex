@@ -26,6 +26,7 @@ files:
     render:x:998:testuser
     seat:x:999:testuser
     utmp:x:22:
+    lp:x:7:testuser
 
 - path: /etc/shadow
   mode: 384
@@ -99,11 +100,6 @@ files:
     [Unit]
     After=dbus-broker.service
     Wants=dbus-broker.service
-
-- path: /etc/modules-load.d/virtio.conf
-  mode: 420
-  content: |
-    virtio_net
 
 # tmpfiles
 - path: /etc/tmpfiles.d/home-testuser.conf
@@ -277,9 +273,32 @@ files:
   symlink: dbus-broker.service
   replace: true
 
+# NetworkManager + iwd configuration
+- path: /etc/NetworkManager/conf.d/wifi-backend.conf
+  mode: 420
+  content: |
+    [device]
+    wifi.backend=iwd
+
+# iwd configuration directory
+- path: /etc/iwd/main.conf
+  mode: 420
+  content: |
+    [General]
+    EnableNetworkConfiguration=false
+
+    [Network]
+    NameResolvingService=systemd
+
 # systemd service enablement
-- path: /etc/systemd/system/multi-user.target.wants/systemd-networkd.service
-  symlink: /usr/lib/systemd/system/systemd-networkd.service
+- path: /etc/systemd/system/multi-user.target.wants/NetworkManager.service
+  symlink: /usr/lib/systemd/system/NetworkManager.service
+
+- path: /etc/systemd/system/multi-user.target.wants/iwd.service
+  symlink: /usr/lib/systemd/system/iwd.service
+
+- path: /etc/systemd/system/multi-user.target.wants/bluetooth.service
+  symlink: /usr/lib/systemd/system/bluetooth.service
 
 - path: /etc/systemd/system/multi-user.target.wants/systemd-resolved.service
   symlink: /usr/lib/systemd/system/systemd-resolved.service
@@ -301,6 +320,28 @@ files:
 
 - path: /etc/systemd/user/default.target.wants/wireplumber.service
   symlink: /usr/lib/systemd/user/wireplumber.service
+
+# container config
+- path: /etc/containers/containers.conf
+  mode: 420
+  content: |
+    [engine]
+    runtime = "runc"
+
+    [network]
+    firewall_driver = "nftables"
+
+- path: /etc/containers/registries.conf
+  mode: 420
+  content: |
+    unqualified-search-registries = ["docker.io"]
+
+- path: /etc/containers/policy.json
+  mode: 420
+  content: |
+    {
+      "default": [{ "type": "insecureAcceptAnything" }]
+    }
 
 # gsettings overrides
 - path: /usr/share/glib-2.0/schemas/90_nex.gschema.override

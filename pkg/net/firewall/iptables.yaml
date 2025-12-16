@@ -1,0 +1,987 @@
+package:
+  schema: 1
+  name: iptables
+  slug: iptables
+  namespace: net/firewall
+  version: 1.8.11
+  description: Linux packet filtering and NAT tool
+  homepage: https://www.netfilter.org/projects/iptables/
+  checksum: c549c880fe25dea98e507b6c475b6463995249644f9a5b7c24fd77e41284a2e7
+
+sources:
+- name: iptables
+  url: https://www.netfilter.org/projects/iptables/files/iptables-1.8.11.tar.xz
+  sha256: d87303d55ef8c92bcad4dd3f978b26d272013642b029425775f5bad1009fe7b2
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: libmnl
+  commit: x86_64/pkg/libs/net/libmnl/1.0.5/bundles/dev
+- name: libnftnl
+  commit: x86_64/pkg/libs/net/libnftnl/1.3.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: autoconf
+  commit: x86_64/pkg/core/toolchain/autoconf/2.72/bundles/dev
+- name: automake
+  commit: x86_64/pkg/core/toolchain/automake/1.16.5/bundles/dev
+- name: libtool
+  commit: x86_64/pkg/core/toolchain/libtool/2.4.7/bundles/dev
+- name: flex
+  commit: x86_64/pkg/core/toolchain/flex/2.6.4/bundles/dev
+- name: bison
+  commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure \
+      --prefix=/usr \
+      --sbindir=/usr/sbin \
+      --libexecdir=/usr/lib \
+      --sysconfdir=/etc \
+      --disable-static \
+      --disable-bpf-compiler \
+      --disable-nfsynproxy \
+      --enable-libipq
+
+    make
+    make DESTDIR=${OUT_DIR} install
+
+    # create iptables symlinks for legacy compatibility
+    for prog in iptables iptables-save iptables-restore ip6tables ip6tables-save ip6tables-restore; do
+      ln -sfv xtables-nft-multi ${OUT_DIR}/usr/sbin/${prog}
+    done
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.la' -delete
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - lib
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/iptables-xml
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libip4tc.so.2
+      - /usr/lib/libip6tc.so.2
+      - /usr/lib/libxtables.so.12
+
+  conf:
+    files:
+    - path: /etc/ethertypes
+
+  dev:
+    files:
+    - path: /usr/include/libipq.h
+    - path: /usr/include/libiptc/ipt_kernel_headers.h
+    - path: /usr/include/libiptc/libip6tc.h
+    - path: /usr/include/libiptc/libiptc.h
+    - path: /usr/include/libiptc/libxtc.h
+    - path: /usr/include/libiptc/xtcshared.h
+    - path: /usr/include/xtables-version.h
+    - path: /usr/include/xtables.h
+    - path: /usr/lib/pkgconfig/libip4tc.pc
+    - path: /usr/lib/pkgconfig/libip6tc.pc
+    - path: /usr/lib/pkgconfig/libipq.pc
+    - path: /usr/lib/pkgconfig/libiptc.pc
+    - path: /usr/lib/pkgconfig/xtables.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libip4tc.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libip4tc.so.2
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libip4tc.so.2.0.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libip6tc.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libip6tc.so.2
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libip6tc.so.2.0.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libipq.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libipq.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libipq.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libxtables.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libxtables.so.12
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libxtables.so.12.7.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/xtables/libarpt_mangle.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_802_3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_among.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_arp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_arpreply.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_dnat.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_ip.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_ip6.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_log.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_mark.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_mark_m.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_nflog.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_pkttype.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_redirect.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_snat.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_stp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libebt_vlan.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_DNPT.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_HL.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_NETMAP.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_REJECT.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_SNPT.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_ah.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_dst.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_eui64.so
+      needs:
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_frag.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_hbh.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_hl.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_icmp6.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_ipv6header.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_mh.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_rt.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libip6t_srh.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libipt_CLUSTERIP.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libipt_ECN.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libipt_NETMAP.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libipt_REJECT.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libipt_TTL.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libipt_ULOG.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libipt_ah.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libipt_icmp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libipt_realm.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libipt_ttl.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_AUDIT.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_CHECKSUM.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_CLASSIFY.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_CONNMARK.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_CONNSECMARK.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_CT.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_DNAT.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_DSCP.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_HMARK.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_IDLETIMER.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_LED.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_LOG.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_MARK.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_MASQUERADE.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_NAT.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_NFLOG.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_NFQUEUE.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_NOTRACK.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_RATEEST.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_REDIRECT.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_SECMARK.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_SET.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_SNAT.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_SYNPROXY.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_TCPMSS.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_TCPOPTSTRIP.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_TEE.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_TOS.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_TPROXY.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_TRACE.so
+      needs:
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_addrtype.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_bpf.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_cgroup.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_cluster.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_comment.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_connbytes.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_connlimit.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_connmark.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_conntrack.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_cpu.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_dccp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_devgroup.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_dscp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_ecn.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_esp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_hashlimit.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_helper.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_ipcomp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_iprange.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_ipvs.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_length.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_limit.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_mac.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_mark.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_multiport.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_nfacct.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_osf.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_owner.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_physdev.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_pkttype.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_policy.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_quota.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_rateest.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_recent.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_rpfilter.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_sctp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_set.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_socket.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_standard.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_state.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_statistic.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_string.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_tcp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_tcpmss.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_time.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_tos.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_u32.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+    - path: /usr/lib/xtables/libxt_udp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxtables.so.12
+
+  man:
+    files:
+    - path: /usr/share/man/man1/iptables-xml.1
+    - path: /usr/share/man/man3/ipq_create_handle.3
+    - path: /usr/share/man/man3/ipq_destroy_handle.3
+    - path: /usr/share/man/man3/ipq_errstr.3
+    - path: /usr/share/man/man3/ipq_get_msgerr.3
+    - path: /usr/share/man/man3/ipq_get_packet.3
+    - path: /usr/share/man/man3/ipq_message_type.3
+    - path: /usr/share/man/man3/ipq_perror.3
+    - path: /usr/share/man/man3/ipq_read.3
+    - path: /usr/share/man/man3/ipq_set_mode.3
+    - path: /usr/share/man/man3/ipq_set_verdict.3
+    - path: /usr/share/man/man3/libipq.3
+    - path: /usr/share/man/man8/arptables-nft-restore.8
+    - path: /usr/share/man/man8/arptables-nft-save.8
+    - path: /usr/share/man/man8/arptables-nft.8
+    - path: /usr/share/man/man8/arptables-translate.8
+    - path: /usr/share/man/man8/ebtables-nft.8
+    - path: /usr/share/man/man8/ebtables-translate.8
+    - path: /usr/share/man/man8/ip6tables-apply.8
+    - path: /usr/share/man/man8/ip6tables-restore-translate.8
+    - path: /usr/share/man/man8/ip6tables-restore.8
+    - path: /usr/share/man/man8/ip6tables-save.8
+    - path: /usr/share/man/man8/ip6tables-translate.8
+    - path: /usr/share/man/man8/ip6tables.8
+    - path: /usr/share/man/man8/iptables-apply.8
+    - path: /usr/share/man/man8/iptables-extensions.8
+    - path: /usr/share/man/man8/iptables-restore-translate.8
+    - path: /usr/share/man/man8/iptables-restore.8
+    - path: /usr/share/man/man8/iptables-save.8
+    - path: /usr/share/man/man8/iptables-translate.8
+    - path: /usr/share/man/man8/iptables.8
+    - path: /usr/share/man/man8/xtables-legacy.8
+    - path: /usr/share/man/man8/xtables-monitor.8
+    - path: /usr/share/man/man8/xtables-nft.8
+    - path: /usr/share/man/man8/xtables-translate.8
+
+  misc:
+    files:
+    - path: /usr/sbin/arptables
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/arptables-nft
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/arptables-nft-restore
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/arptables-nft-save
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/arptables-restore
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/arptables-save
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/arptables-translate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ebtables
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ebtables-nft
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ebtables-nft-restore
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ebtables-nft-save
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ebtables-restore
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ebtables-save
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ebtables-translate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ip6tables
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ip6tables-apply
+    - path: /usr/sbin/ip6tables-legacy
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libip4tc.so.2
+      - /usr/lib/libip6tc.so.2
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ip6tables-legacy-restore
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libip4tc.so.2
+      - /usr/lib/libip6tc.so.2
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ip6tables-legacy-save
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libip4tc.so.2
+      - /usr/lib/libip6tc.so.2
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ip6tables-nft
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ip6tables-nft-restore
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ip6tables-nft-save
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ip6tables-restore
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ip6tables-restore-translate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ip6tables-save
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/ip6tables-translate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/iptables
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/iptables-apply
+    - path: /usr/sbin/iptables-legacy
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libip4tc.so.2
+      - /usr/lib/libip6tc.so.2
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/iptables-legacy-restore
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libip4tc.so.2
+      - /usr/lib/libip6tc.so.2
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/iptables-legacy-save
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libip4tc.so.2
+      - /usr/lib/libip6tc.so.2
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/iptables-nft
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/iptables-nft-restore
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/iptables-nft-save
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/iptables-restore
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/iptables-restore-translate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/iptables-save
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/iptables-translate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/xtables-legacy-multi
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libip4tc.so.2
+      - /usr/lib/libip6tc.so.2
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/xtables-monitor
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/sbin/xtables-nft-multi
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libxtables.so.12
+    - path: /usr/share/xtables/iptables.xslt
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libmnl.so.0: libmnl
+  /usr/lib/libnftnl.so.11: libnftnl
+  /usr/lib/libip4tc.so.2: self
+  /usr/lib/libip6tc.so.2: self
+  /usr/lib/libxtables.so.12: self

@@ -80,14 +80,15 @@ if [ -z "$SYSTEM_CHECKSUM" ]; then
     SYSTEM_CHECKSUM=$(zub --repo="$REPO" rev-parse "$SYSTEM_REF")
 fi
 
-DEPLOY_PATH="nex/deploy/nex/deploy/${SYSTEM_CHECKSUM}.0"
+DEPLOY_PATH="nex/deployments/${SYSTEM_CHECKSUM}.0"
 DEPLOY_DIR="$ROOT_CONTENT/$DEPLOY_PATH"
 
 log "Extracting $SYSTEM_REF..."
 mkdir -p "$(dirname "$DEPLOY_DIR")"
 zub --repo="$REPO" checkout "$SYSTEM_REF" "$DEPLOY_DIR"
 
-mkdir -p "$ROOT_CONTENT/nex/deploy/nex/var"
+# create /nex/current symlink to active deployment
+ln -sfn "deployments/${SYSTEM_CHECKSUM}.0" "$ROOT_CONTENT/nex/current"
 
 log "Initializing repo with remote (SSH to host)..."
 rm -rf "$ROOT_CONTENT/nex/repo"
@@ -139,9 +140,10 @@ ln -sf "$DEPLOY_PATH/etc" "$ROOT_CONTENT/etc"
 ln -sf "$DEPLOY_PATH/var" "$ROOT_CONTENT/var"
 ln -sf "usr/bin/init" "$ROOT_CONTENT/init"
 
-ln -sfn "/$DEPLOY_PATH/nex/pkg" "$ROOT_CONTENT/nex/pkg"
-ln -sfn "/$DEPLOY_PATH/nex/db" "$ROOT_CONTENT/nex/db"
-ln -sfn "/$DEPLOY_PATH/nex/env" "$ROOT_CONTENT/nex/env"
+# symlink /nex/pkg, /nex/db, /nex/env from current deployment
+ln -sfn "current/nex/pkg" "$ROOT_CONTENT/nex/pkg"
+ln -sfn "current/nex/db" "$ROOT_CONTENT/nex/db"
+ln -sfn "current/nex/env" "$ROOT_CONTENT/nex/env"
 
 log "Creating /nex/users directory..."
 mkdir -p "$ROOT_CONTENT/nex/users"
@@ -195,7 +197,7 @@ qemu-system-x86_64 \
     -netdev user,id=net0,hostfwd=tcp::10022-:22 \
     -device virtio-net-pci,netdev=net0 \
     -device virtio-keyboard-pci \
-    -device virtio-mouse-pci \
+    -device virtio-tablet-pci \
     -serial mon:stdio \
     -no-reboot
 
