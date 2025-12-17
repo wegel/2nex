@@ -15,10 +15,7 @@ use std::io;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
-use tempfile::TempDir;
-
 use crate::manifest::ManifestIndex;
-use crate::store::Store;
 use crate::utils::hash_file_content;
 
 /// Flatten runtime dependencies for a single package capsule using precomputed deps.
@@ -192,21 +189,10 @@ fn resolve_transitive_deps(
             (dep_name.clone(), false)
         };
 
-        eprintln!(
-            "[FLATTEN] Processing: {} from {} (self_cont={})",
-            file_path, actual_dep_name, is_self_continuation
-        );
-
         // find the dependency by name in source manifest
         let dep = match find_dependency_by_name(source_manifest, &actual_dep_name) {
             Some(d) => d,
-            None => {
-                eprintln!(
-                    "[FLATTEN]   SKIP: dep {} not found in source manifest (pkg={})",
-                    actual_dep_name, source_manifest.package.slug
-                );
-                continue;
-            }
+            None => continue,
         };
 
         // derive files commit for this dependency
@@ -242,15 +228,10 @@ fn resolve_transitive_deps(
         let file_needs = find_file_needs(&file_path, dep_manifest);
 
         // queue up transitive deps
-        eprintln!("[FLATTEN]   file_needs for {}: {:?}", file_path, file_needs);
         for needed_file in file_needs {
             if seen_files.insert(needed_file.clone()) {
                 // resolve using dependency manifest's resolution map
                 if let Some(transitive_dep_name) = dep_manifest.resolution.get(&needed_file) {
-                    eprintln!(
-                        "[FLATTEN]     {} -> {} (resolution)",
-                        needed_file, transitive_dep_name
-                    );
                     if transitive_dep_name == "self" {
                         // "self" means from the same package we're currently processing
                         // add to results and queue for further resolution using same dep context
@@ -268,11 +249,7 @@ fn resolve_transitive_deps(
                     } else {
                         queue.push((needed_file, transitive_dep_name.clone(), dep_manifest));
                     }
-                } else {
-                    eprintln!("[FLATTEN]     {} -> NOT IN RESOLUTION", needed_file);
                 }
-            } else {
-                eprintln!("[FLATTEN]     {} -> already seen", needed_file);
             }
         }
     }
@@ -418,6 +395,7 @@ fn find_manifest_for_commit<'a>(
 }
 
 /// Flatten a single library from a store commit, preserving original path structure.
+/// Uses direct export from blob store instead of full checkout.
 fn flatten_library_preserving_path(
     repo_path: &str,
     commit: &str,
@@ -432,41 +410,88 @@ fn flatten_library_preserving_path(
         return Ok(false);
     }
 
-    let staging_dir = Path::new("/nex/staging");
-    let temp_parent = if staging_dir.exists() || fs::create_dir_all(staging_dir).is_ok() {
-        staging_dir
-    } else {
-        Path::new(repo_path).parent().unwrap_or(Path::new("."))
-    };
-    let temp = TempDir::new_in(temp_parent)?;
-    let checkout_dir = temp.path().join("checkout");
-
-    let store = Store::open_with_fallback_chain(repo_path, fallback_repos)?;
-    store.checkout(commit, &checkout_dir, true)?;
-
-    let src = checkout_dir.join(rel_path);
-    if !src.exists() {
-        return Ok(false);
+    // export directly from blob store (no full checkout needed)
+    // commit is already "{hash}/files", lib_path is the path inside it
+    match export_single_file(repo_path, commit, lib_path, &dest, fallback_repos) {
+        Ok(()) => {}
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(e),
     }
 
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    hardlink_or_symlink(&src, &dest)?;
+    // for symlinks, also export the target if it's relative
+    if dest.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false) {
+        if let Ok(link_target) = fs::read_link(&dest) {
+            if !link_target.is_absolute() {
+                let target_rel = dest.parent()
+                    .map(|p| p.join(&link_target))
+                    .and_then(|p| p.strip_prefix(pkg_dir).ok().map(|s| s.to_path_buf()));
 
-    // handle symlink targets (e.g., libc.so.6 -> libc-2.39.so)
-    if src.symlink_metadata()?.file_type().is_symlink() {
-        let link_target = fs::read_link(&src)?;
-        if !link_target.is_absolute() {
-            let target_src = src.parent().unwrap().join(&link_target);
-            let target_dest = dest.parent().unwrap().join(&link_target);
-            if target_src.exists() && !target_dest.exists() {
-                hardlink_or_symlink(&target_src, &target_dest)?;
+                if let Some(target_rel_path) = target_rel {
+                    let target_dest = pkg_dir.join(&target_rel_path);
+                    if !target_dest.exists() {
+                        let target_src_path = format!("/{}", target_rel_path.display());
+                        let _ = export_single_file(
+                            repo_path,
+                            commit,
+                            &target_src_path,
+                            &target_dest,
+                            fallback_repos,
+                        );
+                    }
+                }
             }
         }
     }
 
     Ok(true)
+}
+
+/// Export a single file from a commit using zub's export_path.
+fn export_single_file(
+    repo_path: &str,
+    commit: &str,
+    src_path: &str,
+    dest: &Path,
+    fallback_repos: &[PathBuf],
+) -> io::Result<()> {
+    use zub::Repo;
+
+    let opts = zub::ops::ExportOptions {
+        overwrite: true,
+        hardlink: true,
+        preserve_sparse: false,
+    };
+
+    // create parent directory if needed
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // try primary repo
+    let repo = Repo::open(Path::new(repo_path))
+        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
+
+    match zub::ops::export_path(&repo, commit, src_path, dest, opts.clone()) {
+        Ok(()) => return Ok(()),
+        Err(zub::Error::RefNotFound(_)) | Err(zub::Error::PathNotFound(_)) => {}
+        Err(e) => return Err(io::Error::other(e.to_string())),
+    }
+
+    // try fallbacks
+    for fallback_path in fallback_repos {
+        if let Ok(fallback) = Repo::open(fallback_path) {
+            match zub::ops::export_path(&fallback, commit, src_path, dest, opts.clone()) {
+                Ok(()) => return Ok(()),
+                Err(zub::Error::RefNotFound(_)) | Err(zub::Error::PathNotFound(_)) => continue,
+                Err(e) => return Err(io::Error::other(e.to_string())),
+            }
+        }
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        format!("path {} not found in commit {}", src_path, commit),
+    ))
 }
 
 /// Create lib/ld-linux-x86-64.so.2 symlink for nex-ld-shim loader lookup.
@@ -487,36 +512,6 @@ fn ensure_loader_symlink(pkg_dir: &Path, flattened_files: &[String]) -> io::Resu
 
     fs::create_dir_all(&lib_dir)?;
     symlink(format!("../usr/lib/{}", loader_name), &loader_symlink)?;
-
-    Ok(())
-}
-
-/// Hardlink a file or recreate a symlink.
-fn hardlink_or_symlink(src: &Path, dest: &Path) -> io::Result<()> {
-    let meta = src.symlink_metadata()?;
-
-    if meta.file_type().is_symlink() {
-        let target = fs::read_link(src)?;
-        if dest.exists() || dest.symlink_metadata().is_ok() {
-            fs::remove_file(dest)?;
-        }
-        symlink(&target, dest)?;
-    } else {
-        if dest.exists() || dest.symlink_metadata().is_ok() {
-            fs::remove_file(dest)?;
-        }
-        fs::hard_link(src, dest).map_err(|e| {
-            io::Error::new(
-                e.kind(),
-                format!(
-                    "failed to hardlink {} -> {}: {} (cross-device mounts not supported)",
-                    src.display(),
-                    dest.display(),
-                    e
-                ),
-            )
-        })?;
-    }
 
     Ok(())
 }
