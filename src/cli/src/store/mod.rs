@@ -604,8 +604,6 @@ pub fn commit_tree(
     tree_path: &Path,
     metadata: &[(String, String)],
 ) -> io::Result<Hash> {
-    println!("Committing {} to branch {}", tree_path.display(), branch);
-
     let repo = Repo::open(Path::new(repo_path))
         .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
 

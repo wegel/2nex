@@ -43,8 +43,6 @@ pub fn commit_bundle(
     manifest: &Manifest,
     manifest_hash: &str,
 ) -> io::Result<()> {
-    println!("Creating bundle: {}", bundle_name);
-
     // collect output commit refs
     let mut output_commits = Vec::new();
 
