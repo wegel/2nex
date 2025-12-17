@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
@@ -221,7 +222,7 @@ pub fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Re
 pub fn calculate_output_checksum(output_dir: &Path) -> io::Result<String> {
     let mut file_paths: Vec<PathBuf> = Vec::new();
 
-    // Collect all file paths
+    // collect all file paths
     for entry in WalkDir::new(output_dir) {
         let entry = entry?;
         if entry.file_type().is_file() {
@@ -229,31 +230,44 @@ pub fn calculate_output_checksum(output_dir: &Path) -> io::Result<String> {
         }
     }
 
-    // Sort file paths to ensure consistent ordering
+    // sort for consistent ordering
     file_paths.sort();
 
-    let mut hasher = Sha256::new();
+    // hash each file in parallel using BLAKE3
+    let file_hashes: Vec<io::Result<([u8; 32], String)>> = file_paths
+        .par_iter()
+        .map(|path| {
+            let relative_path = path
+                .strip_prefix(output_dir)
+                .unwrap()
+                .to_string_lossy()
+                .into_owned();
 
-    for path in file_paths {
-        // Update hasher with relative path
-        let relative_path = path.strip_prefix(output_dir).unwrap();
-        hasher.update(relative_path.to_string_lossy().as_bytes());
-        hasher.update(b"\0"); // Use null byte as separator
-
-        // Read and hash file contents
-        let mut file = fs::File::open(&path)?;
-        let mut buffer = [0; 4096];
-        loop {
-            let count = file.read(&mut buffer)?;
-            if count == 0 {
-                break;
+            let mut hasher = blake3::Hasher::new();
+            let mut file = fs::File::open(path)?;
+            let mut buffer = [0u8; 65536]; // 64KB buffer
+            loop {
+                let count = file.read(&mut buffer)?;
+                if count == 0 {
+                    break;
+                }
+                hasher.update(&buffer[..count]);
             }
-            hasher.update(&buffer[..count]);
-        }
-        hasher.update(b"\0"); // Use null byte as separator between files
+            Ok((*hasher.finalize().as_bytes(), relative_path))
+        })
+        .collect();
+
+    // combine all file hashes deterministically (must be in sorted order)
+    let mut final_hasher = blake3::Hasher::new();
+    for result in file_hashes {
+        let (hash, path) = result?;
+        final_hasher.update(path.as_bytes());
+        final_hasher.update(b"\0");
+        final_hasher.update(&hash);
+        final_hasher.update(b"\0");
     }
 
-    Ok(hex::encode(hasher.finalize()))
+    Ok(final_hasher.finalize().to_hex().to_string())
 }
 
 pub fn categorize_files(rootfs_dir: &Path) -> HashMap<String, Vec<String>> {
