@@ -148,10 +148,10 @@ impl fmt::Display for UefiIoError {
     }
 }
 
-impl ext4_view::IoError for UefiIoError {}
+impl core::error::Error for UefiIoError {}
 
 impl ext4_view::Ext4Read for UefiBlockReader {
-    fn read(&mut self, start_byte: u64, dst: &mut [u8]) -> Result<(), Box<dyn ext4_view::IoError>> {
+    fn read(&mut self, start_byte: u64, dst: &mut [u8]) -> Result<(), Box<dyn core::error::Error + Send + Sync + 'static>> {
         use uefi::proto::media::block::BlockIO;
 
         if dst.is_empty() {
@@ -160,7 +160,7 @@ impl ext4_view::Ext4Read for UefiBlockReader {
 
         // open BlockIO protocol for this handle
         let block_io = uefi::boot::open_protocol_exclusive::<BlockIO>(self.handle).map_err(
-            |e| -> Box<dyn ext4_view::IoError> {
+            |e| -> Box<dyn core::error::Error + Send + Sync + 'static> {
                 Box::new(UefiIoError(alloc::format!("open BlockIO failed: {:?}", e)))
             },
         )?;
@@ -181,7 +181,7 @@ impl ext4_view::Ext4Read for UefiBlockReader {
         // read blocks
         block_io
             .read_blocks(media_id, start_block, &mut buf)
-            .map_err(|e| -> Box<dyn ext4_view::IoError> {
+            .map_err(|e| -> Box<dyn core::error::Error + Send + Sync + 'static> {
                 Box::new(UefiIoError(alloc::format!("read_blocks failed: {:?}", e)))
             })?;
 
