@@ -160,6 +160,7 @@ pub fn setup_composite_rootfs(
     fallback_repos: &[String],
     dependency_commits: &[String],
     paths: &BuildPaths,
+    verbose: bool,
 ) -> io::Result<()> {
     println!("Setting up composite rootfs at {}", base_dir);
     if Path::new(base_dir).exists() {
@@ -172,16 +173,20 @@ pub fn setup_composite_rootfs(
     let tmp_dir = Path::new(base_dir).join("tmp");
 
     for dir in &[&work_dir, &out_dir, &tmp_dir] {
-        println!("Creating directory: {}", dir.display());
+        if verbose {
+            println!("Creating directory: {}", dir.display());
+        }
         if dir.exists() {
-            println!("Removing existing {}", dir.display());
+            if verbose {
+                println!("Removing existing {}", dir.display());
+            }
             fs::remove_dir_all(dir)?;
         }
         fs::create_dir_all(dir)?;
     }
 
     for commit in dependency_commits {
-        checkout_into_with_fallbacks(repo_path, fallback_repos, commit, Path::new(base_dir), true)?;
+        checkout_into_with_fallbacks(repo_path, fallback_repos, commit, Path::new(base_dir), true, verbose)?;
     }
 
     // create FHS compatibility symlinks (only if there are actual dependencies to checkout)
@@ -214,9 +219,10 @@ pub fn layer_commits_into_rootfs(
     repo_path: &str,
     fallback_repos: &[String],
     commits: &[String],
+    verbose: bool,
 ) -> io::Result<()> {
     for commit in commits {
-        checkout_into_with_fallbacks(repo_path, fallback_repos, commit, Path::new(base_dir), true)?;
+        checkout_into_with_fallbacks(repo_path, fallback_repos, commit, Path::new(base_dir), true, verbose)?;
     }
     Ok(())
 }
@@ -719,6 +725,7 @@ pub fn build_package_manifest_with_dir(
         &opts.fallback_repos,
         &dependency_commits,
         &build_env.paths,
+        opts.verbose,
     )?;
 
     // use_absolute_paths = !chroot (when not using chroot, we need absolute paths)
@@ -897,6 +904,7 @@ pub fn build_package_manifest_with_dir(
             &opts.fallback_repos,
             &dependency_commits,
             &build_env.paths,
+            opts.verbose,
         )?;
         let input_env_vars_2 = handle_inputs(
             &manifest.sources,

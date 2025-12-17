@@ -53,12 +53,14 @@ pub fn build_system_manifest_with_dir(
         &opts.fallback_repos,
         &dependency_commits,
         &build_env.paths,
+        opts.verbose,
     )?;
     layer_commits_into_rootfs(
         base_dir,
         &opts.repo_path,
         &opts.fallback_repos,
         &package_commits,
+        opts.verbose,
     )?;
 
     // get original package commits (not expanded) for materialize
@@ -168,12 +170,14 @@ pub fn build_system_manifest_with_dir(
             &opts.fallback_repos,
             &dependency_commits,
             &build_env.paths,
+            opts.verbose,
         )?;
         layer_commits_into_rootfs(
             base_dir,
             &opts.repo_path,
             &opts.fallback_repos,
             &package_commits,
+            opts.verbose,
         )?;
 
         if manifest.system.nex_structure {

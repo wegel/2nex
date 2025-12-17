@@ -212,6 +212,7 @@ pub fn collect_dependencies_recursive(
     force: bool,
     ref_cache: &mut HashMap<String, bool>,
     store: Option<&Store>,
+    verbose: bool,
 ) -> io::Result<NodeIndex> {
     let manifest_path = manifest_source.path();
 
@@ -265,11 +266,13 @@ pub fn collect_dependencies_recursive(
 
             if !*ref_available {
                 // ref not available locally or remotely, needs build
-                println!(
-                    "  [needs build] {} (pinned to {}, not in store)",
-                    dep.commit,
-                    &blob_sha[..12]
-                );
+                if verbose {
+                    println!(
+                        "  [needs build] {} (pinned to {}, not in store)",
+                        dep.commit,
+                        &blob_sha[..12]
+                    );
+                }
             } else {
                 match crate::utils::fetch_git_blob(&git_root, blob_sha) {
                     Ok(content) => {
@@ -278,15 +281,19 @@ pub fn collect_dependencies_recursive(
 
                         match build_exists_for_manifest(repo_path, &dep.commit, &content_hash) {
                             Ok(true) => {
-                                println!("  [cached] {} skipping (pinned)", dep.commit);
+                                if verbose {
+                                    println!("  [cached] {} skipping (pinned)", dep.commit);
+                                }
                                 continue;
                             }
                             Ok(false) => {
-                                println!(
-                                    "  [needs build] {} (pinned to {})",
-                                    dep.commit,
-                                    &blob_sha[..12]
-                                );
+                                if verbose {
+                                    println!(
+                                        "  [needs build] {} (pinned to {})",
+                                        dep.commit,
+                                        &blob_sha[..12]
+                                    );
+                                }
                             }
                             Err(e) => {
                                 eprintln!(
@@ -337,14 +344,18 @@ pub fn collect_dependencies_recursive(
                         // use artifact lookup (O(1)) or commit search
                         match build_exists_for_manifest(repo_path, &ref_to_check, &manifest_hash) {
                             Ok(true) => {
-                                println!("  [floating] {} skipping", dep.commit);
+                                if verbose {
+                                    println!("  [floating] {} skipping", dep.commit);
+                                }
                                 continue;
                             }
                             Ok(false) => {
-                                println!(
-                                    "  [floating/stale] {} manifest changed, rebuilding",
-                                    dep.commit
-                                );
+                                if verbose {
+                                    println!(
+                                        "  [floating/stale] {} manifest changed, rebuilding",
+                                        dep.commit
+                                    );
+                                }
                             }
                             Err(e) => {
                                 eprintln!(
@@ -355,7 +366,9 @@ pub fn collect_dependencies_recursive(
                         }
                     }
                     Err(_) => {
-                        println!("  [floating] {} skipping (no manifest found)", dep.commit);
+                        if verbose {
+                            println!("  [floating] {} skipping (no manifest found)", dep.commit);
+                        }
                         continue;
                     }
                 }
@@ -372,10 +385,12 @@ pub fn collect_dependencies_recursive(
                     continue;
                 }
 
-                println!(
-                    "  Found dependency manifest: {}",
-                    dep_manifest_path.display()
-                );
+                if verbose {
+                    println!(
+                        "  Found dependency manifest: {}",
+                        dep_manifest_path.display()
+                    );
+                }
 
                 let dep_source = if let Some(ref blob_sha) = dep.manifest_ref {
                     ManifestSource::Blob {
@@ -395,6 +410,7 @@ pub fn collect_dependencies_recursive(
                     force,
                     ref_cache,
                     store,
+                    verbose,
                 )?;
 
                 if !graph[dep_node].is_skip() {
@@ -1090,6 +1106,7 @@ pub fn build_with_dependencies(
         opts.force || opts.add_checksums,
         &mut ref_cache,
         store.as_ref(),
+        opts.verbose,
     )?;
 
     if let Some(ref pattern) = opts.trace_dependency {

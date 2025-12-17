@@ -474,7 +474,7 @@ pub fn get_commit_metadata(repo_path: &str, commit: &str, key: &str) -> io::Resu
 
 /// checkout a commit into a directory
 pub fn checkout_into(repo_path: &str, commit: &str, dest: &Path, union: bool) -> io::Result<()> {
-    checkout_into_with_fallbacks(repo_path, &[], commit, dest, union)
+    checkout_into_with_fallbacks(repo_path, &[], commit, dest, union, false)
 }
 
 /// checkout a commit into a directory, with fallback repos for dependency lookups.
@@ -486,6 +486,7 @@ pub fn checkout_into_with_fallbacks(
     commit: &str,
     dest: &Path,
     union: bool,
+    verbose: bool,
 ) -> io::Result<()> {
     use crate::refs::PackageRef;
 
@@ -495,12 +496,14 @@ pub fn checkout_into_with_fallbacks(
     if let Ok(pkg_ref) = PackageRef::parse(commit) {
         if let Some(subpath) = pkg_ref.internal_path() {
             let base_ref = pkg_ref.commit_ref();
-            println!(
-                "Extracting {} from {} into {}",
-                subpath,
-                base_ref,
-                dest.display()
-            );
+            if verbose {
+                println!(
+                    "Extracting {} from {} into {}",
+                    subpath,
+                    base_ref,
+                    dest.display()
+                );
+            }
 
             let target_path = dest.join(subpath);
             if let Some(parent) = target_path.parent() {
@@ -519,12 +522,14 @@ pub fn checkout_into_with_fallbacks(
     }
 
     // full checkout for refs without internal paths
-    println!(
-        "Checking out {} into {} (union: {})",
-        commit,
-        dest.display(),
-        union
-    );
+    if verbose {
+        println!(
+            "Checking out {} into {} (union: {})",
+            commit,
+            dest.display(),
+            union
+        );
+    }
     let store = Store::open_with_fallback_chain(repo_path, &fallback_paths)?;
     store.checkout(commit, dest, union)
 }
