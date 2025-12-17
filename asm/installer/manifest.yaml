@@ -1,0 +1,70 @@
+system:
+  schema: 1
+  name: nex Installer
+  slug: installer
+  version: 0.0.1
+  description: Minimal bootable installer for nex systems
+  checksum: f67e31bcedd5e08e96ff7f3ba4ef99690322372167fcbe0276981ebbef5d2af0
+  nex_structure: true
+
+overlays:
+- asm/installer/overlay.yaml
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/lib
+- name: gcc-libs
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/outputs/lib
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/runtime
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/outputs/lib
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/outputs/lib
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/outputs/lib
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/outputs/lib
+- name: nex-ld-shim
+  commit: x86_64/pkg/core/nex/nex-ld-shim/0.0.1/outputs/lib
+
+packages:
+# shell and core utilities
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/outputs/bin
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/outputs/bin
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/outputs/bin
+
+# disk utilities
+- name: util_linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/runtime
+- name: dosfstools
+  commit: x86_64/pkg/core/fs/dosfstools/4.2/bundles/dev
+- name: e2fsprogs
+  commit: x86_64/pkg/core/fs/e2fsprogs/1.47.0/bundles/full
+
+# kernel (minimal for installer)
+- name: linux
+  commit: x86_64/pkg/core/kernel/linux/6.12.58/bundles/vm
+- name: linux-boot
+  commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/boot
+- name: linux-vfat
+  commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/fs-vfat
+- name: kmod
+  commit: x86_64/pkg/core/kernel/kmod/32/bundles/runtime
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  script: |
+    set -eux
+
+    # directories for runtime
+    mkdir -p /target/{proc,sys,dev,run,tmp,mnt}
+    mkdir -p /target/run/installer
+

@@ -1,0 +1,265 @@
+files:
+# install script
+- path: /usr/bin/nex-install
+  mode: 493
+  content: |
+    #!/bin/bash
+    # nex-install: install nex system to disk
+    set -eu
+
+    # paths on the installer (on the root filesystem)
+    SYSTEM_DIR="/nex/installer/system"
+    CHECKSUM_FILE="/nex/installer/system-checksum"
+    BOOTLOADER_PATH="/nex/installer/BOOTX64.EFI"
+
+    ESP_SIZE="512M"
+
+    die() {
+        printf "error: %s\n" "$*" >&2
+        exit 1
+    }
+
+    # get partition path for a device
+    # /dev/sda -> /dev/sda1, /dev/nvme0n1 -> /dev/nvme0n1p1
+    partition_path() {
+        dev=$1
+        num=$2
+        case "$dev" in
+            *[0-9]) printf "%sp%s" "$dev" "$num" ;;
+            *)      printf "%s%s" "$dev" "$num" ;;
+        esac
+    }
+
+    show_disks() {
+        printf "available disks:\n\n"
+        lsblk -d -o NAME,SIZE,MODEL | grep -v "^loop"
+        printf "\n"
+    }
+
+    confirm_destroy() {
+        dev=$1
+        printf "\ntarget device: %s\n" "$dev"
+        lsblk -o NAME,SIZE,TYPE,MOUNTPOINT "$dev" 2>/dev/null || true
+        printf "\nWARNING: this will ERASE ALL DATA on %s\n" "$dev"
+        printf "type 'yes' to continue: "
+        read -r confirm
+        [ "$confirm" = "yes" ] || die "aborted"
+    }
+
+    partition_disk() {
+        dev=$1
+        printf "partitioning %s...\n" "$dev"
+
+        # create GPT with sfdisk:
+        # 1. ESP (EFI System Partition) - 512MB
+        # 2. root - remaining space
+        sfdisk --wipe always "$dev" <<EOF
+    label: gpt
+    size=${ESP_SIZE}, type=uefi, name="EFI"
+    type=linux, name="nex"
+    EOF
+
+        # wait for kernel to re-read partition table
+        partprobe "$dev" 2>/dev/null || sleep 1
+    }
+
+    format_partitions() {
+        dev=$1
+        esp=$(partition_path "$dev" 1)
+        root=$(partition_path "$dev" 2)
+
+        printf "formatting ESP (%s)...\n" "$esp"
+        mkfs.fat -F32 "$esp" >/dev/null
+
+        printf "formatting root (%s)...\n" "$root"
+        mkfs.ext4 -q -L nex "$root"
+    }
+
+    install_system() {
+        dev=$1
+        esp=$(partition_path "$dev" 1)
+        root=$(partition_path "$dev" 2)
+
+        # read system checksum
+        [ -f "$CHECKSUM_FILE" ] || die "system checksum not found at $CHECKSUM_FILE"
+        checksum=$(cat "$CHECKSUM_FILE")
+        checksum_len=$(printf "%s" "$checksum" | wc -c)
+        [ "$checksum_len" -eq 64 ] || die "invalid checksum length: $checksum_len"
+
+        deploy_dir="/nex/deployments/${checksum}.0"
+
+        # mount root
+        printf "mounting root partition...\n"
+        mount "$root" /mnt
+
+        # create deployment directory
+        mkdir -p "/mnt${deploy_dir}"
+
+        # copy system
+        printf "copying system (this may take a while)...\n"
+        cp -a "$SYSTEM_DIR"/* "/mnt${deploy_dir}/"
+
+        # create root symlinks
+        printf "creating root symlinks...\n"
+        deploy_rel="nex/deployments/${checksum}.0"
+        ln -sf "$deploy_rel/usr" /mnt/usr
+        ln -sf "$deploy_rel/lib" /mnt/lib
+        ln -sf "$deploy_rel/lib64" /mnt/lib64
+        ln -sf "$deploy_rel/bin" /mnt/bin
+        ln -sf "$deploy_rel/sbin" /mnt/sbin
+        ln -sf "$deploy_rel/etc" /mnt/etc
+        ln -sf "$deploy_rel/var" /mnt/var 2>/dev/null || true
+        ln -sf usr/bin/init /mnt/init
+
+        # create /nex symlinks
+        ln -sfn "deployments/${checksum}.0" /mnt/nex/current
+        ln -sfn "current/nex/pkg" /mnt/nex/pkg
+        ln -sfn "current/nex/db" /mnt/nex/db
+
+        # mount and populate ESP
+        printf "setting up ESP...\n"
+        mkdir -p /mnt/boot/efi
+        mount "$esp" /mnt/boot/efi
+        mkdir -p /mnt/boot/efi/EFI/BOOT
+        cp "$BOOTLOADER_PATH" /mnt/boot/efi/EFI/BOOT/BOOTX64.EFI
+
+        # unmount
+        printf "finalizing...\n"
+        umount /mnt/boot/efi
+        umount /mnt
+    }
+
+    main() {
+        [ "$(id -u)" -eq 0 ] || die "must be run as root"
+
+        # check installer media is mounted
+        [ -d "$SYSTEM_DIR" ] || die "installer system not found at $SYSTEM_DIR"
+        [ -f "$BOOTLOADER_PATH" ] || die "bootloader not found at $BOOTLOADER_PATH"
+
+        # get target device
+        device="${1:-}"
+        if [ -z "$device" ]; then
+            show_disks
+            printf "target device (e.g., /dev/sda): "
+            read -r device
+        fi
+
+        [ -b "$device" ] || die "not a block device: $device"
+
+        # safety check: don't install to the installer media (current root)
+        installer_dev=$(findmnt -n -o SOURCE / 2>/dev/null | sed 's/[0-9p]*$//' || true)
+        if [ -n "$installer_dev" ]; then
+            case "$device" in
+                "$installer_dev"*) die "cannot install to the installer media" ;;
+            esac
+        fi
+
+        confirm_destroy "$device"
+
+        partition_disk "$device"
+        format_partitions "$device"
+        install_system "$device"
+
+        printf "\ninstallation complete!\n"
+        printf "remove the USB drive and reboot.\n"
+    }
+
+    main "$@"
+
+# os-release
+- path: /etc/os-release
+  mode: 420
+  content: |
+    NAME="nex"
+    PRETTY_NAME="nex Installer"
+    ID=nex
+    VERSION_ID=0.0.1
+
+# basic passwd/group for root
+- path: /etc/passwd
+  mode: 420
+  content: |
+    root:x:0:0:root:/root:/bin/bash
+
+- path: /etc/group
+  mode: 420
+  content: |
+    root:x:0:
+
+- path: /etc/shadow
+  mode: 384
+  content: |
+    root::19735:0:99999:7:::
+
+# symlinks
+- path: /bin
+  symlink: usr/bin
+
+- path: /sbin
+  symlink: usr/bin
+
+- path: /usr/bin/sh
+  symlink: bash
+
+- path: /usr/bin/init
+  symlink: ../../init
+
+- path: /init
+  mode: 493
+  content: |
+    #!/bin/bash
+    # installer init: mount filesystems
+
+    # mount basics first so we can log
+    mount -t proc proc /proc
+    mount -t sysfs sys /sys
+    mount -t devtmpfs dev /dev
+
+    # log to kernel ring buffer
+    echo "INSTALLER: init started, PID=$$" > /dev/kmsg
+    echo "INSTALLER: script=$0" > /dev/kmsg
+
+    mkdir -p /run
+    mount -t tmpfs run /run
+
+    # load vfat module for ESP mounting
+    modprobe vfat 2>/dev/null || true
+
+    echo "INSTALLER: checking /nex/installer" > /dev/kmsg
+    if [ -d /nex/installer ]; then
+        echo "INSTALLER: found /nex/installer, ready to install" > /dev/kmsg
+    else
+        echo "INSTALLER: /nex/installer not found (test mode)" > /dev/kmsg
+    fi
+
+    echo "INSTALLER: starting shell" > /dev/kmsg
+
+    # set up environment
+    export HOME=/root
+    export TERM=linux
+    export PATH=/usr/bin
+
+    # use ttyS0 for serial console (matches kernel console=ttyS0)
+    exec setsid -c /bin/bash --login </dev/ttyS0 >/dev/ttyS0 2>&1
+
+- path: /etc/mtab
+  symlink: /proc/self/mounts
+
+# mount points
+- path: /mnt
+  directory: true
+
+# root home
+- path: /root
+  directory: true
+
+- path: /root/.bashrc
+  mode: 420
+  content: |
+    export PATH=/usr/bin
+    export PS1='installer# '
+    printf "\n"
+    printf "=== nex Installer ===\n"
+    printf "\n"
+    printf "run 'nex-install' to install nex to disk\n"
+    printf "\n"
