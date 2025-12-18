@@ -1,0 +1,157 @@
+package:
+  schema: 1
+  name: dosfstools
+  slug: dosfstools
+  namespace: core/fs
+  version: "4.2"
+  description: Utilities for making and checking MS-DOS FAT filesystems
+  homepage: https://github.com/dosfstools/dosfstools
+  checksum: 6384efd2bb2243c0e0e8d6589ab83d1f8064777d8395e30384064aa2fb1121be
+
+sources:
+- name: dosfstools
+  url: https://github.com/dosfstools/dosfstools/releases/download/v4.2/dosfstools-4.2.tar.gz
+  sha256: 64926eebf90092dca21b14259a5301b7b98e7b1943e8a201c7d726084809b527
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4157:1126, 8400:1974, 13436:1975, 18472:1976, 23516:1976, 28663:1977, 33286:2061, 36433:2754]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr \
+                --enable-compat-symlinks
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    # move from /usr/sbin to /usr/bin
+    mkdir -p ${OUT_DIR}/usr/bin
+    mv ${OUT_DIR}/usr/sbin/* ${OUT_DIR}/usr/bin/
+    rmdir ${OUT_DIR}/usr/sbin
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/dosfsck
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/dosfslabel
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/fatlabel
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/fsck.fat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/fsck.msdos
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/fsck.vfat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/mkdosfs
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/mkfs.fat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/mkfs.msdos
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/mkfs.vfat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  doc:
+    files:
+    - path: /usr/share/doc/dosfstools/ANNOUNCE.mkdosfs
+    - path: /usr/share/doc/dosfstools/COPYING
+    - path: /usr/share/doc/dosfstools/ChangeLog
+    - path: /usr/share/doc/dosfstools/ChangeLog.dosfsck
+    - path: /usr/share/doc/dosfstools/ChangeLog.dosfstools-2.x
+    - path: /usr/share/doc/dosfstools/ChangeLog.mkdosfs
+    - path: /usr/share/doc/dosfstools/NEWS
+    - path: /usr/share/doc/dosfstools/README
+    - path: /usr/share/doc/dosfstools/README.dosfsck
+    - path: /usr/share/doc/dosfstools/README.dosfstools-2.x
+    - path: /usr/share/doc/dosfstools/README.mkdosfs
+    - path: /usr/share/doc/dosfstools/TODO.dosfstools-2.x
+
+  man:
+    files:
+    - path: /usr/share/man/man8/dosfsck.8
+    - path: /usr/share/man/man8/dosfslabel.8
+    - path: /usr/share/man/man8/fatlabel.8
+    - path: /usr/share/man/man8/fsck.fat.8
+    - path: /usr/share/man/man8/fsck.msdos.8
+    - path: /usr/share/man/man8/fsck.vfat.8
+    - path: /usr/share/man/man8/mkdosfs.8
+    - path: /usr/share/man/man8/mkfs.fat.8
+    - path: /usr/share/man/man8/mkfs.msdos.8
+    - path: /usr/share/man/man8/mkfs.vfat.8
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

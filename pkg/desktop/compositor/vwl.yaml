@@ -6,12 +6,15 @@ package:
   version: 0.1.0
   description: Simple tiling Wayland compositor based on dwl
   homepage: https://github.com/wegel/vwl
-  checksum: 7da670b3017ad2397653f3cdce5fc7d4641b321107e5bd1675ed0652d22ea9da
+  checksum: 30ec4370ecc70f741a744b9f87c8edd05135ce8df94caedc6f37d8636d717773
 
 sources:
 - name: vwl
-  url: https://github.com/wegel/vwl/archive/35513f30773d4f496f994f8f7e2c0a564d1992f8.tar.gz
-  sha256: 4e57a9d836f1aa91c24f43dc715bcd14ff3ee6c0520c9e80373cbc7bc977657a
+  url: https://github.com/wegel/vwl/archive/cf7d635c7c78ad7de73d5a977f3c10689d084f5d.tar.gz
+  sha256: 93119cf9428317eed4bcc8d95c3296ba4123692452a1a2de32ba8b1d3b017f6e
+- name: config
+  file: pkg/desktop/compositor/vwl-config.h
+  sha256: 966ad3ddb2bd9be51fabe7ef791eb1ba7bf6cc2ed6ede66dc4a339b4d4a8f373
 
 dependencies:
 - name: glibc
@@ -134,8 +137,8 @@ build:
     tar --no-same-owner -xzf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-    # use ctrl+alt as mod key instead of logo/super
-    sed -i 's/#define MODKEY WLR_MODIFIER_LOGO/#define MODKEY (WLR_MODIFIER_CTRL|WLR_MODIFIER_ALT)/' config.def.h
+    # use our config.h (left alt as modkey, catppuccin mocha theme)
+    cp /${SOURCE_config} config.h
 
     make CC=gcc PREFIX=/usr XWAYLAND=-DXWAYLAND XLIBS="xcb xcb-icccm"
 

@@ -6,7 +6,7 @@ package:
   version: 1.47.0
   description: Utilities for managing ext2, ext3, and ext4 filesystems
   homepage: http://e2fsprogs.sourceforge.net/
-  checksum: a81ee00816df3741983c27f08d5faa50abbfd3c0f4621d8f20e1b94490a6b11e
+  checksum: c18611f47cd3f7b9e7a502ef1b613d1dc7d2e97dedf83a50b2fb704ddddab90a
 
 sources:
 - name: e2fsprogs
@@ -78,6 +78,12 @@ build:
 
     make
     make DESTDIR=$OUT_DIR install
+
+    # move from /usr/sbin to /usr/bin
+    if [ -d "${OUT_DIR}/usr/sbin" ]; then
+      mv ${OUT_DIR}/usr/sbin/* ${OUT_DIR}/usr/bin/
+      rmdir ${OUT_DIR}/usr/sbin
+    fi
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -263,13 +269,13 @@ outputs:
 
   misc:
     files:
-    - path: /usr/sbin/badblocks
+    - path: /usr/bin/badblocks
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcom_err.so.2
       - /usr/lib/libext2fs.so.2
-    - path: /usr/sbin/debugfs
+    - path: /usr/bin/debugfs
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libblkid.so.1
@@ -279,7 +285,7 @@ outputs:
       - /usr/lib/libext2fs.so.2
       - /usr/lib/libss.so.2
       - /usr/lib/libuuid.so.1
-    - path: /usr/sbin/dumpe2fs
+    - path: /usr/bin/dumpe2fs
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libblkid.so.1
@@ -287,45 +293,7 @@ outputs:
       - /usr/lib/libcom_err.so.2
       - /usr/lib/libe2p.so.2
       - /usr/lib/libext2fs.so.2
-    - path: /usr/sbin/e2label
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libblkid.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/libcom_err.so.2
-      - /usr/lib/libe2p.so.2
-      - /usr/lib/libext2fs.so.2
-      - /usr/lib/libuuid.so.1
-    - path: /usr/sbin/e2scrub
-    - path: /usr/sbin/e2scrub_all
-    - path: /usr/sbin/e2image
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libblkid.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/libcom_err.so.2
-      - /usr/lib/libext2fs.so.2
-    - path: /usr/sbin/e2mmpstatus
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libblkid.so.1
-      - /usr/lib/libc.so.6
-      - /usr/lib/libcom_err.so.2
-      - /usr/lib/libe2p.so.2
-      - /usr/lib/libext2fs.so.2
-    - path: /usr/sbin/e2undo
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/libcom_err.so.2
-      - /usr/lib/libext2fs.so.2
-    - path: /usr/sbin/e2freefrag
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/libcom_err.so.2
-      - /usr/lib/libext2fs.so.2
-    - path: /usr/sbin/e2fsck
+    - path: /usr/bin/e2label
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libblkid.so.1
@@ -334,23 +302,36 @@ outputs:
       - /usr/lib/libe2p.so.2
       - /usr/lib/libext2fs.so.2
       - /usr/lib/libuuid.so.1
-    - path: /usr/sbin/e4defrag
+    - path: /usr/bin/e2scrub
+    - path: /usr/bin/e2scrub_all
+    - path: /usr/bin/e2image
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libext2fs.so.2
+    - path: /usr/bin/e2mmpstatus
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+    - path: /usr/bin/e2undo
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcom_err.so.2
       - /usr/lib/libext2fs.so.2
-    - path: /usr/sbin/e4crypt
+    - path: /usr/bin/e2freefrag
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
       - /usr/lib/libext2fs.so.2
-      - /usr/lib/libuuid.so.1
-    - path: /usr/sbin/filefrag
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-    - path: /usr/sbin/fsck.ext2
+    - path: /usr/bin/e2fsck
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libblkid.so.1
@@ -359,7 +340,23 @@ outputs:
       - /usr/lib/libe2p.so.2
       - /usr/lib/libext2fs.so.2
       - /usr/lib/libuuid.so.1
-    - path: /usr/sbin/fsck.ext3
+    - path: /usr/bin/e4defrag
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libext2fs.so.2
+    - path: /usr/bin/e4crypt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/filefrag
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/fsck.ext2
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libblkid.so.1
@@ -368,7 +365,7 @@ outputs:
       - /usr/lib/libe2p.so.2
       - /usr/lib/libext2fs.so.2
       - /usr/lib/libuuid.so.1
-    - path: /usr/sbin/fsck.ext4
+    - path: /usr/bin/fsck.ext3
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libblkid.so.1
@@ -377,11 +374,7 @@ outputs:
       - /usr/lib/libe2p.so.2
       - /usr/lib/libext2fs.so.2
       - /usr/lib/libuuid.so.1
-    - path: /usr/sbin/logsave
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-    - path: /usr/sbin/mke2fs
+    - path: /usr/bin/fsck.ext4
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libblkid.so.1
@@ -390,7 +383,11 @@ outputs:
       - /usr/lib/libe2p.so.2
       - /usr/lib/libext2fs.so.2
       - /usr/lib/libuuid.so.1
-    - path: /usr/sbin/mkfs.ext2
+    - path: /usr/bin/logsave
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/mke2fs
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libblkid.so.1
@@ -399,7 +396,7 @@ outputs:
       - /usr/lib/libe2p.so.2
       - /usr/lib/libext2fs.so.2
       - /usr/lib/libuuid.so.1
-    - path: /usr/sbin/mkfs.ext3
+    - path: /usr/bin/mkfs.ext2
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libblkid.so.1
@@ -408,7 +405,7 @@ outputs:
       - /usr/lib/libe2p.so.2
       - /usr/lib/libext2fs.so.2
       - /usr/lib/libuuid.so.1
-    - path: /usr/sbin/mkfs.ext4
+    - path: /usr/bin/mkfs.ext3
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libblkid.so.1
@@ -417,18 +414,27 @@ outputs:
       - /usr/lib/libe2p.so.2
       - /usr/lib/libext2fs.so.2
       - /usr/lib/libuuid.so.1
-    - path: /usr/sbin/mklost+found
+    - path: /usr/bin/mkfs.ext4
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/mklost+found
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
-    - path: /usr/sbin/resize2fs
+    - path: /usr/bin/resize2fs
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcom_err.so.2
       - /usr/lib/libe2p.so.2
       - /usr/lib/libext2fs.so.2
-    - path: /usr/sbin/tune2fs
+    - path: /usr/bin/tune2fs
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libblkid.so.1

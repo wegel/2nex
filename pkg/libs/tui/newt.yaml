@@ -1,0 +1,217 @@
+package:
+  schema: 1
+  name: newt
+  slug: newt
+  namespace: libs/tui
+  version: 0.52.24
+  description: Library for text mode user interfaces
+  homepage: https://pagure.io/newt
+  checksum: 8caac2f4c0c8d8a5db04ffecd3b92816bc841cc6e555dba2751a04f0c57d1bff
+
+sources:
+- name: newt
+  url: https://releases.pagure.org/newt/newt-0.52.24.tar.gz
+  sha256: 5ded7e221f85f642521c49b1826c8de19845aa372baf5d630a51774b544fbdbb
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: slang
+  commit: x86_64/pkg/libs/tui/slang/2.3.3/bundles/dev
+- name: popt
+  commit: x86_64/pkg/libs/system/popt/1.19/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4282:607, 8395:613, 12498:818, 15069:1106]
+
+  script: |
+    tar --no-same-owner -xzf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    # disable LTO - causes linker issues
+    CFLAGS=${CFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
+    ./configure --prefix=/usr --without-tcl --without-python
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/whiptail
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnewt.so.0.52
+      - /usr/lib/libpopt.so.0
+      - /usr/lib/libslang.so.2
+
+  dev:
+    files:
+    - path: /usr/include/newt.h
+    - path: /usr/lib/pkgconfig/libnewt.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libnewt.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libslang.so.2
+    - path: /usr/lib/libnewt.so.0.52
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libslang.so.2
+    - path: /usr/lib/libnewt.so.0.52.24
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libslang.so.2
+
+  locale:
+    files:
+    - path: /usr/share/locale/ar/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/as/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/ast/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/bal/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/bg/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/bn/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/bn_IN/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/bs/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/cy/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/dz/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/et/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/eu/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/fa/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/ga/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/gu/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/he/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/hi/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/ia/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/km/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/kn/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/ku/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/lt/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/lv/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/mg/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/mk/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/ml/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/mr/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/nds/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/ne/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/nn/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/pa/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/sl/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/sq/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/sr@latin/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/ta/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/te/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/tg/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/th/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/tl/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/wo/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/xh/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/newt.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/newt.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/whiptail.1
+
+  static:
+    files:
+    - path: /usr/lib/libnewt.a
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libpopt.so.0: popt
+  /usr/lib/libnewt.so.0.52: self
+  /usr/lib/libslang.so.2: slang

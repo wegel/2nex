@@ -1,0 +1,324 @@
+package:
+  schema: 1
+  name: slang
+  slug: slang
+  namespace: libs/tui
+  version: 2.3.3
+  description: S-Lang library for text mode user interfaces
+  homepage: https://www.jedsoft.org/slang/
+  checksum: 6d04b81cd8021011c61e734846413c69165906a1bccac0ed0c5eff866eed5b82
+
+sources:
+- name: slang
+  url: https://www.jedsoft.org/releases/slang/slang-2.3.3.tar.bz2
+  sha256: f9145054ae131973c61208ea82486d5dd10e3c5cdad23b7c4a0617743c8f5a18
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: readline
+  commit: x86_64/pkg/libs/system/readline/8.2/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4096:1364, 8244:6957, 12466:7220, 20816:7280, 25049:7319, 33288:11354, 37415:11558, 45638:12181, 53935:12347, 59760:12500]
+
+  script: |
+    tar --no-same-owner -xjf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --sysconfdir=/etc --with-readline=gnu
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/slsh
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libreadline.so.8
+      - /usr/lib/libslang.so.2
+
+  conf:
+    files:
+    - path: /etc/slsh.rc
+
+  dev:
+    files:
+    - path: /usr/include/slang.h
+    - path: /usr/include/slcurses.h
+    - path: /usr/lib/pkgconfig/slang.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/slang/v2/COPYING
+    - path: /usr/share/doc/slang/v2/changes.txt
+    - path: /usr/share/doc/slang/v2/cref.txt
+    - path: /usr/share/doc/slang/v2/cslang.txt
+    - path: /usr/share/doc/slang/v2/slang.txt
+    - path: /usr/share/doc/slang/v2/slangdoc.html
+    - path: /usr/share/doc/slang/v2/slangfun.txt
+    - path: /usr/share/doc/slsh/html/slshfun-1.html
+    - path: /usr/share/doc/slsh/html/slshfun-2.html
+    - path: /usr/share/doc/slsh/html/slshfun-3.html
+    - path: /usr/share/doc/slsh/html/slshfun-4.html
+    - path: /usr/share/doc/slsh/html/slshfun-5.html
+    - path: /usr/share/doc/slsh/html/slshfun-6.html
+    - path: /usr/share/doc/slsh/html/slshfun-7.html
+    - path: /usr/share/doc/slsh/html/slshfun-8.html
+    - path: /usr/share/doc/slsh/html/slshfun-9.html
+    - path: /usr/share/doc/slsh/html/slshfun-10.html
+    - path: /usr/share/doc/slsh/html/slshfun-11.html
+    - path: /usr/share/doc/slsh/html/slshfun-12.html
+    - path: /usr/share/doc/slsh/html/slshfun-13.html
+    - path: /usr/share/doc/slsh/html/slshfun.html
+
+  lib:
+    files:
+    - path: /usr/lib/libslang.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libslang.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libslang.so.2.3.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/slang/v2/modules/base64-module.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/slang/v2/modules/chksum-module.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/slang/v2/modules/csv-module.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/slang/v2/modules/fcntl-module.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/slang/v2/modules/fork-module.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/slang/v2/modules/histogram-module.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/slang/v2/modules/iconv-module.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/slang/v2/modules/json-module.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/slang/v2/modules/rand-module.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/slang/v2/modules/select-module.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/slang/v2/modules/slsmg-module.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/slang/v2/modules/socket-module.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/slang/v2/modules/stats-module.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/slang/v2/modules/sysconf-module.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/slang/v2/modules/termios-module.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/slang/v2/modules/varray-module.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/slang/v2/modules/zlib-module.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+
+  man:
+    files:
+    - path: /usr/share/man/man1/slsh.1
+
+  misc:
+    files:
+    - path: /usr/share/slsh/arrayfuns.sl
+    - path: /usr/share/slsh/autoload.sl
+    - path: /usr/share/slsh/base64.sl
+    - path: /usr/share/slsh/chksum.sl
+    - path: /usr/share/slsh/cmaps/cool.map
+    - path: /usr/share/slsh/cmaps/coolwarm.map
+    - path: /usr/share/slsh/cmaps/copper.map
+    - path: /usr/share/slsh/cmaps/cubicl.map
+    - path: /usr/share/slsh/cmaps/cubicyf.map
+    - path: /usr/share/slsh/cmaps/drywet.map
+    - path: /usr/share/slsh/cmaps/ds9b.map
+    - path: /usr/share/slsh/cmaps/ds9sls.map
+    - path: /usr/share/slsh/cmaps/edge.map
+    - path: /usr/share/slsh/cmaps/gebco.map
+    - path: /usr/share/slsh/cmaps/globe.map
+    - path: /usr/share/slsh/cmaps/gray.map
+    - path: /usr/share/slsh/cmaps/haxby.map
+    - path: /usr/share/slsh/cmaps/hot.map
+    - path: /usr/share/slsh/cmaps/jet.map
+    - path: /usr/share/slsh/cmaps/no_green.map
+    - path: /usr/share/slsh/cmaps/ocean.map
+    - path: /usr/share/slsh/cmaps/polar.map
+    - path: /usr/share/slsh/cmaps/rainbow.map
+    - path: /usr/share/slsh/cmaps/red2green.map
+    - path: /usr/share/slsh/cmaps/relief.map
+    - path: /usr/share/slsh/cmaps/sealand.map
+    - path: /usr/share/slsh/cmaps/seis.map
+    - path: /usr/share/slsh/cmaps/split.map
+    - path: /usr/share/slsh/cmaps/topo.map
+    - path: /usr/share/slsh/cmaps/wysiwyg.map
+    - path: /usr/share/slsh/cmdopt.sl
+    - path: /usr/share/slsh/csv.sl
+    - path: /usr/share/slsh/fcntl.sl
+    - path: /usr/share/slsh/fork.sl
+    - path: /usr/share/slsh/fswalk.sl
+    - path: /usr/share/slsh/glob.sl
+    - path: /usr/share/slsh/help/arrayfuns.hlp
+    - path: /usr/share/slsh/help/base64funs.hlp
+    - path: /usr/share/slsh/help/chksumfuns.hlp
+    - path: /usr/share/slsh/help/cmdopt.hlp
+    - path: /usr/share/slsh/help/csvfuns.hlp
+    - path: /usr/share/slsh/help/forkfuns.hlp
+    - path: /usr/share/slsh/help/fswalk.hlp
+    - path: /usr/share/slsh/help/glob.hlp
+    - path: /usr/share/slsh/help/histfuns.hlp
+    - path: /usr/share/slsh/help/jsonfuns.hlp
+    - path: /usr/share/slsh/help/listfuns.hlp
+    - path: /usr/share/slsh/help/onigfuns.hlp
+    - path: /usr/share/slsh/help/pcrefuns.hlp
+    - path: /usr/share/slsh/help/pngfuns.hlp
+    - path: /usr/share/slsh/help/print.hlp
+    - path: /usr/share/slsh/help/process.hlp
+    - path: /usr/share/slsh/help/profile.hlp
+    - path: /usr/share/slsh/help/randfuns.hlp
+    - path: /usr/share/slsh/help/readascii.hlp
+    - path: /usr/share/slsh/help/require.hlp
+    - path: /usr/share/slsh/help/setfuns.hlp
+    - path: /usr/share/slsh/help/slsmg.hlp
+    - path: /usr/share/slsh/help/sockfuns.hlp
+    - path: /usr/share/slsh/help/statsfuns.hlp
+    - path: /usr/share/slsh/help/structfuns.hlp
+    - path: /usr/share/slsh/help/timestamp.hlp
+    - path: /usr/share/slsh/histogram.sl
+    - path: /usr/share/slsh/iconv.sl
+    - path: /usr/share/slsh/json.sl
+    - path: /usr/share/slsh/listfuns.sl
+    - path: /usr/share/slsh/onig.sl
+    - path: /usr/share/slsh/pcre.sl
+    - path: /usr/share/slsh/png.sl
+    - path: /usr/share/slsh/print.sl
+    - path: /usr/share/slsh/process.sl
+    - path: /usr/share/slsh/profile.sl
+    - path: /usr/share/slsh/rand.sl
+    - path: /usr/share/slsh/readascii.sl
+    - path: /usr/share/slsh/require.sl
+    - path: /usr/share/slsh/rline/complete.sl
+    - path: /usr/share/slsh/rline/editfuns.sl
+    - path: /usr/share/slsh/rline/editor.sl
+    - path: /usr/share/slsh/rline/emacskeys.sl
+    - path: /usr/share/slsh/rline/history.sl
+    - path: /usr/share/slsh/rline/histsrch.sl
+    - path: /usr/share/slsh/rline/slrline.rc
+    - path: /usr/share/slsh/rline/vikeys.sl
+    - path: /usr/share/slsh/scripts/jpegsize
+    - path: /usr/share/slsh/scripts/lsrpm
+    - path: /usr/share/slsh/scripts/slcov
+    - path: /usr/share/slsh/scripts/sldb
+    - path: /usr/share/slsh/scripts/slprof
+    - path: /usr/share/slsh/scripts/slstkchk
+    - path: /usr/share/slsh/scripts/svnsh
+    - path: /usr/share/slsh/select.sl
+    - path: /usr/share/slsh/setfuns.sl
+    - path: /usr/share/slsh/sldb.sl
+    - path: /usr/share/slsh/sldbcore.sl
+    - path: /usr/share/slsh/sldbsock.sl
+    - path: /usr/share/slsh/slshhelp.sl
+    - path: /usr/share/slsh/slshrl.sl
+    - path: /usr/share/slsh/slsmg.sl
+    - path: /usr/share/slsh/socket.sl
+    - path: /usr/share/slsh/stats.sl
+    - path: /usr/share/slsh/statslib/ad_test.sl
+    - path: /usr/share/slsh/statslib/ks_test.sl
+    - path: /usr/share/slsh/statslib/kuiper.sl
+    - path: /usr/share/slsh/stkcheck.sl
+    - path: /usr/share/slsh/structfuns.sl
+    - path: /usr/share/slsh/sysconf.sl
+    - path: /usr/share/slsh/termios.sl
+    - path: /usr/share/slsh/timestamp.sl
+    - path: /usr/share/slsh/varray.sl
+    - path: /usr/share/slsh/zlib.sl
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libreadline.so.8: readline
+  /usr/lib/libslang.so.2: self
+  /usr/lib/libz.so.1: zlib

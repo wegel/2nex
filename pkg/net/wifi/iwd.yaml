@@ -6,7 +6,7 @@ package:
   version: "2.22"
   description: Internet Wireless Daemon - modern WiFi daemon from Intel
   homepage: https://git.kernel.org/pub/scm/network/wireless/iwd.git
-  checksum: 3ade57146136b326b4d8295525c84bfbcf3c9859ce6fd2c963150476f1acb38a
+  checksum: 8f0ab983139aab1ca305a490185da6f3688a44054fd5d0378344e068b119028b
 
 sources:
 - name: iwd
@@ -62,6 +62,8 @@ dependencies:
   commit: x86_64/pkg/core/ipc/dbus/1.16.2/bundles/dev
 - name: readline
   commit: x86_64/pkg/libs/system/readline/8.2/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
@@ -79,7 +81,7 @@ build:
       --enable-client \
       --enable-monitor \
       --enable-wired \
-      --disable-systemd-service
+      --enable-systemd-service
 
     make
     make DESTDIR="${OUT_DIR}" install
@@ -95,11 +97,13 @@ bundles:
   dev:
   - bin
   - conf
+  - dbus-services
   - lib
 
   full:
   - bin
   - conf
+  - dbus-services
   - lib
   - man
 
@@ -107,17 +111,46 @@ outputs:
   bin:
     files:
     - path: /usr/bin/iwctl
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libell.so.0
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libreadline.so.8
     - path: /usr/bin/iwmon
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libell.so.0
 
   conf:
     files:
     - path: /usr/share/dbus-1/system.d/ead-dbus.conf
     - path: /usr/share/dbus-1/system.d/iwd-dbus.conf
 
+  dbus-services:
+    files:
+    - path: /usr/share/dbus-1/system-services/net.connman.ead.service
+    - path: /usr/share/dbus-1/system-services/net.connman.iwd.service
+
   lib:
     files:
     - path: /usr/lib/iwd/ead
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libell.so.0
+      - /usr/lib/libgcc_s.so.1
     - path: /usr/lib/iwd/iwd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libell.so.0
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/modules-load.d/pkcs8.conf
+    - path: /usr/lib/systemd/network/80-iwd.link
+    - path: /usr/lib/systemd/system/ead.service
+    - path: /usr/lib/systemd/system/iwd.service
 
   man:
     files:
@@ -129,3 +162,10 @@ outputs:
     - path: /usr/share/man/man7/iwd.debug.7
     - path: /usr/share/man/man8/ead.8
     - path: /usr/share/man/man8/iwd.8
+
+resolution:
+  /usr/lib/libell.so.0: ell
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libreadline.so.8: readline

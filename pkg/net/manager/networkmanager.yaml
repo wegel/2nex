@@ -6,7 +6,7 @@ package:
   version: 1.50.0
   description: Network connection manager and user applications
   homepage: https://networkmanager.dev/
-  checksum: 0b5a0afcef63e1595cc72853bd3c04e9d72242971ef040cb3198fb9f4c003c50
+  checksum: 697a656fbd2aab86409e947b06c2354f3fd76d0cfa07e843bc9751ebe5ea1adc
 
 sources:
 - name: networkmanager
@@ -92,10 +92,16 @@ dependencies:
   commit: x86_64/pkg/libs/text/libidn2/2.3.7/bundles/dev
 - name: libunistring
   commit: x86_64/pkg/libs/text/libunistring/1.3/bundles/dev
+- name: newt
+  commit: x86_64/pkg/libs/tui/newt/0.52.24/bundles/dev
+- name: slang
+  commit: x86_64/pkg/libs/tui/slang/2.3.3/bundles/dev
+- name: popt
+  commit: x86_64/pkg/libs/system/popt/1.19/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4142:1384, 12540:1557, 20813:2354, 33268:2872, 45681:4479, 58089:6866, 66312:8460, 82859:45678, 99388:89202, 108815:89798]
+  profile: [4105:1283, 12544:1456, 20812:1916, 37348:2783, 45645:3584, 58164:5622, 70573:7664, 87096:28434, 103583:92214, 113591:94042]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_networkmanager} -C "${WORK_DIR}" --strip-components=1
@@ -116,12 +122,12 @@ build:
       -Dppp=false \
       -Dmodem_manager=false \
       -Dovs=false \
-      -Dnmtui=false \
+      -Dnmtui=true \
       -Dbluez5_dun=false \
       -Debpf=false \
       -Dwifi=true \
       -Dwext=false \
-      -Diwd=false \
+      -Diwd=true \
       -Dconfig_plugins_default=keyfile \
       -Ddhcpcd=no \
       -Ddhclient=no \
@@ -175,6 +181,50 @@ outputs:
       - /usr/lib/libgobject-2.0.so.0
       - /usr/lib/libnm.so.0
       - /usr/lib/libreadline.so.8
+    - path: /usr/bin/nmtui
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libnewt.so.0.52
+      - /usr/lib/libnm.so.0
+    - path: /usr/bin/nmtui-connect
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libnewt.so.0.52
+      - /usr/lib/libnm.so.0
+    - path: /usr/bin/nmtui-edit
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libnewt.so.0.52
+      - /usr/lib/libnm.so.0
+    - path: /usr/bin/nmtui-hostname
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libnewt.so.0.52
+      - /usr/lib/libnm.so.0
     - path: /usr/libexec/nm-daemon-helper
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -493,6 +543,7 @@ resolution:
   /usr/lib/libgnutls.so.30: gnutls
   /usr/lib/libndp.so.0: libndp
   /usr/lib/libpsl.so.5: libpsl
+  /usr/lib/libnewt.so.0.52: newt
   /usr/lib/libreadline.so.8: readline
   /usr/lib/libnm.so.0: self
   /usr/lib/libsystemd.so.0: systemd
