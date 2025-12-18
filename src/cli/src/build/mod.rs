@@ -619,6 +619,85 @@ pub fn create_and_commit_bundles(
     Ok(())
 }
 
+/// commit raw build output files to `{checksum}/files`.
+/// called before outputs/bundles are created, so files can be compared
+/// between builds when checksums don't match.
+pub fn commit_raw_files(
+    manifest: &Manifest,
+    base_dir: &str,
+    repo_path: &str,
+    paths: &BuildPaths,
+    checksum: &str,
+) -> io::Result<()> {
+    let out_dir = Path::new(base_dir).join(&paths.out);
+    if !out_dir.exists() {
+        return Ok(());
+    }
+
+    let files_ref = format!("{}/files", checksum);
+    println!("Committing raw build output to {}", files_ref);
+
+    let metadata = vec![
+        ("nex.checksum".to_string(), checksum.to_string()),
+        (
+            "nex.package".to_string(),
+            format!(
+                "{}/{}/{}",
+                manifest.package.namespace_path(),
+                manifest.package.slug,
+                manifest.package.version
+            ),
+        ),
+    ];
+
+    commit_tree(repo_path, &files_ref, &out_dir, &metadata)?;
+
+    Ok(())
+}
+
+/// create semantic `x86_64/{pkg}/files` ref pointing to the checksum-based files commit.
+/// only called after successful checksum verification.
+fn create_semantic_files_ref(
+    manifest: &Manifest,
+    repo_path: &str,
+    manifest_path: &Path,
+    checksum: &str,
+) -> io::Result<()> {
+    let files_ref = format!("{}/files", checksum);
+    let semantic_files_ref = format!(
+        "x86_64/{}/{}/{}/files",
+        manifest.package.namespace_path(),
+        manifest.package.slug,
+        manifest.package.version
+    );
+
+    println!("Creating semantic ref: {}", semantic_files_ref);
+
+    let repo =
+        zub::Repo::open(Path::new(repo_path)).map_err(|e| io::Error::other(e.to_string()))?;
+
+    // resolve the commit hash from the checksum-based ref
+    let commit_hash =
+        zub::resolve_ref(&repo, &files_ref).map_err(|e| io::Error::other(e.to_string()))?;
+
+    // write the semantic ref pointing to the same commit
+    zub::write_ref(&repo, &semantic_files_ref, &commit_hash)
+        .map_err(|e| io::Error::other(e.to_string()))?;
+
+    // attach manifest hash to semantic ref for staleness checks
+    let manifest_hash = compute_manifest_hash(manifest_path)?;
+    rewrite_branch_metadata(
+        repo_path,
+        &semantic_files_ref,
+        &[
+            ("nex.manifest.hash".to_string(), manifest_hash),
+            ("nex.address_hash".to_string(), checksum.to_string()),
+        ],
+    )?;
+
+    Ok(())
+}
+
 // ============================================================================
 // public build API - entry points for building packages
 // ============================================================================
@@ -798,28 +877,23 @@ pub fn build_package_manifest_with_dir(
         }
     }
 
-    verify_and_commit_outputs(
-        manifest,
-        base_dir,
-        &opts.repo_path,
-        Path::new(&opts.manifest_file),
-        &build_env.paths,
-    )?;
-
-    create_and_commit_bundles(
-        manifest,
-        base_dir,
-        &opts.repo_path,
-        Path::new(&opts.manifest_file),
-    )?;
-
-    println!("Build, packaging, and commit completed for all outputs.");
-
+    // calculate checksum BEFORE committing anything
     let output_dir = Path::new(base_dir).join(&build_env.paths.out);
     let checksum = calculate_output_checksum(&output_dir)?;
     println!("Build output checksum: {}", checksum);
 
-    match manifest.package.checksum.as_ref() {
+    // always commit raw files first (before moving files to outputs)
+    // this allows comparing builds when checksums don't match
+    commit_raw_files(
+        manifest,
+        base_dir,
+        &opts.repo_path,
+        &build_env.paths,
+        &checksum,
+    )?;
+
+    // determine if we should commit outputs/bundles based on checksum verification
+    let should_commit = match manifest.package.checksum.as_ref() {
         Some(expected_checksum) => {
             if checksum != *expected_checksum {
                 if opts.update_checksum {
@@ -833,28 +907,39 @@ pub fn build_package_manifest_with_dir(
                         &checksum,
                     )?;
                     manifest.package.checksum = Some(checksum.clone());
-                    // refresh store metadata with new manifest hash
-                    refresh_package_metadata(
-                        &opts.repo_path,
-                        manifest,
-                        Path::new(&opts.manifest_file),
-                    )?;
-                } else if !opts.check {
-                    // only exit on mismatch if we're not validating reproducibility
-                    // (reproducibility check compares two builds, not against stored checksum)
-                    eprintln!(
-                        "Checksum mismatch. Expected: {}, Calculated: {}",
-                        expected_checksum, checksum
-                    );
-                    std::process::exit(-2);
-                } else {
+                    true // commit with updated checksum
+                } else if opts.check {
                     println!(
                         "Note: checksum differs from manifest (expected {}, got {}). Proceeding with reproducibility check.",
                         expected_checksum, checksum
                     );
+                    true // commit for reproducibility check
+                } else {
+                    // checksum mismatch: raw files already committed for debugging
+                    eprintln!(
+                        "Checksum mismatch. Expected: {}, Calculated: {}",
+                        expected_checksum, checksum
+                    );
+                    eprintln!(
+                        "Raw files committed to {}/files for debugging.",
+                        checksum
+                    );
+                    eprintln!(
+                        "Compare with: zub diff {}/files {}/files",
+                        expected_checksum, checksum
+                    );
+
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "Checksum mismatch. Expected: {}, Calculated: {}",
+                            expected_checksum, checksum
+                        ),
+                    ));
                 }
             } else {
                 println!("Checksum verified successfully.");
+                true
             }
         }
         None => {
@@ -869,18 +954,41 @@ pub fn build_package_manifest_with_dir(
                     &checksum,
                 )?;
                 manifest.package.checksum = Some(checksum.clone());
-                // refresh store metadata with new manifest hash
-                refresh_package_metadata(
-                    &opts.repo_path,
-                    manifest,
-                    Path::new(&opts.manifest_file),
-                )?;
             }
+            true // no expected checksum, always commit
         }
-    }
+    };
 
-    // create {hash}/files commit (union of all outputs) for dependency resolution
-    create_files_commit_for_package(manifest, &opts.repo_path, Path::new(&opts.manifest_file))?;
+    if should_commit {
+        verify_and_commit_outputs(
+            manifest,
+            base_dir,
+            &opts.repo_path,
+            Path::new(&opts.manifest_file),
+            &build_env.paths,
+        )?;
+
+        create_and_commit_bundles(
+            manifest,
+            base_dir,
+            &opts.repo_path,
+            Path::new(&opts.manifest_file),
+        )?;
+
+        println!("Build, packaging, and commit completed for all outputs.");
+
+        // refresh store metadata if checksum was updated
+        if opts.update_checksum {
+            refresh_package_metadata(
+                &opts.repo_path,
+                manifest,
+                Path::new(&opts.manifest_file),
+            )?;
+        }
+
+        // create semantic {pkg}/files ref pointing to the checksum-based files commit
+        create_semantic_files_ref(manifest, &opts.repo_path, Path::new(&opts.manifest_file), &checksum)?;
+    }
 
     // compute runtime dependencies (opt-in, modifies manifest)
     if opts.compute_deps {
@@ -959,108 +1067,6 @@ pub fn refresh_package_metadata(
     refresh_output_branches(repo_path, manifest, &manifest_hash)?;
     refresh_bundle_branches(repo_path, manifest, &manifest_hash)?;
     println!("Finished refreshing metadata for {}", manifest.package.slug);
-    Ok(())
-}
-
-/// create {hash}/files commit as in-store union of all outputs.
-fn create_files_commit_for_package(
-    manifest: &Manifest,
-    repo_path: &str,
-    manifest_path: &Path,
-) -> io::Result<()> {
-    // determine address hash: checksum if stable, else manifest git blob SHA
-    let has_stable_checksum =
-        manifest.package.checksum.is_some() && manifest.package.stable_checksum.unwrap_or(true);
-
-    let address_hash = if has_stable_checksum {
-        manifest.package.checksum.clone().unwrap()
-    } else {
-        crate::utils::hash_file_content(manifest_path)?
-    };
-
-    let files_ref = format!("{}/files", address_hash);
-
-    // build output refs
-    let output_refs: Vec<String> = manifest
-        .outputs
-        .keys()
-        .filter(|k| *k != OUTPUT_DISCARD)
-        .map(|name| {
-            format!(
-                "x86_64/{}/{}/{}/outputs/{}",
-                manifest.package.namespace_path(),
-                manifest.package.slug,
-                manifest.package.version,
-                name
-            )
-        })
-        .collect();
-
-    if output_refs.is_empty() {
-        return Ok(());
-    }
-
-    println!("Creating files commit: {}", files_ref);
-
-    let repo =
-        zub::Repo::open(Path::new(repo_path)).map_err(|e| io::Error::other(e.to_string()))?;
-
-    let ref_strs: Vec<&str> = output_refs.iter().map(|s| s.as_str()).collect();
-    zub::ops::union_trees(
-        &repo,
-        &ref_strs,
-        &files_ref,
-        zub::ops::UnionOptions {
-            on_conflict: zub::ops::ConflictResolution::Last,
-            ..Default::default()
-        },
-    )
-    .map_err(|e| io::Error::other(e.to_string()))?;
-
-    // attach metadata
-    let metadata = vec![
-        ("nex.address_hash".to_string(), address_hash.clone()),
-        (
-            "nex.package".to_string(),
-            format!(
-                "{}/{}/{}",
-                manifest.package.namespace_path(),
-                manifest.package.slug,
-                manifest.package.version
-            ),
-        ),
-    ];
-    rewrite_branch_metadata(repo_path, &files_ref, &metadata)?;
-
-    // create semantic files ref (x86_64/pkg/{namespace}/{slug}/{version}/files)
-    let semantic_files_ref = format!(
-        "x86_64/{}/{}/{}/files",
-        manifest.package.namespace_path(),
-        manifest.package.slug,
-        manifest.package.version
-    );
-
-    // resolve the commit hash from the checksum-based ref
-    let commit_hash =
-        zub::resolve_ref(&repo, &files_ref).map_err(|e| io::Error::other(e.to_string()))?;
-
-    // write the semantic ref pointing to the same commit
-    zub::write_ref(&repo, &semantic_files_ref, &commit_hash)
-        .map_err(|e| io::Error::other(e.to_string()))?;
-
-    // attach manifest hash to semantic ref for staleness checks
-    let manifest_hash = compute_manifest_hash(manifest_path)?;
-    rewrite_branch_metadata(
-        repo_path,
-        &semantic_files_ref,
-        &[
-            ("nex.manifest.hash".to_string(), manifest_hash),
-            ("nex.address_hash".to_string(), address_hash),
-        ],
-    )?;
-
-    println!("Created semantic ref: {}", semantic_files_ref);
-
     Ok(())
 }
 
