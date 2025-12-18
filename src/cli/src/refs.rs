@@ -35,9 +35,10 @@ impl PackageRef {
         let parts: Vec<&str> = s.split('/').collect();
 
         // find the anchor keyword (outputs, bundles, files)
+        // use rposition to find the LAST occurrence, since namespace may contain "files"
         let anchor_idx = parts
             .iter()
-            .position(|&p| p == "outputs" || p == "bundles" || p == "files")
+            .rposition(|&p| p == "outputs" || p == "bundles" || p == "files")
             .ok_or_else(|| {
                 format!(
                     "no anchor keyword (outputs/bundles/files) found in ref: {}",
