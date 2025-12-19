@@ -2,7 +2,7 @@
 # nex initramfs init
 export PATH=/bin:/sbin
 
-echo "nex initramfs starting... (v3)"
+echo "nex initramfs starting... (v4)"
 
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
@@ -57,7 +57,35 @@ if [ ! -d "$DEPLOY" ]; then
 fi
 
 echo "switching to deployment: $DEPLOY"
-mount -o remount,rw /mnt/root
+
+# find and mount var partition by label (root stays readonly)
+echo "looking for var partition..."
+VAR_DEV=$(blkid -L nex-var -o device 2>/dev/null)
+if [ -n "$VAR_DEV" ]; then
+    echo "found var partition: $VAR_DEV"
+    mkdir -p /mnt/root/var
+    mount "$VAR_DEV" /mnt/root/var
+
+    # first-boot: populate /var/etc from deployment
+    if [ ! -f /mnt/root/var/etc/.initialized ]; then
+        echo "first boot: copying /etc from deployment..."
+        mkdir -p /mnt/root/var/etc
+        cp -a "$DEPLOY/etc/." /mnt/root/var/etc/
+        touch /mnt/root/var/etc/.initialized
+        echo "/var/etc initialized"
+    fi
+
+    # create standard /var directories if missing
+    mkdir -p /mnt/root/var/home
+    mkdir -p /mnt/root/var/log
+    mkdir -p /mnt/root/var/lib
+    mkdir -p /mnt/root/var/cache
+    mkdir -p /mnt/root/var/tmp
+    chmod 1777 /mnt/root/var/tmp
+else
+    echo "WARNING: var partition not found, remounting root rw"
+    mount -o remount,rw /mnt/root
+fi
 
 # move virtual filesystems to new root so systemd finds them
 mkdir -p /mnt/root/proc /mnt/root/sys /mnt/root/dev /mnt/root/run
@@ -87,18 +115,7 @@ rm -rf /mnt/root/tmp
 mkdir -p /mnt/root/tmp
 chmod 1777 /mnt/root/tmp
 
-echo "mount points created (v5)"
-
-# test if we can mount tmpfs on /tmp from busybox
-echo "testing busybox mount tmpfs..."
-mount -t tmpfs tmpfs /mnt/root/tmp && echo "tmpfs mount OK" || echo "tmpfs mount FAILED"
-umount /mnt/root/tmp 2>/dev/null
-mkdir -p /mnt/root/tmp
-chmod 1777 /mnt/root/tmp
-
-# check available filesystems
-echo "supported filesystems:"
-cat /proc/filesystems | grep -E "hugetlbfs|mqueue|debugfs|tracingfs|tmpfs"
+echo "mount points created"
 
 # use /init which symlinks through the deployment
 exec switch_root /mnt/root /init
