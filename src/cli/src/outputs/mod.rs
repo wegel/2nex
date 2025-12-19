@@ -293,16 +293,3 @@ pub fn categorize_files(rootfs_dir: &Path) -> HashMap<String, Vec<String>> {
     outputs
 }
 
-pub fn print_outputs(outputs: &HashMap<String, Vec<String>>) {
-    println!("outputs:");
-    let mut categories: Vec<_> = outputs.keys().collect();
-    categories.sort();
-    for category in categories {
-        let files = outputs.get(category).unwrap();
-        println!("  {}:", category);
-        println!("    files:");
-        for file in files {
-            println!("      - {}", file);
-        }
-    }
-}
