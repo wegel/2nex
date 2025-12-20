@@ -60,7 +60,7 @@ parted -s "$OUTPUT" \
     mklabel gpt \
     mkpart ESP fat32 1MiB ${ESP_SIZE_MB}MiB \
     set 1 esp on \
-    mkpart root ext4 ${ESP_SIZE_MB}MiB 100%
+    mkpart nex ext4 ${ESP_SIZE_MB}MiB 100%
 
 log "Creating ESP with bootloader..."
 ESP_IMG="$TMPDIR/esp.img"

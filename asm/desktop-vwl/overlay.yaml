@@ -75,6 +75,25 @@ files:
     SDL_VIDEODRIVER=wayland
     _JAVA_AWT_WM_NONREPARENTING=1
 
+- path: /etc/inputrc
+  mode: 420
+  content: |
+    # readline config for bash/zsh
+    set editing-mode emacs
+    set bell-style none
+
+    # ctrl+left/right for word navigation
+    "\e[1;5C": forward-word
+    "\e[1;5D": backward-word
+    "\e[5C": forward-word
+    "\e[5D": backward-word
+
+    # ctrl+backspace to delete word
+    "\C-h": backward-kill-word
+
+    # ctrl+delete to delete word forward
+    "\e[3;5~": kill-word
+
 # systemd
 - path: /etc/systemd/network/80-dhcp.network
   mode: 420
@@ -106,6 +125,8 @@ files:
   mode: 420
   content: |
     d /home/testuser 0755 testuser testuser -
+    C /home/testuser/.zshrc 0644 testuser testuser - /nex/current/home/testuser/.zshrc
+    C /home/testuser/.config 0755 testuser testuser - /nex/current/home/testuser/.config
 
 - path: /etc/tmpfiles.d/xdg-runtime.conf
   mode: 420
@@ -185,11 +206,26 @@ files:
 - path: /home/testuser/.zshrc
   mode: 420
   content: |
-    # history
+    # Lines configured by zsh-newuser-install
     HISTFILE=~/.zsh_history
     HISTSIZE=10000
     SAVEHIST=10000
     setopt appendhistory sharehistory
+    # End of lines configured by zsh-newuser-install
+
+    # keybindings - emacs mode with arrow keys
+    bindkey -e
+    bindkey '^[[A' up-line-or-history      # up
+    bindkey '^[[B' down-line-or-history    # down
+    bindkey '^[[C' forward-char            # right
+    bindkey '^[[D' backward-char           # left
+    bindkey '^[[1;5C' forward-word         # ctrl+right
+    bindkey '^[[1;5D' backward-word        # ctrl+left
+    bindkey '^H' backward-kill-word        # ctrl+backspace
+    bindkey '^[[3;5~' kill-word            # ctrl+delete
+    bindkey '^[[3~' delete-char            # delete
+    bindkey '^[[H' beginning-of-line       # home
+    bindkey '^[[F' end-of-line             # end
 
     # modern tool aliases
     alias ls='eza --icons'
@@ -213,14 +249,17 @@ files:
     # locale
     export LANG=en_US.UTF-8
 
-    # wayland environment
+    # xdg runtime dir (needed before wayland starts)
     export XDG_RUNTIME_DIR=/run/user/1000
-    export XDG_SESSION_TYPE=wayland
-    export WAYLAND_DISPLAY=wayland-1
 
-    # auto-start vwl on tty1
+    # auto-start vwl on tty1 (before any wayland env is set)
     if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
         exec vwl
+    fi
+
+    # wayland environment (only set when inside wayland session)
+    if [ -n "$WAYLAND_DISPLAY" ]; then
+        export XDG_SESSION_TYPE=wayland
     fi
 
 - path: /home/testuser/.config/starship.toml

@@ -1,22 +1,29 @@
 #!/bin/sh
 # qemu-test-installer.sh: test the nex installer in QEMU
-# usage: qemu-test-installer.sh [--boot-target]
+# usage: qemu-test-installer.sh [--boot-target] [--rebuild]
 #   default: boots from installer.img with empty target disk
 #   --boot-target: boots from the installed target disk
+#   --rebuild: force rebuild of installer image
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-BUILD_DIR="$ROOT_DIR/build"
+TMP_DIR="$ROOT_DIR/.nex/tmp"
 
-INSTALLER_IMG="$BUILD_DIR/installer.img"
-TARGET_IMG="$BUILD_DIR/installer-target.img"
-TARGET_SIZE_MB=4096
+mkdir -p "$TMP_DIR"
+
+INSTALLER_IMG="$TMP_DIR/installer.img"
+TARGET_IMG="$TMP_DIR/installer-target.img"
+TARGET_SIZE_MB=16384
 BOOT_TARGET=false
+REBUILD=false
 
-if [ "${1:-}" = "--boot-target" ]; then
-    BOOT_TARGET=true
-fi
+for arg in "$@"; do
+    case "$arg" in
+        --boot-target) BOOT_TARGET=true ;;
+        --rebuild) REBUILD=true ;;
+    esac
+done
 
 OVMF_CODE=/usr/share/edk2/x64/OVMF_CODE.4m.fd
 [ -f "$OVMF_CODE" ] || { echo "error: OVMF not found at $OVMF_CODE"; exit 1; }
@@ -38,7 +45,14 @@ if [ "$BOOT_TARGET" = "true" ]; then
         -display none \
         -no-reboot
 else
-    [ -f "$INSTALLER_IMG" ] || { echo "error: installer image not found: $INSTALLER_IMG"; exit 1; }
+    # build installer image if missing or --rebuild
+    if [ ! -f "$INSTALLER_IMG" ] || [ "$REBUILD" = "true" ]; then
+	./nex build asm/installer/manifest.yaml --update-checksum
+        echo "building installer image..."
+        "$SCRIPT_DIR/create-installer-usb" systems/desktop-vwl/0.0.1 "$INSTALLER_IMG"
+        # also reset target disk when rebuilding installer
+        rm -f "$TARGET_IMG"
+    fi
 
     # create empty target disk if needed
     if [ ! -f "$TARGET_IMG" ]; then

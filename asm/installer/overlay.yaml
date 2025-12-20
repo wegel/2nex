@@ -13,6 +13,7 @@ files:
     BOOTLOADER_PATH="/nex/installer/BOOTX64.EFI"
 
     ESP_SIZE="512M"
+    ROOT_SIZE="${ROOT_SIZE:-8G}"
 
     die() {
         printf "error: %s\n" "$*" >&2
@@ -52,11 +53,13 @@ files:
 
         # create GPT with sfdisk:
         # 1. ESP (EFI System Partition) - 512MB
-        # 2. root - remaining space
+        # 2. root - readonly system (user-configurable size)
+        # 3. var - writable state (remaining space)
         sfdisk --wipe always "$dev" <<EOF
     label: gpt
     size=${ESP_SIZE}, type=uefi, name="EFI"
-    type=linux, name="nex"
+    size=${ROOT_SIZE}, type=linux, name="nex"
+    type=linux, name="nex-var"
     EOF
 
         # wait for kernel to re-read partition table
@@ -67,18 +70,23 @@ files:
         dev=$1
         esp=$(partition_path "$dev" 1)
         root=$(partition_path "$dev" 2)
+        var=$(partition_path "$dev" 3)
 
         printf "formatting ESP (%s)...\n" "$esp"
         mkfs.fat -F32 "$esp" >/dev/null
 
         printf "formatting root (%s)...\n" "$root"
         mkfs.ext4 -q -L nex "$root"
+
+        printf "formatting var (%s)...\n" "$var"
+        mkfs.ext4 -q -L nex-var "$var"
     }
 
     install_system() {
         dev=$1
         esp=$(partition_path "$dev" 1)
         root=$(partition_path "$dev" 2)
+        var=$(partition_path "$dev" 3)
 
         # read system checksum
         [ -f "$CHECKSUM_FILE" ] || die "system checksum not found at $CHECKSUM_FILE"
@@ -88,9 +96,11 @@ files:
 
         deploy_dir="/nex/deployments/${checksum}.0"
 
-        # mount root
-        printf "mounting root partition...\n"
+        # mount root and var
+        printf "mounting partitions...\n"
         mount "$root" /mnt
+        mkdir -p /mnt/var
+        mount "$var" /mnt/var
 
         # create deployment directory
         mkdir -p "/mnt${deploy_dir}"
@@ -99,7 +109,25 @@ files:
         printf "copying system (this may take a while)...\n"
         cp -a "$SYSTEM_DIR"/* "/mnt${deploy_dir}/"
 
-        # create root symlinks
+        # set up /var structure
+        printf "setting up /var...\n"
+        mkdir -p /mnt/var/etc
+        mkdir -p /mnt/var/home
+        mkdir -p /mnt/var/log/journal
+        mkdir -p /mnt/var/lib/systemd/{random-seed,timers,coredump}
+        mkdir -p /mnt/var/lib/sshd
+        chmod 700 /mnt/var/lib/sshd
+        mkdir -p /mnt/var/cache/fontconfig
+        mkdir -p /mnt/var/tmp
+        chmod 1777 /mnt/var/tmp
+        ln -sf /run /mnt/var/run
+
+        # copy /etc from deployment to /var/etc
+        printf "copying /etc to /var/etc...\n"
+        cp -a "/mnt${deploy_dir}/etc/." /mnt/var/etc/
+        touch /mnt/var/etc/.initialized
+
+        # create root symlinks (readonly paths from deployment)
         printf "creating root symlinks...\n"
         deploy_rel="nex/deployments/${checksum}.0"
         ln -sf "$deploy_rel/usr" /mnt/usr
@@ -107,9 +135,11 @@ files:
         ln -sf "$deploy_rel/lib64" /mnt/lib64
         ln -sf "$deploy_rel/bin" /mnt/bin
         ln -sf "$deploy_rel/sbin" /mnt/sbin
-        ln -sf "$deploy_rel/etc" /mnt/etc
-        ln -sf "$deploy_rel/var" /mnt/var 2>/dev/null || true
         ln -sf usr/bin/init /mnt/init
+
+        # writable paths symlink to /var
+        ln -sf /var/etc /mnt/etc
+        ln -sf /var/home /mnt/home
 
         # create /nex symlinks
         ln -sfn "deployments/${checksum}.0" /mnt/nex/current
@@ -126,6 +156,7 @@ files:
         # unmount
         printf "finalizing...\n"
         umount /mnt/boot/efi
+        umount /mnt/var
         umount /mnt
     }
 
@@ -155,6 +186,11 @@ files:
         fi
 
         confirm_destroy "$device"
+
+        # prompt for root partition size
+        printf "\nroot partition size (default: %s): " "$ROOT_SIZE"
+        read -r root_size
+        [ -n "$root_size" ] && ROOT_SIZE="$root_size"
 
         partition_disk "$device"
         format_partitions "$device"
@@ -239,8 +275,17 @@ files:
     export TERM=linux
     export PATH=/usr/bin
 
-    # use ttyS0 for serial console (matches kernel console=ttyS0)
-    exec setsid -c /bin/bash --login </dev/ttyS0 >/dev/ttyS0 2>&1
+    # find the active console - prefer serial if available (for headless/QEMU)
+    # /dev/console points to tty0 when multiple consoles are configured,
+    # but with -display none, tty0 doesn't work. use ttyS0 for serial.
+    if [ -c /dev/ttyS0 ]; then
+        CONSOLE=/dev/ttyS0
+    else
+        CONSOLE=/dev/console
+    fi
+    echo "INSTALLER: using console $CONSOLE" > /dev/kmsg
+
+    exec setsid -c /bin/bash --login <$CONSOLE >$CONSOLE 2>&1
 
 - path: /etc/mtab
   symlink: /proc/self/mounts

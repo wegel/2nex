@@ -4,15 +4,13 @@ system:
   slug: desktop-vwl
   version: 0.0.1
   description: Desktop system with systemd, vwl compositor, wayland tools, and CLI utilities
-  checksum: 6e3afaf5091216f01058b70df31600e0ed89e96a741e1a71a14b2c3bf7acca22
+  checksum: 90d96b4403d0239cfd981241d4883913d24c4ada368c888c0725cce8422e1d9e
   nex_structure: true
 
 overlays:
 - asm/desktop-vwl/overlay.yaml
 
 dependencies:
-- name: nex-utilities
-  commit: x86_64/pkg/core/userland/nex-utilities/0.0.1/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
 - name: glibc
@@ -29,6 +27,8 @@ dependencies:
   commit: x86_64/pkg/libs/compression/zstd/1.5.6/outputs/lib
 - name: libcap
   commit: x86_64/pkg/libs/security/libcap/2.69/outputs/lib
+- name: libcap-bin
+  commit: x86_64/pkg/libs/security/libcap/2.69/outputs/bin
 - name: acl
   commit: x86_64/pkg/libs/system/acl/2.3.2/outputs/lib
 - name: attr
@@ -206,8 +206,10 @@ packages:
   commit: x86_64/pkg/dev/vcs/tig/2.6.0/outputs/bin
 
 # cli tools
+- name: ncurses-terminfo
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/outputs/terminfo
 - name: zsh
-  commit: x86_64/pkg/cli/shells/zsh/5.9/outputs/bin
+  commit: x86_64/pkg/cli/shells/zsh/5.9/bundles/dev
 - name: tmux
   commit: x86_64/pkg/cli/system/tmux/3.6a/outputs/bin
 - name: htop
@@ -276,7 +278,7 @@ packages:
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
   script: |
-    set -eux
+    set -eu
 
     # directories that can't be in overlay (mount points, runtime dirs)
     mkdir -p /target/{proc,sys,dev,run,tmp,root}
@@ -310,4 +312,15 @@ build:
       fi
     done
     glib-compile-schemas /target/usr/share/glib-2.0/schemas/
+
+    # rootless containers: setuid on newuidmap/newgidmap
+    # (using setuid instead of capabilities - avoids xattr issues with zub)
+    for f in /target/nex/pkg/core/userland/shadow/*/*/usr/bin/newuidmap; do
+      chmod u+s "$f"
+    done
+    for f in /target/nex/pkg/core/userland/shadow/*/*/usr/bin/newgidmap; do
+      chmod u+s "$f"
+    done
+
+    echo "Assembly configuration done."
 
