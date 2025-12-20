@@ -154,7 +154,7 @@ fn load_boot_modules(fs: &ext4::Ext4Fs, deployment: &zub::Deployment) -> Option<
 
 fn build_cmdline(disk: &disk::RootPartition, deployment: &zub::Deployment) -> String {
     alloc::format!(
-        "root=PARTUUID={} zub={} ro console=ttyS0,115200n8 earlycon=uart8250,io,0x3f8,115200n8",
+        "root=PARTUUID={} zub={} ro console=ttyS0,115200n8 console=tty0 video=1920x1080",
         disk.partuuid,
         deployment.path
     )

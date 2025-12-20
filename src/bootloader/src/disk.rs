@@ -11,6 +11,9 @@ use crate::BootError;
 const LINUX_FILESYSTEM_TYPE: GptPartitionType =
     GptPartitionType(guid!("0fc63daf-8483-4772-8e79-3d69d8477de4"));
 
+// expected partition name for root filesystem
+const ROOT_PARTITION_NAME: &str = "nex";
+
 /// represents a discovered root partition
 pub struct RootPartition {
     pub handle: Handle,
@@ -34,7 +37,7 @@ impl RootPartition {
     }
 }
 
-/// find the root ext4 partition containing OSTree
+/// find the root ext4 partition named "nex"
 pub fn find_root_partition() -> Result<RootPartition, BootError> {
     // get all handles with BlockIO protocol
     let handles =
@@ -46,13 +49,21 @@ pub fn find_root_partition() -> Result<RootPartition, BootError> {
         if let Ok(partition_info) = uefi::boot::open_protocol_exclusive::<PartitionInfo>(handle) {
             // check if this is a GPT partition
             if let Some(gpt) = partition_info.gpt_partition_entry() {
-                // copy GUIDs to avoid unaligned access on packed struct
+                // copy fields to avoid unaligned access on packed struct
                 let type_guid = gpt.partition_type_guid;
                 let unique_guid = gpt.unique_partition_guid;
+                let partition_name = gpt.partition_name;
 
                 // skip non-Linux filesystem partitions (e.g., ESP)
                 if type_guid != LINUX_FILESYSTEM_TYPE {
                     log::debug!("skipping partition with type {:?}", type_guid);
+                    continue;
+                }
+
+                // check partition name matches "nex"
+                let name = partition_name_to_string(&partition_name);
+                if name != ROOT_PARTITION_NAME {
+                    log::debug!("skipping partition with name {:?}", name);
                     continue;
                 }
 
@@ -102,4 +113,13 @@ fn format_guid(guid: &uefi::Guid) -> String {
         bytes[8], bytes[9],
         bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
     )
+}
+
+/// convert GPT partition name (Char16, null-terminated) to String
+fn partition_name_to_string(name: &[uefi::Char16; 36]) -> String {
+    // find null terminator and decode UTF-16
+    let len = name.iter().position(|&c| u16::from(c) == 0).unwrap_or(36);
+    char::decode_utf16(name[..len].iter().map(|&c| u16::from(c)))
+        .map(|r| r.unwrap_or('\u{FFFD}'))
+        .collect()
 }
