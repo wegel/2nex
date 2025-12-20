@@ -175,8 +175,9 @@ fn run_build(args: &commands::build::BuildArgs) -> io::Result<()> {
     if args.hydrate_dependencies {
         // hydrate mode: expand dependencies to include all transitive deps
         hydrate_dependencies(&repo_path, &args.manifest)
-    } else if args.single {
+    } else if args.single || args.refresh_metadata {
         // single mode: build only the specified manifest without dependencies
+        // refresh_metadata also uses single mode (no deps needed)
         build::build_single(&opts)
     } else {
         // default: build with full dependency resolution

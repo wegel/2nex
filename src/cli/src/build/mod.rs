@@ -510,10 +510,6 @@ pub fn verify_and_commit_outputs(
 
     let mut accounted_files = Vec::new();
 
-    let outputs = categorize_files(&out_dir);
-    println!("Suggested manifest outputs:");
-    print_outputs(&outputs);
-
     for (output_type, spec) in output_specs {
         if output_type == OUTPUT_DISCARD {
             continue;
@@ -619,7 +615,7 @@ pub fn create_and_commit_bundles(
     Ok(())
 }
 
-/// commit raw build output files to `{checksum}/files`.
+/// commit raw build output files to `x86_64/{pkg}/{checksum}/files`.
 /// called before outputs/bundles are created, so files can be compared
 /// between builds when checksums don't match.
 pub fn commit_raw_files(
@@ -634,7 +630,13 @@ pub fn commit_raw_files(
         return Ok(());
     }
 
-    let files_ref = format!("{}/files", checksum);
+    let files_ref = format!(
+        "x86_64/{}/{}/{}/{}/files",
+        manifest.package.namespace_path(),
+        manifest.package.slug,
+        manifest.package.version,
+        checksum
+    );
     println!("Committing raw build output to {}", files_ref);
 
     let metadata = vec![
@@ -663,7 +665,13 @@ fn create_semantic_files_ref(
     manifest_path: &Path,
     checksum: &str,
 ) -> io::Result<()> {
-    let files_ref = format!("{}/files", checksum);
+    let files_ref = format!(
+        "x86_64/{}/{}/{}/{}/files",
+        manifest.package.namespace_path(),
+        manifest.package.slug,
+        manifest.package.version,
+        checksum
+    );
     let semantic_files_ref = format!(
         "x86_64/{}/{}/{}/files",
         manifest.package.namespace_path(),
@@ -1053,63 +1061,56 @@ pub fn build_package_manifest_with_dir(
     Ok(())
 }
 
-/// refresh metadata on all output and bundle branches for a package.
+/// refresh outputs and bundles by checking out the files ref and re-splitting.
 pub fn refresh_package_metadata(
     repo_path: &str,
     manifest: &Manifest,
     manifest_path: &Path,
 ) -> io::Result<()> {
     println!(
-        "Refreshing store metadata for {}/{} ({})",
+        "Refreshing outputs/bundles for {}/{} ({})",
         manifest.package.slug, manifest.package.version, manifest.package.namespace
     );
-    let manifest_hash = compute_manifest_hash(manifest_path)?;
-    refresh_output_branches(repo_path, manifest, &manifest_hash)?;
-    refresh_bundle_branches(repo_path, manifest, &manifest_hash)?;
-    println!("Finished refreshing metadata for {}", manifest.package.slug);
-    Ok(())
-}
 
-fn refresh_output_branches(
-    repo_path: &str,
-    manifest: &Manifest,
-    manifest_hash: &str,
-) -> io::Result<()> {
-    for (category, spec) in &manifest.outputs {
-        if category == OUTPUT_DISCARD {
-            continue;
-        }
-        let branch_name = format!(
-            "x86_64/{}/{}/{}/outputs/{}",
-            manifest.package.namespace_path(),
-            manifest.package.slug,
-            manifest.package.version,
-            category
-        );
-        ensure_branch_exists(repo_path, &branch_name)?;
-        let metadata = output_branch_metadata(manifest, spec, manifest_hash)?;
-        rewrite_branch_metadata(repo_path, &branch_name, &metadata)?;
-    }
-    Ok(())
-}
+    // find the files ref
+    let files_ref = format!(
+        "x86_64/{}/{}/{}/files",
+        manifest.package.namespace_path(),
+        manifest.package.slug,
+        manifest.package.version
+    );
 
-fn refresh_bundle_branches(
-    repo_path: &str,
-    manifest: &Manifest,
-    manifest_hash: &str,
-) -> io::Result<()> {
-    for (bundle_name, bundle) in &manifest.bundles {
-        let branch_name = format!(
-            "x86_64/{}/{}/{}/bundles/{}",
-            manifest.package.namespace_path(),
-            manifest.package.slug,
-            manifest.package.version,
-            bundle_name
-        );
-        ensure_branch_exists(repo_path, &branch_name)?;
-        let metadata = bundle_branch_metadata(manifest, bundle, manifest_hash)?;
-        rewrite_branch_metadata(repo_path, &branch_name, &metadata)?;
+    // verify files ref exists
+    ensure_branch_exists(repo_path, &files_ref)?;
+
+    // create temp directory in .nex/tmp (same filesystem as repo for hardlinks)
+    let base_dir = PathBuf::from(".nex/tmp/refresh_metadata");
+    if base_dir.exists() {
+        fs::remove_dir_all(&base_dir)?;
     }
+    let out_dir = base_dir.join("out");
+    fs::create_dir_all(&out_dir)?;
+
+    println!("Checking out {} to temp directory", files_ref);
+    checkout_into(repo_path, &files_ref, &out_dir, false)?;
+
+    // create paths struct (out is relative to base_dir)
+    let paths = BuildPaths {
+        work: "work".to_string(),
+        out: "out".to_string(),
+        inputs: "inputs".to_string(),
+    };
+
+    // split files into outputs and commit
+    verify_and_commit_outputs(manifest, base_dir.to_str().unwrap(), repo_path, manifest_path, &paths)?;
+
+    // create bundles from outputs
+    create_and_commit_bundles(manifest, base_dir.to_str().unwrap(), repo_path, manifest_path)?;
+
+    // cleanup temp directory
+    fs::remove_dir_all(&base_dir)?;
+
+    println!("Finished refreshing outputs/bundles for {}", manifest.package.slug);
     Ok(())
 }
 
