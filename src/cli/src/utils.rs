@@ -210,6 +210,86 @@ pub fn create_deterministic_tarball(source_dir: &Path, output_path: &Path) -> io
     Ok(())
 }
 
+/// create an uncompressed deterministic tarball from a directory.
+/// uses fixed mtime, uid/gid 0, sorted file order.
+/// used for dev sources where speed matters more than size.
+pub fn create_deterministic_tarball_uncompressed(
+    source_dir: &Path,
+    output_path: &Path,
+) -> io::Result<()> {
+    use std::io::BufWriter;
+    use std::path::PathBuf;
+
+    let mtime = 1704067200u64;
+
+    let mut entries: Vec<PathBuf> = Vec::new();
+    for entry in WalkDir::new(source_dir).min_depth(0).into_iter() {
+        let entry = entry.map_err(|e| io::Error::other(e.to_string()))?;
+        entries.push(entry.path().to_path_buf());
+    }
+    entries.sort();
+
+    let file = File::create(output_path)?;
+    let writer = BufWriter::new(file);
+    let mut tar = Builder::new(writer);
+
+    let parent = source_dir.parent().unwrap_or(source_dir);
+
+    for path in &entries {
+        let relative = path
+            .strip_prefix(parent)
+            .map_err(|e| io::Error::other(e.to_string()))?;
+
+        if relative.as_os_str().is_empty() {
+            continue;
+        }
+
+        let metadata = fs::symlink_metadata(path)?;
+
+        if metadata.is_dir() {
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Directory);
+            header.set_size(0);
+            header.set_mtime(mtime);
+            header.set_uid(0);
+            header.set_gid(0);
+            header.set_mode(0o755);
+            tar.append_data(&mut header, relative, io::empty())?;
+        } else if metadata.is_symlink() {
+            let link_target = fs::read_link(path)?;
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Symlink);
+            header.set_size(0);
+            header.set_mtime(mtime);
+            header.set_uid(0);
+            header.set_gid(0);
+            header.set_mode(0o777);
+            tar.append_link(&mut header, relative, &link_target)?;
+        } else if metadata.is_file() {
+            let mut file = File::open(path)?;
+            let mut contents = Vec::new();
+            file.read_to_end(&mut contents)?;
+
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(tar::EntryType::Regular);
+            header.set_size(contents.len() as u64);
+            header.set_mtime(mtime);
+            header.set_uid(0);
+            header.set_gid(0);
+            let mode = if metadata.permissions().mode() & 0o111 != 0 {
+                0o755
+            } else {
+                0o644
+            };
+            header.set_mode(mode);
+            tar.append_data(&mut header, relative, &contents[..])?;
+        }
+    }
+
+    tar.finish()?;
+    Ok(())
+}
+
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 

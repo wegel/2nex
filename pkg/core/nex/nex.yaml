@@ -5,12 +5,11 @@ package:
   namespace: core/nex
   version: 0.1.0
   description: nex package builder and manager
-  checksum: 08af1fe3e031e087e00e1abc02bde443aa9c5b0c4bcf2a7b705b4231714374c9
+  checksum: 4c45803defe30406807f693585480f2253a7b09aacda74b0376bd372fe10998d
 
 sources:
 - name: nex_src
-  file: pkg/core/nex/nex-builder-src.tar.gz
-  sha256: 34e66f34867c77d4e3cf7cd1aff770d9ddbc04378740cc14e23be745a0e1446f
+  dev: src/cli
 
 dependencies:
 - name: bash
@@ -52,7 +51,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [3390:36723]
+  profile: [3803:27213]
 
   script: |
 
@@ -61,8 +60,12 @@ build:
     CXXFLAGS=${CXXFLAGS/-flto=auto/}
     LDFLAGS=${LDFLAGS/-flto=auto/}
 
-    # extract source
-    tar --no-same-owner -xzf ${SOURCE_nex_src} -C ${WORK_DIR} --strip-components=1
+    # extract source (use -xf for dev sources, -xzf for compressed)
+    if [ -n "${SOURCE_nex_src_IS_DEV:-}" ]; then
+        tar --no-same-owner -xf /${SOURCE_nex_src} -C ${WORK_DIR} --strip-components=1
+    else
+        tar --no-same-owner -xzf /${SOURCE_nex_src} -C ${WORK_DIR} --strip-components=1
+    fi
     cd ${WORK_DIR}
 
     # setup cc symlink for rust linker

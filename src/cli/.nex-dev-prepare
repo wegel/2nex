@@ -1,0 +1,22 @@
+#!/bin/bash
+# creates dev tarball for nex CLI build
+# usage: .nex-dev-prepare <output.tar>
+set -eu
+
+TARBALL="$1"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+WORK_DIR=$(mktemp -d)
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+# copy source to temp dir
+cp -a "$SCRIPT_DIR/." "$WORK_DIR/"
+
+# vendor dependencies in temp dir
+cd "$WORK_DIR"
+mkdir -p .cargo
+cargo vendor vendor > .cargo/config.toml
+
+# create uncompressed tarball
+tar --sort=name --mtime="2024-01-01T00:00:00Z" \
+    --owner=0 --group=0 --numeric-owner \
+    -cf "$TARBALL" -C "$WORK_DIR" .

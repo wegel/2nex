@@ -236,6 +236,9 @@ pub struct Source {
     pub name: String,
     pub url: Option<String>,
     pub file: Option<String>,
+    /// local directory path for development (creates uncompressed tarball, skips sha256)
+    #[serde(default)]
+    pub dev: Option<String>,
     /// URL or path to Cargo.lock file for automatic vendoring
     #[serde(default)]
     pub cargo_lock: Option<String>,
@@ -248,7 +251,9 @@ pub struct Source {
     /// URL or path to build.zig.zon file for automatic Zig dependency vendoring
     #[serde(default)]
     pub zig_zon: Option<String>,
-    pub sha256: String,
+    /// sha256 checksum (optional for dev sources)
+    #[serde(default)]
+    pub sha256: Option<String>,
 }
 
 /// Execution configuration for build environment

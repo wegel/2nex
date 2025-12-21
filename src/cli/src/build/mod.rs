@@ -269,6 +269,12 @@ pub fn handle_inputs(
         let safe_name = source.name.replace('-', "_");
         let var_name = format!("SOURCE_{}", safe_name);
         input_env_vars.insert(var_name, path_str);
+
+        // mark dev sources with IS_DEV env var
+        if source.dev.is_some() {
+            let is_dev_var = format!("SOURCE_{}_IS_DEV", safe_name);
+            input_env_vars.insert(is_dev_var, "1".to_string());
+        }
     }
 
     Ok(input_env_vars)

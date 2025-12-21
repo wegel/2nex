@@ -283,11 +283,12 @@ fn format_sources(value: &Value) -> io::Result<String> {
             output.push_str("- ");
             let mut first = true;
 
-            // order: name, url, file, sha256, then auto-vendoring fields
+            // order: name, url, file, dev, sha256, then auto-vendoring fields
             for field in [
                 "name",
                 "url",
                 "file",
+                "dev",
                 "sha256",
                 "cargo_lock",
                 "cargo_toml",
