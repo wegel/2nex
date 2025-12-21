@@ -50,26 +50,28 @@ trap "rm -rf $TMPDIR" EXIT
 
 DISK_SIZE_MB=4096
 ESP_SIZE_MB=64
-ROOT_SIZE_MB=$((DISK_SIZE_MB - ESP_SIZE_MB - 1))
+ROOT_SIZE_MB=2048
+VAR_SIZE_MB=$((DISK_SIZE_MB - ESP_SIZE_MB - ROOT_SIZE_MB - 1))
 
 log "Creating ${DISK_SIZE_MB}MB disk image..."
-dd if=/dev/zero of="$OUTPUT" bs=1M count=$DISK_SIZE_MB status=none
+dd if=/dev/zero of="$OUTPUT" bs=1MiB count=$DISK_SIZE_MB status=none
 
-log "Creating GPT partition table..."
+log "Creating GPT partition table (3 partitions: ESP, nex, nex-var)..."
 parted -s "$OUTPUT" \
     mklabel gpt \
     mkpart ESP fat32 1MiB ${ESP_SIZE_MB}MiB \
     set 1 esp on \
-    mkpart nex ext4 ${ESP_SIZE_MB}MiB 100%
+    mkpart nex ext4 ${ESP_SIZE_MB}MiB $((ESP_SIZE_MB + ROOT_SIZE_MB))MiB \
+    mkpart nex-var ext4 $((ESP_SIZE_MB + ROOT_SIZE_MB))MiB 100%
 
 log "Creating ESP with bootloader..."
 ESP_IMG="$TMPDIR/esp.img"
-dd if=/dev/zero of="$ESP_IMG" bs=1M count=$((ESP_SIZE_MB - 1)) status=none
+dd if=/dev/zero of="$ESP_IMG" bs=1MiB count=$((ESP_SIZE_MB - 1)) status=none
 mkfs.vfat -F 32 "$ESP_IMG" >/dev/null
 mmd -i "$ESP_IMG" ::/EFI
 mmd -i "$ESP_IMG" ::/EFI/BOOT
 mcopy -i "$ESP_IMG" "$BOOTLOADER" ::/EFI/BOOT/BOOTX64.EFI
-dd if="$ESP_IMG" of="$OUTPUT" bs=1M seek=1 conv=notrunc status=none
+dd if="$ESP_IMG" of="$OUTPUT" bs=1MiB seek=1 conv=notrunc status=none
 
 log "Building root filesystem..."
 ROOT_CONTENT="$TMPDIR/root"
@@ -108,37 +110,52 @@ EOF
 
 log "Remote configured: ${HOST_USER}@10.0.2.2:${HOST_REPO_PATH}"
 
-log "Copying SSH keys for remote access..."
-mkdir -p "$ROOT_CONTENT/root/.ssh"
-chmod 700 "$ROOT_CONTENT/root/.ssh"
+log "Preparing SSH keys for var partition..."
+SSH_KEYS="$TMPDIR/ssh_keys"
+mkdir -p "$SSH_KEYS"
+chmod 700 "$SSH_KEYS"
 if [ -f "$HOME/.ssh/id_ed25519" ]; then
-    cp "$HOME/.ssh/id_ed25519" "$ROOT_CONTENT/root/.ssh/"
-    cp "$HOME/.ssh/id_ed25519.pub" "$ROOT_CONTENT/root/.ssh/"
+    cp "$HOME/.ssh/id_ed25519" "$SSH_KEYS/"
+    cp "$HOME/.ssh/id_ed25519.pub" "$SSH_KEYS/"
 elif [ -f "$HOME/.ssh/id_rsa" ]; then
-    cp "$HOME/.ssh/id_rsa" "$ROOT_CONTENT/root/.ssh/"
-    cp "$HOME/.ssh/id_rsa.pub" "$ROOT_CONTENT/root/.ssh/"
+    cp "$HOME/.ssh/id_rsa" "$SSH_KEYS/"
+    cp "$HOME/.ssh/id_rsa.pub" "$SSH_KEYS/"
 else
     error "No SSH key found in ~/.ssh (need id_ed25519 or id_rsa)"
 fi
-chmod 600 "$ROOT_CONTENT/root/.ssh/"id_*
+chmod 600 "$SSH_KEYS/"id_*
 
-cat > "$ROOT_CONTENT/root/.ssh/config" << 'EOF'
+cat > "$SSH_KEYS/config" << 'EOF'
 Host 10.0.2.2
     StrictHostKeyChecking accept-new
     UserKnownHostsFile /dev/null
     LogLevel ERROR
 EOF
-chmod 600 "$ROOT_CONTENT/root/.ssh/config"
+chmod 600 "$SSH_KEYS/config"
 
-log "Creating root symlinks to deployment..."
+log "Creating root symlinks..."
+# readonly symlinks to deployment
 ln -sf "$DEPLOY_PATH/usr" "$ROOT_CONTENT/usr"
 ln -sf "$DEPLOY_PATH/lib" "$ROOT_CONTENT/lib"
 ln -sf "$DEPLOY_PATH/lib64" "$ROOT_CONTENT/lib64"
 ln -sf "$DEPLOY_PATH/bin" "$ROOT_CONTENT/bin"
 ln -sf "$DEPLOY_PATH/sbin" "$ROOT_CONTENT/sbin"
-ln -sf "$DEPLOY_PATH/etc" "$ROOT_CONTENT/etc"
-ln -sf "$DEPLOY_PATH/var" "$ROOT_CONTENT/var"
 ln -sf "usr/bin/init" "$ROOT_CONTENT/init"
+
+# writable symlinks to /var (will be separate partition)
+ln -sf "var/etc" "$ROOT_CONTENT/etc"
+ln -sf "var/home" "$ROOT_CONTENT/home"
+ln -sf "var/home/root" "$ROOT_CONTENT/root"
+
+# /var mount point for nex-var partition
+mkdir -p "$ROOT_CONTENT/var"
+
+# mount points for virtual filesystems (root is readonly, can't create at boot)
+mkdir -p "$ROOT_CONTENT/proc"
+mkdir -p "$ROOT_CONTENT/sys"
+mkdir -p "$ROOT_CONTENT/dev"
+mkdir -p "$ROOT_CONTENT/run"
+mkdir -p "$ROOT_CONTENT/tmp"
 
 # symlink /nex/pkg, /nex/db, /nex/env from current deployment
 ln -sfn "current/nex/pkg" "$ROOT_CONTENT/nex/pkg"
@@ -163,7 +180,37 @@ else
     log "WARNING: fakeroot not found - SSH keys may have wrong ownership in VM"
     mke2fs -t ext4 -d "$ROOT_CONTENT" "$ROOT_IMG" ${ROOT_SIZE_MB}M
 fi
-dd if="$ROOT_IMG" of="$OUTPUT" bs=1M seek=$ESP_SIZE_MB conv=notrunc status=none
+dd if="$ROOT_IMG" of="$OUTPUT" bs=1MiB seek=$ESP_SIZE_MB conv=notrunc status=none
+
+log "Building var filesystem..."
+VAR_CONTENT="$TMPDIR/var"
+mkdir -p "$VAR_CONTENT"/{etc,home,log,lib,cache,tmp}
+chmod 1777 "$VAR_CONTENT/tmp"
+mkdir -p "$VAR_CONTENT/log/journal"
+mkdir -p "$VAR_CONTENT/lib/systemd"/{random-seed,timers,coredump}
+mkdir -p "$VAR_CONTENT/lib/sshd"
+chmod 700 "$VAR_CONTENT/lib/sshd"
+mkdir -p "$VAR_CONTENT/cache/fontconfig"
+ln -sf /run "$VAR_CONTENT/run"
+
+# copy /etc from deployment (first-boot initialization)
+log "Copying /etc from deployment to var..."
+cp -a "$DEPLOY_DIR/etc/." "$VAR_CONTENT/etc/"
+touch "$VAR_CONTENT/etc/.initialized"
+
+# copy root's ssh keys to var/home (writable location)
+mkdir -p "$VAR_CONTENT/home/root/.ssh"
+chmod 700 "$VAR_CONTENT/home/root/.ssh"
+cp -a "$SSH_KEYS/." "$VAR_CONTENT/home/root/.ssh/"
+
+log "Creating var ext4 filesystem..."
+VAR_IMG="$TMPDIR/var.img"
+if command -v fakeroot >/dev/null; then
+    fakeroot -- sh -c "chown -R 0:0 '$VAR_CONTENT' && mke2fs -t ext4 -L nex-var -d '$VAR_CONTENT' '$VAR_IMG' ${VAR_SIZE_MB}M"
+else
+    mke2fs -t ext4 -L nex-var -d "$VAR_CONTENT" "$VAR_IMG" ${VAR_SIZE_MB}M
+fi
+dd if="$VAR_IMG" of="$OUTPUT" bs=1MiB seek=$((ESP_SIZE_MB + ROOT_SIZE_MB)) conv=notrunc status=none
 
 log "Disk image created: $OUTPUT"
 log "Starting QEMU with GL-accelerated display..."

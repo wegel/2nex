@@ -60,7 +60,14 @@ echo "switching to deployment: $DEPLOY"
 
 # find and mount var partition by label (root stays readonly)
 echo "looking for var partition..."
-VAR_DEV=$(blkid -L nex-var -o device 2>/dev/null)
+VAR_DEV=""
+i=0
+while [ $i -lt 30 ] && [ -z "$VAR_DEV" ]; do
+    VAR_DEV=$(blkid -L nex-var -o device 2>/dev/null)
+    [ -n "$VAR_DEV" ] && break
+    sleep 0.1
+    i=$((i + 1))
+done
 if [ -n "$VAR_DEV" ]; then
     echo "found var partition: $VAR_DEV"
     mkdir -p /mnt/root/var

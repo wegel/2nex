@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -euvo pipefail
 
 cd "$(dirname "$0")/../../.."
 
@@ -10,7 +10,7 @@ echo "=== building kernel ==="
 time ./nex build pkg/core/kernel/linux.yaml --update-checksum --record-profile --verbose --force --single
 
 echo "=== extracting checksum ==="
-checksum=$(grep "^checksum:" pkg/core/kernel/linux.yaml | awk '{print $2}')
+checksum=$(grep "checksum:" pkg/core/kernel/linux.yaml | awk '{print $2}')
 echo "checksum: $checksum"
 
 echo "=== categorizing modules ==="
