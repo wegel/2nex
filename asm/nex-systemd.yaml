@@ -1,0 +1,115 @@
+system:
+  schema: 1
+  name: Nex Systemd Base
+  slug: nex-systemd
+  version: 0.0.1
+  description: Minimal nex rootfs with systemd, networking, and SSH
+  nex_structure: true
+
+overlays:
+- asm/nex-systemd-overlay.yaml
+
+dependencies:
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/lib
+- name: gcc-libs
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/outputs/lib
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/runtime
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/outputs/lib
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/outputs/lib
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/outputs/lib
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/outputs/lib
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/outputs/lib
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/outputs/lib
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/outputs/lib
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/outputs/lib
+- name: libxcrypt
+  commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/outputs/lib
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/outputs/lib
+- name: nex-ld-shim
+  commit: x86_64/pkg/core/nex/nex-ld-shim/0.0.1/outputs/lib
+
+packages:
+# init and ipc
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/minimal
+- name: dbus-broker
+  commit: x86_64/pkg/core/ipc/dbus-broker/37/bundles/full
+
+# shell and core utilities
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
+- name: util_linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/runtime
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/outputs/bin
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/outputs/bin
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/outputs/bin
+- name: shadow
+  commit: x86_64/pkg/core/userland/shadow/4.15.1/outputs/bin
+- name: kbd
+  commit: x86_64/pkg/core/userland/kbd/2.9.0/bundles/full
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/outputs/bin
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/outputs/bin
+
+# kernel
+- name: kmod
+  commit: x86_64/pkg/core/kernel/kmod/32/bundles/runtime
+- name: linux
+  commit: x86_64/pkg/core/kernel/linux/6.12.58/bundles/vm
+
+# networking
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/outputs/bin
+- name: ca-certificates
+  commit: x86_64/pkg/apps/misc/ca-certificates/20251104/outputs/certs
+- name: openssh
+  commit: x86_64/pkg/cli/net/openssh/9.9p1/bundles/dev
+
+# nex package manager
+- name: nex
+  commit: x86_64/pkg/core/nex/nex/0.1.0/outputs/bin
+- name: ldd
+  commit: x86_64/pkg/libs/system/glibc/2.39/files/usr/bin/ldd
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  script: |
+    set -eu
+
+    # directories for runtime
+    mkdir -p /target/{proc,sys,dev,run,tmp,root}
+    mkdir -p /target/dev/{hugepages,mqueue,shm}
+    mkdir -p /target/sys/kernel/{debug,tracing,config}
+    mkdir -p /target/sys/fs/{fuse/connections,cgroup}
+    mkdir -p /target/var/{log/journal,lib/systemd/{random-seed,timers,coredump}}
+    mkdir -p /target/run/systemd
+    mkdir -p /target/etc/modprobe.d
+
+    # openssh libexec symlinks
+    mkdir -p /target/usr/libexec
+    for f in /target/nex/pkg/cli/net/openssh/*/*/usr/libexec/*; do
+      name=$(basename "$f")
+      relpath="${f#/target/}"
+      ln -sf "../../$relpath" "/target/usr/libexec/$name"
+    done
+
+    echo "nex-systemd base configuration done."

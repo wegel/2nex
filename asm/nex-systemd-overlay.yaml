@@ -1,0 +1,155 @@
+files:
+# users and groups
+- path: /etc/passwd
+  mode: 420
+  content: |
+    root:x:0:0:root:/root:/bin/bash
+    testuser:x:1000:1000:Test User:/home/testuser:/bin/bash
+    systemd-network:x:192:192:systemd Network Management:/:/usr/sbin/nologin
+    systemd-resolve:x:193:193:systemd Resolver:/:/usr/sbin/nologin
+    systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/sbin/nologin
+    sshd:x:74:74:Privilege-separated SSH:/var/lib/sshd:/usr/sbin/nologin
+
+- path: /etc/group
+  mode: 420
+  content: |
+    root:x:0:
+    testuser:x:1000:
+    systemd-network:x:192:
+    systemd-resolve:x:193:
+    systemd-timesync:x:194:
+    systemd-journal:x:190:
+    sshd:x:74:
+    utmp:x:22:
+
+- path: /etc/shadow
+  mode: 384
+  content: |
+    root::19735:0:99999:7:::
+    testuser::19735:0:99999:7:::
+    systemd-network:!*:19735::::::
+    systemd-resolve:!*:19735::::::
+    systemd-timesync:!*:19735::::::
+
+- path: /etc/subuid
+  mode: 420
+  content: |
+    testuser:100000:65536
+
+- path: /etc/subgid
+  mode: 420
+  content: |
+    testuser:100000:65536
+
+# system config
+- path: /etc/os-release
+  mode: 420
+  content: |
+    NAME="nex"
+    PRETTY_NAME="nex Linux"
+    ID=nex
+    VERSION_ID=0.0.1
+
+- path: /etc/fstab
+  mode: 420
+
+- path: /etc/sysctl.conf
+  mode: 420
+
+- path: /etc/machine-id
+  mode: 420
+
+- path: /etc/inputrc
+  mode: 420
+  content: |
+    set editing-mode emacs
+    set bell-style none
+    "\e[1;5C": forward-word
+    "\e[1;5D": backward-word
+    "\C-h": backward-kill-word
+
+# systemd networking
+- path: /etc/systemd/network/80-dhcp.network
+  mode: 420
+  content: |
+    [Match]
+    Name=en*
+
+    [Network]
+    DHCP=yes
+
+# ssh
+- path: /etc/ssh/sshd_config
+  mode: 420
+  content: |
+    PermitRootLogin yes
+    PermitEmptyPasswords yes
+    PasswordAuthentication yes
+    PubkeyAuthentication yes
+    AuthorizedKeysFile none
+    AuthorizedKeysCommand /usr/local/bin/accept-any-key %t %k
+    AuthorizedKeysCommandUser root
+    HostKey /etc/ssh/ssh_host_ed25519_key
+    HostKey /etc/ssh/ssh_host_rsa_key
+    HostKey /etc/ssh/ssh_host_ecdsa_key
+    Subsystem sftp /usr/libexec/sftp-server
+
+- path: /usr/local/bin/accept-any-key
+  mode: 493
+  content: |
+    #!/bin/bash
+    echo "$1 $2"
+
+# tmpfiles
+- path: /etc/tmpfiles.d/home-testuser.conf
+  mode: 420
+  content: |
+    d /home/testuser 0755 testuser testuser -
+
+# directories
+- path: /var/lib/sshd
+  directory: true
+  mode: 448
+
+- path: /home/testuser
+  directory: true
+
+# symlinks
+- path: /var/run
+  symlink: /run
+
+- path: /etc/mtab
+  symlink: /proc/self/mounts
+
+- path: /usr/lib/os-release
+  symlink: ../../etc/os-release
+
+- path: /etc/resolv.conf
+  symlink: /run/systemd/resolve/stub-resolv.conf
+
+- path: /init
+  symlink: usr/bin/init
+
+# dbus.service alias
+- path: /usr/lib/systemd/system/dbus.service
+  symlink: dbus-broker.service
+  replace: true
+
+# systemd service enablement
+- path: /etc/systemd/system/multi-user.target.wants/systemd-networkd.service
+  symlink: /usr/lib/systemd/system/systemd-networkd.service
+
+- path: /etc/systemd/system/multi-user.target.wants/systemd-resolved.service
+  symlink: /usr/lib/systemd/system/systemd-resolved.service
+
+- path: /etc/systemd/system/getty.target.wants/getty@tty1.service
+  symlink: /usr/lib/systemd/system/getty@.service
+
+- path: /etc/systemd/system/multi-user.target.wants/sshd-keygen.service
+  symlink: /usr/lib/systemd/system/sshd-keygen.service
+
+- path: /etc/systemd/system/multi-user.target.wants/sshd.service
+  symlink: /usr/lib/systemd/system/sshd.service
+
+- path: /etc/systemd/system/sockets.target.wants/dbus.socket
+  symlink: /usr/lib/systemd/system/dbus.socket

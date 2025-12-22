@@ -1,14 +1,12 @@
 system:
   schema: 1
-  name: Bootable Minimal System
-  slug: bootable-minimal
+  name: Flat Minimal System
+  slug: flat-minimal
   version: 0.0.1
-  description: Minimal bootable system with basic userland
-  checksum: e01046b98f8be61ba5a9dc9ed0bb625c0a671cce8534167087bda783268a25b4
+  description: Minimal flat rootfs with bash init (no systemd)
+  checksum: 00ce8137e2f710db9700a558fd2254310e8b9db9590360c0f0f40f2787a31872
 
 dependencies:
-- name: nex-utilities
-  commit: x86_64/pkg/core/userland/nex-utilities/0.0.1/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
 
@@ -25,7 +23,9 @@ packages:
   commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/lib
 
 build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
   script: |
+    set -eu
     # create minimal /etc/passwd and /etc/group
     mkdir -p /target/etc
 
@@ -49,7 +49,7 @@ build:
     mount -t devtmpfs devtmpfs /dev
     mount -t tmpfs tmpfs /run
 
-    echo "=== nex bootable-minimal started ==="
+    echo "=== nex flat-minimal started ==="
     echo "System info:"
     uname -a
     echo ""

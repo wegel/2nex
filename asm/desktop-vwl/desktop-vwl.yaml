@@ -3,48 +3,20 @@ system:
   name: Desktop System with vwl/Wayland
   slug: desktop-vwl
   version: 0.0.1
-  description: Desktop system with systemd, vwl compositor, wayland tools, and CLI utilities
-  checksum: fc17e796ccc064bdd6d7acc838297f79fc670265def848910c4bd3d4c19e3279
+  description: Desktop system with vwl compositor, wayland tools, and CLI utilities
   nex_structure: true
 
+extends: asm/nex-systemd.yaml
+
 overlays:
-- asm/desktop-vwl/overlay.yaml
+- asm/desktop-vwl/desktop-vwl-overlay.yaml
 
 dependencies:
-- name: findutils
-  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
-- name: glibc
-  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/lib
-- name: gcc-libs
-  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/outputs/lib
-- name: ncurses
-  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/runtime
-- name: zlib
-  commit: x86_64/pkg/libs/system/zlib/1.3.1/outputs/lib
-- name: xz
-  commit: x86_64/pkg/libs/compression/xz/5.4.6/outputs/lib
-- name: zstd
-  commit: x86_64/pkg/libs/compression/zstd/1.5.6/outputs/lib
-- name: libcap
-  commit: x86_64/pkg/libs/security/libcap/2.69/outputs/lib
+# desktop-specific libs (base libs inherited from nex-systemd)
 - name: libcap-bin
   commit: x86_64/pkg/libs/security/libcap/2.69/outputs/bin
-- name: acl
-  commit: x86_64/pkg/libs/system/acl/2.3.2/outputs/lib
-- name: attr
-  commit: x86_64/pkg/libs/system/attr/2.5.2/outputs/lib
-- name: expat
-  commit: x86_64/pkg/libs/system/expat/2.6.2/outputs/lib
-- name: gmp
-  commit: x86_64/pkg/libs/system/gmp/6.3.0/outputs/lib
-- name: libxcrypt
-  commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/outputs/lib
 - name: linux-pam
   commit: x86_64/pkg/libs/security/linux-pam/1.7.1/outputs/lib
-- name: openssl
-  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/outputs/lib
-- name: nex-ld-shim
-  commit: x86_64/pkg/core/nex/nex-ld-shim/0.0.1/outputs/lib
 - name: glibc-i18n
   commit: x86_64/pkg/libs/system/glibc/2.39/outputs/misc
 - name: bzip2
@@ -61,75 +33,45 @@ dependencies:
   commit: x86_64/pkg/libs/system/jansson/2.14.1/outputs/lib
 
 packages:
-# core system
+# PAM support
 - name: linux-pam
   commit: x86_64/pkg/libs/security/linux-pam/1.7.1/bundles/dev
-- name: systemd
-  commit: x86_64/pkg/core/init/systemd/257.5/bundles/minimal
-- name: dbus-broker
-  commit: x86_64/pkg/core/ipc/dbus-broker/37/bundles/full
-- name: bash
-  commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
-- name: coreutils
-  commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
-- name: util_linux
-  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/runtime
-- name: findutils
-  commit: x86_64/pkg/core/userland/findutils/4.9.0/outputs/bin
-- name: grep
-  commit: x86_64/pkg/cli/text/grep/3.11/outputs/bin
-- name: sed
-  commit: x86_64/pkg/cli/text/sed/4.9/outputs/bin
-- name: shadow
-  commit: x86_64/pkg/core/userland/shadow/4.15.1/outputs/bin
-- name: kbd
-  commit: x86_64/pkg/core/userland/kbd/2.9.0/bundles/full
-- name: kmod
-  commit: x86_64/pkg/core/kernel/kmod/32/bundles/runtime
-- name: nex
-  commit: x86_64/pkg/core/nex/nex/0.1.0/outputs/bin
-- name: gzip
-  commit: x86_64/pkg/cli/archive/gzip/1.13/outputs/bin
-- name: curl
-  commit: x86_64/pkg/cli/net/curl/8.17.0/outputs/bin
-- name: ca-certificates
-  commit: x86_64/pkg/apps/misc/ca-certificates/20251104/outputs/certs
-- name: openssh
-  commit: x86_64/pkg/cli/net/openssh/9.9p1/bundles/dev
+
+# kernel (desktop bundle, not vm)
 - name: linux
   commit: x86_64/pkg/core/kernel/linux/6.12.58/bundles/desktop
 - name: linux-vm
   commit: x86_64/pkg/core/kernel/linux/6.12.58/bundles/vm
 - name: linux-firmware
   commit: x86_64/pkg/core/kernel/linux-firmware/20251125/bundles/desktop
+
+# networking
 - name: networkmanager
   commit: x86_64/pkg/net/manager/networkmanager/1.50.0/bundles/dev
 - name: iwd
   commit: x86_64/pkg/net/wifi/iwd/2.22/bundles/dev
 - name: bluez
   commit: x86_64/pkg/net/bluetooth/bluez/5.85/bundles/dev
-- name: ldd
-  commit: x86_64/pkg/libs/system/glibc/2.39/files/usr/bin/ldd
 - name: inetutils
   commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
+- name: iproute2
+  commit: x86_64/pkg/net/misc/iproute2/6.18.0/bundles/dev
+- name: nftables
+  commit: x86_64/pkg/net/firewall/nftables/1.1.1/bundles/dev
+
+# additional core utilities
 - name: psmisc
   commit: x86_64/pkg/core/userland/psmisc/23.7/bundles/dev
 - name: diffutils
   commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
 - name: file
   commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
-- name: tar
-  commit: x86_64/pkg/cli/archive/tar/1.35/outputs/bin
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/outputs/bin
 - name: procps-ng
   commit: x86_64/pkg/core/userland/procps-ng/4.0.5/bundles/dev
-- name: iproute2
-  commit: x86_64/pkg/net/misc/iproute2/6.18.0/bundles/dev
 - name: which
   commit: x86_64/pkg/core/userland/which/2.23/bundles/dev
-- name: nftables
-  commit: x86_64/pkg/net/firewall/nftables/1.1.1/bundles/dev
 
 # wayland compositor and tools
 - name: xkeyboard-config
@@ -280,29 +222,15 @@ build:
   script: |
     set -eu
 
-    # directories that can't be in overlay (mount points, runtime dirs)
-    mkdir -p /target/{proc,sys,dev,run,tmp,root}
-    mkdir -p /target/dev/{hugepages,mqueue,shm}
-    mkdir -p /target/sys/kernel/{debug,tracing,config}
-    mkdir -p /target/sys/fs/{fuse/connections,cgroup}
-    mkdir -p /target/var/{log/journal,lib/systemd/{random-seed,timers,coredump},cache/fontconfig}
-    mkdir -p /target/run/{systemd,dbus,user/1000}
-    mkdir -p /target/etc/modprobe.d
-
-    # openssh libexec symlinks (dynamic based on package path)
-    mkdir -p /target/usr/libexec
-    for f in /target/nex/pkg/cli/net/openssh/*/*/usr/libexec/*; do
-      name=$(basename "$f")
-      relpath="${f#/target/}"
-      ln -sf "../../$relpath" "/target/usr/libexec/$name"
-    done
+    # desktop-specific directories
+    mkdir -p /target/var/cache/fontconfig
+    mkdir -p /target/run/{dbus,user/1000}
 
     # locale generation
     mkdir -p /target/usr/lib/locale
     localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias /target/usr/lib/locale/en_US.UTF-8
 
     # recompile gsettings schemas (includes overrides from overlay)
-    # resolve symlinks so glib-compile-schemas can read them
     for f in /target/usr/share/glib-2.0/schemas/*.xml; do
       if [ -L "$f" ]; then
         real=$(readlink "$f")
@@ -314,7 +242,6 @@ build:
     glib-compile-schemas /target/usr/share/glib-2.0/schemas/
 
     # rootless containers: setuid on newuidmap/newgidmap
-    # (using setuid instead of capabilities - avoids xattr issues with zub)
     for f in /target/nex/pkg/core/userland/shadow/*/*/usr/bin/newuidmap; do
       chmod u+s "$f"
     done
@@ -322,5 +249,4 @@ build:
       chmod u+s "$f"
     done
 
-    echo "Assembly configuration done."
-
+    echo "Desktop assembly configuration done."

@@ -1,0 +1,55 @@
+system:
+  schema: 1
+  name: Flat Podman System
+  slug: flat-podman
+  version: 0.0.1
+  description: Flat rootfs with systemd and container support
+  extends: flat-systemd.yaml
+
+  checksum: 43a5ab5d43e14f3bcc5ada0a7ae49eabcc8eb7012b5717391dde184025e56073
+packages:
+# containers
+- name: podman
+  commit: x86_64/pkg/apps/containers/podman/5.4.1/outputs/bin
+- name: runc
+  commit: x86_64/pkg/apps/containers/runc/1.2.4/outputs/bin
+- name: conmon
+  commit: x86_64/pkg/apps/containers/conmon/2.1.8/outputs/bin
+- name: catatonit
+  commit: x86_64/pkg/apps/containers/catatonit/0.2.1/outputs/bin
+- name: aardvark-dns
+  commit: x86_64/pkg/apps/containers/aardvark-dns/1.14.0/outputs/bin
+- name: netavark
+  commit: x86_64/pkg/apps/containers/netavark/1.14.0/outputs/bin
+- name: passt
+  commit: x86_64/pkg/apps/containers/passt/2025_02_17/outputs/bin
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+  script: |
+    # container config
+    mkdir -p /target/etc/containers
+    cat > /target/etc/containers/containers.conf << 'EOF'
+    [engine]
+    runtime = "runc"
+    EOF
+
+    cat > /target/etc/containers/registries.conf << 'EOF'
+    unqualified-search-registries = ["docker.io"]
+    EOF
+
+    cat > /target/etc/containers/policy.json << 'EOF'
+    {
+      "default": [{ "type": "insecureAcceptAnything" }]
+    }
+    EOF
+
+    # subuid/subgid for rootless containers
+    cat >> /target/etc/subuid << 'EOF'
+    root:100000:65536
+    EOF
+    cat >> /target/etc/subgid << 'EOF'
+    root:100000:65536
+    EOF
+
+    find /target -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
