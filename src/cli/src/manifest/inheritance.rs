@@ -39,11 +39,9 @@ fn resolve_inheritance_chain(
 
     match &manifest.system.extends {
         Some(extends_path) => {
-            // resolve relative to manifest's directory
-            let base_path = manifest_path
-                .parent()
-                .unwrap_or(Path::new("."))
-                .join(extends_path);
+            // resolve relative to repo root (current working directory)
+            let repo_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            let base_path = repo_root.join(extends_path);
             let base_canonical = base_path.canonicalize().map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::NotFound,
