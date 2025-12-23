@@ -221,6 +221,7 @@ package:
 dependencies: []
 sources: []
 build:
+  environment: env/test.yaml
   script: "true"
 outputs: {}
 "#
@@ -283,6 +284,7 @@ system:
 packages:
   - commit: x86_64/foo/1.0/base/bundles/dev
 build:
+  environment: env/test.yaml
   script: ":"
 sources: []
 dependencies: []
@@ -306,6 +308,7 @@ system:
 packages:
   - commit: x86_64/foo/1.0/base/bundles/dev
 build:
+  environment: env/test.yaml
   script: ":"
 sources: []
 dependencies: []
