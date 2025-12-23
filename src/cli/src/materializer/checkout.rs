@@ -549,6 +549,14 @@ pub fn checkout_files(
             }
             std::os::unix::fs::symlink(&link_target, &dst)?;
         } else {
+            // skip copy if dst already exists with same inode (already hardlinked from earlier checkout)
+            use std::os::unix::fs::MetadataExt;
+            let src_ino = fs::metadata(&src).map(|m| m.ino()).ok();
+            let dst_ino = if dst.exists() { fs::metadata(&dst).map(|m| m.ino()).ok() } else { None };
+            if src_ino.is_some() && src_ino == dst_ino {
+                // same file via hardlink, skip copy to avoid corruption
+                continue;
+            }
             fs::copy(&src, &dst)?;
         }
     }
