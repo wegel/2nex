@@ -302,7 +302,8 @@ impl Store {
     pub fn ls(&self, commit: &str) -> io::Result<Vec<String>> {
         // try to find which repo has this commit
         let repo = self.find_repo_with_ref(commit)?;
-        let entries = zub::ops::ls_tree_recursive(repo, commit)
+        let opts = zub::ops::LsTreeOptions::default();
+        let entries = zub::ops::ls_tree_recursive(repo, commit, &opts)
             .map_err(|e| io::Error::other(e.to_string()))?;
 
         Ok(entries.into_iter().map(|e| e.path).collect())

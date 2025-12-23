@@ -16,6 +16,21 @@ cd "$WORK_DIR"
 mkdir -p .cargo
 cargo vendor vendor > .cargo/config.toml
 
+# copy zub into vendor and patch Cargo.toml
+ZUB_PATH="/var/home/wegel/work/perso/zub"
+if [ -d "$ZUB_PATH" ]; then
+    cp -a "$ZUB_PATH" vendor/zub-store
+    # remove .git to reduce size
+    rm -rf vendor/zub-store/.git vendor/zub-store/target
+    # create cargo checksum file (empty files hash = package is from path source)
+    echo '{"files":{}}' > vendor/zub-store/.cargo-checksum.json
+    # patch Cargo.toml to use vendored zub
+    sed -i 's|git = "https://github.com/wegel/zub.git", rev = "[^"]*"|path = "vendor/zub-store"|' Cargo.toml
+fi
+
+# clean up build artifacts
+rm -rf "$WORK_DIR/target"
+
 # create uncompressed tarball
 tar --sort=name --mtime="2024-01-01T00:00:00Z" \
     --owner=0 --group=0 --numeric-owner \
