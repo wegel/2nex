@@ -586,7 +586,15 @@ pub fn verify_and_commit_outputs(
 
         // create artifact for this output
         let artifact_output = format!("outputs/{}", output_type);
-        create_artifact(repo_path, &tree_hash, &manifest_hash, &artifact_output)?;
+        let artifact_path = format!(
+            "x86_64/{}/{}/{}/{}/outputs/{}",
+            manifest.package.namespace_path(),
+            manifest.package.slug,
+            manifest.package.version,
+            manifest_hash,
+            output_type
+        );
+        create_artifact(repo_path, &tree_hash, &manifest_hash, &artifact_output, &artifact_path)?;
     }
 
     let unaccounted_files: Vec<String> = all_out_files
@@ -1153,8 +1161,11 @@ pub fn check_if_built(
         );
 
         // try artifact lookup first (O(1))
-        let artifact_output = format!("outputs/{}", output_name);
-        if let Ok(Some(_tree)) = lookup_artifact(repo_path, &current_hash, &artifact_output) {
+        let artifact_path = format!(
+            "{}/{}/{}/{}/{}/outputs/{}",
+            arch, namespace, slug, version, current_hash, output_name
+        );
+        if let Ok(Some(_tree)) = lookup_artifact(repo_path, &artifact_path) {
             if found_commit.is_none() {
                 found_commit = Some("artifact".to_string());
             }

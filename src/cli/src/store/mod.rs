@@ -668,11 +668,15 @@ pub fn rewrite_branch_metadata(
 }
 
 /// create an artifact linking a manifest to its build output tree
+///
+/// artifact_path is the full hierarchical path for the artifact ref,
+/// e.g. "x86_64/pkg/libs/foo/1.0/<manifest_hash>/outputs/bin"
 pub fn create_artifact(
     repo_path: &str,
     tree_hash: &Hash,
     manifest_hash: &str,
     output: &str,
+    artifact_path: &str,
 ) -> io::Result<Hash> {
     let repo = Repo::open(Path::new(repo_path))
         .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
@@ -685,10 +689,10 @@ pub fn create_artifact(
         .map_err(|e| io::Error::other(e.to_string()))?;
 
     // write the artifact ref for O(1) lookup
-    zub::write_artifact_ref(&repo, manifest_hash, output, &artifact_hash)
+    zub::write_artifact_ref(&repo, artifact_path, &artifact_hash)
         .map_err(|e| io::Error::other(e.to_string()))?;
 
-    println!("Created artifact: {} -> {}", output, artifact_hash);
+    println!("Created artifact: {} -> {}", artifact_path, artifact_hash);
     Ok(artifact_hash)
 }
 
@@ -706,16 +710,16 @@ pub fn get_branch_tree(repo_path: &str, branch: &str) -> io::Result<Hash> {
     Ok(commit.tree)
 }
 
-/// lookup an artifact by manifest_hash and output, returning the tree hash if found
-pub fn lookup_artifact(repo_path: &str, manifest_hash: &str, output: &str) -> io::Result<Option<Hash>> {
+/// lookup an artifact by path, returning the tree hash if found
+pub fn lookup_artifact(repo_path: &str, artifact_path: &str) -> io::Result<Option<Hash>> {
     let repo = Repo::open(Path::new(repo_path))
         .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
 
-    if !zub::artifact_ref_exists(&repo, manifest_hash, output) {
+    if !zub::artifact_ref_exists(&repo, artifact_path) {
         return Ok(None);
     }
 
-    let artifact_hash = zub::read_artifact_ref(&repo, manifest_hash, output)
+    let artifact_hash = zub::read_artifact_ref(&repo, artifact_path)
         .map_err(|e| io::Error::other(e.to_string()))?;
 
     let artifact = zub::read_artifact(&repo, &artifact_hash)
@@ -727,15 +731,14 @@ pub fn lookup_artifact(repo_path: &str, manifest_hash: &str, output: &str) -> io
 /// checkout an artifact directly to a target directory
 pub fn checkout_artifact(
     repo_path: &str,
-    manifest_hash: &str,
-    output: &str,
+    artifact_path: &str,
     target: &Path,
     force: bool,
 ) -> io::Result<bool> {
     let repo = Repo::open(Path::new(repo_path))
         .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
 
-    let tree_hash = match lookup_artifact(repo_path, manifest_hash, output)? {
+    let tree_hash = match lookup_artifact(repo_path, artifact_path)? {
         Some(h) => h,
         None => return Ok(false),
     };

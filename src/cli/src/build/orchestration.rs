@@ -26,12 +26,12 @@ fn build_exists_for_manifest(
     commit_ref: &str,
     manifest_hash: &str,
 ) -> io::Result<bool> {
-    // parse ref to get artifact output path
+    // parse ref to get artifact path
     if let Ok(pkg_ref) = PackageRef::parse(commit_ref) {
-        let artifact_output = pkg_ref.artifact_output();
+        let artifact_path = pkg_ref.artifact_ref_path(manifest_hash);
 
         // try artifact lookup first (O(1))
-        if let Ok(Some(_tree)) = lookup_artifact(repo_path, manifest_hash, &artifact_output) {
+        if let Ok(Some(_tree)) = lookup_artifact(repo_path, &artifact_path) {
             return Ok(true);
         }
     }

@@ -195,6 +195,15 @@ impl PackageRef {
             RefType::Files { .. } => "files".to_string(),
         }
     }
+
+    /// construct the full artifact ref path including manifest hash
+    pub fn artifact_ref_path(&self, manifest_hash: &str) -> String {
+        let output = self.artifact_output();
+        format!(
+            "{}/{}/{}/{}/{}/{}",
+            self.arch, self.namespace, self.slug, self.version, manifest_hash, output
+        )
+    }
 }
 
 impl fmt::Display for PackageRef {

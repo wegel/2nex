@@ -108,7 +108,15 @@ pub fn commit_bundle(
     // create artifact for this bundle
     let tree_hash = get_branch_tree(repo_path, &bundle_branch)?;
     let artifact_output = format!("bundles/{}", bundle_name);
-    create_artifact(repo_path, &tree_hash, manifest_hash, &artifact_output)?;
+    let artifact_path = format!(
+        "x86_64/{}/{}/{}/{}/bundles/{}",
+        manifest.package.namespace_path(),
+        manifest.package.slug,
+        manifest.package.version,
+        manifest_hash,
+        bundle_name
+    );
+    create_artifact(repo_path, &tree_hash, manifest_hash, &artifact_output, &artifact_path)?;
 
     Ok(())
 }
