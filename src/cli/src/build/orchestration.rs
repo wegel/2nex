@@ -222,25 +222,14 @@ pub fn collect_dependencies_recursive(
 
     let manifest_data = load_manifest_from_source(manifest_source)?;
 
-    let (is_system, slug, dependencies) = match manifest_data {
-        ManifestData::Package(ref m) => (false, m.package.slug.clone(), m.dependencies.clone()),
-        ManifestData::System(ref s) => {
+    let (is_system, slug, dependencies) = match &manifest_data {
+        ManifestData::Package(m) => (false, m.package.slug.clone(), m.dependencies.clone()),
+        ManifestData::System(s) => {
             let mut all_deps = s.dependencies.clone();
             all_deps.extend(system::dependencies_from_system_packages(&s.packages));
             (true, s.system.slug.clone(), all_deps)
         }
     };
-
-    if !is_system && !force {
-        if let ManifestData::Package(ref manifest) = manifest_data {
-            if check_if_built(repo_path, manifest, manifest_path)?.is_some() {
-                println!("Package {} already built, skipping", manifest.package.slug);
-                let node = graph.add_node(ManifestSource::Skip);
-                manifest_map.insert(manifest_path.to_path_buf(), node);
-                return Ok(node);
-            }
-        }
-    }
 
     let node = graph.add_node(manifest_source.clone());
     manifest_map.insert(manifest_path.to_path_buf(), node);
@@ -248,6 +237,7 @@ pub fn collect_dependencies_recursive(
     println!("Processing dependencies for {}", slug);
 
     let git_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let mut deps_need_build = false;
 
     for dep in &dependencies {
         if let Some(ref blob_sha) = dep.manifest_ref {
@@ -414,6 +404,7 @@ pub fn collect_dependencies_recursive(
                 )?;
 
                 if !graph[dep_node].is_skip() {
+                    deps_need_build = true;
                     graph.add_edge(dep_node, node, ());
                 }
             }
@@ -422,6 +413,15 @@ pub fn collect_dependencies_recursive(
                     "  Warning: Could not find manifest for dependency {}: {}",
                     dep.commit, e
                 );
+            }
+        }
+    }
+
+    if !is_system && !force {
+        if let ManifestData::Package(ref manifest) = manifest_data {
+            if check_if_built(repo_path, manifest, manifest_path)?.is_some() && !deps_need_build {
+                println!("Package {} already built, skipping", manifest.package.slug);
+                graph[node] = ManifestSource::Skip;
             }
         }
     }
@@ -1179,4 +1179,137 @@ pub fn build_with_dependencies(
     println!("==================================================");
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::build::compute_manifest_hash;
+    use crate::store::{commit_tree, Store};
+    use std::fs;
+    use std::io;
+    use std::path::Path;
+    use tempfile::TempDir;
+
+    fn write_manifest(path: &Path, contents: &str) -> io::Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, contents)?;
+        Ok(())
+    }
+
+    #[test]
+    fn rebuilds_when_dependency_manifest_changes() -> io::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let repo_dir = temp_dir.path().join("repo");
+        Store::init(&repo_dir)?;
+        let repo_path = repo_dir.to_string_lossy().to_string();
+
+        let root_manifest_path = temp_dir.path().join("pkg/apps/kernel.yaml");
+        let dep_manifest_path = temp_dir.path().join("pkg/deps/initramfs.yaml");
+
+        let dep_manifest_v1 = r#"package:
+  schema: 1
+  name: initramfs
+  slug: initramfs
+  namespace: deps
+  version: "1.0"
+  description: v1
+dependencies: []
+sources: []
+build:
+  environment: env/test.yaml
+  script: "true"
+outputs:
+  boot:
+    files:
+      - path: /boot/initramfs.cpio
+bundles: {}
+"#;
+        write_manifest(&dep_manifest_path, dep_manifest_v1)?;
+
+        let dep_hash = compute_manifest_hash(&dep_manifest_path)?;
+        let dep_tree = temp_dir.path().join("dep_tree");
+        fs::create_dir_all(&dep_tree)?;
+        fs::write(dep_tree.join("boot"), "boot")?;
+        commit_tree(
+            &repo_path,
+            "x86_64/pkg/deps/initramfs/1.0/outputs/boot",
+            &dep_tree,
+            &[("nex.manifest.hash".to_string(), dep_hash)],
+        )?;
+
+        let root_manifest = r#"package:
+  schema: 1
+  name: kernel
+  slug: kernel
+  namespace: apps
+  version: "1.0"
+dependencies:
+  - name: initramfs
+    commit: x86_64/pkg/deps/initramfs/1.0/outputs/boot
+sources: []
+build:
+  environment: env/test.yaml
+  script: "true"
+outputs:
+  bin:
+    files:
+      - path: /usr/bin/kernel
+bundles: {}
+"#;
+        write_manifest(&root_manifest_path, root_manifest)?;
+
+        let root_hash = compute_manifest_hash(&root_manifest_path)?;
+        let root_tree = temp_dir.path().join("root_tree");
+        fs::create_dir_all(&root_tree)?;
+        fs::write(root_tree.join("kernel"), "kernel")?;
+        commit_tree(
+            &repo_path,
+            "x86_64/pkg/apps/kernel/1.0/outputs/bin",
+            &root_tree,
+            &[("nex.manifest.hash".to_string(), root_hash)],
+        )?;
+
+        let dep_manifest_v2 = dep_manifest_v1.replace("description: v1", "description: v2");
+        write_manifest(&dep_manifest_path, &dep_manifest_v2)?;
+
+        let store = Store::open(&repo_path)?;
+        let mut graph = DiGraph::new();
+        let mut manifest_map = HashMap::new();
+        let mut ref_cache = HashMap::new();
+        let manifest_dirs = vec![temp_dir.path().to_path_buf()];
+        let root_source = ManifestSource::Path(root_manifest_path.clone());
+
+        collect_dependencies_recursive(
+            &root_source,
+            &repo_path,
+            &manifest_dirs,
+            &mut graph,
+            &mut manifest_map,
+            false,
+            &mut ref_cache,
+            Some(&store),
+            false,
+        )?;
+
+        let root_node = *manifest_map
+            .get(&root_manifest_path)
+            .expect("root manifest missing from graph");
+        assert!(
+            !graph[root_node].is_skip(),
+            "root should rebuild when a dependency is stale"
+        );
+
+        let dep_node = *manifest_map
+            .get(&dep_manifest_path)
+            .expect("dependency manifest missing from graph");
+        assert!(
+            !graph[dep_node].is_skip(),
+            "dependency should rebuild when manifest hash changes"
+        );
+
+        Ok(())
+    }
 }
