@@ -212,7 +212,8 @@ enum ResolveResult {
 }
 
 /// Resolve a dependency name to a commit ref.
-/// Uses {checksum}/files for stable checksums, {git_blob_sha}/files for bootstrap packages.
+/// Uses x86_64/pkg/{ns}/{slug}/{ver}/{checksum}/files for stable checksums,
+/// or {git_blob_sha}/files for bootstrap packages.
 fn resolve_dependency_to_commit(
     dep_name: &str,
     source_manifest: &crate::manifest::types::Manifest,
@@ -246,6 +247,7 @@ fn resolve_dependency_to_commit(
     }
 
     let slug = parts[end_idx - 2];
+    let version = parts[end_idx - 1];
     let namespace_path = parts[pkg_idx + 1..end_idx - 2].join("/");
     let package_path = format!("{}/{}", namespace_path, slug);
 
@@ -270,7 +272,10 @@ fn resolve_dependency_to_commit(
         }
     };
 
-    let files_ref = format!("{}/files", address_hash);
+    let files_ref = format!(
+        "x86_64/pkg/{}/{}/{}/{}/files",
+        namespace_path, slug, version, address_hash
+    );
     if store.resolve_ref(&files_ref).is_ok() {
         return ResolveResult::Ok(files_ref);
     }

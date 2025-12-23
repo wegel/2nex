@@ -57,7 +57,7 @@ pub fn flatten_capsule_precomputed(
         // bundle - expand to constituent outputs
         match manifest.bundles.get(commit_name) {
             Some(bundle) => bundle.includes.clone(),
-            None => return Ok(0), // bundle not in manifest
+            None => return Ok(0),
         }
     } else {
         // single output specified, but check for other outputs in the capsule
@@ -269,7 +269,7 @@ fn find_dependency_by_name<'a>(
 }
 
 /// Derive the files commit for the current manifest (for self libs).
-/// Uses {checksum}/files for stable checksums, {git_blob_sha}/files for bootstrap packages.
+/// Uses x86_64/pkg/{namespace}/{slug}/{version}/{checksum}/files for stable checksums.
 fn derive_files_commit_for_manifest(manifest: &crate::manifest::types::Manifest) -> Option<String> {
     let has_stable_checksum =
         manifest.package.checksum.is_some() && manifest.package.stable_checksum.unwrap_or(true);
@@ -285,11 +285,17 @@ fn derive_files_commit_for_manifest(manifest: &crate::manifest::types::Manifest)
         hash_file_content(&manifest_path).ok()?
     };
 
-    Some(format!("{}/files", address_hash))
+    Some(format!(
+        "x86_64/pkg/{}/{}/{}/{}/files",
+        manifest.package.namespace,
+        manifest.package.slug,
+        manifest.package.version,
+        address_hash
+    ))
 }
 
 /// Derive the files commit for a dependency.
-/// Uses {checksum}/files for stable checksums, {git_blob_sha}/files for bootstrap packages.
+/// Uses x86_64/pkg/{namespace}/{slug}/{version}/{checksum}/files for stable checksums.
 fn derive_files_commit_for_dependency(
     dep: &crate::manifest::types::Dependency,
     manifest_index: &ManifestIndex,
@@ -306,6 +312,7 @@ fn derive_files_commit_for_dependency(
         return None;
     }
 
+    let version = parts[end_idx - 1];
     let slug = parts[end_idx - 2];
     let namespace_path = parts[pkg_idx + 1..end_idx - 2].join("/");
 
@@ -324,7 +331,13 @@ fn derive_files_commit_for_dependency(
         hash_file_content(&manifest_path).ok()?
     };
 
-    Some(format!("{}/files", address_hash))
+    Some(format!(
+        "x86_64/pkg/{}/{}/{}/{}/files",
+        namespace_path,
+        slug,
+        version,
+        address_hash
+    ))
 }
 
 /// Find the manifest for a dependency.
