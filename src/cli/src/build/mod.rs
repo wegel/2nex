@@ -999,6 +999,10 @@ pub fn build_package_manifest_with_dir(
 
         println!("Build, packaging, and commit completed for all outputs.");
 
+        // create semantic {pkg}/files ref pointing to the checksum-based files commit
+        // (must happen before refresh_package_metadata which needs this ref)
+        create_semantic_files_ref(manifest, &opts.repo_path, Path::new(&opts.manifest_file), &checksum)?;
+
         // refresh store metadata if checksum was updated
         if opts.update_checksum {
             refresh_package_metadata(
@@ -1007,9 +1011,6 @@ pub fn build_package_manifest_with_dir(
                 Path::new(&opts.manifest_file),
             )?;
         }
-
-        // create semantic {pkg}/files ref pointing to the checksum-based files commit
-        create_semantic_files_ref(manifest, &opts.repo_path, Path::new(&opts.manifest_file), &checksum)?;
     }
 
     // compute runtime dependencies (opt-in, modifies manifest)
