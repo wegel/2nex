@@ -5,10 +5,10 @@ files:
   content: |
     root:x:0:0:root:/root:/bin/bash
     testuser:x:1000:1000:Test User:/home/testuser:/bin/bash
-    systemd-network:x:192:192:systemd Network Management:/:/usr/sbin/nologin
-    systemd-resolve:x:193:193:systemd Resolver:/:/usr/sbin/nologin
-    systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/sbin/nologin
-    sshd:x:74:74:Privilege-separated SSH:/var/lib/sshd:/usr/sbin/nologin
+    systemd-network:x:192:192:systemd Network Management:/:/usr/bin/nologin
+    systemd-resolve:x:193:193:systemd Resolver:/:/usr/bin/nologin
+    systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/bin/nologin
+    sshd:x:74:74:Privilege-separated SSH:/var/lib/sshd:/usr/bin/nologin
 
 - path: /etc/group
   mode: 420
@@ -68,6 +68,11 @@ files:
     "\e[1;5D": backward-word
     "\C-h": backward-kill-word
 
+- path: /etc/security/namespace.conf
+  mode: 420
+  content: |
+    # Empty config to satisfy pam_namespace.
+
 # systemd networking
 - path: /etc/systemd/network/80-dhcp.network
   mode: 420
@@ -115,6 +120,22 @@ files:
   directory: true
 
 # symlinks
+- path: /bin
+  symlink: /usr/bin
+  replace: true
+
+- path: /sbin
+  symlink: /usr/sbin
+  replace: true
+
+- path: /lib
+  symlink: /usr/lib
+  replace: true
+
+- path: /usr/sbin
+  symlink: /usr/bin
+  replace: true
+
 - path: /var/run
   symlink: /run
 
@@ -129,6 +150,40 @@ files:
 
 - path: /init
   symlink: usr/bin/init
+
+# systemd dbus-activation aliases (force symlinks to avoid duplicate BusName units)
+- path: /usr/lib/systemd/system/dbus-org.freedesktop.hostname1.service
+  symlink: systemd-hostnamed.service
+  replace: true
+
+- path: /usr/lib/systemd/system/dbus-org.freedesktop.locale1.service
+  symlink: systemd-localed.service
+  replace: true
+
+- path: /usr/lib/systemd/system/dbus-org.freedesktop.login1.service
+  symlink: systemd-logind.service
+  replace: true
+
+- path: /usr/lib/systemd/system/dbus-org.freedesktop.machine1.service
+  symlink: systemd-machined.service
+  replace: true
+
+- path: /usr/lib/systemd/system/dbus-org.freedesktop.portable1.service
+  symlink: systemd-portabled.service
+  replace: true
+
+- path: /usr/lib/systemd/system/dbus-org.freedesktop.timedate1.service
+  symlink: systemd-timedated.service
+  replace: true
+
+# PAM configs used by systemd-user
+- path: /etc/pam.d/systemd-user
+  symlink: /usr/lib/pam.d/systemd-user
+  replace: true
+
+- path: /etc/pam.d/systemd-run0
+  symlink: /usr/lib/pam.d/systemd-run0
+  replace: true
 
 # dbus.service alias
 - path: /usr/lib/systemd/system/dbus.service

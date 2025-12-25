@@ -6,7 +6,7 @@ package:
   version: 1.2.14
   description: ALSA utilities (amixer, aplay, arecord, alsactl, alsamixer)
   homepage: https://www.alsa-project.org/
-  checksum: b0d6d92addce14a0cbdea9de90642edc598f5fa22713ff2a2b3ab4e095511f66
+  checksum: 07b1d49066f0f38881f6282ad614e66f342965a7159ef4ac22982e45d19309b9
 
 sources:
 - name: alsa-utils
@@ -73,6 +73,7 @@ build:
 
     ./configure \
       --prefix=/usr \
+      --sbindir=/usr/bin \
       --disable-alsaconf \
       --disable-bat \
       --disable-xmlto \
@@ -94,6 +95,12 @@ outputs:
   bin:
     files:
     - path: /usr/bin/aconnect
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/alsa-info.sh
+    - path: /usr/bin/alsactl
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libasound.so.2
@@ -252,12 +259,6 @@ outputs:
 
   misc:
     files:
-    - path: /usr/sbin/alsa-info.sh
-    - path: /usr/sbin/alsactl
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libasound.so.2
-      - /usr/lib/libc.so.6
     - path: /usr/share/alsa/init/00main
     - path: /usr/share/alsa/init/ca0106
     - path: /usr/share/alsa/init/default

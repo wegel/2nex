@@ -136,10 +136,10 @@ chmod 600 "$SSH_KEYS/config"
 log "Creating root symlinks..."
 # readonly symlinks to deployment
 ln -sf "$DEPLOY_PATH/usr" "$ROOT_CONTENT/usr"
-ln -sf "$DEPLOY_PATH/lib" "$ROOT_CONTENT/lib"
+ln -sf /usr/lib "$ROOT_CONTENT/lib"
 ln -sf "$DEPLOY_PATH/lib64" "$ROOT_CONTENT/lib64"
-ln -sf "$DEPLOY_PATH/bin" "$ROOT_CONTENT/bin"
-ln -sf "$DEPLOY_PATH/sbin" "$ROOT_CONTENT/sbin"
+ln -sf /usr/bin "$ROOT_CONTENT/bin"
+ln -sf /usr/bin "$ROOT_CONTENT/sbin"
 ln -sf "usr/bin/init" "$ROOT_CONTENT/init"
 
 # writable symlinks to /var (will be separate partition)

@@ -111,16 +111,12 @@ mkdir -p /mnt/root/dev/mqueue
 mkdir -p /mnt/root/dev/shm
 mkdir -p /mnt/root/dev/pts
 
-# create sysfs subdirectories for debugfs/tracingfs
-mkdir -p /mnt/root/sys/kernel/debug
-mkdir -p /mnt/root/sys/kernel/tracing
-mkdir -p /mnt/root/sys/kernel/config
-mkdir -p /mnt/root/sys/fs/cgroup
+# sysfs mountpoints are managed by systemd; don't try to create them in sysfs
 
-# ensure /tmp is empty for tmpfs mount
-rm -rf /mnt/root/tmp
-mkdir -p /mnt/root/tmp
-chmod 1777 /mnt/root/tmp
+# ensure /tmp mountpoint exists (root may be readonly)
+if [ ! -d /mnt/root/tmp ]; then
+    mkdir -p /mnt/root/tmp 2>/dev/null || true
+fi
 
 echo "mount points created"
 

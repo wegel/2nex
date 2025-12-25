@@ -1,0 +1,27 @@
+#!/bin/bash
+interval="${1:-10}"
+tail_n="${2:-10}"
+exec awk -v interval="$interval" -v tail_n="$tail_n" '
+{
+    buf[NR % tail_n] = $0
+    total = NR
+    now = systime()
+    if (NR <= 10) {
+        print
+        fflush()
+        last = now
+    } else {
+        if (!last) last = now
+        if (now - last >= interval) {
+            print "[" strftime("%H:%M:%S") "] " $0
+            fflush()
+            last = now
+        }
+    }
+}
+END {
+    print "---"
+    n = (total < tail_n) ? total : tail_n
+    for (i = total - n + 1; i <= total; i++) print buf[i % tail_n]
+}'
+

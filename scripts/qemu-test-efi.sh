@@ -1,5 +1,5 @@
 #!/bin/bash
-# complete EFI boot test: bootloader -> kernel -> initramfs -> systemd + nex
+# complete EFI boot test: bootloader -> kernel (built-in initramfs) -> systemd + nex
 # tests the full boot chain with actual nex system
 #
 # usage: ./qemu-test-efi.sh [system-ref]
@@ -68,7 +68,7 @@ parted -s "$OUTPUT" \
     mklabel gpt \
     mkpart ESP fat32 1MiB ${ESP_SIZE_MB}MiB \
     set 1 esp on \
-    mkpart root ext4 ${ESP_SIZE_MB}MiB 100%
+    mkpart nex ext4 ${ESP_SIZE_MB}MiB 100%
 
 # create ESP with bootloader
 log "Creating ESP with bootloader..."
@@ -151,10 +151,10 @@ chmod 600 "$ROOT_CONTENT/root/.ssh/config"
 # these are needed because binaries have PT_INTERP=/lib64/ld-linux-x86-64.so.2
 log "Creating root symlinks to deployment..."
 ln -sf "$DEPLOY_PATH/usr" "$ROOT_CONTENT/usr"
-ln -sf "$DEPLOY_PATH/lib" "$ROOT_CONTENT/lib"
+ln -sf /usr/lib "$ROOT_CONTENT/lib"
 ln -sf "$DEPLOY_PATH/lib64" "$ROOT_CONTENT/lib64"
-ln -sf "$DEPLOY_PATH/bin" "$ROOT_CONTENT/bin"
-ln -sf "$DEPLOY_PATH/sbin" "$ROOT_CONTENT/sbin"
+ln -sf /usr/bin "$ROOT_CONTENT/bin"
+ln -sf /usr/bin "$ROOT_CONTENT/sbin"
 ln -sf "$DEPLOY_PATH/etc" "$ROOT_CONTENT/etc"
 ln -sf "$DEPLOY_PATH/var" "$ROOT_CONTENT/var"
 ln -sf "usr/bin/init" "$ROOT_CONTENT/init"

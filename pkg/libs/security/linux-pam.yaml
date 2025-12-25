@@ -6,7 +6,7 @@ package:
   version: 1.7.1
   description: Pluggable Authentication Modules for Linux
   homepage: https://github.com/linux-pam/linux-pam
-  checksum: 4cb34e6881af7f447fb58118adc4b7fc4f5df64dc0fe49a86a9916c37676c88a
+  checksum: 75103e802ddcf5c6ce5c54e42e03319394a7f5b70e67b461ebad367a882fe5f6
 
 sources:
 - name: linux-pam
@@ -63,6 +63,7 @@ build:
 
     meson setup build \
       --prefix=/usr \
+      --sbindir=/usr/bin \
       --buildtype=release \
       -Ddocs=disabled \
       -Dexamples=false
@@ -71,7 +72,7 @@ build:
     DESTDIR="${OUT_DIR}" ninja -C build install
 
     # setuid for unix_chkpwd (needed for non-root password checks)
-    chmod 4755 "${OUT_DIR}/usr/sbin/unix_chkpwd"
+    chmod 4755 "${OUT_DIR}/usr/bin/unix_chkpwd"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -314,28 +315,28 @@ outputs:
 
   misc:
     files:
-    - path: /usr/sbin/faillock
+    - path: /usr/bin/faillock
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libpam.so.0
-    - path: /usr/sbin/mkhomedir_helper
+    - path: /usr/bin/mkhomedir_helper
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libpam.so.0
-    - path: /usr/sbin/pam_namespace_helper
-    - path: /usr/sbin/pam_timestamp_check
+    - path: /usr/bin/pam_namespace_helper
+    - path: /usr/bin/pam_timestamp_check
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libpam.so.0
-    - path: /usr/sbin/pwhistory_helper
+    - path: /usr/bin/pwhistory_helper
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcrypt.so.2
-    - path: /usr/sbin/unix_chkpwd
+    - path: /usr/bin/unix_chkpwd
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6

@@ -3,11 +3,13 @@ set -euvo pipefail
 
 cd "$(dirname "$0")/../../.."
 
-echo "=== preparing linux.yaml for output regeneration ==="
-./pkg/core/kernel/toggle-outputs.py prepare
+if [ -z "${SKIP_PREPARE:-}" ]; then
+	echo "=== preparing linux.yaml for output regeneration ==="
+	./pkg/core/kernel/toggle-outputs.py prepare
+fi
 
 echo "=== building kernel ==="
-time ./nex build pkg/core/kernel/linux.yaml --update-checksum --record-profile --verbose --force --single
+time ./nex build pkg/core/kernel/linux.yaml --update-checksum --record-profile --verbose --force
 
 echo "=== extracting checksum ==="
 checksum=$(grep "checksum:" pkg/core/kernel/linux.yaml | awk '{print $2}')

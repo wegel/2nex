@@ -6,7 +6,7 @@ package:
   version: 4.0.5
   description: Utilities for monitoring system processes
   homepage: https://gitlab.com/procps-ng/procps
-  checksum: 5ef86f71557a8cbda43f61a4d70ab993a34dee9e60e3c817a001cf9d8c462cb8
+  checksum: 28eaff2574dd1fe8d40e92e39b510c45cde9d26bc87809701a89781c561d9d68
 
 sources:
 - name: procps_ng
@@ -65,6 +65,7 @@ build:
     cd ${WORK_DIR}
 
     ./configure --prefix=/usr                           \
+                --sbindir=/usr/bin                      \
                 --disable-static                        \
                 --disable-kill                          \
                 --with-systemd                          \
@@ -143,6 +144,10 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libncursesw.so.6
       - /usr/lib/libproc2.so.1
+    - path: /usr/bin/sysctl
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/bin/tload
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -175,10 +180,6 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libncursesw.so.6
-    - path: /usr/sbin/sysctl
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
 
   dev:
     files:

@@ -4,11 +4,12 @@ allmod.py - controlled allmodconfig with fragment support
 
 usage: ./allmod.py [pre-frags...] -- [post-frags...]
 
-1. starts from x86_64_defconfig
+1. starts from allnoconfig (minimal base)
 2. applies pre-fragments (gates, builtins)
 3. enables all tristates as modules
-4. applies post-fragments (disables, overrides)
-5. writes .config
+4. re-applies pre-fragments to restore =y and =n overrides
+5. applies post-fragments (disables, overrides)
+6. writes .config
 """
 import kconfiglib
 import os
@@ -26,8 +27,9 @@ def main():
 
     kconf = kconfiglib.Kconfig()
 
-    # 1. start from defconfig
-    kconf.load_config("arch/x86/configs/x86_64_defconfig")
+    # 1. start from allnoconfig (minimal base)
+    for sym in kconf.unique_defined_syms:
+        sym.set_value(0)  # disable everything
 
     # 2. apply pre-fragments (gates, builtins)
     post = False
@@ -41,11 +43,16 @@ def main():
     # 3. enable all tristates as modules (unless already set to =y)
     for sym in kconf.unique_defined_syms:
         if sym.orig_type == kconfiglib.TRISTATE:
-            # skip if explicitly set to y (2) by a pre-fragment
             if sym.user_value != 2:
                 sym.set_value(1)  # 1 = module
 
-    # 4. apply post-fragments (disables, overrides)
+    # 4. re-apply pre-fragments to restore =y and =n overrides
+    for frag in sys.argv[1:]:
+        if frag == '--':
+            break
+        kconf.load_config(frag, replace=False)
+
+    # 5. apply post-fragments (disables, overrides)
     post = False
     for frag in sys.argv[1:]:
         if frag == '--':

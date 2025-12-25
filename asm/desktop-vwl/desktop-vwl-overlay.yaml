@@ -5,10 +5,10 @@ files:
   content: |
     root:x:0:0:root:/root:/bin/bash
     testuser:x:1000:1000:Test User:/home/testuser:/bin/zsh
-    systemd-network:x:192:192:systemd Network Management:/:/usr/sbin/nologin
-    systemd-resolve:x:193:193:systemd Resolver:/:/usr/sbin/nologin
-    systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/sbin/nologin
-    sshd:x:74:74:Privilege-separated SSH:/var/lib/sshd:/usr/sbin/nologin
+    systemd-network:x:192:192:systemd Network Management:/:/usr/bin/nologin
+    systemd-resolve:x:193:193:systemd Resolver:/:/usr/bin/nologin
+    systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/bin/nologin
+    sshd:x:74:74:Privilege-separated SSH:/var/lib/sshd:/usr/bin/nologin
 
 - path: /etc/group
   mode: 420
@@ -133,6 +133,13 @@ files:
   content: |
     d /run/user/1000 0700 testuser testuser -
     d /run/user/0 0700 root root -
+
+- path: /etc/tmpfiles.d/utmp.conf
+  mode: 420
+  content: |
+    f /run/utmp 0664 root utmp -
+    f /var/log/wtmp 0664 root utmp -
+    f /var/log/btmp 0660 root utmp -
 
 # udev
 - path: /etc/udev/rules.d/70-seat.rules

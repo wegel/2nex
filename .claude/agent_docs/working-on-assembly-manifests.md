@@ -108,8 +108,10 @@ build:
 ## Building an Assembly
 
 ```bash
-./nex build asm/<name>/manifest.yaml --update-checksum
+./nex build asm/<name>/manifest.yaml --update-checksum | scripts/heartbeat 10 50
 ```
+
+Always use `scripts/heartbeat` to monitor and tail long processes, NOT `tail`.
 
 ## Testing Assemblies
 

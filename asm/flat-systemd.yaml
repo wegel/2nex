@@ -4,13 +4,19 @@ system:
   slug: flat-systemd
   version: 0.0.1
   description: Minimal flat rootfs with systemd init
-  checksum: f9c003d4b1cfe195956ae0df021cf79cd39af8e51f97fac609ab9b6dcbfb4cd6
+  checksum: e11c3511c73a7f310d500904fcbd9bf7fde1cdfc9d8abbce102255b299d639cc
 
 dependencies:
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
 
 packages:
+- name: linux
+  commit: x86_64/pkg/core/kernel/linux/6.12.58/bundles/vm
+- name: linux-boot
+  commit: x86_64/pkg/core/kernel/linux/6.12.58/outputs/boot
+- name: initramfs
+  commit: x86_64/pkg/core/kernel/initramfs/1.0.0/outputs/boot
 - name: systemd-bin
   commit: x86_64/pkg/core/init/systemd/257.5/outputs/bin
 - name: systemd-lib
@@ -29,14 +35,13 @@ packages:
   commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/bin
 - name: dbus-broker-conf
   commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/conf
+- name: kmod-bin
+  commit: x86_64/pkg/core/kernel/kmod/32/outputs/bin
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
   script: |
-    # create minimal /etc/passwd and /etc/group with systemd users
-    mkdir -p /target/etc
-
-    mkdir -p /target/root
+    mkdir -p /target/etc /target/root
 
     cat > /target/etc/passwd << 'EOF'
     root:x:0:0:root:/root:/usr/bin/bash
@@ -53,7 +58,6 @@ build:
     systemd-journal:x:190:
     EOF
 
-    # create /etc/shadow with blank password for root user
     cat > /target/etc/shadow << 'EOF'
     root::19735:0:99999:7:::
     systemd-network:!*:19735::::::
@@ -62,7 +66,6 @@ build:
     EOF
     chmod 600 /target/etc/shadow
 
-    # nsswitch.conf tells glibc how to look up users/groups
     cat > /target/etc/nsswitch.conf << 'EOF'
     passwd:     files
     group:      files
@@ -73,22 +76,36 @@ build:
     services:   files
     EOF
 
-    # create mount points for essential filesystems
-    mkdir -p /target/{proc,sys,dev,run,tmp}
+    cat > /target/etc/os-release << 'EOF'
+    NAME="nex"
+    ID=nex
+    VERSION="0.0.1"
+    EOF
 
-    # create minimal systemd directories
+    echo "uninitialized" > /target/etc/machine-id
+
+    mkdir -p /target/{proc,sys,dev,run,tmp}
+    ln -sf usr/lib /target/lib
+    ln -sf usr/lib /target/lib64
+    ln -sf usr/bin /target/bin
+
     mkdir -p /target/etc/systemd/system
     mkdir -p /target/var/log/journal
     mkdir -p /target/var/lib/systemd
 
-    # minimal shell profile
     cat > /target/etc/profile << 'EOF'
     export PS1='# '
     export TERM=linux
-    echo "=== /etc/profile loaded ===" >&2
     EOF
 
-    # symlink init to systemd
     ln -sf /usr/lib/systemd/systemd /target/init
+
+    # kmod symlinks
+    ln -sf /usr/bin/kmod /target/usr/bin/modprobe
+    ln -sf /usr/bin/kmod /target/usr/bin/insmod
+    ln -sf /usr/bin/kmod /target/usr/bin/rmmod
+    ln -sf /usr/bin/kmod /target/usr/bin/lsmod
+    ln -sf /usr/bin/kmod /target/usr/bin/depmod
+    ln -sf /usr/bin /target/sbin
 
     find /target -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
