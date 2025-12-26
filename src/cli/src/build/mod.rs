@@ -1099,10 +1099,18 @@ pub fn refresh_package_metadata(
     ensure_branch_exists(repo_path, &files_ref)?;
 
     // create temp directory in .nex/tmp (same filesystem as repo for hardlinks)
-    let base_dir = PathBuf::from(".nex/tmp/refresh_metadata");
-    if base_dir.exists() {
-        fs::remove_dir_all(&base_dir)?;
-    }
+    let base_parent = Path::new(".nex/tmp");
+    fs::create_dir_all(base_parent)?;
+    let prefix = format!(
+        "refresh_metadata_{}_{}_",
+        manifest.package.slug.replace("/", "_"),
+        manifest.package.namespace.replace("/", "_")
+    );
+    let temp_dir = tempfile::Builder::new()
+        .prefix(&prefix)
+        .tempdir_in(base_parent)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("tempdir failed: {}", e)))?;
+    let base_dir = temp_dir.path().to_path_buf();
     let out_dir = base_dir.join("out");
     fs::create_dir_all(&out_dir)?;
 
@@ -1123,7 +1131,7 @@ pub fn refresh_package_metadata(
     create_and_commit_bundles(manifest, base_dir.to_str().unwrap(), repo_path, manifest_path)?;
 
     // cleanup temp directory
-    fs::remove_dir_all(&base_dir)?;
+    drop(temp_dir);
 
     println!("Finished refreshing outputs/bundles for {}", manifest.package.slug);
     Ok(())
