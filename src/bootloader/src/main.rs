@@ -9,7 +9,12 @@ extern crate alloc;
 
 use alloc::string::String;
 use alloc::vec::Vec;
+use uefi::boot;
+use uefi::fs::{FileSystem, Path, PathBuf};
 use uefi::prelude::*;
+use uefi::proto::device_path::media::FilePath as DevicePathFilePath;
+use uefi::proto::loaded_image::LoadedImage;
+use uefi::CString16;
 
 mod cpio;
 mod disk;
@@ -87,8 +92,9 @@ fn boot_sequence() -> Result<(), BootError> {
         }
     }
 
-    // build kernel command line
-    let cmdline = build_cmdline(&root_disk, &deployment);
+    // build kernel command line (allow optional ESP override)
+    let extra_cmdline = read_kcmdline_from_esp();
+    let cmdline = build_cmdline(&root_disk, &deployment, extra_cmdline.as_deref());
     log::info!("cmdline: {}", cmdline);
 
     // boot the kernel
@@ -152,12 +158,114 @@ fn load_boot_modules(fs: &ext4::Ext4Fs, deployment: &zub::Deployment) -> Option<
     Some(cpio::build_module_initramfs(&modules))
 }
 
-fn build_cmdline(disk: &disk::RootPartition, deployment: &zub::Deployment) -> String {
-    alloc::format!(
-        "root=PARTUUID={} zub={} ro console=ttyS0,115200n8 console=tty0 video=1920x1080",
+fn build_cmdline(
+    disk: &disk::RootPartition,
+    deployment: &zub::Deployment,
+    extra: Option<&str>,
+) -> String {
+    let mut cmdline = alloc::format!(
+        "root=PARTUUID={} zub={} ro",
         disk.partuuid,
         deployment.path
-    )
+    );
+
+    if let Some(extra) = extra {
+        let extra = extra.trim();
+        if !extra.is_empty() {
+            cmdline.push(' ');
+            cmdline.push_str(extra);
+        }
+    }
+
+    cmdline
+}
+
+fn read_kcmdline_from_esp() -> Option<String> {
+    let fs = match boot::get_image_file_system(boot::image_handle()) {
+        Ok(fs) => fs,
+        Err(e) => {
+            log::warn!("kcmdline: failed to get image filesystem: {:?}", e);
+            return None;
+        }
+    };
+    let mut fs = FileSystem::new(fs);
+
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    if let Some(mut dir) = bootloader_dir() {
+        if let Ok(name) = CString16::try_from("kcmdline.txt") {
+            dir.push(name.as_ref());
+            candidates.push(dir);
+        }
+    }
+
+    if let Ok(fallback) = CString16::try_from("\\EFI\\BOOT\\kcmdline.txt") {
+        candidates.push(PathBuf::from(fallback.as_ref()));
+    }
+
+    for path in candidates {
+        match fs.read_to_string(&*path) {
+            Ok(contents) => {
+                if let Some(extra) = normalize_kcmdline(&contents) {
+                    log::info!("kcmdline: loaded from {}", path);
+                    return Some(extra);
+                }
+                log::warn!("kcmdline: {} is empty after trimming", path);
+            }
+            Err(e) => {
+                log::debug!("kcmdline: failed to read {}: {:?}", path, e);
+            }
+        }
+    }
+
+    None
+}
+
+fn bootloader_dir() -> Option<PathBuf> {
+    let loaded_image =
+        boot::open_protocol_exclusive::<LoadedImage>(boot::image_handle()).ok()?;
+    let file_path = loaded_image.file_path()?;
+
+    let mut file_path_cstr: Option<CString16> = None;
+    for node in file_path.node_iter() {
+        if let Ok(file_path_node) = <&DevicePathFilePath>::try_from(node) {
+            if let Ok(cstr) = CString16::try_from(&file_path_node.path_name()) {
+                file_path_cstr = Some(cstr);
+            }
+        }
+    }
+
+    let file_path_cstr = file_path_cstr?;
+    let path = Path::new(file_path_cstr.as_ref());
+    if let Some(parent) = path.parent() {
+        return Some(parent);
+    }
+
+    if let Ok(root) = CString16::try_from("\\") {
+        return Some(PathBuf::from(root.as_ref()));
+    }
+
+    None
+}
+
+fn normalize_kcmdline(contents: &str) -> Option<String> {
+    let mut out = String::new();
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(line);
+    }
+
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
 }
 
 #[derive(Debug)]
