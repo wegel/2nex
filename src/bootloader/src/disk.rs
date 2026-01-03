@@ -1,6 +1,10 @@
 //! UEFI disk access and partition discovery
 
 use alloc::string::String;
+use alloc::vec::Vec;
+use uefi::boot;
+use uefi::proto::device_path::{DevicePath, DevicePathNodeEnum};
+use uefi::proto::loaded_image::LoadedImage;
 use uefi::proto::media::block::BlockIO;
 use uefi::proto::media::partition::{GptPartitionType, PartitionInfo};
 use uefi::{guid, Handle, Identify};
@@ -39,10 +43,14 @@ impl RootPartition {
 
 /// find the root ext4 partition named "nex"
 pub fn find_root_partition() -> Result<RootPartition, BootError> {
+    let boot_prefix = boot_device_prefix();
+
     // get all handles with BlockIO protocol
     let handles =
         uefi::boot::locate_handle_buffer(uefi::boot::SearchType::ByProtocol(&BlockIO::GUID))
             .map_err(|_| BootError::DiskNotFound)?;
+
+    let mut fallback: Option<RootPartition> = None;
 
     for &handle in handles.iter() {
         // try to get partition info
@@ -88,18 +96,58 @@ pub fn find_root_partition() -> Result<RootPartition, BootError> {
                         block_size
                     );
 
-                    return Ok(RootPartition {
+                    let root = RootPartition {
                         handle,
                         partuuid,
                         block_size,
                         num_blocks,
-                    });
+                    };
+
+                    if let Some(prefix) = boot_prefix.as_ref() {
+                        if let Some(part_prefix) = device_path_prefix(handle) {
+                            if &part_prefix == prefix {
+                                log::debug!("selected root partition on boot device");
+                                return Ok(root);
+                            }
+                        }
+                    }
+
+                    if fallback.is_none() {
+                        fallback = Some(root);
+                    }
                 }
             }
         }
     }
 
+    if let Some(root) = fallback {
+        log::debug!("selected root partition (fallback)");
+        return Ok(root);
+    }
+
     Err(BootError::PartitionNotFound)
+}
+
+fn boot_device_prefix() -> Option<Vec<u8>> {
+    let loaded_image =
+        boot::open_protocol_exclusive::<LoadedImage>(boot::image_handle()).ok()?;
+    let device = loaded_image.device()?;
+    device_path_prefix(device)
+}
+
+fn device_path_prefix(handle: Handle) -> Option<Vec<u8>> {
+    let dp = boot::open_protocol_exclusive::<DevicePath>(handle).ok()?;
+    let mut prefix_len: usize = 0;
+    for node in dp.node_iter() {
+        if let Ok(node_enum) = node.as_enum() {
+            if matches!(node_enum, DevicePathNodeEnum::MediaHardDrive(_)) {
+                break;
+            }
+        }
+        prefix_len += usize::from(node.length());
+    }
+
+    dp.as_bytes().get(..prefix_len).map(|b| b.to_vec())
 }
 
 fn format_guid(guid: &uefi::Guid) -> String {
