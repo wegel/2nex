@@ -5,6 +5,9 @@ CONFIG_LSM="landlock,lockdown,yama,integrity"
 # wifi crypto requirements (iwd)
 CONFIG_KEY_DH_OPERATIONS=y
 
+# enable AMD Display Core for amdgpu KMS
+CONFIG_DRM_AMD_DC=y
+
 # cap maximum CPUs to reduce static kernel memory usage
 CONFIG_NR_CPUS=128
 

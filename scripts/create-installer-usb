@@ -1,6 +1,6 @@
 #!/bin/sh
 # create-installer-usb: create a bootable USB disk image for installing nex
-# usage: create-installer-usb <target-system-ref> <output.img>
+# usage: create-installer-usb [--vm|--hardware] [--kcmdline <path>] <target-system-ref> <output.img>
 #
 # write to USB with: sudo dd if=output.img of=/dev/sdX bs=4M status=progress
 set -eu
@@ -11,15 +11,35 @@ die() {
 }
 
 usage() {
-    printf "usage: %s <target-system-ref> <output.img>\n" "$0"
+    printf "usage: %s [--vm|--hardware] [--kcmdline <path>] <target-system-ref> <output.img>\n" "$0"
     printf "\n"
     printf "example:\n"
     printf "  %s systems/desktop-vwl/0.0.1 ./installer.img\n" "$0"
+    printf "  %s --hardware systems/desktop-vwl/0.0.1 ./installer.img\n" "$0"
     printf "\n"
     printf "then write to USB:\n"
     printf "  sudo dd if=./installer.img of=/dev/sdX bs=4M status=progress\n"
     exit 1
 }
+
+KCMDLINE_MODE="vm"
+KCMDLINE_SRC=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --vm) KCMDLINE_MODE="vm"; shift ;;
+        --hardware) KCMDLINE_MODE="hardware"; shift ;;
+        --kcmdline)
+            [ $# -ge 2 ] || die "--kcmdline requires a path"
+            KCMDLINE_SRC="$2"
+            shift 2
+            ;;
+        -h|--help) usage ;;
+        --) shift; break ;;
+        -*) die "unknown option: $1" ;;
+        *) break ;;
+    esac
+done
 
 [ $# -eq 2 ] || usage
 
@@ -39,16 +59,17 @@ command -v mkfs.vfat >/dev/null || die "mkfs.vfat not found (install dosfstools)
 command -v mke2fs >/dev/null || die "mke2fs not found (install e2fsprogs)"
 command -v mcopy >/dev/null || die "mcopy not found (install mtools)"
 
+# always rebuild installer system to avoid stale images
+printf "building installer system...\n"
+"$ROOT_DIR/nex" build "$ROOT_DIR/asm/installer/installer.yaml" --update-checksum || die "installer build failed"
+
 # check refs exist
 zub refs 2>/dev/null | grep -q " ${INSTALLER_REF}$" || die "installer not found: ${INSTALLER_REF}"
 zub refs 2>/dev/null | grep -q " ${TARGET_REF}$" || die "target system not found: ${TARGET_REF}"
 
 # build bootloader if needed
-if [ ! -f "$BOOTLOADER_EFI" ]; then
-    printf "building bootloader...\n"
-    (cd "$BOOTLOADER_SRC" && cargo build) || die "bootloader build failed"
-fi
-[ -f "$BOOTLOADER_EFI" ] || die "bootloader not found at $BOOTLOADER_EFI"
+printf "building bootloader...\n"
+(cd "$BOOTLOADER_SRC" && cargo build) || die "bootloader build failed"
 
 # get target system checksum from ref metadata (or fall back to commit hash)
 TARGET_CHECKSUM=$(zub show "${TARGET_REF}" 2>/dev/null | grep "nex.system.checksum:" | awk '{print $2}')
@@ -97,6 +118,27 @@ mkfs.vfat -F 32 "$ESP_IMG" >/dev/null
 mmd -i "$ESP_IMG" ::/EFI
 mmd -i "$ESP_IMG" ::/EFI/BOOT
 mcopy -i "$ESP_IMG" "$BOOTLOADER_EFI" ::/EFI/BOOT/BOOTX64.EFI
+KCMDLINE_FILE=""
+if [ -n "$KCMDLINE_SRC" ]; then
+    KCMDLINE_FILE="$KCMDLINE_SRC"
+else
+    case "$KCMDLINE_MODE" in
+        vm) KCMDLINE_FILE="$BOOTLOADER_SRC/kcmdline.vm.txt" ;;
+        hardware) KCMDLINE_FILE="$BOOTLOADER_SRC/kcmdline.hardware.txt" ;;
+        *) die "unknown kcmdline mode: $KCMDLINE_MODE" ;;
+    esac
+fi
+if [ -n "$KCMDLINE_FILE" ]; then
+    if [ -f "$KCMDLINE_FILE" ]; then
+        mcopy -i "$ESP_IMG" "$KCMDLINE_FILE" ::/EFI/BOOT/kcmdline.txt
+    elif [ -n "$KCMDLINE_SRC" ]; then
+        die "kcmdline file not found: $KCMDLINE_FILE"
+    elif [ -f "$BOOTLOADER_SRC/kcmdline.txt" ]; then
+        mcopy -i "$ESP_IMG" "$BOOTLOADER_SRC/kcmdline.txt" ::/EFI/BOOT/kcmdline.txt
+    else
+        printf "warning: no kcmdline file found for mode '%s'\n" "$KCMDLINE_MODE"
+    fi
+fi
 dd if="$ESP_IMG" of="$OUTPUT_IMG" bs=1M seek=1 conv=notrunc status=none
 
 # build root filesystem content
@@ -133,6 +175,7 @@ ln -sf usr/bin/init "$ROOT_CONTENT/init"
 
 # create mount points
 mkdir -p "$ROOT_CONTENT/mnt"
+mkdir -p "$ROOT_CONTENT/proc" "$ROOT_CONTENT/sys" "$ROOT_CONTENT/dev" "$ROOT_CONTENT/run" "$ROOT_CONTENT/tmp"
 
 # create /nex/current and symlinks (needed for absolute package paths)
 ln -sfn "deployments/${INSTALLER_CHECKSUM}.0" "$ROOT_CONTENT/nex/current"

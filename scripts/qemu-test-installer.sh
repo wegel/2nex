@@ -4,7 +4,7 @@
 #   default: boots from installer.img with empty target disk
 #   --boot-target: boots from the installed target disk
 #   --rebuild: force rebuild of installer image
-set -eu
+set -eux
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -42,12 +42,12 @@ if [ "$BOOT_TARGET" = "true" ]; then
         -device ahci,id=ahci \
         -device ide-hd,drive=disk,bus=ahci.0 \
         -serial stdio \
-        -display none \
+        -display gtk \
         -no-reboot
 else
     # build installer image if missing or --rebuild
     if [ ! -f "$INSTALLER_IMG" ] || [ "$REBUILD" = "true" ]; then
-	./nex build asm/installer/manifest.yaml --update-checksum
+	./nex build asm/installer/installer.yaml --update-checksum
         echo "building installer image..."
         "$SCRIPT_DIR/create-installer-usb" systems/desktop-vwl/0.0.1 "$INSTALLER_IMG"
         # also reset target disk when rebuilding installer
@@ -79,6 +79,6 @@ else
         -drive file="$TARGET_IMG",format=raw,if=none,id=target \
         -device ide-hd,drive=target,bus=ahci.1 \
         -serial stdio \
-        -display none \
+        -display gtk \
         -no-reboot
 fi

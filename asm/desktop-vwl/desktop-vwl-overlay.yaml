@@ -260,8 +260,10 @@ files:
     export XDG_RUNTIME_DIR=/run/user/1000
 
     # auto-start vwl on tty1 (before any wayland env is set)
-    if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
-        exec vwl
+    if ! grep -q "nex.safe=1" /proc/cmdline && ! grep -q "nex.novwl=1" /proc/cmdline; then
+        if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+            exec vwl
+        fi
     fi
 
     # wayland environment (only set when inside wayland session)
@@ -292,6 +294,10 @@ files:
   mode: 420
   content: |
     export XDG_RUNTIME_DIR=/run/user/0
+
+- path: /root
+  directory: true
+  mode: 448
 
 # directories
 - path: /var/lib/sshd
@@ -336,6 +342,156 @@ files:
     [Network]
     NameResolvingService=systemd
 
+- path: /etc/systemd/journald.conf.d/00-persistent.conf
+  mode: 420
+  content: |
+    [Journal]
+    Storage=persistent
+    SystemMaxUse=50M
+
+- path: /usr/local/bin/nex-boot-dump
+  mode: 493
+  content: |
+    #!/bin/sh
+    set -eu
+    OUT_DIR=/var/log/nex
+    OUT_FILE="${OUT_DIR}/boot-dump.txt"
+    mkdir -p "$OUT_DIR"
+    {
+        echo "=== nex boot dump ==="
+        date -u
+        echo ""
+        echo "cmdline:"
+        cat /proc/cmdline
+        echo ""
+        echo "uname:"
+        uname -a
+        echo ""
+        echo "systemctl --failed:"
+        systemctl --failed --no-pager || true
+        echo ""
+        echo "kernel log:"
+        dmesg || true
+        echo ""
+        echo "modules:"
+        lsmod || true
+        echo ""
+        echo "network devices:"
+        ip link || true
+        echo ""
+        echo "nm connections:"
+        nmcli -f NAME,UUID,TYPE,AUTOCONNECT,AUTOCONNECT-PRIORITY connection show || true
+        echo ""
+        echo "nm devices:"
+        nmcli -f DEVICE,TYPE,STATE dev || true
+        echo ""
+        echo "pci devices:"
+        if [ -d /sys/bus/pci/devices ]; then
+            for d in /sys/bus/pci/devices/*; do
+                [ -d "$d" ] || continue
+                echo "- $(basename "$d")"
+                cat "$d/vendor" "$d/device" 2>/dev/null | paste -sd ' ' - || true
+                [ -f "$d/class" ] && echo "class=$(cat "$d/class")" || true
+                [ -f "$d/driver/module" ] && echo "driver=$(basename "$(readlink -f "$d/driver/module")")" || true
+            done
+        fi
+        echo ""
+        echo "usb devices:"
+        if [ -d /sys/bus/usb/devices ]; then
+            for d in /sys/bus/usb/devices/*; do
+                [ -d "$d" ] || continue
+                [ -f "$d/idVendor" ] || continue
+                echo "- $(basename "$d") vendor=$(cat "$d/idVendor") product=$(cat "$d/idProduct")"
+                [ -f "$d/product" ] && echo "  product=$(cat "$d/product")" || true
+                [ -f "$d/manufacturer" ] && echo "  manufacturer=$(cat "$d/manufacturer")" || true
+            done
+        fi
+    } >"$OUT_FILE" 2>&1
+
+- path: /etc/systemd/system/nex-boot-dump.service
+  mode: 420
+  content: |
+    [Unit]
+    Description=Dump boot diagnostics to /var/log/nex/boot-dump.txt
+    After=network.target NetworkManager.service
+    Wants=NetworkManager.service
+
+    [Service]
+    Type=oneshot
+    ExecStart=/usr/local/bin/nex-boot-dump
+
+    [Install]
+    WantedBy=multi-user.target
+
+- path: /etc/NetworkManager/system-connections/wegelnet.nmconnection
+  mode: 384
+  content: |
+    [connection]
+    id=wegelnet
+    type=wifi
+    autoconnect=true
+    autoconnect-priority=100
+
+    [wifi]
+    ssid=wegelnet
+    mode=infrastructure
+
+    [wifi-security]
+    key-mgmt=wpa-psk
+    psk=BackToYouF00cker5
+
+    [ipv4]
+    method=manual
+    address1=192.168.3.110/24,192.168.3.2
+    dns=192.168.3.2;
+
+    [ipv6]
+    method=ignore
+
+- path: /usr/local/bin/nm-autoconnect
+  mode: 493
+  content: |
+    #!/bin/sh
+    set -eu
+    ensure_conn() {
+        if nmcli -g NAME connection show 2>/dev/null | grep -qx wegelnet; then
+            return 0
+        fi
+        nmcli connection add type wifi ifname "*" con-name wegelnet ssid wegelnet \
+            wifi-sec.key-mgmt wpa-psk wifi-sec.psk BackToYouF00cker5 \
+            ipv4.method manual ipv4.addresses 192.168.3.110/24 ipv4.gateway 192.168.3.2 ipv4.dns 192.168.3.2 \
+            ipv6.method ignore || true
+    }
+    wifi_connected() {
+        nmcli -t -f TYPE,STATE dev 2>/dev/null | awk -F: '$1=="wifi" && $2=="connected"{found=1} END{exit !found}'
+    }
+    for _i in 1 2 3 4 5 6 7 8 9 10; do
+        ensure_conn || true
+        wifi_connected && exit 0 || true
+        nmcli --wait 10 connection up id wegelnet && exit 0 || true
+        sleep 2
+    done
+    exit 1
+
+- path: /etc/systemd/system/nm-autoconnect.service
+  mode: 420
+  content: |
+    [Unit]
+    Description=Force NetworkManager autoconnect for wegelnet
+    After=NetworkManager.service
+    Wants=NetworkManager.service iwd.service
+
+    [Service]
+    Type=oneshot
+    ExecStartPre=/bin/sleep 5
+    ExecStart=/usr/local/bin/nm-autoconnect
+    Restart=on-failure
+    RestartSec=10
+    StartLimitIntervalSec=0
+
+    [Install]
+    WantedBy=multi-user.target
+
 # systemd service enablement
 - path: /etc/systemd/system/multi-user.target.wants/NetworkManager.service
   symlink: /usr/lib/systemd/system/NetworkManager.service
@@ -348,6 +504,12 @@ files:
 
 - path: /etc/systemd/system/multi-user.target.wants/systemd-resolved.service
   symlink: /usr/lib/systemd/system/systemd-resolved.service
+
+- path: /etc/systemd/system/multi-user.target.wants/nex-boot-dump.service
+  symlink: /etc/systemd/system/nex-boot-dump.service
+
+- path: /etc/systemd/system/multi-user.target.wants/nm-autoconnect.service
+  symlink: /etc/systemd/system/nm-autoconnect.service
 
 - path: /etc/systemd/system/getty.target.wants/getty@tty1.service
   symlink: /usr/lib/systemd/system/getty@.service
