@@ -137,9 +137,14 @@ files:
         ln -sf /usr/bin /mnt/sbin
         ln -sf usr/bin/init /mnt/init
 
+        # ensure required mountpoints exist on the root (root will be read-only at boot)
+        mkdir -p /mnt/proc /mnt/sys /mnt/dev /mnt/run /mnt/tmp
+
         # writable paths symlink to /var
         ln -sf /var/etc /mnt/etc
         ln -sf /var/home /mnt/home
+        mkdir -p /mnt/var/root
+        ln -sf /var/root /mnt/root
 
         # create /nex symlinks
         ln -sfn "deployments/${checksum}.0" /mnt/nex/current
@@ -152,6 +157,22 @@ files:
         mount "$esp" /mnt/boot/efi
         mkdir -p /mnt/boot/efi/EFI/BOOT
         cp "$BOOTLOADER_PATH" /mnt/boot/efi/EFI/BOOT/BOOTX64.EFI
+
+        # copy kcmdline.txt from installer media ESP if present
+        installer_root=$(findmnt -n -o SOURCE / 2>/dev/null || true)
+        if [ -n "$installer_root" ]; then
+            installer_dev=$(echo "$installer_root" | sed 's/[0-9p]*$//')
+            installer_esp=$(partition_path "$installer_dev" 1)
+            if [ -b "$installer_esp" ]; then
+                mkdir -p /run/installer/esp
+                if mount -o ro "$installer_esp" /run/installer/esp 2>/dev/null; then
+                    if [ -f /run/installer/esp/EFI/BOOT/kcmdline.txt ]; then
+                        cp /run/installer/esp/EFI/BOOT/kcmdline.txt /mnt/boot/efi/EFI/BOOT/kcmdline.txt
+                    fi
+                    umount /run/installer/esp 2>/dev/null || true
+                fi
+            fi
+        fi
 
         # unmount
         printf "finalizing...\n"
@@ -275,14 +296,41 @@ files:
     export TERM=linux
     export PATH=/usr/bin
 
-    # find the active console - prefer serial if available (for headless/QEMU)
-    # /dev/console points to tty0 when multiple consoles are configured,
-    # but with -display none, tty0 doesn't work. use ttyS0 for serial.
-    if [ -c /dev/ttyS0 ]; then
-        CONSOLE=/dev/ttyS0
-    else
-        CONSOLE=/dev/console
+    # find the active console
+    CMDLINE="$(cat /proc/cmdline)"
+    echo "INSTALLER: cmdline: $CMDLINE" > /dev/kmsg
+
+    CONSOLE=""
+    case "$CMDLINE" in
+        *installer.console=ttyS0*) CONSOLE=/dev/ttyS0 ;;
+        *installer.console=tty0*) CONSOLE=/dev/tty0 ;;
+        *installer.console=console*) CONSOLE=/dev/console ;;
+        *installer.console=tty[0-9]*)
+            tnum=$(echo "$CMDLINE" | sed -n 's/.*installer.console=tty\([0-9][0-9]*\).*/\1/p' | head -1)
+            [ -n "$tnum" ] && CONSOLE="/dev/tty${tnum}"
+            ;;
+    esac
+
+    if [ -z "$CONSOLE" ]; then
+        if echo "$CMDLINE" | grep -q "console=tty0" && [ -c /dev/tty0 ]; then
+            CONSOLE=/dev/tty0
+        elif echo "$CMDLINE" | grep -q "console=ttyS0" && [ -c /dev/ttyS0 ]; then
+            CONSOLE=/dev/ttyS0
+        else
+            CONSOLE=/dev/console
+        fi
     fi
+
+    if [ ! -c "$CONSOLE" ]; then
+        echo "INSTALLER: console $CONSOLE missing, falling back" > /dev/kmsg
+        if [ -c /dev/tty0 ]; then
+            CONSOLE=/dev/tty0
+        elif [ -c /dev/console ]; then
+            CONSOLE=/dev/console
+        fi
+    fi
+
+    echo "INSTALLER: console probe: tty0=$(ls -l /dev/tty0 2>/dev/null || echo missing) tty1=$(ls -l /dev/tty1 2>/dev/null || echo missing) ttyS0=$(ls -l /dev/ttyS0 2>/dev/null || echo missing) console=$(ls -l /dev/console 2>/dev/null || echo missing)" > /dev/kmsg
     echo "INSTALLER: using console $CONSOLE" > /dev/kmsg
 
     exec setsid -c /bin/bash --login <$CONSOLE >$CONSOLE 2>&1

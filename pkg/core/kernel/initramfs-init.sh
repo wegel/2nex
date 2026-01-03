@@ -2,11 +2,39 @@
 # nex initramfs init
 export PATH=/bin:/sbin
 
-echo "nex initramfs starting... (v4)"
-
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev
+if [ ! -c /dev/console ]; then
+    mknod -m 600 /dev/console c 5 1
+fi
+if [ ! -c /dev/null ]; then
+    mknod -m 666 /dev/null c 1 3
+fi
+if [ ! -c /dev/tty0 ]; then
+    mknod -m 600 /dev/tty0 c 4 0
+fi
+if [ ! -c /dev/ttyS0 ]; then
+    mknod -m 600 /dev/ttyS0 c 4 64
+fi
+
+# set up a working console for init output
+CMDLINE="$(cat /proc/cmdline)"
+CONSOLE=""
+if echo "$CMDLINE" | grep -q "console=tty0" && [ -c /dev/tty0 ]; then
+    CONSOLE=/dev/tty0
+elif echo "$CMDLINE" | grep -q "console=ttyS0" && [ -c /dev/ttyS0 ]; then
+    CONSOLE=/dev/ttyS0
+elif [ -c /dev/console ]; then
+    CONSOLE=/dev/console
+fi
+if [ -n "$CONSOLE" ]; then
+    exec <"$CONSOLE" >"$CONSOLE" 2>&1
+elif [ -c /dev/kmsg ]; then
+    exec >/dev/kmsg 2>&1
+fi
+
+echo "nex initramfs starting... (v5)"
 
 # parse cmdline
 ROOT=""
