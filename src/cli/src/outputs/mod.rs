@@ -1,4 +1,3 @@
-use rayon::prelude::*;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
@@ -346,35 +345,28 @@ pub fn calculate_output_checksum(output_dir: &Path) -> io::Result<String> {
     // sort for consistent ordering
     file_paths.sort();
 
-    // hash each file in parallel using BLAKE3
-    let file_hashes: Vec<io::Result<([u8; 32], String)>> = file_paths
-        .par_iter()
-        .map(|path| {
-            let relative_path = path
-                .strip_prefix(output_dir)
-                .unwrap()
-                .to_string_lossy()
-                .into_owned();
-
-            let mut hasher = blake3::Hasher::new();
-            let mut file = fs::File::open(path)?;
-            let mut buffer = [0u8; 65536]; // 64KB buffer
-            loop {
-                let count = file.read(&mut buffer)?;
-                if count == 0 {
-                    break;
-                }
-                hasher.update(&buffer[..count]);
-            }
-            Ok((*hasher.finalize().as_bytes(), relative_path))
-        })
-        .collect();
-
-    // combine all file hashes deterministically (must be in sorted order)
+    // hash each file deterministically in sorted order
     let mut final_hasher = blake3::Hasher::new();
-    for result in file_hashes {
-        let (hash, path) = result?;
-        final_hasher.update(path.as_bytes());
+    for path in &file_paths {
+        let relative_path = path
+            .strip_prefix(output_dir)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+
+        let mut hasher = blake3::Hasher::new();
+        let mut file = fs::File::open(path)?;
+        let mut buffer = [0u8; 65536]; // 64KB buffer
+        loop {
+            let count = file.read(&mut buffer)?;
+            if count == 0 {
+                break;
+            }
+            hasher.update(&buffer[..count]);
+        }
+        let hash = *hasher.finalize().as_bytes();
+
+        final_hasher.update(relative_path.as_bytes());
         final_hasher.update(b"\0");
         final_hasher.update(&hash);
         final_hasher.update(b"\0");
@@ -407,4 +399,3 @@ pub fn categorize_files(rootfs_dir: &Path) -> HashMap<String, Vec<String>> {
 
     outputs
 }
-

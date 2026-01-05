@@ -6,7 +6,7 @@ package:
   version: 2.44.2
   description: GDK Pixbuf library for image loading
   homepage: https://docs.gtk.org/gdk-pixbuf/
-  checksum: 14307f67e68a5ff5123697e1396b094c578f9bb2f4b13b6ac9034f197ab1dd75
+  checksum: dbcf63b144cc37788c091f01749c044874b1e775c6d61c5b68003e804c83728f
 
 sources:
 - name: gdk-pixbuf
@@ -40,6 +40,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: meson
@@ -58,6 +60,10 @@ dependencies:
   commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
 - name: libjpeg-turbo
   commit: x86_64/pkg/libs/graphics/libjpeg-turbo/3.1.2/bundles/dev
+- name: libtiff
+  commit: x86_64/pkg/libs/graphics/libtiff/4.7.1/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
 - name: libpng
   commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
 - name: util-linux
@@ -67,7 +73,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4135:1036, 8276:1326, 11343:2932]
+  profile: [4112:1313, 8716:1483, 13210:1592, 18815:1637, 24404:1642, 30118:1657, 35811:1674, 47244:1694, 55981:3380, 59079:3617]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_gdk_pixbuf} -C "${WORK_DIR}" --strip-components=1
@@ -77,7 +83,11 @@ build:
       --prefix=/usr \
       --libdir=lib \
       --buildtype=release \
-      -Dbuiltin_loaders=all \
+      -Dbuiltin_loaders=png,gif,jpeg,tiff \
+      -Dpng=enabled \
+      -Djpeg=enabled \
+      -Dtiff=enabled \
+      -Dgif=enabled \
       -Dman=false \
       -Dgtk_doc=false \
       -Dintrospection=disabled \
@@ -86,8 +96,16 @@ build:
       -Dtests=false \
       -Dinstalled_tests=false
 
-    ninja -C build
+    ninja -v -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # Generate a loaders.cache that points at the packaged modules.
+    mkdir -p "${OUT_DIR}/usr/lib/gdk-pixbuf-2.0/2.10.0"
+    GDK_PIXBUF_MODULEDIR="${OUT_DIR}/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders" \
+    GDK_PIXBUF_MODULE_FILE="${OUT_DIR}/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache" \
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${OUT_DIR}/usr/bin/gdk-pixbuf-query-loaders" > "${OUT_DIR}/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
+    sed -i "s#${OUT_DIR}##g" "${OUT_DIR}/usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -143,6 +161,7 @@ outputs:
 
   lib:
     files:
+    - path: /usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache
     - path: /usr/lib/libgdk_pixbuf-2.0.so
       needs:
       - /usr/lib/libc.so.6
@@ -153,6 +172,7 @@ outputs:
       - /usr/lib/libjpeg.so.8
       - /usr/lib/libm.so.6
       - /usr/lib/libpng16.so.16
+      - /usr/lib/libtiff.so.6
     - path: /usr/lib/libgdk_pixbuf-2.0.so.0
       needs:
       - /usr/lib/libc.so.6
@@ -163,6 +183,7 @@ outputs:
       - /usr/lib/libjpeg.so.8
       - /usr/lib/libm.so.6
       - /usr/lib/libpng16.so.16
+      - /usr/lib/libtiff.so.6
     - path: /usr/lib/libgdk_pixbuf-2.0.so.0.4400.2
       needs:
       - /usr/lib/libc.so.6
@@ -173,6 +194,7 @@ outputs:
       - /usr/lib/libjpeg.so.8
       - /usr/lib/libm.so.6
       - /usr/lib/libpng16.so.16
+      - /usr/lib/libtiff.so.6
 
 resolution:
   /usr/lib/libgio-2.0.so.0: glib2
@@ -184,4 +206,5 @@ resolution:
   /usr/lib/libm.so.6: glibc
   /usr/lib/libjpeg.so.8: libjpeg-turbo
   /usr/lib/libpng16.so.16: libpng
+  /usr/lib/libtiff.so.6: libtiff
   /usr/lib/libgdk_pixbuf-2.0.so.0: self

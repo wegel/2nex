@@ -54,6 +54,7 @@ pub fn build_system_manifest_with_dir(
         &dependency_commits,
         &build_env.paths,
         opts.verbose,
+        opts.reuse_rootfs,
     )?;
     layer_commits_into_rootfs(
         base_dir,
@@ -171,6 +172,7 @@ pub fn build_system_manifest_with_dir(
             &dependency_commits,
             &build_env.paths,
             opts.verbose,
+            false, // never reuse rootfs for reproducibility check
         )?;
         layer_commits_into_rootfs(
             base_dir,

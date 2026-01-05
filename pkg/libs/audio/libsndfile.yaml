@@ -1,0 +1,203 @@
+package:
+  schema: 1
+  name: libsndfile
+  slug: libsndfile
+  namespace: libs/audio
+  version: 1.2.2
+  description: C library for reading and writing sound files
+  homepage: https://libsndfile.github.io/libsndfile/
+  checksum: fb8a0823932cb5fc6dff4a66b50413b873c27b6c0f4a9cc1f0ffadea67b2d600
+
+sources:
+- name: libsndfile
+  url: https://github.com/libsndfile/libsndfile/releases/download/1.2.2/libsndfile-1.2.2.tar.xz
+  sha256: 3799ca9924d3125038880367bf1468e53a1b7e3686a934f098b7e1d286cdb80e
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4134:1534, 8275:4783, 12416:6361, 16527:7148, 20654:9999, 22555:10156]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --disable-static
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/sndfile-cmp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsndfile.so.1
+    - path: /usr/bin/sndfile-concat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsndfile.so.1
+    - path: /usr/bin/sndfile-convert
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsndfile.so.1
+    - path: /usr/bin/sndfile-deinterleave
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsndfile.so.1
+    - path: /usr/bin/sndfile-info
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libsndfile.so.1
+    - path: /usr/bin/sndfile-interleave
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsndfile.so.1
+    - path: /usr/bin/sndfile-metadata-get
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsndfile.so.1
+    - path: /usr/bin/sndfile-metadata-set
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libsndfile.so.1
+    - path: /usr/bin/sndfile-play
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsndfile.so.1
+    - path: /usr/bin/sndfile-salvage
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsndfile.so.1
+
+  dev:
+    files:
+    - path: /usr/include/sndfile.h
+    - path: /usr/include/sndfile.hh
+    - path: /usr/lib/libsndfile.la
+    - path: /usr/lib/pkgconfig/sndfile.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/libsndfile/FAQ.md
+    - path: /usr/share/doc/libsndfile/api.md
+    - path: /usr/share/doc/libsndfile/bugs.md
+    - path: /usr/share/doc/libsndfile/command.md
+    - path: /usr/share/doc/libsndfile/embedded_files.md
+    - path: /usr/share/doc/libsndfile/formats.md
+    - path: /usr/share/doc/libsndfile/index.md
+    - path: /usr/share/doc/libsndfile/libsndfile.css
+    - path: /usr/share/doc/libsndfile/libsndfile.jpg
+    - path: /usr/share/doc/libsndfile/lists.md
+    - path: /usr/share/doc/libsndfile/new_file_type_howto.md
+    - path: /usr/share/doc/libsndfile/octave.md
+    - path: /usr/share/doc/libsndfile/print.css
+    - path: /usr/share/doc/libsndfile/sndfile_info.md
+    - path: /usr/share/doc/libsndfile/tutorial.md
+    - path: /usr/share/doc/libsndfile/win32.md
+
+  lib:
+    files:
+    - path: /usr/lib/libsndfile.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libsndfile.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libsndfile.so.1.0.37
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man1/sndfile-cmp.1
+    - path: /usr/share/man/man1/sndfile-concat.1
+    - path: /usr/share/man/man1/sndfile-convert.1
+    - path: /usr/share/man/man1/sndfile-deinterleave.1
+    - path: /usr/share/man/man1/sndfile-info.1
+    - path: /usr/share/man/man1/sndfile-interleave.1
+    - path: /usr/share/man/man1/sndfile-metadata-get.1
+    - path: /usr/share/man/man1/sndfile-metadata-set.1
+    - path: /usr/share/man/man1/sndfile-play.1
+    - path: /usr/share/man/man1/sndfile-salvage.1
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libsndfile.so.1: self

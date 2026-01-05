@@ -1,0 +1,158 @@
+package:
+  schema: 1
+  name: libva
+  slug: libva
+  namespace: libs/graphics
+  version: 2.20.0
+  description: VA-API video acceleration library
+  homepage: https://github.com/intel/libva
+  checksum: 7c8c4338b2553688e437e04c0c4a85f8ecc1c9762032f54e6be0e652ba054e68
+
+sources:
+- name: libva
+  url: https://github.com/intel/libva/archive/refs/tags/2.20.0.tar.gz
+  sha256: 117f8d658a5fc9ea406ca80a3eb4ae1d70b15a54807c9ed77199c812bed73b60
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: libdrm
+  commit: x86_64/pkg/libs/graphics/libdrm/2.4.123/bundles/dev
+- name: libx11
+  commit: x86_64/pkg/libs/x11/libx11/1.8.10/bundles/dev
+- name: libxext
+  commit: x86_64/pkg/libs/x11/libxext/1.3.6/bundles/dev
+- name: wayland
+  commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --buildtype=release
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/va/va.h
+    - path: /usr/include/va/va_backend.h
+    - path: /usr/include/va/va_backend_prot.h
+    - path: /usr/include/va/va_backend_vpp.h
+    - path: /usr/include/va/va_compat.h
+    - path: /usr/include/va/va_dec_av1.h
+    - path: /usr/include/va/va_dec_hevc.h
+    - path: /usr/include/va/va_dec_jpeg.h
+    - path: /usr/include/va/va_dec_vp8.h
+    - path: /usr/include/va/va_dec_vp9.h
+    - path: /usr/include/va/va_drm.h
+    - path: /usr/include/va/va_drmcommon.h
+    - path: /usr/include/va/va_egl.h
+    - path: /usr/include/va/va_enc_av1.h
+    - path: /usr/include/va/va_enc_h264.h
+    - path: /usr/include/va/va_enc_hevc.h
+    - path: /usr/include/va/va_enc_jpeg.h
+    - path: /usr/include/va/va_enc_mpeg2.h
+    - path: /usr/include/va/va_enc_vp8.h
+    - path: /usr/include/va/va_enc_vp9.h
+    - path: /usr/include/va/va_fei.h
+    - path: /usr/include/va/va_fei_h264.h
+    - path: /usr/include/va/va_fei_hevc.h
+    - path: /usr/include/va/va_prot.h
+    - path: /usr/include/va/va_str.h
+    - path: /usr/include/va/va_tpi.h
+    - path: /usr/include/va/va_version.h
+    - path: /usr/include/va/va_vpp.h
+    - path: /usr/lib/pkgconfig/libva-drm.pc
+    - path: /usr/lib/pkgconfig/libva.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libva-drm.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdrm.so.2
+      - /usr/lib/libva.so.2
+    - path: /usr/lib/libva-drm.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdrm.so.2
+      - /usr/lib/libva.so.2
+    - path: /usr/lib/libva-drm.so.2.2000.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdrm.so.2
+      - /usr/lib/libva.so.2
+    - path: /usr/lib/libva.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libva.so.2
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libva.so.2.2000.0
+      needs:
+      - /usr/lib/libc.so.6
+
+resolution:
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libdrm.so.2: libdrm
+  /usr/lib/libva.so.2: self

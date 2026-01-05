@@ -1,0 +1,201 @@
+package:
+  schema: 1
+  name: nspr
+  slug: nspr
+  namespace: libs/security
+  version: "4.35"
+  description: Netscape Portable Runtime
+  homepage: https://developer.mozilla.org/docs/Mozilla/Projects/NSPR
+  checksum: 931c81cfba52171103ee6c068f3b280c8332b69305219ee543050d39155145b1
+
+sources:
+- name: nspr
+  url: https://ftp.mozilla.org/pub/nspr/releases/v4.35/src/nspr-4.35.tar.gz
+  sha256: 7ea3297ea5969b5d25a5dd8d47f2443cda88e9ee746301f6e1e1426f8a6abc8f
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4150:1088, 9175:1300, 18529:1637, 27082:1917, 36768:2165, 46120:2444, 55613:2727, 69029:4275, 82103:4441, 87691:4686]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}/nspr
+
+    ./configure --prefix=/usr --enable-64bit
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - misc
+
+  full:
+  - bin
+  - dev
+  - lib
+  - misc
+  - static
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/compile-et.pl
+    - path: /usr/bin/nspr-config
+    - path: /usr/bin/prerr.properties
+
+  dev:
+    files:
+    - path: /usr/include/nspr/md/_aix32.cfg
+    - path: /usr/include/nspr/md/_aix64.cfg
+    - path: /usr/include/nspr/md/_bsdi.cfg
+    - path: /usr/include/nspr/md/_darwin.cfg
+    - path: /usr/include/nspr/md/_freebsd.cfg
+    - path: /usr/include/nspr/md/_hpux32.cfg
+    - path: /usr/include/nspr/md/_hpux64.cfg
+    - path: /usr/include/nspr/md/_linux.cfg
+    - path: /usr/include/nspr/md/_netbsd.cfg
+    - path: /usr/include/nspr/md/_nto.cfg
+    - path: /usr/include/nspr/md/_openbsd.cfg
+    - path: /usr/include/nspr/md/_os2.cfg
+    - path: /usr/include/nspr/md/_qnx.cfg
+    - path: /usr/include/nspr/md/_riscos.cfg
+    - path: /usr/include/nspr/md/_scoos.cfg
+    - path: /usr/include/nspr/md/_solaris.cfg
+    - path: /usr/include/nspr/md/_unixware.cfg
+    - path: /usr/include/nspr/md/_unixware7.cfg
+    - path: /usr/include/nspr/md/_win95.cfg
+    - path: /usr/include/nspr/md/_winnt.cfg
+    - path: /usr/include/nspr/nspr.h
+    - path: /usr/include/nspr/obsolete/pralarm.h
+    - path: /usr/include/nspr/obsolete/probslet.h
+    - path: /usr/include/nspr/obsolete/protypes.h
+    - path: /usr/include/nspr/obsolete/prsem.h
+    - path: /usr/include/nspr/plarena.h
+    - path: /usr/include/nspr/plarenas.h
+    - path: /usr/include/nspr/plbase64.h
+    - path: /usr/include/nspr/plerror.h
+    - path: /usr/include/nspr/plgetopt.h
+    - path: /usr/include/nspr/plhash.h
+    - path: /usr/include/nspr/plstr.h
+    - path: /usr/include/nspr/pratom.h
+    - path: /usr/include/nspr/prbit.h
+    - path: /usr/include/nspr/prclist.h
+    - path: /usr/include/nspr/prcmon.h
+    - path: /usr/include/nspr/prcountr.h
+    - path: /usr/include/nspr/prcpucfg.h
+    - path: /usr/include/nspr/prcvar.h
+    - path: /usr/include/nspr/prdtoa.h
+    - path: /usr/include/nspr/prenv.h
+    - path: /usr/include/nspr/prerr.h
+    - path: /usr/include/nspr/prerror.h
+    - path: /usr/include/nspr/prinet.h
+    - path: /usr/include/nspr/prinit.h
+    - path: /usr/include/nspr/prinrval.h
+    - path: /usr/include/nspr/prio.h
+    - path: /usr/include/nspr/pripcsem.h
+    - path: /usr/include/nspr/private/pprio.h
+    - path: /usr/include/nspr/private/pprthred.h
+    - path: /usr/include/nspr/private/prpriv.h
+    - path: /usr/include/nspr/prlink.h
+    - path: /usr/include/nspr/prlock.h
+    - path: /usr/include/nspr/prlog.h
+    - path: /usr/include/nspr/prlong.h
+    - path: /usr/include/nspr/prmem.h
+    - path: /usr/include/nspr/prmon.h
+    - path: /usr/include/nspr/prmwait.h
+    - path: /usr/include/nspr/prnetdb.h
+    - path: /usr/include/nspr/prolock.h
+    - path: /usr/include/nspr/prpdce.h
+    - path: /usr/include/nspr/prprf.h
+    - path: /usr/include/nspr/prproces.h
+    - path: /usr/include/nspr/prrng.h
+    - path: /usr/include/nspr/prrwlock.h
+    - path: /usr/include/nspr/prshm.h
+    - path: /usr/include/nspr/prshma.h
+    - path: /usr/include/nspr/prsystem.h
+    - path: /usr/include/nspr/prthread.h
+    - path: /usr/include/nspr/prtime.h
+    - path: /usr/include/nspr/prtpool.h
+    - path: /usr/include/nspr/prtrace.h
+    - path: /usr/include/nspr/prtypes.h
+    - path: /usr/include/nspr/prvrsion.h
+    - path: /usr/include/nspr/prwin16.h
+    - path: /usr/lib/pkgconfig/nspr.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libnspr4.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libplc4.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+    - path: /usr/lib/libplds4.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+
+  misc:
+    files:
+    - path: /usr/share/aclocal/nspr.m4
+
+  static:
+    files:
+    - path: /usr/lib/libnspr4.a
+    - path: /usr/lib/libplc4.a
+    - path: /usr/lib/libplds4.a
+
+resolution:
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libnspr4.so: self

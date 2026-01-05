@@ -427,6 +427,7 @@ fn build_provider_lookup(
                 show_dep_paths: false,
                 trace_dependency: None,
                 multi_progress: None,
+                reuse_rootfs: false,
             };
             let manifest_dirs = vec![PathBuf::from(".")];
             crate::build::orchestration::build_with_dependencies(

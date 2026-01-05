@@ -95,6 +95,10 @@ pub struct BuildArgs {
     /// Disable progress tracking (legacy behavior, shows raw output)
     #[clap(long)]
     pub no_progress: bool,
+
+    /// Reuse existing build rootfs directory (skip deletion for faster iteration)
+    #[clap(long)]
+    pub reuse_rootfs: bool,
 }
 
 /// Build options passed to build functions
@@ -119,6 +123,8 @@ pub struct BuildOpts {
     pub trace_dependency: Option<String>,
     /// shared MultiProgress for parallel builds (None for single builds)
     pub multi_progress: Option<Arc<MultiProgress>>,
+    /// reuse existing build rootfs directory (skip deletion)
+    pub reuse_rootfs: bool,
 }
 
 impl BuildOpts {
@@ -143,6 +149,7 @@ impl BuildOpts {
             show_dep_paths: args.show_dep_paths,
             trace_dependency: args.trace_dependency.clone(),
             multi_progress: None,
+            reuse_rootfs: args.reuse_rootfs,
         }
     }
 }

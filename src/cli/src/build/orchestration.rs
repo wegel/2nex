@@ -587,6 +587,7 @@ fn build_packages_parallel(
                             show_dep_paths: opts.show_dep_paths,
                             trace_dependency: opts.trace_dependency.clone(),
                             multi_progress: Some(multi_progress.clone()),
+                            reuse_rootfs: opts.reuse_rootfs,
                         };
 
                         println!(
@@ -639,6 +640,7 @@ fn build_packages_parallel(
                             show_dep_paths: opts.show_dep_paths,
                             trace_dependency: opts.trace_dependency.clone(),
                             multi_progress: Some(multi_progress.clone()),
+                            reuse_rootfs: opts.reuse_rootfs,
                         };
 
                         println!(
@@ -812,6 +814,7 @@ fn add_missing_checksums_to_manifests(
                     show_dep_paths: false,
                     trace_dependency: None,
                     multi_progress: None,
+                    reuse_rootfs: false, // never reuse when adding checksums
                 };
 
                 crate::build::build_package_manifest_with_dir(

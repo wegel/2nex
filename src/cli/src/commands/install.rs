@@ -527,6 +527,7 @@ fn build_package_to_user_repo(
         show_dep_paths: false,
         trace_dependency: None,
         multi_progress: None,
+        reuse_rootfs: false,
     };
 
     build::build_single(&opts)

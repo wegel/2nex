@@ -1,0 +1,108 @@
+package:
+  schema: 1
+  name: packaging
+  slug: packaging
+  namespace: dev/python
+  version: "25.0"
+  description: Core utilities for Python packages
+  homepage: https://pypi.org/project/packaging/
+  checksum: b80076cad3d0a8622d7d8828c015fec23aefeecdd1531b95e3746a7b52672612
+
+sources:
+- name: packaging
+  url: https://files.pythonhosted.org/packages/source/p/packaging/packaging-25.0.tar.gz
+  sha256: d443872c98d677bf60f6a1f2f8c1cb748e8fe762d2bf9d3148b5599295b0fc4f
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: setuptools
+  commit: x86_64/pkg/dev/python/setuptools/70.0.0/bundles/dev
+- name: wheel
+  commit: x86_64/pkg/dev/python/wheel/0.43.0/bundles/dev
+- name: flit-core
+  commit: x86_64/pkg/dev/python/flit-core/3.9.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [1307:413]
+
+  script: |
+    set -eux
+    tar --no-same-owner -xf /${SOURCE_packaging} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    PYTHONDONTWRITEBYTECODE=1 \
+      python3 -m pip install --no-build-isolation --no-deps --no-compile \
+      --root="${OUT_DIR}" --prefix=/usr .
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - lib
+
+  full:
+  - lib
+
+outputs:
+  lib:
+    files:
+    - path: /usr/lib/python3.12/site-packages/packaging-25.0.dist-info/INSTALLER
+    - path: /usr/lib/python3.12/site-packages/packaging-25.0.dist-info/LICENSE
+    - path: /usr/lib/python3.12/site-packages/packaging-25.0.dist-info/LICENSE.APACHE
+    - path: /usr/lib/python3.12/site-packages/packaging-25.0.dist-info/LICENSE.BSD
+    - path: /usr/lib/python3.12/site-packages/packaging-25.0.dist-info/METADATA
+    - path: /usr/lib/python3.12/site-packages/packaging-25.0.dist-info/RECORD
+    - path: /usr/lib/python3.12/site-packages/packaging-25.0.dist-info/REQUESTED
+    - path: /usr/lib/python3.12/site-packages/packaging-25.0.dist-info/WHEEL
+    - path: /usr/lib/python3.12/site-packages/packaging-25.0.dist-info/direct_url.json
+    - path: /usr/lib/python3.12/site-packages/packaging/__init__.py
+    - path: /usr/lib/python3.12/site-packages/packaging/_elffile.py
+    - path: /usr/lib/python3.12/site-packages/packaging/_manylinux.py
+    - path: /usr/lib/python3.12/site-packages/packaging/_musllinux.py
+    - path: /usr/lib/python3.12/site-packages/packaging/_parser.py
+    - path: /usr/lib/python3.12/site-packages/packaging/_structures.py
+    - path: /usr/lib/python3.12/site-packages/packaging/_tokenizer.py
+    - path: /usr/lib/python3.12/site-packages/packaging/licenses/__init__.py
+    - path: /usr/lib/python3.12/site-packages/packaging/licenses/_spdx.py
+    - path: /usr/lib/python3.12/site-packages/packaging/markers.py
+    - path: /usr/lib/python3.12/site-packages/packaging/metadata.py
+    - path: /usr/lib/python3.12/site-packages/packaging/py.typed
+    - path: /usr/lib/python3.12/site-packages/packaging/requirements.py
+    - path: /usr/lib/python3.12/site-packages/packaging/specifiers.py
+    - path: /usr/lib/python3.12/site-packages/packaging/tags.py
+    - path: /usr/lib/python3.12/site-packages/packaging/utils.py
+    - path: /usr/lib/python3.12/site-packages/packaging/version.py

@@ -161,9 +161,10 @@ pub fn setup_composite_rootfs(
     dependency_commits: &[String],
     paths: &BuildPaths,
     verbose: bool,
+    reuse_rootfs: bool,
 ) -> io::Result<()> {
     println!("Setting up composite rootfs at {}", base_dir);
-    if Path::new(base_dir).exists() {
+    if !reuse_rootfs && Path::new(base_dir).exists() {
         fs::remove_dir_all(base_dir)?;
     }
     fs::create_dir_all(base_dir)?;
@@ -172,17 +173,28 @@ pub fn setup_composite_rootfs(
     let out_dir = Path::new(base_dir).join(&paths.out);
     let tmp_dir = Path::new(base_dir).join("tmp");
 
-    for dir in &[&work_dir, &out_dir, &tmp_dir] {
-        if verbose {
-            println!("Creating directory: {}", dir.display());
-        }
-        if dir.exists() {
-            if verbose {
-                println!("Removing existing {}", dir.display());
+    // when reusing rootfs, preserve work_dir (extracted sources) but clean out_dir and tmp_dir
+    if reuse_rootfs {
+        fs::create_dir_all(&work_dir)?;
+        for dir in &[&out_dir, &tmp_dir] {
+            if dir.exists() {
+                fs::remove_dir_all(dir)?;
             }
-            fs::remove_dir_all(dir)?;
+            fs::create_dir_all(dir)?;
         }
-        fs::create_dir_all(dir)?;
+    } else {
+        for dir in &[&work_dir, &out_dir, &tmp_dir] {
+            if verbose {
+                println!("Creating directory: {}", dir.display());
+            }
+            if dir.exists() {
+                if verbose {
+                    println!("Removing existing {}", dir.display());
+                }
+                fs::remove_dir_all(dir)?;
+            }
+            fs::create_dir_all(dir)?;
+        }
     }
 
     for commit in dependency_commits {
@@ -827,6 +839,7 @@ pub fn build_package_manifest_with_dir(
         &dependency_commits,
         &build_env.paths,
         opts.verbose,
+        opts.reuse_rootfs,
     )?;
 
     // use_absolute_paths = !chroot (when not using chroot, we need absolute paths)
@@ -1036,6 +1049,7 @@ pub fn build_package_manifest_with_dir(
             &dependency_commits,
             &build_env.paths,
             opts.verbose,
+            false, // never reuse rootfs for reproducibility check
         )?;
         let input_env_vars_2 = handle_inputs(
             &manifest.sources,
@@ -1046,6 +1060,11 @@ pub fn build_package_manifest_with_dir(
             canonical_prefix,
         )?;
         run_build_script_with_env(&build_script, base_dir, &input_env_vars_2, &build_env, None)?;
+
+        // compute checksum before outputs are moved into categorized dirs
+        let second_checksum = calculate_output_checksum(&output_dir)?;
+        println!("Second build output checksum: {}", second_checksum);
+
         verify_and_commit_outputs(
             manifest,
             base_dir,
@@ -1059,9 +1078,6 @@ pub fn build_package_manifest_with_dir(
             &opts.repo_path,
             Path::new(&opts.manifest_file),
         )?;
-
-        let second_checksum = calculate_output_checksum(&output_dir)?;
-        println!("Second build output checksum: {}", second_checksum);
 
         if checksum == second_checksum {
             println!("Build is reproducible. Checksums match.");

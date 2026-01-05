@@ -1,0 +1,732 @@
+package:
+  schema: 1
+  name: krb5
+  slug: krb5
+  namespace: libs/security
+  version: 1.21.3
+  description: MIT Kerberos 5 implementation
+  homepage: https://web.mit.edu/kerberos/
+  checksum: 614a2c6107949ca4f32109d6a62cf8514c8a37644a4ed05226a21a79a161bedd
+
+sources:
+- name: krb5
+  url: https://web.mit.edu/kerberos/dist/krb5/1.21/krb5-1.21.3.tar.gz
+  sha256: b7a4cd5ead67fb08b980b21abd150ff7217e85ea320c9ed0c6dadd304840ad35
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: e2fsprogs
+  commit: x86_64/pkg/core/fs/e2fsprogs/1.47.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: bison
+  commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
+- name: m4
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [21183:9544, 83992:11421, 185694:13203, 310658:13834, 413456:15788, 514918:16247, 617053:18501, 770580:26791, 922513:34833, 1024021:36654]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}/src
+
+    ./configure \
+      --prefix=/usr \
+      --sysconfdir=/etc \
+      --localstatedir=/var/lib \
+      --runstatedir=/run \
+      --enable-shared \
+      --disable-rpath \
+      --without-system-et \
+      --without-system-ss \
+      --without-ldap \
+      --without-lmdb
+
+    make -j$(nproc)
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - bin
+  - conf
+  - dev
+  - lib
+  - man
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/compile_et
+    - path: /usr/bin/gss-client
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgssapi_krb5.so.2
+    - path: /usr/bin/k5srvutil
+    - path: /usr/bin/kadmin
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkadm5clnt_mit.so.12
+      - /usr/lib/libkrb5.so.3
+    - path: /usr/bin/kdestroy
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libkrb5.so.3
+    - path: /usr/bin/kinit
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libkadm5srv_mit.so.12
+      - /usr/lib/libkdb5.so.10
+      - /usr/lib/libkrb5.so.3
+    - path: /usr/bin/klist
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+    - path: /usr/bin/kpasswd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libkrb5.so.3
+    - path: /usr/bin/krb5-config
+    - path: /usr/bin/kswitch
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libkrb5.so.3
+    - path: /usr/bin/ktutil
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+    - path: /usr/bin/kvno
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+    - path: /usr/bin/sclient
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+    - path: /usr/bin/sim_client
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libkrb5.so.3
+    - path: /usr/bin/uuclient
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libkrb5.so.3
+
+  conf:
+    files:
+    - path: /usr/share/examples/krb5/kdc.conf
+    - path: /usr/share/examples/krb5/krb5.conf
+
+  dev:
+    files:
+    - path: /usr/include/com_err.h
+    - path: /usr/include/gssapi.h
+    - path: /usr/include/gssapi/gssapi.h
+    - path: /usr/include/gssapi/gssapi_alloc.h
+    - path: /usr/include/gssapi/gssapi_ext.h
+    - path: /usr/include/gssapi/gssapi_generic.h
+    - path: /usr/include/gssapi/gssapi_krb5.h
+    - path: /usr/include/gssapi/mechglue.h
+    - path: /usr/include/gssrpc/auth.h
+    - path: /usr/include/gssrpc/auth_gss.h
+    - path: /usr/include/gssrpc/auth_gssapi.h
+    - path: /usr/include/gssrpc/auth_unix.h
+    - path: /usr/include/gssrpc/clnt.h
+    - path: /usr/include/gssrpc/netdb.h
+    - path: /usr/include/gssrpc/pmap_clnt.h
+    - path: /usr/include/gssrpc/pmap_prot.h
+    - path: /usr/include/gssrpc/pmap_rmt.h
+    - path: /usr/include/gssrpc/rename.h
+    - path: /usr/include/gssrpc/rpc.h
+    - path: /usr/include/gssrpc/rpc_msg.h
+    - path: /usr/include/gssrpc/svc.h
+    - path: /usr/include/gssrpc/svc_auth.h
+    - path: /usr/include/gssrpc/types.h
+    - path: /usr/include/gssrpc/xdr.h
+    - path: /usr/include/kadm5/admin.h
+    - path: /usr/include/kadm5/chpass_util_strings.h
+    - path: /usr/include/kadm5/kadm_err.h
+    - path: /usr/include/kdb.h
+    - path: /usr/include/krad.h
+    - path: /usr/include/krb5/ccselect_plugin.h
+    - path: /usr/include/krb5/certauth_plugin.h
+    - path: /usr/include/krb5/clpreauth_plugin.h
+    - path: /usr/include/krb5.h
+    - path: /usr/include/krb5/hostrealm_plugin.h
+    - path: /usr/include/krb5/kadm5_auth_plugin.h
+    - path: /usr/include/krb5/kadm5_hook_plugin.h
+    - path: /usr/include/krb5/kdcpolicy_plugin.h
+    - path: /usr/include/krb5/kdcpreauth_plugin.h
+    - path: /usr/include/krb5/krb5.h
+    - path: /usr/include/krb5/localauth_plugin.h
+    - path: /usr/include/krb5/locate_plugin.h
+    - path: /usr/include/krb5/plugin.h
+    - path: /usr/include/krb5/preauth_plugin.h
+    - path: /usr/include/krb5/pwqual_plugin.h
+    - path: /usr/include/profile.h
+    - path: /usr/include/verto-module.h
+    - path: /usr/include/verto.h
+    - path: /usr/lib/pkgconfig/gssrpc.pc
+    - path: /usr/lib/pkgconfig/kadm-client.pc
+    - path: /usr/lib/pkgconfig/kadm-server.pc
+    - path: /usr/lib/pkgconfig/kdb.pc
+    - path: /usr/lib/pkgconfig/krb5-gssapi.pc
+    - path: /usr/lib/pkgconfig/krb5.pc
+    - path: /usr/lib/pkgconfig/mit-krb5-gssapi.pc
+    - path: /usr/lib/pkgconfig/mit-krb5.pc
+
+  lib:
+    files:
+    - path: /usr/lib/krb5/plugins/kdb/db2.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkadm5srv_mit.so.12
+      - /usr/lib/libkdb5.so.10
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/krb5/plugins/preauth/otp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrad.so.0
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+      - /usr/lib/libverto.so.0
+    - path: /usr/lib/krb5/plugins/preauth/pkinit.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/krb5/plugins/preauth/spake.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/krb5/plugins/preauth/test.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/krb5/plugins/tls/k5tls.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libssl.so.3
+    - path: /usr/lib/libcom_err.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libcom_err.so.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libcom_err.so.3.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libgssapi_krb5.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libgssapi_krb5.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libgssapi_krb5.so.2.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libgssrpc.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libgssrpc.so.4
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libgssrpc.so.4.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libk5crypto.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libk5crypto.so.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libk5crypto.so.3.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkadm5clnt.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkadm5clnt_mit.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkadm5clnt_mit.so.12
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkadm5clnt_mit.so.12.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkadm5srv.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkdb5.so.10
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkadm5srv_mit.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkdb5.so.10
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkadm5srv_mit.so.12
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkdb5.so.10
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkadm5srv_mit.so.12.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkdb5.so.10
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkdb5.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkdb5.so.10
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkdb5.so.10.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkrad.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+      - /usr/lib/libverto.so.0
+    - path: /usr/lib/libkrad.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+      - /usr/lib/libverto.so.0
+    - path: /usr/lib/libkrad.so.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+      - /usr/lib/libverto.so.0
+    - path: /usr/lib/libkrb5.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkrb5.so.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkrb5.so.3.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkrb5support.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkrb5support.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libkrb5support.so.0.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libverto.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libverto.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libresolv.so.2
+    - path: /usr/lib/libverto.so.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libresolv.so.2
+
+  man:
+    files:
+    - path: /usr/share/man/man1/compile_et.1
+    - path: /usr/share/man/man1/k5srvutil.1
+    - path: /usr/share/man/man1/kadmin.1
+    - path: /usr/share/man/man1/kdestroy.1
+    - path: /usr/share/man/man1/kinit.1
+    - path: /usr/share/man/man1/klist.1
+    - path: /usr/share/man/man1/kpasswd.1
+    - path: /usr/share/man/man1/krb5-config.1
+    - path: /usr/share/man/man1/ksu.1
+    - path: /usr/share/man/man1/kswitch.1
+    - path: /usr/share/man/man1/ktutil.1
+    - path: /usr/share/man/man1/kvno.1
+    - path: /usr/share/man/man1/sclient.1
+    - path: /usr/share/man/man5/.k5identity.5
+    - path: /usr/share/man/man5/.k5login.5
+    - path: /usr/share/man/man5/k5identity.5
+    - path: /usr/share/man/man5/k5login.5
+    - path: /usr/share/man/man5/kadm5.acl.5
+    - path: /usr/share/man/man5/kdc.conf.5
+    - path: /usr/share/man/man5/krb5.conf.5
+    - path: /usr/share/man/man7/kerberos.7
+    - path: /usr/share/man/man8/kadmin.local.8
+    - path: /usr/share/man/man8/kadmind.8
+    - path: /usr/share/man/man8/kdb5_ldap_util.8
+    - path: /usr/share/man/man8/kdb5_util.8
+    - path: /usr/share/man/man8/kprop.8
+    - path: /usr/share/man/man8/kpropd.8
+    - path: /usr/share/man/man8/kproplog.8
+    - path: /usr/share/man/man8/krb5kdc.8
+    - path: /usr/share/man/man8/sserver.8
+
+  misc:
+    files:
+    - path: /usr/sbin/gss-server
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgssapi_krb5.so.2
+    - path: /usr/sbin/kadmin.local
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkadm5srv_mit.so.12
+      - /usr/lib/libkrb5.so.3
+    - path: /usr/sbin/kadmind
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libkadm5srv_mit.so.12
+      - /usr/lib/libkdb5.so.10
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libverto.so.0
+    - path: /usr/sbin/kdb5_util
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkadm5srv_mit.so.12
+      - /usr/lib/libkdb5.so.10
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+    - path: /usr/sbin/kprop
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+    - path: /usr/sbin/kpropd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkadm5clnt_mit.so.12
+      - /usr/lib/libkdb5.so.10
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+    - path: /usr/sbin/kproplog
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libkadm5srv_mit.so.12
+      - /usr/lib/libkdb5.so.10
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+    - path: /usr/sbin/krb5kdc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libgssrpc.so.4
+      - /usr/lib/libk5crypto.so.3
+      - /usr/lib/libkadm5srv_mit.so.12
+      - /usr/lib/libkdb5.so.10
+      - /usr/lib/libkrb5.so.3
+      - /usr/lib/libkrb5support.so.0
+      - /usr/lib/libverto.so.0
+    - path: /usr/sbin/krb5-send-pr
+    - path: /usr/sbin/sim_server
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libkrb5.so.3
+    - path: /usr/sbin/sserver
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libkrb5.so.3
+    - path: /usr/sbin/uuserver
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.3
+      - /usr/lib/libkrb5.so.3
+    - path: /usr/share/et/et_c.awk
+    - path: /usr/share/et/et_h.awk
+    - path: /usr/share/examples/krb5/services.append
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libresolv.so.2: glibc
+  /usr/lib/libcrypto.so.3: openssl3
+  /usr/lib/libssl.so.3: openssl3
+  /usr/lib/libcom_err.so.3: self
+  /usr/lib/libgssapi_krb5.so.2: self
+  /usr/lib/libgssrpc.so.4: self
+  /usr/lib/libk5crypto.so.3: self
+  /usr/lib/libkadm5clnt_mit.so.12: self
+  /usr/lib/libkadm5srv_mit.so.12: self
+  /usr/lib/libkdb5.so.10: self
+  /usr/lib/libkrad.so.0: self
+  /usr/lib/libkrb5.so.3: self
+  /usr/lib/libkrb5support.so.0: self
+  /usr/lib/libverto.so.0: self

@@ -1,0 +1,151 @@
+package:
+  schema: 1
+  name: gyp-next
+  slug: gyp-next
+  namespace: dev/python
+  version: 0.21.0
+  description: GYP build tool (maintained fork)
+  homepage: https://pypi.org/project/gyp-next/
+  checksum: 0b90db9ce18233973e7a25a9f2a137ebcf94b1fbce6b635d770dacb47859011d
+
+sources:
+- name: gyp-next
+  url: https://files.pythonhosted.org/packages/source/g/gyp-next/gyp_next-0.21.0.tar.gz
+  sha256: 4cbf51defec8e8fe5ac963f17513eaf21b0d0e26a9ca3af90c835e06bcd6f043
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: setuptools
+  commit: x86_64/pkg/dev/python/setuptools/70.0.0/bundles/dev
+- name: wheel
+  commit: x86_64/pkg/dev/python/wheel/0.43.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: packaging
+  commit: x86_64/pkg/dev/python/packaging/25/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [1782:652]
+
+  script: |
+    set -eux
+    tar --no-same-owner -xf /${SOURCE_gyp_next} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    PYTHONDONTWRITEBYTECODE=1 \
+      python3 -m pip install --no-build-isolation --no-deps --no-compile \
+      --root="${OUT_DIR}" --prefix=/usr .
+
+    find "${OUT_DIR}" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.pyc' -delete 2>/dev/null || true
+    if [ -f "${OUT_DIR}/usr/lib/python3.12/site-packages/gyp_next-0.21.0.dist-info/RECORD" ]; then
+      tmp_record="${OUT_DIR}/tmp/RECORD"
+      mkdir -p "${OUT_DIR}/tmp"
+      grep -v '__pycache__' "${OUT_DIR}/usr/lib/python3.12/site-packages/gyp_next-0.21.0.dist-info/RECORD" \
+        | grep -v '\.pyc' \
+        | LC_ALL=C sort > "${tmp_record}"
+      mv "${tmp_record}" "${OUT_DIR}/usr/lib/python3.12/site-packages/gyp_next-0.21.0.dist-info/RECORD"
+    fi
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - lib
+
+  full:
+  - bin
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/gyp
+
+  lib:
+    files:
+    - path: /usr/lib/python3.12/site-packages/gyp/MSVSNew.py
+    - path: /usr/lib/python3.12/site-packages/gyp/MSVSProject.py
+    - path: /usr/lib/python3.12/site-packages/gyp/MSVSSettings.py
+    - path: /usr/lib/python3.12/site-packages/gyp/MSVSSettings_test.py
+    - path: /usr/lib/python3.12/site-packages/gyp/MSVSToolFile.py
+    - path: /usr/lib/python3.12/site-packages/gyp/MSVSUserFile.py
+    - path: /usr/lib/python3.12/site-packages/gyp/MSVSUtil.py
+    - path: /usr/lib/python3.12/site-packages/gyp/MSVSVersion.py
+    - path: /usr/lib/python3.12/site-packages/gyp/__init__.py
+    - path: /usr/lib/python3.12/site-packages/gyp/common.py
+    - path: /usr/lib/python3.12/site-packages/gyp/common_test.py
+    - path: /usr/lib/python3.12/site-packages/gyp/easy_xml.py
+    - path: /usr/lib/python3.12/site-packages/gyp/easy_xml_test.py
+    - path: /usr/lib/python3.12/site-packages/gyp/flock_tool.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/__init__.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/analyzer.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/android.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/cmake.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/compile_commands_json.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/dump_dependency_json.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/eclipse.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/gypd.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/gypsh.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/make.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/msvs.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/msvs_test.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/ninja.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/ninja_test.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/xcode.py
+    - path: /usr/lib/python3.12/site-packages/gyp/generator/xcode_test.py
+    - path: /usr/lib/python3.12/site-packages/gyp/input.py
+    - path: /usr/lib/python3.12/site-packages/gyp/input_test.py
+    - path: /usr/lib/python3.12/site-packages/gyp/mac_tool.py
+    - path: /usr/lib/python3.12/site-packages/gyp/msvs_emulation.py
+    - path: /usr/lib/python3.12/site-packages/gyp/ninja_syntax.py
+    - path: /usr/lib/python3.12/site-packages/gyp/simple_copy.py
+    - path: /usr/lib/python3.12/site-packages/gyp/win_tool.py
+    - path: /usr/lib/python3.12/site-packages/gyp/xcode_emulation.py
+    - path: /usr/lib/python3.12/site-packages/gyp/xcode_emulation_test.py
+    - path: /usr/lib/python3.12/site-packages/gyp/xcode_ninja.py
+    - path: /usr/lib/python3.12/site-packages/gyp/xcodeproj_file.py
+    - path: /usr/lib/python3.12/site-packages/gyp/xml_fix.py
+    - path: /usr/lib/python3.12/site-packages/gyp_next-0.21.0.dist-info/AUTHORS
+    - path: /usr/lib/python3.12/site-packages/gyp_next-0.21.0.dist-info/INSTALLER
+    - path: /usr/lib/python3.12/site-packages/gyp_next-0.21.0.dist-info/LICENSE
+    - path: /usr/lib/python3.12/site-packages/gyp_next-0.21.0.dist-info/METADATA
+    - path: /usr/lib/python3.12/site-packages/gyp_next-0.21.0.dist-info/RECORD
+    - path: /usr/lib/python3.12/site-packages/gyp_next-0.21.0.dist-info/REQUESTED
+    - path: /usr/lib/python3.12/site-packages/gyp_next-0.21.0.dist-info/WHEEL
+    - path: /usr/lib/python3.12/site-packages/gyp_next-0.21.0.dist-info/direct_url.json
+    - path: /usr/lib/python3.12/site-packages/gyp_next-0.21.0.dist-info/entry_points.txt
+    - path: /usr/lib/python3.12/site-packages/gyp_next-0.21.0.dist-info/top_level.txt

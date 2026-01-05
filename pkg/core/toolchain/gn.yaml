@@ -1,0 +1,119 @@
+package:
+  schema: 1
+  name: GN
+  slug: gn
+  namespace: core/toolchain
+  version: "0.2289"
+  description: Meta-build system that generates build files for Ninja
+  homepage: https://gn.googlesource.com/gn/
+  checksum: dbfd41e2069c4ac442a5052e0f1b60f5e0ba71218b182112d7998ef36e5f5731
+
+sources:
+- name: gn
+  url: https://deps.gentoo.zip/dev-build/gn/gn-0.2289.tar.xz
+  sha256: c3b7a4b628f5805751e1beb01d75958e6f54f792a78885b49d8142dd9cf96d43
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: git
+  commit: x86_64/pkg/dev/vcs/git/2.49.0/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4150:227, 8292:227, 12424:227, 20635:228, 24769:228, 28882:228, 37105:228, 45347:2034, 53549:18972, 56847:25719]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    # create a fake git repo for gen.py to use
+    # set deterministic environment for reproducible commits
+    export GIT_AUTHOR_NAME="nex builder"
+    export GIT_AUTHOR_EMAIL="nex@builder"
+    export GIT_COMMITTER_NAME="nex builder"
+    export GIT_COMMITTER_EMAIL="nex@builder"
+    export GIT_AUTHOR_DATE="2024-01-01T00:00:00+00:00"
+    export GIT_COMMITTER_DATE="2024-01-01T00:00:00+00:00"
+
+    git init
+    git add -A
+    git commit -m "initial-commit"
+    git tag -a initial-commit -m "initial-commit"
+    # add second commit so git describe works properly
+    echo "0.2289" > VERSION
+    git add VERSION
+    export GIT_AUTHOR_DATE="2024-01-01T00:00:01+00:00"
+    export GIT_COMMITTER_DATE="2024-01-01T00:00:01+00:00"
+    git commit -m "version 0.2289"
+
+    # gn builds with clang by default, use gcc instead
+    export CC=gcc
+    export CXX=g++
+    export AR=ar
+    # clear flags that conflict with gn's -Wno-format
+    export CFLAGS=""
+    export CXXFLAGS=""
+    export LDFLAGS="-Wl,-rpath,/usr/lib"
+
+    python3 build/gen.py --allow-warnings
+    ninja -C out
+
+    mkdir -p ${OUT_DIR}/usr/bin
+    install -vm755 out/gn ${OUT_DIR}/usr/bin/
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+
+  full:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/gn
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

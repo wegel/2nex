@@ -134,3 +134,9 @@ preamble: |
           ln -sf bin {build_dir}/target/usr/sbin
       fi
   fi
+
+  # regenerate ld.so.cache so dynamic linker can find all libraries from dependencies
+  # (required for tools like glib-compile-resources that dlopen gdk-pixbuf loaders)
+  if [ -x {build_dir}/usr/bin/ldconfig ]; then
+      {build_dir}/usr/bin/ldconfig -r {build_dir}
+  fi

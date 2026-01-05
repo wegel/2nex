@@ -6,7 +6,7 @@ package:
   version: 1.18.4
   description: 2D graphics library with support for multiple output devices
   homepage: https://cairographics.org/
-  checksum: b476183cfbe974c853fe8ae5ff63597f246ac77d4f1d821525dba1a1d959a9f0
+  checksum: 18e83fe8a110653e16091737abef24665cda14bab7bb5670ab9aeda52f8dff70
 
 sources:
 - name: cairo
@@ -68,10 +68,24 @@ dependencies:
   commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
 - name: libffi
   commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: xorgproto
+  commit: x86_64/pkg/libs/x11/xorgproto/2024.1/bundles/dev
+- name: libx11
+  commit: x86_64/pkg/libs/x11/libx11/1.8.10/bundles/dev
+- name: libxcb
+  commit: x86_64/pkg/libs/x11/libxcb/1.17.0/bundles/dev
+- name: libxau
+  commit: x86_64/pkg/libs/x11/libxau/1.0.12/bundles/dev
+- name: libxdmcp
+  commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
+- name: libxext
+  commit: x86_64/pkg/libs/x11/libxext/1.3.6/bundles/dev
+- name: libxrender
+  commit: x86_64/pkg/libs/x11/libxrender/0.9.11/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4126:2786, 8251:2837, 12356:3116, 16477:3345, 20594:3572, 24711:13220, 28810:13220, 32924:13220, 41172:14555, 41288:14603]
+  profile: [4098:2373, 8356:2854, 12470:3016, 16646:3210, 20821:3440, 24973:3798, 29091:13680, 37315:13680, 41486:14731, 45838:14980]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -80,9 +94,9 @@ build:
     meson setup build \
       --prefix=/usr \
       --buildtype=release \
-      -Dxcb=disabled \
-      -Dxlib=disabled \
-      -Dxlib-xcb=disabled \
+      -Dxcb=enabled \
+      -Dxlib=enabled \
+      -Dxlib-xcb=enabled \
       -Dgtk_doc=false \
       -Dtests=disabled \
       -Dspectre=disabled
@@ -117,6 +131,9 @@ outputs:
     - path: /usr/include/cairo/cairo-svg.h
     - path: /usr/include/cairo/cairo-tee.h
     - path: /usr/include/cairo/cairo-version.h
+    - path: /usr/include/cairo/cairo-xcb.h
+    - path: /usr/include/cairo/cairo-xlib-xrender.h
+    - path: /usr/include/cairo/cairo-xlib.h
     - path: /usr/include/cairo/cairo.h
     - path: /usr/lib/pkgconfig/cairo-fc.pc
     - path: /usr/lib/pkgconfig/cairo-ft.pc
@@ -128,6 +145,11 @@ outputs:
     - path: /usr/lib/pkgconfig/cairo-script.pc
     - path: /usr/lib/pkgconfig/cairo-svg.pc
     - path: /usr/lib/pkgconfig/cairo-tee.pc
+    - path: /usr/lib/pkgconfig/cairo-xcb-shm.pc
+    - path: /usr/lib/pkgconfig/cairo-xcb.pc
+    - path: /usr/lib/pkgconfig/cairo-xlib-xcb.pc
+    - path: /usr/lib/pkgconfig/cairo-xlib-xrender.pc
+    - path: /usr/lib/pkgconfig/cairo-xlib.pc
     - path: /usr/lib/pkgconfig/cairo.pc
 
   lib:
@@ -180,30 +202,45 @@ outputs:
       - /usr/lib/libz.so.1
     - path: /usr/lib/libcairo.so
       needs:
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libX11-xcb.so.1
       - /usr/lib/libc.so.6
       - /usr/lib/libfontconfig.so.1
       - /usr/lib/libfreetype.so.6
       - /usr/lib/libm.so.6
       - /usr/lib/libpixman-1.so.0
       - /usr/lib/libpng16.so.16
+      - /usr/lib/libxcb-render.so.0
+      - /usr/lib/libxcb-shm.so.0
+      - /usr/lib/libxcb.so.1
       - /usr/lib/libz.so.1
     - path: /usr/lib/libcairo.so.2
       needs:
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libX11-xcb.so.1
       - /usr/lib/libc.so.6
       - /usr/lib/libfontconfig.so.1
       - /usr/lib/libfreetype.so.6
       - /usr/lib/libm.so.6
       - /usr/lib/libpixman-1.so.0
       - /usr/lib/libpng16.so.16
+      - /usr/lib/libxcb-render.so.0
+      - /usr/lib/libxcb-shm.so.0
+      - /usr/lib/libxcb.so.1
       - /usr/lib/libz.so.1
     - path: /usr/lib/libcairo.so.2.11804.4
       needs:
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libX11-xcb.so.1
       - /usr/lib/libc.so.6
       - /usr/lib/libfontconfig.so.1
       - /usr/lib/libfreetype.so.6
       - /usr/lib/libm.so.6
       - /usr/lib/libpixman-1.so.0
       - /usr/lib/libpng16.so.16
+      - /usr/lib/libxcb-render.so.0
+      - /usr/lib/libxcb-shm.so.0
+      - /usr/lib/libxcb.so.1
       - /usr/lib/libz.so.1
 
 resolution:
@@ -214,6 +251,11 @@ resolution:
   /usr/lib/libc.so.6: glibc
   /usr/lib/libm.so.6: glibc
   /usr/lib/libpng16.so.16: libpng
+  /usr/lib/libX11.so.6: libx11
+  /usr/lib/libX11-xcb.so.1: libx11
+  /usr/lib/libxcb-render.so.0: libxcb
+  /usr/lib/libxcb-shm.so.0: libxcb
+  /usr/lib/libxcb.so.1: libxcb
   /usr/lib/libpixman-1.so.0: pixman
   /usr/lib/libcairo.so.2: self
   /usr/lib/libz.so.1: zlib
