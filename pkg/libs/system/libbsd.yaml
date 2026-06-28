@@ -1,0 +1,380 @@
+package:
+  schema: 1
+  name: libbsd
+  slug: libbsd
+  namespace: libs/system
+  version: 0.12.2
+  description: BSD compatibility library for Linux
+  homepage: https://libbsd.freedesktop.org/wiki/
+  checksum: 07ab8b39a49b8208417da6b805baef99321f18f776dc7dd569ab6d2544df4d2d
+
+sources:
+- name: libbsd
+  url: https://libbsd.freedesktop.org/releases/libbsd-0.12.2.tar.xz
+  sha256: b88cc9163d0c652aaf39a99991d974ddba1c3a9711db8f1b5838af2a14731014
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: libmd
+  commit: x86_64/pkg/libs/crypto/libmd/1.2.0/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4108:1161, 8223:3267, 12364:4136, 16892:4155, 19423:4334]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_libbsd} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --disable-static
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+  - man
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/bsd/bitstring.h
+    - path: /usr/include/bsd/bsd.h
+    - path: /usr/include/bsd/err.h
+    - path: /usr/include/bsd/getopt.h
+    - path: /usr/include/bsd/grp.h
+    - path: /usr/include/bsd/inttypes.h
+    - path: /usr/include/bsd/libutil.h
+    - path: /usr/include/bsd/md5.h
+    - path: /usr/include/bsd/netinet/ip_icmp.h
+    - path: /usr/include/bsd/nlist.h
+    - path: /usr/include/bsd/pwd.h
+    - path: /usr/include/bsd/readpassphrase.h
+    - path: /usr/include/bsd/stdio.h
+    - path: /usr/include/bsd/stdlib.h
+    - path: /usr/include/bsd/string.h
+    - path: /usr/include/bsd/stringlist.h
+    - path: /usr/include/bsd/sys/bitstring.h
+    - path: /usr/include/bsd/sys/cdefs.h
+    - path: /usr/include/bsd/sys/endian.h
+    - path: /usr/include/bsd/sys/param.h
+    - path: /usr/include/bsd/sys/poll.h
+    - path: /usr/include/bsd/sys/queue.h
+    - path: /usr/include/bsd/sys/time.h
+    - path: /usr/include/bsd/sys/tree.h
+    - path: /usr/include/bsd/timeconv.h
+    - path: /usr/include/bsd/unistd.h
+    - path: /usr/include/bsd/vis.h
+    - path: /usr/include/bsd/wchar.h
+    - path: /usr/lib/libbsd.la
+    - path: /usr/lib/pkgconfig/libbsd-ctor.pc
+    - path: /usr/lib/pkgconfig/libbsd-overlay.pc
+    - path: /usr/lib/pkgconfig/libbsd.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libbsd.so
+    - path: /usr/lib/libbsd.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmd.so.0
+    - path: /usr/lib/libbsd.so.0.12.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmd.so.0
+
+  man:
+    files:
+    - path: /usr/share/man/man3/LIST_CLASS_ENTRY.3bsd
+    - path: /usr/share/man/man3/LIST_CLASS_HEAD.3bsd
+    - path: /usr/share/man/man3/LIST_EMPTY.3bsd
+    - path: /usr/share/man/man3/LIST_ENTRY.3bsd
+    - path: /usr/share/man/man3/LIST_FIRST.3bsd
+    - path: /usr/share/man/man3/LIST_FOREACH.3bsd
+    - path: /usr/share/man/man3/LIST_FOREACH_FROM.3bsd
+    - path: /usr/share/man/man3/LIST_FOREACH_FROM_SAFE.3bsd
+    - path: /usr/share/man/man3/LIST_FOREACH_SAFE.3bsd
+    - path: /usr/share/man/man3/LIST_HEAD.3bsd
+    - path: /usr/share/man/man3/LIST_HEAD_INITIALIZER.3bsd
+    - path: /usr/share/man/man3/LIST_INIT.3bsd
+    - path: /usr/share/man/man3/LIST_INSERT_AFTER.3bsd
+    - path: /usr/share/man/man3/LIST_INSERT_BEFORE.3bsd
+    - path: /usr/share/man/man3/LIST_INSERT_HEAD.3bsd
+    - path: /usr/share/man/man3/LIST_NEXT.3bsd
+    - path: /usr/share/man/man3/LIST_PREV.3bsd
+    - path: /usr/share/man/man3/LIST_REMOVE.3bsd
+    - path: /usr/share/man/man3/LIST_SWAP.3bsd
+    - path: /usr/share/man/man3/RB_EMPTY.3bsd
+    - path: /usr/share/man/man3/RB_ENTRY.3bsd
+    - path: /usr/share/man/man3/RB_FIND.3bsd
+    - path: /usr/share/man/man3/RB_FOREACH.3bsd
+    - path: /usr/share/man/man3/RB_FOREACH_REVERSE.3bsd
+    - path: /usr/share/man/man3/RB_GENERATE.3bsd
+    - path: /usr/share/man/man3/RB_GENERATE_STATIC.3bsd
+    - path: /usr/share/man/man3/RB_HEAD.3bsd
+    - path: /usr/share/man/man3/RB_INIT.3bsd
+    - path: /usr/share/man/man3/RB_INITIALIZER.3bsd
+    - path: /usr/share/man/man3/RB_INSERT.3bsd
+    - path: /usr/share/man/man3/RB_LEFT.3bsd
+    - path: /usr/share/man/man3/RB_MAX.3bsd
+    - path: /usr/share/man/man3/RB_MIN.3bsd
+    - path: /usr/share/man/man3/RB_NEXT.3bsd
+    - path: /usr/share/man/man3/RB_NFIND.3bsd
+    - path: /usr/share/man/man3/RB_PARENT.3bsd
+    - path: /usr/share/man/man3/RB_PREV.3bsd
+    - path: /usr/share/man/man3/RB_PROTOTYPE.3bsd
+    - path: /usr/share/man/man3/RB_PROTOTYPE_STATIC.3bsd
+    - path: /usr/share/man/man3/RB_REMOVE.3bsd
+    - path: /usr/share/man/man3/RB_RIGHT.3bsd
+    - path: /usr/share/man/man3/RB_ROOT.3bsd
+    - path: /usr/share/man/man3/SLIST_CLASS_ENTRY.3bsd
+    - path: /usr/share/man/man3/SLIST_CLASS_HEAD.3bsd
+    - path: /usr/share/man/man3/SLIST_EMPTY.3bsd
+    - path: /usr/share/man/man3/SLIST_ENTRY.3bsd
+    - path: /usr/share/man/man3/SLIST_FIRST.3bsd
+    - path: /usr/share/man/man3/SLIST_FOREACH.3bsd
+    - path: /usr/share/man/man3/SLIST_FOREACH_FROM.3bsd
+    - path: /usr/share/man/man3/SLIST_FOREACH_FROM_SAFE.3bsd
+    - path: /usr/share/man/man3/SLIST_FOREACH_SAFE.3bsd
+    - path: /usr/share/man/man3/SLIST_HEAD.3bsd
+    - path: /usr/share/man/man3/SLIST_HEAD_INITIALIZER.3bsd
+    - path: /usr/share/man/man3/SLIST_INIT.3bsd
+    - path: /usr/share/man/man3/SLIST_INSERT_AFTER.3bsd
+    - path: /usr/share/man/man3/SLIST_INSERT_HEAD.3bsd
+    - path: /usr/share/man/man3/SLIST_NEXT.3bsd
+    - path: /usr/share/man/man3/SLIST_REMOVE.3bsd
+    - path: /usr/share/man/man3/SLIST_REMOVE_AFTER.3bsd
+    - path: /usr/share/man/man3/SLIST_REMOVE_HEAD.3bsd
+    - path: /usr/share/man/man3/SLIST_REMOVE_PREVPTR.3bsd
+    - path: /usr/share/man/man3/SLIST_SWAP.3bsd
+    - path: /usr/share/man/man3/SPLAY_EMPTY.3bsd
+    - path: /usr/share/man/man3/SPLAY_ENTRY.3bsd
+    - path: /usr/share/man/man3/SPLAY_FIND.3bsd
+    - path: /usr/share/man/man3/SPLAY_FOREACH.3bsd
+    - path: /usr/share/man/man3/SPLAY_GENERATE.3bsd
+    - path: /usr/share/man/man3/SPLAY_HEAD.3bsd
+    - path: /usr/share/man/man3/SPLAY_INIT.3bsd
+    - path: /usr/share/man/man3/SPLAY_INITIALIZER.3bsd
+    - path: /usr/share/man/man3/SPLAY_INSERT.3bsd
+    - path: /usr/share/man/man3/SPLAY_LEFT.3bsd
+    - path: /usr/share/man/man3/SPLAY_MAX.3bsd
+    - path: /usr/share/man/man3/SPLAY_MIN.3bsd
+    - path: /usr/share/man/man3/SPLAY_NEXT.3bsd
+    - path: /usr/share/man/man3/SPLAY_PROTOTYPE.3bsd
+    - path: /usr/share/man/man3/SPLAY_REMOVE.3bsd
+    - path: /usr/share/man/man3/SPLAY_RIGHT.3bsd
+    - path: /usr/share/man/man3/SPLAY_ROOT.3bsd
+    - path: /usr/share/man/man3/STAILQ_CLASS_ENTRY.3bsd
+    - path: /usr/share/man/man3/STAILQ_CLASS_HEAD.3bsd
+    - path: /usr/share/man/man3/STAILQ_CONCAT.3bsd
+    - path: /usr/share/man/man3/STAILQ_EMPTY.3bsd
+    - path: /usr/share/man/man3/STAILQ_ENTRY.3bsd
+    - path: /usr/share/man/man3/STAILQ_FIRST.3bsd
+    - path: /usr/share/man/man3/STAILQ_FOREACH.3bsd
+    - path: /usr/share/man/man3/STAILQ_FOREACH_FROM.3bsd
+    - path: /usr/share/man/man3/STAILQ_FOREACH_FROM_SAFE.3bsd
+    - path: /usr/share/man/man3/STAILQ_FOREACH_SAFE.3bsd
+    - path: /usr/share/man/man3/STAILQ_HEAD.3bsd
+    - path: /usr/share/man/man3/STAILQ_HEAD_INITIALIZER.3bsd
+    - path: /usr/share/man/man3/STAILQ_INIT.3bsd
+    - path: /usr/share/man/man3/STAILQ_INSERT_AFTER.3bsd
+    - path: /usr/share/man/man3/STAILQ_INSERT_HEAD.3bsd
+    - path: /usr/share/man/man3/STAILQ_INSERT_TAIL.3bsd
+    - path: /usr/share/man/man3/STAILQ_LAST.3bsd
+    - path: /usr/share/man/man3/STAILQ_NEXT.3bsd
+    - path: /usr/share/man/man3/STAILQ_REMOVE.3bsd
+    - path: /usr/share/man/man3/STAILQ_REMOVE_AFTER.3bsd
+    - path: /usr/share/man/man3/STAILQ_REMOVE_HEAD.3bsd
+    - path: /usr/share/man/man3/STAILQ_SWAP.3bsd
+    - path: /usr/share/man/man3/TAILQ_CLASS_ENTRY.3bsd
+    - path: /usr/share/man/man3/TAILQ_CLASS_HEAD.3bsd
+    - path: /usr/share/man/man3/TAILQ_CONCAT.3bsd
+    - path: /usr/share/man/man3/TAILQ_EMPTY.3bsd
+    - path: /usr/share/man/man3/TAILQ_ENTRY.3bsd
+    - path: /usr/share/man/man3/TAILQ_FIRST.3bsd
+    - path: /usr/share/man/man3/TAILQ_FOREACH.3bsd
+    - path: /usr/share/man/man3/TAILQ_FOREACH_FROM.3bsd
+    - path: /usr/share/man/man3/TAILQ_FOREACH_FROM_SAFE.3bsd
+    - path: /usr/share/man/man3/TAILQ_FOREACH_REVERSE.3bsd
+    - path: /usr/share/man/man3/TAILQ_FOREACH_REVERSE_FROM.3bsd
+    - path: /usr/share/man/man3/TAILQ_FOREACH_REVERSE_FROM_SAFE.3bsd
+    - path: /usr/share/man/man3/TAILQ_FOREACH_REVERSE_SAFE.3bsd
+    - path: /usr/share/man/man3/TAILQ_FOREACH_SAFE.3bsd
+    - path: /usr/share/man/man3/TAILQ_HEAD.3bsd
+    - path: /usr/share/man/man3/TAILQ_HEAD_INITIALIZER.3bsd
+    - path: /usr/share/man/man3/TAILQ_INIT.3bsd
+    - path: /usr/share/man/man3/TAILQ_INSERT_AFTER.3bsd
+    - path: /usr/share/man/man3/TAILQ_INSERT_BEFORE.3bsd
+    - path: /usr/share/man/man3/TAILQ_INSERT_HEAD.3bsd
+    - path: /usr/share/man/man3/TAILQ_INSERT_TAIL.3bsd
+    - path: /usr/share/man/man3/TAILQ_LAST.3bsd
+    - path: /usr/share/man/man3/TAILQ_NEXT.3bsd
+    - path: /usr/share/man/man3/TAILQ_PREV.3bsd
+    - path: /usr/share/man/man3/TAILQ_REMOVE.3bsd
+    - path: /usr/share/man/man3/TAILQ_SWAP.3bsd
+    - path: /usr/share/man/man3/arc4random.3bsd
+    - path: /usr/share/man/man3/arc4random_addrandom.3bsd
+    - path: /usr/share/man/man3/arc4random_buf.3bsd
+    - path: /usr/share/man/man3/arc4random_stir.3bsd
+    - path: /usr/share/man/man3/arc4random_uniform.3bsd
+    - path: /usr/share/man/man3/be16dec.3bsd
+    - path: /usr/share/man/man3/be16enc.3bsd
+    - path: /usr/share/man/man3/be32dec.3bsd
+    - path: /usr/share/man/man3/be32enc.3bsd
+    - path: /usr/share/man/man3/be64dec.3bsd
+    - path: /usr/share/man/man3/be64enc.3bsd
+    - path: /usr/share/man/man3/bit_alloc.3bsd
+    - path: /usr/share/man/man3/bit_clear.3bsd
+    - path: /usr/share/man/man3/bit_decl.3bsd
+    - path: /usr/share/man/man3/bit_ffc.3bsd
+    - path: /usr/share/man/man3/bit_ffs.3bsd
+    - path: /usr/share/man/man3/bit_nclear.3bsd
+    - path: /usr/share/man/man3/bit_nset.3bsd
+    - path: /usr/share/man/man3/bit_set.3bsd
+    - path: /usr/share/man/man3/bit_test.3bsd
+    - path: /usr/share/man/man3/bitstr_size.3bsd
+    - path: /usr/share/man/man3/bitstring.3bsd
+    - path: /usr/share/man/man3/byteorder.3bsd
+    - path: /usr/share/man/man3/closefrom.3bsd
+    - path: /usr/share/man/man3/dehumanize_number.3bsd
+    - path: /usr/share/man/man3/errc.3bsd
+    - path: /usr/share/man/man3/expand_number.3bsd
+    - path: /usr/share/man/man3/explicit_bzero.3bsd
+    - path: /usr/share/man/man3/fgetln.3bsd
+    - path: /usr/share/man/man3/fgetwln.3bsd
+    - path: /usr/share/man/man3/flopen.3bsd
+    - path: /usr/share/man/man3/fmtcheck.3bsd
+    - path: /usr/share/man/man3/fparseln.3bsd
+    - path: /usr/share/man/man3/fpurge.3bsd
+    - path: /usr/share/man/man3/freezero.3bsd
+    - path: /usr/share/man/man3/funopen.3bsd
+    - path: /usr/share/man/man3/getbsize.3bsd
+    - path: /usr/share/man/man3/getmode.3bsd
+    - path: /usr/share/man/man3/getpeereid.3bsd
+    - path: /usr/share/man/man3/getprogname.3bsd
+    - path: /usr/share/man/man3/gid_from_group.3bsd
+    - path: /usr/share/man/man3/group_from_gid.3bsd
+    - path: /usr/share/man/man3/heapsort.3bsd
+    - path: /usr/share/man/man3/humanize_number.3bsd
+    - path: /usr/share/man/man3/le16dec.3bsd
+    - path: /usr/share/man/man3/le16enc.3bsd
+    - path: /usr/share/man/man3/le32dec.3bsd
+    - path: /usr/share/man/man3/le32enc.3bsd
+    - path: /usr/share/man/man3/le64dec.3bsd
+    - path: /usr/share/man/man3/le64enc.3bsd
+    - path: /usr/share/man/man3/md5.3bsd
+    - path: /usr/share/man/man3/mergesort.3bsd
+    - path: /usr/share/man/man3/nlist.3bsd
+    - path: /usr/share/man/man3/pidfile.3bsd
+    - path: /usr/share/man/man3/pidfile_close.3bsd
+    - path: /usr/share/man/man3/pidfile_open.3bsd
+    - path: /usr/share/man/man3/pidfile_remove.3bsd
+    - path: /usr/share/man/man3/pidfile_write.3bsd
+    - path: /usr/share/man/man3/pwcache.3bsd
+    - path: /usr/share/man/man3/queue.3bsd
+    - path: /usr/share/man/man3/radixsort.3bsd
+    - path: /usr/share/man/man3/readpassphrase.3bsd
+    - path: /usr/share/man/man3/reallocarray.3bsd
+    - path: /usr/share/man/man3/reallocf.3bsd
+    - path: /usr/share/man/man3/recallocarray.3bsd
+    - path: /usr/share/man/man3/setmode.3bsd
+    - path: /usr/share/man/man3/setproctitle.3bsd
+    - path: /usr/share/man/man3/setproctitle_init.3bsd
+    - path: /usr/share/man/man3/setprogname.3bsd
+    - path: /usr/share/man/man3/sl_add.3bsd
+    - path: /usr/share/man/man3/sl_delete.3bsd
+    - path: /usr/share/man/man3/sl_find.3bsd
+    - path: /usr/share/man/man3/sl_free.3bsd
+    - path: /usr/share/man/man3/sl_init.3bsd
+    - path: /usr/share/man/man3/sradixsort.3bsd
+    - path: /usr/share/man/man3/stringlist.3bsd
+    - path: /usr/share/man/man3/strlcat.3bsd
+    - path: /usr/share/man/man3/strlcpy.3bsd
+    - path: /usr/share/man/man3/strmode.3bsd
+    - path: /usr/share/man/man3/strnstr.3bsd
+    - path: /usr/share/man/man3/strnunvis.3bsd
+    - path: /usr/share/man/man3/strnvis.3bsd
+    - path: /usr/share/man/man3/strtoi.3bsd
+    - path: /usr/share/man/man3/strtonum.3bsd
+    - path: /usr/share/man/man3/strtou.3bsd
+    - path: /usr/share/man/man3/strunvis.3bsd
+    - path: /usr/share/man/man3/strvis.3bsd
+    - path: /usr/share/man/man3/strvisx.3bsd
+    - path: /usr/share/man/man3/timeradd.3bsd
+    - path: /usr/share/man/man3/timerclear.3bsd
+    - path: /usr/share/man/man3/timercmp.3bsd
+    - path: /usr/share/man/man3/timerisset.3bsd
+    - path: /usr/share/man/man3/timersub.3bsd
+    - path: /usr/share/man/man3/timespecadd.3bsd
+    - path: /usr/share/man/man3/timespecclear.3bsd
+    - path: /usr/share/man/man3/timespeccmp.3bsd
+    - path: /usr/share/man/man3/timespecisset.3bsd
+    - path: /usr/share/man/man3/timespecsub.3bsd
+    - path: /usr/share/man/man3/tree.3bsd
+    - path: /usr/share/man/man3/uid_from_user.3bsd
+    - path: /usr/share/man/man3/unvis.3bsd
+    - path: /usr/share/man/man3/user_from_uid.3bsd
+    - path: /usr/share/man/man3/verrc.3bsd
+    - path: /usr/share/man/man3/vis.3bsd
+    - path: /usr/share/man/man3/vwarnc.3bsd
+    - path: /usr/share/man/man3/warnc.3bsd
+    - path: /usr/share/man/man3/wcslcat.3bsd
+    - path: /usr/share/man/man3/wcslcpy.3bsd
+    - path: /usr/share/man/man7/libbsd.7
+
+  static:
+    files:
+    - path: /usr/lib/libbsd-ctor.a
+
+resolution:
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libmd.so.0: libmd
