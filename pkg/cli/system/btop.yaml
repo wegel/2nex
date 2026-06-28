@@ -1,0 +1,142 @@
+package:
+  schema: 1
+  name: btop
+  slug: btop
+  namespace: cli/system
+  version: 1.4.5
+  description: Interactive terminal resource monitor
+  homepage: https://github.com/aristocratos/btop
+  checksum: 3bf15f0f2726f77d0b78dc8262b279a89f3a5db73a6ac7c06ec2ef64bd8d465c
+
+sources:
+- name: btop
+  url: https://github.com/aristocratos/btop/archive/refs/tags/v1.4.5.tar.gz
+  sha256: 0ffe03d3e26a3e9bbfd5375adf34934137757994f297d6b699a46edd43c3fc02
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4265:503, 8541:503, 11435:7460]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_btop} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    make \
+      PREFIX=/usr \
+      CXX=g++ \
+      GPU_SUPPORT=false \
+      VERBOSE=true \
+      STRIP=false
+
+    make \
+      PREFIX=/usr \
+      DESTDIR="${OUT_DIR}" \
+      GPU_SUPPORT=false \
+      install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/btop
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+
+  misc:
+    files:
+    - path: /usr/share/applications/btop.desktop
+    - path: /usr/share/btop/README.md
+    - path: /usr/share/btop/themes/HotPurpleTrafficLight.theme
+    - path: /usr/share/btop/themes/adapta.theme
+    - path: /usr/share/btop/themes/adwaita-dark.theme
+    - path: /usr/share/btop/themes/adwaita.theme
+    - path: /usr/share/btop/themes/ayu.theme
+    - path: /usr/share/btop/themes/dracula.theme
+    - path: /usr/share/btop/themes/dusklight.theme
+    - path: /usr/share/btop/themes/elementarish.theme
+    - path: /usr/share/btop/themes/everforest-dark-hard.theme
+    - path: /usr/share/btop/themes/everforest-dark-medium.theme
+    - path: /usr/share/btop/themes/everforest-light-medium.theme
+    - path: /usr/share/btop/themes/flat-remix-light.theme
+    - path: /usr/share/btop/themes/flat-remix.theme
+    - path: /usr/share/btop/themes/greyscale.theme
+    - path: /usr/share/btop/themes/gruvbox_dark.theme
+    - path: /usr/share/btop/themes/gruvbox_dark_v2.theme
+    - path: /usr/share/btop/themes/gruvbox_light.theme
+    - path: /usr/share/btop/themes/gruvbox_material_dark.theme
+    - path: /usr/share/btop/themes/horizon.theme
+    - path: /usr/share/btop/themes/kanagawa-lotus.theme
+    - path: /usr/share/btop/themes/kanagawa-wave.theme
+    - path: /usr/share/btop/themes/kyli0x.theme
+    - path: /usr/share/btop/themes/matcha-dark-sea.theme
+    - path: /usr/share/btop/themes/monokai.theme
+    - path: /usr/share/btop/themes/night-owl.theme
+    - path: /usr/share/btop/themes/nord.theme
+    - path: /usr/share/btop/themes/onedark.theme
+    - path: /usr/share/btop/themes/paper.theme
+    - path: /usr/share/btop/themes/phoenix-night.theme
+    - path: /usr/share/btop/themes/solarized_dark.theme
+    - path: /usr/share/btop/themes/solarized_light.theme
+    - path: /usr/share/btop/themes/tokyo-night.theme
+    - path: /usr/share/btop/themes/tokyo-storm.theme
+    - path: /usr/share/btop/themes/tomorrow-night.theme
+    - path: /usr/share/btop/themes/whiteout.theme
+    - path: /usr/share/icons/hicolor/48x48/apps/btop.png
+    - path: /usr/share/icons/hicolor/scalable/apps/btop.svg
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
