@@ -198,7 +198,14 @@ pub fn setup_composite_rootfs(
     }
 
     for commit in dependency_commits {
-        checkout_into_with_fallbacks(repo_path, fallback_repos, commit, Path::new(base_dir), true, verbose)?;
+        checkout_into_with_fallbacks(
+            repo_path,
+            fallback_repos,
+            commit,
+            Path::new(base_dir),
+            true,
+            verbose,
+        )?;
     }
 
     // create FHS compatibility symlinks (only if there are actual dependencies to checkout)
@@ -226,6 +233,48 @@ pub fn setup_composite_rootfs(
     Ok(())
 }
 
+fn refresh_chroot_usrmerge_symlinks(build_dir: &Path) -> io::Result<()> {
+    let mapped_uid = nix::unistd::Uid::effective().as_raw();
+    let mapped_gid = nix::unistd::Gid::effective().as_raw();
+    let symlinks = [
+        ("bin", "/usr/bin"),
+        ("lib", "/usr/lib"),
+        ("sbin", "/usr/bin"),
+        ("lib64", "/usr/lib"),
+        ("usr/lib64", "lib"),
+        ("usr/sbin", "bin"),
+    ];
+
+    for dir in [build_dir.to_path_buf(), build_dir.join("usr")] {
+        if dir.exists() {
+            std::os::unix::fs::chown(&dir, Some(mapped_uid), Some(mapped_gid))?;
+        }
+    }
+
+    for (link_path, _) in symlinks {
+        let full_link_path = build_dir.join(link_path);
+        if fs::symlink_metadata(&full_link_path)
+            .map(|metadata| metadata.file_type().is_symlink())
+            .unwrap_or(false)
+        {
+            fs::remove_file(&full_link_path)?;
+        }
+    }
+
+    for (link_path, target) in symlinks {
+        let full_link_path = build_dir.join(link_path);
+        if let Some(parent) = full_link_path.parent() {
+            fs::create_dir_all(parent)?;
+            std::os::unix::fs::chown(parent, Some(mapped_uid), Some(mapped_gid))?;
+        }
+        if !full_link_path.exists() {
+            std::os::unix::fs::symlink(target, &full_link_path)?;
+        }
+    }
+
+    Ok(())
+}
+
 pub fn layer_commits_into_rootfs(
     base_dir: &str,
     repo_path: &str,
@@ -234,7 +283,14 @@ pub fn layer_commits_into_rootfs(
     verbose: bool,
 ) -> io::Result<()> {
     for commit in commits {
-        checkout_into_with_fallbacks(repo_path, fallback_repos, commit, Path::new(base_dir), true, verbose)?;
+        checkout_into_with_fallbacks(
+            repo_path,
+            fallback_repos,
+            commit,
+            Path::new(base_dir),
+            true,
+            verbose,
+        )?;
     }
     Ok(())
 }
@@ -326,6 +382,9 @@ pub fn run_build_script_with_env(
         .to_string();
     let tmpdir_path = build_dir_abs.join("nex").join("tmp");
     std::fs::create_dir_all(&tmpdir_path)?;
+    if build_env.execution.chroot {
+        refresh_chroot_usrmerge_symlinks(&build_dir_abs)?;
+    }
 
     // compute template variable values
     let num_cpus = num_cpus::get();
@@ -606,7 +665,13 @@ pub fn verify_and_commit_outputs(
             manifest_hash,
             output_type
         );
-        create_artifact(repo_path, &tree_hash, &manifest_hash, &artifact_output, &artifact_path)?;
+        create_artifact(
+            repo_path,
+            &tree_hash,
+            &manifest_hash,
+            &artifact_output,
+            &artifact_path,
+        )?;
     }
 
     let unaccounted_files: Vec<String> = all_out_files
@@ -902,7 +967,7 @@ pub fn build_package_manifest_with_dir(
     // if generate_outputs is enabled, write auto-detected outputs to manifest
     if opts.generate_outputs {
         let out_dir = Path::new(base_dir).join(&build_env.paths.out);
-        let categorized = categorize_files(&out_dir);
+        let categorized = categorize_files_with_existing_outputs(&out_dir, &manifest.outputs);
         crate::manifest::update::write_auto_outputs_to_manifest(&opts.manifest_file, &categorized)?;
 
         // reload the manifest to pick up the new outputs
@@ -955,10 +1020,7 @@ pub fn build_package_manifest_with_dir(
                         "Checksum mismatch. Expected: {}, Calculated: {}",
                         expected_checksum, checksum
                     );
-                    eprintln!(
-                        "Raw files committed to {}/files for debugging.",
-                        checksum
-                    );
+                    eprintln!("Raw files committed to {}/files for debugging.", checksum);
                     eprintln!(
                         "Compare with: zub diff {}/files {}/files",
                         expected_checksum, checksum
@@ -1014,15 +1076,16 @@ pub fn build_package_manifest_with_dir(
 
         // create semantic {pkg}/files ref pointing to the checksum-based files commit
         // (must happen before refresh_package_metadata which needs this ref)
-        create_semantic_files_ref(manifest, &opts.repo_path, Path::new(&opts.manifest_file), &checksum)?;
+        create_semantic_files_ref(
+            manifest,
+            &opts.repo_path,
+            Path::new(&opts.manifest_file),
+            &checksum,
+        )?;
 
         // refresh store metadata if checksum was updated
         if opts.update_checksum {
-            refresh_package_metadata(
-                &opts.repo_path,
-                manifest,
-                Path::new(&opts.manifest_file),
-            )?;
+            refresh_package_metadata(&opts.repo_path, manifest, Path::new(&opts.manifest_file))?;
         }
     }
 
@@ -1141,15 +1204,29 @@ pub fn refresh_package_metadata(
     };
 
     // split files into outputs and commit
-    verify_and_commit_outputs(manifest, base_dir.to_str().unwrap(), repo_path, manifest_path, &paths)?;
+    verify_and_commit_outputs(
+        manifest,
+        base_dir.to_str().unwrap(),
+        repo_path,
+        manifest_path,
+        &paths,
+    )?;
 
     // create bundles from outputs
-    create_and_commit_bundles(manifest, base_dir.to_str().unwrap(), repo_path, manifest_path)?;
+    create_and_commit_bundles(
+        manifest,
+        base_dir.to_str().unwrap(),
+        repo_path,
+        manifest_path,
+    )?;
 
     // cleanup temp directory
     drop(temp_dir);
 
-    println!("Finished refreshing outputs/bundles for {}", manifest.package.slug);
+    println!(
+        "Finished refreshing outputs/bundles for {}",
+        manifest.package.slug
+    );
     Ok(())
 }
 
@@ -1269,4 +1346,33 @@ fn resolve_dependency_commits(
     }
 
     Ok(resolved)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::symlink;
+    use tempfile::TempDir;
+
+    #[test]
+    fn refreshes_chroot_usrmerge_symlinks() -> io::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let root = temp_dir.path();
+        fs::create_dir_all(root.join("usr"))?;
+        symlink("old-lib", root.join("usr/lib64"))?;
+
+        refresh_chroot_usrmerge_symlinks(root)?;
+
+        assert_eq!(fs::read_link(root.join("bin"))?, PathBuf::from("/usr/bin"));
+        assert_eq!(fs::read_link(root.join("lib"))?, PathBuf::from("/usr/lib"));
+        assert_eq!(fs::read_link(root.join("sbin"))?, PathBuf::from("/usr/bin"));
+        assert_eq!(
+            fs::read_link(root.join("lib64"))?,
+            PathBuf::from("/usr/lib")
+        );
+        assert_eq!(fs::read_link(root.join("usr/lib64"))?, PathBuf::from("lib"));
+        assert_eq!(fs::read_link(root.join("usr/sbin"))?, PathBuf::from("bin"));
+
+        Ok(())
+    }
 }

@@ -34,6 +34,8 @@ pub fn determine_category(file_path: &str) -> String {
         "bin".to_string()
     } else if file_path.contains("/libexec/") {
         "bin".to_string()
+    } else if file_path == "/boot" || file_path.starts_with("/boot/") {
+        "boot".to_string()
     } else if file_path.contains("/lib/") || file_path.contains("/lib64/") {
         "lib".to_string()
     } else if file_path.contains("/conf/")
@@ -314,5 +316,6 @@ mod tests {
         assert_eq!(determine_category("/etc/foo.conf"), "conf");
         assert_eq!(determine_category("/usr/share/doc/foo/readme"), "doc");
         assert_eq!(determine_category("/usr/bin/foo"), "bin");
+        assert_eq!(determine_category("/boot/initramfs.cpio"), "boot");
     }
 }

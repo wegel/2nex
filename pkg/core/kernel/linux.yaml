@@ -6,7 +6,7 @@ package:
   version: 6.12.58
   description: Linux kernel with allmod config and curated fragments
   homepage: https://www.kernel.org/
-  checksum: e266a48665610500e43a4b437dd7edc2e1536a48d5a091236fa87bc8b272b697
+  checksum: 4fc28063accfef32254806f6f4ea2daac0a8014d20b316752033d948731d4c38
 
 sources:
 - name: kernel
@@ -131,7 +131,7 @@ dependencies:
 
 build:
   environment: env/linux-kernel.yaml
-  profile: [54067:6453, 216511:6479, 483010:6567, 805222:71367, 1072908:215273, 1340447:338230, 1608462:450094, 2012042:505349, 2412591:510292, 2679389:521893]
+  profile: [54067:6767, 216511:6778, 483010:6855, 805155:70501, 1072791:210220, 1340554:336681, 1608475:447189, 2012157:503391, 2412923:508333, 2679721:520377]
 
   script: |
     set -eu
@@ -259,8 +259,6 @@ build:
 
     # run depmod with correct basedir
     # busybox's depmod lacks -b flag, create temp symlink to kmod
-    # depmod checks /lib/modules exists even with -b, create it in rootfs (/lib -> /usr/lib)
-    mkdir -p /usr/lib/modules
     ln -sf /usr/bin/kmod /tmp/depmod
     /tmp/depmod -b ${OUT_DIR}/usr 6.12.58
 
@@ -5904,6 +5902,11 @@ outputs:
 
   lib:
     files:
+    - path: /usr/lib/kernel/size/builtin.objects.paths.txt
+    - path: /usr/lib/kernel/size/builtin.objects.txt
+    - path: /usr/lib/kernel/size/vmlinux.size.txt
+    - path: /usr/lib/kernel/size/vmlinux.syms.txt
+    - path: /usr/lib/modules/6.12.58/build
     - path: /usr/lib/modules/6.12.58/kernel/arch/x86/events/amd/amd-uncore.ko
     - path: /usr/lib/modules/6.12.58/kernel/arch/x86/events/amd/power.ko
     - path: /usr/lib/modules/6.12.58/kernel/arch/x86/events/intel/intel-cstate.ko

@@ -2,6 +2,9 @@
 # nex initramfs init
 export PATH=/bin:/sbin
 
+log() { echo "$@"; }
+die() { log "FATAL: $*"; exec /bin/sh; }
+
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev
@@ -21,10 +24,14 @@ fi
 # set up a working console for init output
 CMDLINE="$(cat /proc/cmdline)"
 CONSOLE=""
-if echo "$CMDLINE" | grep -q "console=tty0" && [ -c /dev/tty0 ]; then
+if echo "$CMDLINE" | grep -q "installer.console=ttyS0" && [ -c /dev/ttyS0 ]; then
+    CONSOLE=/dev/ttyS0
+elif echo "$CMDLINE" | grep -q "installer.console=tty0" && [ -c /dev/tty0 ]; then
     CONSOLE=/dev/tty0
 elif echo "$CMDLINE" | grep -q "console=ttyS0" && [ -c /dev/ttyS0 ]; then
     CONSOLE=/dev/ttyS0
+elif echo "$CMDLINE" | grep -q "console=tty0" && [ -c /dev/tty0 ]; then
+    CONSOLE=/dev/tty0
 elif [ -c /dev/console ]; then
     CONSOLE=/dev/console
 fi
@@ -34,7 +41,7 @@ elif [ -c /dev/kmsg ]; then
     exec >/dev/kmsg 2>&1
 fi
 
-echo "nex initramfs starting... (v5)"
+log "nex initramfs starting... (v6)"
 
 # parse cmdline
 ROOT=""
@@ -50,7 +57,7 @@ done
 
 # use blkid to resolve PARTUUID to device path
 if [ -n "$ROOT_PARTUUID" ]; then
-    echo "looking for root partition PARTUUID=$ROOT_PARTUUID..."
+    log "looking for root partition PARTUUID=$ROOT_PARTUUID..."
     i=0
     while [ $i -lt 30 ] && [ -z "$ROOT" ]; do
         ROOT=$(blkid -t PARTUUID="$ROOT_PARTUUID" -o device 2>/dev/null)
@@ -60,94 +67,186 @@ if [ -n "$ROOT_PARTUUID" ]; then
     done
 fi
 
-echo "root=$ROOT zub=$DEPLOY_PATH"
+log "root=$ROOT zub=$DEPLOY_PATH"
 
 if [ -z "$ROOT" ] || [ ! -b "$ROOT" ]; then
-    echo "FATAL: root device not found!"
-    echo "PARTUUID=$ROOT_PARTUUID"
-    echo "block devices:"
-    ls /dev/vd* /dev/sd* /dev/nvme* 2>/dev/null || echo "(none)"
+    log "FATAL: root device not found!"
+    log "PARTUUID=$ROOT_PARTUUID"
+    log "block devices:"
+    ls /dev/vd* /dev/sd* /dev/nvme* 2>/dev/null || log "(none)"
     exec /bin/sh
 fi
 
-echo "mounting root filesystem..."
-mount -o ro "$ROOT" /mnt/root
+SYSROOT_MOUNT=/mnt/sysroot
+SYSROOT_RW=0
+
+ensure_sysroot_rw() {
+    if [ "$SYSROOT_RW" -eq 1 ]; then
+        return 0
+    fi
+    mount -o remount,rw "$SYSROOT_MOUNT" || return 1
+    SYSROOT_RW=1
+    return 0
+}
+
+mkdirp_deploy() {
+    dir="$1"
+    if [ -d "$dir" ]; then
+        return 0
+    fi
+    mkdir -p "$dir" 2>/dev/null && return 0
+    ensure_sysroot_rw || die "failed to remount sysroot rw (needed to create $dir)"
+    mkdir -p "$dir" || die "failed to create $dir"
+}
+
+log "mounting sysroot filesystem..."
+mkdir -p "$SYSROOT_MOUNT" || die "failed to create $SYSROOT_MOUNT"
+mount -o ro "$ROOT" "$SYSROOT_MOUNT" || die "failed to mount sysroot $ROOT"
 
 if [ -z "$DEPLOY_PATH" ]; then
-    echo "FATAL: no zub= parameter!"
-    exec /bin/sh
+    die "no zub= parameter!"
 fi
 
-DEPLOY="/mnt/root/$DEPLOY_PATH"
+case "$DEPLOY_PATH" in
+    /*) DEPLOY="${SYSROOT_MOUNT}${DEPLOY_PATH}" ;;
+    *) DEPLOY="${SYSROOT_MOUNT}/${DEPLOY_PATH}" ;;
+esac
 if [ ! -d "$DEPLOY" ]; then
-    echo "FATAL: deployment $DEPLOY not found!"
-    exec /bin/sh
+    die "deployment $DEPLOY not found!"
 fi
 
-echo "switching to deployment: $DEPLOY"
+log "selected deployment: $DEPLOY"
 
 # find and mount var partition by label (root stays readonly)
-echo "looking for var partition..."
+log "looking for var partition..."
 VAR_DEV=""
-i=0
-while [ $i -lt 30 ] && [ -z "$VAR_DEV" ]; do
-    VAR_DEV=$(blkid -L nex-var -o device 2>/dev/null)
-    [ -n "$VAR_DEV" ] && break
-    sleep 0.1
-    i=$((i + 1))
-done
-if [ -n "$VAR_DEV" ]; then
-    echo "found var partition: $VAR_DEV"
-    mkdir -p /mnt/root/var
-    mount "$VAR_DEV" /mnt/root/var
+ensure_var_dirs() {
+    mkdir -p \
+        "${SYSROOT_MOUNT}/var/etc" \
+        "${SYSROOT_MOUNT}/var/home" \
+        "${SYSROOT_MOUNT}/var/root" \
+        "${SYSROOT_MOUNT}/var/log" \
+        "${SYSROOT_MOUNT}/var/lib" \
+        "${SYSROOT_MOUNT}/var/cache" \
+        "${SYSROOT_MOUNT}/var/tmp" \
+        "${SYSROOT_MOUNT}/var/nex/repo" \
+        "${SYSROOT_MOUNT}/var/nex/staging" \
+        "${SYSROOT_MOUNT}/var/nex/manifests" \
+        "${SYSROOT_MOUNT}/var/nex/users" \
+        || die "failed to create standard /var directories"
+    chmod 1777 "${SYSROOT_MOUNT}/var/tmp" 2>/dev/null || true
+}
 
-    # first-boot: populate /var/etc from deployment
-    if [ ! -f /mnt/root/var/etc/.initialized ]; then
-        echo "first boot: copying /etc from deployment..."
-        mkdir -p /mnt/root/var/etc
-        cp -a "$DEPLOY/etc/." /mnt/root/var/etc/
-        touch /mnt/root/var/etc/.initialized
-        echo "/var/etc initialized"
-    fi
-
-    # create standard /var directories if missing
-    mkdir -p /mnt/root/var/home
-    mkdir -p /mnt/root/var/log
-    mkdir -p /mnt/root/var/lib
-    mkdir -p /mnt/root/var/cache
-    mkdir -p /mnt/root/var/tmp
-    chmod 1777 /mnt/root/var/tmp
-else
-    echo "WARNING: var partition not found, remounting root rw"
-    mount -o remount,rw /mnt/root
+if [ -n "$ROOT" ]; then
+    case "$ROOT" in
+        /dev/nvme*n*p2) VAR_DEV="${ROOT%p2}p3" ;;
+        /dev/*2) VAR_DEV="${ROOT%2}3" ;;
+        *) VAR_DEV="" ;;
+    esac
 fi
 
-# move virtual filesystems to new root so systemd finds them
-mkdir -p /mnt/root/proc /mnt/root/sys /mnt/root/dev /mnt/root/run
-mount --move /proc /mnt/root/proc
-mount --move /sys /mnt/root/sys
-mount --move /dev /mnt/root/dev
+if [ -n "$VAR_DEV" ] && [ -b "$VAR_DEV" ]; then
+    var_label=$(blkid -o value -s LABEL "$VAR_DEV" 2>/dev/null || true)
+    if [ "$var_label" != "nex-var" ]; then
+        VAR_DEV=""
+    fi
+else
+    VAR_DEV=""
+fi
 
-# mount tmpfs on /run - systemd requires this to be a tmpfs
-mount -t tmpfs -o mode=755,nosuid,nodev tmpfs /mnt/root/run
-mkdir -p /mnt/root/run/systemd
+if [ -n "$VAR_DEV" ]; then
+    log "found var partition: $VAR_DEV"
+    mkdirp_deploy "${SYSROOT_MOUNT}/var"
+    mount "$VAR_DEV" "${SYSROOT_MOUNT}/var" || die "failed to mount var partition"
+    ensure_var_dirs
+
+    # first-boot: populate /var/etc from deployment template
+    if [ ! -f "${SYSROOT_MOUNT}/var/etc/.initialized" ]; then
+        log "first boot: copying /etc from deployment template..."
+        cp -a "$DEPLOY/etc/." "${SYSROOT_MOUNT}/var/etc/" || die "failed to copy /etc template into /var/etc"
+        touch "${SYSROOT_MOUNT}/var/etc/.initialized" || die "failed to create /var/etc initialization marker"
+        log "/var/etc initialized"
+    fi
+
+    # ensure machine-id exists and is writable for systemd
+    if [ ! -f "${SYSROOT_MOUNT}/var/etc/machine-id" ]; then
+        : > "${SYSROOT_MOUNT}/var/etc/machine-id" 2>/dev/null || true
+    fi
+else
+    log "WARNING: var partition not found on root device; using sysroot /var and remounting sysroot rw"
+    mkdir -p "${SYSROOT_MOUNT}/var" 2>/dev/null || true
+    ensure_sysroot_rw || die "failed to remount sysroot rw for missing var partition"
+    ensure_var_dirs
+fi
+
+# Ensure deployment mount points exist (may require temporarily making sysroot writable)
+mkdirp_deploy "${DEPLOY}/sysroot"
+mkdirp_deploy "${DEPLOY}/var"
+mkdirp_deploy "${DEPLOY}/etc"
+mkdirp_deploy "${DEPLOY}/home"
+mkdirp_deploy "${DEPLOY}/root"
+mkdirp_deploy "${DEPLOY}/nex/repo"
+mkdirp_deploy "${DEPLOY}/nex/deployments"
+mkdirp_deploy "${DEPLOY}/nex/staging"
+mkdirp_deploy "${DEPLOY}/nex/users"
+mkdirp_deploy "${DEPLOY}/nex/manifests"
+mkdirp_deploy "${DEPLOY}/proc"
+mkdirp_deploy "${DEPLOY}/sys"
+mkdirp_deploy "${DEPLOY}/dev"
+mkdirp_deploy "${DEPLOY}/run"
+mkdirp_deploy "${DEPLOY}/tmp"
+
+# busybox switch_root requires NEW_ROOT to be a mount point; make the deployment
+# root a mount point before adding bind mounts under it.
+mount --bind "$DEPLOY" "$DEPLOY" || die "failed to make deployment root a mount point"
+
+# Bind mounts for ostree-like layout
+mount --bind "$SYSROOT_MOUNT" "${DEPLOY}/sysroot" || die "failed to bind-mount sysroot"
+mount --bind "${SYSROOT_MOUNT}/var" "${DEPLOY}/var" || die "failed to bind-mount /var"
+mount --bind "${SYSROOT_MOUNT}/var/etc" "${DEPLOY}/etc" || die "failed to bind-mount /etc"
+mount --bind "${SYSROOT_MOUNT}/var/home" "${DEPLOY}/home" || die "failed to bind-mount /home"
+mount --bind "${SYSROOT_MOUNT}/var/root" "${DEPLOY}/root" || die "failed to bind-mount /root"
+
+mount --bind "${SYSROOT_MOUNT}/var/nex/repo" "${DEPLOY}/nex/repo" || die "failed to bind-mount /nex/repo"
+mount --bind "${SYSROOT_MOUNT}/nex/deployments" "${DEPLOY}/nex/deployments" || die "failed to bind-mount /nex/deployments"
+mount --bind "${SYSROOT_MOUNT}/var/nex/staging" "${DEPLOY}/nex/staging" || die "failed to bind-mount /nex/staging"
+mkdir -p "${SYSROOT_MOUNT}/var/nex/users" 2>/dev/null || true
+mount --bind "${SYSROOT_MOUNT}/var/nex/users" "${DEPLOY}/nex/users" || die "failed to bind-mount /nex/users"
+
+# keep manifests repo on /var (writable), and bind it into the deployment at /nex/manifests
+mkdir -p "${SYSROOT_MOUNT}/var/nex/manifests" 2>/dev/null || true
+mount --bind "${SYSROOT_MOUNT}/var/nex/manifests" "${DEPLOY}/nex/manifests" || die "failed to bind-mount /nex/manifests"
+
+# switch sysroot back to RO after any needed mkdirs
+if [ "$SYSROOT_RW" -eq 1 ]; then
+    mount -o remount,ro "$SYSROOT_MOUNT" 2>/dev/null || true
+fi
+mount -o remount,ro,bind "${DEPLOY}/sysroot" || die "failed to remount /sysroot read-only"
+
+# Move virtual filesystems into deployment root for systemd
+mount --move /proc "${DEPLOY}/proc" || die "failed to move /proc"
+mount --move /sys "${DEPLOY}/sys" || die "failed to move /sys"
+mount --move /dev "${DEPLOY}/dev" || die "failed to move /dev"
+
+# /run must be tmpfs for systemd
+mount -t tmpfs -o mode=755,nosuid,nodev tmpfs "${DEPLOY}/run" || die "failed to mount tmpfs on /run"
+mkdir -p "${DEPLOY}/run/systemd" 2>/dev/null || true
 
 # create subdirectories on devtmpfs for systemd mount units
-echo "creating mount point directories..."
-mkdir -p /mnt/root/dev/hugepages
-mkdir -p /mnt/root/dev/mqueue
-mkdir -p /mnt/root/dev/shm
-mkdir -p /mnt/root/dev/pts
+log "creating mount point directories..."
+mkdir -p "${DEPLOY}/dev/hugepages" 2>/dev/null || true
+mkdir -p "${DEPLOY}/dev/mqueue" 2>/dev/null || true
+mkdir -p "${DEPLOY}/dev/shm" 2>/dev/null || true
+mkdir -p "${DEPLOY}/dev/pts" 2>/dev/null || true
 
 # sysfs mountpoints are managed by systemd; don't try to create them in sysfs
 
-# ensure /tmp mountpoint exists (root may be readonly)
-if [ ! -d /mnt/root/tmp ]; then
-    mkdir -p /mnt/root/tmp 2>/dev/null || true
-fi
+# ensure /tmp exists
+mkdir -p "${DEPLOY}/tmp" 2>/dev/null || true
+chmod 1777 "${DEPLOY}/tmp" 2>/dev/null || true
 
-echo "mount points created"
+log "mount points created"
 
-# use /init which symlinks through the deployment
-exec switch_root /mnt/root /init
+# /init is inside the deployment root
+exec switch_root "$DEPLOY" /init
 exec /bin/sh

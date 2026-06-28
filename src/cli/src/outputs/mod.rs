@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::manifest::*;
-use crate::store::{create_artifact, encode_metadata_list, get_branch_tree, rewrite_branch_metadata};
+use crate::store::{
+    create_artifact, encode_metadata_list, get_branch_tree, rewrite_branch_metadata,
+};
 use crate::utils::{create_deterministic_tarball_uncompressed, determine_category};
 
 #[cfg(unix)]
@@ -115,7 +117,13 @@ pub fn commit_bundle(
         manifest_hash,
         bundle_name
     );
-    create_artifact(repo_path, &tree_hash, manifest_hash, &artifact_output, &artifact_path)?;
+    create_artifact(
+        repo_path,
+        &tree_hash,
+        manifest_hash,
+        &artifact_output,
+        &artifact_path,
+    )?;
 
     Ok(())
 }
@@ -376,7 +384,27 @@ pub fn calculate_output_checksum(output_dir: &Path) -> io::Result<String> {
 }
 
 pub fn categorize_files(rootfs_dir: &Path) -> HashMap<String, Vec<String>> {
+    categorize_files_with_existing_outputs(rootfs_dir, &HashMap::new())
+}
+
+pub fn categorize_files_with_existing_outputs(
+    rootfs_dir: &Path,
+    existing_outputs: &HashMap<String, OutputSpec>,
+) -> HashMap<String, Vec<String>> {
     let mut outputs = HashMap::new();
+    let mut known_paths = HashMap::new();
+    let mut output_names: Vec<&String> = existing_outputs.keys().collect();
+    output_names.sort();
+
+    for output_name in output_names {
+        if let Some(output) = existing_outputs.get(output_name) {
+            for file in &output.files {
+                known_paths
+                    .entry(file.path.clone())
+                    .or_insert_with(|| output_name.clone());
+            }
+        }
+    }
 
     for entry in WalkDir::new(rootfs_dir) {
         let entry = entry.unwrap();
@@ -384,7 +412,10 @@ pub fn categorize_files(rootfs_dir: &Path) -> HashMap<String, Vec<String>> {
             let relative_path = entry.path().strip_prefix(rootfs_dir).unwrap();
             let relative_path_str = format!("/{}", relative_path.to_str().unwrap());
 
-            let category = determine_category(&relative_path_str);
+            let category = known_paths
+                .get(&relative_path_str)
+                .cloned()
+                .unwrap_or_else(|| determine_category(&relative_path_str));
             outputs
                 .entry(category)
                 .or_insert_with(Vec::new)
@@ -398,4 +429,51 @@ pub fn categorize_files(rootfs_dir: &Path) -> HashMap<String, Vec<String>> {
     }
 
     outputs
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn generated_outputs_preserve_existing_output_names() {
+        let temp_dir = TempDir::new().unwrap();
+        let root = temp_dir.path();
+        fs::create_dir_all(root.join("usr/lib/modules/1/kernel/drivers/net")).unwrap();
+        fs::create_dir_all(root.join("usr/lib/modules/1/kernel/drivers/gpu")).unwrap();
+        fs::write(
+            root.join("usr/lib/modules/1/kernel/drivers/net/e1000e.ko"),
+            "net",
+        )
+        .unwrap();
+        fs::write(
+            root.join("usr/lib/modules/1/kernel/drivers/gpu/amdgpu.ko"),
+            "gpu",
+        )
+        .unwrap();
+
+        let mut existing = HashMap::new();
+        existing.insert(
+            "drv-eth-intel".to_string(),
+            OutputSpec {
+                files: vec![FileEntry {
+                    path: "/usr/lib/modules/1/kernel/drivers/net/e1000e.ko".to_string(),
+                    needs: Vec::new(),
+                }],
+            },
+        );
+
+        let categorized = categorize_files_with_existing_outputs(root, &existing);
+
+        assert_eq!(
+            categorized.get("drv-eth-intel").unwrap(),
+            &vec!["/usr/lib/modules/1/kernel/drivers/net/e1000e.ko".to_string()]
+        );
+        assert_eq!(
+            categorized.get("lib").unwrap(),
+            &vec!["/usr/lib/modules/1/kernel/drivers/gpu/amdgpu.ko".to_string()]
+        );
+    }
 }

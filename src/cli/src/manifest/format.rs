@@ -95,6 +95,7 @@ fn format_root(
     let sections: &[&str] = if is_system {
         &[
             "system",
+            "overlays",
             "sources",
             "dependencies",
             "packages",
@@ -132,6 +133,7 @@ fn format_root(
             match section {
                 "package" => output.push_str(&format_package(value, original_version, unstable)?),
                 "system" => output.push_str(&format_system(value, original_version, unstable)?),
+                "overlays" => output.push_str(&format_overlays(value)?),
                 "sources" => output.push_str(&format_sources(value)?),
                 "dependencies" => output.push_str(&format_dependencies(value)?),
                 "packages" => output.push_str(&format_packages(value)?),
@@ -258,6 +260,18 @@ fn format_version(original: Option<&str>, parsed: &Value) -> String {
     } else {
         version_str
     }
+}
+
+fn format_overlays(value: &Value) -> io::Result<String> {
+    let seq = value
+        .as_sequence()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "overlays must be a sequence"))?;
+
+    let mut output = String::from("overlays:\n");
+    for overlay in seq {
+        output.push_str(&format!("- {}\n", format_scalar(overlay)));
+    }
+    Ok(output)
 }
 
 fn format_sources(value: &Value) -> io::Result<String> {
@@ -734,5 +748,26 @@ mod tests {
                 "/usr/lib/libc.so.10",
             ]
         );
+    }
+
+    #[test]
+    fn formats_system_overlays() {
+        let input = r#"system:
+  schema: 1
+  name: test system
+  slug: test
+  version: 1.0
+overlays:
+  - asm/test-overlay.yaml
+dependencies: []
+packages: []
+build:
+  environment: env/test.yaml
+  script: "true"
+"#;
+
+        let formatted = format_manifest_string(input).unwrap();
+        assert!(formatted.contains("overlays:\n- asm/test-overlay.yaml\n"));
+        assert!(formatted.contains("\ndependencies: []\n"));
     }
 }
