@@ -5,8 +5,8 @@ system:
   version: 0.0.1
   description: Minimal nex rootfs with systemd, networking, and SSH
   nex_structure: true
+  checksum: 58955b13a4660a9a25a4ac76e374178522d8bfde60bdb365f59f0c09bd2cf141
 
-  checksum: 840f8b45de942718b041b8da91d21df8b3b746895c40d3aead123d6dd05bd1bb
 overlays:
 - asm/nex-systemd-overlay.yaml
 
@@ -48,7 +48,6 @@ packages:
   commit: x86_64/pkg/core/init/systemd/257.5/bundles/minimal
 - name: dbus-broker
   commit: x86_64/pkg/core/ipc/dbus-broker/37/bundles/full
-
 # shell and core utilities
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
@@ -70,7 +69,6 @@ packages:
   commit: x86_64/pkg/cli/archive/gzip/1.13/outputs/bin
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/outputs/bin
-
 # kernel
 - name: kmod
   commit: x86_64/pkg/core/kernel/kmod/32/bundles/runtime
@@ -78,7 +76,6 @@ packages:
   commit: x86_64/pkg/core/kernel/linux/6.12.58/bundles/vm
 - name: initramfs
   commit: x86_64/pkg/core/kernel/initramfs/1.0.0/outputs/boot
-
 # networking
 - name: curl
   commit: x86_64/pkg/cli/net/curl/8.17.0/outputs/bin
@@ -86,7 +83,6 @@ packages:
   commit: x86_64/pkg/apps/misc/ca-certificates/20251104/outputs/certs
 - name: openssh
   commit: x86_64/pkg/cli/net/openssh/9.9p1/bundles/dev
-
 # nex package manager
 - name: nex
   commit: x86_64/pkg/core/nex/nex/0.1.0/outputs/bin
@@ -95,6 +91,7 @@ packages:
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+
   script: |
     set -eu
 
@@ -106,6 +103,11 @@ build:
     mkdir -p /target/var/{log/journal,lib/systemd/{random-seed,timers,coredump}}
     mkdir -p /target/run/systemd
     mkdir -p /target/etc/modprobe.d
+    mkdir -p /target/home
+
+    # deployment-root boot mountpoints (initramfs bind-mounts sysroot/var/nex into the deployment)
+    mkdir -p /target/sysroot
+    mkdir -p /target/nex/repo /target/nex/deployments /target/nex/users /target/nex/staging /target/nex/manifests
 
     # openssh libexec symlinks
     mkdir -p /target/usr/libexec

@@ -6,13 +6,25 @@ system:
   description: Desktop system with vwl compositor, wayland tools, and CLI utilities
   nex_structure: true
   extends: asm/nex-systemd.yaml
+  checksum: ed3fbaa8397e02d42968b2d0201d52d58e2d45ac5d03506beed3acf6d7d74b09
 
-  checksum: 3915ead6cf1d437fe7882a21d2190c6dbc63884530b4af18a76b0f064aada8b7
 overlays:
 - asm/desktop-vwl/desktop-vwl-overlay.yaml
 
+sources:
+# Ship a snapshot of the Nex repo needed for self-hosting. The installed system
+# copies this template into writable /var on first boot.
+- name: nex_pkg
+  dev: pkg
+- name: nex_asm
+  dev: asm
+- name: nex_src_cli
+  dev: src/cli
+- name: nex_scripts
+  dev: scripts
+
 dependencies:
-# desktop-specific libs (base libs inherited from nex-systemd)
+# desktop-specific libs; base libs come from nex-systemd
 - name: libcap-bin
   commit: x86_64/pkg/libs/security/libcap/2.69/outputs/bin
 - name: linux-pam
@@ -36,8 +48,7 @@ packages:
 # PAM support
 - name: linux-pam
   commit: x86_64/pkg/libs/security/linux-pam/1.7.1/bundles/dev
-
-# kernel (desktop bundle, not vm)
+# kernel
 - name: linux
   commit: x86_64/pkg/core/kernel/linux/6.12.58/bundles/all-modules
 - name: linux-vm
@@ -46,7 +57,6 @@ packages:
   commit: x86_64/pkg/core/kernel/linux-firmware/20251125/bundles/desktop
 - name: wireless-regdb
   commit: x86_64/pkg/core/kernel/wireless-regdb/2024.10.07/outputs/regdb
-
 # networking
 - name: networkmanager
   commit: x86_64/pkg/net/manager/networkmanager/1.50.0/bundles/dev
@@ -60,7 +70,6 @@ packages:
   commit: x86_64/pkg/net/misc/iproute2/6.18.0/bundles/dev
 - name: nftables
   commit: x86_64/pkg/net/firewall/nftables/1.1.1/bundles/dev
-
 # additional core utilities
 - name: psmisc
   commit: x86_64/pkg/core/userland/psmisc/23.7/bundles/dev
@@ -74,8 +83,7 @@ packages:
   commit: x86_64/pkg/core/userland/procps-ng/4.0.5/bundles/dev
 - name: which
   commit: x86_64/pkg/core/userland/which/2.23/bundles/dev
-
-# wayland compositor and tools
+# Wayland compositor, desktop tools, and X11 compatibility
 - name: xkeyboard-config
   commit: x86_64/pkg/libs/input/xkeyboard-config/2.43/outputs/misc
 - name: vwl
@@ -104,7 +112,29 @@ packages:
   commit: x86_64/pkg/desktop/wayland/wlr-randr/0.4.1/outputs/bin
 - name: ironbar
   commit: x86_64/pkg/desktop/wayland/ironbar/0.18.0-git/outputs/bin
-
+- name: xwayland
+  commit: x86_64/pkg/servers/xwayland/24.1.4/outputs/bin
+- name: libseat
+  commit: x86_64/pkg/libs/wayland/libseat/0.9.1/outputs/lib
+- name: wlroots
+  commit: x86_64/pkg/libs/wayland/wlroots/0.19.2/outputs/lib
+- name: wayland-protocols
+  commit: x86_64/pkg/libs/wayland/wayland-protocols/1.46/outputs/misc
+# graphics, Vulkan runtime, and desktop integration libraries
+- name: mesa-lib
+  commit: x86_64/pkg/libs/graphics/mesa/24.2.7/outputs/lib
+- name: mesa-conf
+  commit: x86_64/pkg/libs/graphics/mesa/24.2.7/outputs/conf
+- name: mesa-vulkan-icd
+  commit: x86_64/pkg/libs/graphics/mesa/24.2.7/outputs/misc
+- name: vulkan-loader
+  commit: x86_64/pkg/libs/graphics/vulkan-loader/1.4.328.1/outputs/lib
+- name: libsecret
+  commit: x86_64/pkg/libs/security/libsecret/0.21.7/outputs/lib
+- name: libnotify
+  commit: x86_64/pkg/libs/graphics/libnotify/0.8.3/outputs/lib
+- name: notify-send
+  commit: x86_64/pkg/libs/graphics/libnotify/0.8.3/outputs/bin
 # audio
 - name: pipewire
   commit: x86_64/pkg/libs/audio/pipewire/1.4.9/bundles/dev
@@ -112,7 +142,6 @@ packages:
   commit: x86_64/pkg/libs/audio/wireplumber/0.5.12/bundles/dev
 - name: alsa-utils
   commit: x86_64/pkg/libs/audio/alsa-utils/1.2.14/outputs/bin
-
 # editors
 - name: neovim
   commit: x86_64/pkg/cli/editors/neovim/0.11.0/outputs/bin
@@ -120,11 +149,9 @@ packages:
   commit: x86_64/pkg/cli/editor/helix/25.01.1/outputs/bin
 - name: gnome-text-editor
   commit: x86_64/pkg/apps/editor/gnome-text-editor/47.4/bundles/full
-
 # file manager
 - name: nautilus
   commit: x86_64/pkg/apps/files/nautilus/47.6/outputs/bin
-
 # containers
 - name: podman
   commit: x86_64/pkg/apps/containers/podman/5.4.1/outputs/bin
@@ -140,7 +167,19 @@ packages:
   commit: x86_64/pkg/apps/containers/netavark/1.14.0/outputs/bin
 - name: passt
   commit: x86_64/pkg/apps/containers/passt/2025_02_17/outputs/bin
-
+# virtual machines
+- name: qemu-bin
+  commit: x86_64/pkg/dev/virt/qemu/10.1.2/outputs/bin
+- name: qemu-data
+  commit: x86_64/pkg/dev/virt/qemu/10.1.2/outputs/misc
+- name: libvirt-bin
+  commit: x86_64/pkg/dev/virt/libvirt/11.0.0/outputs/bin
+- name: libvirt-conf
+  commit: x86_64/pkg/dev/virt/libvirt/11.0.0/outputs/conf
+- name: libvirt-lib
+  commit: x86_64/pkg/dev/virt/libvirt/11.0.0/outputs/lib
+- name: libvirt-daemons
+  commit: x86_64/pkg/dev/virt/libvirt/11.0.0/outputs/misc
 # dev tools
 - name: git
   commit: x86_64/pkg/dev/vcs/git/2.49.0/outputs/bin
@@ -148,7 +187,6 @@ packages:
   commit: x86_64/pkg/dev/vcs/lazygit/0.44.1/outputs/bin
 - name: tig
   commit: x86_64/pkg/dev/vcs/tig/2.6.0/outputs/bin
-
 # cli tools
 - name: ncurses-terminfo
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/outputs/terminfo
@@ -192,7 +230,6 @@ packages:
   commit: x86_64/pkg/cli/system/procs/0.14.10/outputs/bin
 - name: lsd
   commit: x86_64/pkg/cli/system/lsd/1.2.0/outputs/bin
-
 # utilities
 - name: rsync
   commit: x86_64/pkg/cli/net/rsync/3.4.1/outputs/bin
@@ -200,13 +237,13 @@ packages:
   commit: x86_64/pkg/cli/archive/unzip/6.0/outputs/bin
 - name: bc
   commit: x86_64/pkg/cli/calc/bc/6.7.5/outputs/bin
-
+- name: dosfstools
+  commit: x86_64/pkg/core/fs/dosfstools/4.2/outputs/bin
 # multimedia
 - name: mpv
   commit: x86_64/pkg/apps/multimedia/mpv/0.40.0+20251205/outputs/bin
 - name: ffmpeg
   commit: x86_64/pkg/libs/multimedia/ffmpeg/8.0.1/outputs/bin
-
 # fonts
 - name: fontconfig-conf
   commit: x86_64/pkg/libs/graphics/fontconfig/2.17.1/outputs/conf
@@ -221,6 +258,7 @@ packages:
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+
   script: |
     set -eu
 
@@ -250,5 +288,29 @@ build:
     for f in /target/nex/pkg/core/userland/shadow/*/*/usr/bin/newgidmap; do
       chmod u+s "$f"
     done
+
+    # ship manifests + sources for self-hosting (template copied to /var on first boot)
+    mkdir -p /target/usr/share/nex/manifests/pkg
+    mkdir -p /target/usr/share/nex/manifests/asm
+    mkdir -p /target/usr/share/nex/manifests/src/cli
+    mkdir -p /target/usr/share/nex/manifests/scripts
+
+    # extract dev sources (uncompressed tarballs)
+    if [ -n "${SOURCE_nex_pkg_IS_DEV:-}" ]; then
+        tar --no-same-owner -xf "/${SOURCE_nex_pkg}" -C /target/usr/share/nex/manifests/pkg --strip-components=1
+    fi
+    if [ -n "${SOURCE_nex_asm_IS_DEV:-}" ]; then
+        tar --no-same-owner -xf "/${SOURCE_nex_asm}" -C /target/usr/share/nex/manifests/asm --strip-components=1
+        find /target/usr/share/nex/manifests/asm -name '*.yaml' -exec sed -i '/^[[:space:]]*checksum:[[:space:]]/d' {} +
+    fi
+    if [ -n "${SOURCE_nex_src_cli_IS_DEV:-}" ]; then
+        tar --no-same-owner -xf "/${SOURCE_nex_src_cli}" -C /target/usr/share/nex/manifests/src/cli --strip-components=1
+    fi
+    if [ -n "${SOURCE_nex_scripts_IS_DEV:-}" ]; then
+        tar --no-same-owner -xf "/${SOURCE_nex_scripts}" -C /target/usr/share/nex/manifests/scripts --strip-components=1
+    fi
+
+    # keep deterministic timestamps for the shipped snapshot
+    find /target/usr/share/nex/manifests -exec touch -d "2024-01-01T00:00:00+00:00" {} \; || true
 
     echo "Desktop assembly configuration done."
