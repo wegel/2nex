@@ -1,0 +1,868 @@
+package:
+  schema: 1
+  name: ImageMagick
+  slug: imagemagick
+  namespace: apps/graphics
+  version: 7.1.2-26
+  description: Command-line image conversion and processing tools
+  homepage: https://imagemagick.org/
+  checksum: 927ba4c6d825b7235bb63bf741c134621f4d438c1e7931ae2a95900bed0bbd72
+
+sources:
+- name: imagemagick
+  url: https://github.com/ImageMagick/ImageMagick/archive/refs/tags/7.1.2-26.tar.gz
+  sha256: d63594e334e1c410f600fb9370d78d49e4dc6f315722ca4ba083e864e5c354cb
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: libpng
+  commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+- name: libjpeg-turbo
+  commit: x86_64/pkg/libs/graphics/libjpeg-turbo/3.1.2/bundles/dev
+- name: libtiff
+  commit: x86_64/pkg/libs/graphics/libtiff/4.7.1/bundles/dev
+- name: libwebp
+  commit: x86_64/pkg/libs/graphics/libwebp/1.6.0/bundles/dev
+- name: freetype
+  commit: x86_64/pkg/libs/graphics/freetype/2.14.1/bundles/dev
+- name: fontconfig
+  commit: x86_64/pkg/libs/graphics/fontconfig/2.17.1/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4149:1400, 8272:2629, 16504:9468, 28837:11519, 37148:12584, 45778:21996, 55617:22025, 68025:22098, 80374:22177, 86445:26836]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xzf /${SOURCE_imagemagick} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
+
+    ./configure \
+      --prefix=/usr \
+      --sysconfdir=/etc \
+      --disable-static \
+      --disable-openmp \
+      --without-magick-plus-plus \
+      --without-perl \
+      --without-x \
+      --without-autotrace \
+      --without-djvu \
+      --without-dps \
+      --without-fpx \
+      --without-gvc \
+      --without-heic \
+      --without-jxl \
+      --without-lcms \
+      --without-lqr \
+      --without-openexr \
+      --without-openjp2 \
+      --without-pango \
+      --without-raqm \
+      --without-raw \
+      --without-rsvg \
+      --without-wmf \
+      --with-bzlib=yes \
+      --with-fontconfig=yes \
+      --with-freetype=yes \
+      --with-jpeg=yes \
+      --with-lzma=yes \
+      --with-png=yes \
+      --with-tiff=yes \
+      --with-webp=yes \
+      --with-xml=yes \
+      --with-zlib=yes \
+      --with-zstd=yes
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -name '*.la' -delete
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - conf
+  - dev
+  - lib
+  - misc
+
+  full:
+  - bin
+  - conf
+  - lib
+  - man
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/MagickCore-config
+    - path: /usr/bin/MagickWand-config
+    - path: /usr/bin/animate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libMagickWand-7.Q16HDRI.so.11
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/compare
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libMagickWand-7.Q16HDRI.so.11
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/composite
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libMagickWand-7.Q16HDRI.so.11
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/conjure
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libMagickWand-7.Q16HDRI.so.11
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/convert
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libMagickWand-7.Q16HDRI.so.11
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/display
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libMagickWand-7.Q16HDRI.so.11
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/identify
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libMagickWand-7.Q16HDRI.so.11
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/import
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libMagickWand-7.Q16HDRI.so.11
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/magick
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libMagickWand-7.Q16HDRI.so.11
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/magick-script
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libMagickWand-7.Q16HDRI.so.11
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/mogrify
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libMagickWand-7.Q16HDRI.so.11
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/montage
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libMagickWand-7.Q16HDRI.so.11
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/stream
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libMagickWand-7.Q16HDRI.so.11
+      - /usr/lib/libc.so.6
+
+  conf:
+    files:
+    - path: /etc/ImageMagick-7/colors.xml
+    - path: /etc/ImageMagick-7/delegates.xml
+    - path: /etc/ImageMagick-7/log.xml
+    - path: /etc/ImageMagick-7/mime.xml
+    - path: /etc/ImageMagick-7/policy.xml
+    - path: /etc/ImageMagick-7/quantization-table.xml
+    - path: /etc/ImageMagick-7/thresholds.xml
+    - path: /etc/ImageMagick-7/type-apple.xml
+    - path: /etc/ImageMagick-7/type-dejavu.xml
+    - path: /etc/ImageMagick-7/type-ghostscript.xml
+    - path: /etc/ImageMagick-7/type-urw-base35-type1.xml
+    - path: /etc/ImageMagick-7/type-urw-base35.xml
+    - path: /etc/ImageMagick-7/type-windows.xml
+    - path: /etc/ImageMagick-7/type.xml
+
+  dev:
+    files:
+    - path: /usr/include/ImageMagick-7/MagickCore/MagickCore.h
+    - path: /usr/include/ImageMagick-7/MagickCore/animate.h
+    - path: /usr/include/ImageMagick-7/MagickCore/annotate.h
+    - path: /usr/include/ImageMagick-7/MagickCore/artifact.h
+    - path: /usr/include/ImageMagick-7/MagickCore/attribute.h
+    - path: /usr/include/ImageMagick-7/MagickCore/blob.h
+    - path: /usr/include/ImageMagick-7/MagickCore/cache-view.h
+    - path: /usr/include/ImageMagick-7/MagickCore/cache.h
+    - path: /usr/include/ImageMagick-7/MagickCore/channel.h
+    - path: /usr/include/ImageMagick-7/MagickCore/cipher.h
+    - path: /usr/include/ImageMagick-7/MagickCore/client.h
+    - path: /usr/include/ImageMagick-7/MagickCore/coder.h
+    - path: /usr/include/ImageMagick-7/MagickCore/color.h
+    - path: /usr/include/ImageMagick-7/MagickCore/colormap.h
+    - path: /usr/include/ImageMagick-7/MagickCore/colorspace.h
+    - path: /usr/include/ImageMagick-7/MagickCore/compare.h
+    - path: /usr/include/ImageMagick-7/MagickCore/composite.h
+    - path: /usr/include/ImageMagick-7/MagickCore/compress.h
+    - path: /usr/include/ImageMagick-7/MagickCore/configure.h
+    - path: /usr/include/ImageMagick-7/MagickCore/constitute.h
+    - path: /usr/include/ImageMagick-7/MagickCore/decorate.h
+    - path: /usr/include/ImageMagick-7/MagickCore/delegate.h
+    - path: /usr/include/ImageMagick-7/MagickCore/deprecate.h
+    - path: /usr/include/ImageMagick-7/MagickCore/display.h
+    - path: /usr/include/ImageMagick-7/MagickCore/distort.h
+    - path: /usr/include/ImageMagick-7/MagickCore/distribute-cache.h
+    - path: /usr/include/ImageMagick-7/MagickCore/draw.h
+    - path: /usr/include/ImageMagick-7/MagickCore/effect.h
+    - path: /usr/include/ImageMagick-7/MagickCore/enhance.h
+    - path: /usr/include/ImageMagick-7/MagickCore/exception.h
+    - path: /usr/include/ImageMagick-7/MagickCore/feature.h
+    - path: /usr/include/ImageMagick-7/MagickCore/fourier.h
+    - path: /usr/include/ImageMagick-7/MagickCore/fx.h
+    - path: /usr/include/ImageMagick-7/MagickCore/gem.h
+    - path: /usr/include/ImageMagick-7/MagickCore/geometry.h
+    - path: /usr/include/ImageMagick-7/MagickCore/histogram.h
+    - path: /usr/include/ImageMagick-7/MagickCore/identify.h
+    - path: /usr/include/ImageMagick-7/MagickCore/image-view.h
+    - path: /usr/include/ImageMagick-7/MagickCore/image.h
+    - path: /usr/include/ImageMagick-7/MagickCore/layer.h
+    - path: /usr/include/ImageMagick-7/MagickCore/linked-list.h
+    - path: /usr/include/ImageMagick-7/MagickCore/list.h
+    - path: /usr/include/ImageMagick-7/MagickCore/locale_.h
+    - path: /usr/include/ImageMagick-7/MagickCore/log.h
+    - path: /usr/include/ImageMagick-7/MagickCore/magic.h
+    - path: /usr/include/ImageMagick-7/MagickCore/magick-baseconfig.h
+    - path: /usr/include/ImageMagick-7/MagickCore/magick-config.h
+    - path: /usr/include/ImageMagick-7/MagickCore/magick-type.h
+    - path: /usr/include/ImageMagick-7/MagickCore/magick.h
+    - path: /usr/include/ImageMagick-7/MagickCore/matrix.h
+    - path: /usr/include/ImageMagick-7/MagickCore/memory_.h
+    - path: /usr/include/ImageMagick-7/MagickCore/method-attribute.h
+    - path: /usr/include/ImageMagick-7/MagickCore/methods.h
+    - path: /usr/include/ImageMagick-7/MagickCore/mime.h
+    - path: /usr/include/ImageMagick-7/MagickCore/module.h
+    - path: /usr/include/ImageMagick-7/MagickCore/monitor.h
+    - path: /usr/include/ImageMagick-7/MagickCore/montage.h
+    - path: /usr/include/ImageMagick-7/MagickCore/morphology.h
+    - path: /usr/include/ImageMagick-7/MagickCore/nt-base.h
+    - path: /usr/include/ImageMagick-7/MagickCore/opencl.h
+    - path: /usr/include/ImageMagick-7/MagickCore/option.h
+    - path: /usr/include/ImageMagick-7/MagickCore/paint.h
+    - path: /usr/include/ImageMagick-7/MagickCore/pixel-accessor.h
+    - path: /usr/include/ImageMagick-7/MagickCore/pixel.h
+    - path: /usr/include/ImageMagick-7/MagickCore/policy.h
+    - path: /usr/include/ImageMagick-7/MagickCore/prepress.h
+    - path: /usr/include/ImageMagick-7/MagickCore/profile.h
+    - path: /usr/include/ImageMagick-7/MagickCore/property.h
+    - path: /usr/include/ImageMagick-7/MagickCore/quantize.h
+    - path: /usr/include/ImageMagick-7/MagickCore/quantum.h
+    - path: /usr/include/ImageMagick-7/MagickCore/random_.h
+    - path: /usr/include/ImageMagick-7/MagickCore/registry.h
+    - path: /usr/include/ImageMagick-7/MagickCore/resample.h
+    - path: /usr/include/ImageMagick-7/MagickCore/resize.h
+    - path: /usr/include/ImageMagick-7/MagickCore/resource_.h
+    - path: /usr/include/ImageMagick-7/MagickCore/segment.h
+    - path: /usr/include/ImageMagick-7/MagickCore/semaphore.h
+    - path: /usr/include/ImageMagick-7/MagickCore/shear.h
+    - path: /usr/include/ImageMagick-7/MagickCore/signature.h
+    - path: /usr/include/ImageMagick-7/MagickCore/splay-tree.h
+    - path: /usr/include/ImageMagick-7/MagickCore/static.h
+    - path: /usr/include/ImageMagick-7/MagickCore/statistic.h
+    - path: /usr/include/ImageMagick-7/MagickCore/stream.h
+    - path: /usr/include/ImageMagick-7/MagickCore/string_.h
+    - path: /usr/include/ImageMagick-7/MagickCore/studio.h
+    - path: /usr/include/ImageMagick-7/MagickCore/threshold.h
+    - path: /usr/include/ImageMagick-7/MagickCore/timer.h
+    - path: /usr/include/ImageMagick-7/MagickCore/token.h
+    - path: /usr/include/ImageMagick-7/MagickCore/transform.h
+    - path: /usr/include/ImageMagick-7/MagickCore/type.h
+    - path: /usr/include/ImageMagick-7/MagickCore/utility.h
+    - path: /usr/include/ImageMagick-7/MagickCore/version.h
+    - path: /usr/include/ImageMagick-7/MagickCore/vision.h
+    - path: /usr/include/ImageMagick-7/MagickCore/visual-effects.h
+    - path: /usr/include/ImageMagick-7/MagickCore/widget.h
+    - path: /usr/include/ImageMagick-7/MagickCore/xml-tree.h
+    - path: /usr/include/ImageMagick-7/MagickCore/xwindow.h
+    - path: /usr/include/ImageMagick-7/MagickWand/MagickWand.h
+    - path: /usr/include/ImageMagick-7/MagickWand/animate.h
+    - path: /usr/include/ImageMagick-7/MagickWand/compare.h
+    - path: /usr/include/ImageMagick-7/MagickWand/composite.h
+    - path: /usr/include/ImageMagick-7/MagickWand/conjure.h
+    - path: /usr/include/ImageMagick-7/MagickWand/deprecate.h
+    - path: /usr/include/ImageMagick-7/MagickWand/display.h
+    - path: /usr/include/ImageMagick-7/MagickWand/drawing-wand.h
+    - path: /usr/include/ImageMagick-7/MagickWand/identify.h
+    - path: /usr/include/ImageMagick-7/MagickWand/import.h
+    - path: /usr/include/ImageMagick-7/MagickWand/magick-cli.h
+    - path: /usr/include/ImageMagick-7/MagickWand/magick-image.h
+    - path: /usr/include/ImageMagick-7/MagickWand/magick-property.h
+    - path: /usr/include/ImageMagick-7/MagickWand/method-attribute.h
+    - path: /usr/include/ImageMagick-7/MagickWand/mogrify.h
+    - path: /usr/include/ImageMagick-7/MagickWand/montage.h
+    - path: /usr/include/ImageMagick-7/MagickWand/operation.h
+    - path: /usr/include/ImageMagick-7/MagickWand/pixel-iterator.h
+    - path: /usr/include/ImageMagick-7/MagickWand/pixel-wand.h
+    - path: /usr/include/ImageMagick-7/MagickWand/stream.h
+    - path: /usr/include/ImageMagick-7/MagickWand/wand-view.h
+    - path: /usr/include/ImageMagick-7/MagickWand/wandcli.h
+    - path: /usr/lib/pkgconfig/ImageMagick-7.Q16HDRI.pc
+    - path: /usr/lib/pkgconfig/ImageMagick.pc
+    - path: /usr/lib/pkgconfig/MagickCore-7.Q16HDRI.pc
+    - path: /usr/lib/pkgconfig/MagickCore.pc
+    - path: /usr/lib/pkgconfig/MagickWand-7.Q16HDRI.pc
+    - path: /usr/lib/pkgconfig/MagickWand.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/ImageMagick-7/LICENSE
+    - path: /usr/share/doc/ImageMagick-7/images/ImageMagick.ico
+    - path: /usr/share/doc/ImageMagick-7/images/affine.png
+    - path: /usr/share/doc/ImageMagick-7/images/annotate.png
+    - path: /usr/share/doc/ImageMagick-7/images/arc.png
+    - path: /usr/share/doc/ImageMagick-7/images/atop.gif
+    - path: /usr/share/doc/ImageMagick-7/images/background.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/bitcoin.svg
+    - path: /usr/share/doc/ImageMagick-7/images/black.png
+    - path: /usr/share/doc/ImageMagick-7/images/bluebells_clipped.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/bluebells_darker.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/bluebells_lin.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/bluebells_log.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/button.gif
+    - path: /usr/share/doc/ImageMagick-7/images/color-thresholding-gray.gif
+    - path: /usr/share/doc/ImageMagick-7/images/color-thresholding-hsv-rgb.gif
+    - path: /usr/share/doc/ImageMagick-7/images/color-thresholding-hsv.gif
+    - path: /usr/share/doc/ImageMagick-7/images/color-thresholding-rgb.gif
+    - path: /usr/share/doc/ImageMagick-7/images/color-thresholding.gif
+    - path: /usr/share/doc/ImageMagick-7/images/color-thresholding.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/configure.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/convex-hull-barn-closure.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/convex-hull-barn.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/convex-hull-blocks-closure.png
+    - path: /usr/share/doc/ImageMagick-7/images/convex-hull-blocks.png
+    - path: /usr/share/doc/ImageMagick-7/images/convex-hull.png
+    - path: /usr/share/doc/ImageMagick-7/images/cylinder_shaded.png
+    - path: /usr/share/doc/ImageMagick-7/images/difference.png
+    - path: /usr/share/doc/ImageMagick-7/images/examples.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/frame.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/fuzzy-magick.png
+    - path: /usr/share/doc/ImageMagick-7/images/gaussian-blur.png
+    - path: /usr/share/doc/ImageMagick-7/images/granite.png
+    - path: /usr/share/doc/ImageMagick-7/images/imade_art2.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/label.gif
+    - path: /usr/share/doc/ImageMagick-7/images/logo-sm-flop.png
+    - path: /usr/share/doc/ImageMagick-7/images/logo-sm-fx.png
+    - path: /usr/share/doc/ImageMagick-7/images/logo-sm.png
+    - path: /usr/share/doc/ImageMagick-7/images/logo.eps
+    - path: /usr/share/doc/ImageMagick-7/images/logo.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/logo.png
+    - path: /usr/share/doc/ImageMagick-7/images/montage.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/mountains-clahe.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/mountains-equalize.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/mountains.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/navy.png
+    - path: /usr/share/doc/ImageMagick-7/images/objects.gif
+    - path: /usr/share/doc/ImageMagick-7/images/objects.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/objects.png
+    - path: /usr/share/doc/ImageMagick-7/images/over.gif
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/bricks.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/checkerboard.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/circles.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/crosshatch.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/crosshatch30.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/crosshatch45.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/fishscales.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray0.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray5.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray10.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray15.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray20.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray25.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray30.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray35.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray40.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray45.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray50.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray55.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray60.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray65.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray70.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray75.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray80.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray85.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray90.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray95.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/gray100.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/hexagons.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/horizontal.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/horizontal2.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/horizontal3.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/horizontalsaw.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/hs_bdiagonal.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/hs_cross.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/hs_diagcross.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/hs_fdiagonal.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/hs_horizontal.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/hs_vertical.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/left30.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/left45.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/leftshingle.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/octagons.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/right30.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/right45.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/rightshingle.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/smallfishscales.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/vertical.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/vertical2.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/vertical3.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/verticalbricks.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/verticalleftshingle.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/verticalrightshingle.png
+    - path: /usr/share/doc/ImageMagick-7/images/patterns/verticalsaw.png
+    - path: /usr/share/doc/ImageMagick-7/images/piechart.png
+    - path: /usr/share/doc/ImageMagick-7/images/radial-gradient.png
+    - path: /usr/share/doc/ImageMagick-7/images/reconstruct.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/red-ball.png
+    - path: /usr/share/doc/ImageMagick-7/images/red-circle.png
+    - path: /usr/share/doc/ImageMagick-7/images/right.gif
+    - path: /usr/share/doc/ImageMagick-7/images/rose-over.png
+    - path: /usr/share/doc/ImageMagick-7/images/rose-sigmoidal.png
+    - path: /usr/share/doc/ImageMagick-7/images/rose.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/rose.png
+    - path: /usr/share/doc/ImageMagick-7/images/rose.pnm
+    - path: /usr/share/doc/ImageMagick-7/images/script.png
+    - path: /usr/share/doc/ImageMagick-7/images/smile.gif
+    - path: /usr/share/doc/ImageMagick-7/images/sponsor.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/sprite.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/t-shirt.png
+    - path: /usr/share/doc/ImageMagick-7/images/wand.ico
+    - path: /usr/share/doc/ImageMagick-7/images/wand.png
+    - path: /usr/share/doc/ImageMagick-7/images/wand.svg
+    - path: /usr/share/doc/ImageMagick-7/images/white-highlight.png
+    - path: /usr/share/doc/ImageMagick-7/images/wizard.jpg
+    - path: /usr/share/doc/ImageMagick-7/images/wizard.png
+    - path: /usr/share/doc/ImageMagick-7/index.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Blob.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Cache.fig
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Cache.png
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Cache.svg
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/ChangeLog.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/CoderInfo.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Color.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Documentation.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Drawable.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Drawable_example_1.png
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Enumerations.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Exception.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/FormatCharacters.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Future.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Geometry.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Image++.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Image.fig
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Image.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Image.png
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/ImageDesign.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/ImageMagick.png
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Install.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Magick++.png
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Montage.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/NEWS.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/PixelPacket.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Pixels.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/Quantum.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/README.txt
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/STL.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/TypeMetric.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/index.html
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/magick.css
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/montage-sample-framed.jpg
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/right_triangle.png
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/thumbnail-anatomy-framed.fig
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/thumbnail-anatomy-framed.jpg
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/thumbnail-anatomy-plain.fig
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/thumbnail-anatomy-plain.jpg
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/thumbnail-sample-framed.jpg
+    - path: /usr/share/doc/ImageMagick-7/www/Magick++/thumbnail-sample-plain.jpg
+    - path: /usr/share/doc/ImageMagick-7/www/advanced-linux-installation.html
+    - path: /usr/share/doc/ImageMagick-7/www/advanced-unix-installation.html
+    - path: /usr/share/doc/ImageMagick-7/www/advanced-windows-installation.html
+    - path: /usr/share/doc/ImageMagick-7/www/animate.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/Image++.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/animate.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/annotate.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/attribute.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/blob.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/cache-view.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/cache.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/channel.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/cipher.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/color.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/colormap.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/colorspace.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/compare.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/composite.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/constitute.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/decorate.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/deprecate.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/display.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/distort.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/draw.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/drawing-wand.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/effect.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/enhance.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/exception.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/feature.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/fourier.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/fx.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/histogram.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/image-view.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/image.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/layer.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/list.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/magick++-classes.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/magick-deprecate.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/magick-image.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/magick-property.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/magick-wand.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/magick.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/memory.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/mime.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/module.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/mogrify.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/monitor.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/montage.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/morphology.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/paint.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/pixel-iterator.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/pixel-wand.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/profile.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/property.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/quantize.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/registry.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/resize.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/resource.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/segment.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/shear.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/signature.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/statistic.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/stream.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/transform.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/version.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/vision.html
+    - path: /usr/share/doc/ImageMagick-7/www/api/wand-view.html
+    - path: /usr/share/doc/ImageMagick-7/www/architecture.html
+    - path: /usr/share/doc/ImageMagick-7/www/assets/bootstrap.bundle.min.js
+    - path: /usr/share/doc/ImageMagick-7/www/assets/bootstrap.min.css
+    - path: /usr/share/doc/ImageMagick-7/www/assets/color-modes.js
+    - path: /usr/share/doc/ImageMagick-7/www/changelog.html
+    - path: /usr/share/doc/ImageMagick-7/www/cipher.html
+    - path: /usr/share/doc/ImageMagick-7/www/cite.html
+    - path: /usr/share/doc/ImageMagick-7/www/clahe.html
+    - path: /usr/share/doc/ImageMagick-7/www/color-management.html
+    - path: /usr/share/doc/ImageMagick-7/www/color-thresholding.html
+    - path: /usr/share/doc/ImageMagick-7/www/color.html
+    - path: /usr/share/doc/ImageMagick-7/www/command-line-options.html
+    - path: /usr/share/doc/ImageMagick-7/www/command-line-processing.html
+    - path: /usr/share/doc/ImageMagick-7/www/command-line-tools.html
+    - path: /usr/share/doc/ImageMagick-7/www/compare.html
+    - path: /usr/share/doc/ImageMagick-7/www/compose.html
+    - path: /usr/share/doc/ImageMagick-7/www/composite.html
+    - path: /usr/share/doc/ImageMagick-7/www/conjure.html
+    - path: /usr/share/doc/ImageMagick-7/www/connected-components.html
+    - path: /usr/share/doc/ImageMagick-7/www/contact.html
+    - path: /usr/share/doc/ImageMagick-7/www/convert.html
+    - path: /usr/share/doc/ImageMagick-7/www/convex-hull.html
+    - path: /usr/share/doc/ImageMagick-7/www/defines.html
+    - path: /usr/share/doc/ImageMagick-7/www/develop.html
+    - path: /usr/share/doc/ImageMagick-7/www/display.html
+    - path: /usr/share/doc/ImageMagick-7/www/distribute-pixel-cache.html
+    - path: /usr/share/doc/ImageMagick-7/www/download.html
+    - path: /usr/share/doc/ImageMagick-7/www/escape.html
+    - path: /usr/share/doc/ImageMagick-7/www/examples.html
+    - path: /usr/share/doc/ImageMagick-7/www/exception.html
+    - path: /usr/share/doc/ImageMagick-7/www/export.html
+    - path: /usr/share/doc/ImageMagick-7/www/favicon.ico
+    - path: /usr/share/doc/ImageMagick-7/www/formats.html
+    - path: /usr/share/doc/ImageMagick-7/www/fx.html
+    - path: /usr/share/doc/ImageMagick-7/www/gradient.html
+    - path: /usr/share/doc/ImageMagick-7/www/high-dynamic-range.html
+    - path: /usr/share/doc/ImageMagick-7/www/history.html
+    - path: /usr/share/doc/ImageMagick-7/www/identify.html
+    - path: /usr/share/doc/ImageMagick-7/www/import.html
+    - path: /usr/share/doc/ImageMagick-7/www/index.html
+    - path: /usr/share/doc/ImageMagick-7/www/install-source.html
+    - path: /usr/share/doc/ImageMagick-7/www/jp2.html
+    - path: /usr/share/doc/ImageMagick-7/www/license.html
+    - path: /usr/share/doc/ImageMagick-7/www/links.html
+    - path: /usr/share/doc/ImageMagick-7/www/magick++.html
+    - path: /usr/share/doc/ImageMagick-7/www/magick-cache.html
+    - path: /usr/share/doc/ImageMagick-7/www/magick-core.html
+    - path: /usr/share/doc/ImageMagick-7/www/magick-script.html
+    - path: /usr/share/doc/ImageMagick-7/www/magick-vector-graphics.html
+    - path: /usr/share/doc/ImageMagick-7/www/magick-wand.html
+    - path: /usr/share/doc/ImageMagick-7/www/magick.html
+    - path: /usr/share/doc/ImageMagick-7/www/miff.html
+    - path: /usr/share/doc/ImageMagick-7/www/mirror.html
+    - path: /usr/share/doc/ImageMagick-7/www/mogrify.html
+    - path: /usr/share/doc/ImageMagick-7/www/montage.html
+    - path: /usr/share/doc/ImageMagick-7/www/motion-picture.html
+    - path: /usr/share/doc/ImageMagick-7/www/multispectral-imagery.html
+    - path: /usr/share/doc/ImageMagick-7/www/news.html
+    - path: /usr/share/doc/ImageMagick-7/www/opencl.html
+    - path: /usr/share/doc/ImageMagick-7/www/openmp.html
+    - path: /usr/share/doc/ImageMagick-7/www/perl-magick.html
+    - path: /usr/share/doc/ImageMagick-7/www/porting.html
+    - path: /usr/share/doc/ImageMagick-7/www/privacy-policy.html
+    - path: /usr/share/doc/ImageMagick-7/www/quantize.html
+    - path: /usr/share/doc/ImageMagick-7/www/resources.html
+    - path: /usr/share/doc/ImageMagick-7/www/search.html
+    - path: /usr/share/doc/ImageMagick-7/www/security-policy.html
+    - path: /usr/share/doc/ImageMagick-7/www/sitemap.html
+    - path: /usr/share/doc/ImageMagick-7/www/source/analyze.c
+    - path: /usr/share/doc/ImageMagick-7/www/source/coder.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/colors.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/configure.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/contrast.c
+    - path: /usr/share/doc/ImageMagick-7/www/source/core.c
+    - path: /usr/share/doc/ImageMagick-7/www/source/delegates.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/english.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/examples.pl
+    - path: /usr/share/doc/ImageMagick-7/www/source/francais.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/incantation.msl
+    - path: /usr/share/doc/ImageMagick-7/www/source/locale.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/log.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/magic.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/mgk.c
+    - path: /usr/share/doc/ImageMagick-7/www/source/mime.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/piechart.mvg
+    - path: /usr/share/doc/ImageMagick-7/www/source/piechart.svg
+    - path: /usr/share/doc/ImageMagick-7/www/source/policy.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/quantization-table.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/thresholds.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/type-apple.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/type-dejavu.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/type-ghostscript.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/type-urw-base35.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/type-windows.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/type.xml
+    - path: /usr/share/doc/ImageMagick-7/www/source/wand.c
+    - path: /usr/share/doc/ImageMagick-7/www/stream.html
+    - path: /usr/share/doc/ImageMagick-7/www/support.html
+    - path: /usr/share/doc/ImageMagick-7/www/vpat.html
+    - path: /usr/share/doc/ImageMagick-7/www/wand.png
+    - path: /usr/share/doc/ImageMagick-7/www/webp.html
+
+  lib:
+    files:
+    - path: /usr/lib/ImageMagick-7.1.2/config-Q16HDRI/configure.xml
+    - path: /usr/lib/libMagickCore-7.Q16HDRI.so
+      needs:
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libtiff.so.6
+      - /usr/lib/libwebp.so.7
+      - /usr/lib/libwebpdemux.so.2
+      - /usr/lib/libwebpmux.so.3
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      needs:
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libtiff.so.6
+      - /usr/lib/libwebp.so.7
+      - /usr/lib/libwebpdemux.so.2
+      - /usr/lib/libwebpmux.so.3
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libMagickCore-7.Q16HDRI.so.11.0.2
+      needs:
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libtiff.so.6
+      - /usr/lib/libwebp.so.7
+      - /usr/lib/libwebpdemux.so.2
+      - /usr/lib/libwebpmux.so.3
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libMagickWand-7.Q16HDRI.so
+      needs:
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libtiff.so.6
+      - /usr/lib/libwebp.so.7
+      - /usr/lib/libwebpdemux.so.2
+      - /usr/lib/libwebpmux.so.3
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libMagickWand-7.Q16HDRI.so.11
+      needs:
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libtiff.so.6
+      - /usr/lib/libwebp.so.7
+      - /usr/lib/libwebpdemux.so.2
+      - /usr/lib/libwebpmux.so.3
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libMagickWand-7.Q16HDRI.so.11.0.2
+      needs:
+      - /usr/lib/libMagickCore-7.Q16HDRI.so.11
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libtiff.so.6
+      - /usr/lib/libwebp.so.7
+      - /usr/lib/libwebpdemux.so.2
+      - /usr/lib/libwebpmux.so.3
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libz.so.1
+
+  man:
+    files:
+    - path: /usr/share/man/man1/ImageMagick.1
+    - path: /usr/share/man/man1/MagickCore-config.1
+    - path: /usr/share/man/man1/MagickWand-config.1
+    - path: /usr/share/man/man1/animate.1
+    - path: /usr/share/man/man1/compare.1
+    - path: /usr/share/man/man1/composite.1
+    - path: /usr/share/man/man1/conjure.1
+    - path: /usr/share/man/man1/convert.1
+    - path: /usr/share/man/man1/display.1
+    - path: /usr/share/man/man1/identify.1
+    - path: /usr/share/man/man1/import.1
+    - path: /usr/share/man/man1/magick-script.1
+    - path: /usr/share/man/man1/magick.1
+    - path: /usr/share/man/man1/mogrify.1
+    - path: /usr/share/man/man1/montage.1
+    - path: /usr/share/man/man1/stream.1
+
+  misc:
+    files:
+    - path: /usr/share/ImageMagick-7/english.xml
+    - path: /usr/share/ImageMagick-7/francais.xml
+    - path: /usr/share/ImageMagick-7/locale.xml
+
+resolution:
+  /usr/lib/libbz2.so.1.0: bzip2
+  /usr/lib/libfontconfig.so.1: fontconfig
+  /usr/lib/libfreetype.so.6: freetype
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libjpeg.so.8: libjpeg-turbo
+  /usr/lib/libpng16.so.16: libpng
+  /usr/lib/libtiff.so.6: libtiff
+  /usr/lib/libwebp.so.7: libwebp
+  /usr/lib/libwebpdemux.so.2: libwebp
+  /usr/lib/libwebpmux.so.3: libwebp
+  /usr/lib/libxml2.so.2: libxml2
+  /usr/lib/libMagickCore-7.Q16HDRI.so.11: self
+  /usr/lib/libMagickWand-7.Q16HDRI.so.11: self
+  /usr/lib/liblzma.so.5: xz
+  /usr/lib/libz.so.1: zlib
