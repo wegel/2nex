@@ -6,7 +6,7 @@ package:
   version: 3.24.43
   description: GTK3 toolkit for creating graphical user interfaces
   homepage: https://www.gtk.org/
-  checksum: a933e8183424c50db9eceecdcafa7a07dbe3fdc458148773584d7de85fbad0dc
+  checksum: bd7137aedad5794cd7f3fdd6524b96b04f8ec11fa8fa19832f5456ead2c4c25d
 
 sources:
 - name: gtk3
@@ -24,6 +24,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
 - name: ncurses
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
 - name: acl
@@ -54,6 +56,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: glib2
   commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: gobject-introspection
+  commit: x86_64/pkg/dev/tools/gobject-introspection/1.84.0/bundles/dev
 - name: libffi
   commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
 - name: pcre2
@@ -68,8 +72,12 @@ dependencies:
   commit: x86_64/pkg/libs/graphics/cairo/1.18.4/bundles/dev
 - name: pango
   commit: x86_64/pkg/libs/text/pango/1.57.0/bundles/dev
+- name: pango-gir
+  commit: x86_64/pkg/libs/text/pango/1.57.0/outputs/misc
 - name: harfbuzz
   commit: x86_64/pkg/libs/text/harfbuzz/10.1.0/bundles/dev
+- name: harfbuzz-gir
+  commit: x86_64/pkg/libs/text/harfbuzz/10.1.0/outputs/misc
 - name: fribidi
   commit: x86_64/pkg/libs/text/fribidi/1.0.15/bundles/dev
 - name: fontconfig
@@ -78,6 +86,8 @@ dependencies:
   commit: x86_64/pkg/libs/graphics/freetype/2.14.1/bundles/dev
 - name: gdk-pixbuf
   commit: x86_64/pkg/libs/graphics/gdk-pixbuf/2.44.2/bundles/dev
+- name: gdk-pixbuf-gir
+  commit: x86_64/pkg/libs/graphics/gdk-pixbuf/2.44.2/outputs/misc
 - name: libepoxy
   commit: x86_64/pkg/libs/graphics/libepoxy/1.5.10/bundles/dev
 - name: libpng
@@ -138,6 +148,8 @@ dependencies:
   commit: x86_64/pkg/libs/x11/libxtst/1.2.4/bundles/dev
 - name: atk
   commit: x86_64/pkg/libs/graphics/atk/2.38.0/bundles/dev
+- name: atk-gir
+  commit: x86_64/pkg/libs/graphics/atk/2.38.0/outputs/misc
 - name: at-spi2-atk
   commit: x86_64/pkg/libs/graphics/at-spi2-atk/2.38.0/bundles/dev
 - name: at-spi2-core
@@ -151,7 +163,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [8283:7175, 20661:7890, 41385:9368, 70367:12209, 91061:13920, 115845:15713, 136510:17325, 169638:20283, 202750:22555, 224160:22893]
+  profile: [8235:7377, 20691:7954, 49720:9515, 78664:11516, 103634:12921, 128617:13968, 153575:15613, 190990:17944, 228127:23338, 253148:23637]
 
   script: |
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -169,14 +181,17 @@ build:
     # update ld.so.cache to include all libraries added by dependencies
     /usr/sbin/ldconfig 2>/dev/null || true
 
-    # generate shared-mime-info database (required for glib-compile-resources image format detection)
-    /usr/bin/update-mime-database /usr/share/mime
+    # generate shared-mime-info database for glib-compile-resources image format detection
+    mkdir -p "${WORK_DIR}/mime-root/usr/share"
+    cp -R --no-preserve=ownership /usr/share/mime "${WORK_DIR}/mime-root/usr/share/"
+    /usr/bin/update-mime-database "${WORK_DIR}/mime-root/usr/share/mime"
+    export XDG_DATA_DIRS="${WORK_DIR}/mime-root/usr/share:/usr/share"
 
     meson setup build \
       --prefix=/usr \
       --libdir=lib \
       --buildtype=release \
-      -Dintrospection=false \
+      -Dintrospection=true \
       -Dtests=false \
       -Dman=false
 
@@ -715,6 +730,9 @@ outputs:
 
   lib:
     files:
+    - path: /usr/lib/girepository-1.0/Gdk-3.0.typelib
+    - path: /usr/lib/girepository-1.0/GdkX11-3.0.typelib
+    - path: /usr/lib/girepository-1.0/Gtk-3.0.typelib
     - path: /usr/lib/gtk-3.0/3.0.0/immodules/im-am-et.so
       needs:
       - /usr/lib/libc.so.6
@@ -996,6 +1014,9 @@ outputs:
     - path: /usr/share/applications/gtk3-widget-factory.desktop
     - path: /usr/share/gettext/its/gtkbuilder.its
     - path: /usr/share/gettext/its/gtkbuilder.loc
+    - path: /usr/share/gir-1.0/Gdk-3.0.gir
+    - path: /usr/share/gir-1.0/GdkX11-3.0.gir
+    - path: /usr/share/gir-1.0/Gtk-3.0.gir
     - path: /usr/share/glib-2.0/schemas/org.gtk.Demo.gschema.xml
     - path: /usr/share/glib-2.0/schemas/org.gtk.Settings.ColorChooser.gschema.xml
     - path: /usr/share/glib-2.0/schemas/org.gtk.Settings.Debug.gschema.xml
