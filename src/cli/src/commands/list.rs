@@ -94,7 +94,10 @@ pub fn run(args: &ListArgs) -> io::Result<()> {
             } else {
                 format!(" [{}]", targets.join(", "))
             };
-            println!("{}/{} {}{}", pkg.namespace, pkg.slug, pkg.version, targets_str);
+            println!(
+                "{}/{} {}{}",
+                pkg.namespace, pkg.slug, pkg.version, targets_str
+            );
         }
     }
 

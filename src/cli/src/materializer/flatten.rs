@@ -287,10 +287,7 @@ fn derive_files_commit_for_manifest(manifest: &crate::manifest::types::Manifest)
 
     Some(format!(
         "x86_64/pkg/{}/{}/{}/{}/files",
-        manifest.package.namespace,
-        manifest.package.slug,
-        manifest.package.version,
-        address_hash
+        manifest.package.namespace, manifest.package.slug, manifest.package.version, address_hash
     ))
 }
 
@@ -333,10 +330,7 @@ fn derive_files_commit_for_dependency(
 
     Some(format!(
         "x86_64/pkg/{}/{}/{}/{}/files",
-        namespace_path,
-        slug,
-        version,
-        address_hash
+        namespace_path, slug, version, address_hash
     ))
 }
 
@@ -432,10 +426,15 @@ fn flatten_library_preserving_path(
     }
 
     // for symlinks, also export the target if it's relative
-    if dest.symlink_metadata().map(|m| m.file_type().is_symlink()).unwrap_or(false) {
+    if dest
+        .symlink_metadata()
+        .map(|m| m.file_type().is_symlink())
+        .unwrap_or(false)
+    {
         if let Ok(link_target) = fs::read_link(&dest) {
             if !link_target.is_absolute() {
-                let target_rel = dest.parent()
+                let target_rel = dest
+                    .parent()
                     .map(|p| p.join(&link_target))
                     .and_then(|p| p.strip_prefix(pkg_dir).ok().map(|s| s.to_path_buf()));
 

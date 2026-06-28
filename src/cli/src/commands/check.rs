@@ -2,8 +2,8 @@ use clap::Args;
 use std::io;
 
 use crate::deps::resolve_dependency_closure;
-use crate::manifest::{load_manifest, ManifestData, ManifestIndex};
 use crate::manifest::types::Overlay;
+use crate::manifest::{load_manifest, ManifestData, ManifestIndex};
 use std::path::Path;
 
 const USRMERGE_FORBIDDEN_PREFIXES: [&str; 5] = ["/bin", "/sbin", "/lib", "/lib64", "/usr/sbin"];
@@ -23,9 +23,15 @@ fn is_allowed_usrmerge_symlink(path: &str, target: &str) -> bool {
     let normalized_target = target.trim_end_matches('/');
     match path {
         "/bin" => matches!(normalized_target, "/usr/bin" | "usr/bin"),
-        "/sbin" => matches!(normalized_target, "/usr/bin" | "usr/bin" | "/usr/sbin" | "usr/sbin"),
+        "/sbin" => matches!(
+            normalized_target,
+            "/usr/bin" | "usr/bin" | "/usr/sbin" | "usr/sbin"
+        ),
         "/lib" => matches!(normalized_target, "/usr/lib" | "usr/lib"),
-        "/lib64" => matches!(normalized_target, "/usr/lib" | "usr/lib" | "/usr/lib64" | "usr/lib64"),
+        "/lib64" => matches!(
+            normalized_target,
+            "/usr/lib" | "usr/lib" | "/usr/lib64" | "usr/lib64"
+        ),
         "/usr/sbin" => matches!(normalized_target, "/usr/bin" | "usr/bin"),
         _ => false,
     }

@@ -150,11 +150,7 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     // build if not cached or stale
     if !is_cached {
         println!("Building {}...", package_ref);
-        build_package_to_user_repo(
-            &repo_path,
-            &ctx.fallback_repos,
-            manifest_path,
-        )?;
+        build_package_to_user_repo(&repo_path, &ctx.fallback_repos, manifest_path)?;
     }
 
     println!("Installing {}...", package_ref);
@@ -375,7 +371,10 @@ fn validate_target(manifest: &crate::manifest::Manifest, target: &str) -> io::Re
     if parts.len() != 2 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("Invalid target '{}': expected format like bundles/full or outputs/bin", target),
+            format!(
+                "Invalid target '{}': expected format like bundles/full or outputs/bin",
+                target
+            ),
         ));
     }
 
@@ -411,7 +410,10 @@ fn validate_target(manifest: &crate::manifest::Manifest, target: &str) -> io::Re
         _ => {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("Invalid target kind '{}': expected bundles, outputs, or files", kind),
+                format!(
+                    "Invalid target kind '{}': expected bundles, outputs, or files",
+                    kind
+                ),
             ));
         }
     }

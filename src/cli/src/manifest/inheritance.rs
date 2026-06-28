@@ -70,12 +70,15 @@ fn load_raw_system_manifest(path: &Path) -> io::Result<SystemManifest> {
     if detect_manifest_kind(&doc) != ManifestKind::System {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("{} is a package manifest, not a system manifest", path.display()),
+            format!(
+                "{} is a package manifest, not a system manifest",
+                path.display()
+            ),
         ));
     }
 
-    let sys: SystemManifest = serde_yaml::from_value(doc)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let sys: SystemManifest =
+        serde_yaml::from_value(doc).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     Ok(sys)
 }
@@ -88,7 +91,11 @@ fn merge_manifests(base: &SystemManifest, child: &SystemManifest) -> SystemManif
         schema: child.schema.or(base.schema),
         system: merge_meta(&base.system, &child.system),
         packages: merge_packages(&base.packages, &child.packages, &excludes.packages),
-        dependencies: merge_deps(&base.dependencies, &child.dependencies, &excludes.dependencies),
+        dependencies: merge_deps(
+            &base.dependencies,
+            &child.dependencies,
+            &excludes.dependencies,
+        ),
         sources: merge_sources(&base.sources, &child.sources),
         overlays: [base.overlays.clone(), child.overlays.clone()].concat(),
         build: merge_build(&base.build, &child.build),
@@ -102,9 +109,18 @@ fn merge_meta(base: &SystemMeta, child: &SystemMeta) -> SystemMeta {
         name: child.name.clone(),
         slug: child.slug.clone(),
         version: child.version.clone(),
-        architecture: child.architecture.clone().or_else(|| base.architecture.clone()),
-        boot_method: child.boot_method.clone().or_else(|| base.boot_method.clone()),
-        description: child.description.clone().or_else(|| base.description.clone()),
+        architecture: child
+            .architecture
+            .clone()
+            .or_else(|| base.architecture.clone()),
+        boot_method: child
+            .boot_method
+            .clone()
+            .or_else(|| base.boot_method.clone()),
+        description: child
+            .description
+            .clone()
+            .or_else(|| base.description.clone()),
         checksum: None, // will be recomputed
         stable_checksum: child.stable_checksum.or(base.stable_checksum),
         nex_structure: child.nex_structure || base.nex_structure,
@@ -222,7 +238,10 @@ fn merge_build(base: &Build, child: &Build) -> Build {
     } else if base.script.trim().is_empty() {
         child.script.clone()
     } else {
-        format!("{}\n\n# === extended assembly ===\n{}", base.script, child.script)
+        format!(
+            "{}\n\n# === extended assembly ===\n{}",
+            base.script, child.script
+        )
     };
 
     Build {
