@@ -6,7 +6,7 @@ package:
   version: 2.44.2
   description: GDK Pixbuf library for image loading
   homepage: https://docs.gtk.org/gdk-pixbuf/
-  checksum: dbcf63b144cc37788c091f01749c044874b1e775c6d61c5b68003e804c83728f
+  checksum: 304e4165e52ac3d98ee48315981ce2f72b360ef6dc66100ec609159413c462a6
 
 sources:
 - name: gdk-pixbuf
@@ -54,6 +54,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: glib2
   commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: gobject-introspection
+  commit: x86_64/pkg/dev/tools/gobject-introspection/1.84.0/bundles/dev
 - name: libffi
   commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
 - name: pcre2
@@ -73,7 +75,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4112:1313, 8716:1483, 13210:1592, 18815:1637, 24404:1642, 30118:1657, 35811:1674, 47244:1694, 55981:3380, 59079:3617]
+  profile: [4112:1293, 8248:1391, 12950:1489, 23024:1557, 28474:1558, 34180:1563, 39958:1577, 49788:1602, 58692:3465, 62776:4034]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_gdk_pixbuf} -C "${WORK_DIR}" --strip-components=1
@@ -90,7 +92,7 @@ build:
       -Dgif=enabled \
       -Dman=false \
       -Dgtk_doc=false \
-      -Dintrospection=disabled \
+      -Dintrospection=enabled \
       -Dglycin=disabled \
       -Dthumbnailer=disabled \
       -Dtests=false \
@@ -162,6 +164,8 @@ outputs:
   lib:
     files:
     - path: /usr/lib/gdk-pixbuf-2.0/2.10.0/loaders.cache
+    - path: /usr/lib/girepository-1.0/GdkPixbuf-2.0.typelib
+    - path: /usr/lib/girepository-1.0/GdkPixdata-2.0.typelib
     - path: /usr/lib/libgdk_pixbuf-2.0.so
       needs:
       - /usr/lib/libc.so.6
@@ -195,6 +199,11 @@ outputs:
       - /usr/lib/libm.so.6
       - /usr/lib/libpng16.so.16
       - /usr/lib/libtiff.so.6
+
+  misc:
+    files:
+    - path: /usr/share/gir-1.0/GdkPixbuf-2.0.gir
+    - path: /usr/share/gir-1.0/GdkPixdata-2.0.gir
 
 resolution:
   /usr/lib/libgio-2.0.so.0: glib2
