@@ -80,6 +80,14 @@ build environment. Nex fetches declared sources, verifies their hashes, and
 then runs the build without network access. Normal builds run in a filesystem
 sandbox so package scripts cannot read or modify arbitrary host files.
 
+Package authors must list build-time dependencies explicitly. The builder does
+not infer compilers, headers, configure helpers, interpreters, or build tools
+from installed binaries because those programs may affect output without
+remaining in the final package. Runtime libraries are different: after a
+package installs files, Nex can inspect ELF objects and record the libraries
+that those installed files need. Manifests therefore use manual build inputs
+and generated runtime metadata together.
+
 Nex should stay close to upstream defaults. A manifest may patch upstream
 software for reproducibility, compatibility, security, or necessary Nex
 integration, but the patch and its reason must remain visible. Optional features
