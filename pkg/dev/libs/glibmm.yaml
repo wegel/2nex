@@ -1,0 +1,631 @@
+package:
+  schema: 1
+  name: glibmm
+  slug: glibmm
+  namespace: dev/libs
+  version: 2.84.0
+  description: C++ bindings for GLib and GIO
+  homepage: https://gtkmm.gnome.org/
+  checksum: 272855510ed96c6408e8308e1a35cc518178762905f046fa4b54deb9b67f9e28
+
+sources:
+- name: glibmm
+  url: https://download.gnome.org/sources/glibmm/2.84/glibmm-2.84.0.tar.xz
+  sha256: 56ee5f51c8acfc0afdf46959316e4c8554cb50ed2b6bc5ce389d979cbb642509
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: libsigcxx
+  commit: x86_64/pkg/dev/libs/libsigcxx/3.6.0/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4162:2850, 8318:3746, 16555:7124, 24867:9956, 33081:22142, 41374:22163, 49662:22206, 62046:22210, 74489:22217, 82578:22436]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --buildtype=release \
+      -Dmaintainer-mode=false \
+      -Dbuild-documentation=false \
+      -Dbuild-examples=false
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/giomm-2.68/giomm.h
+    - path: /usr/include/giomm-2.68/giomm/action.h
+    - path: /usr/include/giomm-2.68/giomm/actiongroup.h
+    - path: /usr/include/giomm-2.68/giomm/actionmap.h
+    - path: /usr/include/giomm-2.68/giomm/appinfo.h
+    - path: /usr/include/giomm-2.68/giomm/appinfomonitor.h
+    - path: /usr/include/giomm-2.68/giomm/applaunchcontext.h
+    - path: /usr/include/giomm-2.68/giomm/application.h
+    - path: /usr/include/giomm-2.68/giomm/applicationcommandline.h
+    - path: /usr/include/giomm-2.68/giomm/asyncinitable.h
+    - path: /usr/include/giomm-2.68/giomm/asyncresult.h
+    - path: /usr/include/giomm-2.68/giomm/bufferedinputstream.h
+    - path: /usr/include/giomm-2.68/giomm/bufferedoutputstream.h
+    - path: /usr/include/giomm-2.68/giomm/bytesicon.h
+    - path: /usr/include/giomm-2.68/giomm/cancellable.h
+    - path: /usr/include/giomm-2.68/giomm/charsetconverter.h
+    - path: /usr/include/giomm-2.68/giomm/contenttype.h
+    - path: /usr/include/giomm-2.68/giomm/converter.h
+    - path: /usr/include/giomm-2.68/giomm/converterinputstream.h
+    - path: /usr/include/giomm-2.68/giomm/converteroutputstream.h
+    - path: /usr/include/giomm-2.68/giomm/credentials.h
+    - path: /usr/include/giomm-2.68/giomm/datainputstream.h
+    - path: /usr/include/giomm-2.68/giomm/dataoutputstream.h
+    - path: /usr/include/giomm-2.68/giomm/dbusactiongroup.h
+    - path: /usr/include/giomm-2.68/giomm/dbusaddress.h
+    - path: /usr/include/giomm-2.68/giomm/dbusauthobserver.h
+    - path: /usr/include/giomm-2.68/giomm/dbusconnection.h
+    - path: /usr/include/giomm-2.68/giomm/dbuserror.h
+    - path: /usr/include/giomm-2.68/giomm/dbuserrorutils.h
+    - path: /usr/include/giomm-2.68/giomm/dbusinterface.h
+    - path: /usr/include/giomm-2.68/giomm/dbusinterfaceskeleton.h
+    - path: /usr/include/giomm-2.68/giomm/dbusinterfacevtable.h
+    - path: /usr/include/giomm-2.68/giomm/dbusintrospection.h
+    - path: /usr/include/giomm-2.68/giomm/dbusmenumodel.h
+    - path: /usr/include/giomm-2.68/giomm/dbusmessage.h
+    - path: /usr/include/giomm-2.68/giomm/dbusmethodinvocation.h
+    - path: /usr/include/giomm-2.68/giomm/dbusobject.h
+    - path: /usr/include/giomm-2.68/giomm/dbusobjectmanager.h
+    - path: /usr/include/giomm-2.68/giomm/dbusobjectmanagerclient.h
+    - path: /usr/include/giomm-2.68/giomm/dbusobjectmanagerserver.h
+    - path: /usr/include/giomm-2.68/giomm/dbusobjectproxy.h
+    - path: /usr/include/giomm-2.68/giomm/dbusobjectskeleton.h
+    - path: /usr/include/giomm-2.68/giomm/dbusownname.h
+    - path: /usr/include/giomm-2.68/giomm/dbusproxy.h
+    - path: /usr/include/giomm-2.68/giomm/dbusserver.h
+    - path: /usr/include/giomm-2.68/giomm/dbussubtreevtable.h
+    - path: /usr/include/giomm-2.68/giomm/dbusutils.h
+    - path: /usr/include/giomm-2.68/giomm/dbuswatchname.h
+    - path: /usr/include/giomm-2.68/giomm/desktopappinfo.h
+    - path: /usr/include/giomm-2.68/giomm/drive.h
+    - path: /usr/include/giomm-2.68/giomm/emblem.h
+    - path: /usr/include/giomm-2.68/giomm/emblemedicon.h
+    - path: /usr/include/giomm-2.68/giomm/enums.h
+    - path: /usr/include/giomm-2.68/giomm/error.h
+    - path: /usr/include/giomm-2.68/giomm/file.h
+    - path: /usr/include/giomm-2.68/giomm/fileattributeinfo.h
+    - path: /usr/include/giomm-2.68/giomm/fileattributeinfolist.h
+    - path: /usr/include/giomm-2.68/giomm/filedescriptorbased.h
+    - path: /usr/include/giomm-2.68/giomm/fileenumerator.h
+    - path: /usr/include/giomm-2.68/giomm/fileicon.h
+    - path: /usr/include/giomm-2.68/giomm/fileinfo.h
+    - path: /usr/include/giomm-2.68/giomm/fileinputstream.h
+    - path: /usr/include/giomm-2.68/giomm/fileiostream.h
+    - path: /usr/include/giomm-2.68/giomm/filemonitor.h
+    - path: /usr/include/giomm-2.68/giomm/filenamecompleter.h
+    - path: /usr/include/giomm-2.68/giomm/fileoutputstream.h
+    - path: /usr/include/giomm-2.68/giomm/filterinputstream.h
+    - path: /usr/include/giomm-2.68/giomm/filteroutputstream.h
+    - path: /usr/include/giomm-2.68/giomm/icon.h
+    - path: /usr/include/giomm-2.68/giomm/inetaddress.h
+    - path: /usr/include/giomm-2.68/giomm/inetsocketaddress.h
+    - path: /usr/include/giomm-2.68/giomm/init.h
+    - path: /usr/include/giomm-2.68/giomm/initable.h
+    - path: /usr/include/giomm-2.68/giomm/inputstream.h
+    - path: /usr/include/giomm-2.68/giomm/iostream.h
+    - path: /usr/include/giomm-2.68/giomm/listmodel.h
+    - path: /usr/include/giomm-2.68/giomm/liststore.h
+    - path: /usr/include/giomm-2.68/giomm/loadableicon.h
+    - path: /usr/include/giomm-2.68/giomm/memoryinputstream.h
+    - path: /usr/include/giomm-2.68/giomm/memoryoutputstream.h
+    - path: /usr/include/giomm-2.68/giomm/menu.h
+    - path: /usr/include/giomm-2.68/giomm/menuattributeiter.h
+    - path: /usr/include/giomm-2.68/giomm/menuitem.h
+    - path: /usr/include/giomm-2.68/giomm/menulinkiter.h
+    - path: /usr/include/giomm-2.68/giomm/menumodel.h
+    - path: /usr/include/giomm-2.68/giomm/mount.h
+    - path: /usr/include/giomm-2.68/giomm/mountoperation.h
+    - path: /usr/include/giomm-2.68/giomm/networkaddress.h
+    - path: /usr/include/giomm-2.68/giomm/networkmonitor.h
+    - path: /usr/include/giomm-2.68/giomm/networkservice.h
+    - path: /usr/include/giomm-2.68/giomm/notification.h
+    - path: /usr/include/giomm-2.68/giomm/outputstream.h
+    - path: /usr/include/giomm-2.68/giomm/permission.h
+    - path: /usr/include/giomm-2.68/giomm/pollableinputstream.h
+    - path: /usr/include/giomm-2.68/giomm/pollableoutputstream.h
+    - path: /usr/include/giomm-2.68/giomm/private/action_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/actiongroup_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/actionmap_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/appinfo_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/appinfomonitor_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/applaunchcontext_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/application_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/applicationcommandline_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/asyncinitable_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/asyncresult_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/bufferedinputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/bufferedoutputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/bytesicon_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/cancellable_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/charsetconverter_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/converter_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/converterinputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/converteroutputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/credentials_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/datainputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dataoutputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusactiongroup_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusaddress_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusauthobserver_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusconnection_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbuserror_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbuserrorutils_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusinterface_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusinterfaceskeleton_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusinterfacevtable_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusintrospection_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusmenumodel_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusmessage_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusmethodinvocation_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusobject_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusobjectmanager_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusobjectmanagerclient_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusobjectmanagerserver_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusobjectproxy_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusobjectskeleton_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusownname_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusproxy_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusserver_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbussubtreevtable_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbusutils_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/dbuswatchname_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/desktopappinfo_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/drive_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/emblem_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/emblemedicon_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/enums_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/error_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/file_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/fileattributeinfo_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/fileattributeinfolist_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/filedescriptorbased_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/fileenumerator_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/fileicon_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/fileinfo_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/fileinputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/fileiostream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/filemonitor_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/filenamecompleter_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/fileoutputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/filterinputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/filteroutputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/icon_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/inetaddress_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/inetsocketaddress_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/initable_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/inputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/iostream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/listmodel_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/liststore_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/loadableicon_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/memoryinputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/memoryoutputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/menu_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/menuattributeiter_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/menuitem_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/menulinkiter_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/menumodel_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/mount_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/mountoperation_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/networkaddress_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/networkmonitor_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/networkservice_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/notification_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/outputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/permission_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/pollableinputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/pollableoutputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/propertyaction_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/proxy_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/proxyaddress_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/proxyresolver_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/remoteactiongroup_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/resolver_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/resource_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/seekable_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/settings_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/settingsschema_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/settingsschemakey_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/settingsschemasource_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/simpleaction_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/simpleactiongroup_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/simpleiostream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/simplepermission_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/socket_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/socketaddress_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/socketaddressenumerator_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/socketclient_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/socketconnectable_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/socketconnection_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/socketcontrolmessage_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/socketlistener_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/socketservice_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/srvtarget_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/subprocess_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/subprocesslauncher_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/tcpconnection_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/tcpwrapperconnection_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/themedicon_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/threadedsocketservice_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/tlscertificate_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/tlsclientconnection_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/tlsconnection_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/tlsdatabase_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/tlsinteraction_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/tlspassword_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/tlsserverconnection_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/unixconnection_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/unixcredentialsmessage_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/unixfdlist_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/unixfdmessage_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/unixinputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/unixoutputstream_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/unixsocketaddress_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/volume_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/volumemonitor_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/zlibcompressor_p.h
+    - path: /usr/include/giomm-2.68/giomm/private/zlibdecompressor_p.h
+    - path: /usr/include/giomm-2.68/giomm/propertyaction.h
+    - path: /usr/include/giomm-2.68/giomm/proxy.h
+    - path: /usr/include/giomm-2.68/giomm/proxyaddress.h
+    - path: /usr/include/giomm-2.68/giomm/proxyresolver.h
+    - path: /usr/include/giomm-2.68/giomm/remoteactiongroup.h
+    - path: /usr/include/giomm-2.68/giomm/resolver.h
+    - path: /usr/include/giomm-2.68/giomm/resource.h
+    - path: /usr/include/giomm-2.68/giomm/seekable.h
+    - path: /usr/include/giomm-2.68/giomm/settings.h
+    - path: /usr/include/giomm-2.68/giomm/settingsschema.h
+    - path: /usr/include/giomm-2.68/giomm/settingsschemakey.h
+    - path: /usr/include/giomm-2.68/giomm/settingsschemasource.h
+    - path: /usr/include/giomm-2.68/giomm/simpleaction.h
+    - path: /usr/include/giomm-2.68/giomm/simpleactiongroup.h
+    - path: /usr/include/giomm-2.68/giomm/simpleiostream.h
+    - path: /usr/include/giomm-2.68/giomm/simplepermission.h
+    - path: /usr/include/giomm-2.68/giomm/slot_async.h
+    - path: /usr/include/giomm-2.68/giomm/socket.h
+    - path: /usr/include/giomm-2.68/giomm/socketaddress.h
+    - path: /usr/include/giomm-2.68/giomm/socketaddressenumerator.h
+    - path: /usr/include/giomm-2.68/giomm/socketclient.h
+    - path: /usr/include/giomm-2.68/giomm/socketconnectable.h
+    - path: /usr/include/giomm-2.68/giomm/socketconnection.h
+    - path: /usr/include/giomm-2.68/giomm/socketcontrolmessage.h
+    - path: /usr/include/giomm-2.68/giomm/socketlistener.h
+    - path: /usr/include/giomm-2.68/giomm/socketservice.h
+    - path: /usr/include/giomm-2.68/giomm/socketsource.h
+    - path: /usr/include/giomm-2.68/giomm/srvtarget.h
+    - path: /usr/include/giomm-2.68/giomm/subprocess.h
+    - path: /usr/include/giomm-2.68/giomm/subprocesslauncher.h
+    - path: /usr/include/giomm-2.68/giomm/tcpconnection.h
+    - path: /usr/include/giomm-2.68/giomm/tcpwrapperconnection.h
+    - path: /usr/include/giomm-2.68/giomm/themedicon.h
+    - path: /usr/include/giomm-2.68/giomm/threadedsocketservice.h
+    - path: /usr/include/giomm-2.68/giomm/tlscertificate.h
+    - path: /usr/include/giomm-2.68/giomm/tlsclientconnection.h
+    - path: /usr/include/giomm-2.68/giomm/tlsclientconnectionimpl.h
+    - path: /usr/include/giomm-2.68/giomm/tlsconnection.h
+    - path: /usr/include/giomm-2.68/giomm/tlsdatabase.h
+    - path: /usr/include/giomm-2.68/giomm/tlsinteraction.h
+    - path: /usr/include/giomm-2.68/giomm/tlspassword.h
+    - path: /usr/include/giomm-2.68/giomm/tlsserverconnection.h
+    - path: /usr/include/giomm-2.68/giomm/tlsserverconnectionimpl.h
+    - path: /usr/include/giomm-2.68/giomm/unixconnection.h
+    - path: /usr/include/giomm-2.68/giomm/unixcredentialsmessage.h
+    - path: /usr/include/giomm-2.68/giomm/unixfdlist.h
+    - path: /usr/include/giomm-2.68/giomm/unixfdmessage.h
+    - path: /usr/include/giomm-2.68/giomm/unixinputstream.h
+    - path: /usr/include/giomm-2.68/giomm/unixoutputstream.h
+    - path: /usr/include/giomm-2.68/giomm/unixsocketaddress.h
+    - path: /usr/include/giomm-2.68/giomm/volume.h
+    - path: /usr/include/giomm-2.68/giomm/volumemonitor.h
+    - path: /usr/include/giomm-2.68/giomm/wrap_init.h
+    - path: /usr/include/giomm-2.68/giomm/zlibcompressor.h
+    - path: /usr/include/giomm-2.68/giomm/zlibdecompressor.h
+    - path: /usr/include/glibmm-2.68/glibmm.h
+    - path: /usr/include/glibmm-2.68/glibmm/base64.h
+    - path: /usr/include/glibmm-2.68/glibmm/binding.h
+    - path: /usr/include/glibmm-2.68/glibmm/bytearray.h
+    - path: /usr/include/glibmm-2.68/glibmm/bytes.h
+    - path: /usr/include/glibmm-2.68/glibmm/checksum.h
+    - path: /usr/include/glibmm-2.68/glibmm/class.h
+    - path: /usr/include/glibmm-2.68/glibmm/containerhandle_shared.h
+    - path: /usr/include/glibmm-2.68/glibmm/convert.h
+    - path: /usr/include/glibmm-2.68/glibmm/date.h
+    - path: /usr/include/glibmm-2.68/glibmm/datetime.h
+    - path: /usr/include/glibmm-2.68/glibmm/debug.h
+    - path: /usr/include/glibmm-2.68/glibmm/dispatcher.h
+    - path: /usr/include/glibmm-2.68/glibmm/enums.h
+    - path: /usr/include/glibmm-2.68/glibmm/environ.h
+    - path: /usr/include/glibmm-2.68/glibmm/error.h
+    - path: /usr/include/glibmm-2.68/glibmm/exceptionhandler.h
+    - path: /usr/include/glibmm-2.68/glibmm/extraclassinit.h
+    - path: /usr/include/glibmm-2.68/glibmm/fileutils.h
+    - path: /usr/include/glibmm-2.68/glibmm/i18n-lib.h
+    - path: /usr/include/glibmm-2.68/glibmm/i18n.h
+    - path: /usr/include/glibmm-2.68/glibmm/init.h
+    - path: /usr/include/glibmm-2.68/glibmm/interface.h
+    - path: /usr/include/glibmm-2.68/glibmm/iochannel.h
+    - path: /usr/include/glibmm-2.68/glibmm/keyfile.h
+    - path: /usr/include/glibmm-2.68/glibmm/main.h
+    - path: /usr/include/glibmm-2.68/glibmm/markup.h
+    - path: /usr/include/glibmm-2.68/glibmm/miscutils.h
+    - path: /usr/include/glibmm-2.68/glibmm/module.h
+    - path: /usr/include/glibmm-2.68/glibmm/nodetree.h
+    - path: /usr/include/glibmm-2.68/glibmm/object.h
+    - path: /usr/include/glibmm-2.68/glibmm/objectbase.h
+    - path: /usr/include/glibmm-2.68/glibmm/optioncontext.h
+    - path: /usr/include/glibmm-2.68/glibmm/optionentry.h
+    - path: /usr/include/glibmm-2.68/glibmm/optiongroup.h
+    - path: /usr/include/glibmm-2.68/glibmm/pattern.h
+    - path: /usr/include/glibmm-2.68/glibmm/priorities.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/binding_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/bytearray_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/bytes_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/checksum_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/convert_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/date_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/datetime_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/enums_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/fileutils_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/interface_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/iochannel_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/keyfile_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/markup_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/miscutils_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/module_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/nodetree_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/object_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/optioncontext_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/optionentry_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/optiongroup_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/regex_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/shell_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/spawn_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/timezone_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/unicode_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/uriutils_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/variant_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/variantdict_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/variantiter_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/private/varianttype_p.h
+    - path: /usr/include/glibmm-2.68/glibmm/property.h
+    - path: /usr/include/glibmm-2.68/glibmm/propertyproxy.h
+    - path: /usr/include/glibmm-2.68/glibmm/propertyproxy_base.h
+    - path: /usr/include/glibmm-2.68/glibmm/quark.h
+    - path: /usr/include/glibmm-2.68/glibmm/random.h
+    - path: /usr/include/glibmm-2.68/glibmm/refptr.h
+    - path: /usr/include/glibmm-2.68/glibmm/regex.h
+    - path: /usr/include/glibmm-2.68/glibmm/shell.h
+    - path: /usr/include/glibmm-2.68/glibmm/signalproxy.h
+    - path: /usr/include/glibmm-2.68/glibmm/signalproxy_connectionnode.h
+    - path: /usr/include/glibmm-2.68/glibmm/spawn.h
+    - path: /usr/include/glibmm-2.68/glibmm/stringutils.h
+    - path: /usr/include/glibmm-2.68/glibmm/timer.h
+    - path: /usr/include/glibmm-2.68/glibmm/timezone.h
+    - path: /usr/include/glibmm-2.68/glibmm/unicode.h
+    - path: /usr/include/glibmm-2.68/glibmm/uriutils.h
+    - path: /usr/include/glibmm-2.68/glibmm/ustring.h
+    - path: /usr/include/glibmm-2.68/glibmm/ustring_hash.h
+    - path: /usr/include/glibmm-2.68/glibmm/utility.h
+    - path: /usr/include/glibmm-2.68/glibmm/value.h
+    - path: /usr/include/glibmm-2.68/glibmm/value_basictypes.h
+    - path: /usr/include/glibmm-2.68/glibmm/value_custom.h
+    - path: /usr/include/glibmm-2.68/glibmm/variant.h
+    - path: /usr/include/glibmm-2.68/glibmm/variant_basictypes.h
+    - path: /usr/include/glibmm-2.68/glibmm/variantdbusstring.h
+    - path: /usr/include/glibmm-2.68/glibmm/variantdict.h
+    - path: /usr/include/glibmm-2.68/glibmm/variantiter.h
+    - path: /usr/include/glibmm-2.68/glibmm/varianttype.h
+    - path: /usr/include/glibmm-2.68/glibmm/vectorutils.h
+    - path: /usr/include/glibmm-2.68/glibmm/version.h
+    - path: /usr/include/glibmm-2.68/glibmm/wrap.h
+    - path: /usr/include/glibmm-2.68/glibmm/wrap_init.h
+    - path: /usr/include/glibmm-2.68/glibmm_generate_extra_defs/generate_extra_defs.h
+    - path: /usr/lib/giomm-2.68/include/giommconfig.h
+    - path: /usr/lib/glibmm-2.68/include/glibmmconfig.h
+    - path: /usr/lib/pkgconfig/giomm-2.68.pc
+    - path: /usr/lib/pkgconfig/glibmm-2.68.pc
+
+  lib:
+    files:
+    - path: /usr/lib/glibmm-2.68/proc/generate_wrap_init.pl
+    - path: /usr/lib/glibmm-2.68/proc/gmmproc
+    - path: /usr/lib/glibmm-2.68/proc/m4/base.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/class_boxedtype.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/class_boxedtype_static.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/class_generic.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/class_gobject.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/class_interface.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/class_opaque_copyable.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/class_opaque_refcounted.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/class_shared.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/compare.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/convert.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/convert_base.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/convert_gio.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/convert_glib.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/convert_glibmm.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/ctor.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/doc.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/enum.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/gerror.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/initialize.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/initialize_base.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/initialize_gio.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/initialize_glib.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/initialize_glibmm.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/member.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/method.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/property.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/signal.m4
+    - path: /usr/lib/glibmm-2.68/proc/m4/vfunc.m4
+    - path: /usr/lib/glibmm-2.68/proc/pm/DocsParser.pm
+    - path: /usr/lib/glibmm-2.68/proc/pm/Enum.pm
+    - path: /usr/lib/glibmm-2.68/proc/pm/Function.pm
+    - path: /usr/lib/glibmm-2.68/proc/pm/FunctionBase.pm
+    - path: /usr/lib/glibmm-2.68/proc/pm/GtkDefs.pm
+    - path: /usr/lib/glibmm-2.68/proc/pm/Object.pm
+    - path: /usr/lib/glibmm-2.68/proc/pm/Output.pm
+    - path: /usr/lib/glibmm-2.68/proc/pm/Property.pm
+    - path: /usr/lib/glibmm-2.68/proc/pm/Util.pm
+    - path: /usr/lib/glibmm-2.68/proc/pm/WrapParser.pm
+    - path: /usr/lib/libgiomm-2.68.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libglibmm-2.68.so.1
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libsigc-3.0.so.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libgiomm-2.68.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libglibmm-2.68.so.1
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libsigc-3.0.so.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libgiomm-2.68.so.1.3.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libglibmm-2.68.so.1
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libsigc-3.0.so.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libglibmm-2.68.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libsigc-3.0.so.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libglibmm-2.68.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libsigc-3.0.so.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libglibmm-2.68.so.1.3.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libsigc-3.0.so.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libglibmm_generate_extra_defs-2.68.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libglibmm_generate_extra_defs-2.68.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libglibmm_generate_extra_defs-2.68.so.1.3.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libstdc++.so.6
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/libgio-2.0.so.0: glib2
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgmodule-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libsigc-3.0.so.0: libsigcxx
+  /usr/lib/libglibmm-2.68.so.1: self
