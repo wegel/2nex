@@ -187,16 +187,16 @@ pub fn locate_outputs_block(contents: &str) -> io::Result<(usize, usize)> {
             .unwrap_or(contents.len());
         let line = &contents[line_start..line_end];
         let trimmed = line.trim_end();
+        let trimmed_ws = trimmed.trim();
+        let is_top_level =
+            !line.starts_with(' ') && !line.starts_with('\t') && !trimmed_ws.is_empty();
 
         if start.is_none() {
-            if !line.starts_with(' ') && !line.starts_with('\t') && trimmed == "outputs:" {
+            if is_top_level && trimmed_ws.starts_with("outputs:") {
                 start = Some(line_start);
             }
         } else {
-            let trimmed_ws = trimmed.trim();
-            let is_top_level =
-                !line.starts_with(' ') && !line.starts_with('\t') && !trimmed_ws.is_empty();
-            if is_top_level && trimmed_ws != "outputs:" {
+            if is_top_level && !trimmed_ws.starts_with("outputs:") {
                 end = line_start;
                 break;
             }
@@ -215,6 +215,20 @@ pub fn locate_outputs_block(contents: &str) -> io::Result<(usize, usize)> {
             io::ErrorKind::InvalidData,
             "Unable to locate outputs section",
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn locates_flow_style_empty_outputs_block() {
+        let contents = "package:\n  name: test\n\noutputs: {}\n\nresolution: {}\n";
+
+        let (start, end) = locate_outputs_block(contents).unwrap();
+
+        assert_eq!(&contents[start..end], "outputs: {}\n\n");
     }
 }
 
