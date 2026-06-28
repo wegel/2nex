@@ -6,7 +6,7 @@ package:
   version: 4.8.4
   description: Source code editing widget for GTK3
   homepage: https://wiki.gnome.org/Projects/GtkSourceView
-  checksum: 509a79f89211afeeaa08618aab893ddf29adfb09e0fd5040665598256f97162b
+  checksum: 0a6dad55ccf8c7cb02c235e130941004330c57e22662233a387d836f20f73a8d
 
 sources:
 - name: gtksourceview
@@ -42,24 +42,34 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: glib2
   commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: gobject-introspection
+  commit: x86_64/pkg/dev/tools/gobject-introspection/1.84.0/bundles/dev
 - name: gtk3
   commit: x86_64/pkg/libs/graphics/gtk3/3.24.43/bundles/dev
+- name: gtk3-gir
+  commit: x86_64/pkg/libs/graphics/gtk3/3.24.43/outputs/misc
 - name: libxml2
   commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
 - name: fribidi
   commit: x86_64/pkg/libs/text/fribidi/1.0.15/bundles/dev
 - name: pango
   commit: x86_64/pkg/libs/text/pango/1.57.0/bundles/dev
+- name: pango-gir
+  commit: x86_64/pkg/libs/text/pango/1.57.0/outputs/misc
 - name: cairo
   commit: x86_64/pkg/libs/graphics/cairo/1.18.4/bundles/dev
 - name: harfbuzz
   commit: x86_64/pkg/libs/text/harfbuzz/10.1.0/bundles/dev
+- name: harfbuzz-gir
+  commit: x86_64/pkg/libs/text/harfbuzz/10.1.0/outputs/misc
 - name: fontconfig
   commit: x86_64/pkg/libs/graphics/fontconfig/2.17.1/bundles/dev
 - name: freetype
   commit: x86_64/pkg/libs/graphics/freetype/2.14.1/bundles/dev
 - name: gdk-pixbuf
   commit: x86_64/pkg/libs/graphics/gdk-pixbuf/2.44.2/bundles/dev
+- name: gdk-pixbuf-gir
+  commit: x86_64/pkg/libs/graphics/gdk-pixbuf/2.44.2/outputs/misc
 - name: libepoxy
   commit: x86_64/pkg/libs/graphics/libepoxy/1.5.10/bundles/dev
 - name: mesa
@@ -76,6 +86,8 @@ dependencies:
   commit: x86_64/pkg/libs/graphics/pixman/0.46.4/bundles/dev
 - name: atk
   commit: x86_64/pkg/libs/graphics/atk/2.38.0/bundles/dev
+- name: atk-gir
+  commit: x86_64/pkg/libs/graphics/atk/2.38.0/outputs/misc
 - name: at-spi2-atk
   commit: x86_64/pkg/libs/graphics/at-spi2-atk/2.38.0/bundles/dev
 - name: at-spi2-core
@@ -149,7 +161,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4100:2912, 8228:3206, 12383:3767, 16521:4085, 20677:4491, 24847:8904, 33151:8910, 37348:8910, 45663:8917, 49272:9028]
+  profile: [4114:1049, 8261:1158, 12387:1958, 16548:2318, 20647:2703, 28967:8234, 33129:8235, 41471:8241, 45632:8248, 50369:8362]
 
   script: |
     set -eux
@@ -164,7 +176,7 @@ build:
       --buildtype=release \
       -Dglade_catalog=false \
       -Dgtk_doc=false \
-      -Dgir=false \
+      -Dgir=true \
       -Dvapi=false
 
     ninja -C build
@@ -234,6 +246,7 @@ outputs:
 
   lib:
     files:
+    - path: /usr/lib/girepository-1.0/GtkSource-4.typelib
     - path: /usr/lib/libgtksourceview-4.so
       needs:
       - /usr/lib/libatk-1.0.so.0
@@ -285,6 +298,7 @@ outputs:
 
   misc:
     files:
+    - path: /usr/share/gir-1.0/GtkSource-4.gir
     - path: /usr/share/gtksourceview-4/language-specs/R.lang
     - path: /usr/share/gtksourceview-4/language-specs/abnf.lang
     - path: /usr/share/gtksourceview-4/language-specs/actionscript.lang
