@@ -99,10 +99,8 @@ fn format_root(
             "sources",
             "dependencies",
             "packages",
+            "exclude",
             "build",
-            "bundles",
-            "outputs",
-            "resolution",
         ]
     } else {
         &[
@@ -137,6 +135,7 @@ fn format_root(
                 "sources" => output.push_str(&format_sources(value)?),
                 "dependencies" => output.push_str(&format_dependencies(value)?),
                 "packages" => output.push_str(&format_packages(value)?),
+                "exclude" => output.push_str(&format_generic_section("exclude", value)?),
                 "build" => output.push_str(&format_build(value)?),
                 "bundles" => output.push_str(&format_bundles(value)?),
                 "outputs" => output.push_str(&format_outputs(value, skip_needs)?),
@@ -217,9 +216,10 @@ fn format_system(
         "architecture",
         "boot_method",
         "description",
-        "checksum",
-        "stable_checksum",
         "nex_structure",
+        "extends",
+        "stable_checksum",
+        "checksum",
     ];
 
     for field in fields {
@@ -237,6 +237,23 @@ fn format_system(
             };
             output.push_str(&format!("  {}: {}\n", field, formatted));
         }
+    }
+
+    Ok(output)
+}
+
+fn format_generic_section(name: &str, value: &Value) -> io::Result<String> {
+    let mut output = format!("{name}:\n");
+    let rendered =
+        serde_yaml::to_string(value).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    for line in rendered.lines() {
+        if line == "---" {
+            continue;
+        }
+        output.push_str("  ");
+        output.push_str(line);
+        output.push('\n');
     }
 
     Ok(output)
@@ -769,5 +786,29 @@ build:
         let formatted = format_manifest_string(input).unwrap();
         assert!(formatted.contains("overlays:\n- asm/test-overlay.yaml\n"));
         assert!(formatted.contains("\ndependencies: []\n"));
+    }
+
+    #[test]
+    fn formats_system_extends() {
+        let input = r#"system:
+  schema: 1
+  name: child system
+  slug: child
+  version: 1.0
+  description: Child assembly
+  nex_structure: true
+  extends: asm/base.yaml
+  checksum: abc123
+packages: []
+build:
+  environment: env/test.yaml
+  script: "true"
+"#;
+
+        let formatted = format_manifest_string(input).unwrap();
+        let system = formatted.split("\n\n").next().unwrap();
+        assert!(system.contains("  nex_structure: true\n"));
+        assert!(system.contains("  extends: asm/base.yaml\n"));
+        assert!(system.ends_with("  checksum: abc123"));
     }
 }
