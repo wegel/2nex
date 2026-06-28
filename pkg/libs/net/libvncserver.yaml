@@ -1,0 +1,168 @@
+package:
+  schema: 1
+  name: libvncserver
+  slug: libvncserver
+  namespace: libs/net
+  version: 0.9.15
+  description: VNC server and client libraries
+  homepage: https://libvnc.github.io/
+  checksum: 26ca174aa091ec716771c8919965dab5aaa27b299c4f23886ff1cbe436780325
+
+sources:
+- name: libvncserver
+  url: https://github.com/LibVNC/libvncserver/archive/refs/tags/LibVNCServer-0.9.15.tar.gz
+  sha256: 62352c7795e231dfce044beb96156065a05a05c974e5de9e023d688d8ff675d7
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: libjpeg-turbo
+  commit: x86_64/pkg/libs/graphics/libjpeg-turbo/3.1.2/bundles/dev
+- name: libpng
+  commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4111:2111, 8240:2144, 12423:2153, 16521:2173, 20663:2190, 23297:5788]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf /${SOURCE_libvncserver} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    cmake -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DBUILD_SHARED_LIBS=ON \
+      -DWITH_EXAMPLES=OFF \
+      -DWITH_TESTS=OFF \
+      -DWITH_SDL=OFF \
+      -DWITH_GTK=OFF \
+      -DWITH_QT=OFF \
+      -DWITH_LIBSSHTUNNEL=OFF \
+      -DWITH_GNUTLS=OFF \
+      -DWITH_GCRYPT=OFF \
+      -DWITH_SYSTEMD=OFF \
+      -DWITH_FFMPEG=OFF \
+      -DWITH_SASL=OFF \
+      -DWITH_XCB=OFF
+
+    cmake --build build
+    DESTDIR="${OUT_DIR}" cmake --install build
+
+    find "${OUT_DIR}" -name '*.la' -delete
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/rfb/keysym.h
+    - path: /usr/include/rfb/rfb.h
+    - path: /usr/include/rfb/rfbclient.h
+    - path: /usr/include/rfb/rfbconfig.h
+    - path: /usr/include/rfb/rfbproto.h
+    - path: /usr/include/rfb/rfbregion.h
+    - path: /usr/include/rfb/threading.h
+    - path: /usr/lib/cmake/LibVNCServer/LibVNCServerConfig.cmake
+    - path: /usr/lib/cmake/LibVNCServer/LibVNCServerConfigVersion.cmake
+    - path: /usr/lib/cmake/LibVNCServer/LibVNCServerTargets-release.cmake
+    - path: /usr/lib/cmake/LibVNCServer/LibVNCServerTargets.cmake
+    - path: /usr/lib/pkgconfig/libvncclient.pc
+    - path: /usr/lib/pkgconfig/libvncserver.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libvncclient.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libvncclient.so.0.9.15
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libvncclient.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libvncserver.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libvncserver.so.0.9.15
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libvncserver.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+
+resolution:
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libjpeg.so.8: libjpeg-turbo
+  /usr/lib/libpng16.so.16: libpng
+  /usr/lib/libcrypto.so.3: openssl3
+  /usr/lib/libssl.so.3: openssl3
+  /usr/lib/libz.so.1: zlib
