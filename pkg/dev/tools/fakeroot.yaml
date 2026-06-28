@@ -1,0 +1,140 @@
+package:
+  schema: 1
+  name: fakeroot
+  slug: fakeroot
+  namespace: dev/tools
+  version: 1.38.1
+  description: Runs a command in an environment that fakes root file ownership
+  homepage: https://salsa.debian.org/clint/fakeroot
+  checksum: 7baaa9f1437b5c3819d97eb4470a248c27f56233a5603317983f2df3a06e6fe2
+
+sources:
+- name: fakeroot
+  url: https://deb.debian.org/debian/pool/main/f/fakeroot/fakeroot_1.38.1.orig.tar.gz
+  sha256: 37c5063942efe2e2aeefd6e71ae2690bcb9b7d512c53bc6409b54d0730cbdac1
+
+dependencies:
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4100:878, 8229:3677, 12701:4229, 16819:4247, 20971:4247, 25067:4247, 29523:4254, 33852:4336, 37965:4750, 39966:5040]
+
+  script: |
+    tar --no-same-owner -xzf ${SOURCE_fakeroot} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure \
+      --prefix=/usr \
+      --libdir=/usr/lib \
+      --disable-static \
+      --with-ipc=sysv \
+      CPP=cpp
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    sed -i '1s|^#!/bin/sh$|#!/usr/bin/sh|' "${OUT_DIR}/usr/bin/fakeroot"
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+  - lib
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/faked
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/fakeroot
+      needs:
+      - /usr/bin/faked
+      - /usr/bin/getopt
+      - /usr/bin/sed
+      - /usr/bin/sh
+      - /usr/lib/libfakeroot.so
+
+  dev:
+    files:
+    - path: /usr/lib/libfakeroot.la
+
+  lib:
+    files:
+    - path: /usr/lib/libfakeroot-0.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libfakeroot.so
+      needs:
+      - /usr/lib/libc.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/de/man1/faked.1
+    - path: /usr/share/man/de/man1/fakeroot.1
+    - path: /usr/share/man/es/man1/faked.1
+    - path: /usr/share/man/es/man1/fakeroot.1
+    - path: /usr/share/man/fr/man1/faked.1
+    - path: /usr/share/man/fr/man1/fakeroot.1
+    - path: /usr/share/man/man1/faked.1
+    - path: /usr/share/man/man1/fakeroot.1
+    - path: /usr/share/man/nl/man1/faked.1
+    - path: /usr/share/man/nl/man1/fakeroot.1
+    - path: /usr/share/man/pt/man1/faked.1
+    - path: /usr/share/man/pt/man1/fakeroot.1
+    - path: /usr/share/man/ro/man1/faked.1
+    - path: /usr/share/man/ro/man1/fakeroot.1
+    - path: /usr/share/man/sv/man1/faked.1
+    - path: /usr/share/man/sv/man1/fakeroot.1
+
+resolution:
+  /usr/bin/sh: bash
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/bin/sed: sed
+  /usr/bin/faked: self
+  /usr/lib/libfakeroot.so: self
+  /usr/bin/getopt: util-linux
