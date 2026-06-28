@@ -7,7 +7,7 @@
 //! This eliminates the need for runtime ELF scanning during `nex install`.
 
 use clap::Args;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -217,9 +217,11 @@ pub fn compute_deps_for_manifest(
         println!("  Provider index: {} libraries", provider_lookup.len());
     }
 
+    let existing_needs = collect_existing_needs(manifest);
+
     // process each output
     let mut new_outputs: HashMap<String, Vec<FileEntry>> = HashMap::new();
-    let mut resolution: HashMap<String, String> = HashMap::new();
+    let mut resolution: HashMap<String, String> = manifest.resolution.clone();
 
     for output_ref in &all_refs {
         // extract output name from ref (e.g., "x86_64/.../outputs/bin" -> "bin")
@@ -262,13 +264,18 @@ pub fn compute_deps_for_manifest(
                 continue;
             }
 
+            let existing_file_needs = existing_needs
+                .get(file_path)
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+
             // scan for DT_NEEDED
             let needed = scan_elf_for_deps(&physical_path)?;
             if needed.is_empty() {
                 // no deps (script or static binary)
                 file_entries.push(FileEntry {
                     path: file_path.clone(),
-                    needs: Vec::new(),
+                    needs: merge_needs(existing_file_needs, Vec::new()),
                 });
                 continue;
             }
@@ -313,7 +320,7 @@ pub fn compute_deps_for_manifest(
 
             file_entries.push(FileEntry {
                 path: file_path.clone(),
-                needs,
+                needs: merge_needs(existing_file_needs, needs),
             });
         }
 
@@ -344,6 +351,26 @@ pub fn compute_deps_for_manifest(
     println!("Manifest updated: {}", manifest_path.display());
 
     Ok(())
+}
+
+fn collect_existing_needs(
+    manifest: &crate::manifest::types::Manifest,
+) -> HashMap<String, Vec<String>> {
+    let mut existing = HashMap::new();
+    for output in manifest.outputs.values() {
+        for file in &output.files {
+            if !file.needs.is_empty() {
+                existing.insert(file.path.clone(), file.needs.clone());
+            }
+        }
+    }
+    existing
+}
+
+fn merge_needs(existing: &[String], discovered: Vec<String>) -> Vec<String> {
+    let mut merged: BTreeSet<String> = existing.iter().cloned().collect();
+    merged.extend(discovered);
+    merged.into_iter().collect()
 }
 
 /// Build a lookup table from library basename to (provider_key, file_path, files_commit).
@@ -653,7 +680,10 @@ fn find_or_create_files_commit(
         // if no local outputs, try to pull from remote
         if output_refs.is_empty() && !all_output_refs.is_empty() {
             if verbose {
-                println!("    No local outputs for {}, trying remote...", provider_key);
+                println!(
+                    "    No local outputs for {}, trying remote...",
+                    provider_key
+                );
             }
             for output_ref in &all_output_refs {
                 if store.pull_from_remote(output_ref).unwrap_or(false) {
@@ -972,4 +1002,33 @@ fn derive_manifest_base_dir(manifest_path: &Path) -> String {
 
     // fallback: return empty (use relative paths)
     String::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::merge_needs;
+
+    #[test]
+    fn merge_needs_preserves_manual_script_dependencies() {
+        let existing = vec!["/usr/bin/python3".to_string()];
+
+        assert_eq!(merge_needs(&existing, Vec::new()), existing);
+    }
+
+    #[test]
+    fn merge_needs_adds_discovered_libraries_without_duplicates() {
+        let existing = vec!["/usr/bin/python3".to_string()];
+        let discovered = vec![
+            "/usr/lib/libc.so.6".to_string(),
+            "/usr/bin/python3".to_string(),
+        ];
+
+        assert_eq!(
+            merge_needs(&existing, discovered),
+            vec![
+                "/usr/bin/python3".to_string(),
+                "/usr/lib/libc.so.6".to_string(),
+            ]
+        );
+    }
 }
