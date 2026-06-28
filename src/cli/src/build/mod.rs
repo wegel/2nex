@@ -16,6 +16,7 @@ use crate::commands::build::BuildOpts;
 pub const OUTPUT_DISCARD: &str = "discard";
 use crate::manifest::types::{BuildEnvironment, BuildPaths};
 use crate::manifest::*;
+use crate::materializer::{materialize, MaterializeConfig, MaterializeMode, MaterializeRequest};
 use crate::outputs::*;
 use crate::progress::{self, BuildProgressConfig};
 use crate::store::{
@@ -162,6 +163,7 @@ pub fn setup_composite_rootfs(
     paths: &BuildPaths,
     verbose: bool,
     reuse_rootfs: bool,
+    hydrate_runtime_deps: bool,
 ) -> io::Result<()> {
     println!("Setting up composite rootfs at {}", base_dir);
     if !reuse_rootfs && Path::new(base_dir).exists() {
@@ -197,15 +199,19 @@ pub fn setup_composite_rootfs(
         }
     }
 
-    for commit in dependency_commits {
-        checkout_into_with_fallbacks(
-            repo_path,
-            fallback_repos,
-            commit,
-            Path::new(base_dir),
-            true,
-            verbose,
-        )?;
+    if hydrate_runtime_deps && !dependency_commits.is_empty() {
+        materialize_build_dependencies(base_dir, repo_path, fallback_repos, dependency_commits)?;
+    } else {
+        for commit in dependency_commits {
+            checkout_into_with_fallbacks(
+                repo_path,
+                fallback_repos,
+                commit,
+                Path::new(base_dir),
+                true,
+                verbose,
+            )?;
+        }
     }
 
     // create FHS compatibility symlinks (only if there are actual dependencies to checkout)
@@ -231,6 +237,39 @@ pub fn setup_composite_rootfs(
     }
 
     Ok(())
+}
+
+fn materialize_build_dependencies(
+    base_dir: &str,
+    repo_path: &str,
+    fallback_repos: &[String],
+    dependency_commits: &[String],
+) -> io::Result<()> {
+    let fallback_repo_paths: Vec<PathBuf> = fallback_repos.iter().map(PathBuf::from).collect();
+    let requests: Vec<MaterializeRequest> = dependency_commits
+        .iter()
+        .map(|commit| materialize_request_for_build_dependency(commit.clone()))
+        .collect();
+    let config = MaterializeConfig {
+        repo_path: repo_path.to_string(),
+        target_dir: PathBuf::from(base_dir),
+        mode: MaterializeMode::Flat,
+        resolve_deps: true,
+        manifest_db_paths: vec![PathBuf::from("pkg")],
+        fallback_repo_paths,
+        ..Default::default()
+    };
+
+    materialize(&config, &requests)?;
+    Ok(())
+}
+
+fn materialize_request_for_build_dependency(commit: String) -> MaterializeRequest {
+    if commit.contains("/bundles/") {
+        MaterializeRequest::Bundle { commit }
+    } else {
+        MaterializeRequest::Output { commit }
+    }
 }
 
 fn refresh_chroot_usrmerge_symlinks(build_dir: &Path) -> io::Result<()> {
@@ -270,6 +309,32 @@ fn refresh_chroot_usrmerge_symlinks(build_dir: &Path) -> io::Result<()> {
         if !full_link_path.exists() {
             std::os::unix::fs::symlink(target, &full_link_path)?;
         }
+    }
+
+    Ok(())
+}
+
+fn validate_chroot_build_root(build_dir: &Path) -> io::Result<()> {
+    let bash = build_dir.join("usr/bin/bash");
+    if !bash.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "chroot build root is missing /usr/bin/bash at {}; add bash to dependencies",
+                bash.display()
+            ),
+        ));
+    }
+
+    let loader = build_dir.join("usr/lib/ld-linux-x86-64.so.2");
+    if !loader.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "chroot build root has /usr/bin/bash but is missing /usr/lib/ld-linux-x86-64.so.2 at {}; add glibc or fix the standard chroot runtime",
+                loader.display()
+            ),
+        ));
     }
 
     Ok(())
@@ -384,6 +449,7 @@ pub fn run_build_script_with_env(
     std::fs::create_dir_all(&tmpdir_path)?;
     if build_env.execution.chroot {
         refresh_chroot_usrmerge_symlinks(&build_dir_abs)?;
+        validate_chroot_build_root(&build_dir_abs)?;
     }
 
     // compute template variable values
@@ -905,6 +971,7 @@ pub fn build_package_manifest_with_dir(
         &build_env.paths,
         opts.verbose,
         opts.reuse_rootfs,
+        build_env.execution.chroot,
     )?;
 
     // use_absolute_paths = !chroot (when not using chroot, we need absolute paths)
@@ -1113,6 +1180,7 @@ pub fn build_package_manifest_with_dir(
             &build_env.paths,
             opts.verbose,
             false, // never reuse rootfs for reproducibility check
+            build_env.execution.chroot,
         )?;
         let input_env_vars_2 = handle_inputs(
             &manifest.sources,
@@ -1372,6 +1440,38 @@ mod tests {
         );
         assert_eq!(fs::read_link(root.join("usr/lib64"))?, PathBuf::from("lib"));
         assert_eq!(fs::read_link(root.join("usr/sbin"))?, PathBuf::from("bin"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn classifies_build_dependency_materialize_requests() {
+        let bundle = materialize_request_for_build_dependency(
+            "x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev".to_string(),
+        );
+        let output = materialize_request_for_build_dependency(
+            "x86_64/pkg/libs/system/glibc/2.39/outputs/lib".to_string(),
+        );
+
+        assert!(matches!(bundle, MaterializeRequest::Bundle { .. }));
+        assert!(matches!(output, MaterializeRequest::Output { .. }));
+    }
+
+    #[test]
+    fn validates_chroot_build_root_launcher_files() -> io::Result<()> {
+        let temp_dir = TempDir::new()?;
+        let root = temp_dir.path();
+        fs::create_dir_all(root.join("usr/bin"))?;
+        fs::write(root.join("usr/bin/bash"), b"")?;
+
+        let err = validate_chroot_build_root(root).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("missing /usr/lib/ld-linux-x86-64.so.2"));
+
+        fs::create_dir_all(root.join("usr/lib"))?;
+        fs::write(root.join("usr/lib/ld-linux-x86-64.so.2"), b"")?;
+        validate_chroot_build_root(root)?;
 
         Ok(())
     }
