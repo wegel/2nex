@@ -618,6 +618,10 @@ fn format_outputs(value: &Value, skip_needs: bool) -> io::Result<String> {
         .as_mapping()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "outputs must be a mapping"))?;
 
+    if mapping.is_empty() {
+        return Ok(String::from("outputs: {}\n"));
+    }
+
     let mut output = String::from("outputs:\n");
 
     // sort output names alphabetically
@@ -703,6 +707,10 @@ fn format_resolution(value: &Value) -> io::Result<String> {
     let mapping = value.as_mapping().ok_or_else(|| {
         io::Error::new(io::ErrorKind::InvalidData, "resolution must be a mapping")
     })?;
+
+    if mapping.is_empty() {
+        return Ok(String::from("resolution: {}\n"));
+    }
 
     let mut output = String::from("resolution:\n");
 
@@ -928,5 +936,31 @@ build:
         assert!(formatted.contains("dependencies:\n# runtime libs\n- name: glibc\n"));
         assert!(formatted.contains("packages:\n# init tools\n- name: systemd\n"));
         assert!(formatted.contains("# shell\n- name: bash\n"));
+    }
+
+    #[test]
+    fn formats_empty_output_and_resolution_maps_as_flow_maps() {
+        let input = r#"package:
+  schema: 1
+  name: test
+  slug: test
+  namespace: test
+  version: 1.0
+sources: []
+dependencies: []
+build:
+  environment: env/test.yaml
+  script: "true"
+bundles:
+  dev: []
+outputs: {}
+resolution: {}
+"#;
+
+        let formatted = format_manifest_string(input).unwrap();
+
+        assert!(formatted.contains("\noutputs: {}\n"));
+        assert!(formatted.contains("\nresolution: {}\n"));
+        serde_yaml::from_str::<Value>(&formatted).unwrap();
     }
 }
