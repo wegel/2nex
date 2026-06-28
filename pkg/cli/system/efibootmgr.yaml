@@ -1,0 +1,106 @@
+package:
+  schema: 1
+  name: efibootmgr
+  slug: efibootmgr
+  namespace: cli/system
+  version: "18"
+  description: Tool for managing UEFI boot entries
+  homepage: https://github.com/rhboot/efibootmgr
+  checksum: d2de4fc669673a1dd80cb43a9e8622422fcfed132e8a689164a5daf3f5a7c43e
+
+sources:
+- name: efibootmgr
+  url: https://github.com/rhboot/efibootmgr/archive/refs/tags/18.tar.gz
+  sha256: 442867d12f8525034a404fc8af3036dba8e1fc970998af2486c3b940dfad0874
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: efivar
+  commit: x86_64/pkg/libs/system/efivar/39/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: popt
+  commit: x86_64/pkg/libs/system/popt/1.19/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4552:68, 6557:429]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_efibootmgr}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    make \
+      CC=gcc \
+      EFIDIR=BOOT \
+      prefix=/usr \
+      libdir=/usr/lib \
+      sbindir=/usr/bin
+
+    make \
+      DESTDIR="${OUT_DIR}" \
+      CC=gcc \
+      EFIDIR=BOOT \
+      prefix=/usr \
+      libdir=/usr/lib \
+      sbindir=/usr/bin \
+      install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/efibootdump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libefiboot.so.1
+      - /usr/lib/libefivar.so.1
+      - /usr/lib/libpopt.so.0
+    - path: /usr/bin/efibootmgr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libefiboot.so.1
+      - /usr/lib/libefivar.so.1
+
+  man:
+    files:
+    - path: /usr/share/man/man8/efibootdump.8
+    - path: /usr/share/man/man8/efibootmgr.8
+
+resolution:
+  /usr/lib/libefiboot.so.1: efivar
+  /usr/lib/libefivar.so.1: efivar
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libpopt.so.0: popt
