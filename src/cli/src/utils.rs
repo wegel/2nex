@@ -43,6 +43,13 @@ pub fn determine_category(file_path: &str) -> String {
         || file_path.ends_with(".conf")
     {
         "conf".to_string()
+    } else if file_path.contains("/share/fonts/")
+        || file_path.ends_with(".ttf")
+        || file_path.ends_with(".otf")
+        || file_path.ends_with(".ttc")
+        || file_path.ends_with(".otc")
+    {
+        "fonts".to_string()
     } else {
         "misc".to_string()
     }
@@ -317,5 +324,9 @@ mod tests {
         assert_eq!(determine_category("/usr/share/doc/foo/readme"), "doc");
         assert_eq!(determine_category("/usr/bin/foo"), "bin");
         assert_eq!(determine_category("/boot/initramfs.cpio"), "boot");
+        assert_eq!(
+            determine_category("/usr/share/fonts/TTF/HackNerdFont-Regular.ttf"),
+            "fonts"
+        );
     }
 }
