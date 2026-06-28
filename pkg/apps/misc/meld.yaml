@@ -6,7 +6,7 @@ package:
   version: 3.22.2
   description: Visual diff and merge tool
   homepage: https://meldmerge.org/
-  checksum: 8c06a8f9d3e4e1a3e8cf0e3bf9ff5f06bc5bf06c7c5e8af2a4949e4c7ecc580c
+  checksum: c896a665380f671a98eaba14b7022eaf130b26245ca6bacd091694565567671f
 
 sources:
 - name: meld
@@ -175,7 +175,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4098:346, 8206:453, 12313:600, 16416:600, 20548:610, 24699:610, 28803:733, 32936:737, 36000:945]
+  profile: [4098:344, 8206:451, 12313:594, 16416:594, 20548:603, 24699:604, 28803:727, 32936:732, 36555:979]
 
   script: |
     set -eux
@@ -190,6 +190,14 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    python_site=/usr/lib/python3.12/site-packages
+    out_site="${OUT_DIR}${python_site}"
+    mkdir -p "${out_site}"
+    cp -a "${python_site}/gi" "${out_site}/"
+    cp -a "${python_site}"/PyGObject-*.dist-info "${out_site}/"
+    cp -a "${python_site}/cairo" "${out_site}/"
+    cp -a "${python_site}"/pycairo-*.dist-info "${out_site}/"
 
     /usr/bin/python3 - "${OUT_DIR}/usr/bin/meld" <<'PY'
     import os
@@ -247,8 +255,86 @@ outputs:
       - /usr/lib/python3.12/site-packages/cairo/__init__.py
       - /usr/lib/python3.12/site-packages/gi/__init__.py
 
+  dev:
+    files:
+    - path: /usr/lib/python3.12/site-packages/cairo/include/py3cairo.h
+
   lib:
     files:
+    - path: /usr/lib/python3.12/site-packages/PyGObject-3.56.3.dist-info/METADATA
+    - path: /usr/lib/python3.12/site-packages/cairo/__init__.py
+    - path: /usr/lib/python3.12/site-packages/cairo/__init__.pyi
+    - path: /usr/lib/python3.12/site-packages/cairo/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/cairo/_cairo.cpython-312-x86_64-linux-gnu.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcairo.so.2
+    - path: /usr/lib/python3.12/site-packages/cairo/py.typed
+    - path: /usr/lib/python3.12/site-packages/gi/__init__.py
+    - path: /usr/lib/python3.12/site-packages/gi/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/__pycache__/_constants.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/__pycache__/_enum.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/__pycache__/_error.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/__pycache__/_gtktemplate.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/__pycache__/_ossighelper.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/__pycache__/_propertyhelper.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/__pycache__/_signalhelper.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/__pycache__/_signature.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/__pycache__/docstring.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/__pycache__/events.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/__pycache__/importer.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/__pycache__/module.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/__pycache__/types.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/_constants.py
+    - path: /usr/lib/python3.12/site-packages/gi/_enum.py
+    - path: /usr/lib/python3.12/site-packages/gi/_error.py
+    - path: /usr/lib/python3.12/site-packages/gi/_gi.cpython-312-x86_64-linux-gnu.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libffi.so.8
+      - /usr/lib/libgirepository-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+    - path: /usr/lib/python3.12/site-packages/gi/_gi_cairo.cpython-312-x86_64-linux-gnu.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcairo-gobject.so.2
+      - /usr/lib/libcairo.so.2
+      - /usr/lib/libgobject-2.0.so.0
+    - path: /usr/lib/python3.12/site-packages/gi/_gtktemplate.py
+    - path: /usr/lib/python3.12/site-packages/gi/_ossighelper.py
+    - path: /usr/lib/python3.12/site-packages/gi/_propertyhelper.py
+    - path: /usr/lib/python3.12/site-packages/gi/_signalhelper.py
+    - path: /usr/lib/python3.12/site-packages/gi/_signature.py
+    - path: /usr/lib/python3.12/site-packages/gi/docstring.py
+    - path: /usr/lib/python3.12/site-packages/gi/events.py
+    - path: /usr/lib/python3.12/site-packages/gi/importer.py
+    - path: /usr/lib/python3.12/site-packages/gi/module.py
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/GIMarshallingTests.py
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/GLib.py
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/GLibUnix.py
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/GObject.py
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/Gdk.py
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/GdkPixbuf.py
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/Gio.py
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/GioUnix.py
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/Gtk.py
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/Pango.py
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/__init__.py
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/__pycache__/GIMarshallingTests.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/__pycache__/GLib.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/__pycache__/GLibUnix.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/__pycache__/GObject.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/__pycache__/Gdk.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/__pycache__/GdkPixbuf.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/__pycache__/Gio.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/__pycache__/GioUnix.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/__pycache__/Gtk.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/__pycache__/Pango.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/overrides/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/repository/__init__.py
+    - path: /usr/lib/python3.12/site-packages/gi/repository/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/gi/types.py
     - path: /usr/lib/python3.12/site-packages/meld/__init__.py
     - path: /usr/lib/python3.12/site-packages/meld/__pycache__/__init__.cpython-312.pyc
     - path: /usr/lib/python3.12/site-packages/meld/__pycache__/accelerators.cpython-312.pyc
@@ -381,6 +467,7 @@ outputs:
     - path: /usr/lib/python3.12/site-packages/meld/vc/svn.py
     - path: /usr/lib/python3.12/site-packages/meld/vcview.py
     - path: /usr/lib/python3.12/site-packages/meld/windowstate.py
+    - path: /usr/lib/python3.12/site-packages/pycairo-1.29.0.dist-info/METADATA
 
   locale:
     files:
@@ -562,11 +649,18 @@ outputs:
     - path: /usr/share/mime/packages/org.gnome.Meld.xml
 
 resolution:
+  /usr/lib/libcairo-gobject.so.2: cairo
+  /usr/lib/libcairo.so.2: cairo
+  /usr/lib/libgirepository-2.0.so.0: glib2
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/libc.so.6: glibc
   /usr/lib/girepository-1.0/xlib-2.0.typelib: gobject-introspection
   /usr/lib/girepository-1.0/Gtk-3.0.typelib: gtk3
   /usr/lib/libgtk-3.so.0: gtk3
   /usr/lib/girepository-1.0/GtkSource-4.typelib: gtksourceview4
   /usr/lib/libgtksourceview-4.so.0: gtksourceview4
+  /usr/lib/libffi.so.8: libffi
   /usr/lib/python3.12/site-packages/cairo/__init__.py: pycairo
   /usr/lib/python3.12/site-packages/gi/__init__.py: pygobject
   /usr/bin/python3: python3
