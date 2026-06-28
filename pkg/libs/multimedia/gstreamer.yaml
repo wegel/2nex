@@ -1,0 +1,417 @@
+package:
+  schema: 1
+  name: gstreamer
+  slug: gstreamer
+  namespace: libs/multimedia
+  version: 1.26.11
+  description: Streaming media framework core library and tools
+  homepage: https://gstreamer.freedesktop.org/
+  checksum: 3d37de67cfde41c29f0ef9da8f2fee72b9f868e24c24512460839f6afb6b54ea
+
+sources:
+- name: gstreamer
+  url: https://gstreamer.freedesktop.org/src/gstreamer/gstreamer-1.26.11.tar.xz
+  sha256: 2e0bd192d0438ea606a6f76a95c8e16542167656ffec2c2bc3aaf6ee0837fbf6
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: flex
+  commit: x86_64/pkg/core/toolchain/flex/2.6.4/bundles/dev
+- name: bison
+  commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
+- name: m4
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4150:1701, 8267:1803, 12414:2416, 16520:2806, 20639:11724, 24784:17425, 28932:17425, 33105:17429, 35382:17527]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf /${SOURCE_gstreamer} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --libexecdir=libexec \
+      --buildtype=release \
+      -Dintrospection=disabled \
+      -Ddoc=disabled \
+      -Dtests=disabled \
+      -Dexamples=disabled \
+      -Dbenchmarks=disabled \
+      -Dcheck=disabled \
+      -Dlibunwind=disabled \
+      -Dlibdw=disabled \
+      -Dnls=disabled \
+      -Dptp-helper=disabled \
+      -Dcoretracers=disabled \
+      -Dbash-completion=disabled \
+      -Dtools=enabled
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - misc
+
+  full:
+  - bin
+  - dev
+  - lib
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/gst-inspect-1.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+    - path: /usr/bin/gst-launch-1.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+    - path: /usr/bin/gst-stats-1.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+    - path: /usr/bin/gst-typefind-1.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+    - path: /usr/libexec/gstreamer-1.0/gst-completion-helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+    - path: /usr/libexec/gstreamer-1.0/gst-hotdoc-plugins-scanner
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+    - path: /usr/libexec/gstreamer-1.0/gst-plugins-doc-cache-generator
+
+  dev:
+    files:
+    - path: /usr/include/gstreamer-1.0/gst/base/base-prelude.h
+    - path: /usr/include/gstreamer-1.0/gst/base/base.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstadapter.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstaggregator.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstbaseparse.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstbasesink.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstbasesrc.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstbasetransform.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstbitreader.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstbitwriter.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstbytereader.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstbytewriter.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstcollectpads.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstdataqueue.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstflowcombiner.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstpushsrc.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gstqueuearray.h
+    - path: /usr/include/gstreamer-1.0/gst/base/gsttypefindhelper.h
+    - path: /usr/include/gstreamer-1.0/gst/controller/controller-enumtypes.h
+    - path: /usr/include/gstreamer-1.0/gst/controller/controller-prelude.h
+    - path: /usr/include/gstreamer-1.0/gst/controller/controller.h
+    - path: /usr/include/gstreamer-1.0/gst/controller/gstargbcontrolbinding.h
+    - path: /usr/include/gstreamer-1.0/gst/controller/gstdirectcontrolbinding.h
+    - path: /usr/include/gstreamer-1.0/gst/controller/gstinterpolationcontrolsource.h
+    - path: /usr/include/gstreamer-1.0/gst/controller/gstlfocontrolsource.h
+    - path: /usr/include/gstreamer-1.0/gst/controller/gstproxycontrolbinding.h
+    - path: /usr/include/gstreamer-1.0/gst/controller/gsttimedvaluecontrolsource.h
+    - path: /usr/include/gstreamer-1.0/gst/controller/gsttriggercontrolsource.h
+    - path: /usr/include/gstreamer-1.0/gst/glib-compat.h
+    - path: /usr/include/gstreamer-1.0/gst/gst.h
+    - path: /usr/include/gstreamer-1.0/gst/gstallocator.h
+    - path: /usr/include/gstreamer-1.0/gst/gstatomicqueue.h
+    - path: /usr/include/gstreamer-1.0/gst/gstbin.h
+    - path: /usr/include/gstreamer-1.0/gst/gstbuffer.h
+    - path: /usr/include/gstreamer-1.0/gst/gstbufferlist.h
+    - path: /usr/include/gstreamer-1.0/gst/gstbufferpool.h
+    - path: /usr/include/gstreamer-1.0/gst/gstbus.h
+    - path: /usr/include/gstreamer-1.0/gst/gstbytearrayinterface.h
+    - path: /usr/include/gstreamer-1.0/gst/gstcaps.h
+    - path: /usr/include/gstreamer-1.0/gst/gstcapsfeatures.h
+    - path: /usr/include/gstreamer-1.0/gst/gstchildproxy.h
+    - path: /usr/include/gstreamer-1.0/gst/gstclock.h
+    - path: /usr/include/gstreamer-1.0/gst/gstcompat.h
+    - path: /usr/include/gstreamer-1.0/gst/gstconfig.h
+    - path: /usr/include/gstreamer-1.0/gst/gstcontext.h
+    - path: /usr/include/gstreamer-1.0/gst/gstcontrolbinding.h
+    - path: /usr/include/gstreamer-1.0/gst/gstcontrolsource.h
+    - path: /usr/include/gstreamer-1.0/gst/gstdatetime.h
+    - path: /usr/include/gstreamer-1.0/gst/gstdebugutils.h
+    - path: /usr/include/gstreamer-1.0/gst/gstdevice.h
+    - path: /usr/include/gstreamer-1.0/gst/gstdevicemonitor.h
+    - path: /usr/include/gstreamer-1.0/gst/gstdeviceprovider.h
+    - path: /usr/include/gstreamer-1.0/gst/gstdeviceproviderfactory.h
+    - path: /usr/include/gstreamer-1.0/gst/gstdynamictypefactory.h
+    - path: /usr/include/gstreamer-1.0/gst/gstelement.h
+    - path: /usr/include/gstreamer-1.0/gst/gstelementfactory.h
+    - path: /usr/include/gstreamer-1.0/gst/gstelementmetadata.h
+    - path: /usr/include/gstreamer-1.0/gst/gstenumtypes.h
+    - path: /usr/include/gstreamer-1.0/gst/gsterror.h
+    - path: /usr/include/gstreamer-1.0/gst/gstevent.h
+    - path: /usr/include/gstreamer-1.0/gst/gstformat.h
+    - path: /usr/include/gstreamer-1.0/gst/gstghostpad.h
+    - path: /usr/include/gstreamer-1.0/gst/gstidstr.h
+    - path: /usr/include/gstreamer-1.0/gst/gstinfo.h
+    - path: /usr/include/gstreamer-1.0/gst/gstiterator.h
+    - path: /usr/include/gstreamer-1.0/gst/gstmacros.h
+    - path: /usr/include/gstreamer-1.0/gst/gstmemory.h
+    - path: /usr/include/gstreamer-1.0/gst/gstmessage.h
+    - path: /usr/include/gstreamer-1.0/gst/gstmeta.h
+    - path: /usr/include/gstreamer-1.0/gst/gstminiobject.h
+    - path: /usr/include/gstreamer-1.0/gst/gstobject.h
+    - path: /usr/include/gstreamer-1.0/gst/gstpad.h
+    - path: /usr/include/gstreamer-1.0/gst/gstpadtemplate.h
+    - path: /usr/include/gstreamer-1.0/gst/gstparamspecs.h
+    - path: /usr/include/gstreamer-1.0/gst/gstparse.h
+    - path: /usr/include/gstreamer-1.0/gst/gstpipeline.h
+    - path: /usr/include/gstreamer-1.0/gst/gstplugin.h
+    - path: /usr/include/gstreamer-1.0/gst/gstpluginfeature.h
+    - path: /usr/include/gstreamer-1.0/gst/gstpoll.h
+    - path: /usr/include/gstreamer-1.0/gst/gstpreset.h
+    - path: /usr/include/gstreamer-1.0/gst/gstpromise.h
+    - path: /usr/include/gstreamer-1.0/gst/gstprotection.h
+    - path: /usr/include/gstreamer-1.0/gst/gstquery.h
+    - path: /usr/include/gstreamer-1.0/gst/gstregistry.h
+    - path: /usr/include/gstreamer-1.0/gst/gstsample.h
+    - path: /usr/include/gstreamer-1.0/gst/gstsegment.h
+    - path: /usr/include/gstreamer-1.0/gst/gststreamcollection.h
+    - path: /usr/include/gstreamer-1.0/gst/gststreams.h
+    - path: /usr/include/gstreamer-1.0/gst/gststructure.h
+    - path: /usr/include/gstreamer-1.0/gst/gstsystemclock.h
+    - path: /usr/include/gstreamer-1.0/gst/gsttaglist.h
+    - path: /usr/include/gstreamer-1.0/gst/gsttagsetter.h
+    - path: /usr/include/gstreamer-1.0/gst/gsttask.h
+    - path: /usr/include/gstreamer-1.0/gst/gsttaskpool.h
+    - path: /usr/include/gstreamer-1.0/gst/gsttoc.h
+    - path: /usr/include/gstreamer-1.0/gst/gsttocsetter.h
+    - path: /usr/include/gstreamer-1.0/gst/gsttracer.h
+    - path: /usr/include/gstreamer-1.0/gst/gsttracerfactory.h
+    - path: /usr/include/gstreamer-1.0/gst/gsttracerrecord.h
+    - path: /usr/include/gstreamer-1.0/gst/gsttypefind.h
+    - path: /usr/include/gstreamer-1.0/gst/gsttypefindfactory.h
+    - path: /usr/include/gstreamer-1.0/gst/gsturi.h
+    - path: /usr/include/gstreamer-1.0/gst/gstutils.h
+    - path: /usr/include/gstreamer-1.0/gst/gstvalue.h
+    - path: /usr/include/gstreamer-1.0/gst/gstvecdeque.h
+    - path: /usr/include/gstreamer-1.0/gst/gstversion.h
+    - path: /usr/include/gstreamer-1.0/gst/math-compat.h
+    - path: /usr/include/gstreamer-1.0/gst/net/gstnet.h
+    - path: /usr/include/gstreamer-1.0/gst/net/gstnetaddressmeta.h
+    - path: /usr/include/gstreamer-1.0/gst/net/gstnetclientclock.h
+    - path: /usr/include/gstreamer-1.0/gst/net/gstnetcontrolmessagemeta.h
+    - path: /usr/include/gstreamer-1.0/gst/net/gstnettimepacket.h
+    - path: /usr/include/gstreamer-1.0/gst/net/gstnettimeprovider.h
+    - path: /usr/include/gstreamer-1.0/gst/net/gstnetutils.h
+    - path: /usr/include/gstreamer-1.0/gst/net/gstptpclock.h
+    - path: /usr/include/gstreamer-1.0/gst/net/net-prelude.h
+    - path: /usr/include/gstreamer-1.0/gst/net/net.h
+    - path: /usr/lib/pkgconfig/gstreamer-1.0.pc
+    - path: /usr/lib/pkgconfig/gstreamer-base-1.0.pc
+    - path: /usr/lib/pkgconfig/gstreamer-controller-1.0.pc
+    - path: /usr/lib/pkgconfig/gstreamer-net-1.0.pc
+
+  lib:
+    files:
+    - path: /usr/lib/gstreamer-1.0/libgstcoreelements.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstbase-1.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+    - path: /usr/lib/libgstbase-1.0.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+    - path: /usr/lib/libgstbase-1.0.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+    - path: /usr/lib/libgstbase-1.0.so.0.2611.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+    - path: /usr/lib/libgstcontroller-1.0.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libgstcontroller-1.0.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libgstcontroller-1.0.so.0.2611.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libgstnet-1.0.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstbase-1.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+    - path: /usr/lib/libgstnet-1.0.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstbase-1.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+    - path: /usr/lib/libgstnet-1.0.so.0.2611.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgstbase-1.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+    - path: /usr/lib/libgstreamer-1.0.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libgstreamer-1.0.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libgstreamer-1.0.so.0.2611.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libm.so.6
+    - path: /usr/share/gdb/auto-load/usr/lib/libgstreamer-1.0.so.0.2611.0-gdb.py
+
+  man:
+    files:
+    - path: /usr/share/man/man1/gst-inspect-1.0.1
+    - path: /usr/share/man/man1/gst-launch-1.0.1
+    - path: /usr/share/man/man1/gst-stats-1.0.1
+    - path: /usr/share/man/man1/gst-typefind-1.0.1
+
+  misc:
+    files:
+    - path: /usr/libexec/gstreamer-1.0/gst-plugin-scanner
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgstreamer-1.0.so.0
+    - path: /usr/share/aclocal/gst-element-check-1.0.m4
+    - path: /usr/share/cmake/FindGStreamer.cmake
+    - path: /usr/share/gstreamer-1.0/gdb/glib_gobject_helper.py
+    - path: /usr/share/gstreamer-1.0/gdb/gst_gdb.py
+
+resolution:
+  /usr/lib/libgio-2.0.so.0: glib2
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgmodule-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libgstbase-1.0.so.0: self
+  /usr/lib/libgstreamer-1.0.so.0: self
