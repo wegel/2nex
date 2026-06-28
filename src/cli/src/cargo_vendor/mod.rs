@@ -138,6 +138,7 @@ fn parse_cargo_lock(content: &str) -> io::Result<(Vec<RegistryPackage>, Vec<GitP
 
     let mut registry_packages = Vec::new();
     let mut git_packages = Vec::new();
+    let metadata = lock.get("metadata").and_then(|v| v.as_table());
 
     if let Some(pkg_array) = lock.get("package").and_then(|v| v.as_array()) {
         for pkg in pkg_array {
@@ -151,14 +152,27 @@ fn parse_cargo_lock(content: &str) -> io::Result<(Vec<RegistryPackage>, Vec<GitP
 
             if source.starts_with("registry+") {
                 // crates.io package
-                let checksum = pkg.get("checksum").and_then(|v| v.as_str()).unwrap_or("");
+                let checksum = pkg
+                    .get("checksum")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string)
+                    .or_else(|| legacy_lock_checksum(metadata, name, version, source))
+                    .ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!(
+                                "Missing checksum for registry crate {} {} in Cargo.lock",
+                                name, version
+                            ),
+                        )
+                    })?;
                 if checksum.is_empty() {
                     continue;
                 }
                 registry_packages.push(RegistryPackage {
                     name: name.to_string(),
                     version: version.to_string(),
-                    checksum: checksum.to_string(),
+                    checksum,
                 });
             } else if source.starts_with("git+") {
                 // git package: git+https://github.com/owner/repo?...#commitsha
@@ -176,6 +190,19 @@ fn parse_cargo_lock(content: &str) -> io::Result<(Vec<RegistryPackage>, Vec<GitP
     }
 
     Ok((registry_packages, git_packages))
+}
+
+fn legacy_lock_checksum(
+    metadata: Option<&toml::map::Map<String, Value>>,
+    name: &str,
+    version: &str,
+    source: &str,
+) -> Option<String> {
+    let key = format!("checksum {name} {version} ({source})");
+    metadata?
+        .get(&key)
+        .and_then(|value| value.as_str())
+        .map(str::to_string)
 }
 
 /// parse git source string: git+https://github.com/owner/repo?rev=abc#fullsha
@@ -452,4 +479,30 @@ fn download_git_clone(pkg: &GitPackage, dest_dir: &Path) -> io::Result<()> {
 
     fs::rename(&tmp_clone, dest_dir)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_legacy_lock_metadata_checksums() {
+        let lock = r#"
+[[package]]
+name = "aho-corasick"
+version = "0.6.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[metadata]
+"checksum aho-corasick 0.6.10 (registry+https://github.com/rust-lang/crates.io-index)" = "0123456789abcdef"
+"#;
+
+        let (registry, git) = parse_cargo_lock(lock).unwrap();
+
+        assert_eq!(git.len(), 0);
+        assert_eq!(registry.len(), 1);
+        assert_eq!(registry[0].name, "aho-corasick");
+        assert_eq!(registry[0].version, "0.6.10");
+        assert_eq!(registry[0].checksum, "0123456789abcdef");
+    }
 }
