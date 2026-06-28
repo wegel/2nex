@@ -1,0 +1,480 @@
+package:
+  schema: 1
+  name: libxt
+  slug: libxt
+  namespace: libs/x11
+  version: 1.3.1
+  description: X11 toolkit intrinsics library
+  homepage: https://xorg.freedesktop.org/
+  checksum: 66e091878d302c7ca335f91d6dc318b56f4ab6d97d3c5d2d6d23c55255448a8f
+
+sources:
+- name: libxt
+  url: https://xorg.freedesktop.org/archive/individual/lib/libXt-1.3.1.tar.xz
+  sha256: e0a774b33324f4d4c05b199ea45050f87206586d81655f8bef4dba434d931288
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: xorgproto
+  commit: x86_64/pkg/libs/x11/xorgproto/2024.1/bundles/dev
+- name: util-macros
+  commit: x86_64/pkg/libs/x11/util-macros/1.20.2/bundles/dev
+- name: libx11
+  commit: x86_64/pkg/libs/x11/libx11/1.8.10/bundles/dev
+- name: libxcb
+  commit: x86_64/pkg/libs/x11/libxcb/1.17.0/bundles/dev
+- name: libxau
+  commit: x86_64/pkg/libs/x11/libxau/1.0.12/bundles/dev
+- name: libxdmcp
+  commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
+- name: libsm
+  commit: x86_64/pkg/libs/x11/libsm/1.2.6/bundles/dev
+- name: libice
+  commit: x86_64/pkg/libs/x11/libice/1.1.2/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4116:954, 8237:2963, 12347:3086, 16452:3086, 20549:3090, 24658:4468, 28756:4501, 32950:4581, 37417:4598, 40230:4751]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure \
+      --prefix=/usr \
+      --disable-static \
+      --without-glib \
+      --without-xmlto \
+      --without-fop \
+      --without-xsltproc
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/X11/CallbackI.h
+    - path: /usr/include/X11/Composite.h
+    - path: /usr/include/X11/CompositeP.h
+    - path: /usr/include/X11/ConstrainP.h
+    - path: /usr/include/X11/Constraint.h
+    - path: /usr/include/X11/ConvertI.h
+    - path: /usr/include/X11/Core.h
+    - path: /usr/include/X11/CoreP.h
+    - path: /usr/include/X11/CreateI.h
+    - path: /usr/include/X11/EventI.h
+    - path: /usr/include/X11/HookObjI.h
+    - path: /usr/include/X11/InitialI.h
+    - path: /usr/include/X11/Intrinsic.h
+    - path: /usr/include/X11/IntrinsicI.h
+    - path: /usr/include/X11/IntrinsicP.h
+    - path: /usr/include/X11/Object.h
+    - path: /usr/include/X11/ObjectP.h
+    - path: /usr/include/X11/PassivGraI.h
+    - path: /usr/include/X11/RectObj.h
+    - path: /usr/include/X11/RectObjP.h
+    - path: /usr/include/X11/ResConfigP.h
+    - path: /usr/include/X11/ResourceI.h
+    - path: /usr/include/X11/SelectionI.h
+    - path: /usr/include/X11/Shell.h
+    - path: /usr/include/X11/ShellI.h
+    - path: /usr/include/X11/ShellP.h
+    - path: /usr/include/X11/StringDefs.h
+    - path: /usr/include/X11/ThreadsI.h
+    - path: /usr/include/X11/TranslateI.h
+    - path: /usr/include/X11/VarargsI.h
+    - path: /usr/include/X11/Vendor.h
+    - path: /usr/include/X11/VendorP.h
+    - path: /usr/include/X11/Xtos.h
+    - path: /usr/lib/libXt.la
+    - path: /usr/lib/pkgconfig/xt.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/libXt/CH01.xml
+    - path: /usr/share/doc/libXt/CH02.xml
+    - path: /usr/share/doc/libXt/CH03.xml
+    - path: /usr/share/doc/libXt/CH04.xml
+    - path: /usr/share/doc/libXt/CH05.xml
+    - path: /usr/share/doc/libXt/CH06.xml
+    - path: /usr/share/doc/libXt/CH07.xml
+    - path: /usr/share/doc/libXt/CH08.xml
+    - path: /usr/share/doc/libXt/CH09.xml
+    - path: /usr/share/doc/libXt/CH10.xml
+    - path: /usr/share/doc/libXt/CH11.xml
+    - path: /usr/share/doc/libXt/CH12.xml
+    - path: /usr/share/doc/libXt/CH13.xml
+    - path: /usr/share/doc/libXt/acknowledgement.xml
+    - path: /usr/share/doc/libXt/appA.xml
+    - path: /usr/share/doc/libXt/appB.xml
+    - path: /usr/share/doc/libXt/appC.xml
+    - path: /usr/share/doc/libXt/appD.xml
+    - path: /usr/share/doc/libXt/appE.xml
+    - path: /usr/share/doc/libXt/appF.xml
+    - path: /usr/share/doc/libXt/intrinsics.xml
+    - path: /usr/share/doc/libXt/preface.xml
+
+  lib:
+    files:
+    - path: /usr/lib/libXt.so
+      needs:
+      - /usr/lib/libICE.so.6
+      - /usr/lib/libSM.so.6
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libXau.so.6
+      - /usr/lib/libXdmcp.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libuuid.so.1
+      - /usr/lib/libxcb.so.1
+    - path: /usr/lib/libXt.so.6
+      needs:
+      - /usr/lib/libICE.so.6
+      - /usr/lib/libSM.so.6
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libXau.so.6
+      - /usr/lib/libXdmcp.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libuuid.so.1
+      - /usr/lib/libxcb.so.1
+    - path: /usr/lib/libXt.so.6.0.0
+      needs:
+      - /usr/lib/libICE.so.6
+      - /usr/lib/libSM.so.6
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libXau.so.6
+      - /usr/lib/libXdmcp.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libuuid.so.1
+      - /usr/lib/libxcb.so.1
+
+  man:
+    files:
+    - path: /usr/share/man/man3/MenuPopdown.3
+    - path: /usr/share/man/man3/MenuPopup.3
+    - path: /usr/share/man/man3/XtAddActions.3
+    - path: /usr/share/man/man3/XtAddCallback.3
+    - path: /usr/share/man/man3/XtAddCallbacks.3
+    - path: /usr/share/man/man3/XtAddConverter.3
+    - path: /usr/share/man/man3/XtAddEventHandler.3
+    - path: /usr/share/man/man3/XtAddExposureToRegion.3
+    - path: /usr/share/man/man3/XtAddGrab.3
+    - path: /usr/share/man/man3/XtAddInput.3
+    - path: /usr/share/man/man3/XtAddRawEventHandler.3
+    - path: /usr/share/man/man3/XtAddTimeOut.3
+    - path: /usr/share/man/man3/XtAddWorkProc.3
+    - path: /usr/share/man/man3/XtAllocateGC.3
+    - path: /usr/share/man/man3/XtAppAddActionHook.3
+    - path: /usr/share/man/man3/XtAppAddActions.3
+    - path: /usr/share/man/man3/XtAppAddBlockHook.3
+    - path: /usr/share/man/man3/XtAppAddConverter.3
+    - path: /usr/share/man/man3/XtAppAddInput.3
+    - path: /usr/share/man/man3/XtAppAddSignal.3
+    - path: /usr/share/man/man3/XtAppAddTimeOut.3
+    - path: /usr/share/man/man3/XtAppAddWorkProc.3
+    - path: /usr/share/man/man3/XtAppCreateShell.3
+    - path: /usr/share/man/man3/XtAppError.3
+    - path: /usr/share/man/man3/XtAppErrorMsg.3
+    - path: /usr/share/man/man3/XtAppGetErrorDatabase.3
+    - path: /usr/share/man/man3/XtAppGetErrorDatabaseText.3
+    - path: /usr/share/man/man3/XtAppGetExitFlag.3
+    - path: /usr/share/man/man3/XtAppGetSelectionTimeout.3
+    - path: /usr/share/man/man3/XtAppInitialize.3
+    - path: /usr/share/man/man3/XtAppLock.3
+    - path: /usr/share/man/man3/XtAppMainLoop.3
+    - path: /usr/share/man/man3/XtAppNextEvent.3
+    - path: /usr/share/man/man3/XtAppPeekEvent.3
+    - path: /usr/share/man/man3/XtAppPending.3
+    - path: /usr/share/man/man3/XtAppProcessEvent.3
+    - path: /usr/share/man/man3/XtAppReleaseCacheRefs.3
+    - path: /usr/share/man/man3/XtAppSetErrorHandler.3
+    - path: /usr/share/man/man3/XtAppSetErrorMsgHandler.3
+    - path: /usr/share/man/man3/XtAppSetExitFlag.3
+    - path: /usr/share/man/man3/XtAppSetFallbackResources.3
+    - path: /usr/share/man/man3/XtAppSetSelectionTimeout.3
+    - path: /usr/share/man/man3/XtAppSetTypeConverter.3
+    - path: /usr/share/man/man3/XtAppSetWarningHandler.3
+    - path: /usr/share/man/man3/XtAppSetWarningMsgHandler.3
+    - path: /usr/share/man/man3/XtAppUnlock.3
+    - path: /usr/share/man/man3/XtAppWarning.3
+    - path: /usr/share/man/man3/XtAppWarningMsg.3
+    - path: /usr/share/man/man3/XtAsprintf.3
+    - path: /usr/share/man/man3/XtAugmentTranslations.3
+    - path: /usr/share/man/man3/XtBuildEventMask.3
+    - path: /usr/share/man/man3/XtCallAcceptFocus.3
+    - path: /usr/share/man/man3/XtCallActionProc.3
+    - path: /usr/share/man/man3/XtCallCallbackList.3
+    - path: /usr/share/man/man3/XtCallCallbacks.3
+    - path: /usr/share/man/man3/XtCallConverter.3
+    - path: /usr/share/man/man3/XtCallbackExclusive.3
+    - path: /usr/share/man/man3/XtCallbackNone.3
+    - path: /usr/share/man/man3/XtCallbackNonexclusive.3
+    - path: /usr/share/man/man3/XtCallbackPopdown.3
+    - path: /usr/share/man/man3/XtCalloc.3
+    - path: /usr/share/man/man3/XtCancelSelectionRequest.3
+    - path: /usr/share/man/man3/XtChangeManagedSet.3
+    - path: /usr/share/man/man3/XtCheckSubclass.3
+    - path: /usr/share/man/man3/XtClass.3
+    - path: /usr/share/man/man3/XtCloseDisplay.3
+    - path: /usr/share/man/man3/XtConfigureWidget.3
+    - path: /usr/share/man/man3/XtConvert.3
+    - path: /usr/share/man/man3/XtConvertAndStore.3
+    - path: /usr/share/man/man3/XtConvertCase.3
+    - path: /usr/share/man/man3/XtCreateApplicationContext.3
+    - path: /usr/share/man/man3/XtCreateApplicationShell.3
+    - path: /usr/share/man/man3/XtCreateManagedWidget.3
+    - path: /usr/share/man/man3/XtCreatePopupShell.3
+    - path: /usr/share/man/man3/XtCreateSelectionRequest.3
+    - path: /usr/share/man/man3/XtCreateWidget.3
+    - path: /usr/share/man/man3/XtCreateWindow.3
+    - path: /usr/share/man/man3/XtDatabase.3
+    - path: /usr/share/man/man3/XtDestroyApplicationContext.3
+    - path: /usr/share/man/man3/XtDestroyWidget.3
+    - path: /usr/share/man/man3/XtDirectConvert.3
+    - path: /usr/share/man/man3/XtDisownSelection.3
+    - path: /usr/share/man/man3/XtDispatchEvent.3
+    - path: /usr/share/man/man3/XtDispatchEventToWidget.3
+    - path: /usr/share/man/man3/XtDisplay.3
+    - path: /usr/share/man/man3/XtDisplayInitialize.3
+    - path: /usr/share/man/man3/XtDisplayOfObject.3
+    - path: /usr/share/man/man3/XtDisplayStringConversionWarning.3
+    - path: /usr/share/man/man3/XtDisplayToApplicationContext.3
+    - path: /usr/share/man/man3/XtError.3
+    - path: /usr/share/man/man3/XtErrorMsg.3
+    - path: /usr/share/man/man3/XtFindFile.3
+    - path: /usr/share/man/man3/XtFree.3
+    - path: /usr/share/man/man3/XtGetActionKeysym.3
+    - path: /usr/share/man/man3/XtGetActionList.3
+    - path: /usr/share/man/man3/XtGetApplicationNameAndClass.3
+    - path: /usr/share/man/man3/XtGetApplicationResources.3
+    - path: /usr/share/man/man3/XtGetClassExtension.3
+    - path: /usr/share/man/man3/XtGetConstraintResourceList.3
+    - path: /usr/share/man/man3/XtGetDisplays.3
+    - path: /usr/share/man/man3/XtGetErrorDatabase.3
+    - path: /usr/share/man/man3/XtGetErrorDatabaseText.3
+    - path: /usr/share/man/man3/XtGetGC.3
+    - path: /usr/share/man/man3/XtGetKeyboardFocusWidget.3
+    - path: /usr/share/man/man3/XtGetKeysymTable.3
+    - path: /usr/share/man/man3/XtGetMultiClickTime.3
+    - path: /usr/share/man/man3/XtGetResourceList.3
+    - path: /usr/share/man/man3/XtGetSelectionParameters.3
+    - path: /usr/share/man/man3/XtGetSelectionRequest.3
+    - path: /usr/share/man/man3/XtGetSelectionTimeout.3
+    - path: /usr/share/man/man3/XtGetSelectionValue.3
+    - path: /usr/share/man/man3/XtGetSelectionValueIncremental.3
+    - path: /usr/share/man/man3/XtGetSelectionValues.3
+    - path: /usr/share/man/man3/XtGetSelectionValuesIncremental.3
+    - path: /usr/share/man/man3/XtGetSubresources.3
+    - path: /usr/share/man/man3/XtGetSubvalues.3
+    - path: /usr/share/man/man3/XtGetValues.3
+    - path: /usr/share/man/man3/XtGrabButton.3
+    - path: /usr/share/man/man3/XtGrabKey.3
+    - path: /usr/share/man/man3/XtGrabKeyboard.3
+    - path: /usr/share/man/man3/XtGrabPointer.3
+    - path: /usr/share/man/man3/XtHasCallbacks.3
+    - path: /usr/share/man/man3/XtHooksOfDisplay.3
+    - path: /usr/share/man/man3/XtInitialize.3
+    - path: /usr/share/man/man3/XtInitializeWidgetClass.3
+    - path: /usr/share/man/man3/XtInsertEventHandler.3
+    - path: /usr/share/man/man3/XtInsertEventTypeHandler.3
+    - path: /usr/share/man/man3/XtInsertRawEventHandler.3
+    - path: /usr/share/man/man3/XtInstallAccelerators.3
+    - path: /usr/share/man/man3/XtInstallAllAccelerators.3
+    - path: /usr/share/man/man3/XtIsApplicationShell.3
+    - path: /usr/share/man/man3/XtIsComposite.3
+    - path: /usr/share/man/man3/XtIsConstraint.3
+    - path: /usr/share/man/man3/XtIsManaged.3
+    - path: /usr/share/man/man3/XtIsObject.3
+    - path: /usr/share/man/man3/XtIsOverrideShell.3
+    - path: /usr/share/man/man3/XtIsRealized.3
+    - path: /usr/share/man/man3/XtIsRectObj.3
+    - path: /usr/share/man/man3/XtIsSensitive.3
+    - path: /usr/share/man/man3/XtIsSessionShell.3
+    - path: /usr/share/man/man3/XtIsShell.3
+    - path: /usr/share/man/man3/XtIsSubclass.3
+    - path: /usr/share/man/man3/XtIsTopLevelShell.3
+    - path: /usr/share/man/man3/XtIsTransientShell.3
+    - path: /usr/share/man/man3/XtIsVendorShell.3
+    - path: /usr/share/man/man3/XtIsWMShell.3
+    - path: /usr/share/man/man3/XtIsWidget.3
+    - path: /usr/share/man/man3/XtKeysymToKeycodeList.3
+    - path: /usr/share/man/man3/XtLastEventProcessed.3
+    - path: /usr/share/man/man3/XtLastTimestampProcessed.3
+    - path: /usr/share/man/man3/XtMainLoop.3
+    - path: /usr/share/man/man3/XtMakeGeometryRequest.3
+    - path: /usr/share/man/man3/XtMakeResizeRequest.3
+    - path: /usr/share/man/man3/XtMalloc.3
+    - path: /usr/share/man/man3/XtManageChild.3
+    - path: /usr/share/man/man3/XtManageChildren.3
+    - path: /usr/share/man/man3/XtMapWidget.3
+    - path: /usr/share/man/man3/XtMergeArgLists.3
+    - path: /usr/share/man/man3/XtMoveWidget.3
+    - path: /usr/share/man/man3/XtName.3
+    - path: /usr/share/man/man3/XtNameToWidget.3
+    - path: /usr/share/man/man3/XtNew.3
+    - path: /usr/share/man/man3/XtNewString.3
+    - path: /usr/share/man/man3/XtNextEvent.3
+    - path: /usr/share/man/man3/XtNoticeSignal.3
+    - path: /usr/share/man/man3/XtNumber.3
+    - path: /usr/share/man/man3/XtOffset.3
+    - path: /usr/share/man/man3/XtOffsetOf.3
+    - path: /usr/share/man/man3/XtOpenApplication.3
+    - path: /usr/share/man/man3/XtOpenDisplay.3
+    - path: /usr/share/man/man3/XtOverrideTranslations.3
+    - path: /usr/share/man/man3/XtOwnSelection.3
+    - path: /usr/share/man/man3/XtOwnSelectionIncremental.3
+    - path: /usr/share/man/man3/XtParent.3
+    - path: /usr/share/man/man3/XtParseAcceleratorTable.3
+    - path: /usr/share/man/man3/XtParseTranslationTable.3
+    - path: /usr/share/man/man3/XtPeekEvent.3
+    - path: /usr/share/man/man3/XtPending.3
+    - path: /usr/share/man/man3/XtPopdown.3
+    - path: /usr/share/man/man3/XtPopup.3
+    - path: /usr/share/man/man3/XtPopupSpringLoaded.3
+    - path: /usr/share/man/man3/XtProcessEvent.3
+    - path: /usr/share/man/man3/XtProcessLock.3
+    - path: /usr/share/man/man3/XtProcessUnlock.3
+    - path: /usr/share/man/man3/XtQueryGeometry.3
+    - path: /usr/share/man/man3/XtRealizeWidget.3
+    - path: /usr/share/man/man3/XtRealloc.3
+    - path: /usr/share/man/man3/XtRegisterCaseConverter.3
+    - path: /usr/share/man/man3/XtRegisterDrawable.3
+    - path: /usr/share/man/man3/XtRegisterExtensionSelector.3
+    - path: /usr/share/man/man3/XtRegisterGrabAction.3
+    - path: /usr/share/man/man3/XtReleaseGC.3
+    - path: /usr/share/man/man3/XtReleasePropertyAtom.3
+    - path: /usr/share/man/man3/XtRemoveActionHook.3
+    - path: /usr/share/man/man3/XtRemoveAllCallbacks.3
+    - path: /usr/share/man/man3/XtRemoveBlockHook.3
+    - path: /usr/share/man/man3/XtRemoveCallback.3
+    - path: /usr/share/man/man3/XtRemoveCallbacks.3
+    - path: /usr/share/man/man3/XtRemoveEventHandler.3
+    - path: /usr/share/man/man3/XtRemoveEventTypeHandler.3
+    - path: /usr/share/man/man3/XtRemoveGrab.3
+    - path: /usr/share/man/man3/XtRemoveInput.3
+    - path: /usr/share/man/man3/XtRemoveRawEventHandler.3
+    - path: /usr/share/man/man3/XtRemoveSignal.3
+    - path: /usr/share/man/man3/XtRemoveTimeOut.3
+    - path: /usr/share/man/man3/XtRemoveWorkProc.3
+    - path: /usr/share/man/man3/XtReservePropertyAtom.3
+    - path: /usr/share/man/man3/XtResizeWidget.3
+    - path: /usr/share/man/man3/XtResolvePathname.3
+    - path: /usr/share/man/man3/XtScreen.3
+    - path: /usr/share/man/man3/XtScreenDatabase.3
+    - path: /usr/share/man/man3/XtScreenOfObject.3
+    - path: /usr/share/man/man3/XtSendSelectionRequest.3
+    - path: /usr/share/man/man3/XtSessionGetToken.3
+    - path: /usr/share/man/man3/XtSessionReturnToken.3
+    - path: /usr/share/man/man3/XtSetArg.3
+    - path: /usr/share/man/man3/XtSetErrorHandler.3
+    - path: /usr/share/man/man3/XtSetErrorMsgHandler.3
+    - path: /usr/share/man/man3/XtSetEventDispatcher.3
+    - path: /usr/share/man/man3/XtSetKeyTranslator.3
+    - path: /usr/share/man/man3/XtSetKeyboardFocus.3
+    - path: /usr/share/man/man3/XtSetLanguageProc.3
+    - path: /usr/share/man/man3/XtSetMappedWhenManaged.3
+    - path: /usr/share/man/man3/XtSetMultiClickTime.3
+    - path: /usr/share/man/man3/XtSetSelectionParameters.3
+    - path: /usr/share/man/man3/XtSetSelectionTimeout.3
+    - path: /usr/share/man/man3/XtSetSensitive.3
+    - path: /usr/share/man/man3/XtSetSubvalues.3
+    - path: /usr/share/man/man3/XtSetTypeConverter.3
+    - path: /usr/share/man/man3/XtSetValues.3
+    - path: /usr/share/man/man3/XtSetWMColormapWindows.3
+    - path: /usr/share/man/man3/XtSetWarningHandler.3
+    - path: /usr/share/man/man3/XtSetWarningMsgHandler.3
+    - path: /usr/share/man/man3/XtStringConversionWarning.3
+    - path: /usr/share/man/man3/XtSuperclass.3
+    - path: /usr/share/man/man3/XtToolkitInitialize.3
+    - path: /usr/share/man/man3/XtToolkitThreadInitialize.3
+    - path: /usr/share/man/man3/XtTranslateCoords.3
+    - path: /usr/share/man/man3/XtTranslateKeycode.3
+    - path: /usr/share/man/man3/XtUngrabButton.3
+    - path: /usr/share/man/man3/XtUngrabKey.3
+    - path: /usr/share/man/man3/XtUngrabKeyboard.3
+    - path: /usr/share/man/man3/XtUngrabPointer.3
+    - path: /usr/share/man/man3/XtUninstallTranslations.3
+    - path: /usr/share/man/man3/XtUnmanageChild.3
+    - path: /usr/share/man/man3/XtUnmanageChildren.3
+    - path: /usr/share/man/man3/XtUnmapWidget.3
+    - path: /usr/share/man/man3/XtUnrealizeWidget.3
+    - path: /usr/share/man/man3/XtUnregisterDrawable.3
+    - path: /usr/share/man/man3/XtVaAppCreateShell.3
+    - path: /usr/share/man/man3/XtVaAppInitialize.3
+    - path: /usr/share/man/man3/XtVaCreateArgsList.3
+    - path: /usr/share/man/man3/XtVaCreateManagedWidget.3
+    - path: /usr/share/man/man3/XtVaCreatePopupShell.3
+    - path: /usr/share/man/man3/XtVaCreateWidget.3
+    - path: /usr/share/man/man3/XtVaGetApplicationResources.3
+    - path: /usr/share/man/man3/XtVaGetSubresources.3
+    - path: /usr/share/man/man3/XtVaGetSubvalues.3
+    - path: /usr/share/man/man3/XtVaGetValues.3
+    - path: /usr/share/man/man3/XtVaOpenApplication.3
+    - path: /usr/share/man/man3/XtVaSetSubvalues.3
+    - path: /usr/share/man/man3/XtVaSetValues.3
+    - path: /usr/share/man/man3/XtWarning.3
+    - path: /usr/share/man/man3/XtWarningMsg.3
+    - path: /usr/share/man/man3/XtWidgetToApplicationContext.3
+    - path: /usr/share/man/man3/XtWindow.3
+    - path: /usr/share/man/man3/XtWindowOfObject.3
+    - path: /usr/share/man/man3/XtWindowToWidget.3
+
+resolution:
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libICE.so.6: libice
+  /usr/lib/libSM.so.6: libsm
+  /usr/lib/libX11.so.6: libx11
+  /usr/lib/libXau.so.6: libxau
+  /usr/lib/libxcb.so.1: libxcb
+  /usr/lib/libXdmcp.so.6: libxdmcp
+  /usr/lib/libuuid.so.1: util-linux
