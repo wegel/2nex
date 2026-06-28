@@ -6,7 +6,7 @@ package:
   version: 2.38.0
   description: Accessibility Toolkit
   homepage: https://wiki.gnome.org/Accessibility
-  checksum: 4af4d93e47c4ee624eaef6cb03b24277b2f76d66a9568343ce0c7402fe7079fd
+  checksum: 8a7ed17b10f173d438a2a58a04403a7dc63ee8ca299135b29d76797c9cba93c1
 
 sources:
 - name: atk
@@ -50,6 +50,10 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: glib2
   commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: gobject-introspection
+  commit: x86_64/pkg/dev/tools/gobject-introspection/1.84.0/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
 - name: libffi
   commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
 - name: pcre2
@@ -57,7 +61,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4104:762, 8236:1782, 8236:1815]
+  profile: [4141:942, 8282:2437, 8832:2475]
 
   script: |
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -67,7 +71,7 @@ build:
       --prefix=/usr \
       --libdir=lib \
       --buildtype=release \
-      -Dintrospection=false \
+      -Dintrospection=true \
       -Ddocs=false
 
     ninja -C build
@@ -128,6 +132,7 @@ outputs:
 
   lib:
     files:
+    - path: /usr/lib/girepository-1.0/Atk-1.0.typelib
     - path: /usr/lib/libatk-1.0.so
       needs:
       - /usr/lib/libc.so.6
@@ -143,6 +148,10 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libglib-2.0.so.0
       - /usr/lib/libgobject-2.0.so.0
+
+  misc:
+    files:
+    - path: /usr/share/gir-1.0/Atk-1.0.gir
 
 resolution:
   /usr/lib/libglib-2.0.so.0: glib2
