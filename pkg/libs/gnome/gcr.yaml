@@ -1,0 +1,318 @@
+package:
+  schema: 1
+  name: gcr
+  slug: gcr
+  namespace: libs/gnome
+  version: 3.41.2
+  description: GNOME crypto and certificate libraries
+  homepage: https://gitlab.gnome.org/GNOME/gcr
+  checksum: 66510bbc0edbf948a3e1702be015b8888195178d604b01efb6bee57efd824b27
+
+sources:
+- name: gcr
+  url: https://download.gnome.org/sources/gcr/3.41/gcr-3.41.2.tar.xz
+  sha256: bad10f3c553a0e1854649ab59c5b2434da22ca1a54ae6138f1f53961567e1ab7
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: gettext
+  commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: p11-kit
+  commit: x86_64/pkg/libs/crypto/p11-kit/0.25.5/bundles/dev
+- name: libtasn1
+  commit: x86_64/pkg/libs/crypto/libtasn1/4.19.0/bundles/dev
+- name: libgcrypt
+  commit: x86_64/pkg/libs/crypto/libgcrypt/1.11.3/bundles/dev
+- name: libgpg-error
+  commit: x86_64/pkg/dev/libs/libgpg-error/1.51/bundles/dev
+- name: openssh
+  commit: x86_64/pkg/cli/net/openssh/9.9p1/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4136:779, 12395:893, 20660:1119, 33124:1245, 45494:1421, 57876:1666, 66221:1789, 82807:1790, 99311:6404, 109638:6577]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_gcr} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --buildtype=release \
+      -Dgtk=false \
+      -Dintrospection=false \
+      -Dgtk_doc=false \
+      -Dssh_agent=false \
+      -Dsystemd=disabled \
+      -Dgpg_path=/usr/bin/false
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    rm -f \
+      "${OUT_DIR}/usr/share/dbus-1/services/org.gnome.keyring.PrivatePrompter.service" \
+      "${OUT_DIR}/usr/share/dbus-1/services/org.gnome.keyring.SystemPrompter.service"
+    rmdir --ignore-fail-on-non-empty "${OUT_DIR}/usr/share/dbus-1/services" 2>/dev/null || true
+    rmdir --ignore-fail-on-non-empty "${OUT_DIR}/usr/share/dbus-1" 2>/dev/null || true
+
+    glib-compile-schemas "${OUT_DIR}/usr/share/glib-2.0/schemas"
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - misc
+
+  full:
+  - bin
+  - lib
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/libexec/gcr-ssh-askpass
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+
+  dev:
+    files:
+    - path: /usr/include/gck-1/gck/gck-deprecated.h
+    - path: /usr/include/gck-1/gck/gck-enum-types.h
+    - path: /usr/include/gck-1/gck/gck-version.h
+    - path: /usr/include/gck-1/gck/gck.h
+    - path: /usr/include/gck-1/gck/pkcs11n.h
+    - path: /usr/include/gck-1/gck/pkcs11x.h
+    - path: /usr/include/gck-1/gck/pkcs11.h
+    - path: /usr/include/gcr-3/gcr/gcr-base.h
+    - path: /usr/include/gcr-3/gcr/gcr-certificate-chain.h
+    - path: /usr/include/gcr-3/gcr/gcr-certificate-request.h
+    - path: /usr/include/gcr-3/gcr/gcr-certificate.h
+    - path: /usr/include/gcr-3/gcr/gcr-collection.h
+    - path: /usr/include/gcr-3/gcr/gcr-column.h
+    - path: /usr/include/gcr-3/gcr/gcr-comparable.h
+    - path: /usr/include/gcr-3/gcr/gcr-deprecated-base.h
+    - path: /usr/include/gcr-3/gcr/gcr-enum-types-base.h
+    - path: /usr/include/gcr-3/gcr/gcr-filter-collection.h
+    - path: /usr/include/gcr-3/gcr/gcr-fingerprint.h
+    - path: /usr/include/gcr-3/gcr/gcr-icons.h
+    - path: /usr/include/gcr-3/gcr/gcr-import-interaction.h
+    - path: /usr/include/gcr-3/gcr/gcr-importer.h
+    - path: /usr/include/gcr-3/gcr/gcr-library.h
+    - path: /usr/include/gcr-3/gcr/gcr-mock-prompter.h
+    - path: /usr/include/gcr-3/gcr/gcr-parser.h
+    - path: /usr/include/gcr-3/gcr/gcr-pkcs11-certificate.h
+    - path: /usr/include/gcr-3/gcr/gcr-prompt.h
+    - path: /usr/include/gcr-3/gcr/gcr-secret-exchange.h
+    - path: /usr/include/gcr-3/gcr/gcr-secure-memory.h
+    - path: /usr/include/gcr-3/gcr/gcr-simple-certificate.h
+    - path: /usr/include/gcr-3/gcr/gcr-simple-collection.h
+    - path: /usr/include/gcr-3/gcr/gcr-ssh-askpass.h
+    - path: /usr/include/gcr-3/gcr/gcr-system-prompt.h
+    - path: /usr/include/gcr-3/gcr/gcr-system-prompter.h
+    - path: /usr/include/gcr-3/gcr/gcr-trust.h
+    - path: /usr/include/gcr-3/gcr/gcr-types.h
+    - path: /usr/include/gcr-3/gcr/gcr-union-collection.h
+    - path: /usr/include/gcr-3/gcr/gcr-unlock-options.h
+    - path: /usr/include/gcr-3/gcr/gcr-version.h
+    - path: /usr/lib/libgck-1.so
+    - path: /usr/lib/libgcr-base-3.so
+    - path: /usr/lib/pkgconfig/gck-1.pc
+    - path: /usr/lib/pkgconfig/gcr-base-3.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libgck-1.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libp11-kit.so.0
+    - path: /usr/lib/libgck-1.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libp11-kit.so.0
+    - path: /usr/lib/libgcr-base-3.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgck-1.so.0
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libp11-kit.so.0
+    - path: /usr/lib/libgcr-base-3.so.1.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgck-1.so.0
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libp11-kit.so.0
+
+  locale:
+    files:
+    - path: /usr/share/locale/ab/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/af/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ar/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/as/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ast/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/az/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/be/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/be@latin/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/bg/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/bn/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/bn_IN/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/bs/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ca@valencia/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ckb/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/cy/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/dz/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/en@shaw/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/en_CA/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/en_GB/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/et/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/eu/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/fa/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/fur/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ga/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/gu/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/he/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/hi/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/kk/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/kn/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/lt/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/lv/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/mai/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/mg/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/mk/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ml/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/mn/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/mr/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ne/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/nn/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/oc/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/or/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/pa/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/rw/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/si/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/sl/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/sq/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/sr@latin/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ta/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/te/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/tg/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/th/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/ug/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/xh/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/zh_HK/LC_MESSAGES/gcr.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/gcr.mo
+
+  misc:
+    files:
+    - path: /usr/share/GConf/gsettings/org.gnome.crypto.pgp.convert
+    - path: /usr/share/GConf/gsettings/org.gnome.crypto.pgp_keyservers.convert
+    - path: /usr/share/glib-2.0/schemas/gschemas.compiled
+    - path: /usr/share/glib-2.0/schemas/org.gnome.crypto.pgp.gschema.xml
+
+resolution:
+  /usr/lib/libgio-2.0.so.0: glib2
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libgcrypt.so.20: libgcrypt
+  /usr/lib/libp11-kit.so.0: p11-kit
+  /usr/lib/libgck-1.so.0: self
