@@ -28,7 +28,96 @@ pub fn format_manifest_string(contents: &str) -> io::Result<String> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "manifest must be a mapping"))?;
 
     let is_system = mapping.contains_key(Value::String("system".to_string()));
-    format_root(mapping, is_system, original_version.as_deref())
+    let formatted = format_root(mapping, is_system, original_version.as_deref())?;
+    Ok(restore_section_item_comments(contents, &formatted))
+}
+
+fn restore_section_item_comments(original: &str, formatted: &str) -> String {
+    let comments = collect_section_item_comments(original);
+    if comments.is_empty() {
+        return formatted.to_string();
+    }
+
+    let mut output = String::new();
+    let mut section = "";
+
+    for line in formatted.lines() {
+        if is_top_level_section(line) {
+            section = line.trim_end_matches(':');
+        }
+
+        if matches!(section, "sources" | "dependencies" | "packages") {
+            if let Some(name) = parse_item_name(line) {
+                if let Some(lines) = comments.get(&(section.to_string(), name)) {
+                    for comment in lines {
+                        output.push_str(comment);
+                        output.push('\n');
+                    }
+                }
+            }
+        }
+
+        output.push_str(line);
+        output.push('\n');
+    }
+
+    output
+}
+
+fn collect_section_item_comments(contents: &str) -> HashMap<(String, String), Vec<String>> {
+    let mut comments = HashMap::new();
+    let mut section = "";
+    let mut pending: Vec<String> = Vec::new();
+
+    for line in contents.lines() {
+        if is_top_level_section(line) {
+            section = line.trim_end_matches(':');
+            pending.clear();
+            continue;
+        }
+
+        if !matches!(section, "sources" | "dependencies" | "packages") {
+            continue;
+        }
+
+        let trimmed = line.trim();
+        if trimmed.starts_with('#') {
+            pending.push(trimmed.to_string());
+            continue;
+        }
+
+        if let Some(name) = parse_item_name(line) {
+            if !pending.is_empty() {
+                comments.insert((section.to_string(), name), std::mem::take(&mut pending));
+            }
+            continue;
+        }
+
+        if !trimmed.is_empty() {
+            pending.clear();
+        }
+    }
+
+    comments
+}
+
+fn is_top_level_section(line: &str) -> bool {
+    let trimmed = line.trim_end();
+    !trimmed.is_empty()
+        && !line.starts_with(' ')
+        && !line.starts_with('\t')
+        && trimmed.ends_with(':')
+        && !trimmed.starts_with('-')
+}
+
+fn parse_item_name(line: &str) -> Option<String> {
+    let trimmed = line.trim_start();
+    let name = trimmed.strip_prefix("- name:")?.trim();
+    Some(unquote_scalar(name))
+}
+
+fn unquote_scalar(value: &str) -> String {
+    value.trim_matches('"').trim_matches('\'').to_string()
 }
 
 /// extract version string from raw YAML text before parsing
@@ -810,5 +899,34 @@ build:
         assert!(system.contains("  nex_structure: true\n"));
         assert!(system.contains("  extends: asm/base.yaml\n"));
         assert!(system.ends_with("  checksum: abc123"));
+    }
+
+    #[test]
+    fn preserves_system_item_comments() {
+        let input = r#"system:
+  schema: 1
+  name: test system
+  slug: test
+  version: 1.0
+dependencies:
+# runtime libs
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/lib
+packages:
+# init tools
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/minimal
+# shell
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
+build:
+  environment: env/test.yaml
+  script: "true"
+"#;
+
+        let formatted = format_manifest_string(input).unwrap();
+        assert!(formatted.contains("dependencies:\n# runtime libs\n- name: glibc\n"));
+        assert!(formatted.contains("packages:\n# init tools\n- name: systemd\n"));
+        assert!(formatted.contains("# shell\n- name: bash\n"));
     }
 }
