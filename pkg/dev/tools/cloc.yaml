@@ -1,0 +1,46 @@
+package:
+  schema: 1
+  name: cloc
+  slug: cloc
+  namespace: dev/tools
+  version: "2.08"
+  description: Count blank lines, comment lines, and physical lines of source code
+  homepage: https://github.com/AlDanial/cloc
+  checksum: 69de71d0cc98cf003d03097de885226646b6fe9fc2aeec1a81c60c72858adab7
+
+sources:
+- name: cloc
+  url: https://github.com/AlDanial/cloc/releases/download/v2.08/cloc-2.08.pl
+  sha256: 0a551a86c7785880bcaa0fdfe6107c064abfbebc7cc26b7eaeac423fe2c0d49e
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [32:28]
+
+  script: |
+    mkdir -p "${OUT_DIR}/usr/bin"
+    install -m755 /${SOURCE_cloc} "${OUT_DIR}/usr/bin/cloc"
+    sed -i '1s|^#!.*|#!/usr/bin/perl|' "${OUT_DIR}/usr/bin/cloc"
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/cloc
