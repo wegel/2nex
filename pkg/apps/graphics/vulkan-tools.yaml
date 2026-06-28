@@ -1,0 +1,165 @@
+package:
+  schema: 1
+  name: vulkan-tools
+  slug: vulkan-tools
+  namespace: apps/graphics
+  version: 1.4.328.1
+  description: Khronos Vulkan command-line tools
+  homepage: https://github.com/KhronosGroup/Vulkan-Tools
+  checksum: 73f17af7e8acc6abfc9b2a90d68172f78a9c16c03d3fd76d396aadc0dea888f6
+
+sources:
+- name: vulkan-tools
+  url: https://github.com/KhronosGroup/Vulkan-Tools/archive/refs/tags/vulkan-sdk-1.4.328.1.tar.gz
+  sha256: 617e91b396ac771869d62cd131f05dcc0b82d038744dab7f575bcf213852f8bf
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: vulkan-headers
+  commit: x86_64/pkg/libs/graphics/vulkan-headers/1.4.328.1/bundles/dev
+- name: vulkan-loader
+  commit: x86_64/pkg/libs/graphics/vulkan-loader/1.4.328.1/bundles/dev
+- name: wayland
+  commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
+- name: wayland-protocols
+  commit: x86_64/pkg/libs/wayland/wayland-protocols/1.46/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: libx11
+  commit: x86_64/pkg/libs/x11/libx11/1.8.10/bundles/dev
+- name: libxcb
+  commit: x86_64/pkg/libs/x11/libxcb/1.17.0/bundles/dev
+- name: libxau
+  commit: x86_64/pkg/libs/x11/libxau/1.0.12/bundles/dev
+- name: libxdmcp
+  commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
+- name: xorgproto
+  commit: x86_64/pkg/libs/x11/xorgproto/2024.1/bundles/dev
+- name: xtrans
+  commit: x86_64/pkg/libs/x11/xtrans/1.5.2/bundles/dev
+- name: libxrandr
+  commit: x86_64/pkg/libs/x11/libxrandr/1.5.4/bundles/dev
+- name: libxext
+  commit: x86_64/pkg/libs/x11/libxext/1.3.6/bundles/dev
+- name: libxrender
+  commit: x86_64/pkg/libs/x11/libxrender/0.9.11/bundles/dev
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/dev
+- name: libarchive
+  commit: x86_64/pkg/libs/archive/libarchive/3.8.4/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [2914:11597]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_vulkan_tools} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
+
+    cmake -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DBUILD_TESTS=OFF \
+      -DBUILD_WSI_DIRECTFB_SUPPORT=OFF
+
+    cmake --build build
+    DESTDIR="${OUT_DIR}" cmake --install build
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/vkcube
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvulkan.so.1
+    - path: /usr/bin/vkcubepp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libvulkan.so.1
+    - path: /usr/bin/vulkaninfo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libvulkan.so.1
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libxcb.so.1
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libX11.so.6: libx11
+  /usr/lib/libxcb.so.1: libxcb
+  /usr/lib/libvulkan.so.1: vulkan-loader
+  /usr/lib/libwayland-client.so.0: wayland
