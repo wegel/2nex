@@ -392,7 +392,12 @@ fn read_go_version(module_dir: &Path) -> Option<String> {
         let line = line.trim();
         if line.starts_with("go ") {
             // extract version after "go "
-            let version = line.strip_prefix("go ")?.trim();
+            let version = line
+                .strip_prefix("go ")?
+                .split("//")
+                .next()
+                .unwrap_or("")
+                .trim();
             // handle cases like "go 1.21" or "go 1.21.0"
             if !version.is_empty() {
                 return Some(version.to_string());
@@ -436,4 +441,22 @@ fn find_go_packages(dir: &Path, base_path: &str) -> io::Result<Vec<String>> {
     }
 
     Ok(packages)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_go_version;
+    use std::fs;
+
+    #[test]
+    fn read_go_version_strips_inline_comments() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(
+            dir.path().join("go.mod"),
+            "module example.test/mod\n\ngo 1.22.0 // => default GODEBUG has gotypesalias=0\n",
+        )
+        .unwrap();
+
+        assert_eq!(read_go_version(dir.path()).as_deref(), Some("1.22.0"));
+    }
 }
