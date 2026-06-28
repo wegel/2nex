@@ -6,7 +6,7 @@ package:
   version: 3.13.1+ce16bd0
   description: Visual editor for SQLite database files
   homepage: https://sqlitebrowser.org/
-  checksum: 074825e1a8785c9887d67c06dc878017ac15a102c3430d46fe23eb1ef78f7697
+  checksum: c8027c77a2da478d8bc007394c529f8d8b34d0cbdbecfca40b95e5b2fa5f1d47
 
 sources:
 - name: sqlitebrowser
@@ -24,6 +24,8 @@ dependencies:
   commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
 - name: coreutils
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
@@ -97,7 +99,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4105:8176, 12387:11092, 20661:14825, 37164:14826, 45522:14826, 57960:17219, 70322:39799, 86782:46941, 103237:51689, 111275:52145]
+  profile: [4111:8114, 12503:11180, 20774:15050, 37347:15213, 45709:15213, 58210:17287, 70648:39854, 87150:47262, 103870:51769, 111275:52175]
 
   script: |
     set -eu
@@ -131,6 +133,37 @@ build:
     cmake --build build
     DESTDIR="${OUT_DIR}" cmake --install build
 
+    mkdir -p \
+      "${OUT_DIR}/usr/libexec/sqlitebrowser" \
+      "${OUT_DIR}/usr/lib/qt6/plugins/platforms"
+    mv "${OUT_DIR}/usr/bin/sqlitebrowser" \
+      "${OUT_DIR}/usr/libexec/sqlitebrowser/sqlitebrowser"
+    cp -a \
+      /usr/lib/qt6/plugins/platforms/libqminimal.so \
+      /usr/lib/qt6/plugins/platforms/libqoffscreen.so \
+      "${OUT_DIR}/usr/lib/qt6/plugins/platforms/"
+    cat > "${OUT_DIR}/usr/bin/sqlitebrowser" <<'EOF'
+    #!/usr/bin/bash
+    script=$0
+    if target=$(/usr/bin/readlink "$script"); then
+      case "$target" in
+        /*) script=$target ;;
+      esac
+    fi
+    root=${script%/usr/bin/sqlitebrowser}
+    if [ "$root" = "$script" ]; then
+      root=
+    fi
+
+    export QT_PLUGIN_PATH="${root}/usr/lib/qt6/plugins${QT_PLUGIN_PATH:+:${QT_PLUGIN_PATH}}"
+    if [ "${QT_QPA_PLATFORM:-}" = wayland ] && [ ! -e "${root}/usr/lib/qt6/plugins/platforms/libqwayland-generic.so" ]; then
+      export QT_QPA_PLATFORM=minimal
+    fi
+
+    exec "${root}/usr/libexec/sqlitebrowser/sqlitebrowser" "$@"
+    EOF
+    chmod 755 "${OUT_DIR}/usr/bin/sqlitebrowser"
+
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
@@ -148,6 +181,27 @@ outputs:
   bin:
     files:
     - path: /usr/bin/sqlitebrowser
+      needs:
+      - /usr/bin/bash
+      - /usr/bin/readlink
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/qt6/plugins/platforms/libqminimal.so
+      - /usr/lib/qt6/plugins/platforms/libqoffscreen.so
+      - /usr/libexec/sqlitebrowser/sqlitebrowser
+    - path: /usr/lib/qt6/plugins/platforms/libqminimal.so
+      needs:
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/qt6/plugins/platforms/libqoffscreen.so
+      needs:
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/libexec/sqlitebrowser/sqlitebrowser
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libGLX.so.0
@@ -197,7 +251,9 @@ outputs:
     - path: /usr/share/metainfo/sqlitebrowser.desktop.appdata.xml
 
 resolution:
+  /usr/bin/bash: bash
   /usr/lib/libbz2.so.1.0: bzip2
+  /usr/bin/readlink: coreutils
   /usr/lib/libdbus-1.so.3: dbus
   /usr/lib/libexpat.so.1: expat
   /usr/lib/libfontconfig.so.1: fontconfig
@@ -221,6 +277,7 @@ resolution:
   /usr/lib/libxcb.so.1: libxcb
   /usr/lib/libXdmcp.so.6: libxdmcp
   /usr/lib/libxkbcommon.so.0: libxkbcommon
+  /usr/lib/libncursesw.so.6: ncurses
   /usr/lib/libcrypto.so.3: openssl3
   /usr/lib/libpcre2-8.so.0: pcre2
   /usr/lib/libpcre2-16.so.0: pcre2
@@ -232,6 +289,9 @@ resolution:
   /usr/lib/libQt6Core.so.6: qt6-base
   /usr/lib/libQt6PrintSupport.so.6: qt6-base
   /usr/lib/libQt6Gui.so.6: qt6-base
+  /usr/lib/qt6/plugins/platforms/libqminimal.so: self
+  /usr/lib/qt6/plugins/platforms/libqoffscreen.so: self
+  /usr/libexec/sqlitebrowser/sqlitebrowser: self
   /usr/lib/libsqlite3.so: sqlite3
   /usr/lib/libsystemd.so.0: systemd
   /usr/lib/libz.so.1: zlib
