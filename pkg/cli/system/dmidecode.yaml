@@ -1,0 +1,93 @@
+package:
+  schema: 1
+  name: Dmidecode
+  slug: dmidecode
+  namespace: cli/system
+  version: "3.7"
+  description: Reports information about system hardware from SMBIOS/DMI tables
+  homepage: https://www.nongnu.org/dmidecode/
+  checksum: 235268d44fbcd8ff8f2a60ef2ce620efb7ba9e8c7c653715bdcfe56db14ecc54
+
+sources:
+- name: dmidecode
+  url: https://download.savannah.gnu.org/releases/dmidecode/dmidecode-3.7.tar.xz
+  sha256: 2c3aed12c85a1e6a9410d406d5e417c455466dc1bc7c89278bb32cf7cad91e8a
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4161:185, 4960:853]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_dmidecode} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    make CC=gcc prefix=/usr sbindir=/usr/bin
+    make CC=gcc DESTDIR="${OUT_DIR}" prefix=/usr sbindir=/usr/bin install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+  - doc
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/biosdecode
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/dmidecode
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/ownership
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/vpddecode
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  doc:
+    files:
+    - path: /usr/share/doc/dmidecode/AUTHORS
+    - path: /usr/share/doc/dmidecode/NEWS
+    - path: /usr/share/doc/dmidecode/README
+
+  man:
+    files:
+    - path: /usr/share/man/man8/biosdecode.8
+    - path: /usr/share/man/man8/dmidecode.8
+    - path: /usr/share/man/man8/ownership.8
+    - path: /usr/share/man/man8/vpddecode.8
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
