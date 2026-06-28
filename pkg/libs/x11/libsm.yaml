@@ -1,0 +1,128 @@
+package:
+  schema: 1
+  name: libsm
+  slug: libsm
+  namespace: libs/x11
+  version: 1.2.6
+  description: X11 session management library
+  homepage: https://xorg.freedesktop.org/
+  checksum: ff61e6a4514874a2fc49bfcc76006cf01be234d6c2e3024bd104ab2a6644f08e
+
+sources:
+- name: libsm
+  url: https://xorg.freedesktop.org/archive/individual/lib/libSM-1.2.6.tar.xz
+  sha256: be7c0abdb15cbfd29ac62573c1c82e877f9d4047ad15321e7ea97d1e43d835be
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: xorgproto
+  commit: x86_64/pkg/libs/x11/xorgproto/2024.1/bundles/dev
+- name: util-macros
+  commit: x86_64/pkg/libs/x11/util-macros/1.20.2/bundles/dev
+- name: xtrans
+  commit: x86_64/pkg/libs/x11/xtrans/1.5.2/bundles/dev
+- name: libice
+  commit: x86_64/pkg/libs/x11/libice/1.1.2/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4122:957, 8242:2921, 8778:2940]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure \
+      --prefix=/usr \
+      --disable-static \
+      --without-xmlto \
+      --without-fop \
+      --without-xsltproc
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/X11/SM/SM.h
+    - path: /usr/include/X11/SM/SMlib.h
+    - path: /usr/include/X11/SM/SMproto.h
+    - path: /usr/lib/libSM.la
+    - path: /usr/lib/pkgconfig/sm.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/libSM/SMlib.xml
+    - path: /usr/share/doc/libSM/xsmp.xml
+
+  lib:
+    files:
+    - path: /usr/lib/libSM.so
+      needs:
+      - /usr/lib/libICE.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libuuid.so.1
+    - path: /usr/lib/libSM.so.6
+      needs:
+      - /usr/lib/libICE.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libuuid.so.1
+    - path: /usr/lib/libSM.so.6.0.1
+      needs:
+      - /usr/lib/libICE.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libuuid.so.1
+
+resolution:
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libICE.so.6: libice
+  /usr/lib/libuuid.so.1: util-linux
