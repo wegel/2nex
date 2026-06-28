@@ -85,8 +85,14 @@ pub fn resolve_runtime_deps_precomputed(
                     }
                 };
 
-                // skip self entries - internal libs don't need resolution
                 if dep_name == "self" {
+                    queue_self_file_dependency(
+                        &commit,
+                        &needed_file,
+                        format!("{} needs {} from self", file_path, needed_file),
+                        &mut closure,
+                        &mut pending,
+                    );
                     continue;
                 }
 
@@ -225,6 +231,22 @@ fn is_checksum_files_commit_ref(commit: &str) -> bool {
         && commit.split('/').count() >= 7
 }
 
+fn queue_self_file_dependency(
+    commit: &str,
+    needed_file: &str,
+    reason: String,
+    closure: &mut RuntimeClosure,
+    pending: &mut Vec<String>,
+) {
+    if !is_checksum_files_commit_ref(commit) {
+        return;
+    }
+
+    if closure.add_file_dep(commit, needed_file, reason) {
+        pending.push(commit.to_string());
+    }
+}
+
 /// Find the manifest that corresponds to a store commit ref.
 fn find_manifest_for_commit<'a>(
     commit: &str,
@@ -351,11 +373,11 @@ fn resolve_dependency_to_commit(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{BTreeSet, HashMap};
 
     use crate::manifest::types::{Build, FileEntry, Manifest, OutputSpec, Package};
 
-    use super::{file_entries_to_process, RuntimeClosure};
+    use super::{file_entries_to_process, queue_self_file_dependency, RuntimeClosure};
 
     fn manifest_with_lib_output() -> Manifest {
         let mut outputs = HashMap::new();
@@ -431,5 +453,36 @@ mod tests {
             entries,
             vec![("/usr/lib/libX11-xcb.so.1".to_string(), Vec::new())]
         );
+    }
+
+    #[test]
+    fn checksum_files_commit_queues_self_file_for_later_processing() {
+        let commit = "x86_64/pkg/libs/graphics/mesa/24.2.7/abc/files";
+        let mut closure = RuntimeClosure::default();
+        let mut pending = Vec::new();
+
+        queue_self_file_dependency(
+            commit,
+            "/usr/lib/libgallium-24.2.7.so",
+            "test".to_string(),
+            &mut closure,
+            &mut pending,
+        );
+
+        assert_eq!(pending, vec![commit.to_string()]);
+        assert_eq!(
+            closure.get_files(commit).cloned().unwrap_or_default(),
+            BTreeSet::from(["/usr/lib/libgallium-24.2.7.so".to_string()])
+        );
+
+        queue_self_file_dependency(
+            commit,
+            "/usr/lib/libgallium-24.2.7.so",
+            "duplicate".to_string(),
+            &mut closure,
+            &mut pending,
+        );
+
+        assert_eq!(pending, vec![commit.to_string()]);
     }
 }
