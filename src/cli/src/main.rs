@@ -74,11 +74,21 @@ enum Command {
     /// Commit staged changes
     Commit(commands::commit::CommitArgs),
 
+    /// Deploy a system ref to /nex/deployments
+    #[clap(alias = "upgrade")]
+    Deploy(commands::deploy::DeployArgs),
+
+    /// List system deployments
+    Deployments(commands::deployments::DeploymentsArgs),
+
     /// Show current and previous deployments
     Status(commands::status::StatusArgs),
 
     /// Rollback to a previous version
     Rollback(commands::rollback::RollbackArgs),
+
+    /// Garbage-collect old deployments and (optionally) zub objects
+    Gc(commands::gc::GcArgs),
 
     /// Resolve and show runtime dependencies for a package
     Resolve(commands::resolve::ResolveArgs),
@@ -127,8 +137,11 @@ fn main() -> io::Result<()> {
         Command::Remove(args) => commands::remove::run(&args),
         Command::Switch(args) => commands::switch::run(&args),
         Command::Commit(args) => commands::commit::run(&args),
+        Command::Deploy(args) => commands::deploy::run(&args),
+        Command::Deployments(args) => commands::deployments::run(&args),
         Command::Status(args) => commands::status::run(&args),
         Command::Rollback(args) => commands::rollback::run(&args),
+        Command::Gc(args) => commands::gc::run(&args),
         Command::Resolve(args) => commands::resolve::run(&args),
         Command::ComputeDeps(args) => commands::compute_deps::run(&args),
         Command::DepGraph(args) => commands::dep_graph::run(&args),

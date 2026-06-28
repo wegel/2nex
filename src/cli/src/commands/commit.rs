@@ -7,7 +7,7 @@ use std::process::Command;
 use super::stage::{cleanup_staging, is_staged};
 use crate::store;
 
-const STAGING_STATE_DIR: &str = "/run/nex/staging";
+const STAGING_STATE_DIR: &str = super::stage::STAGING_STATE_DIR;
 const NEX_REPO: &str = "/nex/repo";
 
 #[derive(Args)]

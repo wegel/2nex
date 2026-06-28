@@ -204,7 +204,8 @@ pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
             fallback_repos: Vec::new(), // system is the ultimate fallback
             is_system: true,
             needs_staging: true,
-            var_path: PathBuf::from("/nex/var"),
+            // system state must live on the writable /var partition (the deployment root is read-only)
+            var_path: PathBuf::from("/var/nex/system"),
             manifest_dirs,
             manifests_path: None, // system uses /nex/db/pkg
         });

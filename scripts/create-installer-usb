@@ -61,7 +61,7 @@ command -v mcopy >/dev/null || die "mcopy not found (install mtools)"
 
 # always rebuild installer system to avoid stale images
 printf "building installer system...\n"
-"$ROOT_DIR/nex" build "$ROOT_DIR/asm/installer/installer.yaml" --update-checksum || die "installer build failed"
+"$ROOT_DIR/nex" build "$ROOT_DIR/asm/installer/installer.yaml" --update-checksum --force || die "installer build failed"
 
 # check refs exist
 zub refs 2>/dev/null | grep -q " ${INSTALLER_REF}$" || die "installer not found: ${INSTALLER_REF}"
@@ -163,6 +163,13 @@ printf "%s" "$TARGET_CHECKSUM" > "$DEPLOY_DIR/nex/installer/system-checksum"
 # copy bootloader for target installation
 cp "$BOOTLOADER_EFI" "$DEPLOY_DIR/nex/installer/BOOTX64.EFI"
 
+# copy kcmdline.txt into the installer rootfs so nex-install can install it without needing to mount the installer ESP
+if [ -n "$KCMDLINE_FILE" ] && [ -f "$KCMDLINE_FILE" ]; then
+    cp "$KCMDLINE_FILE" "$DEPLOY_DIR/nex/installer/kcmdline.txt"
+elif [ -f "$BOOTLOADER_SRC/kcmdline.txt" ]; then
+    cp "$BOOTLOADER_SRC/kcmdline.txt" "$DEPLOY_DIR/nex/installer/kcmdline.txt"
+fi
+
 # create root symlinks to deployment (kernel runs /init from root, not from deployment)
 DEPLOY_REL="nex/deployments/${INSTALLER_CHECKSUM}.0"
 ln -sf "$DEPLOY_REL/usr" "$ROOT_CONTENT/usr"
@@ -177,11 +184,30 @@ ln -sf usr/bin/init "$ROOT_CONTENT/init"
 mkdir -p "$ROOT_CONTENT/mnt"
 mkdir -p "$ROOT_CONTENT/proc" "$ROOT_CONTENT/sys" "$ROOT_CONTENT/dev" "$ROOT_CONTENT/run" "$ROOT_CONTENT/tmp"
 
+# ensure sysroot-level directories exist for deployment-root boot
+mkdir -p "$ROOT_CONTENT/nex/repo" "$ROOT_CONTENT/nex/staging"
+
 # create /nex/current and symlinks (needed for absolute package paths)
 ln -sfn "deployments/${INSTALLER_CHECKSUM}.0" "$ROOT_CONTENT/nex/current"
 ln -sfn "current/nex/pkg" "$ROOT_CONTENT/nex/pkg"
 ln -sfn "current/nex/db" "$ROOT_CONTENT/nex/db"
 ln -sfn "current/nex/installer" "$ROOT_CONTENT/nex/installer"
+
+# ensure deployment has mount points needed by initramfs deployment-root boot
+mkdir -p \
+  "$DEPLOY_DIR/sysroot" \
+  "$DEPLOY_DIR/var" \
+  "$DEPLOY_DIR/proc" \
+  "$DEPLOY_DIR/sys" \
+  "$DEPLOY_DIR/dev" \
+  "$DEPLOY_DIR/run" \
+  "$DEPLOY_DIR/tmp" \
+  "$DEPLOY_DIR/home" \
+  "$DEPLOY_DIR/root" \
+  "$DEPLOY_DIR/nex/repo" \
+  "$DEPLOY_DIR/nex/deployments" \
+  "$DEPLOY_DIR/nex/staging" \
+  "$DEPLOY_DIR/nex/users"
 
 # debug: show what we're putting in the image
 printf "DEBUG: root content structure:\n"

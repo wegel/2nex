@@ -13,6 +13,13 @@ use std::path::{Path, PathBuf};
 use zub::transport::{pull_ssh, PullOptions};
 use zub::{ops::ExportOptions, Commit, Config, Hash, Repo};
 
+fn is_cross_device_hardlink_error(err: &zub::Error) -> bool {
+    match err {
+        zub::Error::Io { source, .. } => source.kind() == io::ErrorKind::CrossesDevices,
+        _ => false,
+    }
+}
+
 /// parse an SSH URL into (remote, path) components.
 /// supports formats:
 ///   - ssh://user@host/path -> ("user@host", "/path")
@@ -239,7 +246,7 @@ impl Store {
     /// checkout a commit to target directory.
     /// tries primary repo first, then each fallback in order, then remotes.
     pub fn checkout(&self, commit: &str, target: &Path, union: bool) -> io::Result<()> {
-        let opts = zub::ops::CheckoutOptions {
+        let mut opts = zub::ops::CheckoutOptions {
             force: union,
             hardlink: true,
             preserve_sparse: false,
@@ -249,14 +256,29 @@ impl Store {
         match zub::ops::checkout(&self.repo, commit, target, opts.clone()) {
             Ok(()) => return Ok(()),
             Err(zub::Error::RefNotFound(_)) => {}
+            Err(e) if opts.hardlink && is_cross_device_hardlink_error(&e) => {
+                // cross-device hardlinks are not possible (e.g., fallback from /nex/repo to /var/*).
+                // retry with a full copy instead.
+                opts.hardlink = false;
+                zub::ops::checkout(&self.repo, commit, target, opts.clone())
+                    .map_err(|e| io::Error::other(e.to_string()))?;
+                return Ok(());
+            }
             Err(e) => return Err(io::Error::other(e.to_string())),
         }
 
         // try each fallback in order
         for fallback in &self.fallback_chain {
-            match zub::ops::checkout(fallback, commit, target, opts.clone()) {
+            let mut fb_opts = opts.clone();
+            match zub::ops::checkout(fallback, commit, target, fb_opts.clone()) {
                 Ok(()) => return Ok(()),
                 Err(zub::Error::RefNotFound(_)) => continue,
+                Err(e) if fb_opts.hardlink && is_cross_device_hardlink_error(&e) => {
+                    fb_opts.hardlink = false;
+                    zub::ops::checkout(fallback, commit, target, fb_opts)
+                        .map_err(|e| io::Error::other(e.to_string()))?;
+                    return Ok(());
+                }
                 Err(e) => return Err(io::Error::other(e.to_string())),
             }
         }
@@ -264,8 +286,14 @@ impl Store {
         // try to pull from remote
         if self.pull_from_remote(commit)? {
             // now it should be in primary repo
-            match zub::ops::checkout(&self.repo, commit, target, opts) {
+            match zub::ops::checkout(&self.repo, commit, target, opts.clone()) {
                 Ok(()) => return Ok(()),
+                Err(e) if opts.hardlink && is_cross_device_hardlink_error(&e) => {
+                    opts.hardlink = false;
+                    zub::ops::checkout(&self.repo, commit, target, opts)
+                        .map_err(|e| io::Error::other(e.to_string()))?;
+                    return Ok(());
+                }
                 Err(e) => return Err(io::Error::other(e.to_string())),
             }
         }
@@ -544,7 +572,7 @@ fn export_path_with_fallbacks(
     dest: &Path,
     hardlink: bool,
 ) -> io::Result<()> {
-    let opts = zub::ops::ExportOptions {
+    let mut opts = zub::ops::ExportOptions {
         overwrite: true,
         hardlink,
         preserve_sparse: false,
@@ -557,15 +585,28 @@ fn export_path_with_fallbacks(
     match zub::ops::export_path(&repo, commit, src_path, dest, opts.clone()) {
         Ok(()) => return Ok(()),
         Err(zub::Error::RefNotFound(_)) => {}
+        Err(e) if opts.hardlink && is_cross_device_hardlink_error(&e) => {
+            opts.hardlink = false;
+            zub::ops::export_path(&repo, commit, src_path, dest, opts)
+                .map_err(|e| io::Error::other(e.to_string()))?;
+            return Ok(());
+        }
         Err(e) => return Err(io::Error::other(e.to_string())),
     }
 
     // try fallbacks
     for fallback_path in fallback_paths {
         if let Ok(fallback) = Repo::open(fallback_path) {
-            match zub::ops::export_path(&fallback, commit, src_path, dest, opts.clone()) {
+            let mut fb_opts = opts.clone();
+            match zub::ops::export_path(&fallback, commit, src_path, dest, fb_opts.clone()) {
                 Ok(()) => return Ok(()),
                 Err(zub::Error::RefNotFound(_)) => continue,
+                Err(e) if fb_opts.hardlink && is_cross_device_hardlink_error(&e) => {
+                    fb_opts.hardlink = false;
+                    zub::ops::export_path(&fallback, commit, src_path, dest, fb_opts)
+                        .map_err(|e| io::Error::other(e.to_string()))?;
+                    return Ok(());
+                }
                 Err(e) => return Err(io::Error::other(e.to_string())),
             }
         }
@@ -624,8 +665,8 @@ pub fn commit_tree(
             .map_err(|e| io::Error::other(e.to_string()))?;
 
     // get tree hash from the commit
-    let commit = zub::read_commit(&repo, &commit_hash)
-        .map_err(|e| io::Error::other(e.to_string()))?;
+    let commit =
+        zub::read_commit(&repo, &commit_hash).map_err(|e| io::Error::other(e.to_string()))?;
 
     Ok(commit.tree)
 }
@@ -685,8 +726,8 @@ pub fn create_artifact(
         .map_err(|e| io::Error::other(format!("invalid manifest hash: {}", e)))?;
 
     let artifact = zub::Artifact::new(*tree_hash, manifest_hash_obj, output);
-    let artifact_hash = zub::write_artifact(&repo, &artifact)
-        .map_err(|e| io::Error::other(e.to_string()))?;
+    let artifact_hash =
+        zub::write_artifact(&repo, &artifact).map_err(|e| io::Error::other(e.to_string()))?;
 
     // write the artifact ref for O(1) lookup
     zub::write_artifact_ref(&repo, artifact_path, &artifact_hash)
@@ -701,11 +742,11 @@ pub fn get_branch_tree(repo_path: &str, branch: &str) -> io::Result<Hash> {
     let repo = Repo::open(Path::new(repo_path))
         .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
 
-    let commit_hash = zub::resolve_ref(&repo, branch)
-        .map_err(|e| io::Error::other(e.to_string()))?;
+    let commit_hash =
+        zub::resolve_ref(&repo, branch).map_err(|e| io::Error::other(e.to_string()))?;
 
-    let commit = zub::read_commit(&repo, &commit_hash)
-        .map_err(|e| io::Error::other(e.to_string()))?;
+    let commit =
+        zub::read_commit(&repo, &commit_hash).map_err(|e| io::Error::other(e.to_string()))?;
 
     Ok(commit.tree)
 }
@@ -722,8 +763,8 @@ pub fn lookup_artifact(repo_path: &str, artifact_path: &str) -> io::Result<Optio
     let artifact_hash = zub::read_artifact_ref(&repo, artifact_path)
         .map_err(|e| io::Error::other(e.to_string()))?;
 
-    let artifact = zub::read_artifact(&repo, &artifact_hash)
-        .map_err(|e| io::Error::other(e.to_string()))?;
+    let artifact =
+        zub::read_artifact(&repo, &artifact_hash).map_err(|e| io::Error::other(e.to_string()))?;
 
     Ok(Some(artifact.tree))
 }
@@ -743,14 +784,21 @@ pub fn checkout_artifact(
         None => return Ok(false),
     };
 
-    let opts = zub::ops::CheckoutOptions {
+    let mut opts = zub::ops::CheckoutOptions {
         force,
         hardlink: true,
         preserve_sparse: false,
     };
 
-    zub::ops::checkout_from_tree_hash(&repo, &tree_hash, target, opts)
-        .map_err(|e| io::Error::other(e.to_string()))?;
+    match zub::ops::checkout_from_tree_hash(&repo, &tree_hash, target, opts.clone()) {
+        Ok(()) => {}
+        Err(e) if opts.hardlink && is_cross_device_hardlink_error(&e) => {
+            opts.hardlink = false;
+            zub::ops::checkout_from_tree_hash(&repo, &tree_hash, target, opts)
+                .map_err(|e| io::Error::other(e.to_string()))?;
+        }
+        Err(e) => return Err(io::Error::other(e.to_string())),
+    }
 
     Ok(true)
 }

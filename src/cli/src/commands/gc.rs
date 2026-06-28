@@ -1,25 +1,26 @@
 use clap::Args;
 use nix::unistd::Uid;
+use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 #[derive(Args)]
-pub struct RollbackArgs {
+pub struct GcArgs {
     /// Sysroot mount point (default: /sysroot)
     #[clap(long, default_value = "/sysroot")]
     pub sysroot: PathBuf,
 
-    /// Roll back to this deployment (format: <checksum>.<serial>)
+    /// Number of most-recent deployments to keep (by serial)
+    #[clap(long, default_value_t = 2)]
+    pub keep: usize,
+
+    /// Also run zub object GC on the system repo (/nex/repo)
     #[clap(long)]
-    pub to: Option<String>,
+    pub zub: bool,
 
-    /// Don't prompt for confirmation
-    #[clap(long, short = 'y')]
-    pub yes: bool,
-
-    /// Print what would be done without writing
+    /// Print what would be done without deleting
     #[clap(long)]
     pub dry_run: bool,
 }
@@ -31,9 +32,11 @@ struct Deployment {
     name: String,
 }
 
-pub fn run(args: &RollbackArgs) -> io::Result<()> {
+pub fn run(args: &GcArgs) -> io::Result<()> {
     let sysroot = &args.sysroot;
     let deployments_dir = sysroot.join("nex/deployments");
+    let repo_dir = sysroot.join("nex/repo");
+
     if !deployments_dir.exists() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
@@ -45,121 +48,94 @@ pub fn run(args: &RollbackArgs) -> io::Result<()> {
     }
 
     let current = current_deployment_from_cmdline();
-    let deployments = list_deployments(&deployments_dir)?;
-    if deployments.len() < 2 && args.to.is_none() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "not enough deployments to rollback (need at least 2)",
-        ));
-    }
-
-    let max_serial = deployments
-        .iter()
-        .map(|d| d.serial)
-        .max()
-        .unwrap_or_default();
-    let next_serial = max_serial.saturating_add(1);
-
-    let target = match &args.to {
-        Some(name) => deployments
-            .iter()
-            .find(|d| &d.name == name)
-            .cloned()
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::NotFound,
-                    format!("deployment not found: {}", name),
-                )
-            })?,
-        None => choose_previous(&deployments, current.as_deref())?,
-    };
-
-    let new_name = format!("{}.{}", target.checksum, next_serial);
-    let src = deployments_dir.join(&target.name);
-    let dst = deployments_dir.join(&new_name);
-
-    println!("Current:  {}", current.as_deref().unwrap_or("(unknown)"));
-    println!("Target:   {}", target.name);
-    println!("New:      {}", new_name);
-    println!("Source:   {}", src.display());
-    println!("Dest:     {}", dst.display());
-    println!();
-
-    if args.dry_run {
-        return Ok(());
-    }
-
-    if !args.yes {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "rollback requires confirmation; re-run with --yes",
-        ));
-    }
-
-    let mut remount = RemountGuard::new(sysroot)?;
-
-    // Create destination dir (remount sysroot rw if needed)
-    if let Err(e) = fs::create_dir_all(&dst) {
-        if e.kind() == io::ErrorKind::ReadOnlyFilesystem {
-            remount.remount_rw()?;
-            fs::create_dir_all(&dst)?;
-        } else {
-            return Err(e);
-        }
-    }
-
-    // Hardlink-copy the selected deployment into the new deployment dir.
-    // This is safe even if the source deployment is the currently running one.
-    let status = Command::new("cp")
-        .args([
-            "-a",
-            "-l",
-            &format!("{}/.", src.display()),
-            dst.to_str().unwrap(),
-        ])
-        .status()?;
-    if !status.success() {
-        return Err(io::Error::other(
-            "failed to create rollback deployment (cp -a -l)",
-        ));
-    }
-
-    remount.remount_ro()?;
-
-    println!("Rollback deployment created: {}", new_name);
-    println!("Reboot to activate (bootloader picks highest serial).");
-    Ok(())
-}
-
-fn choose_previous(deployments: &[Deployment], current: Option<&str>) -> io::Result<Deployment> {
-    let mut sorted = deployments.to_vec();
-    sorted.sort_by(|a, b| {
+    let mut deployments = list_deployments(&deployments_dir)?;
+    deployments.sort_by(|a, b| {
         a.serial
             .cmp(&b.serial)
             .then_with(|| a.checksum.cmp(&b.checksum))
     });
 
-    if let Some(cur) = current {
-        if let Some(pos) = sorted.iter().position(|d| d.name == cur) {
-            if pos == 0 {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "current deployment is the oldest; no rollback target",
-                ));
-            }
-            return Ok(sorted[pos - 1].clone());
+    if deployments.is_empty() {
+        println!("No deployments found.");
+        return Ok(());
+    }
+
+    // Keep N most recent by serial, plus current if present.
+    let mut keep_names: HashSet<String> = HashSet::new();
+    for d in deployments.iter().rev().take(args.keep) {
+        keep_names.insert(d.name.clone());
+    }
+    if let Some(cur) = &current {
+        keep_names.insert(cur.clone());
+    }
+
+    let mut remove = Vec::new();
+    for d in &deployments {
+        if !keep_names.contains(&d.name) {
+            remove.push(d.clone());
         }
     }
 
-    // fallback: second-highest by serial
-    if sorted.len() >= 2 {
-        Ok(sorted[sorted.len() - 2].clone())
+    println!("Deployments dir: {}", deployments_dir.display());
+    println!("Current: {}", current.as_deref().unwrap_or("(unknown)"));
+    println!("Keep: {}", args.keep);
+    println!();
+
+    if remove.is_empty() {
+        println!("Nothing to remove.");
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "not enough deployments to rollback",
-        ))
+        println!("Will remove {} deployment(s):", remove.len());
+        for d in &remove {
+            println!("  {}", d.name);
+        }
     }
+    println!();
+
+    if args.dry_run {
+        if args.zub {
+            println!(
+                "(dry-run) would run zub object GC in {}",
+                repo_dir.display()
+            );
+        }
+        return Ok(());
+    }
+
+    let mut remount = RemountGuard::new(sysroot)?;
+
+    // Delete deployment directories (remount sysroot rw if needed).
+    for d in remove {
+        let path = deployments_dir.join(&d.name);
+        if let Err(e) = fs::remove_dir_all(&path) {
+            if e.kind() == io::ErrorKind::ReadOnlyFilesystem {
+                remount.remount_rw()?;
+                fs::remove_dir_all(&path)?;
+            } else {
+                return Err(e);
+            }
+        }
+    }
+
+    if args.zub {
+        if !repo_dir.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("system repo not found: {}", repo_dir.display()),
+            ));
+        }
+        if remount.is_ro() {
+            remount.remount_rw()?;
+        }
+        let repo = zub::Repo::open(&repo_dir).map_err(|e| io::Error::other(e.to_string()))?;
+        let stats = zub::ops::gc(&repo, false).map_err(|e| io::Error::other(e.to_string()))?;
+        println!(
+            "zub gc: blobs={} trees={} commits={} bytes_freed={}",
+            stats.blobs_removed, stats.trees_removed, stats.commits_removed, stats.bytes_freed
+        );
+    }
+
+    remount.remount_ro()?;
+    Ok(())
 }
 
 fn list_deployments(dir: &Path) -> io::Result<Vec<Deployment>> {
@@ -227,6 +203,10 @@ impl<'a> RemountGuard<'a> {
             is_root: Uid::effective().is_root(),
             touched_rw: false,
         })
+    }
+
+    fn is_ro(&self) -> bool {
+        !self.touched_rw
     }
 
     fn remount_rw(&mut self) -> io::Result<()> {

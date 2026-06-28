@@ -20,8 +20,8 @@ pub fn run(args: &DiscardArgs) -> io::Result<()> {
 
     if !args.force {
         // check if there are changes in the upper dirs
-        let upper_nex = "/run/nex/staging/upper/nex";
-        let upper_usr_bin = "/run/nex/staging/upper/usr_bin";
+        let upper_nex = format!("{}/upper/nex", super::stage::STAGING_STATE_DIR);
+        let upper_usr_bin = format!("{}/upper/usr_bin", super::stage::STAGING_STATE_DIR);
 
         let has_nex_changes = std::fs::read_dir(upper_nex)
             .map(|mut d| d.next().is_some())

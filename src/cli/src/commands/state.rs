@@ -1,4 +1,4 @@
-//! Package state tracking for /nex/var/
+//! Package state tracking for the writable state directory
 //!
 //! Tracks installed package versions and which version is "current" (has symlinks).
 
@@ -9,9 +9,6 @@ use std::io;
 use std::path::Path;
 
 use crate::repo::NexContext;
-
-const NEX_VAR_DIR: &str = "/nex/var";
-const STATE_FILE: &str = "/nex/var/installed.json";
 
 /// Information about a single installed version
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,33 +38,6 @@ pub struct InstalledState {
 }
 
 impl InstalledState {
-    /// Load state from disk, or return empty state if not found
-    pub fn load() -> io::Result<Self> {
-        let path = Path::new(STATE_FILE);
-        if !path.exists() {
-            return Ok(Self::default());
-        }
-
-        let content = fs::read_to_string(path)?;
-        serde_json::from_str(&content).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Failed to parse state file: {}", e),
-            )
-        })
-    }
-
-    /// Save state to disk
-    pub fn save(&self) -> io::Result<()> {
-        // ensure directory exists
-        fs::create_dir_all(NEX_VAR_DIR)?;
-
-        let content = serde_json::to_string_pretty(self)
-            .map_err(|e| io::Error::other(format!("Failed to serialize state: {}", e)))?;
-
-        fs::write(STATE_FILE, content)
-    }
-
     /// Load state from a specific var directory
     pub fn load_from(var_path: &Path) -> io::Result<Self> {
         let path = var_path.join("installed.json");
