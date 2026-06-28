@@ -183,7 +183,7 @@ pub fn build_system_manifest_with_dir(
         )?;
 
         if manifest.system.nex_structure {
-            materialize_nex_structure(base_dir, &opts.repo_path, &package_commits)?;
+            materialize_nex_structure(base_dir, &opts.repo_path, &original_package_commits)?;
         } else {
             materialize_system_packages(
                 base_dir,
