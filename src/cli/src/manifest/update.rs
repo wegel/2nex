@@ -1,4 +1,5 @@
 use serde_yaml::{Mapping, Value};
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::mem;
@@ -221,6 +222,7 @@ pub fn locate_outputs_block(contents: &str) -> io::Result<(usize, usize)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     #[test]
     fn locates_flow_style_empty_outputs_block() {
@@ -230,6 +232,63 @@ mod tests {
 
         assert_eq!(&contents[start..end], "outputs: {}\n\n");
     }
+
+    #[test]
+    fn generated_outputs_preserve_existing_file_needs() {
+        let manifest = tempfile::NamedTempFile::new().unwrap();
+        fs::write(
+            manifest.path(),
+            "package:\n  name: test\n\noutputs:\n  bin:\n    files:\n    - path: /usr/bin/dool\n      needs:\n      - /usr/bin/python3\n\nresolution:\n  /usr/bin/python3: python3\n",
+        )
+        .unwrap();
+
+        let mut categorized = HashMap::new();
+        categorized.insert("bin".to_string(), vec!["/usr/bin/dool".to_string()]);
+
+        write_auto_outputs_to_manifest(manifest.path().to_str().unwrap(), &categorized).unwrap();
+
+        let updated = fs::read_to_string(manifest.path()).unwrap();
+        assert!(updated.contains("needs:\n      - /usr/bin/python3"));
+    }
+}
+
+fn collect_existing_file_needs(contents: &str) -> io::Result<HashMap<String, Value>> {
+    let doc: Value = serde_yaml::from_str(contents)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+    let mut needs_by_path = HashMap::new();
+
+    let Some(outputs) = doc.get("outputs").and_then(|outputs| outputs.as_mapping()) else {
+        return Ok(needs_by_path);
+    };
+
+    for output in outputs.values() {
+        let Some(output_map) = output.as_mapping() else {
+            continue;
+        };
+        let Some(files) = output_map
+            .get(Value::String("files".to_string()))
+            .and_then(|files| files.as_sequence())
+        else {
+            continue;
+        };
+
+        for file in files {
+            let Some(file_map) = file.as_mapping() else {
+                continue;
+            };
+            let Some(path) = file_map
+                .get(Value::String("path".to_string()))
+                .and_then(|path| path.as_str())
+            else {
+                continue;
+            };
+            if let Some(needs) = file_map.get(Value::String("needs".to_string())) {
+                needs_by_path.insert(path.to_string(), needs.clone());
+            }
+        }
+    }
+
+    Ok(needs_by_path)
 }
 
 /// Write auto-detected outputs to manifest, replacing the outputs section.
@@ -238,6 +297,7 @@ pub fn write_auto_outputs_to_manifest(
     categorized: &std::collections::HashMap<String, Vec<String>>,
 ) -> io::Result<()> {
     let contents = fs::read_to_string(manifest_path)?;
+    let existing_needs = collect_existing_file_needs(&contents)?;
 
     // build the outputs Value from categorized files
     let mut outputs_mapping = Mapping::new();
@@ -256,6 +316,9 @@ pub fn write_auto_outputs_to_manifest(
             .map(|f| {
                 let mut file_map = Mapping::new();
                 file_map.insert(Value::String("path".to_string()), Value::String(f.clone()));
+                if let Some(needs) = existing_needs.get(f) {
+                    file_map.insert(Value::String("needs".to_string()), needs.clone());
+                }
                 Value::Mapping(file_map)
             })
             .collect();
