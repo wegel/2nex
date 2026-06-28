@@ -140,12 +140,14 @@ impl RuntimeClosure {
     }
 
     /// Add a file-level dependency (specific file from a commit).
-    pub fn add_file_dep(&mut self, commit: &str, file: &str, reason: String) {
-        self.files_needed
+    pub fn add_file_dep(&mut self, commit: &str, file: &str, reason: String) -> bool {
+        let inserted = self
+            .files_needed
             .entry(commit.to_string())
             .or_default()
             .insert(file.to_string());
         self.add(commit, reason);
+        inserted
     }
 
     /// Check if a commit has file-level dependencies (vs full checkout).
