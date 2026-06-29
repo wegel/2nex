@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use crate::manifest::ManifestIndex;
 use crate::store::Store;
+use crate::utils::short_hash;
 
 use super::resolver_entries::{file_entries_to_process, is_checksum_files_commit_ref};
 use super::resolver_metadata::missing_runtime_metadata;
@@ -227,7 +228,7 @@ impl<'a> RuntimeResolver<'a> {
                         "{} needs {} - missing {}/files commit",
                         file_path,
                         dep_name,
-                        &checksum[..12]
+                        short_hash(&checksum)
                     ),
                 );
             }

@@ -12,6 +12,10 @@ use super::commits::{
     refresh_package_metadata, verify_and_commit_outputs,
 };
 
+#[cfg(test)]
+#[path = "package_outputs_tests.rs"]
+mod package_outputs_tests;
+
 /// Calculate the package output checksum and commit the raw files snapshot.
 pub fn commit_raw_output(
     opts: &BuildOpts,
@@ -164,6 +168,31 @@ pub(super) fn update_check_checksum_after_reproducibility(
         return Ok(());
     }
     update_package_checksum(opts, manifest, checksum)
+}
+
+pub(super) fn ensure_check_checksum_allows_package_publish(
+    opts: &BuildOpts,
+    manifest: &Manifest,
+    checksum: &str,
+) -> io::Result<()> {
+    if !opts.check || opts.update_checksum {
+        return Ok(());
+    }
+
+    match manifest.package.checksum.as_deref() {
+        Some(expected) if expected == checksum => Ok(()),
+        Some(expected) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "package checksum differs from manifest after reproducibility check: expected {}, got {}. Re-run with --update-checksum before publishing refs.",
+                expected, checksum
+            ),
+        )),
+        None => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "package manifest does not record a checksum. Re-run with --update-checksum before publishing refs.",
+        )),
+    }
 }
 
 fn update_package_checksum(

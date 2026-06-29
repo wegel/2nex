@@ -13,6 +13,7 @@ use crate::manifest::{load_manifest_from_source, ManifestData};
 use crate::refs::PackageRef;
 use crate::store::{ensure_branch_exists, Store};
 use crate::system;
+use crate::utils::short_hash;
 
 use super::manifest_lookup::{build_exists_for_manifest, find_manifest_for_commit};
 
@@ -130,7 +131,10 @@ impl GraphBuilder<'_> {
         blob_sha: &str,
     ) -> io::Result<bool> {
         if !self.ref_is_available(&dep.commit) {
-            self.print_needs_build(dep, &format!("pinned to {}, not in store", &blob_sha[..12]));
+            self.print_needs_build(
+                dep,
+                &format!("pinned to {}, not in store", short_hash(blob_sha)),
+            );
             return Ok(false);
         }
 

@@ -22,6 +22,10 @@ use super::flat::materialize_system_packages;
 use super::nex::materialize_nex_structure;
 use super::overlays::apply_overlays;
 
+#[cfg(test)]
+#[path = "build_tests.rs"]
+mod build_tests;
+
 struct SystemBuildInputs {
     manifest_index: ManifestIndex,
     dependency_commits: Vec<String>,
@@ -62,6 +66,7 @@ pub fn build_system_manifest_with_dir(
     if opts.check {
         check_system_reproducibility(opts, manifest, base_dir, download_dir, &inputs, &checksum)?;
     }
+    ensure_check_checksum_allows_system_publish(opts, manifest, &checksum)?;
     update_system_checksum_after_reproducibility(opts, manifest, &checksum)?;
     commit_system_build(opts, manifest, base_dir, &inputs, &checksum)?;
     println!(
@@ -256,6 +261,31 @@ fn update_system_checksum_after_reproducibility(
         return Ok(());
     }
     update_manifest_checksum_field(&opts.manifest_file, ManifestKind::System, checksum)
+}
+
+fn ensure_check_checksum_allows_system_publish(
+    opts: &BuildOpts,
+    manifest: &SystemManifest,
+    checksum: &str,
+) -> io::Result<()> {
+    if !opts.check || opts.update_checksum {
+        return Ok(());
+    }
+
+    match manifest.system.checksum.as_deref() {
+        Some(expected) if expected == checksum => Ok(()),
+        Some(expected) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "system checksum differs from manifest after reproducibility check: expected {}, got {}. Re-run with --update-checksum before publishing refs.",
+                expected, checksum
+            ),
+        )),
+        None => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "system manifest does not record a checksum. Re-run with --update-checksum before publishing refs.",
+        )),
+    }
 }
 
 fn commit_system_build(

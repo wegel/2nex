@@ -57,6 +57,11 @@ pub fn determine_category(file_path: &str) -> String {
     }
 }
 
+/// Return a display prefix for a hash-like string without panicking on short input.
+pub fn short_hash(value: &str) -> &str {
+    value.get(..12).unwrap_or(value)
+}
+
 fn is_kernel_module_sdk_path(file_path: &str) -> bool {
     if file_path.starts_with("/usr/src/linux-") {
         return true;
@@ -357,5 +362,11 @@ mod tests {
             determine_category("/usr/lib/modules/6.12.58/source/include/linux/module.h"),
             "module-sdk"
         );
+    }
+
+    #[test]
+    fn short_hash_handles_short_values() {
+        assert_eq!(short_hash("abc"), "abc");
+        assert_eq!(short_hash("1234567890123456"), "123456789012");
     }
 }

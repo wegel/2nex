@@ -18,8 +18,9 @@ use super::dependencies::resolve_dependency_commits;
 use super::env::load_environment;
 use super::inputs::handle_inputs;
 use super::package_outputs::{
-    commit_package_outputs, commit_raw_output, maybe_compute_runtime_deps,
-    should_commit_package_outputs, update_check_checksum_after_reproducibility,
+    commit_package_outputs, commit_raw_output, ensure_check_checksum_allows_package_publish,
+    maybe_compute_runtime_deps, should_commit_package_outputs,
+    update_check_checksum_after_reproducibility,
 };
 use super::reproducibility::{maybe_check_reproducibility, ReproducibilityCheck};
 use super::rootfs::setup_composite_rootfs;
@@ -132,6 +133,7 @@ fn publish_checked_package_outputs(plan: PackagePublish<'_>) -> io::Result<()> {
         build_script: plan.build_script,
         checksum: plan.checksum,
     })?;
+    ensure_check_checksum_allows_package_publish(plan.opts, plan.manifest, plan.checksum)?;
     update_check_checksum_after_reproducibility(plan.opts, plan.manifest, plan.checksum)?;
 
     if should_commit_outputs {
