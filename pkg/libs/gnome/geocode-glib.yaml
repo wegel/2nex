@@ -1,0 +1,186 @@
+package:
+  schema: 1
+  name: geocode-glib
+  slug: geocode-glib
+  namespace: libs/gnome
+  version: 3.26.4
+  description: GLib library for geocoding services
+  homepage: https://gitlab.gnome.org/GNOME/geocode-glib
+  checksum: b6f59560de37ef0e31ca6e993d55d7655910ad3470ae649269d4d81306d024a6
+
+sources:
+- name: geocode-glib
+  url: https://download.gnome.org/sources/geocode-glib/3.26/geocode-glib-3.26.4.tar.xz
+  sha256: 2d9a6826d158470449a173871221596da0f83ebdcff98b90c7049089056a37aa
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: gettext
+  commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: libsoup3
+  commit: x86_64/pkg/libs/net/libsoup3/3.6.4/bundles/dev
+- name: json-glib
+  commit: x86_64/pkg/libs/system/json-glib/1.10.6/bundles/dev
+- name: sqlite3
+  commit: x86_64/pkg/libs/data/sqlite3/3.51.1/bundles/dev
+- name: libpsl
+  commit: x86_64/pkg/libs/net/libpsl/0.21.5/bundles/dev
+- name: libidn2
+  commit: x86_64/pkg/libs/text/libidn2/2.3.7/bundles/dev
+- name: libunistring
+  commit: x86_64/pkg/libs/text/libunistring/1.3/bundles/dev
+- name: brotli
+  commit: x86_64/pkg/libs/compression/brotli/1.1.0/bundles/dev
+- name: nghttp2
+  commit: x86_64/pkg/libs/net/nghttp2/1.64.0/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4109:1499, 6753:1533]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf /${SOURCE_geocode_glib} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --buildtype=release \
+      -Dsoup2=false \
+      -Denable-introspection=false \
+      -Denable-gtk-doc=false \
+      -Denable-installed-tests=false
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - lib
+  - misc
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/geocode-glib-2.0/geocode-glib/geocode-backend.h
+    - path: /usr/include/geocode-glib-2.0/geocode-glib/geocode-bounding-box.h
+    - path: /usr/include/geocode-glib-2.0/geocode-glib/geocode-enum-types.h
+    - path: /usr/include/geocode-glib-2.0/geocode-glib/geocode-error.h
+    - path: /usr/include/geocode-glib-2.0/geocode-glib/geocode-forward.h
+    - path: /usr/include/geocode-glib-2.0/geocode-glib/geocode-glib.h
+    - path: /usr/include/geocode-glib-2.0/geocode-glib/geocode-location.h
+    - path: /usr/include/geocode-glib-2.0/geocode-glib/geocode-mock-backend.h
+    - path: /usr/include/geocode-glib-2.0/geocode-glib/geocode-nominatim.h
+    - path: /usr/include/geocode-glib-2.0/geocode-glib/geocode-place.h
+    - path: /usr/include/geocode-glib-2.0/geocode-glib/geocode-reverse.h
+    - path: /usr/lib/pkgconfig/geocode-glib-2.0.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libgeocode-glib-2.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libjson-glib-1.0.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libsoup-3.0.so.0
+    - path: /usr/lib/libgeocode-glib-2.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libjson-glib-1.0.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libsoup-3.0.so.0
+    - path: /usr/lib/libgeocode-glib-2.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libjson-glib-1.0.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libsoup-3.0.so.0
+
+  misc:
+    files:
+    - path: /usr/share/icons/hicolor/scalable/places/poi-airport.svg
+    - path: /usr/share/icons/hicolor/scalable/places/poi-bar.svg
+    - path: /usr/share/icons/hicolor/scalable/places/poi-building.svg
+    - path: /usr/share/icons/hicolor/scalable/places/poi-bus-stop.svg
+    - path: /usr/share/icons/hicolor/scalable/places/poi-car.svg
+    - path: /usr/share/icons/hicolor/scalable/places/poi-light-rail-station.svg
+    - path: /usr/share/icons/hicolor/scalable/places/poi-marker.svg
+    - path: /usr/share/icons/hicolor/scalable/places/poi-place-of-worship.svg
+    - path: /usr/share/icons/hicolor/scalable/places/poi-railway-station.svg
+    - path: /usr/share/icons/hicolor/scalable/places/poi-restaurant.svg
+    - path: /usr/share/icons/hicolor/scalable/places/poi-school.svg
+    - path: /usr/share/icons/hicolor/scalable/places/poi-town.svg
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libgio-2.0.so.0: glib2
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libjson-glib-1.0.so.0: json-glib
+  /usr/lib/libsoup-3.0.so.0: libsoup3
