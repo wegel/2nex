@@ -3,7 +3,6 @@
 use std::fs;
 use std::io;
 use std::path::Path;
-use std::process;
 
 use crate::build::{
     layer_commits_into_rootfs, load_environment, run_build_script_with_env, setup_composite_rootfs,
@@ -215,11 +214,13 @@ fn handle_recorded_checksum(
         );
         return update_manifest_checksum_field(&opts.manifest_file, ManifestKind::System, checksum);
     }
-    eprintln!(
-        "Checksum mismatch. Expected: {}, Calculated: {}",
-        expected_checksum, checksum
-    );
-    process::exit(-2);
+    Err(io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!(
+            "Checksum mismatch. Expected: {}, Calculated: {}",
+            expected_checksum, checksum
+        ),
+    ))
 }
 
 fn handle_missing_checksum(opts: &BuildOpts, checksum: &str) -> io::Result<()> {
