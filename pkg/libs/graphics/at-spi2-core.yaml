@@ -6,7 +6,7 @@ package:
   version: 2.54.0
   description: Assistive Technology Service Provider Interface (core)
   homepage: https://wiki.gnome.org/Accessibility
-  checksum: c85f73e9629635b3912b423c5efed05c370190215a4e7a839a12a12921fbf39e
+  checksum: 105391caacbf521e9ca4bb7c1040c48669bd387c17c10914aa61f2f0cd8a438d
 
 sources:
 - name: at-spi2-core
@@ -50,6 +50,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: glib2
   commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: gobject-introspection
+  commit: x86_64/pkg/dev/tools/gobject-introspection/1.84.0/bundles/dev
 - name: libffi
   commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
 - name: pcre2
@@ -91,7 +93,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4105:969, 8247:1318, 12347:1532, 16448:1728, 20562:4281, 24679:4281, 25754:4344]
+  profile: [4124:1163, 8264:1518, 12368:1724, 16507:1935, 20648:4578, 24797:4578, 27822:4651]
 
   script: |
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -101,7 +103,7 @@ build:
       --prefix=/usr \
       --libdir=lib \
       --buildtype=release \
-      -Dintrospection=disabled
+      -Dintrospection=enabled
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
@@ -224,6 +226,15 @@ outputs:
 
   lib:
     files:
+    - path: /usr/lib/girepository-1.0/Atk-1.0.typelib
+      needs:
+      - /usr/lib/girepository-1.0/GLib-2.0.typelib
+      - /usr/lib/girepository-1.0/GObject-2.0.typelib
+    - path: /usr/lib/girepository-1.0/Atspi-2.0.typelib
+      needs:
+      - /usr/lib/girepository-1.0/GLib-2.0.typelib
+      - /usr/lib/girepository-1.0/GObject-2.0.typelib
+      - /usr/lib/girepository-1.0/Gio-2.0.typelib
     - path: /usr/lib/gnome-settings-daemon-3.0/gtk-modules/at-spi2-atk.desktop
     - path: /usr/lib/gtk-2.0/modules/libatk-bridge.so
       needs:
@@ -299,6 +310,8 @@ outputs:
     files:
     - path: /usr/share/dbus-1/accessibility-services/org.a11y.atspi.Registry.service
     - path: /usr/share/dbus-1/services/org.a11y.Bus.service
+    - path: /usr/share/gir-1.0/Atk-1.0.gir
+    - path: /usr/share/gir-1.0/Atspi-2.0.gir
 
 resolution:
   /usr/lib/libdbus-1.so.3: dbus
@@ -308,6 +321,9 @@ resolution:
   /usr/lib/libgobject-2.0.so.0: glib2
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
+  /usr/lib/girepository-1.0/GLib-2.0.typelib: gobject-introspection
+  /usr/lib/girepository-1.0/GObject-2.0.typelib: gobject-introspection
+  /usr/lib/girepository-1.0/Gio-2.0.typelib: gobject-introspection
   /usr/lib/libX11.so.6: libx11
   /usr/lib/libXi.so.6: libxi
   /usr/lib/libXtst.so.6: libxtst
