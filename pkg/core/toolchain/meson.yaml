@@ -6,7 +6,7 @@ package:
   version: 1.6.1
   description: Meson is an open source build system meant to be both extremely fast, and as user friendly as possible.
   homepage: https://mesonbuild.com
-  checksum: 462f0494db77bdeae1e25c8480245c5c14a92c1cc76ff4c4b8d117888c32db86
+  checksum: d104d566c71c31cab2b74f3559194a194865c8e1ec0a211853dd050d85027fe4
 
 sources:
 - name: meson
@@ -49,7 +49,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [2183:1872]
+  profile: [1683:1884]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -57,6 +57,23 @@ build:
 
     pip3 wheel -w dist --no-cache-dir --no-build-isolation --no-deps $PWD
     pip3 install --no-index --root=${OUT_DIR} --find-links dist meson
+    cat > ${OUT_DIR}/usr/bin/meson <<'PY'
+    #!/usr/bin/python3.12
+    import os
+    import re
+    import sys
+
+    prefix = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    site_packages = os.path.join(prefix, "lib", "python3.12", "site-packages")
+    sys.path.insert(0, site_packages)
+
+    from mesonbuild.mesonmain import main
+
+    if __name__ == "__main__":
+        sys.argv[0] = re.sub(r"(-script\.pyw|\.exe)?$", "", sys.argv[0])
+        sys.exit(main())
+    PY
+    chmod 755 ${OUT_DIR}/usr/bin/meson
     install -vDm644 data/shell-completions/bash/meson ${OUT_DIR}/usr/share/bash-completion/completions/meson
     install -vDm644 data/shell-completions/zsh/_meson ${OUT_DIR}/usr/share/zsh/site-functions/_meson
 
