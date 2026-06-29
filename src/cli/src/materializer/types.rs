@@ -177,6 +177,7 @@ pub struct MaterializeResult {
 }
 
 impl MaterializeResult {
+    /// Create an empty materialization result for a resolved closure.
     pub fn new(closure: RuntimeClosure) -> Self {
         Self {
             closure,

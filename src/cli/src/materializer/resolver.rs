@@ -88,6 +88,10 @@ impl<'a> RuntimeResolver<'a> {
 
     fn process_commit(&mut self, commit: &str) {
         let Some(manifest) = find_manifest_for_commit(commit, self.manifest_index) else {
+            self.closure.add_unresolved(
+                format!("manifest for {}", commit).as_str(),
+                format!("{} was included in the runtime closure", commit),
+            );
             return;
         };
         let file_entries = file_entries_to_process(

@@ -16,9 +16,7 @@ mod flatten_runtime_tests;
 
 /// Flatten runtime dependencies for a single package capsule using precomputed deps.
 ///
-/// Reads deps from the manifest and copies required libraries into the package's
-/// `lib/` directory. Dependencies are resolved transitively - if libA needs libB,
-/// we also flatten libB and everything it needs.
+/// Reads deps from the manifest and copies required libraries into the package capsule.
 pub fn flatten_capsule_precomputed(
     repo_path: &str,
     pkg_dir: &Path,
@@ -28,7 +26,7 @@ pub fn flatten_capsule_precomputed(
 ) -> io::Result<usize> {
     let manifest = match find_manifest_for_commit(commit, manifest_index) {
         Some(manifest) => manifest,
-        None => return Ok(0),
+        None => return Err(missing_manifest_error(commit)),
     };
     let self_files_commit = derive_files_commit_for_manifest(manifest);
     let output_names = output_names_for_commit(pkg_dir, commit, manifest)?;
@@ -317,6 +315,16 @@ fn flatten_export_error(commit: &str, path: &str, error: io::Error) -> io::Error
         format!(
             "failed to flatten declared runtime file {} from {}: {}",
             path, commit, error
+        ),
+    )
+}
+
+fn missing_manifest_error(commit: &str) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::NotFound,
+        format!(
+            "cannot flatten runtime dependencies for {} because no manifest was found",
+            commit
         ),
     )
 }

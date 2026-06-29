@@ -97,6 +97,7 @@ fn verify_second_build(
     let output_dir = Path::new(base_dir).join(&build_env.paths.out);
     let second_checksum = calculate_output_checksum(&output_dir)?;
     println!("Second build output checksum: {}", second_checksum);
+    verify_reproducible_checksum(checksum, &second_checksum)?;
 
     let manifest_path = Path::new(&opts.manifest_file);
     verify_and_commit_outputs(
@@ -107,8 +108,11 @@ fn verify_second_build(
         &build_env.paths,
     )?;
     create_and_commit_bundles(manifest, base_dir, &opts.repo_path, manifest_path)?;
+    Ok(())
+}
 
-    if checksum == second_checksum {
+fn verify_reproducible_checksum(first_checksum: &str, second_checksum: &str) -> io::Result<()> {
+    if first_checksum == second_checksum {
         println!("Build is reproducible. Checksums match.");
         Ok(())
     } else {

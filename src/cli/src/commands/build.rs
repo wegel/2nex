@@ -5,6 +5,7 @@ use std::sync::Arc;
 use clap::Args;
 use indicatif::MultiProgress;
 
+/// Command-line arguments for `nex build`.
 #[derive(Args)]
 pub struct BuildArgs {
     /// Manifest file to build
@@ -148,6 +149,7 @@ pub struct BuildOpts {
 }
 
 impl BuildOpts {
+    /// Convert parsed CLI arguments into internal builder options.
     pub fn from_args(args: &BuildArgs, repo_path: String) -> Self {
         Self {
             repo_path,

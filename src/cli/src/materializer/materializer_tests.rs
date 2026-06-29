@@ -2,6 +2,8 @@ use std::io;
 
 use tempfile::TempDir;
 
+use crate::store::Store;
+
 use super::{
     materialize, reject_unresolved_dependencies, MaterializeConfig, MaterializeMode,
     MaterializeRequest, RuntimeClosure,
@@ -67,4 +69,42 @@ fn requested_only_materialize_does_not_require_manifest_db() {
     let error = materialize(&config, &requests).unwrap_err();
 
     assert!(!error.to_string().contains("manifest_db_paths is required"));
+}
+
+fn host_lacks_root_user_namespace_mapping(error: &io::Error) -> bool {
+    error.to_string().contains("uid 0 not mapped in namespace")
+}
+
+#[test]
+fn resolving_materialize_fails_when_root_manifest_is_missing() -> io::Result<()> {
+    let temp_dir = TempDir::new()?;
+    let repo_path = temp_dir.path().join("repo");
+    if let Err(error) = Store::init(&repo_path) {
+        if host_lacks_root_user_namespace_mapping(&error) {
+            eprintln!("skipping missing manifest materializer test: host cannot map uid 0");
+            return Ok(());
+        }
+        return Err(error);
+    }
+
+    let manifest_db = temp_dir.path().join("empty-pkg-db");
+    std::fs::create_dir_all(&manifest_db)?;
+    let config = MaterializeConfig {
+        repo_path: repo_path.display().to_string(),
+        target_dir: temp_dir.path().join("target"),
+        manifest_db_paths: vec![manifest_db],
+        resolve_deps: true,
+        ..Default::default()
+    };
+    let requests = [MaterializeRequest::Output {
+        commit: "x86_64/pkg/apps/example/1.0/outputs/bin".to_string(),
+    }];
+
+    let error = materialize(&config, &requests).unwrap_err();
+    let message = error.to_string();
+
+    assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    assert!(message.contains("manifest for x86_64/pkg/apps/example/1.0/outputs/bin"));
+    assert!(message.contains("was included in the runtime closure"));
+    Ok(())
 }
