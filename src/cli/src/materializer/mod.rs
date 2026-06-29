@@ -35,6 +35,7 @@ pub mod resolver;
 mod resolver_entries;
 mod resolver_metadata;
 mod resolver_refs;
+mod symlink_forest;
 pub mod types;
 
 pub use checkout::checkout_closure;
