@@ -8,6 +8,9 @@ CONFIG_KEY_DH_OPERATIONS=y
 # enable AMD Display Core for amdgpu KMS
 CONFIG_DRM_AMD_DC=y
 
+# keep exported symbols available for out-of-tree modules
+# CONFIG_TRIM_UNUSED_KSYMS is not set
+
 # cap maximum CPUs to reduce static kernel memory usage
 CONFIG_NR_CPUS=128
 

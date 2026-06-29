@@ -6,7 +6,7 @@ package:
   version: 6.12.58
   description: Linux kernel with allmod config and curated fragments
   homepage: https://www.kernel.org/
-  checksum: 0cfd4dfb0cfab550b24a12472e83e2bf35e145f7cd1b6fc618064b4ee6f0668b
+  checksum: 91b6d003a41e4f45510262530438d6ee3f66dfc058708b772be8fa2621badbeb
 
 sources:
 - name: kernel
@@ -41,7 +41,7 @@ sources:
   sha256: 493a60874edf3512a15e35f86eb0ed84f2e049557eafa60773b7548cca8467e7
 - name: overrides
   file: pkg/core/kernel/fragments/overrides.frag
-  sha256: 1c934ac4ff8b1d4cf20c209b38088522125be163109e994e2fe214d7a0775fe9
+  sha256: a2d7f54566e84489d8bf281c7753a695bf2881c483b694c50fc4d82b96b88877
 
 dependencies:
 - name: libcap
@@ -131,7 +131,7 @@ dependencies:
 
 build:
   environment: env/linux-kernel.yaml
-  profile: [54067:6665, 216511:6675, 483010:6750, 805200:71656, 1072832:209294, 1340477:326961, 1608512:433498, 2012157:486505, 2412923:491562, 2679721:506896]
+  profile: [54067:6648, 216511:6656, 483010:6726, 805393:73432, 1072936:213612, 1340916:327346, 1608857:435406, 2012519:489643, 2413068:494584, 2679920:509808]
 
   script: |
     set -eu
@@ -266,6 +266,7 @@ build:
     sdk_dir="${OUT_DIR}/usr/src/linux-6.12.58"
     srctree=. SRCARCH=x86 MAKE=make CC=gcc HOSTCC=gcc \
       scripts/package/install-extmod-build "${sdk_dir}"
+    cp -v .config "${sdk_dir}/.config"
     rm -f "${OUT_DIR}/usr/lib/modules/6.12.58/build" \
           "${OUT_DIR}/usr/lib/modules/6.12.58/source"
     ln -s ../../../src/linux-6.12.58 "${OUT_DIR}/usr/lib/modules/6.12.58/build"
@@ -7016,6 +7017,7 @@ outputs:
     files:
     - path: /usr/lib/modules/6.12.58/build
     - path: /usr/lib/modules/6.12.58/source
+    - path: /usr/src/linux-6.12.58/.config
     - path: /usr/src/linux-6.12.58/Makefile
     - path: /usr/src/linux-6.12.58/Module.symvers
     - path: /usr/src/linux-6.12.58/arch/x86/Makefile
