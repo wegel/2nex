@@ -31,6 +31,10 @@ struct ProgressCapture {
     output: Option<Vec<u8>>,
 }
 
+#[cfg(test)]
+#[path = "script_tests.rs"]
+mod script_tests;
+
 /// Run a build script in the namespace and chroot mode named by its environment.
 pub fn run_build_script_with_env(
     build_script: &str,
@@ -100,12 +104,6 @@ fn build_script_env(
     input_env_vars: &HashMap<String, String>,
     build_env: &BuildEnvironment,
 ) -> HashMap<String, String> {
-    if !build_env.execution.chroot {
-        for (key, _) in env::vars() {
-            env::remove_var(key);
-        }
-    }
-
     let mut vars = HashMap::new();
     for (key, value) in &build_env.env {
         vars.insert(key.clone(), expand_for_launch(value, launch));
@@ -172,6 +170,7 @@ fn spawn_build_process(
     let mut command = Command::new("unshare");
     command
         .args(unshare_command(launch_script))
+        .env_clear()
         .envs(script_env);
 
     if progress_config.is_some() {
