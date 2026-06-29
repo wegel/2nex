@@ -14,6 +14,8 @@ use walkdir::WalkDir;
 pub fn determine_category(file_path: &str) -> String {
     if file_path.ends_with(".so") || file_path.contains(".so.") {
         "lib".to_string()
+    } else if is_kernel_module_sdk_path(file_path) {
+        "module-sdk".to_string()
     } else if file_path.contains("/include/") {
         "dev".to_string()
     } else if file_path.ends_with(".pc") || file_path.contains("/pkgconfig/") {
@@ -53,6 +55,21 @@ pub fn determine_category(file_path: &str) -> String {
     } else {
         "misc".to_string()
     }
+}
+
+fn is_kernel_module_sdk_path(file_path: &str) -> bool {
+    if file_path.starts_with("/usr/src/linux-") {
+        return true;
+    }
+
+    if let Some(suffix) = file_path.strip_prefix("/usr/lib/modules/") {
+        let mut parts = suffix.split('/');
+        if parts.next().is_some() {
+            return matches!(parts.next(), Some("build" | "source"));
+        }
+    }
+
+    false
 }
 
 /// Fetch content from a git blob by its SHA.
@@ -327,6 +344,18 @@ mod tests {
         assert_eq!(
             determine_category("/usr/share/fonts/TTF/HackNerdFont-Regular.ttf"),
             "fonts"
+        );
+        assert_eq!(
+            determine_category("/usr/src/linux-6.12.58/Module.symvers"),
+            "module-sdk"
+        );
+        assert_eq!(
+            determine_category("/usr/lib/modules/6.12.58/build"),
+            "module-sdk"
+        );
+        assert_eq!(
+            determine_category("/usr/lib/modules/6.12.58/source/include/linux/module.h"),
+            "module-sdk"
         );
     }
 }
