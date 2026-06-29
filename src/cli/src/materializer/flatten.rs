@@ -1,5 +1,6 @@
 //! Dependency flattening for Nex capsules using precomputed deps.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::io;
 use std::os::unix::fs::symlink;
@@ -12,7 +13,8 @@ use crate::utils::hash_file_content;
 use super::flatten_deps::{find_file_needs, resolve_transitive_deps};
 pub(super) use super::flatten_errors::flatten_export_error;
 use super::flatten_errors::{
-    missing_manifest_error, missing_resolution_error, missing_self_files_commit_error,
+    missing_bundle_error, missing_manifest_error, missing_output_error, missing_resolution_error,
+    missing_self_files_commit_error,
 };
 
 #[cfg(test)]
@@ -79,11 +81,12 @@ fn output_names_for_commit(
     let commit_name = commit_parts.last().copied().unwrap_or("");
 
     if commit_type == "bundles" {
-        Ok(manifest
-            .bundles
-            .get(commit_name)
-            .map(|bundle| bundle.includes.clone())
-            .unwrap_or_default())
+        let Some(bundle) = manifest.bundles.get(commit_name) else {
+            return Err(missing_bundle_error(commit_name, manifest));
+        };
+        Ok(bundle.includes.clone())
+    } else if commit_type == "outputs" {
+        Ok(vec![commit_name.to_string()])
     } else {
         Ok(detect_outputs_in_capsule(pkg_dir, manifest))
     }
@@ -110,7 +113,7 @@ fn collect_output_deps(
     deps: &mut CapsuleDeps,
 ) -> io::Result<()> {
     let Some(output_spec) = manifest.outputs.get(output_name) else {
-        return Ok(());
+        return Err(missing_output_error(output_name, manifest));
     };
 
     for file_entry in &output_spec.files {
@@ -142,13 +145,21 @@ fn collect_external_deps_from_self_libs(
     manifest: &Manifest,
     deps: &mut CapsuleDeps,
 ) -> io::Result<()> {
-    for self_lib in &deps.self_libs.clone() {
-        let needs = find_file_needs(self_lib, manifest);
+    let mut seen_self_libs = deps.self_libs.iter().cloned().collect::<BTreeSet<_>>();
+    let mut index = 0;
+    while index < deps.self_libs.len() {
+        let self_lib = deps.self_libs[index].clone();
+        index += 1;
+        let needs = find_file_needs(&self_lib, manifest);
         for needed_file in needs {
             let Some(dep_name) = manifest.resolution.get(&needed_file) else {
                 return Err(missing_resolution_error(&needed_file, manifest));
             };
-            if dep_name != "self" {
+            if dep_name == "self" {
+                if seen_self_libs.insert(needed_file.clone()) {
+                    deps.self_libs.push(needed_file);
+                }
+            } else {
                 deps.external_deps.push((needed_file, dep_name.clone()));
             }
         }

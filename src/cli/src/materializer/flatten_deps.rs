@@ -1,6 +1,6 @@
 //! Transitive runtime dependency discovery for capsule flattening.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashSet};
 use std::io;
 use std::path::PathBuf;
 
@@ -20,7 +20,6 @@ pub(super) fn resolve_transitive_deps(
 ) -> io::Result<Vec<(String, String, String)>> {
     let mut result: Vec<(String, String, String)> = Vec::new();
     let (mut seen_files, mut queue) = seed_dependency_queue(direct_deps, root_manifest);
-    let mut dep_manifest_cache: HashMap<String, Option<&Manifest>> = HashMap::new();
 
     while let Some((file_path, dep_name, source_manifest)) = queue.pop() {
         process_dependency_queue_item(
@@ -28,7 +27,6 @@ pub(super) fn resolve_transitive_deps(
             dep_name,
             source_manifest,
             manifest_index,
-            &mut dep_manifest_cache,
             &mut seen_files,
             &mut queue,
             &mut result,
@@ -60,7 +58,6 @@ fn process_dependency_queue_item<'a>(
     dep_name: String,
     source_manifest: &'a Manifest,
     manifest_index: &'a ManifestIndex,
-    dep_manifest_cache: &mut HashMap<String, Option<&'a Manifest>>,
     seen_files: &mut HashSet<String>,
     queue: &mut DependencyQueue<'a>,
     result: &mut Vec<(String, String, String)>,
@@ -80,8 +77,7 @@ fn process_dependency_queue_item<'a>(
             dep,
         ));
     };
-    let dep_manifest =
-        cached_dependency_manifest(dep_manifest_cache, &actual_dep_name, dep, manifest_index);
+    let dep_manifest = find_manifest_for_dependency(dep, manifest_index);
 
     if !is_self_continuation {
         push_result_paths(
@@ -140,21 +136,6 @@ pub(super) fn python_site_packages_dir_prefix(file_path: &str) -> Option<String>
     }
 
     Some(format!("{}{}/", &file_path[..package_start], package_name))
-}
-
-fn cached_dependency_manifest<'a>(
-    cache: &mut HashMap<String, Option<&'a Manifest>>,
-    dep_name: &str,
-    dep: &crate::manifest::types::Dependency,
-    manifest_index: &'a ManifestIndex,
-) -> Option<&'a Manifest> {
-    if let Some(cached) = cache.get(dep_name) {
-        *cached
-    } else {
-        let manifest = find_manifest_for_dependency(dep, manifest_index);
-        cache.insert(dep_name.to_string(), manifest);
-        manifest
-    }
 }
 
 fn push_result_paths(

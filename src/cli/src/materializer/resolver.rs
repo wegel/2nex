@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use crate::manifest::ManifestIndex;
 use crate::store::Store;
 
+use super::resolver_metadata::missing_runtime_metadata;
 use super::resolver_refs::{resolve_dependency_to_commit, ResolveResult};
 use super::types::{MaterializeRequest, RuntimeClosure};
 
@@ -94,6 +95,9 @@ impl<'a> RuntimeResolver<'a> {
             );
             return;
         };
+        if self.record_missing_runtime_metadata(commit, manifest) {
+            return;
+        }
         let file_entries = file_entries_to_process(
             commit,
             manifest,
@@ -118,6 +122,21 @@ impl<'a> RuntimeResolver<'a> {
         for needed_file in file_needs {
             self.process_needed_file(commit, manifest, manifest_key, file_path, &needed_file);
         }
+    }
+
+    fn record_missing_runtime_metadata(
+        &mut self,
+        commit: &str,
+        manifest: &crate::manifest::types::Manifest,
+    ) -> bool {
+        let missing = missing_runtime_metadata(commit, manifest);
+        for item in &missing {
+            self.closure.add_unresolved(
+                item,
+                format!("{} references missing runtime metadata", commit),
+            );
+        }
+        !missing.is_empty()
     }
 
     fn process_needed_file(
@@ -294,7 +313,7 @@ fn file_entries_to_process(
         .collect()
 }
 
-fn is_checksum_files_commit_ref(commit: &str) -> bool {
+pub(super) fn is_checksum_files_commit_ref(commit: &str) -> bool {
     let mut parts = commit.rsplit('/');
     let Some(last) = parts.next() else {
         return false;

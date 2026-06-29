@@ -32,6 +32,7 @@ mod flatten_errors;
 pub mod index;
 mod pathdiff;
 pub mod resolver;
+mod resolver_metadata;
 mod resolver_refs;
 pub mod types;
 

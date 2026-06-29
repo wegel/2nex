@@ -24,6 +24,26 @@ pub(super) fn missing_manifest_error(commit: &str) -> io::Error {
     )
 }
 
+pub(super) fn missing_bundle_error(bundle_name: &str, manifest: &Manifest) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!(
+            "bundle '{}' is referenced for {}/{} but is not declared",
+            bundle_name, manifest.package.namespace, manifest.package.slug
+        ),
+    )
+}
+
+pub(super) fn missing_output_error(output_name: &str, manifest: &Manifest) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!(
+            "output '{}' is referenced for {}/{} but is not declared",
+            output_name, manifest.package.namespace, manifest.package.slug
+        ),
+    )
+}
+
 pub(super) fn missing_self_files_commit_error(
     manifest: &Manifest,
     self_libs: &[String],
