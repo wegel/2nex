@@ -1,0 +1,278 @@
+package:
+  schema: 1
+  name: Distrobox
+  slug: distrobox
+  namespace: apps/containers
+  version: 1.8.2.5
+  description: Use OCI containers as integrated development environments
+  homepage: https://distrobox.it/
+  checksum: 4666f493d2b526b6f24e97f6386fa098dc2035ebf0d35c9cd6c68bab868b1f21
+
+sources:
+- name: distrobox
+  url: https://github.com/89luca89/distrobox/archive/refs/tags/1.8.2.5.tar.gz
+  sha256: 0c3bc4785ee3be3b89f93abb7cc0a9f60e56989e81319af140a4b60403b18f80
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: podman
+  commit: x86_64/pkg/apps/containers/podman/5.4.1/bundles/full
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [289:130]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "/./${SOURCE_distrobox}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    find . -maxdepth 1 -type f -name 'distrobox*' -exec sed -i '1s|^#!/bin/sh$|#!/usr/bin/sh|' {} \;
+    sed -i '1s|^#!/bin/sh$|#!/usr/bin/sh|' install uninstall
+
+    sh ./install --prefix "${OUT_DIR}/usr" --no-color
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - completions
+  - man
+
+  full:
+  - bin
+  - completions
+  - icons
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/distrobox
+      needs:
+      - /usr/bin/dirname
+      - /usr/bin/sh
+    - path: /usr/bin/distrobox-assemble
+      needs:
+      - /usr/bin/awk
+      - /usr/bin/basename
+      - /usr/bin/dirname
+      - /usr/bin/grep
+      - /usr/bin/podman
+      - /usr/bin/realpath
+      - /usr/bin/sed
+      - /usr/bin/sh
+    - path: /usr/bin/distrobox-create
+      needs:
+      - /usr/bin/basename
+      - /usr/bin/cut
+      - /usr/bin/dirname
+      - /usr/bin/getent
+      - /usr/bin/id
+      - /usr/bin/podman
+      - /usr/bin/realpath
+      - /usr/bin/sed
+      - /usr/bin/sh
+      - /usr/bin/uname
+    - path: /usr/bin/distrobox-enter
+      needs:
+      - /usr/bin/basename
+      - /usr/bin/dirname
+      - /usr/bin/grep
+      - /usr/bin/id
+      - /usr/bin/podman
+      - /usr/bin/realpath
+      - /usr/bin/sed
+      - /usr/bin/sh
+    - path: /usr/bin/distrobox-ephemeral
+      needs:
+      - /usr/bin/basename
+      - /usr/bin/dirname
+      - /usr/bin/grep
+      - /usr/bin/id
+      - /usr/bin/podman
+      - /usr/bin/realpath
+      - /usr/bin/sed
+      - /usr/bin/sh
+    - path: /usr/bin/distrobox-export
+      needs:
+      - /usr/bin/basename
+      - /usr/bin/dirname
+      - /usr/bin/find
+      - /usr/bin/grep
+      - /usr/bin/id
+      - /usr/bin/podman
+      - /usr/bin/realpath
+      - /usr/bin/sed
+      - /usr/bin/sh
+    - path: /usr/bin/distrobox-generate-entry
+      needs:
+      - /usr/bin/basename
+      - /usr/bin/dirname
+      - /usr/bin/find
+      - /usr/bin/grep
+      - /usr/bin/id
+      - /usr/bin/podman
+      - /usr/bin/realpath
+      - /usr/bin/sed
+      - /usr/bin/sh
+    - path: /usr/bin/distrobox-host-exec
+      needs:
+      - /usr/bin/basename
+      - /usr/bin/grep
+      - /usr/bin/sed
+      - /usr/bin/sh
+      - /usr/bin/uname
+    - path: /usr/bin/distrobox-init
+      needs:
+      - /usr/bin/awk
+      - /usr/bin/basename
+      - /usr/bin/cut
+      - /usr/bin/dirname
+      - /usr/bin/find
+      - /usr/bin/getent
+      - /usr/bin/grep
+      - /usr/bin/id
+      - /usr/bin/realpath
+      - /usr/bin/sed
+      - /usr/bin/sh
+      - /usr/bin/tr
+      - /usr/bin/uname
+      - /usr/bin/xargs
+    - path: /usr/bin/distrobox-list
+      needs:
+      - /usr/bin/basename
+      - /usr/bin/grep
+      - /usr/bin/id
+      - /usr/bin/podman
+      - /usr/bin/realpath
+      - /usr/bin/sed
+      - /usr/bin/sh
+      - /usr/bin/tr
+    - path: /usr/bin/distrobox-rm
+      needs:
+      - /usr/bin/basename
+      - /usr/bin/find
+      - /usr/bin/grep
+      - /usr/bin/id
+      - /usr/bin/podman
+      - /usr/bin/realpath
+      - /usr/bin/sed
+      - /usr/bin/sh
+      - /usr/bin/xargs
+    - path: /usr/bin/distrobox-stop
+      needs:
+      - /usr/bin/basename
+      - /usr/bin/grep
+      - /usr/bin/id
+      - /usr/bin/podman
+      - /usr/bin/realpath
+      - /usr/bin/sed
+      - /usr/bin/sh
+    - path: /usr/bin/distrobox-upgrade
+      needs:
+      - /usr/bin/basename
+      - /usr/bin/grep
+      - /usr/bin/id
+      - /usr/bin/podman
+      - /usr/bin/realpath
+      - /usr/bin/sed
+      - /usr/bin/sh
+      - /usr/bin/tr
+
+  completions:
+    files:
+    - path: /usr/share/bash-completion/completions/distrobox
+    - path: /usr/share/bash-completion/completions/distrobox-assemble
+    - path: /usr/share/bash-completion/completions/distrobox-create
+    - path: /usr/share/bash-completion/completions/distrobox-enter
+    - path: /usr/share/bash-completion/completions/distrobox-ephemeral
+    - path: /usr/share/bash-completion/completions/distrobox-generate-entry
+    - path: /usr/share/bash-completion/completions/distrobox-list
+    - path: /usr/share/bash-completion/completions/distrobox-rm
+    - path: /usr/share/bash-completion/completions/distrobox-stop
+    - path: /usr/share/bash-completion/completions/distrobox-upgrade
+    - path: /usr/share/zsh/site-functions/_distrobox
+    - path: /usr/share/zsh/site-functions/_distrobox-assemble
+    - path: /usr/share/zsh/site-functions/_distrobox-create
+    - path: /usr/share/zsh/site-functions/_distrobox-enter
+    - path: /usr/share/zsh/site-functions/_distrobox-ephemeral
+    - path: /usr/share/zsh/site-functions/_distrobox-export
+    - path: /usr/share/zsh/site-functions/_distrobox-generate-entry
+    - path: /usr/share/zsh/site-functions/_distrobox-host-exec
+    - path: /usr/share/zsh/site-functions/_distrobox-init
+    - path: /usr/share/zsh/site-functions/_distrobox-list
+    - path: /usr/share/zsh/site-functions/_distrobox-rm
+    - path: /usr/share/zsh/site-functions/_distrobox-stop
+    - path: /usr/share/zsh/site-functions/_distrobox-upgrade
+    - path: /usr/share/zsh/site-functions/_distrobox_containers
+    - path: /usr/share/zsh/site-functions/_distrobox_images
+    - path: /usr/share/zsh/site-functions/_distrobox_running_containers
+
+  icons:
+    files:
+    - path: /usr/share/icons/hicolor/16x16/apps/terminal-distrobox-icon.png
+    - path: /usr/share/icons/hicolor/22x22/apps/terminal-distrobox-icon.png
+    - path: /usr/share/icons/hicolor/24x24/apps/terminal-distrobox-icon.png
+    - path: /usr/share/icons/hicolor/32x32/apps/terminal-distrobox-icon.png
+    - path: /usr/share/icons/hicolor/36x36/apps/terminal-distrobox-icon.png
+    - path: /usr/share/icons/hicolor/48x48/apps/terminal-distrobox-icon.png
+    - path: /usr/share/icons/hicolor/64x64/apps/terminal-distrobox-icon.png
+    - path: /usr/share/icons/hicolor/72x72/apps/terminal-distrobox-icon.png
+    - path: /usr/share/icons/hicolor/96x96/apps/terminal-distrobox-icon.png
+    - path: /usr/share/icons/hicolor/128x128/apps/terminal-distrobox-icon.png
+    - path: /usr/share/icons/hicolor/256x256/apps/terminal-distrobox-icon.png
+    - path: /usr/share/icons/hicolor/scalable/apps/terminal-distrobox-icon.svg
+
+  man:
+    files:
+    - path: /usr/share/man/man1/distrobox-assemble.1
+    - path: /usr/share/man/man1/distrobox-compatibility.1
+    - path: /usr/share/man/man1/distrobox-create.1
+    - path: /usr/share/man/man1/distrobox-enter.1
+    - path: /usr/share/man/man1/distrobox-ephemeral.1
+    - path: /usr/share/man/man1/distrobox-export.1
+    - path: /usr/share/man/man1/distrobox-generate-entry.1
+    - path: /usr/share/man/man1/distrobox-host-exec.1
+    - path: /usr/share/man/man1/distrobox-init.1
+    - path: /usr/share/man/man1/distrobox-list.1
+    - path: /usr/share/man/man1/distrobox-rm.1
+    - path: /usr/share/man/man1/distrobox-stop.1
+    - path: /usr/share/man/man1/distrobox-upgrade.1
+    - path: /usr/share/man/man1/distrobox.1
+
+resolution:
+  /usr/bin/sh: bash
+  /usr/bin/basename: coreutils
+  /usr/bin/cut: coreutils
+  /usr/bin/dirname: coreutils
+  /usr/bin/id: coreutils
+  /usr/bin/realpath: coreutils
+  /usr/bin/tr: coreutils
+  /usr/bin/uname: coreutils
+  /usr/bin/find: findutils
+  /usr/bin/xargs: findutils
+  /usr/bin/awk: gawk
+  /usr/bin/getent: glibc
+  /usr/bin/grep: grep
+  /usr/bin/podman: podman
+  /usr/bin/sed: sed
