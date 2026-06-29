@@ -1,0 +1,101 @@
+package:
+  schema: 1
+  name: v4l2loopback
+  slug: v4l2loopback
+  namespace: core/kernel
+  version: 0.12.7
+  description: Virtual V4L2 loopback camera kernel module and control tool
+  homepage: https://github.com/v4l2loopback/v4l2loopback
+  checksum: 0de68c202bab6676701eb3717d92a7debe34b87c6d1b532663155bd31b305b19
+
+sources:
+- name: v4l2loopback
+  url: https://github.com/v4l2loopback/v4l2loopback/archive/refs/tags/v0.12.7.tar.gz
+  sha256: e0782b8abe8f2235e2734f725dc1533a0729e674c4b7834921ade43b9f04939b
+
+dependencies:
+- name: linux-module-sdk
+  commit: x86_64/pkg/core/kernel/linux/6.12.58/bundles/module-sdk
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: which
+  commit: x86_64/pkg/core/userland/which/2.23/outputs/bin
+
+build:
+  environment: env/standard.yaml
+  profile: [403:872]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "/${SOURCE_v4l2loopback}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    # Linux 6.12 removed strlcpy; strscpy is the in-kernel replacement.
+    sed -i 's/strlcpy(/strscpy(/g' v4l2loopback.c
+
+    make KERNELRELEASE=6.12.58 KERNEL_DIR=/usr/src/linux-6.12.58 all
+
+    install -Dm644 v4l2loopback.ko \
+      "${OUT_DIR}/usr/lib/modules/6.12.58/extra/v4l2loopback.ko"
+    install -Dm755 utils/v4l2loopback-ctl \
+      "${OUT_DIR}/usr/bin/v4l2loopback-ctl"
+
+    strip --strip-debug "${OUT_DIR}/usr/lib/modules/6.12.58/extra/v4l2loopback.ko"
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  full:
+  - bin
+  - module
+
+  runtime:
+  - bin
+  - module
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/v4l2loopback-ctl
+      needs:
+      - /usr/bin/bash
+      - /usr/bin/cat
+      - /usr/bin/grep
+      - /usr/bin/readlink
+      - /usr/bin/sed
+      - /usr/bin/tee
+      - /usr/bin/which
+
+  module:
+    files:
+    - path: /usr/lib/modules/6.12.58/extra/v4l2loopback.ko
+
+resolution:
+  /usr/bin/bash: bash
+  /usr/bin/cat: coreutils
+  /usr/bin/readlink: coreutils
+  /usr/bin/tee: coreutils
+  /usr/bin/grep: grep
+  /usr/bin/sed: sed
+  /usr/bin/which: which

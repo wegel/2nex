@@ -138,5 +138,10 @@ preamble: |
   # regenerate ld.so.cache so dynamic linker can find all libraries from dependencies
   # (required for tools like glib-compile-resources that dlopen gdk-pixbuf loaders)
   if [ -x {build_dir}/usr/bin/ldconfig ]; then
-      {build_dir}/usr/bin/ldconfig -r {build_dir}
+      mkdir -p {build_dir}/etc
+      if [ ! -e {build_dir}/etc/ld.so.cache ]; then
+          {build_dir}/usr/bin/ldconfig -r {build_dir}
+      else
+          echo 'Warning: skipping ldconfig cache refresh because /etc/ld.so.cache already exists' >&2
+      fi
   fi
