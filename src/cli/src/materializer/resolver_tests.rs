@@ -2,7 +2,8 @@ use std::collections::{BTreeSet, HashMap};
 
 use crate::manifest::types::{Build, FileEntry, Manifest, OutputSpec, Package};
 
-use super::{file_entries_to_process, queue_self_file_dependency, RuntimeClosure};
+use super::super::resolver_entries::file_entries_to_process;
+use super::{queue_self_file_dependency, RuntimeClosure};
 
 fn manifest_with_lib_output() -> Manifest {
     let mut outputs = HashMap::new();
@@ -55,15 +56,17 @@ fn files_commit_processes_needed_manifest_entries_once() {
     let mut processed_file_paths = HashMap::new();
     let entries = file_entries_to_process(commit, &manifest, &closure, &mut processed_file_paths);
     assert_eq!(
-        entries,
+        entries.entries,
         vec![(
             "/usr/lib/libX11.so.6".to_string(),
             vec!["/usr/lib/libxcb.so.1".to_string()]
         )]
     );
+    assert!(entries.missing_files.is_empty());
 
     let entries = file_entries_to_process(commit, &manifest, &closure, &mut processed_file_paths);
-    assert!(entries.is_empty());
+    assert!(entries.entries.is_empty());
+    assert!(entries.missing_files.is_empty());
 
     closure.add_file_dep(
         commit,
@@ -72,9 +75,24 @@ fn files_commit_processes_needed_manifest_entries_once() {
     );
     let entries = file_entries_to_process(commit, &manifest, &closure, &mut processed_file_paths);
     assert_eq!(
-        entries,
+        entries.entries,
         vec![("/usr/lib/libX11-xcb.so.1".to_string(), Vec::new())]
     );
+    assert!(entries.missing_files.is_empty());
+}
+
+#[test]
+fn files_commit_reports_requested_files_missing_manifest_metadata() {
+    let manifest = manifest_with_lib_output();
+    let commit = "x86_64/pkg/libs/x11/libx11/1.8.10/abc/files";
+    let mut closure = RuntimeClosure::default();
+    closure.add_file_dep(commit, "/usr/lib/libmissing.so.1", "test".to_string());
+    let mut processed_file_paths = HashMap::new();
+
+    let entries = file_entries_to_process(commit, &manifest, &closure, &mut processed_file_paths);
+
+    assert!(entries.entries.is_empty());
+    assert_eq!(entries.missing_files, vec!["/usr/lib/libmissing.so.1"]);
 }
 
 #[test]

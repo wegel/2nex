@@ -9,7 +9,8 @@ use crate::manifest::ManifestIndex;
 use crate::utils::hash_file_content;
 
 use super::flatten_errors::{
-    missing_dependency_error, missing_dependency_files_commit_error, missing_resolution_error,
+    missing_dependency_error, missing_dependency_files_commit_error, missing_file_metadata_error,
+    missing_resolution_error,
 };
 
 /// Resolve transitive closure of dependencies.
@@ -113,15 +114,15 @@ fn actual_dependency_name(dep_name: &str) -> (String, bool) {
 }
 
 /// Find what a specific file needs by looking through the manifest's outputs.
-pub(super) fn find_file_needs(file_path: &str, manifest: &Manifest) -> Vec<String> {
+pub(super) fn find_file_needs(file_path: &str, manifest: &Manifest) -> Option<Vec<String>> {
     for output_spec in manifest.outputs.values() {
         for file_entry in &output_spec.files {
             if file_entry.path == file_path {
-                return file_entry.needs.clone();
+                return Some(file_entry.needs.clone());
             }
         }
     }
-    Vec::new()
+    None
 }
 
 pub(super) fn python_site_packages_dir_prefix(file_path: &str) -> Option<String> {
@@ -164,7 +165,10 @@ fn queue_transitive_needs<'a>(
     queue: &mut Vec<(String, String, &'a Manifest)>,
     result: &mut Vec<(String, String, String)>,
 ) -> io::Result<()> {
-    for needed_file in find_file_needs(file_path, dep_manifest) {
+    let Some(needed_files) = find_file_needs(file_path, dep_manifest) else {
+        return Err(missing_file_metadata_error(file_path, dep_manifest));
+    };
+    for needed_file in needed_files {
         if !seen_files.insert(needed_file.clone()) {
             continue;
         }

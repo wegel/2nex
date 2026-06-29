@@ -163,9 +163,21 @@ fn checkout_package_output(repo_path: &str, install: &PackageInstall) -> io::Res
         fs::create_dir_all(parent)?;
     }
     checkout_into(repo_path, &install.commit, &install.install_dir, true)?;
+    record_package_root_commit(install)?;
+    Ok(())
+}
+
+fn record_package_root_commit(install: &PackageInstall) -> io::Result<()> {
     let sentinel_path = install.install_dir.join(".nex-app-root");
-    if !sentinel_path.exists() {
-        fs::write(&sentinel_path, format!("{}\n", install.commit))?;
+    let mut commits = if sentinel_path.exists() {
+        fs::read_to_string(&sentinel_path)?
+    } else {
+        String::new()
+    };
+    if !commits.lines().any(|commit| commit == install.commit) {
+        commits.push_str(&install.commit);
+        commits.push('\n');
+        fs::write(sentinel_path, commits)?;
     }
     Ok(())
 }

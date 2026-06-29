@@ -3,7 +3,7 @@
 use crate::manifest::types::Manifest;
 
 pub(super) fn missing_runtime_metadata(commit: &str, manifest: &Manifest) -> Vec<String> {
-    if super::resolver::is_checksum_files_commit_ref(commit) {
+    if super::resolver_entries::is_checksum_files_commit_ref(commit) {
         return Vec::new();
     }
 

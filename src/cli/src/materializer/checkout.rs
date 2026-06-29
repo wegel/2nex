@@ -14,6 +14,7 @@ use super::pathdiff::diff_paths;
 use super::types::{MaterializeConfig, MaterializeMode, MaterializeResult, RuntimeClosure};
 
 type PackageMap = BTreeMap<PackageId, Vec<String>>;
+type RootCommitMap = BTreeMap<PackageId, Vec<String>>;
 type PackageSet = HashSet<PackageId>;
 
 struct NexPaths {
@@ -94,16 +95,16 @@ fn checkout_nex(
     manifest_index: Option<&ManifestIndex>,
 ) -> io::Result<()> {
     let paths = nex_paths(config)?;
-    let (packages, root_packages) = package_groups(config, closure)?;
-    checkout_root_packages(config, &paths, &packages, &root_packages)?;
+    let (packages, root_commits) = package_groups(config, closure)?;
+    let root_packages = root_package_set(&root_commits);
+    checkout_root_packages(config, &paths, &packages, &root_commits)?;
 
     if let Some(idx) = manifest_index {
         flatten_all_capsules_split(
             &config.repo_path,
             &paths.physical_pkg,
             &paths.logical_pkg,
-            &packages,
-            &root_packages,
+            &root_commits,
             idx,
             &config.fallback_repo_paths,
         )?;
@@ -147,9 +148,9 @@ fn nex_paths(config: &MaterializeConfig) -> io::Result<NexPaths> {
 fn package_groups(
     config: &MaterializeConfig,
     closure: &RuntimeClosure,
-) -> io::Result<(PackageMap, PackageSet)> {
+) -> io::Result<(PackageMap, RootCommitMap)> {
     let mut packages: PackageMap = BTreeMap::new();
-    let mut root_packages = HashSet::new();
+    let mut root_commits: RootCommitMap = BTreeMap::new();
 
     for commit in closure.all_commits() {
         let pkg_id = get_package_id(&config.repo_path, commit, &config.fallback_repo_paths)?;
@@ -158,22 +159,26 @@ fn package_groups(
             .or_default()
             .push(commit.clone());
         if closure.is_root(commit) {
-            root_packages.insert(pkg_id);
+            root_commits.entry(pkg_id).or_default().push(commit.clone());
         }
     }
 
-    Ok((packages, root_packages))
+    Ok((packages, root_commits))
+}
+
+fn root_package_set(root_commits: &RootCommitMap) -> PackageSet {
+    root_commits.keys().cloned().collect()
 }
 
 fn checkout_root_packages(
     config: &MaterializeConfig,
     paths: &NexPaths,
     packages: &PackageMap,
-    root_packages: &PackageSet,
+    root_commits: &RootCommitMap,
 ) -> io::Result<()> {
     for (pkg_id, commits) in packages {
-        if root_packages.contains(pkg_id) {
-            checkout_root_package(config, paths, pkg_id, commits)?;
+        if let Some(root_commits) = root_commits.get(pkg_id) {
+            checkout_root_package(config, paths, pkg_id, commits, root_commits)?;
         }
     }
     Ok(())
@@ -184,6 +189,7 @@ fn checkout_root_package(
     paths: &NexPaths,
     pkg_id: &PackageId,
     commits: &[String],
+    root_commits: &[String],
 ) -> io::Result<()> {
     let short_hash = &pkg_id.manifest_hash[..8.min(pkg_id.manifest_hash.len())];
     let physical_pkg_dir = paths.physical_pkg.join(&pkg_id.path).join(short_hash);
@@ -205,7 +211,7 @@ fn checkout_root_package(
     }
     fs::write(
         physical_pkg_dir.join(".nex-app-root"),
-        commits.join("\n") + "\n",
+        root_commits.join("\n") + "\n",
     )
 }
 
@@ -226,16 +232,11 @@ fn flatten_all_capsules_split(
     repo_path: &str,
     physical_nex_pkg: &Path,
     logical_nex_pkg: &Path,
-    packages: &PackageMap,
-    root_packages: &PackageSet,
+    root_commits: &RootCommitMap,
     manifest_index: &ManifestIndex,
     fallback_repos: &[PathBuf],
 ) -> io::Result<()> {
-    for (pkg_id, commits) in packages {
-        if !root_packages.contains(pkg_id) {
-            continue;
-        }
-
+    for (pkg_id, commits) in root_commits {
         let short_hash = &pkg_id.manifest_hash[..8.min(pkg_id.manifest_hash.len())];
         let physical_pkg_dir = physical_nex_pkg.join(&pkg_id.path).join(short_hash);
         let logical_pkg_dir = logical_nex_pkg.join(&pkg_id.path).join(short_hash);
@@ -244,7 +245,7 @@ fn flatten_all_capsules_split(
             continue;
         }
 
-        if let Some(commit) = commits.first() {
+        for commit in commits {
             let flattened_count = flatten_capsule_precomputed(
                 repo_path,
                 &physical_pkg_dir,

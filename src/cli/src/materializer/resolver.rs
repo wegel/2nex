@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use crate::manifest::ManifestIndex;
 use crate::store::Store;
 
+use super::resolver_entries::{file_entries_to_process, is_checksum_files_commit_ref};
 use super::resolver_metadata::missing_runtime_metadata;
 use super::resolver_refs::{resolve_dependency_to_commit, ResolveResult};
 use super::types::{MaterializeRequest, RuntimeClosure};
@@ -104,9 +105,10 @@ impl<'a> RuntimeResolver<'a> {
             &self.closure,
             &mut self.processed_file_paths,
         );
+        self.record_missing_file_metadata(commit, &file_entries.missing_files);
 
         let manifest_key = manifest as *const _ as usize;
-        for (file_path, file_needs) in file_entries {
+        for (file_path, file_needs) in file_entries.entries {
             self.process_file_needs(commit, manifest, manifest_key, &file_path, file_needs);
         }
     }
@@ -137,6 +139,18 @@ impl<'a> RuntimeResolver<'a> {
             );
         }
         !missing.is_empty()
+    }
+
+    fn record_missing_file_metadata(&mut self, commit: &str, missing_files: &[String]) {
+        for file_path in missing_files {
+            self.closure.add_unresolved(
+                file_path,
+                format!(
+                    "{} requested {} but no manifest file entry describes it",
+                    commit, file_path
+                ),
+            );
+        }
     }
 
     fn process_needed_file(
@@ -257,74 +271,6 @@ impl<'a> RuntimeResolver<'a> {
             self.pending.push(dep_commit);
         }
     }
-}
-
-fn file_entries_to_process(
-    commit: &str,
-    manifest: &crate::manifest::types::Manifest,
-    closure: &RuntimeClosure,
-    processed_file_paths: &mut HashMap<String, BTreeSet<String>>,
-) -> Vec<(String, Vec<String>)> {
-    if is_checksum_files_commit_ref(commit) {
-        let requested_files = match closure.get_files(commit) {
-            Some(files) => files,
-            None => return Vec::new(),
-        };
-        let processed_files = processed_file_paths.entry(commit.to_string()).or_default();
-        let pending_files: BTreeSet<String> = requested_files
-            .difference(processed_files)
-            .cloned()
-            .collect();
-        if pending_files.is_empty() {
-            return Vec::new();
-        }
-
-        processed_files.extend(pending_files.iter().cloned());
-        return manifest
-            .outputs
-            .values()
-            .flat_map(|output| output.files.iter())
-            .filter(|file_entry| pending_files.contains(&file_entry.path))
-            .map(|file_entry| (file_entry.path.clone(), file_entry.needs.clone()))
-            .collect();
-    }
-
-    let commit_parts: Vec<&str> = commit.split('/').collect();
-    let commit_type = commit_parts
-        .get(commit_parts.len().saturating_sub(2))
-        .copied()
-        .unwrap_or("");
-    let commit_name = commit_parts.last().copied().unwrap_or("");
-
-    let output_names: Vec<String> = if commit_type == "bundles" {
-        match manifest.bundles.get(commit_name) {
-            Some(bundle) => bundle.includes.clone(),
-            None => return Vec::new(),
-        }
-    } else {
-        vec![commit_name.to_string()]
-    };
-
-    output_names
-        .iter()
-        .filter_map(|output_name| manifest.outputs.get(output_name))
-        .flat_map(|output| output.files.iter())
-        .map(|file_entry| (file_entry.path.clone(), file_entry.needs.clone()))
-        .collect()
-}
-
-pub(super) fn is_checksum_files_commit_ref(commit: &str) -> bool {
-    let mut parts = commit.rsplit('/');
-    let Some(last) = parts.next() else {
-        return false;
-    };
-    let Some(previous) = parts.next() else {
-        return false;
-    };
-    last == "files"
-        && previous != "outputs"
-        && previous != "bundles"
-        && commit.split('/').count() >= 7
 }
 
 fn queue_self_file_dependency(

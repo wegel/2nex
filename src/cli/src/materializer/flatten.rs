@@ -13,8 +13,8 @@ use crate::utils::hash_file_content;
 use super::flatten_deps::{find_file_needs, resolve_transitive_deps};
 pub(super) use super::flatten_errors::flatten_export_error;
 use super::flatten_errors::{
-    missing_bundle_error, missing_manifest_error, missing_output_error, missing_resolution_error,
-    missing_self_files_commit_error,
+    missing_bundle_error, missing_file_metadata_error, missing_manifest_error,
+    missing_output_error, missing_resolution_error, missing_self_files_commit_error,
 };
 
 #[cfg(test)]
@@ -150,7 +150,9 @@ fn collect_external_deps_from_self_libs(
     while index < deps.self_libs.len() {
         let self_lib = deps.self_libs[index].clone();
         index += 1;
-        let needs = find_file_needs(&self_lib, manifest);
+        let Some(needs) = find_file_needs(&self_lib, manifest) else {
+            return Err(missing_file_metadata_error(&self_lib, manifest));
+        };
         for needed_file in needs {
             let Some(dep_name) = manifest.resolution.get(&needed_file) else {
                 return Err(missing_resolution_error(&needed_file, manifest));

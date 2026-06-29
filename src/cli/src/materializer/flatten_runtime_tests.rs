@@ -54,6 +54,9 @@ outputs:
     - path: /usr/bin/app
       needs:
       - /usr/lib/libself.so
+  lib:
+    files:
+    - path: /usr/lib/libself.so
 resolution:
   /usr/lib/libself.so: self
 "#,
@@ -256,6 +259,55 @@ resolution: {}
 
     assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     assert!(error.to_string().contains("output 'lib'"));
+}
+
+#[test]
+fn flatten_fails_when_dependency_file_metadata_is_missing() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    write_capsule_file(temp_dir.path(), "usr/bin/app");
+    let mut index = ManifestIndex::default();
+    index.add_manifest(package_manifest(
+        "apps",
+        "root",
+        r#"
+dependencies:
+- name: dep
+  commit: x86_64/pkg/libs/dep/1.0/outputs/lib
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/app
+      needs:
+      - /usr/lib/libdep.so
+resolution:
+  /usr/lib/libdep.so: dep
+"#,
+    ));
+    index.add_manifest(package_manifest_with_checksum(
+        "libs",
+        "dep",
+        "abc",
+        r#"
+dependencies: []
+outputs:
+  lib:
+    files: []
+resolution: {}
+"#,
+    ));
+
+    let error = flatten_capsule_precomputed(
+        "missing-repo",
+        temp_dir.path(),
+        "x86_64/pkg/apps/root/1.0/outputs/bin",
+        &index,
+        &[],
+    )
+    .unwrap_err();
+
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    assert!(error.to_string().contains("/usr/lib/libdep.so"));
+    assert!(error.to_string().contains("no manifest file entry"));
 }
 
 fn package_manifest(namespace: &str, slug: &str, body: &str) -> crate::manifest::Manifest {

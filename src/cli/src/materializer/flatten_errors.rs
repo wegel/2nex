@@ -44,6 +44,16 @@ pub(super) fn missing_output_error(output_name: &str, manifest: &Manifest) -> io
     )
 }
 
+pub(super) fn missing_file_metadata_error(file_path: &str, manifest: &Manifest) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!(
+            "{} is needed from {}/{} but no manifest file entry describes it",
+            file_path, manifest.package.namespace, manifest.package.slug
+        ),
+    )
+}
+
 pub(super) fn missing_self_files_commit_error(
     manifest: &Manifest,
     self_libs: &[String],

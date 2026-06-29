@@ -84,12 +84,15 @@ fn flatten_package_capsule(
     manifest_index: &ManifestIndex,
     pkg_dir: &Path,
 ) -> io::Result<()> {
-    let commit = package_root_commit(pkg_dir)?;
-    if commit.is_empty() {
+    let commits = package_root_commits(pkg_dir)?;
+    if commits.is_empty() {
         return Ok(());
     }
-    let flattened_count =
-        flatten_capsule_precomputed(repo_path, pkg_dir, &commit, manifest_index, &[])?;
+    let mut flattened_count = 0;
+    for commit in commits {
+        flattened_count +=
+            flatten_capsule_precomputed(repo_path, pkg_dir, &commit, manifest_index, &[])?;
+    }
     if flattened_count > 0 {
         let rel_path = pkg_dir.strip_prefix(nex_pkg_dir).unwrap_or(pkg_dir);
         println!(
@@ -101,15 +104,20 @@ fn flatten_package_capsule(
     Ok(())
 }
 
-fn package_root_commit(pkg_dir: &Path) -> io::Result<String> {
+fn package_root_commits(pkg_dir: &Path) -> io::Result<Vec<String>> {
     Ok(fs::read_to_string(pkg_dir.join(".nex-app-root"))?
         .lines()
-        .next()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
         .map(|line| line.to_string())
-        .unwrap_or_default())
+        .collect())
 }
 
 fn is_yaml_path(path: &Path) -> bool {
     path.extension()
         .is_some_and(|ext| ext == "yaml" || ext == "yml")
 }
+
+#[cfg(test)]
+#[path = "nex_db_tests.rs"]
+mod nex_db_tests;
