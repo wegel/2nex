@@ -59,15 +59,15 @@ pub fn build_system_manifest_with_dir(
     println!("System build checksum: {}", checksum);
 
     handle_system_checksum(opts, manifest, &checksum)?;
+    if opts.check {
+        check_system_reproducibility(opts, manifest, base_dir, download_dir, &inputs, &checksum)?;
+    }
+    update_system_checksum_after_reproducibility(opts, manifest, &checksum)?;
     commit_system_build(opts, manifest, base_dir, &inputs, &checksum)?;
     println!(
         "System commit stored at systems/{}/{}",
         manifest.system.slug, manifest.system.version
     );
-
-    if opts.check {
-        check_system_reproducibility(opts, manifest, base_dir, download_dir, &inputs, &checksum)?;
-    }
 
     Ok(())
 }
@@ -207,6 +207,13 @@ fn handle_recorded_checksum(
         println!("Checksum verified successfully.");
         return Ok(());
     }
+    if opts.check {
+        println!(
+            "Note: system checksum differs from manifest (expected {}, got {}). Proceeding with reproducibility check.",
+            expected_checksum, checksum
+        );
+        return Ok(());
+    }
     if opts.update_checksum {
         println!(
             "System checksum mismatch (expected {}, calculated {}). Updating manifest.",
@@ -224,6 +231,9 @@ fn handle_recorded_checksum(
 }
 
 fn handle_missing_checksum(opts: &BuildOpts, checksum: &str) -> io::Result<()> {
+    if opts.check {
+        return Ok(());
+    }
     if opts.update_checksum {
         println!(
             "System manifest {} does not record a checksum. Storing {}.",
@@ -232,6 +242,20 @@ fn handle_missing_checksum(opts: &BuildOpts, checksum: &str) -> io::Result<()> {
         update_manifest_checksum_field(&opts.manifest_file, ManifestKind::System, checksum)?;
     }
     Ok(())
+}
+
+fn update_system_checksum_after_reproducibility(
+    opts: &BuildOpts,
+    manifest: &SystemManifest,
+    checksum: &str,
+) -> io::Result<()> {
+    if !opts.check || !opts.update_checksum {
+        return Ok(());
+    }
+    if manifest.system.checksum.as_deref() == Some(checksum) {
+        return Ok(());
+    }
+    update_manifest_checksum_field(&opts.manifest_file, ManifestKind::System, checksum)
 }
 
 fn commit_system_build(
@@ -264,8 +288,7 @@ fn check_system_reproducibility(
     build_system_once(opts, manifest, base_dir, download_dir, inputs, false)?;
     let second_checksum = checksum_target(base_dir)?;
     println!("Second build checksum: {}", second_checksum);
-    verify_reproducible_checksum(checksum, &second_checksum)?;
-    commit_system_build(opts, manifest, base_dir, inputs, &second_checksum)
+    verify_reproducible_checksum(checksum, &second_checksum)
 }
 
 fn verify_reproducible_checksum(first_checksum: &str, second_checksum: &str) -> io::Result<()> {

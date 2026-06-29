@@ -21,6 +21,7 @@ struct NexPaths {
     physical_pkg: PathBuf,
     physical_env: PathBuf,
     logical_pkg: PathBuf,
+    logical_env: PathBuf,
 }
 
 /// Checkout commits from the closure to the target directory.
@@ -106,9 +107,10 @@ fn checkout_nex(
     }
 
     create_symlink_forest_split(
-        config,
         &paths.physical_pkg,
+        &paths.logical_pkg,
         &paths.physical_env,
+        &paths.logical_env,
         &packages,
         &root_packages,
         result,
@@ -131,12 +133,17 @@ fn nex_paths(config: &MaterializeConfig) -> io::Result<NexPaths> {
         .pkg_dir_override
         .clone()
         .unwrap_or_else(|| config.target_dir.join("nex/pkg"));
+    let logical_env = config
+        .env_dir_override
+        .clone()
+        .unwrap_or_else(|| config.target_dir.join("nex/env"));
     fs::create_dir_all(&physical_pkg)?;
     fs::create_dir_all(&physical_env)?;
     Ok(NexPaths {
         physical_pkg,
         physical_env,
         logical_pkg,
+        logical_env,
     })
 }
 
@@ -276,15 +283,14 @@ fn flatten_all_capsules_split(
 mod checkout_tests;
 
 fn create_symlink_forest_split(
-    config: &MaterializeConfig,
     physical_nex_pkg: &Path,
+    logical_nex_pkg: &Path,
     physical_nex_env: &Path,
+    logical_nex_env: &Path,
     packages: &PackageMap,
     root_packages: &PackageSet,
     result: &mut MaterializeResult,
 ) -> io::Result<()> {
-    let logical_nex_pkg = config.target_dir.join("nex/pkg");
-    let logical_nex_env = config.target_dir.join("nex/env");
     let link_dirs = ["bin", "lib", "lib64", "sbin", "share", "include"];
 
     for pkg_id in packages.keys() {

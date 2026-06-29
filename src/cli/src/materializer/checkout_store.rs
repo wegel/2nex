@@ -44,19 +44,23 @@ fn checkout_one_file(
     commit: &str,
 ) -> io::Result<()> {
     let src = temp_dir.join(file.trim_start_matches('/'));
-    if !src.exists() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("File {} not found in commit {}", file, commit),
-        ));
-    }
+    let src_metadata = src.symlink_metadata().map_err(|error| {
+        if error.kind() == io::ErrorKind::NotFound {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("File {} not found in commit {}", file, commit),
+            )
+        } else {
+            error
+        }
+    })?;
 
     let dst = target_dir.join(file.trim_start_matches('/'));
     if let Some(parent) = dst.parent() {
         fs::create_dir_all(parent)?;
     }
 
-    if src.symlink_metadata()?.file_type().is_symlink() {
+    if src_metadata.file_type().is_symlink() {
         checkout_symlink_file(&src, &dst)
     } else {
         copy_regular_file(&src, &dst)
@@ -106,3 +110,7 @@ fn is_same_inode(src: &Path, dst: &Path) -> bool {
     };
     src_ino.is_some() && src_ino == dst_ino
 }
+
+#[cfg(test)]
+#[path = "checkout_store_tests.rs"]
+mod checkout_store_tests;

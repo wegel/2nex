@@ -100,19 +100,19 @@ fn handle_expected_checksum(
         println!("Checksum verified successfully.");
         return Ok(true);
     }
+    if opts.check {
+        println!(
+            "Note: checksum differs from manifest (expected {}, got {}). Proceeding with reproducibility check.",
+            expected_checksum, checksum
+        );
+        return Ok(true);
+    }
     if opts.update_checksum {
         println!(
             "Checksum mismatch (expected {}, calculated {}). Updating manifest.",
             expected_checksum, checksum
         );
         update_package_checksum(opts, manifest, checksum)?;
-        return Ok(true);
-    }
-    if opts.check {
-        println!(
-            "Note: checksum differs from manifest (expected {}, got {}). Proceeding with reproducibility check.",
-            expected_checksum, checksum
-        );
         return Ok(true);
     }
 
@@ -139,6 +139,9 @@ fn handle_missing_checksum(
     manifest: &mut Manifest,
     checksum: &str,
 ) -> io::Result<bool> {
+    if opts.check {
+        return Ok(true);
+    }
     if opts.update_checksum {
         println!(
             "Manifest {} does not record a checksum. Storing {}.",
@@ -147,6 +150,20 @@ fn handle_missing_checksum(
         update_package_checksum(opts, manifest, checksum)?;
     }
     Ok(true)
+}
+
+pub(super) fn update_check_checksum_after_reproducibility(
+    opts: &BuildOpts,
+    manifest: &mut Manifest,
+    checksum: &str,
+) -> io::Result<()> {
+    if !opts.check || !opts.update_checksum {
+        return Ok(());
+    }
+    if manifest.package.checksum.as_deref() == Some(checksum) {
+        return Ok(());
+    }
+    update_package_checksum(opts, manifest, checksum)
 }
 
 fn update_package_checksum(

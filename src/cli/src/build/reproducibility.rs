@@ -8,7 +8,6 @@ use crate::commands::build::BuildOpts;
 use crate::manifest::{BuildEnvironment, Manifest};
 use crate::outputs::calculate_output_checksum;
 
-use super::commits::{create_and_commit_bundles, verify_and_commit_outputs};
 use super::inputs::handle_inputs;
 use super::rootfs::setup_composite_rootfs;
 use super::script::run_build_script_with_env;
@@ -66,7 +65,7 @@ pub fn maybe_check_reproducibility(check: ReproducibilityCheck<'_>) -> io::Resul
         canonical_prefix,
     )?;
     run_build_script_with_env(build_script, base_dir, &input_env_vars, build_env, None)?;
-    verify_second_build(opts, manifest, base_dir, build_env, checksum)
+    verify_second_build(base_dir, build_env, checksum)
 }
 
 fn prepare_second_build_root(
@@ -88,8 +87,6 @@ fn prepare_second_build_root(
 }
 
 fn verify_second_build(
-    opts: &BuildOpts,
-    manifest: &Manifest,
     base_dir: &str,
     build_env: &BuildEnvironment,
     checksum: &str,
@@ -97,18 +94,7 @@ fn verify_second_build(
     let output_dir = Path::new(base_dir).join(&build_env.paths.out);
     let second_checksum = calculate_output_checksum(&output_dir)?;
     println!("Second build output checksum: {}", second_checksum);
-    verify_reproducible_checksum(checksum, &second_checksum)?;
-
-    let manifest_path = Path::new(&opts.manifest_file);
-    verify_and_commit_outputs(
-        manifest,
-        base_dir,
-        &opts.repo_path,
-        manifest_path,
-        &build_env.paths,
-    )?;
-    create_and_commit_bundles(manifest, base_dir, &opts.repo_path, manifest_path)?;
-    Ok(())
+    verify_reproducible_checksum(checksum, &second_checksum)
 }
 
 fn verify_reproducible_checksum(first_checksum: &str, second_checksum: &str) -> io::Result<()> {

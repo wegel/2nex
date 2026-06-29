@@ -5,8 +5,8 @@ use tempfile::TempDir;
 use crate::store::Store;
 
 use super::{
-    materialize, reject_unresolved_dependencies, MaterializeConfig, MaterializeMode,
-    MaterializeRequest, RuntimeClosure,
+    bundle_materialize_config, materialize, reject_unresolved_dependencies, MaterializeConfig,
+    MaterializeMode, MaterializeRequest, RuntimeClosure,
 };
 
 #[test]
@@ -34,6 +34,16 @@ fn test_materialize_request_commit() {
         paths: vec!["/bin/foo".to_string()],
     };
     assert_eq!(files.commit(), "test/files");
+}
+
+#[test]
+fn bundle_helper_config_does_not_require_manifest_db() {
+    let temp_dir = TempDir::new().unwrap();
+
+    let config = bundle_materialize_config("repo", temp_dir.path(), MaterializeMode::Nex);
+
+    assert!(!config.resolve_deps);
+    assert!(config.manifest_db_paths.is_empty());
 }
 
 #[test]

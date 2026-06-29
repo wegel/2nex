@@ -19,7 +19,7 @@ use super::env::load_environment;
 use super::inputs::handle_inputs;
 use super::package_outputs::{
     commit_package_outputs, commit_raw_output, maybe_compute_runtime_deps,
-    should_commit_package_outputs,
+    should_commit_package_outputs, update_check_checksum_after_reproducibility,
 };
 use super::reproducibility::{maybe_check_reproducibility, ReproducibilityCheck};
 use super::rootfs::setup_composite_rootfs;
@@ -90,12 +90,7 @@ pub fn build_package_manifest_with_dir(
     maybe_generate_outputs(opts, manifest, base_dir, &build_env)?;
 
     let checksum = commit_raw_output(opts, manifest, base_dir, &build_env)?;
-    if should_commit_package_outputs(opts, manifest, &checksum)? {
-        commit_package_outputs(opts, manifest, base_dir, &build_env, &checksum)?;
-    }
-
-    maybe_compute_runtime_deps(opts, manifest)?;
-    maybe_check_reproducibility(ReproducibilityCheck {
+    publish_checked_package_outputs(PackagePublish {
         opts,
         manifest,
         base_dir,
@@ -109,6 +104,46 @@ pub fn build_package_manifest_with_dir(
 
     append_checksum_file(&manifest.package, &checksum, Path::new("checksums.txt"))?;
     Ok(())
+}
+
+struct PackagePublish<'a> {
+    opts: &'a BuildOpts,
+    manifest: &'a mut Manifest,
+    base_dir: &'a str,
+    download_dir: &'a str,
+    build_env: &'a BuildEnvironment,
+    dependency_commits: &'a [String],
+    canonical_prefix: Option<&'a str>,
+    build_script: &'a str,
+    checksum: &'a str,
+}
+
+fn publish_checked_package_outputs(plan: PackagePublish<'_>) -> io::Result<()> {
+    let should_commit_outputs =
+        should_commit_package_outputs(plan.opts, plan.manifest, plan.checksum)?;
+    maybe_check_reproducibility(ReproducibilityCheck {
+        opts: plan.opts,
+        manifest: plan.manifest,
+        base_dir: plan.base_dir,
+        download_dir: plan.download_dir,
+        build_env: plan.build_env,
+        dependency_commits: plan.dependency_commits,
+        canonical_prefix: plan.canonical_prefix,
+        build_script: plan.build_script,
+        checksum: plan.checksum,
+    })?;
+    update_check_checksum_after_reproducibility(plan.opts, plan.manifest, plan.checksum)?;
+
+    if should_commit_outputs {
+        commit_package_outputs(
+            plan.opts,
+            plan.manifest,
+            plan.base_dir,
+            plan.build_env,
+            plan.checksum,
+        )?;
+    }
+    maybe_compute_runtime_deps(plan.opts, plan.manifest)
 }
 
 fn load_manifest_data(opts: &BuildOpts) -> io::Result<ManifestData> {

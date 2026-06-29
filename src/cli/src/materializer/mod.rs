@@ -153,19 +153,27 @@ pub fn materialize_bundle(
     target_dir: &std::path::Path,
     mode: MaterializeMode,
 ) -> io::Result<MaterializeResult> {
-    let config = MaterializeConfig {
-        repo_path: repo_path.to_string(),
-        target_dir: target_dir.to_path_buf(),
-        mode,
-        resolve_deps: true,
-        ..Default::default()
-    };
+    let config = bundle_materialize_config(repo_path, target_dir, mode);
 
     let requests = vec![MaterializeRequest::Bundle {
         commit: commit.to_string(),
     }];
 
     materialize(&config, &requests)
+}
+
+fn bundle_materialize_config(
+    repo_path: &str,
+    target_dir: &std::path::Path,
+    mode: MaterializeMode,
+) -> MaterializeConfig {
+    MaterializeConfig {
+        repo_path: repo_path.to_string(),
+        target_dir: target_dir.to_path_buf(),
+        mode,
+        resolve_deps: false,
+        ..Default::default()
+    }
 }
 
 /// Convenience function to materialize multiple outputs (flat union).
