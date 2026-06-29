@@ -1,0 +1,230 @@
+package:
+  schema: 1
+  name: libpcap
+  slug: libpcap
+  namespace: libs/net
+  version: 1.10.6
+  description: Packet capture library used by tcpdump
+  homepage: https://www.tcpdump.org/
+  checksum: 1808d805be7e34e8e5db4dc15040bdc93cd488f9948ff118d18263e02ce04d60
+
+sources:
+- name: libpcap
+  url: https://www.tcpdump.org/release/libpcap-1.10.6.tar.xz
+  sha256: ec97d1206bdd19cb6bdd043eaa9f0037aa732262ec68e070fd7c7b5f834d5dfc
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: flex
+  commit: x86_64/pkg/core/toolchain/flex/2.6.4/bundles/dev
+- name: bison
+  commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
+- name: m4
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4141:2013, 8803:2243, 13360:2246, 17463:3186, 21608:3963, 23558:4045]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "/./${SOURCE_libpcap}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    ./configure \
+      --prefix=/usr \
+      --libdir=/usr/lib \
+      --enable-shared \
+      --disable-dbus \
+      --disable-bluetooth \
+      --disable-rdma \
+      --disable-usb \
+      --disable-netmap \
+      --without-libnl
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    sed -i '1s|^#! */bin/sh$|#!/usr/bin/sh|' "${OUT_DIR}/usr/bin/pcap-config"
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - static
+
+  full:
+  - bin
+  - dev
+  - lib
+  - man
+  - static
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/pcap-config
+      needs:
+      - /usr/bin/sh
+
+  dev:
+    files:
+    - path: /usr/include/pcap-bpf.h
+    - path: /usr/include/pcap-namedb.h
+    - path: /usr/include/pcap.h
+    - path: /usr/include/pcap/bluetooth.h
+    - path: /usr/include/pcap/bpf.h
+    - path: /usr/include/pcap/can_socketcan.h
+    - path: /usr/include/pcap/compiler-tests.h
+    - path: /usr/include/pcap/dlt.h
+    - path: /usr/include/pcap/funcattrs.h
+    - path: /usr/include/pcap/ipnet.h
+    - path: /usr/include/pcap/namedb.h
+    - path: /usr/include/pcap/nflog.h
+    - path: /usr/include/pcap/pcap-inttypes.h
+    - path: /usr/include/pcap/pcap.h
+    - path: /usr/include/pcap/sll.h
+    - path: /usr/include/pcap/socket.h
+    - path: /usr/include/pcap/usb.h
+    - path: /usr/include/pcap/vlan.h
+    - path: /usr/lib/pkgconfig/libpcap.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libpcap.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libpcap.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libpcap.so.1.10.6
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man1/pcap-config.1
+    - path: /usr/share/man/man3/pcap.3pcap
+    - path: /usr/share/man/man3/pcap_activate.3pcap
+    - path: /usr/share/man/man3/pcap_breakloop.3pcap
+    - path: /usr/share/man/man3/pcap_can_set_rfmon.3pcap
+    - path: /usr/share/man/man3/pcap_close.3pcap
+    - path: /usr/share/man/man3/pcap_compile.3pcap
+    - path: /usr/share/man/man3/pcap_create.3pcap
+    - path: /usr/share/man/man3/pcap_datalink.3pcap
+    - path: /usr/share/man/man3/pcap_datalink_name_to_val.3pcap
+    - path: /usr/share/man/man3/pcap_datalink_val_to_description.3pcap
+    - path: /usr/share/man/man3/pcap_datalink_val_to_description_or_dlt.3pcap
+    - path: /usr/share/man/man3/pcap_datalink_val_to_name.3pcap
+    - path: /usr/share/man/man3/pcap_dispatch.3pcap
+    - path: /usr/share/man/man3/pcap_dump.3pcap
+    - path: /usr/share/man/man3/pcap_dump_close.3pcap
+    - path: /usr/share/man/man3/pcap_dump_file.3pcap
+    - path: /usr/share/man/man3/pcap_dump_flush.3pcap
+    - path: /usr/share/man/man3/pcap_dump_fopen.3pcap
+    - path: /usr/share/man/man3/pcap_dump_ftell.3pcap
+    - path: /usr/share/man/man3/pcap_dump_open.3pcap
+    - path: /usr/share/man/man3/pcap_file.3pcap
+    - path: /usr/share/man/man3/pcap_fileno.3pcap
+    - path: /usr/share/man/man3/pcap_findalldevs.3pcap
+    - path: /usr/share/man/man3/pcap_fopen_offline.3pcap
+    - path: /usr/share/man/man3/pcap_fopen_offline_with_tstamp_precision.3pcap
+    - path: /usr/share/man/man3/pcap_free_datalinks.3pcap
+    - path: /usr/share/man/man3/pcap_free_tstamp_types.3pcap
+    - path: /usr/share/man/man3/pcap_freealldevs.3pcap
+    - path: /usr/share/man/man3/pcap_freecode.3pcap
+    - path: /usr/share/man/man3/pcap_get_required_select_timeout.3pcap
+    - path: /usr/share/man/man3/pcap_get_selectable_fd.3pcap
+    - path: /usr/share/man/man3/pcap_get_tstamp_precision.3pcap
+    - path: /usr/share/man/man3/pcap_geterr.3pcap
+    - path: /usr/share/man/man3/pcap_getnonblock.3pcap
+    - path: /usr/share/man/man3/pcap_init.3pcap
+    - path: /usr/share/man/man3/pcap_inject.3pcap
+    - path: /usr/share/man/man3/pcap_is_swapped.3pcap
+    - path: /usr/share/man/man3/pcap_lib_version.3pcap
+    - path: /usr/share/man/man3/pcap_list_datalinks.3pcap
+    - path: /usr/share/man/man3/pcap_list_tstamp_types.3pcap
+    - path: /usr/share/man/man3/pcap_lookupdev.3pcap
+    - path: /usr/share/man/man3/pcap_lookupnet.3pcap
+    - path: /usr/share/man/man3/pcap_loop.3pcap
+    - path: /usr/share/man/man3/pcap_major_version.3pcap
+    - path: /usr/share/man/man3/pcap_minor_version.3pcap
+    - path: /usr/share/man/man3/pcap_next.3pcap
+    - path: /usr/share/man/man3/pcap_next_ex.3pcap
+    - path: /usr/share/man/man3/pcap_offline_filter.3pcap
+    - path: /usr/share/man/man3/pcap_open_dead.3pcap
+    - path: /usr/share/man/man3/pcap_open_dead_with_tstamp_precision.3pcap
+    - path: /usr/share/man/man3/pcap_open_live.3pcap
+    - path: /usr/share/man/man3/pcap_open_offline.3pcap
+    - path: /usr/share/man/man3/pcap_open_offline_with_tstamp_precision.3pcap
+    - path: /usr/share/man/man3/pcap_perror.3pcap
+    - path: /usr/share/man/man3/pcap_sendpacket.3pcap
+    - path: /usr/share/man/man3/pcap_set_buffer_size.3pcap
+    - path: /usr/share/man/man3/pcap_set_datalink.3pcap
+    - path: /usr/share/man/man3/pcap_set_immediate_mode.3pcap
+    - path: /usr/share/man/man3/pcap_set_promisc.3pcap
+    - path: /usr/share/man/man3/pcap_set_protocol_linux.3pcap
+    - path: /usr/share/man/man3/pcap_set_rfmon.3pcap
+    - path: /usr/share/man/man3/pcap_set_snaplen.3pcap
+    - path: /usr/share/man/man3/pcap_set_timeout.3pcap
+    - path: /usr/share/man/man3/pcap_set_tstamp_precision.3pcap
+    - path: /usr/share/man/man3/pcap_set_tstamp_type.3pcap
+    - path: /usr/share/man/man3/pcap_setdirection.3pcap
+    - path: /usr/share/man/man3/pcap_setfilter.3pcap
+    - path: /usr/share/man/man3/pcap_setnonblock.3pcap
+    - path: /usr/share/man/man3/pcap_snapshot.3pcap
+    - path: /usr/share/man/man3/pcap_stats.3pcap
+    - path: /usr/share/man/man3/pcap_statustostr.3pcap
+    - path: /usr/share/man/man3/pcap_strerror.3pcap
+    - path: /usr/share/man/man3/pcap_tstamp_type_name_to_val.3pcap
+    - path: /usr/share/man/man3/pcap_tstamp_type_val_to_description.3pcap
+    - path: /usr/share/man/man3/pcap_tstamp_type_val_to_name.3pcap
+    - path: /usr/share/man/man5/pcap-savefile.5
+    - path: /usr/share/man/man7/pcap-filter.7
+    - path: /usr/share/man/man7/pcap-linktype.7
+    - path: /usr/share/man/man7/pcap-tstamp.7
+
+  static:
+    files:
+    - path: /usr/lib/libpcap.a
+
+resolution:
+  /usr/bin/sh: bash
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
