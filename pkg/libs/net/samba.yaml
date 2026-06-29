@@ -1,0 +1,3031 @@
+package:
+  schema: 1
+  name: samba
+  slug: samba
+  namespace: libs/net
+  version: 4.21.3
+  description: SMB client library from Samba
+  homepage: https://www.samba.org/
+  checksum: 56af4352a0008c2f20cf06253b2759f88617facadfb0188ade44bd7edd53973a
+
+sources:
+- name: samba
+  url: https://download.samba.org/pub/samba/stable/samba-4.21.3.tar.gz
+  sha256: ae2179a613e7a5d4088735ab100d4ca1cae0f92374d6307e22eaec13ad90125c
+- name: linux_credential_probe_patch
+  file: pkg/libs/net/samba-linux-credential-probe.patch
+  sha256: 5106bd67b6eb6dc6746d9e008ac4c0ba0d7224b3333fb6983f0f14a42b8da7b0
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: inetutils
+  commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: parse-yapp
+  commit: x86_64/pkg/dev/perl/parse-yapp/1.21/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: flex
+  commit: x86_64/pkg/core/toolchain/flex/2.6.4/bundles/dev
+- name: bison
+  commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
+- name: m4
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: readline
+  commit: x86_64/pkg/libs/system/readline/8.2/bundles/dev
+- name: popt
+  commit: x86_64/pkg/libs/system/popt/1.19/bundles/dev
+- name: libtirpc
+  commit: x86_64/pkg/libs/net/libtirpc/1.3.7/bundles/dev
+- name: gnutls
+  commit: x86_64/pkg/libs/crypto/gnutls/3.8.8/bundles/dev
+- name: nettle
+  commit: x86_64/pkg/libs/crypto/nettle/3.1/bundles/dev
+- name: libtasn1
+  commit: x86_64/pkg/libs/crypto/libtasn1/4.19.0/bundles/dev
+- name: p11-kit
+  commit: x86_64/pkg/libs/crypto/p11-kit/0.25.5/bundles/dev
+- name: libunistring
+  commit: x86_64/pkg/libs/text/libunistring/1.3/bundles/dev
+- name: libidn2
+  commit: x86_64/pkg/libs/text/libidn2/2.3.7/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libbsd
+  commit: x86_64/pkg/libs/system/libbsd/0.12.2/bundles/dev
+- name: libmd
+  commit: x86_64/pkg/libs/crypto/libmd/1.2.0/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [12404:2715, 49770:9747, 112227:18838, 186470:24143, 246111:26287, 310529:28298, 368342:32464, 462106:47613, 552974:63501, 613326:68561]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_samba} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    patch -Np1 -i /${SOURCE_linux_credential_probe_patch}
+
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+    export CFLAGS CXXFLAGS LDFLAGS
+
+    ./configure \
+      --prefix=/usr \
+      --libdir=/usr/lib \
+      --sysconfdir=/etc \
+      --localstatedir=/var \
+      --enable-fhs \
+      --disable-python \
+      --without-gettext \
+      --without-gpgme \
+      --without-ad-dc \
+      --without-ads \
+      --without-ldap \
+      --without-pam \
+      --without-systemd \
+      --disable-cups \
+      --disable-avahi \
+      --without-libarchive \
+      --without-json \
+      --without-acl-support \
+      --without-winbind \
+      --without-ldb-lmdb \
+      --without-quotas \
+      --without-utmp \
+      --without-automount \
+      --without-fam \
+      --without-regedit \
+      --without-winexe \
+      --disable-glusterfs \
+      --disable-cephfs \
+      --disable-spotlight \
+      --disable-wsp \
+      --with-shared-modules='!vfs_snapper' \
+      --bundled-libraries=ALL
+
+    PYTHONHASHSEED=1 WAF_MAKE=1 ./buildtools/bin/waf build --targets=smbclient
+    PYTHONHASHSEED=1 WAF_MAKE=1 DESTDIR="${OUT_DIR}" ./buildtools/bin/waf install
+
+    find "${OUT_DIR}" -mindepth 1 -maxdepth 1 ! -name usr -exec rm -rf {} +
+    find "${OUT_DIR}/usr" -mindepth 1 -maxdepth 1 \
+      ! -name include \
+      ! -name lib \
+      -exec rm -rf {} +
+    find "${OUT_DIR}/usr/lib" -mindepth 1 -maxdepth 1 \
+      ! -name 'lib*.so' \
+      ! -name 'lib*.so.*' \
+      ! -name pkgconfig \
+      ! -name samba \
+      -exec rm -rf {} +
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/samba-4.0/charset.h
+    - path: /usr/include/samba-4.0/core/doserr.h
+    - path: /usr/include/samba-4.0/core/error.h
+    - path: /usr/include/samba-4.0/core/hresult.h
+    - path: /usr/include/samba-4.0/core/ntstatus.h
+    - path: /usr/include/samba-4.0/core/ntstatus_gen.h
+    - path: /usr/include/samba-4.0/core/werror.h
+    - path: /usr/include/samba-4.0/core/werror_gen.h
+    - path: /usr/include/samba-4.0/dcesrv_core.h
+    - path: /usr/include/samba-4.0/domain_credentials.h
+    - path: /usr/include/samba-4.0/gen_ndr/atsvc.h
+    - path: /usr/include/samba-4.0/gen_ndr/auth.h
+    - path: /usr/include/samba-4.0/gen_ndr/claims.h
+    - path: /usr/include/samba-4.0/gen_ndr/dcerpc.h
+    - path: /usr/include/samba-4.0/gen_ndr/drsblobs.h
+    - path: /usr/include/samba-4.0/gen_ndr/drsuapi.h
+    - path: /usr/include/samba-4.0/gen_ndr/krb5pac.h
+    - path: /usr/include/samba-4.0/gen_ndr/lsa.h
+    - path: /usr/include/samba-4.0/gen_ndr/misc.h
+    - path: /usr/include/samba-4.0/gen_ndr/nbt.h
+    - path: /usr/include/samba-4.0/gen_ndr/ndr_atsvc.h
+    - path: /usr/include/samba-4.0/gen_ndr/ndr_dcerpc.h
+    - path: /usr/include/samba-4.0/gen_ndr/ndr_drsblobs.h
+    - path: /usr/include/samba-4.0/gen_ndr/ndr_drsuapi.h
+    - path: /usr/include/samba-4.0/gen_ndr/ndr_krb5pac.h
+    - path: /usr/include/samba-4.0/gen_ndr/ndr_misc.h
+    - path: /usr/include/samba-4.0/gen_ndr/ndr_nbt.h
+    - path: /usr/include/samba-4.0/gen_ndr/ndr_samr.h
+    - path: /usr/include/samba-4.0/gen_ndr/ndr_svcctl.h
+    - path: /usr/include/samba-4.0/gen_ndr/ndr_svcctl_c.h
+    - path: /usr/include/samba-4.0/gen_ndr/netlogon.h
+    - path: /usr/include/samba-4.0/gen_ndr/samr.h
+    - path: /usr/include/samba-4.0/gen_ndr/security.h
+    - path: /usr/include/samba-4.0/gen_ndr/server_id.h
+    - path: /usr/include/samba-4.0/gen_ndr/svcctl.h
+    - path: /usr/include/samba-4.0/ldb_wrap.h
+    - path: /usr/include/samba-4.0/libsmbclient.h
+    - path: /usr/include/samba-4.0/lookup_sid.h
+    - path: /usr/include/samba-4.0/machine_sid.h
+    - path: /usr/include/samba-4.0/ndr.h
+    - path: /usr/include/samba-4.0/ndr/ndr_dcerpc.h
+    - path: /usr/include/samba-4.0/ndr/ndr_drsblobs.h
+    - path: /usr/include/samba-4.0/ndr/ndr_drsuapi.h
+    - path: /usr/include/samba-4.0/ndr/ndr_krb5pac.h
+    - path: /usr/include/samba-4.0/ndr/ndr_nbt.h
+    - path: /usr/include/samba-4.0/ndr/ndr_svcctl.h
+    - path: /usr/include/samba-4.0/netapi.h
+    - path: /usr/include/samba-4.0/passdb.h
+    - path: /usr/include/samba-4.0/rpc_common.h
+    - path: /usr/include/samba-4.0/samba/session.h
+    - path: /usr/include/samba-4.0/samba/version.h
+    - path: /usr/include/samba-4.0/share.h
+    - path: /usr/include/samba-4.0/smb2_lease_struct.h
+    - path: /usr/include/samba-4.0/smb3posix.h
+    - path: /usr/include/samba-4.0/smbconf.h
+    - path: /usr/include/samba-4.0/tdr.h
+    - path: /usr/include/samba-4.0/tsocket.h
+    - path: /usr/include/samba-4.0/tsocket_internal.h
+    - path: /usr/include/samba-4.0/util/attr.h
+    - path: /usr/include/samba-4.0/util/blocking.h
+    - path: /usr/include/samba-4.0/util/data_blob.h
+    - path: /usr/include/samba-4.0/util/debug.h
+    - path: /usr/include/samba-4.0/util/discard.h
+    - path: /usr/include/samba-4.0/util/fault.h
+    - path: /usr/include/samba-4.0/util/genrand.h
+    - path: /usr/include/samba-4.0/util/idtree.h
+    - path: /usr/include/samba-4.0/util/idtree_random.h
+    - path: /usr/include/samba-4.0/util/signal.h
+    - path: /usr/include/samba-4.0/util/substitute.h
+    - path: /usr/include/samba-4.0/util/tfork.h
+    - path: /usr/include/samba-4.0/util/time.h
+    - path: /usr/include/samba-4.0/util_ldb.h
+    - path: /usr/include/samba-4.0/wbclient.h
+    - path: /usr/lib/pkgconfig/ndr.pc
+    - path: /usr/lib/pkgconfig/ndr_krb5pac.pc
+    - path: /usr/lib/pkgconfig/ndr_nbt.pc
+    - path: /usr/lib/pkgconfig/ndr_standard.pc
+    - path: /usr/lib/pkgconfig/netapi.pc
+    - path: /usr/lib/pkgconfig/samba-util.pc
+    - path: /usr/lib/pkgconfig/smbclient.pc
+    - path: /usr/lib/pkgconfig/wbclient.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libdcerpc-binding.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/libdcerpc-binding.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/libdcerpc-binding.so.0.0.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/libdcerpc-server-core.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdcerpc-binding.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libdcerpc-pkt-auth-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/libdcerpc-server-core.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdcerpc-binding.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libdcerpc-pkt-auth-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/libdcerpc-server-core.so.0.0.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdcerpc-binding.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libdcerpc-pkt-auth-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/libndr-krb5pac.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libz.so.1
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libstable-sort-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libndr-krb5pac.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libz.so.1
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libstable-sort-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libndr-krb5pac.so.0.0.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libz.so.1
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libstable-sort-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libndr-nbt.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libndr-nbt.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libndr-nbt.so.0.0.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libndr-standard.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libndr-standard.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libndr-standard.so.0.0.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libndr.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libndr.so.5
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libndr.so.5.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libnetapi.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-passdb.so.0
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libCHARSET3-private-samba.so
+      - /usr/lib/samba/libads-private-samba.so
+      - /usr/lib/samba/libcli-smb-common-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libdcerpc-samba-private-samba.so
+      - /usr/lib/samba/libflag-mapping-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgse-private-samba.so
+      - /usr/lib/samba/liblibcli-lsa3-private-samba.so
+      - /usr/lib/samba/liblibcli-netlogon3-private-samba.so
+      - /usr/lib/samba/liblibsmb-private-samba.so
+      - /usr/lib/samba/libmsrpc3-private-samba.so
+      - /usr/lib/samba/libndr-samba4-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libnetapi.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-passdb.so.0
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libCHARSET3-private-samba.so
+      - /usr/lib/samba/libads-private-samba.so
+      - /usr/lib/samba/libcli-smb-common-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libdcerpc-samba-private-samba.so
+      - /usr/lib/samba/libflag-mapping-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgse-private-samba.so
+      - /usr/lib/samba/liblibcli-lsa3-private-samba.so
+      - /usr/lib/samba/liblibcli-netlogon3-private-samba.so
+      - /usr/lib/samba/liblibsmb-private-samba.so
+      - /usr/lib/samba/libmsrpc3-private-samba.so
+      - /usr/lib/samba/libndr-samba4-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libnetapi.so.1.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-passdb.so.0
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libCHARSET3-private-samba.so
+      - /usr/lib/samba/libads-private-samba.so
+      - /usr/lib/samba/libcli-smb-common-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libdcerpc-samba-private-samba.so
+      - /usr/lib/samba/libflag-mapping-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgse-private-samba.so
+      - /usr/lib/samba/liblibcli-lsa3-private-samba.so
+      - /usr/lib/samba/liblibcli-netlogon3-private-samba.so
+      - /usr/lib/samba/liblibsmb-private-samba.so
+      - /usr/lib/samba/libmsrpc3-private-samba.so
+      - /usr/lib/samba/libndr-samba4-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libnss_winbind.so.2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnss_wins.so.2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libsamba-errors.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libsamba-errors.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libsamba-errors.so.1.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/libsamba-passdb.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/libwbclient.so.0
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libndr-samba4-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-modules-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libtdb-wrap-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/libsamba-passdb.so.0
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/libwbclient.so.0
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libndr-samba4-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-modules-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libtdb-wrap-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/libsamba-passdb.so.0.29.0
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/libwbclient.so.0
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libndr-samba4-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-modules-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libtdb-wrap-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/libsamba-util.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libsys-rw-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtime-basic-private-samba.so
+    - path: /usr/lib/libsamba-util.so.0
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libsys-rw-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtime-basic-private-samba.so
+    - path: /usr/lib/libsamba-util.so.0.0.1
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libsys-rw-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtime-basic-private-samba.so
+    - path: /usr/lib/libsmbclient.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libcli-smb-common-private-samba.so
+      - /usr/lib/samba/libdcerpc-samba-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgse-private-samba.so
+      - /usr/lib/samba/liblibcli-lsa3-private-samba.so
+      - /usr/lib/samba/liblibsmb-private-samba.so
+      - /usr/lib/samba/libmsrpc3-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/libsmbclient.so.0
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libcli-smb-common-private-samba.so
+      - /usr/lib/samba/libdcerpc-samba-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgse-private-samba.so
+      - /usr/lib/samba/liblibcli-lsa3-private-samba.so
+      - /usr/lib/samba/liblibsmb-private-samba.so
+      - /usr/lib/samba/libmsrpc3-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/libsmbclient.so.0.8.0
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libcli-smb-common-private-samba.so
+      - /usr/lib/samba/libdcerpc-samba-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgse-private-samba.so
+      - /usr/lib/samba/liblibcli-lsa3-private-samba.so
+      - /usr/lib/samba/liblibsmb-private-samba.so
+      - /usr/lib/samba/libmsrpc3-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/libsmbconf.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libz.so.1
+      - /usr/lib/samba/libCHARSET3-private-samba.so
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libinterfaces-private-samba.so
+      - /usr/lib/samba/libmessages-dgm-private-samba.so
+      - /usr/lib/samba/libmessages-util-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-cluster-support-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libserver-id-db-private-samba.so
+      - /usr/lib/samba/libserver-role-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libsys-rw-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtalloc-report-printf-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libtdb-wrap-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+      - /usr/lib/samba/libtime-basic-private-samba.so
+      - /usr/lib/samba/libutil-reg-private-samba.so
+      - /usr/lib/samba/libutil-setid-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/libsmbconf.so.0
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libz.so.1
+      - /usr/lib/samba/libCHARSET3-private-samba.so
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libinterfaces-private-samba.so
+      - /usr/lib/samba/libmessages-dgm-private-samba.so
+      - /usr/lib/samba/libmessages-util-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-cluster-support-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libserver-id-db-private-samba.so
+      - /usr/lib/samba/libserver-role-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libsys-rw-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtalloc-report-printf-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libtdb-wrap-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+      - /usr/lib/samba/libtime-basic-private-samba.so
+      - /usr/lib/samba/libutil-reg-private-samba.so
+      - /usr/lib/samba/libutil-setid-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/libsmbconf.so.0.0.1
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libz.so.1
+      - /usr/lib/samba/libCHARSET3-private-samba.so
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libinterfaces-private-samba.so
+      - /usr/lib/samba/libmessages-dgm-private-samba.so
+      - /usr/lib/samba/libmessages-util-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-cluster-support-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libserver-id-db-private-samba.so
+      - /usr/lib/samba/libserver-role-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libsys-rw-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtalloc-report-printf-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libtdb-wrap-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+      - /usr/lib/samba/libtime-basic-private-samba.so
+      - /usr/lib/samba/libutil-reg-private-samba.so
+      - /usr/lib/samba/libutil-setid-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/libwbclient.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libwbclient.so.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libwbclient.so.0.16
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/samba/idmap/autorid.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-passdb.so.0
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libidmap-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/idmap/hash.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libidmap-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/idmap/rid.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libidmap-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/idmap/script.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libidmap-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/idmap/tdb2.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libidmap-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/krb5/async_dns_krb5_locator.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgse-private-samba.so
+      - /usr/lib/samba/liblibcli-lsa3-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/krb5/winbind_krb5_locator.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libwbclient.so.0
+      - /usr/lib/samba/libreplace-private-samba.so
+    - path: /usr/lib/samba/ldb/asq.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/ldb/ildap.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libcli-ldap-common-private-samba.so
+      - /usr/lib/samba/libcli-ldap-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+    - path: /usr/lib/samba/ldb/ldb.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libldb-tdb-int-private-samba.so
+    - path: /usr/lib/samba/ldb/ldbsamba_extensions.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libcmdline-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libldbsamba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamdb-common-private-samba.so
+      - /usr/lib/samba/libsamdb-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/ldb/paged_searches.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/ldb/rdn_name.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/ldb/sample.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/ldb/server_sort.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/ldb/skel.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/ldb/tdb.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libldb-tdb-int-private-samba.so
+    - path: /usr/lib/samba/libCHARSET3-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libLIBWBCLIENT-OLD-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libwbclient.so.0
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsmb-transport-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libMESSAGING-SEND-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libmessages-dgm-private-samba.so
+      - /usr/lib/samba/libmessages-util-private-samba.so
+      - /usr/lib/samba/libserver-id-db-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libutil-setid-private-samba.so
+    - path: /usr/lib/samba/libMESSAGING-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdcerpc-binding.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libMESSAGING-SEND-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libmessages-dgm-private-samba.so
+      - /usr/lib/samba/libmessages-util-private-samba.so
+      - /usr/lib/samba/libndr-samba4-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libserver-id-db-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtalloc-report-printf-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libREG-FULL-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-passdb.so.0
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libCHARSET3-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libutil-reg-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/libRPC-SERVER-LOOP-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdcerpc-binding.so.0
+      - /usr/lib/libdcerpc-server-core.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libauth-private-samba.so
+      - /usr/lib/samba/libcommon-auth-private-samba.so
+      - /usr/lib/samba/libmsrpc3-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+    - path: /usr/lib/samba/libRPC-WORKER-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdcerpc-binding.so.0
+      - /usr/lib/libdcerpc-server-core.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libRPC-SERVER-LOOP-private-samba.so
+      - /usr/lib/samba/libauth-private-samba.so
+      - /usr/lib/samba/libcmdline-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libnpa-tstream-private-samba.so
+      - /usr/lib/samba/libpopt-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libaddns-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libclidns-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libads-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdcerpc-binding.so.0
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-passdb.so.0
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libaddns-private-samba.so
+      - /usr/lib/samba/libcli-cldap-private-samba.so
+      - /usr/lib/samba/libcom-err-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgse-private-samba.so
+      - /usr/lib/samba/libkrb5samba-private-samba.so
+      - /usr/lib/samba/libkrb5-private-samba.so
+      - /usr/lib/samba/libmsrpc3-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/libasn1-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libcom-err-private-samba.so
+      - /usr/lib/samba/libroken-private-samba.so
+    - path: /usr/lib/samba/libasn1util-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libauth-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-krb5pac.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-passdb.so.0
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/libwbclient.so.0
+      - /usr/lib/samba/libMESSAGING-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libcommon-auth-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libgse-private-samba.so
+      - /usr/lib/samba/liblibcli-lsa3-private-samba.so
+      - /usr/lib/samba/liblibcli-netlogon3-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-modules-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsamdb-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/libauth-unix-token-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libLIBWBCLIENT-OLD-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libauth4-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdcerpc-binding.so.0
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libMESSAGING-private-samba.so
+      - /usr/lib/samba/libauth-unix-token-private-samba.so
+      - /usr/lib/samba/libauthkrb5-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libcommon-auth-private-samba.so
+      - /usr/lib/samba/libdcerpc-samba4-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libndr-samba4-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-modules-private-samba.so
+      - /usr/lib/samba/libsamdb-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libauthkrb5-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libndr-krb5pac.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libcom-err-private-samba.so
+      - /usr/lib/samba/libcommon-auth-private-samba.so
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgssapi-private-samba.so
+      - /usr/lib/samba/libkrb5samba-private-samba.so
+      - /usr/lib/samba/libkrb5-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/libcli-cldap-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libasn1util-private-samba.so
+      - /usr/lib/samba/libcli-ldap-common-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libcli-ldap-common-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libasn1util-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libcli-ldap-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libaddns-private-samba.so
+      - /usr/lib/samba/libasn1util-private-samba.so
+      - /usr/lib/samba/libauthkrb5-private-samba.so
+      - /usr/lib/samba/libcli-ldap-common-private-samba.so
+      - /usr/lib/samba/libcli-nbt-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libnetif-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libsys-rw-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libcli-nbt-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libcli-smb-common-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libiov-buf-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsmb-transport-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libcli-spoolss-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libdcerpc-samba-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libcliauth-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libasn1util-private-samba.so
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/libclidns-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libcluster-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libcmdline-contexts-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+    - path: /usr/lib/samba/libcmdline-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libpopt-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libcmocka-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/samba/libcom-err-private-samba.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/samba/libcommon-auth-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libdbwrap-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libtdb-wrap-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/libdcerpc-pkt-auth-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdcerpc-binding.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libdcerpc-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdcerpc-binding.so.0
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libauthkrb5-private-samba.so
+      - /usr/lib/samba/libcli-cldap-private-samba.so
+      - /usr/lib/samba/libcli-ldap-private-samba.so
+      - /usr/lib/samba/libcli-smb-common-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libdcerpc-pkt-auth-private-samba.so
+      - /usr/lib/samba/libdcerpc-samba-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libhttp-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsmbclient-raw-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libdcerpc-samba-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdcerpc-binding.so.0
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libdcerpc-samba4-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdcerpc-binding.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/samba/libndr-samba4-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libdcerpc-samr-private-samba.so
+    - path: /usr/lib/samba/libdnsserver-common-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamdb-common-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libdsdb-module-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libMESSAGING-SEND-private-samba.so
+      - /usr/lib/samba/libMESSAGING-private-samba.so
+      - /usr/lib/samba/libcli-ldap-common-private-samba.so
+      - /usr/lib/samba/libflag-mapping-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libldbsamba-private-samba.so
+      - /usr/lib/samba/libnetif-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamdb-common-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libevents-private-samba.so
+      needs:
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libtevent-private-samba.so
+    - path: /usr/lib/samba/libflag-mapping-private-samba.so
+      needs:
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+    - path: /usr/lib/samba/libgenrand-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+    - path: /usr/lib/samba/libgensec-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libwbclient.so.0
+      - /usr/lib/libz.so.1
+      - /usr/lib/samba/libasn1util-private-samba.so
+      - /usr/lib/samba/libauthkrb5-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libcom-err-private-samba.so
+      - /usr/lib/samba/libcommon-auth-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgssapi-private-samba.so
+      - /usr/lib/samba/libkrb5samba-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-modules-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsamdb-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+      - /usr/lib/samba/libtime-basic-private-samba.so
+    - path: /usr/lib/samba/libgpext-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgpo-private-samba.so
+      - /usr/lib/samba/liblibcli-lsa3-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-modules-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libutil-reg-private-samba.so
+    - path: /usr/lib/samba/libgpo-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgse-private-samba.so
+      - /usr/lib/samba/liblibcli-lsa3-private-samba.so
+      - /usr/lib/samba/liblibsmb-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-modules-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libutil-reg-private-samba.so
+    - path: /usr/lib/samba/libgse-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libCHARSET3-private-samba.so
+      - /usr/lib/samba/libaddns-private-samba.so
+      - /usr/lib/samba/libauthkrb5-private-samba.so
+      - /usr/lib/samba/libcli-cldap-private-samba.so
+      - /usr/lib/samba/libcli-nbt-private-samba.so
+      - /usr/lib/samba/libcom-err-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libgssapi-private-samba.so
+      - /usr/lib/samba/libkrb5samba-private-samba.so
+      - /usr/lib/samba/libkrb5-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libgss-preauth-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libgssapi-private-samba.so
+      - /usr/lib/samba/libkrb5-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+    - path: /usr/lib/samba/libgssapi-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libasn1-private-samba.so
+      - /usr/lib/samba/libcom-err-private-samba.so
+      - /usr/lib/samba/libhcrypto-private-samba.so
+      - /usr/lib/samba/libheimbase-private-samba.so
+      - /usr/lib/samba/libkrb5-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libroken-private-samba.so
+    - path: /usr/lib/samba/libhcrypto-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libasn1-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libroken-private-samba.so
+    - path: /usr/lib/samba/libhdb-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libasn1-private-samba.so
+      - /usr/lib/samba/libcom-err-private-samba.so
+      - /usr/lib/samba/libkrb5-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libroken-private-samba.so
+    - path: /usr/lib/samba/libheimbase-private-samba.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libcom-err-private-samba.so
+      - /usr/lib/samba/libroken-private-samba.so
+    - path: /usr/lib/samba/libheimntlm-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libhcrypto-private-samba.so
+      - /usr/lib/samba/libkrb5-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libroken-private-samba.so
+      - /usr/lib/samba/libwind-private-samba.so
+    - path: /usr/lib/samba/libhttp-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libauthkrb5-private-samba.so
+      - /usr/lib/samba/libclidns-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libhx509-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libasn1-private-samba.so
+      - /usr/lib/samba/libcom-err-private-samba.so
+      - /usr/lib/samba/libhcrypto-private-samba.so
+      - /usr/lib/samba/libheimbase-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libroken-private-samba.so
+      - /usr/lib/samba/libwind-private-samba.so
+    - path: /usr/lib/samba/libidmap-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-passdb.so.0
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-modules-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/libinterfaces-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libiov-buf-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libkdc-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libasn1-private-samba.so
+      - /usr/lib/samba/libgss-preauth-private-samba.so
+      - /usr/lib/samba/libgssapi-private-samba.so
+      - /usr/lib/samba/libhcrypto-private-samba.so
+      - /usr/lib/samba/libhdb-private-samba.so
+      - /usr/lib/samba/libheimbase-private-samba.so
+      - /usr/lib/samba/libhx509-private-samba.so
+      - /usr/lib/samba/libkrb5-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libroken-private-samba.so
+    - path: /usr/lib/samba/libkrb5samba-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libasn1-private-samba.so
+      - /usr/lib/samba/libcom-err-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgssapi-private-samba.so
+      - /usr/lib/samba/libkrb5-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libkrb5-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libasn1-private-samba.so
+      - /usr/lib/samba/libcom-err-private-samba.so
+      - /usr/lib/samba/libhcrypto-private-samba.so
+      - /usr/lib/samba/libheimbase-private-samba.so
+      - /usr/lib/samba/libhx509-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libroken-private-samba.so
+      - /usr/lib/samba/libwind-private-samba.so
+    - path: /usr/lib/samba/libldb-cmdline-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libpopt-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libldb-key-value-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libldb-tdb-err-map-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+    - path: /usr/lib/samba/libldb-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+    - path: /usr/lib/samba/libldb-tdb-err-map-private-samba.so
+    - path: /usr/lib/samba/libldb-tdb-int-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libldb-key-value-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libldb-tdb-err-map-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+    - path: /usr/lib/samba/libldbsamba-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libasn1util-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamdb-common-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+    - path: /usr/lib/samba/liblibcli-lsa3-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libdcerpc-samba-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/liblibcli-netlogon3-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libcli-smb-common-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libmsrpc3-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/liblibsmb-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libCHARSET3-private-samba.so
+      - /usr/lib/samba/libcli-smb-common-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libgse-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libndr-samba4-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsmb-transport-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libmessages-dgm-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libmsghdr-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libmessages-util-private-samba.so
+      needs:
+      - /usr/lib/libsamba-util.so.0
+    - path: /usr/lib/samba/libmsghdr-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/samba/libmsrpc3-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdcerpc-binding.so.0
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libcli-smb-common-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libcommon-auth-private-samba.so
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libdcerpc-samba-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libgse-private-samba.so
+      - /usr/lib/samba/liblibsmb-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libndr-samba4-private-samba.so
+      - /usr/lib/samba/libnpa-tstream-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/libndr-samba-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-krb5pac.so.0
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libasn1util-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libndr-samba4-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-krb5pac.so.0
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libnet-keytab-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libcom-err-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgse-private-samba.so
+      - /usr/lib/samba/libkrb5samba-private-samba.so
+      - /usr/lib/samba/libkrb5-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libnetif-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libinterfaces-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libnpa-tstream-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libnss-info-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-modules-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libpopt-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/samba/libposix-eadb-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+    - path: /usr/lib/samba/libprinter-driver-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libcli-spoolss-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgpo-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libprinting-migrate-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libcli-spoolss-private-samba.so
+      - /usr/lib/samba/libdcerpc-samba-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libutil-reg-private-samba.so
+    - path: /usr/lib/samba/libregistry-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libdcerpc-private-samba.so
+      - /usr/lib/samba/libdcerpc-samba-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libldbsamba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsys-rw-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libutil-reg-private-samba.so
+    - path: /usr/lib/samba/libreplace-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/samba/libroken-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libreplace-private-samba.so
+    - path: /usr/lib/samba/libsamba-cluster-support-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/samba/libsamba-credentials-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libauthkrb5-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libcom-err-private-samba.so
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgssapi-private-samba.so
+      - /usr/lib/samba/libkrb5samba-private-samba.so
+      - /usr/lib/samba/libkrb5-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libldbsamba-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamdb-common-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/libsamba-debug-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtime-basic-private-samba.so
+    - path: /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libserver-role-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+    - path: /usr/lib/samba/libsamba-modules-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libsamba-net-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdcerpc-binding.so.0
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libcli-cldap-private-samba.so
+      - /usr/lib/samba/libcli-ldap-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libdcerpc-private-samba.so
+      - /usr/lib/samba/libdcerpc-samba-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libldbsamba-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsamdb-common-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libsamba-policy-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libcli-ldap-common-private-samba.so
+      - /usr/lib/samba/libcli-ldap-private-samba.so
+      - /usr/lib/samba/libdcerpc-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libldbsamba-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-net-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsmbclient-raw-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libsamba-security-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libstable-sort-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libsamba-sockets-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libinterfaces-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+    - path: /usr/lib/samba/libsamba3-util-private-samba.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libutil-setid-private-samba.so
+    - path: /usr/lib/samba/libsamdb-common-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libcli-ldap-common-private-samba.so
+      - /usr/lib/samba/libflag-mapping-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libsys-rw-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libsamdb-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr-krb5pac.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libz.so.1
+      - /usr/lib/samba/libauthkrb5-private-samba.so
+      - /usr/lib/samba/libcli-ldap-common-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libcluster-private-samba.so
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgssapi-private-samba.so
+      - /usr/lib/samba/libkrb5samba-private-samba.so
+      - /usr/lib/samba/libkrb5-private-samba.so
+      - /usr/lib/samba/libldb-private-samba.so
+      - /usr/lib/samba/libldbsamba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamdb-common-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libsecrets3-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libkrb5samba-private-samba.so
+      - /usr/lib/samba/libndr-samba4-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtime-basic-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/libserver-id-db-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libtdb-wrap-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/libserver-role-private-samba.so
+      needs:
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+    - path: /usr/lib/samba/libshares-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-modules-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libsmb-transport-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libsmbclient-raw-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libndr-nbt.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libcli-smb-common-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-credentials-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsmb-transport-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/libsmbd-base-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libndr-standard.so.0
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-passdb.so.0
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libCHARSET3-private-samba.so
+      - /usr/lib/samba/libasn1util-private-samba.so
+      - /usr/lib/samba/libauth-private-samba.so
+      - /usr/lib/samba/libauthkrb5-private-samba.so
+      - /usr/lib/samba/libcli-smb-common-private-samba.so
+      - /usr/lib/samba/libcli-spoolss-private-samba.so
+      - /usr/lib/samba/libcliauth-private-samba.so
+      - /usr/lib/samba/libcom-err-private-samba.so
+      - /usr/lib/samba/libcommon-auth-private-samba.so
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libdcerpc-samba-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libgensec-private-samba.so
+      - /usr/lib/samba/libgse-private-samba.so
+      - /usr/lib/samba/libkrb5samba-private-samba.so
+      - /usr/lib/samba/libkrb5-private-samba.so
+      - /usr/lib/samba/liblibcli-lsa3-private-samba.so
+      - /usr/lib/samba/liblibsmb-private-samba.so
+      - /usr/lib/samba/libmessages-dgm-private-samba.so
+      - /usr/lib/samba/libmsrpc3-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libndr-samba4-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-cluster-support-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libsamba-modules-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libserver-id-db-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libsys-rw-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libtdb-wrap-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+      - /usr/lib/samba/libtime-basic-private-samba.so
+      - /usr/lib/samba/libutil-setid-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/libsmbd-shim-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/samba/libsmbpasswdparser-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libsocket-blocking-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/samba/libstable-sort-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libsys-rw-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/samba/libtalloc-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/samba/libtalloc-report-printf-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libtalloc-report-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libtdb-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libreplace-private-samba.so
+    - path: /usr/lib/samba/libtdb-wrap-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+    - path: /usr/lib/samba/libtevent-private-samba.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libtevent-util-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtime-basic-private-samba.so
+    - path: /usr/lib/samba/libtime-basic-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/samba/libtorture-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-hostconfig-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/libutil-reg-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-util.so.0
+    - path: /usr/lib/samba/libutil-setid-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/samba/libutil-tdb-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+    - path: /usr/lib/samba/libwind-private-samba.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libcom-err-private-samba.so
+    - path: /usr/lib/samba/libxattr-tdb-private-samba.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/nss_info/hash.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libnss-info-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/acl_tdb.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libdbwrap-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libutil-tdb-private-samba.so
+    - path: /usr/lib/samba/vfs/acl_xattr.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/vfs/aio_fork.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libmsghdr-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libsys-rw-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/vfs/aio_pthread.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libmessages-dgm-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+    - path: /usr/lib/samba/vfs/audit.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/btrfs.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/vfs/cap.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/catia.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/vfs/commit.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/vfs/crossrename.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+    - path: /usr/lib/samba/vfs/default_quota.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+    - path: /usr/lib/samba/vfs/dirsort.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/expand_msdfs.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/extd_audit.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/fake_perms.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+    - path: /usr/lib/samba/vfs/fileid.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/fruit.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libcli-smb-common-private-samba.so
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/vfs/full_audit.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsecrets3-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/vfs/glusterfs_fuse.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/gpfs.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libndr.so.5
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-passdb.so.0
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libndr-samba-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-security-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/vfs/linux_xfs_sgid.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/media_harmony.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/offline.so
+      needs:
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+    - path: /usr/lib/samba/vfs/preopen.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libsys-rw-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+    - path: /usr/lib/samba/vfs/readahead.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+    - path: /usr/lib/samba/vfs/readonly.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/recycle.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/shadow_copy.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/shadow_copy2.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtdb-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/vfs/shell_snap.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/streams_depot.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/streams_xattr.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/vfs/syncops.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-errors.so.1
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/time_audit.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+    - path: /usr/lib/samba/vfs/unityed_media.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsamba3-util-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/virusfilter.so
+      needs:
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libreplace-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsamba-sockets-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libsocket-blocking-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+    - path: /usr/lib/samba/vfs/widelinks.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/worm.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+    - path: /usr/lib/samba/vfs/xattr_tdb.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsamba-util.so.0
+      - /usr/lib/libsmbconf.so.0
+      - /usr/lib/samba/libgenrand-private-samba.so
+      - /usr/lib/samba/libsamba-debug-private-samba.so
+      - /usr/lib/samba/libsmbd-base-private-samba.so
+      - /usr/lib/samba/libsmbd-shim-private-samba.so
+      - /usr/lib/samba/libtalloc-private-samba.so
+      - /usr/lib/samba/libtevent-private-samba.so
+      - /usr/lib/samba/libtevent-util-private-samba.so
+      - /usr/lib/samba/libxattr-tdb-private-samba.so
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libgnutls.so.30: gnutls
+  /usr/lib/libbsd.so.0: libbsd
+  /usr/lib/libdcerpc-binding.so.0: self
+  /usr/lib/libdcerpc-server-core.so.0: self
+  /usr/lib/libndr-krb5pac.so.0: self
+  /usr/lib/libndr-nbt.so.0: self
+  /usr/lib/libndr-standard.so.0: self
+  /usr/lib/libndr.so.5: self
+  /usr/lib/libsamba-errors.so.1: self
+  /usr/lib/libsamba-passdb.so.0: self
+  /usr/lib/libsamba-util.so.0: self
+  /usr/lib/libsmbconf.so.0: self
+  /usr/lib/libwbclient.so.0: self
+  /usr/lib/samba/libCHARSET3-private-samba.so: self
+  /usr/lib/samba/libLIBWBCLIENT-OLD-private-samba.so: self
+  /usr/lib/samba/libMESSAGING-SEND-private-samba.so: self
+  /usr/lib/samba/libMESSAGING-private-samba.so: self
+  /usr/lib/samba/libRPC-SERVER-LOOP-private-samba.so: self
+  /usr/lib/samba/libaddns-private-samba.so: self
+  /usr/lib/samba/libads-private-samba.so: self
+  /usr/lib/samba/libasn1-private-samba.so: self
+  /usr/lib/samba/libasn1util-private-samba.so: self
+  /usr/lib/samba/libauth-private-samba.so: self
+  /usr/lib/samba/libauth-unix-token-private-samba.so: self
+  /usr/lib/samba/libauthkrb5-private-samba.so: self
+  /usr/lib/samba/libcli-cldap-private-samba.so: self
+  /usr/lib/samba/libcli-ldap-common-private-samba.so: self
+  /usr/lib/samba/libcli-ldap-private-samba.so: self
+  /usr/lib/samba/libcli-nbt-private-samba.so: self
+  /usr/lib/samba/libcli-smb-common-private-samba.so: self
+  /usr/lib/samba/libcli-spoolss-private-samba.so: self
+  /usr/lib/samba/libcliauth-private-samba.so: self
+  /usr/lib/samba/libclidns-private-samba.so: self
+  /usr/lib/samba/libcluster-private-samba.so: self
+  /usr/lib/samba/libcmdline-private-samba.so: self
+  /usr/lib/samba/libcom-err-private-samba.so: self
+  /usr/lib/samba/libcommon-auth-private-samba.so: self
+  /usr/lib/samba/libdbwrap-private-samba.so: self
+  /usr/lib/samba/libdcerpc-pkt-auth-private-samba.so: self
+  /usr/lib/samba/libdcerpc-private-samba.so: self
+  /usr/lib/samba/libdcerpc-samba-private-samba.so: self
+  /usr/lib/samba/libdcerpc-samba4-private-samba.so: self
+  /usr/lib/samba/libflag-mapping-private-samba.so: self
+  /usr/lib/samba/libgenrand-private-samba.so: self
+  /usr/lib/samba/libgensec-private-samba.so: self
+  /usr/lib/samba/libgpo-private-samba.so: self
+  /usr/lib/samba/libgse-private-samba.so: self
+  /usr/lib/samba/libgss-preauth-private-samba.so: self
+  /usr/lib/samba/libgssapi-private-samba.so: self
+  /usr/lib/samba/libhcrypto-private-samba.so: self
+  /usr/lib/samba/libhdb-private-samba.so: self
+  /usr/lib/samba/libheimbase-private-samba.so: self
+  /usr/lib/samba/libhttp-private-samba.so: self
+  /usr/lib/samba/libhx509-private-samba.so: self
+  /usr/lib/samba/libidmap-private-samba.so: self
+  /usr/lib/samba/libinterfaces-private-samba.so: self
+  /usr/lib/samba/libiov-buf-private-samba.so: self
+  /usr/lib/samba/libkrb5samba-private-samba.so: self
+  /usr/lib/samba/libkrb5-private-samba.so: self
+  /usr/lib/samba/libldb-key-value-private-samba.so: self
+  /usr/lib/samba/libldb-private-samba.so: self
+  /usr/lib/samba/libldb-tdb-err-map-private-samba.so: self
+  /usr/lib/samba/libldb-tdb-int-private-samba.so: self
+  /usr/lib/samba/libldbsamba-private-samba.so: self
+  /usr/lib/samba/liblibcli-lsa3-private-samba.so: self
+  /usr/lib/samba/liblibcli-netlogon3-private-samba.so: self
+  /usr/lib/samba/liblibsmb-private-samba.so: self
+  /usr/lib/samba/libmessages-dgm-private-samba.so: self
+  /usr/lib/samba/libmessages-util-private-samba.so: self
+  /usr/lib/samba/libmsghdr-private-samba.so: self
+  /usr/lib/samba/libmsrpc3-private-samba.so: self
+  /usr/lib/samba/libndr-samba-private-samba.so: self
+  /usr/lib/samba/libndr-samba4-private-samba.so: self
+  /usr/lib/samba/libnetif-private-samba.so: self
+  /usr/lib/samba/libnpa-tstream-private-samba.so: self
+  /usr/lib/samba/libnss-info-private-samba.so: self
+  /usr/lib/samba/libpopt-private-samba.so: self
+  /usr/lib/samba/libreplace-private-samba.so: self
+  /usr/lib/samba/libroken-private-samba.so: self
+  /usr/lib/samba/libsamba-cluster-support-private-samba.so: self
+  /usr/lib/samba/libsamba-credentials-private-samba.so: self
+  /usr/lib/samba/libsamba-debug-private-samba.so: self
+  /usr/lib/samba/libsamba-hostconfig-private-samba.so: self
+  /usr/lib/samba/libsamba-modules-private-samba.so: self
+  /usr/lib/samba/libsamba-net-private-samba.so: self
+  /usr/lib/samba/libsamba-security-private-samba.so: self
+  /usr/lib/samba/libsamba-sockets-private-samba.so: self
+  /usr/lib/samba/libsamba3-util-private-samba.so: self
+  /usr/lib/samba/libsamdb-common-private-samba.so: self
+  /usr/lib/samba/libsamdb-private-samba.so: self
+  /usr/lib/samba/libsecrets3-private-samba.so: self
+  /usr/lib/samba/libserver-id-db-private-samba.so: self
+  /usr/lib/samba/libserver-role-private-samba.so: self
+  /usr/lib/samba/libsmb-transport-private-samba.so: self
+  /usr/lib/samba/libsmbclient-raw-private-samba.so: self
+  /usr/lib/samba/libsmbd-base-private-samba.so: self
+  /usr/lib/samba/libsmbd-shim-private-samba.so: self
+  /usr/lib/samba/libsocket-blocking-private-samba.so: self
+  /usr/lib/samba/libstable-sort-private-samba.so: self
+  /usr/lib/samba/libsys-rw-private-samba.so: self
+  /usr/lib/samba/libtalloc-private-samba.so: self
+  /usr/lib/samba/libtalloc-report-printf-private-samba.so: self
+  /usr/lib/samba/libtdb-private-samba.so: self
+  /usr/lib/samba/libtdb-wrap-private-samba.so: self
+  /usr/lib/samba/libtevent-private-samba.so: self
+  /usr/lib/samba/libtevent-util-private-samba.so: self
+  /usr/lib/samba/libtime-basic-private-samba.so: self
+  /usr/lib/samba/libutil-reg-private-samba.so: self
+  /usr/lib/samba/libutil-setid-private-samba.so: self
+  /usr/lib/samba/libutil-tdb-private-samba.so: self
+  /usr/lib/samba/libwind-private-samba.so: self
+  /usr/lib/samba/libxattr-tdb-private-samba.so: self
+  /usr/lib/libz.so.1: zlib
