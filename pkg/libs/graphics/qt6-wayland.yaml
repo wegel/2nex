@@ -1,0 +1,733 @@
+package:
+  schema: 1
+  name: qt6-wayland
+  slug: qt6-wayland
+  namespace: libs/graphics
+  version: 6.7.2
+  description: Qt6 Wayland client platform plugin and libraries
+  homepage: https://www.qt.io/
+  checksum: 885de55fc40689afcec7eebbd000501d7459c0ba01882431587c13ff02d67536
+
+sources:
+- name: qt6-wayland
+  url: https://download.qt.io/archive/qt/6.7/6.7.2/submodules/qtwayland-everywhere-src-6.7.2.tar.xz
+  sha256: a2a057e1dd644bd44abb9990fecc194b2e25c2e0f39e81aa9fee4c1e5e2a8a5b
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: icu
+  commit: x86_64/pkg/libs/system/icu/76.1/bundles/dev
+- name: fontconfig
+  commit: x86_64/pkg/libs/graphics/fontconfig/2.17.1/bundles/dev
+- name: freetype
+  commit: x86_64/pkg/libs/graphics/freetype/2.14.1/bundles/dev
+- name: harfbuzz
+  commit: x86_64/pkg/libs/text/harfbuzz/10.1.0/bundles/dev
+- name: libpng
+  commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+- name: libjpeg-turbo
+  commit: x86_64/pkg/libs/graphics/libjpeg-turbo/3.1.2/bundles/dev
+- name: libglvnd
+  commit: x86_64/pkg/libs/graphics/libglvnd/1.7.0/bundles/dev
+- name: mesa
+  commit: x86_64/pkg/libs/graphics/mesa/24.2.7/bundles/dev
+- name: libdrm
+  commit: x86_64/pkg/libs/graphics/libdrm/2.4.123/bundles/dev
+- name: libx11
+  commit: x86_64/pkg/libs/x11/libx11/1.8.10/bundles/dev
+- name: libxext
+  commit: x86_64/pkg/libs/x11/libxext/1.3.6/bundles/dev
+- name: libxcb
+  commit: x86_64/pkg/libs/x11/libxcb/1.17.0/bundles/dev
+- name: libxau
+  commit: x86_64/pkg/libs/x11/libxau/1.0.12/bundles/dev
+- name: libxdmcp
+  commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
+- name: libxkbcommon
+  commit: x86_64/pkg/libs/input/libxkbcommon/1.7.0/bundles/dev
+- name: wayland
+  commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
+- name: wayland-protocols
+  commit: x86_64/pkg/libs/wayland/wayland-protocols/1.46/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: qt6-base
+  commit: x86_64/pkg/libs/graphics/qt6-base/6.7.2/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4155:1166, 12474:2937, 24830:2962, 41386:2981, 53741:15535, 66146:20555, 78637:24348, 95272:24360, 116076:24374, 125803:24586]
+
+  script: |
+    set -eu
+
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
+    tar --no-same-owner -xf "${SOURCE_qt6_wayland}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    cmake -S . -B build -G Ninja \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DINSTALL_BINDIR=lib/qt6/bin \
+      -DINSTALL_LIBEXECDIR=lib/qt6 \
+      -DINSTALL_LIBDIR=lib \
+      -DINSTALL_INCLUDEDIR=include/qt6 \
+      -DINSTALL_ARCHDATADIR=lib/qt6 \
+      -DINSTALL_DATADIR=share/qt6 \
+      -DINSTALL_MKSPECSDIR=lib/qt6/mkspecs \
+      -DQT_BUILD_TESTS=OFF \
+      -DQT_BUILD_EXAMPLES=OFF \
+      -DFEATURE_wayland_client=ON
+
+    cmake --build build
+    DESTDIR="${OUT_DIR}" cmake --install build
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qtwaylandclient-config_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qtwaylandclientglobal_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-cursor-shape-v1.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-fractional-scale-v1.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-hardware-integration.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-pointer-gestures-unstable-v1.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-qt-key-unstable-v1.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-qt-text-input-method-unstable-v1.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-qt-windowmanager.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-server-buffer-extension.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-surface-extension.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-tablet-unstable-v2.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-text-input-unstable-v1.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-text-input-unstable-v2.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-text-input-unstable-v3.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-touch-extension.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-viewporter.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-wayland.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-wp-primary-selection-unstable-v1.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-xdg-output-unstable-v1.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-xdg-shell.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwayland-xdg-toplevel-drag-v1.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandabstractdecoration_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandbuffer_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandclientbufferintegration_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandclientbufferintegrationfactory_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandclientbufferintegrationplugin_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandclientextension_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandclientshellapi_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandclipboard_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandcursor_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylanddatadevice_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylanddatadevicemanager_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylanddataoffer_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylanddatasource_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylanddecorationfactory_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylanddecorationplugin_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylanddisplay_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylanddnd_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandextendedsurface_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandfractionalscale_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandhardwareintegration_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandinputcontext_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandinputdevice_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandinputdeviceintegration_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandinputdeviceintegrationfactory_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandinputdeviceintegrationplugin_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandinputmethodcontext_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandintegration_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandnativeinterface_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandpointergestures_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandprimaryselectionv1_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandqtkey_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandscreen_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandserverbufferintegration_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandserverbufferintegrationfactory_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandserverbufferintegrationplugin_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandshellintegration_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandshellintegrationfactory_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandshellintegrationplugin_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandshellsurface_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandshm_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandshmbackingstore_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandshmwindow_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandsubsurface_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandsurface_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandtabletv2_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandtextinputinterface_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandtextinputv1_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandtextinputv2_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandtextinputv3_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandtouch_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandviewport_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandwindow_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/qwaylandwindowmanagerintegration_p.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-cursor-shape-v1-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-fractional-scale-v1-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-hardware-integration-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-pointer-gestures-unstable-v1-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-qt-key-unstable-v1-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-qt-text-input-method-unstable-v1-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-qt-windowmanager-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-server-buffer-extension-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-surface-extension-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-tablet-unstable-v2-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-text-input-unstable-v1-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-text-input-unstable-v2-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-text-input-unstable-v3-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-touch-extension-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-viewporter-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-wayland-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-wp-primary-selection-unstable-v1-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-xdg-output-unstable-v1-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-xdg-shell-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/6.7.2/QtWaylandClient/private/wayland-xdg-toplevel-drag-v1-client-protocol.h
+    - path: /usr/include/qt6/QtWaylandClient/QWaylandClientExtension
+    - path: /usr/include/qt6/QtWaylandClient/QWaylandClientExtensionTemplate
+    - path: /usr/include/qt6/QtWaylandClient/QtWaylandClient
+    - path: /usr/include/qt6/QtWaylandClient/QtWaylandClientDepends
+    - path: /usr/include/qt6/QtWaylandClient/QtWaylandClientVersion
+    - path: /usr/include/qt6/QtWaylandClient/qtwaylandclient-config.h
+    - path: /usr/include/qt6/QtWaylandClient/qtwaylandclientexports.h
+    - path: /usr/include/qt6/QtWaylandClient/qtwaylandclientglobal.h
+    - path: /usr/include/qt6/QtWaylandClient/qtwaylandclientversion.h
+    - path: /usr/include/qt6/QtWaylandClient/qwaylandclientextension.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qtwaylandcompositor-config_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qtwaylandcompositorglobal_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-hardware-integration.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-idle-inhibit-unstable-v1.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-ivi-application.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-presentation-time.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-qt-key-unstable-v1.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-qt-text-input-method-unstable-v1.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-qt-texture-sharing-unstable-v1.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-qt-windowmanager.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-scaler.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-server-buffer-extension.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-text-input-unstable-v2.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-text-input-unstable-v3.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-touch-extension.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-viewporter.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-wayland.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-xdg-decoration-unstable-v1.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-xdg-output-unstable-v1.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwayland-server-xdg-shell.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandcompositor_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandcompositorextension_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylanddestroylistener_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandidleinhibitv1_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandinputmethodcontrol_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandiviapplication_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandivisurface_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandkeyboard_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandkeymap_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandoutput_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandoutputmode_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandpointer_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandqttextinputmethod_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandqttextinputmethodmanager_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandqtwindowmanager_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandseat_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandshell_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandsurface_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandtextinput_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandtextinputmanager_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandtextinputmanagerv3_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandtextinputv3_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandtouch_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandutils_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandview_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandviewporter_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandwlshell_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandxdgdecorationv1_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandxdgoutputv1_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwaylandxdgshell_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlbuffermanager_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlclientbuffer_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlclientbufferintegration_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlclientbufferintegrationfactory_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlclientbufferintegrationplugin_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwldatadevice_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwldatadevicemanager_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwldataoffer_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwldatasource_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlhardwarelayerintegration_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlhardwarelayerintegrationfactory_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlhardwarelayerintegrationplugin_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlhwintegration_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlqtkey_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlqttouch_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlregion_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlserverbufferintegration_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlserverbufferintegrationfactory_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwlserverbufferintegrationplugin_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/qwltextureorphanage_p.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-hardware-integration-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-idle-inhibit-unstable-v1-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-ivi-application-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-presentation-time-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-qt-key-unstable-v1-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-qt-text-input-method-unstable-v1-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-qt-texture-sharing-unstable-v1-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-qt-windowmanager-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-scaler-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-server-buffer-extension-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-text-input-unstable-v2-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-text-input-unstable-v3-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-touch-extension-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-viewporter-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-wayland-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-xdg-decoration-unstable-v1-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-xdg-output-unstable-v1-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/6.7.2/QtWaylandCompositor/private/wayland-xdg-shell-server-protocol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandBufferRef
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandClient
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandCompositor
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandCompositorExtension
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandCompositorExtensionTemplate
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandDestroyListener
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandDrag
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandIdleInhibitManagerV1
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandInputMethodControl
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandIviApplication
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandIviSurface
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandKeyboard
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandKeymap
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandObject
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandOutput
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandOutputMode
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandPointer
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandQtTextInputMethod
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandQtTextInputMethodManager
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandQtWindowManager
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandResource
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandSeat
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandShell
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandShellSurface
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandShellSurfaceTemplate
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandShellTemplate
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandSurface
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandSurfaceGrabber
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandSurfaceRole
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandTextInput
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandTextInputManager
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandTextInputManagerV3
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandTextInputV3
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandTouch
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandView
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandViewporter
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandWlShell
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandWlShellSurface
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandXdgDecorationManagerV1
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandXdgOutputManagerV1
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandXdgOutputV1
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandXdgPopup
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandXdgShell
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandXdgSurface
+    - path: /usr/include/qt6/QtWaylandCompositor/QWaylandXdgToplevel
+    - path: /usr/include/qt6/QtWaylandCompositor/QtWaylandCompositor
+    - path: /usr/include/qt6/QtWaylandCompositor/QtWaylandCompositorDepends
+    - path: /usr/include/qt6/QtWaylandCompositor/QtWaylandCompositorVersion
+    - path: /usr/include/qt6/QtWaylandCompositor/qtwaylandcompositor-config.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qtwaylandcompositorexports.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qtwaylandcompositorglobal.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qtwaylandcompositorversion.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qtwaylandqmlinclude.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandbufferref.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandclient.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandcompositor.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandcompositorextension.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylanddestroylistener.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylanddrag.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandidleinhibitv1.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandinputmethodcontrol.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandiviapplication.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandivisurface.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandkeyboard.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandkeymap.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandoutput.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandoutputmode.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandpointer.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandqttextinputmethod.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandqttextinputmethodmanager.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandqtwindowmanager.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandresource.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandseat.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandshell.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandshellsurface.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandsurface.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandsurfacegrabber.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandtextinput.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandtextinputmanager.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandtextinputmanagerv3.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandtextinputv3.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandtouch.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandview.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandviewporter.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandwlshell.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandxdgdecorationv1.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandxdgoutputv1.h
+    - path: /usr/include/qt6/QtWaylandCompositor/qwaylandxdgshell.h
+    - path: /usr/include/qt6/QtWaylandGlobal/6.7.2/QtWaylandGlobal/private/qtwaylandglobal-config_p.h
+    - path: /usr/include/qt6/QtWaylandGlobal/QtWaylandGlobal
+    - path: /usr/include/qt6/QtWaylandGlobal/QtWaylandGlobalDepends
+    - path: /usr/include/qt6/QtWaylandGlobal/QtWaylandGlobalVersion
+    - path: /usr/include/qt6/QtWaylandGlobal/qtwaylandglobal-config.h
+    - path: /usr/include/qt6/QtWaylandGlobal/qtwaylandglobalversion.h
+    - path: /usr/include/qt6/QtWlShellIntegration/6.7.2/QtWlShellIntegration/private/qwayland-wayland.h
+    - path: /usr/include/qt6/QtWlShellIntegration/6.7.2/QtWlShellIntegration/private/qwaylandwlshellintegration_p.h
+    - path: /usr/include/qt6/QtWlShellIntegration/6.7.2/QtWlShellIntegration/private/qwaylandwlshellsurface_p.h
+    - path: /usr/include/qt6/QtWlShellIntegration/6.7.2/QtWlShellIntegration/private/wayland-wayland-client-protocol.h
+    - path: /usr/include/qt6/QtWlShellIntegration/QtWlShellIntegration
+    - path: /usr/include/qt6/QtWlShellIntegration/QtWlShellIntegrationDepends
+    - path: /usr/include/qt6/QtWlShellIntegration/QtWlShellIntegrationVersion
+    - path: /usr/include/qt6/QtWlShellIntegration/qtwlshellintegrationversion.h
+    - path: /usr/lib/pkgconfig/Qt6WaylandClient.pc
+    - path: /usr/lib/pkgconfig/Qt6WaylandCompositor.pc
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/Qt6/FindWaylandkms.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandBradientDecorationPluginAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandBradientDecorationPluginConfig.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandBradientDecorationPluginConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandBradientDecorationPluginConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandBradientDecorationPluginTargets-release.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandBradientDecorationPluginTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandFullScreenShellV1IntegrationPluginAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandFullScreenShellV1IntegrationPluginConfig.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandFullScreenShellV1IntegrationPluginConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandFullScreenShellV1IntegrationPluginConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandFullScreenShellV1IntegrationPluginTargets-release.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandFullScreenShellV1IntegrationPluginTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandIviShellIntegrationPluginAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandIviShellIntegrationPluginConfig.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandIviShellIntegrationPluginConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandIviShellIntegrationPluginConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandIviShellIntegrationPluginTargets-release.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandIviShellIntegrationPluginTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandQtShellIntegrationPluginAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandQtShellIntegrationPluginConfig.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandQtShellIntegrationPluginConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandQtShellIntegrationPluginConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandQtShellIntegrationPluginTargets-release.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandQtShellIntegrationPluginTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandWlShellIntegrationPluginAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandWlShellIntegrationPluginConfig.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandWlShellIntegrationPluginConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandWlShellIntegrationPluginConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandWlShellIntegrationPluginTargets-release.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandWlShellIntegrationPluginTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandXdgShellIntegrationPluginAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandXdgShellIntegrationPluginConfig.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandXdgShellIntegrationPluginConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandXdgShellIntegrationPluginConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandXdgShellIntegrationPluginTargets-release.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6QWaylandXdgShellIntegrationPluginTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6WaylandClientAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6WaylandClientConfig.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6WaylandClientConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6WaylandClientConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6WaylandClientDependencies.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6WaylandClientMacros.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6WaylandClientPlugins.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6WaylandClientTargets-release.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6WaylandClientTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6WaylandClientVersionlessTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6ShmServerBufferPluginAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6ShmServerBufferPluginConfig.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6ShmServerBufferPluginConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6ShmServerBufferPluginConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6ShmServerBufferPluginTargets-release.cmake
+    - path: /usr/lib/cmake/Qt6WaylandClient/Qt6ShmServerBufferPluginTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6WaylandCompositorAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6WaylandCompositorConfig.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6WaylandCompositorConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6WaylandCompositorConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6WaylandCompositorDependencies.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6WaylandCompositorMacros.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6WaylandCompositorPlugins.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6WaylandCompositorTargets-release.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6WaylandCompositorTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6WaylandCompositorVersionlessTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6ShmServerBufferIntegrationPluginAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6ShmServerBufferIntegrationPluginConfig.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6ShmServerBufferIntegrationPluginConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6ShmServerBufferIntegrationPluginConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6ShmServerBufferIntegrationPluginTargets-release.cmake
+    - path: /usr/lib/cmake/Qt6WaylandCompositor/Qt6ShmServerBufferIntegrationPluginTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandGlobalPrivate/Qt6WaylandGlobalPrivateAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6WaylandGlobalPrivate/Qt6WaylandGlobalPrivateConfig.cmake
+    - path: /usr/lib/cmake/Qt6WaylandGlobalPrivate/Qt6WaylandGlobalPrivateConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6WaylandGlobalPrivate/Qt6WaylandGlobalPrivateConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6WaylandGlobalPrivate/Qt6WaylandGlobalPrivateTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandGlobalPrivate/Qt6WaylandGlobalPrivateVersionlessTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandScannerTools/Qt6WaylandScannerToolsAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6WaylandScannerTools/Qt6WaylandScannerToolsConfig.cmake
+    - path: /usr/lib/cmake/Qt6WaylandScannerTools/Qt6WaylandScannerToolsConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6WaylandScannerTools/Qt6WaylandScannerToolsConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6WaylandScannerTools/Qt6WaylandScannerToolsDependencies.cmake
+    - path: /usr/lib/cmake/Qt6WaylandScannerTools/Qt6WaylandScannerToolsTargets-release.cmake
+    - path: /usr/lib/cmake/Qt6WaylandScannerTools/Qt6WaylandScannerToolsTargets.cmake
+    - path: /usr/lib/cmake/Qt6WaylandScannerTools/Qt6WaylandScannerToolsVersionlessTargets.cmake
+    - path: /usr/lib/cmake/Qt6WlShellIntegrationPrivate/Qt6WlShellIntegrationPrivateAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6WlShellIntegrationPrivate/Qt6WlShellIntegrationPrivateConfig.cmake
+    - path: /usr/lib/cmake/Qt6WlShellIntegrationPrivate/Qt6WlShellIntegrationPrivateConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6WlShellIntegrationPrivate/Qt6WlShellIntegrationPrivateConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6WlShellIntegrationPrivate/Qt6WlShellIntegrationPrivateDependencies.cmake
+    - path: /usr/lib/cmake/Qt6WlShellIntegrationPrivate/Qt6WlShellIntegrationPrivateTargets-release.cmake
+    - path: /usr/lib/cmake/Qt6WlShellIntegrationPrivate/Qt6WlShellIntegrationPrivateTargets.cmake
+    - path: /usr/lib/cmake/Qt6WlShellIntegrationPrivate/Qt6WlShellIntegrationPrivateVersionlessTargets.cmake
+    - path: /usr/lib/cmake/Qt6Gui/Qt6QWaylandIntegrationPluginAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6Gui/Qt6QWaylandIntegrationPluginConfig.cmake
+    - path: /usr/lib/cmake/Qt6Gui/Qt6QWaylandIntegrationPluginConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6Gui/Qt6QWaylandIntegrationPluginConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6Gui/Qt6QWaylandIntegrationPluginTargets-release.cmake
+    - path: /usr/lib/cmake/Qt6Gui/Qt6QWaylandIntegrationPluginTargets.cmake
+    - path: /usr/lib/cmake/Qt6BuildInternals/StandaloneTests/QtWaylandTestsConfig.cmake
+    - path: /usr/lib/libQt6WaylandClient.prl
+    - path: /usr/lib/libQt6WaylandClient.so
+      needs:
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/lib/libQt6WaylandClient.so.6
+      needs:
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/lib/libQt6WaylandClient.so.6.7.2
+      needs:
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/lib/libQt6WaylandCompositor.prl
+    - path: /usr/lib/libQt6WaylandCompositor.so
+      needs:
+      - /usr/lib/libOpenGL.so.0
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6OpenGL.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-server.so.0
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/lib/libQt6WaylandCompositor.so.6
+      needs:
+      - /usr/lib/libOpenGL.so.0
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6OpenGL.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-server.so.0
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/lib/libQt6WaylandCompositor.so.6.7.2
+      needs:
+      - /usr/lib/libOpenGL.so.0
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6OpenGL.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-server.so.0
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/lib/libQt6WlShellIntegration.prl
+    - path: /usr/lib/libQt6WlShellIntegration.so
+      needs:
+      - /usr/lib/libQt6WaylandClient.so.6
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-client.so.0
+    - path: /usr/lib/libQt6WlShellIntegration.so.6
+      needs:
+      - /usr/lib/libQt6WaylandClient.so.6
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-client.so.0
+    - path: /usr/lib/libQt6WlShellIntegration.so.6.7.2
+      needs:
+      - /usr/lib/libQt6WaylandClient.so.6
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-client.so.0
+    - path: /usr/lib/qt6/metatypes/qt6waylandclient_release_metatypes.json
+    - path: /usr/lib/qt6/metatypes/qt6waylandcompositor_release_metatypes.json
+    - path: /usr/lib/qt6/metatypes/qt6wlshellintegrationprivate_release_metatypes.json
+    - path: /usr/lib/qt6/mkspecs/modules/qt_lib_waylandclient.pri
+    - path: /usr/lib/qt6/mkspecs/modules/qt_lib_waylandclient_private.pri
+    - path: /usr/lib/qt6/mkspecs/modules/qt_lib_waylandcompositor.pri
+    - path: /usr/lib/qt6/mkspecs/modules/qt_lib_waylandcompositor_private.pri
+    - path: /usr/lib/qt6/mkspecs/modules/qt_lib_waylandglobal_private.pri
+    - path: /usr/lib/qt6/mkspecs/modules/qt_lib_wl_shell_integration_private.pri
+    - path: /usr/lib/qt6/modules/WaylandClient.json
+    - path: /usr/lib/qt6/modules/WaylandCompositor.json
+    - path: /usr/lib/qt6/modules/WaylandGlobalPrivate.json
+    - path: /usr/lib/qt6/modules/WlShellIntegrationPrivate.json
+    - path: /usr/lib/qt6/plugins/platforms/libqwayland-generic.so
+      needs:
+      - /usr/lib/libQt6WaylandClient.so.6
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/qt6/plugins/wayland-decoration-client/libbradient.so
+      needs:
+      - /usr/lib/libQt6WaylandClient.so.6
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/qt6/plugins/wayland-graphics-integration-client/libshm-emulation-server.so
+      needs:
+      - /usr/lib/libQt6WaylandClient.so.6
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6OpenGL.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-client.so.0
+    - path: /usr/lib/qt6/plugins/wayland-graphics-integration-server/libqt-wayland-compositor-shm-emulation-server.so
+      needs:
+      - /usr/lib/libQt6WaylandCompositor.so.6
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-server.so.0
+    - path: /usr/lib/qt6/plugins/wayland-shell-integration/libfullscreen-shell-v1.so
+      needs:
+      - /usr/lib/libQt6WaylandClient.so.6
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-client.so.0
+    - path: /usr/lib/qt6/plugins/wayland-shell-integration/libivi-shell.so
+      needs:
+      - /usr/lib/libQt6WaylandClient.so.6
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-client.so.0
+    - path: /usr/lib/qt6/plugins/wayland-shell-integration/libqt-shell.so
+      needs:
+      - /usr/lib/libQt6WaylandClient.so.6
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-client.so.0
+    - path: /usr/lib/qt6/plugins/wayland-shell-integration/libwl-shell-plugin.so
+      needs:
+      - /usr/lib/libQt6WaylandClient.so.6
+      - /usr/lib/libQt6WlShellIntegration.so.6
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/qt6/plugins/wayland-shell-integration/libxdg-shell.so
+      needs:
+      - /usr/lib/libQt6WaylandClient.so.6
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-client.so.0
+    - path: /usr/lib/qt6/qtwaylandscanner
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+
+resolution:
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libOpenGL.so.0: libglvnd
+  /usr/lib/libxkbcommon.so.0: libxkbcommon
+  /usr/lib/libQt6Core.so.6: qt6-base
+  /usr/lib/libQt6OpenGL.so.6: qt6-base
+  /usr/lib/libQt6Gui.so.6: qt6-base
+  /usr/lib/libQt6WaylandClient.so.6: self
+  /usr/lib/libQt6WaylandCompositor.so.6: self
+  /usr/lib/libQt6WlShellIntegration.so.6: self
+  /usr/lib/libwayland-client.so.0: wayland
+  /usr/lib/libwayland-cursor.so.0: wayland
+  /usr/lib/libwayland-server.so.0: wayland
