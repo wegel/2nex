@@ -83,11 +83,6 @@ fn checkout_flat(
     Ok(())
 }
 
-/// Nex checkout: isolated package directories with symlink forests.
-/// Groups outputs by manifest hash so relative symlinks within a package work.
-///
-/// When `physical_root` is set (staging mode), files are written there and overlays
-/// make them visible at the logical paths.
 fn checkout_nex(
     config: &MaterializeConfig,
     closure: &RuntimeClosure,
@@ -195,8 +190,7 @@ fn checkout_root_package(
     let physical_pkg_dir = paths.physical_pkg.join(&pkg_id.path).join(short_hash);
     let logical_pkg_dir = paths.logical_pkg.join(&pkg_id.path).join(short_hash);
     if logical_pkg_dir.exists() {
-        println!("  {} already materialized", pkg_id.path);
-        return Ok(());
+        println!("  Merging new output(s) into {}", pkg_id.path);
     }
 
     print_checkout_package(pkg_id, short_hash, commits.len());
@@ -209,10 +203,24 @@ fn checkout_root_package(
             &config.fallback_repo_paths,
         )?;
     }
-    fs::write(
-        physical_pkg_dir.join(".nex-app-root"),
-        root_commits.join("\n") + "\n",
-    )
+    write_root_commits(&physical_pkg_dir, root_commits)
+}
+
+fn write_root_commits(pkg_dir: &Path, root_commits: &[String]) -> io::Result<()> {
+    let marker = pkg_dir.join(".nex-app-root");
+    let mut content = if marker.exists() {
+        fs::read_to_string(&marker)?
+    } else {
+        String::new()
+    };
+    let mut seen = content.lines().map(str::to_string).collect::<HashSet<_>>();
+    for commit in root_commits {
+        if seen.insert(commit.clone()) {
+            content.push_str(commit);
+            content.push('\n');
+        }
+    }
+    fs::write(marker, content)
 }
 
 fn print_checkout_package(pkg_id: &PackageId, short_hash: &str, commit_count: usize) {
@@ -226,8 +234,6 @@ fn print_checkout_package(pkg_id: &PackageId, short_hash: &str, commit_count: us
     );
 }
 
-/// Flatten runtime dependencies into root package capsules using precomputed deps.
-/// Uses physical path for writing, logical path for checking existing.
 fn flatten_all_capsules_split(
     repo_path: &str,
     physical_nex_pkg: &Path,
@@ -265,8 +271,10 @@ fn flatten_all_capsules_split(
     Ok(())
 }
 
-/// Create symlink forest in /nex/env pointing to package files.
-/// Writes symlinks to physical paths but targets are relative to logical root.
+#[cfg(test)]
+#[path = "checkout_tests.rs"]
+mod checkout_tests;
+
 fn create_symlink_forest_split(
     config: &MaterializeConfig,
     physical_nex_pkg: &Path,
@@ -339,7 +347,6 @@ fn create_package_symlinks(
     Ok(())
 }
 
-/// Recursively create symlinks from source to target directory (split physical/logical).
 fn create_symlinks_split(
     src: &Path,
     physical_env_dir: &Path,

@@ -9,7 +9,7 @@ use crate::store::Store;
 
 use super::resolver_entries::{file_entries_to_process, is_checksum_files_commit_ref};
 use super::resolver_metadata::missing_runtime_metadata;
-use super::resolver_refs::{resolve_dependency_to_commit, ResolveResult};
+use super::resolver_refs::{manifest_files_ref, resolve_dependency_to_commit, ResolveResult};
 use super::types::{MaterializeRequest, RuntimeClosure};
 
 /// Resolve runtime dependencies using precomputed deps from manifests.
@@ -165,13 +165,7 @@ impl<'a> RuntimeResolver<'a> {
             return;
         };
         if dep_name == "self" {
-            queue_self_file_dependency(
-                commit,
-                needed_file,
-                format!("{} needs {} from self", file_path, needed_file),
-                &mut self.closure,
-                &mut self.pending,
-            );
+            self.queue_self_file_dependency(commit, manifest, file_path, needed_file);
             return;
         }
 
@@ -271,22 +265,50 @@ impl<'a> RuntimeResolver<'a> {
             self.pending.push(dep_commit);
         }
     }
+
+    fn queue_self_file_dependency(
+        &mut self,
+        commit: &str,
+        manifest: &crate::manifest::types::Manifest,
+        file_path: &str,
+        needed_file: &str,
+    ) {
+        let Some(files_commit) = self_files_commit(commit, manifest) else {
+            self.closure.add_unresolved(
+                needed_file,
+                format!(
+                    "{} needs {} from self but no files ref can be derived",
+                    file_path, needed_file
+                ),
+            );
+            return;
+        };
+        if self.store.resolve_ref(&files_commit).is_err() {
+            self.closure.add_unresolved(
+                needed_file,
+                format!(
+                    "{} needs {} from self but {} is missing",
+                    file_path, needed_file, files_commit
+                ),
+            );
+            return;
+        }
+
+        let reason = format!("{} needs {} from self", file_path, needed_file);
+        let added_file = self
+            .closure
+            .add_file_dep(&files_commit, needed_file, reason);
+        if self.visited.insert(files_commit.clone()) || added_file {
+            self.pending.push(files_commit);
+        }
+    }
 }
 
-fn queue_self_file_dependency(
-    commit: &str,
-    needed_file: &str,
-    reason: String,
-    closure: &mut RuntimeClosure,
-    pending: &mut Vec<String>,
-) {
-    if !is_checksum_files_commit_ref(commit) {
-        return;
+fn self_files_commit(commit: &str, manifest: &crate::manifest::types::Manifest) -> Option<String> {
+    if is_checksum_files_commit_ref(commit) {
+        return Some(commit.to_string());
     }
-
-    if closure.add_file_dep(commit, needed_file, reason) {
-        pending.push(commit.to_string());
-    }
+    manifest_files_ref(manifest)
 }
 
 /// Find the manifest that corresponds to a store commit ref.

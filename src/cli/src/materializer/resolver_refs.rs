@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use crate::manifest::types::Manifest;
 use crate::manifest::ManifestIndex;
 use crate::store::Store;
 use crate::utils::hash_file_content;
@@ -16,6 +17,16 @@ pub(super) enum ResolveResult {
     ManifestNotFound(String),
     /// Files commit doesn't exist and needs `nex compute-deps`.
     FilesCommitMissing { package: String, checksum: String },
+}
+
+pub(super) fn manifest_files_ref(manifest: &Manifest) -> Option<String> {
+    let package_ref = ManifestPackageRef {
+        namespace_path: manifest.package.namespace.clone(),
+        slug: manifest.package.slug.clone(),
+        version: manifest.package.version.clone(),
+    };
+    let address_hash = manifest_address_hash(manifest, &package_ref)?;
+    Some(package_ref.files_ref(&address_hash))
 }
 
 /// Resolve a dependency name to a checksum-addressed files commit.
@@ -65,7 +76,22 @@ struct DependencyPackageRef {
     package_path: String,
 }
 
+struct ManifestPackageRef {
+    namespace_path: String,
+    slug: String,
+    version: String,
+}
+
 impl DependencyPackageRef {
+    fn files_ref(&self, address_hash: &str) -> String {
+        format!(
+            "x86_64/pkg/{}/{}/{}/{}/files",
+            self.namespace_path, self.slug, self.version, address_hash
+        )
+    }
+}
+
+impl ManifestPackageRef {
     fn files_ref(&self, address_hash: &str) -> String {
         format!(
             "x86_64/pkg/{}/{}/{}/{}/files",
@@ -98,6 +124,20 @@ fn dependency_address_hash(
     manifest: &crate::manifest::types::Manifest,
     package_ref: &DependencyPackageRef,
 ) -> Option<String> {
+    let has_stable_checksum =
+        manifest.package.checksum.is_some() && manifest.package.stable_checksum.unwrap_or(true);
+    if has_stable_checksum {
+        return manifest.package.checksum.clone();
+    }
+
+    let manifest_path = PathBuf::from(format!(
+        "pkg/{}/{}.yaml",
+        package_ref.namespace_path, package_ref.slug
+    ));
+    hash_file_content(&manifest_path).ok()
+}
+
+fn manifest_address_hash(manifest: &Manifest, package_ref: &ManifestPackageRef) -> Option<String> {
     let has_stable_checksum =
         manifest.package.checksum.is_some() && manifest.package.stable_checksum.unwrap_or(true);
     if has_stable_checksum {
