@@ -1,11 +1,12 @@
 //! Build orchestration: dependency graph construction and parallel execution
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io;
 use std::path::{Path, PathBuf};
 
 use petgraph::algo::toposort;
 use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::Direction;
 
 use crate::commands::build::BuildOpts;
 use crate::manifest::types::ManifestSource;
@@ -36,52 +37,80 @@ fn show_dependency_paths(
     manifest_map: &HashMap<PathBuf, NodeIndex>,
     root_path: &Path,
 ) {
-    use petgraph::visit::Dfs;
-
     let root_node = manifest_map
         .get(root_path)
         .expect("Root manifest should be in map");
 
-    for (path, &node) in manifest_map.iter() {
-        if path == root_path || graph[node].is_skip() {
-            continue;
+    for path_nodes in dependency_paths(graph, manifest_map, root_path, *root_node) {
+        print!("  ");
+        for (i, node) in path_nodes.iter().enumerate() {
+            let p = graph[*node].path();
+            if i > 0 {
+                print!(" → ");
+            }
+            if let Some(name) = p.file_stem().and_then(|s| s.to_str()) {
+                print!("{}", name);
+            } else {
+                print!("{}", p.display());
+            }
         }
+        println!();
+    }
+}
 
-        let mut dfs = Dfs::new(graph, *root_node);
-        let mut parent_map: HashMap<NodeIndex, Option<NodeIndex>> = HashMap::new();
-        parent_map.insert(*root_node, None);
+fn dependency_paths(
+    graph: &DiGraph<ManifestSource, ()>,
+    manifest_map: &HashMap<PathBuf, NodeIndex>,
+    root_path: &Path,
+    root_node: NodeIndex,
+) -> Vec<Vec<NodeIndex>> {
+    let mut entries: Vec<_> = manifest_map.iter().collect();
+    entries.sort_by(|(left, _), (right, _)| left.cmp(right));
 
-        while let Some(current) = dfs.next(graph) {
-            if current == node {
-                let mut path_nodes = vec![current];
-                let mut cur = current;
-                while let Some(Some(parent)) = parent_map.get(&cur) {
-                    path_nodes.push(*parent);
-                    cur = *parent;
-                }
-                path_nodes.reverse();
+    entries
+        .into_iter()
+        .filter(|(path, &node)| path.as_path() != root_path && !graph[node].is_skip())
+        .filter_map(|(_, &node)| dependency_path_to_node(graph, root_node, node))
+        .collect()
+}
 
-                print!("  ");
-                for (i, &n) in path_nodes.iter().enumerate() {
-                    let p = graph[n].path();
-                    if i > 0 {
-                        print!(" → ");
-                    }
-                    if let Some(name) = p.file_stem().and_then(|s| s.to_str()) {
-                        print!("{}", name);
-                    } else {
-                        print!("{}", p.display());
-                    }
-                }
-                println!();
-                break;
+fn dependency_path_to_node(
+    graph: &DiGraph<ManifestSource, ()>,
+    root_node: NodeIndex,
+    target_node: NodeIndex,
+) -> Option<Vec<NodeIndex>> {
+    let mut queue = VecDeque::from([root_node]);
+    let mut parent_map: HashMap<NodeIndex, Option<NodeIndex>> = HashMap::new();
+    parent_map.insert(root_node, None);
+
+    while let Some(current) = queue.pop_front() {
+        if current == target_node {
+            return Some(rebuild_dependency_path(current, &parent_map));
+        }
+        for dependency in graph.neighbors_directed(current, Direction::Incoming) {
+            if parent_map.contains_key(&dependency) {
+                continue;
             }
-
-            for neighbor in graph.neighbors(current) {
-                parent_map.entry(neighbor).or_insert(Some(current));
-            }
+            parent_map.insert(dependency, Some(current));
+            queue.push_back(dependency);
         }
     }
+
+    None
+}
+
+fn rebuild_dependency_path(
+    target_node: NodeIndex,
+    parent_map: &HashMap<NodeIndex, Option<NodeIndex>>,
+) -> Vec<NodeIndex> {
+    let mut path_nodes = vec![target_node];
+    let mut current = target_node;
+    while let Some(Some(parent)) = parent_map.get(&current) {
+        path_nodes.push(*parent);
+        current = *parent;
+    }
+    path_nodes.reverse();
+    path_nodes
 }
 
 /// Build a manifest and all its missing dependencies

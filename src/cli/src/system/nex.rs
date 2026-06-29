@@ -67,9 +67,7 @@ fn install_package_commit(
     commit: &str,
     installed_packages: &mut HashMap<String, String>,
 ) -> io::Result<()> {
-    let Some(package_ref) = parse_package_ref(commit) else {
-        return Ok(());
-    };
+    let package_ref = parse_package_ref(commit)?;
     if is_kernel_module_output(commit) {
         return install_kernel_modules(repo_path, target_dir, &package_ref, commit);
     }
@@ -85,14 +83,13 @@ fn install_package_commit(
     Ok(())
 }
 
-fn parse_package_ref(commit: &str) -> Option<PackageRef> {
-    match PackageRef::parse(commit) {
-        Ok(package_ref) => Some(package_ref),
-        Err(e) => {
-            eprintln!("Warning: could not parse package commit {}: {}", commit, e);
-            None
-        }
-    }
+fn parse_package_ref(commit: &str) -> io::Result<PackageRef> {
+    PackageRef::parse(commit).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("invalid package commit ref {}: {}", commit, error),
+        )
+    })
 }
 
 fn install_kernel_modules(
@@ -237,3 +234,7 @@ pub(super) fn package_symlink_target(
         rel_path.display()
     )
 }
+
+#[cfg(test)]
+#[path = "nex_tests.rs"]
+mod nex_tests;

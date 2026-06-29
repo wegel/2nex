@@ -10,7 +10,7 @@ use crate::build::compute_manifest_hash;
 use crate::manifest::types::ManifestSource;
 use crate::store::{commit_tree, Store};
 
-use super::{collect_dependencies_recursive, DependencyGraphRequest};
+use super::{collect_dependencies_recursive, dependency_paths, DependencyGraphRequest};
 
 fn write_manifest(path: &Path, contents: &str) -> io::Result<()> {
     if let Some(parent) = path.parent() {
@@ -101,6 +101,37 @@ fn missing_dependency_manifest_stops_graph_collection() -> io::Result<()> {
     assert!(message.contains("x86_64/pkg/deps/initramfs/1.0/outputs/boot"));
     assert!(message.contains("no manifest was found"));
     Ok(())
+}
+
+#[test]
+fn dependency_paths_follow_dependency_edges_back_from_root() {
+    let temp_dir = TempDir::new().unwrap();
+    let root_path = temp_dir.path().join("pkg/apps/root.yaml");
+    let direct_dep_path = temp_dir.path().join("pkg/libs/direct.yaml");
+    let transitive_dep_path = temp_dir.path().join("pkg/libs/transitive.yaml");
+
+    let mut graph = DiGraph::new();
+    let root = graph.add_node(ManifestSource::Path(root_path.clone()));
+    let direct_dep = graph.add_node(ManifestSource::Path(direct_dep_path.clone()));
+    let transitive_dep = graph.add_node(ManifestSource::Path(transitive_dep_path.clone()));
+    graph.add_edge(direct_dep, root, ());
+    graph.add_edge(transitive_dep, direct_dep, ());
+
+    let manifest_map = HashMap::from([
+        (root_path.clone(), root),
+        (direct_dep_path, direct_dep),
+        (transitive_dep_path, transitive_dep),
+    ]);
+
+    let paths = dependency_paths(&graph, &manifest_map, &root_path, root);
+
+    assert_eq!(
+        paths,
+        vec![
+            vec![root, direct_dep],
+            vec![root, direct_dep, transitive_dep]
+        ]
+    );
 }
 
 fn init_test_store(temp_dir: &TempDir) -> io::Result<Option<String>> {
