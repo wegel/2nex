@@ -1,0 +1,452 @@
+package:
+  schema: 1
+  name: xfsprogs
+  slug: xfsprogs
+  namespace: core/fs
+  version: 7.0.1
+  description: Utilities for creating, checking, and repairing XFS filesystems
+  homepage: https://xfs.wiki.kernel.org/
+  checksum: ddf954fc22cadb6168dbda47be31d503d2e0a11c91a5470492ff4b646936ffaf
+
+sources:
+- name: xfsprogs
+  url: https://www.kernel.org/pub/linux/utils/fs/xfs/xfsprogs/xfsprogs-7.0.1.tar.xz
+  sha256: 4a8ca83a7acb8cd92c997d63b69ae64f170056b366a2924a753e47d4bb4b8b06
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: util_linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: userspace-rcu
+  commit: x86_64/pkg/libs/system/userspace-rcu/0.15.6/bundles/dev
+- name: inih
+  commit: x86_64/pkg/libs/system/inih/61/bundles/dev
+- name: icu
+  commit: x86_64/pkg/libs/system/icu/76.1/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: inetutils
+  commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4114:1111, 8231:4071, 12347:5422, 16452:9030, 20583:9070, 24687:9149, 28841:9285, 31447:10174]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "/./${SOURCE_xfsprogs}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    ./configure \
+      --prefix=/usr \
+      --libdir=/usr/lib \
+      --sbindir=/usr/bin \
+      --enable-static=no \
+      --enable-gettext=no \
+      --enable-editline=no \
+      --enable-termcap=no \
+      --enable-lib64=no \
+      --enable-scrub=yes \
+      --enable-libicu=yes \
+      --enable-healer=yes \
+      --with-systemd-unit-dir=/usr/lib/systemd/system \
+      --with-udev-rule-dir=/usr/lib/udev/rules.d \
+      --with-crond-dir=no
+
+    make
+    make DIST_ROOT="${OUT_DIR}" install install-dev
+
+    for script in fsck.xfs xfs_admin xfs_bmap xfs_freeze xfs_info xfs_metadump xfs_mkfile xfs_ncheck; do
+      sed -i '1s|^#!/bin/sh -f$|#!/usr/bin/sh -f|' "${OUT_DIR}/usr/bin/${script}"
+    done
+    sed -i '1s|^#!/bin/bash -f$|#!/usr/bin/bash -f|' "${OUT_DIR}/usr/bin/xfs_property"
+    sed -i '1s|^#!/bin/bash$|#!/usr/bin/bash|' "${OUT_DIR}/usr/libexec/xfsprogs/xfs_scrub_fail"
+    awk '
+      /^import dbus$/ { next }
+      { print }
+      /^\tdef bind\(self\):$/ {
+        print "\t\tglobal dbus"
+        print "\t\timport dbus"
+      }
+    ' "${OUT_DIR}/usr/bin/xfs_scrub_all" > "${OUT_DIR}/usr/bin/xfs_scrub_all.tmp"
+    mv "${OUT_DIR}/usr/bin/xfs_scrub_all.tmp" "${OUT_DIR}/usr/bin/xfs_scrub_all"
+    chmod 755 "${OUT_DIR}/usr/bin/xfs_scrub_all"
+
+    find "${OUT_DIR}" -name '*.la' -delete
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - conf
+  - dev
+  - lib
+
+  full:
+  - bin
+  - conf
+  - dev
+  - doc
+  - lib
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/fsck.xfs
+      needs:
+      - /usr/bin/basename
+      - /usr/bin/blkid
+      - /usr/bin/cat
+      - /usr/bin/mkdir
+      - /usr/bin/mount
+      - /usr/bin/rm
+      - /usr/bin/sh
+      - /usr/bin/umount
+      - /usr/bin/xfs_repair
+    - path: /usr/bin/mkfs.xfs
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libinih.so.0
+      - /usr/lib/liburcu.so.8
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/xfs_admin
+      needs:
+      - /usr/bin/findmnt
+      - /usr/bin/sh
+      - /usr/bin/xfs_db
+      - /usr/bin/xfs_io
+      - /usr/bin/xfs_repair
+    - path: /usr/bin/xfs_bmap
+      needs:
+      - /usr/bin/dirname
+      - /usr/bin/sh
+      - /usr/bin/xfs_io
+    - path: /usr/bin/xfs_copy
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu.so.8
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/xfs_db
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu.so.8
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/xfs_estimate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/xfs_freeze
+      needs:
+      - /usr/bin/dirname
+      - /usr/bin/sh
+      - /usr/bin/xfs_io
+    - path: /usr/bin/xfs_fsr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libhandle.so.1
+    - path: /usr/bin/xfs_growfs
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu.so.8
+    - path: /usr/bin/xfs_info
+      needs:
+      - /usr/bin/findmnt
+      - /usr/bin/losetup
+      - /usr/bin/sh
+      - /usr/bin/tail
+      - /usr/bin/xfs_db
+      - /usr/bin/xfs_spaceman
+    - path: /usr/bin/xfs_io
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libhandle.so.1
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/xfs_logprint
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu.so.8
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/xfs_mdrestore
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu.so.8
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/xfs_metadump
+      needs:
+      - /usr/bin/sh
+      - /usr/bin/xfs_db
+    - path: /usr/bin/xfs_mkfile
+      needs:
+      - /usr/bin/dirname
+      - /usr/bin/sh
+      - /usr/bin/xfs_io
+    - path: /usr/bin/xfs_ncheck
+      needs:
+      - /usr/bin/sh
+      - /usr/bin/xfs_db
+    - path: /usr/bin/xfs_property
+      needs:
+      - /usr/bin/bash
+      - /usr/bin/findmnt
+      - /usr/bin/losetup
+      - /usr/bin/tail
+      - /usr/bin/xfs_db
+      - /usr/bin/xfs_io
+    - path: /usr/bin/xfs_protofile
+      needs:
+      - /usr/bin/python3
+    - path: /usr/bin/xfs_quota
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/xfs_repair
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu.so.8
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/xfs_rtcp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/xfs_scrub
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libhandle.so.1
+      - /usr/lib/libicui18n.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/liburcu.so.8
+    - path: /usr/bin/xfs_scrub_all
+      needs:
+      - /usr/bin/lsblk
+      - /usr/bin/python3
+      - /usr/bin/systemd-escape
+      - /usr/bin/xfs_scrub
+    - path: /usr/bin/xfs_spaceman
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libhandle.so.1
+    - path: /usr/libexec/xfsprogs/xfs_healer
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libhandle.so.1
+      - /usr/lib/liburcu.so.8
+    - path: /usr/libexec/xfsprogs/xfs_scrub_fail
+      needs:
+      - /usr/bin/bash
+      - /usr/bin/hostname
+      - /usr/bin/systemctl
+      - /usr/bin/systemd-escape
+
+  conf:
+    files:
+    - path: /usr/share/xfsprogs/mkfs/dax_x86_64.conf
+    - path: /usr/share/xfsprogs/mkfs/lts_4.19.conf
+    - path: /usr/share/xfsprogs/mkfs/lts_5.4.conf
+    - path: /usr/share/xfsprogs/mkfs/lts_5.10.conf
+    - path: /usr/share/xfsprogs/mkfs/lts_5.15.conf
+    - path: /usr/share/xfsprogs/mkfs/lts_6.1.conf
+    - path: /usr/share/xfsprogs/mkfs/lts_6.6.conf
+    - path: /usr/share/xfsprogs/mkfs/lts_6.12.conf
+    - path: /usr/share/xfsprogs/mkfs/lts_6.18.conf
+
+  dev:
+    files:
+    - path: /usr/include/xfs/handle.h
+    - path: /usr/include/xfs/jdm.h
+    - path: /usr/include/xfs/linux.h
+    - path: /usr/include/xfs/xfs.h
+    - path: /usr/include/xfs/xfs_arch.h
+    - path: /usr/include/xfs/xfs_da_format.h
+    - path: /usr/include/xfs/xfs_format.h
+    - path: /usr/include/xfs/xfs_fs.h
+    - path: /usr/include/xfs/xfs_fs_compat.h
+    - path: /usr/include/xfs/xfs_log_format.h
+    - path: /usr/include/xfs/xfs_types.h
+    - path: /usr/include/xfs/xqm.h
+
+  doc:
+    files:
+    - path: /usr/share/doc/xfsprogs/CHANGES.gz
+    - path: /usr/share/doc/xfsprogs/CREDITS
+    - path: /usr/share/doc/xfsprogs/README
+
+  lib:
+    files:
+    - path: /usr/lib/libhandle.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libhandle.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libhandle.so.1.0.3
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/systemd/system/system-xfs_healer.slice
+    - path: /usr/lib/systemd/system/system-xfs_scrub.slice
+    - path: /usr/lib/systemd/system/xfs_healer@.service
+    - path: /usr/lib/systemd/system/xfs_scrub@.service
+    - path: /usr/lib/systemd/system/xfs_scrub_all.service
+    - path: /usr/lib/systemd/system/xfs_scrub_all.timer
+    - path: /usr/lib/systemd/system/xfs_scrub_all_fail.service
+    - path: /usr/lib/systemd/system/xfs_scrub_fail@.service
+    - path: /usr/lib/systemd/system/xfs_scrub_media@.service
+    - path: /usr/lib/systemd/system/xfs_scrub_media_fail@.service
+    - path: /usr/lib/udev/rules.d/64-xfs.rules
+
+  man:
+    files:
+    - path: /usr/share/man/man2/ioctl_xfs_ag_geometry.2
+    - path: /usr/share/man/man2/ioctl_xfs_bulkstat.2
+    - path: /usr/share/man/man2/ioctl_xfs_commit_range.2
+    - path: /usr/share/man/man2/ioctl_xfs_exchange_range.2
+    - path: /usr/share/man/man2/ioctl_xfs_fsbulkstat.2
+    - path: /usr/share/man/man2/ioctl_xfs_fscounts.2
+    - path: /usr/share/man/man2/ioctl_xfs_fsgeometry.2
+    - path: /usr/share/man/man2/ioctl_xfs_fsgetxattr.2
+    - path: /usr/share/man/man2/ioctl_xfs_fsgetxattra.2
+    - path: /usr/share/man/man2/ioctl_xfs_fsinumbers.2
+    - path: /usr/share/man/man2/ioctl_xfs_fssetxattr.2
+    - path: /usr/share/man/man2/ioctl_xfs_getbmap.2
+    - path: /usr/share/man/man2/ioctl_xfs_getbmapa.2
+    - path: /usr/share/man/man2/ioctl_xfs_getbmapx.2
+    - path: /usr/share/man/man2/ioctl_xfs_getparents.2
+    - path: /usr/share/man/man2/ioctl_xfs_getresblks.2
+    - path: /usr/share/man/man2/ioctl_xfs_goingdown.2
+    - path: /usr/share/man/man2/ioctl_xfs_health_fd_on_monitored_fs.2
+    - path: /usr/share/man/man2/ioctl_xfs_health_monitor.2
+    - path: /usr/share/man/man2/ioctl_xfs_inumbers.2
+    - path: /usr/share/man/man2/ioctl_xfs_rtgroup_geometry.2
+    - path: /usr/share/man/man2/ioctl_xfs_scrub_metadata.2
+    - path: /usr/share/man/man2/ioctl_xfs_scrubv_metadata.2
+    - path: /usr/share/man/man2/ioctl_xfs_setresblks.2
+    - path: /usr/share/man/man2/ioctl_xfs_start_commit.2
+    - path: /usr/share/man/man2/ioctl_xfs_verify_media.2
+    - path: /usr/share/man/man3/attr_list_by_handle.3
+    - path: /usr/share/man/man3/attr_multi_by_handle.3
+    - path: /usr/share/man/man3/fd_to_handle.3
+    - path: /usr/share/man/man3/free_handle.3
+    - path: /usr/share/man/man3/fssetdm_by_handle.3
+    - path: /usr/share/man/man3/getparentpaths_by_handle.3
+    - path: /usr/share/man/man3/getparents_by_handle.3
+    - path: /usr/share/man/man3/handle_to_fshandle.3
+    - path: /usr/share/man/man3/open_by_handle.3
+    - path: /usr/share/man/man3/path_to_fshandle.3
+    - path: /usr/share/man/man3/path_to_handle.3
+    - path: /usr/share/man/man3/readlink_by_handle.3
+    - path: /usr/share/man/man3/xfsctl.3
+    - path: /usr/share/man/man5/projects.5
+    - path: /usr/share/man/man5/projid.5
+    - path: /usr/share/man/man5/xfs.5
+    - path: /usr/share/man/man8/fsck.xfs.8
+    - path: /usr/share/man/man8/mkfs.xfs.8
+    - path: /usr/share/man/man8/xfs_admin.8
+    - path: /usr/share/man/man8/xfs_bmap.8
+    - path: /usr/share/man/man8/xfs_copy.8
+    - path: /usr/share/man/man8/xfs_db.8
+    - path: /usr/share/man/man8/xfs_estimate.8
+    - path: /usr/share/man/man8/xfs_freeze.8
+    - path: /usr/share/man/man8/xfs_fsr.8
+    - path: /usr/share/man/man8/xfs_growfs.8
+    - path: /usr/share/man/man8/xfs_healer.8
+    - path: /usr/share/man/man8/xfs_info.8
+    - path: /usr/share/man/man8/xfs_io.8
+    - path: /usr/share/man/man8/xfs_logprint.8
+    - path: /usr/share/man/man8/xfs_mdrestore.8
+    - path: /usr/share/man/man8/xfs_metadump.8
+    - path: /usr/share/man/man8/xfs_mkfile.8
+    - path: /usr/share/man/man8/xfs_ncheck.8
+    - path: /usr/share/man/man8/xfs_property.8
+    - path: /usr/share/man/man8/xfs_protofile.8
+    - path: /usr/share/man/man8/xfs_quota.8
+    - path: /usr/share/man/man8/xfs_repair.8
+    - path: /usr/share/man/man8/xfs_rtcp.8
+    - path: /usr/share/man/man8/xfs_scrub.8
+    - path: /usr/share/man/man8/xfs_scrub_all.8
+    - path: /usr/share/man/man8/xfs_spaceman.8
+
+resolution:
+  /usr/bin/bash: bash
+  /usr/bin/sh: bash
+  /usr/bin/basename: coreutils
+  /usr/bin/cat: coreutils
+  /usr/bin/dirname: coreutils
+  /usr/bin/mkdir: coreutils
+  /usr/bin/rm: coreutils
+  /usr/bin/tail: coreutils
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libicui18n.so.76: icu
+  /usr/lib/libicuuc.so.76: icu
+  /usr/bin/hostname: inetutils
+  /usr/lib/libinih.so.0: inih
+  /usr/bin/python3: python3
+  /usr/bin/xfs_db: self
+  /usr/bin/xfs_io: self
+  /usr/bin/xfs_repair: self
+  /usr/bin/xfs_scrub: self
+  /usr/bin/xfs_spaceman: self
+  /usr/lib/libhandle.so.1: self
+  /usr/bin/systemctl: systemd
+  /usr/bin/systemd-escape: systemd
+  /usr/lib/liburcu.so.8: userspace-rcu
+  /usr/bin/blkid: util_linux
+  /usr/bin/findmnt: util_linux
+  /usr/bin/losetup: util_linux
+  /usr/bin/lsblk: util_linux
+  /usr/bin/mount: util_linux
+  /usr/bin/umount: util_linux
+  /usr/lib/libblkid.so.1: util_linux
+  /usr/lib/libuuid.so.1: util_linux
