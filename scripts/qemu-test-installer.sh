@@ -332,6 +332,52 @@ poweroff -f
 GUEST_ASSERT
 }
 
+resolve_deploy_file() {
+    root_dir=$1
+    deploy_dir=$2
+    path=$3
+    candidate="$deploy_dir/$path"
+
+    if [ -s "$candidate" ]; then
+        printf "%s\n" "$candidate"
+        return 0
+    fi
+
+    if [ -L "$candidate" ]; then
+        target=$(readlink "$candidate")
+        case "$target" in
+            /*) candidate="$root_dir$target" ;;
+            *) candidate="$(dirname "$candidate")/$target" ;;
+        esac
+
+        if [ -s "$candidate" ]; then
+            printf "%s\n" "$candidate"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+build_combined_initramfs() {
+    root_dir=$1
+    deploy_dir=$2
+    base_initramfs=$3
+    output_initramfs=$4
+
+    : > "$output_initramfs"
+
+    if microcode_initrd=$(resolve_deploy_file "$root_dir" "$deploy_dir" boot/amd-ucode.cpio); then
+        echo "including AMD early microcode initrd: $microcode_initrd"
+        cat "$microcode_initrd" >> "$output_initramfs"
+        microcode_size=$(wc -c < "$microcode_initrd")
+        cmp -n "$microcode_size" "$microcode_initrd" "$output_initramfs" \
+            || die "combined initramfs does not start with AMD microcode cpio"
+    fi
+
+    cat "$base_initramfs" >> "$output_initramfs"
+}
+
 build_direct_initramfs_disk() {
     command -v sfdisk >/dev/null 2>&1 || die "sfdisk not found"
     command -v mke2fs >/dev/null 2>&1 || die "mke2fs not found"
@@ -455,7 +501,9 @@ EOF
     dd if="$VAR_IMG" of="$TARGET_IMG" bs=512 seek="$VAR_START" conv=notrunc status=none
 
     DIRECT_KERNEL="$DIRECT_ROOT/boot/boot/vmlinuz-6.12.58"
-    DIRECT_INITRAMFS="$DIRECT_ROOT/initramfs/boot/initramfs.cpio"
+    DIRECT_BASE_INITRAMFS="$DIRECT_ROOT/initramfs/boot/initramfs.cpio"
+    DIRECT_INITRAMFS="$DIRECT_ROOT/initramfs/boot/combined-initramfs.cpio"
+    build_combined_initramfs "$DIRECT_ROOT/root-content" "$DEPLOY_DIR" "$DIRECT_BASE_INITRAMFS" "$DIRECT_INITRAMFS"
     DIRECT_DEPLOY="/nex/deployments/${TARGET_CHECKSUM}.0"
 }
 

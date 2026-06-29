@@ -84,9 +84,12 @@ fn boot_sequence() -> Result<(), BootError> {
     let kernel_data = kernel::load_from_deployment(&fs, &deployment)?;
     log::info!("loaded kernel ({} bytes)", kernel_data.kernel.len());
 
-    // check for extra boot modules and install initrd protocol if needed
-    if let Some(initramfs) = load_boot_modules(&fs, &deployment) {
-        log::info!("installing initrd protocol ({} bytes)", initramfs.len());
+    // check for extra initrd data and install initrd protocol if needed
+    if let Some(initramfs) = load_extra_initrd(&fs, &deployment) {
+        log::info!(
+            "installing extra initrd protocol ({} bytes)",
+            initramfs.len()
+        );
         if let Err(e) = initrd::install_initrd_protocol(initramfs) {
             log::warn!("failed to install initrd protocol: {:?}", e);
         }
@@ -101,6 +104,38 @@ fn boot_sequence() -> Result<(), BootError> {
     kernel::boot(kernel_data, &cmdline)
 }
 
+/// load deployment-selected extra initrd data in Linux-required order
+fn load_extra_initrd(fs: &ext4::Ext4Fs, deployment: &zub::Deployment) -> Option<Vec<u8>> {
+    let mut initrd = Vec::new();
+
+    if let Some(microcode) = load_amd_microcode_initrd(fs, deployment) {
+        initrd.extend_from_slice(&microcode);
+    }
+
+    if let Some(modules) = load_boot_modules(fs, deployment) {
+        initrd.extend_from_slice(&modules);
+    }
+
+    if initrd.is_empty() {
+        None
+    } else {
+        Some(initrd)
+    }
+}
+
+/// load AMD early microcode cpio if the deployment declares it
+fn load_amd_microcode_initrd(fs: &ext4::Ext4Fs, deployment: &zub::Deployment) -> Option<Vec<u8>> {
+    let microcode_path = alloc::format!("{}/boot/amd-ucode.cpio", deployment.path);
+
+    match fs.read_file(&microcode_path) {
+        Ok(data) => {
+            log::info!("microcode: loaded AMD early cpio ({} bytes)", data.len());
+            Some(data)
+        }
+        Err(_) => None,
+    }
+}
+
 /// load extra boot modules from /etc/boot-modules.conf if present
 fn load_boot_modules(fs: &ext4::Ext4Fs, deployment: &zub::Deployment) -> Option<Vec<u8>> {
     let config_path = alloc::format!("{}/etc/boot-modules.conf", deployment.path);
@@ -112,7 +147,10 @@ fn load_boot_modules(fs: &ext4::Ext4Fs, deployment: &zub::Deployment) -> Option<
     };
 
     let config_str = core::str::from_utf8(&config_content).ok()?;
-    log::info!("boot-modules: found config with {} bytes", config_content.len());
+    log::info!(
+        "boot-modules: found config with {} bytes",
+        config_content.len()
+    );
 
     // parse module paths (one per line, skip empty/comments)
     let module_paths: Vec<&str> = config_str
@@ -163,11 +201,7 @@ fn build_cmdline(
     deployment: &zub::Deployment,
     extra: Option<&str>,
 ) -> String {
-    let mut cmdline = alloc::format!(
-        "root=PARTUUID={} zub={} ro",
-        disk.partuuid,
-        deployment.path
-    );
+    let mut cmdline = alloc::format!("root=PARTUUID={} zub={} ro", disk.partuuid, deployment.path);
 
     if let Some(extra) = extra {
         let extra = extra.trim();
@@ -222,8 +256,7 @@ fn read_kcmdline_from_esp() -> Option<String> {
 }
 
 fn bootloader_dir() -> Option<PathBuf> {
-    let loaded_image =
-        boot::open_protocol_exclusive::<LoadedImage>(boot::image_handle()).ok()?;
+    let loaded_image = boot::open_protocol_exclusive::<LoadedImage>(boot::image_handle()).ok()?;
     let file_path = loaded_image.file_path()?;
 
     let mut file_path_cstr: Option<CString16> = None;
