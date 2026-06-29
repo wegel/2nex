@@ -108,8 +108,13 @@ fn boot_sequence() -> Result<(), BootError> {
 fn load_extra_initrd(fs: &ext4::Ext4Fs, deployment: &zub::Deployment) -> Option<Vec<u8>> {
     let mut initrd = Vec::new();
 
-    if let Some(microcode) = load_amd_microcode_initrd(fs, deployment) {
-        initrd.extend_from_slice(&microcode);
+    for (vendor, path) in [
+        ("AMD", "/boot/amd-ucode.cpio"),
+        ("Intel", "/boot/intel-ucode.cpio"),
+    ] {
+        if let Some(microcode) = load_microcode_initrd(fs, deployment, vendor, path) {
+            initrd.extend_from_slice(&microcode);
+        }
     }
 
     if let Some(modules) = load_boot_modules(fs, deployment) {
@@ -123,13 +128,22 @@ fn load_extra_initrd(fs: &ext4::Ext4Fs, deployment: &zub::Deployment) -> Option<
     }
 }
 
-/// load AMD early microcode cpio if the deployment declares it
-fn load_amd_microcode_initrd(fs: &ext4::Ext4Fs, deployment: &zub::Deployment) -> Option<Vec<u8>> {
-    let microcode_path = alloc::format!("{}/boot/amd-ucode.cpio", deployment.path);
+/// load an early microcode cpio if the deployment declares it
+fn load_microcode_initrd(
+    fs: &ext4::Ext4Fs,
+    deployment: &zub::Deployment,
+    vendor: &str,
+    path: &str,
+) -> Option<Vec<u8>> {
+    let microcode_path = alloc::format!("{}{}", deployment.path, path);
 
     match fs.read_file(&microcode_path) {
         Ok(data) => {
-            log::info!("microcode: loaded AMD early cpio ({} bytes)", data.len());
+            log::info!(
+                "microcode: loaded {} early cpio ({} bytes)",
+                vendor,
+                data.len()
+            );
             Some(data)
         }
         Err(_) => None,

@@ -1,0 +1,83 @@
+package:
+  schema: 1
+  name: Intel Early Microcode Initramfs
+  slug: intel-ucode-initramfs
+  namespace: core/kernel
+  version: "20260512"
+  description: early Intel CPU microcode cpio for Linux boot
+  homepage: https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files
+  checksum: dac12b4b2fb450a7cd3e520fc1de9241d09b74f0205382976138d44c200e8acd
+
+sources:
+- name: ucode
+  url: https://github.com/intel/Intel-Linux-Processor-Microcode-Data-Files/archive/refs/tags/microcode-20260512.tar.gz
+  sha256: 5a07ce745d0bd8b360a4713564d46d5e38be797316a52abedaff0761e1b02370
+- name: gen_init_cpio
+  file: pkg/core/kernel/gen_init_cpio.c
+  sha256: 309cab96d2b43133a0758f165fbcf9cc1b671623555ef8dadd9983095c462345
+- name: gen_initramfs
+  file: pkg/core/kernel/gen_initramfs.sh
+  sha256: a3cf8ccffd72d8087904aece0cde4883c13912a6f4eb958c185fa9eda65bedf0
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [1068:356]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xzf "/${SOURCE_ucode}" -C "${WORK_DIR}"
+    SOURCE_DIR="${WORK_DIR}/Intel-Linux-Processor-Microcode-Data-Files-microcode-20260512"
+
+    MICROCODE_ROOT="${WORK_DIR}/intel-ucode-initramfs"
+    MICROCODE_DIR="${MICROCODE_ROOT}/kernel/x86/microcode"
+    mkdir -p "${MICROCODE_DIR}"
+
+    MICROCODE_PAYLOAD="${MICROCODE_DIR}/GenuineIntel.bin"
+    : > "${MICROCODE_PAYLOAD}"
+    find "${SOURCE_DIR}/intel-ucode" -maxdepth 1 -type f | sort | while IFS= read -r blob; do
+        cat "${blob}" >> "${MICROCODE_PAYLOAD}"
+    done
+    [ -s "${MICROCODE_PAYLOAD}" ] || { echo "empty Intel microcode payload" >&2; exit 1; }
+
+    chmod 0644 "${MICROCODE_PAYLOAD}"
+    find "${MICROCODE_ROOT}" -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;
+
+    mkdir -p "${WORK_DIR}/usr" "${OUT_DIR}/boot"
+    cp "/${SOURCE_gen_initramfs}" "${WORK_DIR}/usr/gen_initramfs.sh"
+    chmod +x "${WORK_DIR}/usr/gen_initramfs.sh"
+    gcc -O2 -Wall -Wextra -o "${WORK_DIR}/usr/gen_init_cpio" "/${SOURCE_gen_init_cpio}"
+
+    (cd "${WORK_DIR}" && ./usr/gen_initramfs.sh -o "${OUT_DIR}/boot/intel-ucode.cpio" -d "2024-01-01T00:00:00+00:00" -u squash -g squash "${MICROCODE_ROOT}")
+    touch -d "2024-01-01T00:00:00+00:00" "${OUT_DIR}/boot/intel-ucode.cpio"
+
+bundles:
+  full:
+  - boot
+
+outputs:
+  boot:
+    files:
+    - path: /boot/intel-ucode.cpio

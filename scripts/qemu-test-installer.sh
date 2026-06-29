@@ -367,13 +367,16 @@ build_combined_initramfs() {
 
     : > "$output_initramfs"
 
-    if microcode_initrd=$(resolve_deploy_file "$root_dir" "$deploy_dir" boot/amd-ucode.cpio); then
-        echo "including AMD early microcode initrd: $microcode_initrd"
-        cat "$microcode_initrd" >> "$output_initramfs"
-        microcode_size=$(wc -c < "$microcode_initrd")
-        cmp -n "$microcode_size" "$microcode_initrd" "$output_initramfs" \
-            || die "combined initramfs does not start with AMD microcode cpio"
-    fi
+    for microcode_name in amd-ucode.cpio intel-ucode.cpio; do
+        if microcode_initrd=$(resolve_deploy_file "$root_dir" "$deploy_dir" "boot/$microcode_name"); then
+            echo "including early microcode initrd: $microcode_initrd"
+            microcode_offset=$(wc -c < "$output_initramfs")
+            cat "$microcode_initrd" >> "$output_initramfs"
+            microcode_size=$(wc -c < "$microcode_initrd")
+            cmp -n "$microcode_size" -i "0:$microcode_offset" "$microcode_initrd" "$output_initramfs" \
+                || die "combined initramfs has $microcode_name at the wrong offset"
+        fi
+    done
 
     cat "$base_initramfs" >> "$output_initramfs"
 }
