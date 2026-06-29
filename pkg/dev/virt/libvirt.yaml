@@ -6,7 +6,7 @@ package:
   version: 11.0.0
   description: Toolkit for virtualization management
   homepage: https://libvirt.org/
-  checksum: 2e5a28fdeb23cd93ae04d1348ecd5a80fc8636f32bc8a8009efe7b8a86dca8c4
+  checksum: 43f098cc7a70181459de90986f651a97a95981354f55ef690700dd06a709fc19
 
 sources:
 - name: libvirt
@@ -91,7 +91,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4109:7227, 12380:27454, 24730:29969, 37158:33682, 49603:35711, 62047:38649, 70306:41272, 91074:81191, 107614:81206, 116304:81484]
+  profile: [4106:1527, 12377:3446, 24691:3964, 37052:4635, 49367:5606, 61745:6786, 70051:7860, 90753:46568, 107286:46583, 115572:47138]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_libvirt} -C "${WORK_DIR}" --strip-components=1
@@ -137,6 +137,13 @@ build:
 
     ninja
     DESTDIR="${OUT_DIR}" ninja install
+
+    mkdir -p docs-api "${OUT_DIR}/usr/share/libvirt/api"
+    python3 ../scripts/apibuild.py ../docs docs-api
+    install -m 0644 docs-api/libvirt-api.xml "${OUT_DIR}/usr/share/libvirt/api/libvirt-api.xml"
+    install -m 0644 docs-api/libvirt-admin-api.xml "${OUT_DIR}/usr/share/libvirt/api/libvirt-admin-api.xml"
+    install -m 0644 docs-api/libvirt-lxc-api.xml "${OUT_DIR}/usr/share/libvirt/api/libvirt-lxc-api.xml"
+    install -m 0644 docs-api/libvirt-qemu-api.xml "${OUT_DIR}/usr/share/libvirt/api/libvirt-qemu-api.xml"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -324,6 +331,10 @@ outputs:
     - path: /usr/lib/pkgconfig/libvirt-lxc.pc
     - path: /usr/lib/pkgconfig/libvirt-qemu.pc
     - path: /usr/lib/pkgconfig/libvirt.pc
+    - path: /usr/share/libvirt/api/libvirt-admin-api.xml
+    - path: /usr/share/libvirt/api/libvirt-api.xml
+    - path: /usr/share/libvirt/api/libvirt-lxc-api.xml
+    - path: /usr/share/libvirt/api/libvirt-qemu-api.xml
 
   doc:
     files:
