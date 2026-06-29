@@ -516,9 +516,10 @@ fn build_provider_lookup(
                 continue;
             }
 
-            if let Some(basename) = Path::new(&file_path).file_name().and_then(|n| n.to_str()) {
-                // reverse order: don't overwrite existing entries (earlier in reverse = later in original)
-                lookup.entry(basename.to_string()).or_insert_with(|| {
+            // Reverse order: don't overwrite existing entries. Earlier in
+            // reverse order means later in the manifest dependency list.
+            for lookup_key in library_lookup_keys(&file_path) {
+                lookup.entry(lookup_key).or_insert_with(|| {
                     (
                         provider_key.clone(),
                         file_path.clone(),
@@ -568,13 +569,14 @@ fn build_provider_lookup(
                 continue;
             }
 
-            if let Some(basename) = Path::new(&file_path).file_name().and_then(|n| n.to_str()) {
-                // self libs have highest priority - overwrite any dep entries
+            // Self libraries have highest priority, so they overwrite
+            // dependency entries for both SONAME and absolute-path lookups.
+            for lookup_key in library_lookup_keys(&file_path) {
                 lookup.insert(
-                    basename.to_string(),
+                    lookup_key,
                     (
                         self_provider_key.to_string(),
-                        file_path,
+                        file_path.clone(),
                         self_files_commit.clone(),
                     ),
                 );
@@ -583,6 +585,20 @@ fn build_provider_lookup(
     }
 
     Ok(lookup)
+}
+
+fn library_lookup_keys(file_path: &str) -> Vec<String> {
+    let mut keys = Vec::new();
+
+    if let Some(basename) = Path::new(file_path).file_name().and_then(|n| n.to_str()) {
+        keys.push(basename.to_string());
+    }
+
+    if file_path.starts_with('/') && !keys.iter().any(|key| key == file_path) {
+        keys.push(file_path.to_string());
+    }
+
+    keys
 }
 
 /// Find files commit for a package by looking up its manifest's checksum.
@@ -1006,7 +1022,7 @@ fn derive_manifest_base_dir(manifest_path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::merge_needs;
+    use super::{library_lookup_keys, merge_needs};
 
     #[test]
     fn merge_needs_preserves_manual_script_dependencies() {
@@ -1028,6 +1044,17 @@ mod tests {
             vec![
                 "/usr/bin/python3".to_string(),
                 "/usr/lib/libc.so.6".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn library_lookup_keys_supports_absolute_dt_needed_paths() {
+        assert_eq!(
+            library_lookup_keys("/usr/lib/libsqlite3.so"),
+            vec![
+                "libsqlite3.so".to_string(),
+                "/usr/lib/libsqlite3.so".to_string(),
             ]
         );
     }
