@@ -1,0 +1,478 @@
+package:
+  schema: 1
+  name: virt-manager
+  slug: virt-manager
+  namespace: apps/virt
+  version: 5.1.0
+  description: Graphical virtual machine manager for libvirt
+  homepage: https://virt-manager.org/
+  checksum: 5fce6d6bc78c620636aef561fcf3c4dbd0fc8fad50aa99ca516e5f5f43470203
+
+sources:
+- name: virt_manager
+  url: https://releases.pagure.org/virt-manager/virt-manager-5.1.0.tar.xz
+  sha256: ccfc44b6c1c0be8398beb687c675d9ea4ca1c721dfb67bd639209a7b0dec11b1
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: docutils
+  commit: x86_64/pkg/dev/python/docutils/0.21.2/bundles/dev
+- name: gettext
+  commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: pygobject
+  commit: x86_64/pkg/dev/python/pygobject/3.56.3/bundles/full
+- name: pycairo
+  commit: x86_64/pkg/dev/python/pycairo/1.29.0/bundles/full
+- name: python3-libxml2
+  commit: x86_64/pkg/dev/python/python3-libxml2/2.13.5/bundles/dev
+- name: libvirt-python
+  commit: x86_64/pkg/dev/python/libvirt-python/11.0.0/bundles/full
+- name: requests
+  commit: x86_64/pkg/dev/python/requests/2.34.2/bundles/full
+- name: libvirt
+  commit: x86_64/pkg/dev/virt/libvirt/11.0.0/bundles/dev
+- name: libvirt-glib
+  commit: x86_64/pkg/dev/virt/libvirt-glib/5.0.0/bundles/full
+- name: libosinfo
+  commit: x86_64/pkg/dev/virt/libosinfo/1.12.0/bundles/full
+- name: osinfo-db
+  commit: x86_64/pkg/dev/virt/osinfo-db/20251212/bundles/full
+- name: gtk3
+  commit: x86_64/pkg/libs/graphics/gtk3/3.24.43/bundles/full
+- name: gtksourceview4
+  commit: x86_64/pkg/libs/text/gtksourceview4/4.8.4/bundles/full
+- name: gtk-vnc
+  commit: x86_64/pkg/dev/virt/gtk-vnc/1.3.1/bundles/full
+- name: vte
+  commit: x86_64/pkg/libs/text/vte/0.76.4/bundles/full
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4132:394, 8278:844, 12473:844, 16599:852, 20695:852, 24814:859, 28952:859, 31258:1050]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "/./${SOURCE_virt_manager}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --buildtype=release \
+      -Dcompile-schemas=false \
+      -Dupdate-icon-cache=false \
+      -Ddefault-graphics=vnc \
+      -Ddefault-hvs=qemu \
+      -Dtests=disabled
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    for wrapper in virt-clone virt-install virt-manager virt-xml; do
+      sed -i '1s|^#!/usr/bin/env python3$|#!/usr/bin/python3|' "${OUT_DIR}/usr/bin/${wrapper}"
+    done
+
+    glib-compile-schemas "${OUT_DIR}/usr/share/glib-2.0/schemas"
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  full:
+  - bin
+  - lib
+  - locale
+  - man
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/virt-clone
+      needs:
+      - /usr/bin/python3
+      - /usr/lib/libvirt.so.0
+      - /usr/lib/python3.12/site-packages/libvirt.py
+      - /usr/lib/python3.12/site-packages/libvirtmod.cpython-312-x86_64-linux-gnu.so
+      - /usr/lib/python3.12/site-packages/libxml2mod.cpython-312-x86_64-linux-gnu.so
+      - /usr/lib/python3.12/site-packages/libxml2.py
+      - /usr/lib/python3.12/site-packages/requests/__init__.py
+      - /usr/share/virt-manager/virtinst/__init__.py
+    - path: /usr/bin/virt-install
+      needs:
+      - /usr/bin/python3
+      - /usr/lib/girepository-1.0/Libosinfo-1.0.typelib
+      - /usr/lib/libvirt.so.0
+      - /usr/lib/python3.12/site-packages/libvirt.py
+      - /usr/lib/python3.12/site-packages/libvirtmod.cpython-312-x86_64-linux-gnu.so
+      - /usr/lib/python3.12/site-packages/libxml2mod.cpython-312-x86_64-linux-gnu.so
+      - /usr/lib/python3.12/site-packages/libxml2.py
+      - /usr/lib/python3.12/site-packages/requests/__init__.py
+      - /usr/share/virt-manager/virtinst/__init__.py
+    - path: /usr/bin/virt-manager
+      needs:
+      - /usr/bin/python3
+      - /usr/lib/girepository-1.0/Gdk-3.0.typelib
+      - /usr/lib/girepository-1.0/Gtk-3.0.typelib
+      - /usr/lib/girepository-1.0/GtkSource-4.typelib
+      - /usr/lib/girepository-1.0/GtkVnc-2.0.typelib
+      - /usr/lib/girepository-1.0/Libosinfo-1.0.typelib
+      - /usr/lib/girepository-1.0/LibvirtGLib-1.0.typelib
+      - /usr/lib/girepository-1.0/Vte-2.91.typelib
+      - /usr/lib/libgtk-3.so.0
+      - /usr/lib/libgtk-vnc-2.0.so.0
+      - /usr/lib/libgtksourceview-4.so.0
+      - /usr/lib/libvirt.so.0
+      - /usr/lib/libvte-2.91.so.0
+      - /usr/lib/python3.12/site-packages/cairo/__init__.py
+      - /usr/lib/python3.12/site-packages/gi/__init__.py
+      - /usr/lib/python3.12/site-packages/libvirt.py
+      - /usr/lib/python3.12/site-packages/libvirtmod.cpython-312-x86_64-linux-gnu.so
+      - /usr/lib/python3.12/site-packages/libxml2mod.cpython-312-x86_64-linux-gnu.so
+      - /usr/lib/python3.12/site-packages/libxml2.py
+      - /usr/lib/python3.12/site-packages/requests/__init__.py
+      - /usr/share/osinfo/os/fedoraproject.org
+      - /usr/share/virt-manager/virtManager/virtmanager.py
+      - /usr/share/virt-manager/virtinst/__init__.py
+    - path: /usr/bin/virt-xml
+      needs:
+      - /usr/bin/python3
+      - /usr/lib/libvirt.so.0
+      - /usr/lib/python3.12/site-packages/libvirt.py
+      - /usr/lib/python3.12/site-packages/libvirtmod.cpython-312-x86_64-linux-gnu.so
+      - /usr/lib/python3.12/site-packages/libxml2mod.cpython-312-x86_64-linux-gnu.so
+      - /usr/lib/python3.12/site-packages/libxml2.py
+      - /usr/lib/python3.12/site-packages/requests/__init__.py
+      - /usr/share/virt-manager/virtinst/__init__.py
+
+  lib:
+    files:
+    - path: /usr/share/virt-manager/virtManager/lib/__init__.py
+    - path: /usr/share/virt-manager/virtManager/lib/connectauth.py
+    - path: /usr/share/virt-manager/virtManager/lib/graphwidgets.py
+    - path: /usr/share/virt-manager/virtManager/lib/inspection.py
+    - path: /usr/share/virt-manager/virtManager/lib/keyring.py
+    - path: /usr/share/virt-manager/virtManager/lib/libvirtenummap.py
+    - path: /usr/share/virt-manager/virtManager/lib/module_trace.py
+    - path: /usr/share/virt-manager/virtManager/lib/statsmanager.py
+    - path: /usr/share/virt-manager/virtManager/lib/testmock.py
+    - path: /usr/share/virt-manager/virtManager/lib/uiutil.py
+
+  locale:
+    files:
+    - path: /usr/share/locale/ar/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/as/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/bg/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/bn_IN/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/bs/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/en_GB/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/fa/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/fur/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/gu/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/hi/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/ie/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/is/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/kab/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/kn/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/ml/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/mr/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/or/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/pa/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/si/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/sr@latin/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/ta/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/te/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/virt-manager.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/virt-manager.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/virt-clone.1
+    - path: /usr/share/man/man1/virt-install.1
+    - path: /usr/share/man/man1/virt-manager.1
+    - path: /usr/share/man/man1/virt-xml.1
+
+  misc:
+    files:
+    - path: /usr/share/applications/virt-manager.desktop
+    - path: /usr/share/bash-completion/completions/virt-clone
+    - path: /usr/share/bash-completion/completions/virt-install
+    - path: /usr/share/bash-completion/completions/virt-xml
+    - path: /usr/share/glib-2.0/schemas/gschemas.compiled
+    - path: /usr/share/glib-2.0/schemas/org.virt-manager.virt-manager.gschema.xml
+    - path: /usr/share/icons/hicolor/16x16/apps/virt-manager.png
+    - path: /usr/share/icons/hicolor/22x22/apps/virt-manager.png
+    - path: /usr/share/icons/hicolor/24x24/apps/virt-manager.png
+    - path: /usr/share/icons/hicolor/32x32/apps/virt-manager.png
+    - path: /usr/share/icons/hicolor/48x48/apps/virt-manager.png
+    - path: /usr/share/icons/hicolor/256x256/apps/virt-manager.png
+    - path: /usr/share/metainfo/virt-manager.appdata.xml
+    - path: /usr/share/virt-manager/icons/hicolor/16x16/actions/icon_console.png
+    - path: /usr/share/virt-manager/icons/hicolor/16x16/actions/vm_new.png
+    - path: /usr/share/virt-manager/icons/hicolor/22x22/actions/icon_console.png
+    - path: /usr/share/virt-manager/icons/hicolor/22x22/actions/icon_details.png
+    - path: /usr/share/virt-manager/icons/hicolor/22x22/actions/vm_new.png
+    - path: /usr/share/virt-manager/icons/hicolor/22x22/devices/device_cpu.png
+    - path: /usr/share/virt-manager/icons/hicolor/22x22/devices/device_mem.png
+    - path: /usr/share/virt-manager/icons/hicolor/22x22/devices/device_pci.png
+    - path: /usr/share/virt-manager/icons/hicolor/22x22/devices/device_serial.png
+    - path: /usr/share/virt-manager/icons/hicolor/22x22/devices/device_usb.png
+    - path: /usr/share/virt-manager/icons/hicolor/22x22/status/state_paused.png
+    - path: /usr/share/virt-manager/icons/hicolor/22x22/status/state_running.png
+    - path: /usr/share/virt-manager/icons/hicolor/22x22/status/state_shutoff.png
+    - path: /usr/share/virt-manager/icons/hicolor/24x24/actions/icon_console.png
+    - path: /usr/share/virt-manager/icons/hicolor/24x24/actions/vm_clone_wizard.png
+    - path: /usr/share/virt-manager/icons/hicolor/24x24/actions/vm_new.png
+    - path: /usr/share/virt-manager/icons/hicolor/32x32/actions/icon_console.png
+    - path: /usr/share/virt-manager/icons/hicolor/32x32/actions/vm_new.png
+    - path: /usr/share/virt-manager/icons/hicolor/32x32/status/state_paused.png
+    - path: /usr/share/virt-manager/icons/hicolor/32x32/status/state_running.png
+    - path: /usr/share/virt-manager/icons/hicolor/32x32/status/state_shutoff.png
+    - path: /usr/share/virt-manager/icons/hicolor/48x48/actions/vm_clone_wizard.png
+    - path: /usr/share/virt-manager/icons/hicolor/48x48/actions/vm_delete_wizard.png
+    - path: /usr/share/virt-manager/icons/hicolor/48x48/actions/vm_import_wizard.png
+    - path: /usr/share/virt-manager/icons/hicolor/48x48/actions/vm_new_wizard.png
+    - path: /usr/share/virt-manager/ui/about.ui
+    - path: /usr/share/virt-manager/ui/addhardware.ui
+    - path: /usr/share/virt-manager/ui/addstorage.ui
+    - path: /usr/share/virt-manager/ui/asyncjob.ui
+    - path: /usr/share/virt-manager/ui/clone.ui
+    - path: /usr/share/virt-manager/ui/connectauth.ui
+    - path: /usr/share/virt-manager/ui/console.ui
+    - path: /usr/share/virt-manager/ui/createconn.ui
+    - path: /usr/share/virt-manager/ui/createnet.ui
+    - path: /usr/share/virt-manager/ui/createpool.ui
+    - path: /usr/share/virt-manager/ui/createvm.ui
+    - path: /usr/share/virt-manager/ui/createvol.ui
+    - path: /usr/share/virt-manager/ui/delete.ui
+    - path: /usr/share/virt-manager/ui/details.ui
+    - path: /usr/share/virt-manager/ui/fsdetails.ui
+    - path: /usr/share/virt-manager/ui/gfxdetails.ui
+    - path: /usr/share/virt-manager/ui/host.ui
+    - path: /usr/share/virt-manager/ui/hostnets.ui
+    - path: /usr/share/virt-manager/ui/hoststorage.ui
+    - path: /usr/share/virt-manager/ui/manager.ui
+    - path: /usr/share/virt-manager/ui/migrate.ui
+    - path: /usr/share/virt-manager/ui/netlist.ui
+    - path: /usr/share/virt-manager/ui/oslist.ui
+    - path: /usr/share/virt-manager/ui/preferences.ui
+    - path: /usr/share/virt-manager/ui/snapshots.ui
+    - path: /usr/share/virt-manager/ui/snapshotsnew.ui
+    - path: /usr/share/virt-manager/ui/storagebrowse.ui
+    - path: /usr/share/virt-manager/ui/tpmdetails.ui
+    - path: /usr/share/virt-manager/ui/vmwindow.ui
+    - path: /usr/share/virt-manager/ui/vsockdetails.ui
+    - path: /usr/share/virt-manager/ui/xmleditor.ui
+    - path: /usr/share/virt-manager/virtManager/__init__.py
+    - path: /usr/share/virt-manager/virtManager/about.py
+    - path: /usr/share/virt-manager/virtManager/addhardware.py
+    - path: /usr/share/virt-manager/virtManager/asyncjob.py
+    - path: /usr/share/virt-manager/virtManager/baseclass.py
+    - path: /usr/share/virt-manager/virtManager/clone.py
+    - path: /usr/share/virt-manager/virtManager/config.py
+    - path: /usr/share/virt-manager/virtManager/connection.py
+    - path: /usr/share/virt-manager/virtManager/connmanager.py
+    - path: /usr/share/virt-manager/virtManager/createconn.py
+    - path: /usr/share/virt-manager/virtManager/createnet.py
+    - path: /usr/share/virt-manager/virtManager/createpool.py
+    - path: /usr/share/virt-manager/virtManager/createvm.py
+    - path: /usr/share/virt-manager/virtManager/createvol.py
+    - path: /usr/share/virt-manager/virtManager/delete.py
+    - path: /usr/share/virt-manager/virtManager/details/__init__.py
+    - path: /usr/share/virt-manager/virtManager/details/console.py
+    - path: /usr/share/virt-manager/virtManager/details/details.py
+    - path: /usr/share/virt-manager/virtManager/details/serialcon.py
+    - path: /usr/share/virt-manager/virtManager/details/snapshots.py
+    - path: /usr/share/virt-manager/virtManager/details/sshtunnels.py
+    - path: /usr/share/virt-manager/virtManager/details/viewers.py
+    - path: /usr/share/virt-manager/virtManager/device/__init__.py
+    - path: /usr/share/virt-manager/virtManager/device/addstorage.py
+    - path: /usr/share/virt-manager/virtManager/device/fsdetails.py
+    - path: /usr/share/virt-manager/virtManager/device/gfxdetails.py
+    - path: /usr/share/virt-manager/virtManager/device/mediacombo.py
+    - path: /usr/share/virt-manager/virtManager/device/netlist.py
+    - path: /usr/share/virt-manager/virtManager/device/tpmdetails.py
+    - path: /usr/share/virt-manager/virtManager/device/vsockdetails.py
+    - path: /usr/share/virt-manager/virtManager/engine.py
+    - path: /usr/share/virt-manager/virtManager/error.py
+    - path: /usr/share/virt-manager/virtManager/host.py
+    - path: /usr/share/virt-manager/virtManager/hostnets.py
+    - path: /usr/share/virt-manager/virtManager/hoststorage.py
+    - path: /usr/share/virt-manager/virtManager/manager.py
+    - path: /usr/share/virt-manager/virtManager/migrate.py
+    - path: /usr/share/virt-manager/virtManager/object/__init__.py
+    - path: /usr/share/virt-manager/virtManager/object/domain.py
+    - path: /usr/share/virt-manager/virtManager/object/libvirtobject.py
+    - path: /usr/share/virt-manager/virtManager/object/network.py
+    - path: /usr/share/virt-manager/virtManager/object/nodedev.py
+    - path: /usr/share/virt-manager/virtManager/object/storagepool.py
+    - path: /usr/share/virt-manager/virtManager/oslist.py
+    - path: /usr/share/virt-manager/virtManager/preferences.py
+    - path: /usr/share/virt-manager/virtManager/storagebrowse.py
+    - path: /usr/share/virt-manager/virtManager/systray.py
+    - path: /usr/share/virt-manager/virtManager/virtmanager.py
+    - path: /usr/share/virt-manager/virtManager/vmmenu.py
+    - path: /usr/share/virt-manager/virtManager/vmwindow.py
+    - path: /usr/share/virt-manager/virtManager/xmleditor.py
+    - path: /usr/share/virt-manager/virtinst/__init__.py
+    - path: /usr/share/virt-manager/virtinst/_progresspriv.py
+    - path: /usr/share/virt-manager/virtinst/build.cfg
+    - path: /usr/share/virt-manager/virtinst/buildconfig.py
+    - path: /usr/share/virt-manager/virtinst/capabilities.py
+    - path: /usr/share/virt-manager/virtinst/cli.py
+    - path: /usr/share/virt-manager/virtinst/cloner.py
+    - path: /usr/share/virt-manager/virtinst/connection.py
+    - path: /usr/share/virt-manager/virtinst/devices/__init__.py
+    - path: /usr/share/virt-manager/virtinst/devices/audio.py
+    - path: /usr/share/virt-manager/virtinst/devices/char.py
+    - path: /usr/share/virt-manager/virtinst/devices/controller.py
+    - path: /usr/share/virt-manager/virtinst/devices/device.py
+    - path: /usr/share/virt-manager/virtinst/devices/disk.py
+    - path: /usr/share/virt-manager/virtinst/devices/filesystem.py
+    - path: /usr/share/virt-manager/virtinst/devices/graphics.py
+    - path: /usr/share/virt-manager/virtinst/devices/hostdev.py
+    - path: /usr/share/virt-manager/virtinst/devices/input.py
+    - path: /usr/share/virt-manager/virtinst/devices/interface.py
+    - path: /usr/share/virt-manager/virtinst/devices/iommu.py
+    - path: /usr/share/virt-manager/virtinst/devices/memballoon.py
+    - path: /usr/share/virt-manager/virtinst/devices/memory.py
+    - path: /usr/share/virt-manager/virtinst/devices/panic.py
+    - path: /usr/share/virt-manager/virtinst/devices/pstore.py
+    - path: /usr/share/virt-manager/virtinst/devices/redirdev.py
+    - path: /usr/share/virt-manager/virtinst/devices/rng.py
+    - path: /usr/share/virt-manager/virtinst/devices/shmem.py
+    - path: /usr/share/virt-manager/virtinst/devices/smartcard.py
+    - path: /usr/share/virt-manager/virtinst/devices/sound.py
+    - path: /usr/share/virt-manager/virtinst/devices/tpm.py
+    - path: /usr/share/virt-manager/virtinst/devices/video.py
+    - path: /usr/share/virt-manager/virtinst/devices/vsock.py
+    - path: /usr/share/virt-manager/virtinst/devices/watchdog.py
+    - path: /usr/share/virt-manager/virtinst/diskbackend.py
+    - path: /usr/share/virt-manager/virtinst/domain/__init__.py
+    - path: /usr/share/virt-manager/virtinst/domain/blkiotune.py
+    - path: /usr/share/virt-manager/virtinst/domain/clock.py
+    - path: /usr/share/virt-manager/virtinst/domain/cpu.py
+    - path: /usr/share/virt-manager/virtinst/domain/cputune.py
+    - path: /usr/share/virt-manager/virtinst/domain/features.py
+    - path: /usr/share/virt-manager/virtinst/domain/idmap.py
+    - path: /usr/share/virt-manager/virtinst/domain/keywrap.py
+    - path: /usr/share/virt-manager/virtinst/domain/launch_security.py
+    - path: /usr/share/virt-manager/virtinst/domain/memorybacking.py
+    - path: /usr/share/virt-manager/virtinst/domain/memtune.py
+    - path: /usr/share/virt-manager/virtinst/domain/metadata.py
+    - path: /usr/share/virt-manager/virtinst/domain/numatune.py
+    - path: /usr/share/virt-manager/virtinst/domain/os.py
+    - path: /usr/share/virt-manager/virtinst/domain/pm.py
+    - path: /usr/share/virt-manager/virtinst/domain/resource.py
+    - path: /usr/share/virt-manager/virtinst/domain/seclabel.py
+    - path: /usr/share/virt-manager/virtinst/domain/sysinfo.py
+    - path: /usr/share/virt-manager/virtinst/domain/vcpus.py
+    - path: /usr/share/virt-manager/virtinst/domain/xmlnsqemu.py
+    - path: /usr/share/virt-manager/virtinst/domcapabilities.py
+    - path: /usr/share/virt-manager/virtinst/generatename.py
+    - path: /usr/share/virt-manager/virtinst/guest.py
+    - path: /usr/share/virt-manager/virtinst/install/__init__.py
+    - path: /usr/share/virt-manager/virtinst/install/cloudinit.py
+    - path: /usr/share/virt-manager/virtinst/install/installer.py
+    - path: /usr/share/virt-manager/virtinst/install/installerinject.py
+    - path: /usr/share/virt-manager/virtinst/install/installertreemedia.py
+    - path: /usr/share/virt-manager/virtinst/install/unattended.py
+    - path: /usr/share/virt-manager/virtinst/install/urldetect.py
+    - path: /usr/share/virt-manager/virtinst/install/urlfetcher.py
+    - path: /usr/share/virt-manager/virtinst/install/volumeupload.py
+    - path: /usr/share/virt-manager/virtinst/logger.py
+    - path: /usr/share/virt-manager/virtinst/network.py
+    - path: /usr/share/virt-manager/virtinst/nodedev.py
+    - path: /usr/share/virt-manager/virtinst/osdict.py
+    - path: /usr/share/virt-manager/virtinst/pollhelpers.py
+    - path: /usr/share/virt-manager/virtinst/progress.py
+    - path: /usr/share/virt-manager/virtinst/snapshot.py
+    - path: /usr/share/virt-manager/virtinst/storage.py
+    - path: /usr/share/virt-manager/virtinst/support.py
+    - path: /usr/share/virt-manager/virtinst/uri.py
+    - path: /usr/share/virt-manager/virtinst/virtclone.py
+    - path: /usr/share/virt-manager/virtinst/virtinstall.py
+    - path: /usr/share/virt-manager/virtinst/virtxml.py
+    - path: /usr/share/virt-manager/virtinst/xmlapi.py
+    - path: /usr/share/virt-manager/virtinst/xmlbuilder.py
+    - path: /usr/share/virt-manager/virtinst/xmlutil.py
+
+resolution:
+  /usr/lib/girepository-1.0/GtkVnc-2.0.typelib: gtk-vnc
+  /usr/lib/libgtk-vnc-2.0.so.0: gtk-vnc
+  /usr/lib/girepository-1.0/Gdk-3.0.typelib: gtk3
+  /usr/lib/girepository-1.0/Gtk-3.0.typelib: gtk3
+  /usr/lib/libgtk-3.so.0: gtk3
+  /usr/lib/girepository-1.0/GtkSource-4.typelib: gtksourceview4
+  /usr/lib/libgtksourceview-4.so.0: gtksourceview4
+  /usr/lib/girepository-1.0/Libosinfo-1.0.typelib: libosinfo
+  /usr/lib/libvirt.so.0: libvirt
+  /usr/lib/girepository-1.0/LibvirtGLib-1.0.typelib: libvirt-glib
+  /usr/lib/python3.12/site-packages/libvirt.py: libvirt-python
+  /usr/lib/python3.12/site-packages/libvirtmod.cpython-312-x86_64-linux-gnu.so: libvirt-python
+  /usr/share/osinfo/os/fedoraproject.org: osinfo-db
+  /usr/lib/python3.12/site-packages/cairo/__init__.py: pycairo
+  /usr/lib/python3.12/site-packages/gi/__init__.py: pygobject
+  /usr/bin/python3: python3
+  /usr/lib/python3.12/site-packages/libxml2mod.cpython-312-x86_64-linux-gnu.so: python3-libxml2
+  /usr/lib/python3.12/site-packages/libxml2.py: python3-libxml2
+  /usr/lib/python3.12/site-packages/requests/__init__.py: requests
+  /usr/share/virt-manager/virtManager/virtmanager.py: self
+  /usr/share/virt-manager/virtinst/__init__.py: self
+  /usr/lib/girepository-1.0/Vte-2.91.typelib: vte
+  /usr/lib/libvte-2.91.so.0: vte
