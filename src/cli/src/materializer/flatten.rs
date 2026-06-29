@@ -1,13 +1,4 @@
 //! Dependency flattening for Nex capsules using precomputed deps.
-//!
-//! This module handles flattening runtime dependencies into each package's
-//! `lib/` directory, creating self-contained "capsules" that nex-ld-shim can use.
-//!
-//! Dependencies are resolved transitively: if binary A needs libB.so, and libB.so
-//! needs libC.so, we flatten both libB.so and libC.so into A's capsule.
-//!
-//! The resolution map points file paths to dependency names (or self for internal).
-//! The files commit is derived from the dependency's manifest.
 
 use std::fs;
 use std::io;
@@ -18,6 +9,10 @@ use crate::manifest::ManifestIndex;
 use crate::utils::hash_file_content;
 
 use super::flatten_deps::{find_file_needs, resolve_transitive_deps};
+
+#[cfg(test)]
+#[path = "flatten_runtime_tests.rs"]
+mod flatten_runtime_tests;
 
 /// Flatten runtime dependencies for a single package capsule using precomputed deps.
 ///
@@ -279,11 +274,8 @@ fn flatten_library_preserving_path(
 
     // export directly from blob store (no full checkout needed)
     // commit is already "{hash}/files", lib_path is the path inside it
-    match export_single_file(repo_path, commit, lib_path, &dest, fallback_repos) {
-        Ok(()) => {}
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(false),
-        Err(e) => return Err(e),
-    }
+    export_single_file(repo_path, commit, lib_path, &dest, fallback_repos)
+        .map_err(|error| flatten_export_error(commit, lib_path, error))?;
 
     // for symlinks, also export the target if it's relative
     if dest
@@ -302,13 +294,14 @@ fn flatten_library_preserving_path(
                     let target_dest = pkg_dir.join(&target_rel_path);
                     if !target_dest.exists() {
                         let target_src_path = format!("/{}", target_rel_path.display());
-                        let _ = export_single_file(
+                        export_single_file(
                             repo_path,
                             commit,
                             &target_src_path,
                             &target_dest,
                             fallback_repos,
-                        );
+                        )
+                        .map_err(|error| flatten_export_error(commit, &target_src_path, error))?;
                     }
                 }
             }
@@ -316,6 +309,16 @@ fn flatten_library_preserving_path(
     }
 
     Ok(true)
+}
+
+fn flatten_export_error(commit: &str, path: &str, error: io::Error) -> io::Error {
+    io::Error::new(
+        error.kind(),
+        format!(
+            "failed to flatten declared runtime file {} from {}: {}",
+            path, commit, error
+        ),
+    )
 }
 
 /// Export a single file from a commit using zub's export_path.

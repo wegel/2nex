@@ -70,6 +70,39 @@ fn rebuilds_when_dependency_manifest_changes() -> io::Result<()> {
     Ok(())
 }
 
+#[test]
+fn missing_dependency_manifest_stops_graph_collection() -> io::Result<()> {
+    let temp_dir = TempDir::new()?;
+    let root_manifest_path = temp_dir.path().join("pkg/apps/kernel.yaml");
+    write_root_manifest(&root_manifest_path)?;
+
+    let mut graph = DiGraph::new();
+    let mut manifest_map = HashMap::new();
+    let mut ref_cache = HashMap::new();
+    let manifest_dirs = vec![temp_dir.path().to_path_buf()];
+    let root_source = ManifestSource::Path(root_manifest_path);
+    let repo_path = temp_dir.path().join("repo");
+
+    let error = collect_dependencies_recursive(DependencyGraphRequest {
+        manifest_source: &root_source,
+        repo_path: repo_path.to_str().unwrap(),
+        manifest_dirs: &manifest_dirs,
+        graph: &mut graph,
+        manifest_map: &mut manifest_map,
+        force: false,
+        ref_cache: &mut ref_cache,
+        store: None,
+        verbose: false,
+    })
+    .unwrap_err();
+
+    let message = error.to_string();
+    assert!(message.contains("cannot build dependency"));
+    assert!(message.contains("x86_64/pkg/deps/initramfs/1.0/outputs/boot"));
+    assert!(message.contains("no manifest was found"));
+    Ok(())
+}
+
 fn init_test_store(temp_dir: &TempDir) -> io::Result<Option<String>> {
     let repo_dir = temp_dir.path().join("repo");
     if let Err(error) = Store::init(&repo_dir) {

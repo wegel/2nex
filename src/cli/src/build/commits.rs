@@ -1,10 +1,10 @@
 //! Store commit helpers for package build outputs.
 
-use walkdir::WalkDir;
-
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
+
+use walkdir::WalkDir;
 
 use crate::manifest::{BuildPaths, FileEntry, Manifest, OutputSpec, Package};
 use crate::outputs::{commit_bundle, output_branch_metadata};

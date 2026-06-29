@@ -21,7 +21,7 @@ use super::package_outputs::{
     commit_package_outputs, commit_raw_output, maybe_compute_runtime_deps,
     should_commit_package_outputs,
 };
-use super::reproducibility::maybe_check_reproducibility;
+use super::reproducibility::{maybe_check_reproducibility, ReproducibilityCheck};
 use super::rootfs::setup_composite_rootfs;
 use super::script::run_build_script_with_env;
 use super::status::check_if_built;
@@ -95,17 +95,17 @@ pub fn build_package_manifest_with_dir(
     }
 
     maybe_compute_runtime_deps(opts, manifest)?;
-    maybe_check_reproducibility(
+    maybe_check_reproducibility(ReproducibilityCheck {
         opts,
         manifest,
         base_dir,
         download_dir,
-        &build_env,
-        &dependency_commits,
+        build_env: &build_env,
+        dependency_commits: &dependency_commits,
         canonical_prefix,
-        &build_script,
-        &checksum,
-    )?;
+        build_script: &build_script,
+        checksum: &checksum,
+    })?;
 
     append_checksum_file(&manifest.package, &checksum, Path::new("checksums.txt"))?;
     Ok(())

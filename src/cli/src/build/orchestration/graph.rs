@@ -1,12 +1,11 @@
 //! Dependency graph construction for package and system builds.
 
-use sha2::{Digest, Sha256};
-
 use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use petgraph::graph::{DiGraph, NodeIndex};
+use sha2::{Digest, Sha256};
 
 use crate::build::{check_if_built, compute_manifest_hash};
 use crate::manifest::types::{Dependency, ManifestSource};
@@ -198,13 +197,13 @@ impl GraphBuilder<'_> {
             Ok(dep_manifest_path) => {
                 self.add_manifest_dependency_edge(dep, dep_manifest_path, node)
             }
-            Err(e) => {
-                eprintln!(
-                    "  Warning: Could not find manifest for dependency {}: {}",
+            Err(e) => Err(io::Error::new(
+                e.kind(),
+                format!(
+                    "cannot build dependency {} because no manifest was found: {}",
                     dep.commit, e
-                );
-                Ok(false)
-            }
+                ),
+            )),
         }
     }
 

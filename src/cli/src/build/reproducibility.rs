@@ -13,19 +13,42 @@ use super::inputs::handle_inputs;
 use super::rootfs::setup_composite_rootfs;
 use super::script::run_build_script_with_env;
 
+/// Inputs for the optional second package build.
+pub struct ReproducibilityCheck<'a> {
+    /// Original CLI build options.
+    pub opts: &'a BuildOpts,
+    /// Package manifest to rebuild.
+    pub manifest: &'a Manifest,
+    /// Build root directory.
+    pub base_dir: &'a str,
+    /// Source input cache directory.
+    pub download_dir: &'a str,
+    /// Loaded build environment.
+    pub build_env: &'a BuildEnvironment,
+    /// Dependency commits used to recreate the build root.
+    pub dependency_commits: &'a [String],
+    /// Prefix used when non-chroot source paths need canonical names.
+    pub canonical_prefix: Option<&'a str>,
+    /// Build script captured before any manifest rewrite.
+    pub build_script: &'a str,
+    /// First build output checksum.
+    pub checksum: &'a str,
+}
+
 /// Run the second build pass when the CLI requested a reproducibility check.
-#[allow(clippy::too_many_arguments)]
-pub fn maybe_check_reproducibility(
-    opts: &BuildOpts,
-    manifest: &Manifest,
-    base_dir: &str,
-    download_dir: &str,
-    build_env: &BuildEnvironment,
-    dependency_commits: &[String],
-    canonical_prefix: Option<&str>,
-    build_script: &str,
-    checksum: &str,
-) -> io::Result<()> {
+pub fn maybe_check_reproducibility(check: ReproducibilityCheck<'_>) -> io::Result<()> {
+    let ReproducibilityCheck {
+        opts,
+        manifest,
+        base_dir,
+        download_dir,
+        build_env,
+        dependency_commits,
+        canonical_prefix,
+        build_script,
+        checksum,
+    } = check;
+
     if !opts.check {
         return Ok(());
     }

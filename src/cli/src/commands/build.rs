@@ -103,29 +103,47 @@ pub struct BuildArgs {
     pub reuse_rootfs: bool,
 }
 
-/// Build options passed to build functions
+/// Build options passed from the CLI into package, system, and graph builders.
 pub struct BuildOpts {
+    /// Primary zub repository path used for build inputs and committed outputs.
     pub repo_path: String,
+    /// Manifest path passed on the command line.
     pub manifest_file: String,
+    /// Run a second build and compare output checksums.
     pub check: bool,
+    /// Rewrite the manifest checksum when a build produces a new checksum.
     pub update_checksum: bool,
+    /// Compute runtime dependency metadata after package outputs are committed.
     pub compute_deps: bool,
+    /// Print per-reference runtime dependency explanations.
     pub runtime_deps_verbose: bool,
+    /// Refresh existing output and bundle metadata without rebuilding.
     pub refresh_metadata: bool,
+    /// Rebuild even when the store already has matching output refs.
     pub force: bool,
+    /// Explicit build directory, or `None` for the default package/system path.
     pub build_dir: Option<String>,
+    /// Regenerate output file lists from the built root.
     pub generate_outputs: bool,
+    /// Fallback zub repositories used when refs are missing from `repo_path`.
     pub fallback_repos: Vec<String>,
+    /// Print verbose checkout and build output.
     pub verbose: bool,
+    /// Record a new build progress profile into the manifest.
     pub record_profile: bool,
+    /// Disable progress UI and show raw build output.
     pub no_progress: bool,
+    /// Print the build graph without building packages.
     pub dry_run: bool,
+    /// Build missing package checksums for manifests that do not record them.
     pub add_checksums: bool,
+    /// Print dependency paths in the build graph.
     pub show_dep_paths: bool,
+    /// Print why a specific dependency appears in the graph.
     pub trace_dependency: Option<String>,
-    /// shared MultiProgress for parallel builds (None for single builds)
+    /// Shared progress renderer for parallel builds.
     pub multi_progress: Option<Arc<MultiProgress>>,
-    /// reuse existing build rootfs directory (skip deletion)
+    /// Reuse an existing build rootfs directory instead of deleting it first.
     pub reuse_rootfs: bool,
 }
 

@@ -57,9 +57,8 @@ pub fn materialize(
 
     println!("Materializing {} request(s)...", requests.len());
 
-    let manifest_index = load_materializer_index(config)?;
-    let closure = runtime_closure(config, requests, &manifest_index)?;
-    report_unresolved_dependencies(&closure);
+    let closure = runtime_closure(config, requests)?;
+    reject_unresolved_dependencies(&closure)?;
 
     println!("  Checking out to {}...", config.target_dir.display());
     let result = checkout_closure(config, &closure)?;
@@ -93,14 +92,14 @@ fn load_materializer_index(config: &MaterializeConfig) -> io::Result<ManifestInd
 fn runtime_closure(
     config: &MaterializeConfig,
     requests: &[MaterializeRequest],
-    manifest_index: &ManifestIndex,
 ) -> io::Result<RuntimeClosure> {
     let closure = if config.resolve_deps {
         println!("  Resolving runtime dependencies (precomputed)...");
+        let manifest_index = load_materializer_index(config)?;
         resolve_runtime_deps_precomputed(
             &config.repo_path,
             requests,
-            manifest_index,
+            &manifest_index,
             &config.fallback_repo_paths,
         )?
     } else {
@@ -119,19 +118,29 @@ fn requested_only_closure(requests: &[MaterializeRequest]) -> RuntimeClosure {
     closure
 }
 
-fn report_unresolved_dependencies(closure: &RuntimeClosure) {
-    if closure.has_unresolved() {
-        println!(
-            "  Warning: {} unresolved dependencies:",
-            closure.unresolved.len()
-        );
-        for (req, reasons) in &closure.unresolved {
-            println!("    - {}", req);
-            for reason in reasons.iter().take(3) {
-                println!("      {}", reason);
-            }
+fn reject_unresolved_dependencies(closure: &RuntimeClosure) -> io::Result<()> {
+    if !closure.has_unresolved() {
+        return Ok(());
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        unresolved_dependencies_message(closure),
+    ))
+}
+
+fn unresolved_dependencies_message(closure: &RuntimeClosure) -> String {
+    let mut message = format!(
+        "{} unresolved runtime dependency requirement(s):",
+        closure.unresolved.len()
+    );
+    for (requirement, reasons) in &closure.unresolved {
+        message.push_str(&format!("\n  {}", requirement));
+        for reason in reasons.iter().take(3) {
+            message.push_str(&format!("\n    needed by: {}", reason));
         }
     }
+    message
 }
 
 /// Convenience function to materialize a single bundle.

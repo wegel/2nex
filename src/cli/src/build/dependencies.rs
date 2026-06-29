@@ -1,10 +1,10 @@
 //! Dependency commit resolution for package builds.
 
-use sha2::{Digest, Sha256};
-
 use std::env;
 use std::io;
 use std::path::{Path, PathBuf};
+
+use sha2::{Digest, Sha256};
 
 use crate::manifest::Dependency;
 use crate::store::find_commit_by_manifest_hash;

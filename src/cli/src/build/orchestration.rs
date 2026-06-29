@@ -26,9 +26,9 @@ pub use manifest_lookup::{
     build_exists_for_manifest, find_manifest_for_commit, get_build_dir_for_package,
 };
 
-use checksums::add_missing_checksums_to_manifests;
-use planner::{build_packages_parallel, show_parallel_execution_plan};
-use trace::trace_dependency_chains;
+use self::checksums::add_missing_checksums_to_manifests;
+use self::planner::{build_packages_parallel, show_parallel_execution_plan};
+use self::trace::trace_dependency_chains;
 
 /// Show dependency paths from root to each node
 fn show_dependency_paths(

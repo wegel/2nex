@@ -1,10 +1,10 @@
 //! Store status checks for already-built package outputs.
 
-use sha2::{Digest, Sha256};
-
 use std::fs;
 use std::io;
 use std::path::Path;
+
+use sha2::{Digest, Sha256};
 
 use crate::manifest::Manifest;
 use crate::store::{ensure_branch_exists, find_commit_by_manifest_hash, lookup_artifact};
