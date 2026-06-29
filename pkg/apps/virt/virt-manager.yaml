@@ -6,7 +6,7 @@ package:
   version: 5.1.0
   description: Graphical virtual machine manager for libvirt
   homepage: https://virt-manager.org/
-  checksum: 5fce6d6bc78c620636aef561fcf3c4dbd0fc8fad50aa99ca516e5f5f43470203
+  checksum: 2af9edbd76b164b79aa86ca03f03f259495764840a47ab3196d89754ceaafaf6
 
 sources:
 - name: virt_manager
@@ -73,7 +73,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4132:381, 8278:827, 12473:827, 16599:835, 20695:836, 24814:843, 28952:843, 31258:1032]
+  profile: [4126:385, 8278:833, 12473:834, 16599:842, 20695:842, 24814:849, 28952:849, 31258:1053]
 
   script: |
     set -eu
@@ -97,6 +97,22 @@ build:
     for wrapper in virt-clone virt-install virt-manager virt-xml; do
       sed -i '1s|^#!/usr/bin/env python3$|#!/usr/bin/python3|' "${OUT_DIR}/usr/bin/${wrapper}"
     done
+    /usr/bin/python3 - "${OUT_DIR}/usr/bin"/virt-{clone,install,manager,xml} <<'PY'
+    import sys
+    from pathlib import Path
+
+    shim = (
+        "import os, sys\n"
+        "sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "
+        "\"lib\", \"python3.12\", \"site-packages\"))\n"
+    )
+
+    for arg in sys.argv[1:]:
+        script = Path(arg)
+        lines = script.read_text().splitlines()
+        lines[1:1] = shim.splitlines()
+        script.write_text("\n".join(lines) + "\n")
+    PY
 
     glib-compile-schemas "${OUT_DIR}/usr/share/glib-2.0/schemas"
 
