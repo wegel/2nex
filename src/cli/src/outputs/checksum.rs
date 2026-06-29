@@ -3,11 +3,12 @@
 use std::fs;
 use std::io::{self, Read};
 use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
 
-/// Calculate a deterministic checksum for every regular file or symlink in an output.
+/// Calculate a deterministic checksum for every directory, regular file, or symlink.
 pub fn calculate_output_checksum(output_dir: &Path) -> io::Result<String> {
     let mut entries = output_entries(output_dir)?;
     entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
@@ -17,13 +18,22 @@ pub fn calculate_output_checksum(output_dir: &Path) -> io::Result<String> {
         final_hasher.update(entry.relative_path.as_os_str().as_bytes());
         final_hasher.update(b"\0");
         match entry.kind {
-            OutputEntryKind::File(hash) => {
+            OutputEntryKind::Directory(mode) => {
+                final_hasher.update(b"directory");
+                final_hasher.update(b"\0");
+                final_hasher.update(&mode.to_le_bytes());
+            }
+            OutputEntryKind::File { mode, hash } => {
                 final_hasher.update(b"file");
+                final_hasher.update(b"\0");
+                final_hasher.update(&mode.to_le_bytes());
                 final_hasher.update(b"\0");
                 final_hasher.update(&hash);
             }
-            OutputEntryKind::Symlink(target) => {
+            OutputEntryKind::Symlink { mode, target } => {
                 final_hasher.update(b"symlink");
+                final_hasher.update(b"\0");
+                final_hasher.update(&mode.to_le_bytes());
                 final_hasher.update(b"\0");
                 final_hasher.update(&target);
             }
@@ -40,28 +50,41 @@ struct OutputEntry {
 }
 
 enum OutputEntryKind {
-    File([u8; 32]),
-    Symlink(Vec<u8>),
+    Directory(u32),
+    File { mode: u32, hash: [u8; 32] },
+    Symlink { mode: u32, target: Vec<u8> },
 }
 
 fn output_entries(output_dir: &Path) -> io::Result<Vec<OutputEntry>> {
     let mut entries = Vec::new();
     for entry in WalkDir::new(output_dir) {
         let entry = entry?;
+        let metadata = entry.path().symlink_metadata()?;
         let relative_path = entry
             .path()
             .strip_prefix(output_dir)
             .map_err(io::Error::other)?
             .to_path_buf();
-        if entry.file_type().is_file() {
+        if entry.file_type().is_dir() {
             entries.push(OutputEntry {
                 relative_path,
-                kind: OutputEntryKind::File(file_hash(entry.path())?),
+                kind: OutputEntryKind::Directory(metadata.mode()),
+            });
+        } else if entry.file_type().is_file() {
+            entries.push(OutputEntry {
+                relative_path,
+                kind: OutputEntryKind::File {
+                    mode: metadata.mode(),
+                    hash: file_hash(entry.path())?,
+                },
             });
         } else if entry.file_type().is_symlink() {
             entries.push(OutputEntry {
                 relative_path,
-                kind: OutputEntryKind::Symlink(symlink_target_bytes(entry.path())?),
+                kind: OutputEntryKind::Symlink {
+                    mode: metadata.mode(),
+                    target: symlink_target_bytes(entry.path())?,
+                },
             });
         }
     }
