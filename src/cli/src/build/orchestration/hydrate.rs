@@ -6,6 +6,7 @@ use std::io;
 use crate::deps::resolve_dependency_closure;
 use crate::manifest::types::Dependency;
 use crate::manifest::{load_manifest, ManifestData, ManifestIndex};
+use crate::refs::PackageRef;
 
 /// Hydrate direct package dependencies with their transitive dependency closure.
 pub fn hydrate_dependencies(_repo_path: &str, manifest_file: &str) -> io::Result<()> {
@@ -44,12 +45,35 @@ fn hydrated_dependencies(
     let all_commits = resolve_dependency_closure(dependencies, manifest_index)?;
     Ok(all_commits
         .into_iter()
-        .map(|commit| Dependency {
-            name: commit.split('/').nth(1).map(ToOwned::to_owned),
-            commit,
-            manifest_ref: None,
+        .map(|commit| {
+            Ok(Dependency {
+                name: hydrated_dependency_name(&commit, dependencies)?,
+                commit,
+                manifest_ref: None,
+            })
         })
-        .collect())
+        .collect::<io::Result<Vec<_>>>()?)
+}
+
+fn hydrated_dependency_name(
+    commit: &str,
+    direct_dependencies: &[Dependency],
+) -> io::Result<Option<String>> {
+    if let Some(name) = direct_dependencies
+        .iter()
+        .find(|dependency| dependency.commit == commit)
+        .and_then(|dependency| dependency.name.clone())
+    {
+        return Ok(Some(name));
+    }
+
+    let package_ref = PackageRef::parse(commit).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("invalid hydrated dependency ref {}: {}", commit, error),
+        )
+    })?;
+    Ok(Some(package_ref.slug))
 }
 
 fn replace_dependency_section(content: &str, hydrated_deps: &[Dependency]) -> io::Result<String> {
@@ -111,3 +135,7 @@ fn format_dependency_section(hydrated_deps: &[Dependency]) -> Vec<String> {
     }
     section
 }
+
+#[cfg(test)]
+#[path = "hydrate_tests.rs"]
+mod hydrate_tests;
