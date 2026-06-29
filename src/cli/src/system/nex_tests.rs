@@ -5,7 +5,7 @@ use super::install_package_commit;
 
 #[test]
 fn invalid_package_ref_stops_nex_materialization() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("test setup should succeed");
     let mut installed_packages = HashMap::new();
 
     let error = install_package_commit(

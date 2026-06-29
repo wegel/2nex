@@ -10,12 +10,16 @@ use crate::manifest::types::Manifest;
 use crate::manifest::ManifestIndex;
 
 use super::flatten_deps::{find_file_needs, resolve_transitive_deps};
-pub(super) use super::flatten_errors::flatten_export_error;
 use super::flatten_errors::{
     missing_bundle_error, missing_file_metadata_error, missing_manifest_error,
     missing_output_error, missing_resolution_error, missing_self_files_commit_error,
 };
+use super::flatten_export::flatten_library_preserving_path;
 use super::flatten_refs::derive_files_commit_for_manifest;
+
+#[cfg(test)]
+#[path = "flatten_export_tests.rs"]
+mod flatten_export_tests;
 
 #[cfg(test)]
 #[path = "flatten_runtime_tests.rs"]
@@ -248,109 +252,6 @@ fn find_manifest_for_commit<'a>(commit: &str, index: &'a ManifestIndex) -> Optio
 
     let pkg_ref = PackageRef::parse(commit).ok()?;
     index.get_manifest(&pkg_ref.namespace, &pkg_ref.slug)
-}
-
-/// Flatten a single library from a store commit, preserving original path structure.
-/// Uses direct export from blob store instead of full checkout.
-fn flatten_library_preserving_path(
-    repo_path: &str,
-    commit: &str,
-    lib_path: &str,
-    pkg_dir: &Path,
-    fallback_repos: &[PathBuf],
-) -> io::Result<bool> {
-    let rel_path = lib_path.trim_start_matches('/');
-    let dest = pkg_dir.join(rel_path);
-
-    if dest.exists() {
-        return Ok(false);
-    }
-
-    // export directly from blob store (no full checkout needed)
-    // commit is already "{hash}/files", lib_path is the path inside it
-    export_single_file(repo_path, commit, lib_path, &dest, fallback_repos)
-        .map_err(|error| flatten_export_error(commit, lib_path, error))?;
-
-    // for symlinks, also export the target if it's relative
-    if dest
-        .symlink_metadata()
-        .map(|m| m.file_type().is_symlink())
-        .unwrap_or(false)
-    {
-        if let Ok(link_target) = fs::read_link(&dest) {
-            if !link_target.is_absolute() {
-                let target_rel = dest
-                    .parent()
-                    .map(|p| p.join(&link_target))
-                    .and_then(|p| p.strip_prefix(pkg_dir).ok().map(|s| s.to_path_buf()));
-
-                if let Some(target_rel_path) = target_rel {
-                    let target_dest = pkg_dir.join(&target_rel_path);
-                    if !target_dest.exists() {
-                        let target_src_path = format!("/{}", target_rel_path.display());
-                        export_single_file(
-                            repo_path,
-                            commit,
-                            &target_src_path,
-                            &target_dest,
-                            fallback_repos,
-                        )
-                        .map_err(|error| flatten_export_error(commit, &target_src_path, error))?;
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(true)
-}
-
-/// Export a single file from a commit using zub's export_path.
-fn export_single_file(
-    repo_path: &str,
-    commit: &str,
-    src_path: &str,
-    dest: &Path,
-    fallback_repos: &[PathBuf],
-) -> io::Result<()> {
-    use zub::Repo;
-
-    let opts = zub::ops::ExportOptions {
-        overwrite: true,
-        hardlink: true,
-        preserve_sparse: false,
-    };
-
-    // create parent directory if needed
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    // try primary repo
-    let repo = Repo::open(Path::new(repo_path))
-        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
-
-    match zub::ops::export_path(&repo, commit, src_path, dest, opts.clone()) {
-        Ok(()) => return Ok(()),
-        Err(zub::Error::RefNotFound(_)) | Err(zub::Error::PathNotFound(_)) => {}
-        Err(e) => return Err(io::Error::other(e.to_string())),
-    }
-
-    // try fallbacks
-    for fallback_path in fallback_repos {
-        if let Ok(fallback) = Repo::open(fallback_path) {
-            match zub::ops::export_path(&fallback, commit, src_path, dest, opts.clone()) {
-                Ok(()) => return Ok(()),
-                Err(zub::Error::RefNotFound(_)) | Err(zub::Error::PathNotFound(_)) => continue,
-                Err(e) => return Err(io::Error::other(e.to_string())),
-            }
-        }
-    }
-
-    Err(io::Error::new(
-        io::ErrorKind::NotFound,
-        format!("path {} not found in commit {}", src_path, commit),
-    ))
 }
 
 /// Create lib/ld-linux-x86-64.so.2 symlink for nex-ld-shim loader lookup.

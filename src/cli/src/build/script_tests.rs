@@ -42,7 +42,7 @@ fn test_launch() -> BuildLaunch {
 
 #[test]
 fn host_build_env_does_not_clear_parent_process_env() {
-    let _guard = env_lock().lock().unwrap();
+    let _guard = env_lock().lock().expect("test setup should succeed");
     let key = "NEX_TEST_PARENT_ENV_SURVIVES";
     let previous = env::var_os(key);
     env::set_var(key, "kept");

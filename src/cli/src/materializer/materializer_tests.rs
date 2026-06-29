@@ -38,7 +38,7 @@ fn test_materialize_request_commit() {
 
 #[test]
 fn bundle_helper_config_does_not_require_manifest_db() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().expect("test setup should succeed");
 
     let config = bundle_materialize_config("repo", temp_dir.path(), MaterializeMode::Nex);
 
@@ -65,7 +65,7 @@ fn unresolved_dependencies_return_actionable_error() {
 
 #[test]
 fn requested_only_materialize_does_not_require_manifest_db() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().expect("test setup should succeed");
     let config = MaterializeConfig {
         repo_path: temp_dir.path().join("missing-repo").display().to_string(),
         target_dir: temp_dir.path().join("target"),

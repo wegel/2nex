@@ -192,7 +192,9 @@ fn download_to_temp_file(url: &str, tmp_path: &Path) -> io::Result<()> {
             "-f",
             "-s",
             "--output",
-            tmp_path.to_str().unwrap(),
+            tmp_path
+                .to_str()
+                .expect("temporary download path should be UTF-8"),
             url,
         ])
         .status()?;

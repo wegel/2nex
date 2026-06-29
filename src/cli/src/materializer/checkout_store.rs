@@ -2,11 +2,15 @@
 
 use std::fs;
 use std::io;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use tempfile::TempDir;
 
 use crate::store::Store;
+
+use super::relative_symlink::{
+    reject_too_many_symlink_hops, relative_symlink_target_inside_root, MAX_RELATIVE_SYMLINK_HOPS,
+};
 
 /// Checkout a single commit in flat mode with union semantics.
 pub(super) fn checkout_commit_flat(
@@ -90,31 +94,16 @@ fn copy_relative_symlink_target(
     link_target: &Path,
     depth: usize,
 ) -> io::Result<()> {
-    if depth > 40 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("too many symlink hops while copying {}", src.display()),
-        ));
+    if depth > MAX_RELATIVE_SYMLINK_HOPS {
+        return reject_too_many_symlink_hops(src);
     }
 
-    let target_src = normalize_path(&src.parent().unwrap().join(link_target));
-    if !target_src.starts_with(checkout_root) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!(
-                "relative symlink target escapes checkout root: {} -> {}",
-                src.display(),
-                link_target.display()
-            ),
-        ));
-    }
+    let relative_target = relative_symlink_target_inside_root(checkout_root, src, link_target)?;
+    let target_src = checkout_root.join(&relative_target);
     if !target_src.exists() && target_src.symlink_metadata().is_err() {
         return Ok(());
     }
 
-    let relative_target = target_src
-        .strip_prefix(checkout_root)
-        .map_err(io::Error::other)?;
     let target_dst = target_root.join(relative_target);
     if let Some(parent) = target_dst.parent() {
         fs::create_dir_all(parent)?;
@@ -142,22 +131,6 @@ fn copy_relative_symlink_target(
         fs::copy(target_src, target_dst)?;
     }
     Ok(())
-}
-
-fn normalize_path(path: &Path) -> PathBuf {
-    let mut normalized = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                normalized.pop();
-            }
-            Component::Normal(part) => normalized.push(part),
-            Component::RootDir => normalized.push(component.as_os_str()),
-            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
-        }
-    }
-    normalized
 }
 
 fn copy_regular_file(src: &Path, dst: &Path) -> io::Result<()> {

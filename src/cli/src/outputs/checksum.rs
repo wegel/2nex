@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
 
-/// Calculate a deterministic checksum for every directory, regular file, or symlink.
+/// Calculate a deterministic checksum for every supported output tree entry.
 pub fn calculate_output_checksum(output_dir: &Path) -> io::Result<String> {
     let mut entries = output_entries(output_dir)?;
     entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
@@ -86,6 +86,11 @@ fn output_entries(output_dir: &Path) -> io::Result<Vec<OutputEntry>> {
                     target: symlink_target_bytes(entry.path())?,
                 },
             });
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported output file type at {}", entry.path().display()),
+            ));
         }
     }
     Ok(entries)

@@ -85,7 +85,7 @@ fn missing_dependency_manifest_stops_graph_collection() -> io::Result<()> {
 
     let error = collect_dependencies_recursive(DependencyGraphRequest {
         manifest_source: &root_source,
-        repo_path: repo_path.to_str().unwrap(),
+        repo_path: repo_path.to_str().expect("test setup should succeed"),
         manifest_dirs: &manifest_dirs,
         graph: &mut graph,
         manifest_map: &mut manifest_map,
@@ -105,7 +105,7 @@ fn missing_dependency_manifest_stops_graph_collection() -> io::Result<()> {
 
 #[test]
 fn dependency_paths_follow_dependency_edges_back_from_root() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().expect("test setup should succeed");
     let root_path = temp_dir.path().join("pkg/apps/root.yaml");
     let direct_dep_path = temp_dir.path().join("pkg/libs/direct.yaml");
     let transitive_dep_path = temp_dir.path().join("pkg/libs/transitive.yaml");

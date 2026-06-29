@@ -154,7 +154,7 @@ fn manifest_with_self_runtime_output() -> Manifest {
     manifest
         .outputs
         .get_mut("lib")
-        .unwrap()
+        .expect("test setup should succeed")
         .files
         .push(FileEntry {
             path: "/usr/lib/libxcb.so.1".to_string(),

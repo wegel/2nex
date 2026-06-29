@@ -13,12 +13,12 @@ fn demo_package_id() -> PackageId {
 
 #[test]
 fn write_root_commits_appends_new_roots() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("test setup should succeed");
     std::fs::write(
         temp_dir.path().join(".nex-app-root"),
         "x86_64/pkg/apps/demo/1.0/outputs/bin\n",
     )
-    .unwrap();
+    .expect("test setup should succeed");
 
     write_root_commits(
         temp_dir.path(),
@@ -27,9 +27,10 @@ fn write_root_commits_appends_new_roots() {
             "x86_64/pkg/apps/demo/1.0/outputs/lib".to_string(),
         ],
     )
-    .unwrap();
+    .expect("test setup should succeed");
 
-    let content = std::fs::read_to_string(temp_dir.path().join(".nex-app-root")).unwrap();
+    let content = std::fs::read_to_string(temp_dir.path().join(".nex-app-root"))
+        .expect("test setup should succeed");
     assert_eq!(
         content,
         "x86_64/pkg/apps/demo/1.0/outputs/bin\nx86_64/pkg/apps/demo/1.0/outputs/lib\n"
@@ -38,7 +39,7 @@ fn write_root_commits_appends_new_roots() {
 
 #[test]
 fn symlink_forest_uses_user_package_and_env_overrides() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("test setup should succeed");
     let pkg_root = temp_dir.path().join("user/pkg");
     let env_root = temp_dir.path().join("user/env");
     let pkg_id = demo_package_id();
@@ -46,8 +47,8 @@ fn symlink_forest_uses_user_package_and_env_overrides() {
         .join(&pkg_id.path)
         .join(&pkg_id.manifest_hash[..8])
         .join("usr/bin");
-    std::fs::create_dir_all(&package_dir).unwrap();
-    std::fs::write(package_dir.join("demo"), b"demo").unwrap();
+    std::fs::create_dir_all(&package_dir).expect("test setup should succeed");
+    std::fs::write(package_dir.join("demo"), b"demo").expect("test setup should succeed");
 
     let config = MaterializeConfig {
         target_dir: temp_dir.path().join("logical-root"),
@@ -58,7 +59,7 @@ fn symlink_forest_uses_user_package_and_env_overrides() {
     let packages = PackageMap::from([(pkg_id.clone(), vec!["unused".to_string()])]);
     let root_packages = PackageSet::from([pkg_id]);
     let mut result = MaterializeResult::new(RuntimeClosure::default());
-    let paths = nex_paths(&config).unwrap();
+    let paths = nex_paths(&config).expect("test setup should succeed");
 
     create_symlink_forest_split(
         &paths.physical_pkg,
@@ -69,18 +70,24 @@ fn symlink_forest_uses_user_package_and_env_overrides() {
         &root_packages,
         &mut result,
     )
-    .unwrap();
+    .expect("test setup should succeed");
 
     let link = env_root.join("bin/demo");
-    let target = std::fs::read_link(&link).unwrap();
-    let resolved = link.parent().unwrap().join(target);
-    assert_eq!(resolved.canonicalize().unwrap(), package_dir.join("demo"));
+    let target = std::fs::read_link(&link).expect("test setup should succeed");
+    let resolved = link
+        .parent()
+        .expect("test setup should succeed")
+        .join(target);
+    assert_eq!(
+        resolved.canonicalize().expect("test setup should succeed"),
+        package_dir.join("demo")
+    );
     assert_eq!(result.symlinks_created, vec![link]);
 }
 
 #[test]
 fn symlink_forest_points_staged_links_at_logical_packages() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("test setup should succeed");
     let physical_pkg = temp_dir.path().join("upper/nex/pkg");
     let physical_env = temp_dir.path().join("upper/nex/env");
     let logical_pkg = temp_dir.path().join("final/nex/pkg");
@@ -90,8 +97,8 @@ fn symlink_forest_points_staged_links_at_logical_packages() {
         .join(&pkg_id.path)
         .join(&pkg_id.manifest_hash[..8])
         .join("usr/bin");
-    std::fs::create_dir_all(&package_dir).unwrap();
-    std::fs::write(package_dir.join("demo"), b"demo").unwrap();
+    std::fs::create_dir_all(&package_dir).expect("test setup should succeed");
+    std::fs::write(package_dir.join("demo"), b"demo").expect("test setup should succeed");
 
     let packages = PackageMap::from([(pkg_id.clone(), vec!["unused".to_string()])]);
     let root_packages = PackageSet::from([pkg_id]);
@@ -106,11 +113,11 @@ fn symlink_forest_points_staged_links_at_logical_packages() {
         &root_packages,
         &mut result,
     )
-    .unwrap();
+    .expect("test setup should succeed");
 
     let physical_link = physical_env.join("bin/demo");
     let logical_link = logical_env.join("bin/demo");
-    let target = std::fs::read_link(&physical_link).unwrap();
+    let target = std::fs::read_link(&physical_link).expect("test setup should succeed");
     assert_eq!(
         target,
         std::path::PathBuf::from("../../pkg/apps/demo/1.0/abcdef12/usr/bin/demo")

@@ -72,5 +72,5 @@ fn check_without_update_rejects_stale_system_checksum() {
 #[test]
 fn check_with_update_allows_stale_system_checksum() {
     ensure_check_checksum_allows_system_publish(&opts(true, true), &manifest(Some("old")), "new")
-        .unwrap();
+        .expect("test setup should succeed");
 }

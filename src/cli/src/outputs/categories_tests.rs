@@ -11,20 +11,22 @@ use super::categorize_files_with_existing_outputs;
 
 #[test]
 fn generated_outputs_preserve_existing_output_names() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().expect("test setup should succeed");
     let root = temp_dir.path();
-    fs::create_dir_all(root.join("usr/lib/modules/1/kernel/drivers/net")).unwrap();
-    fs::create_dir_all(root.join("usr/lib/modules/1/kernel/drivers/gpu")).unwrap();
+    fs::create_dir_all(root.join("usr/lib/modules/1/kernel/drivers/net"))
+        .expect("test setup should succeed");
+    fs::create_dir_all(root.join("usr/lib/modules/1/kernel/drivers/gpu"))
+        .expect("test setup should succeed");
     fs::write(
         root.join("usr/lib/modules/1/kernel/drivers/net/e1000e.ko"),
         "net",
     )
-    .unwrap();
+    .expect("test setup should succeed");
     fs::write(
         root.join("usr/lib/modules/1/kernel/drivers/gpu/amdgpu.ko"),
         "gpu",
     )
-    .unwrap();
+    .expect("test setup should succeed");
 
     let mut existing = HashMap::new();
     existing.insert(
@@ -37,24 +39,27 @@ fn generated_outputs_preserve_existing_output_names() {
         },
     );
 
-    let categorized = categorize_files_with_existing_outputs(root, &existing).unwrap();
+    let categorized =
+        categorize_files_with_existing_outputs(root, &existing).expect("test setup should succeed");
 
     assert_eq!(
-        categorized.get("drv-eth-intel").unwrap(),
+        categorized
+            .get("drv-eth-intel")
+            .expect("test setup should succeed"),
         &vec!["/usr/lib/modules/1/kernel/drivers/net/e1000e.ko".to_string()]
     );
     assert_eq!(
-        categorized.get("lib").unwrap(),
+        categorized.get("lib").expect("test setup should succeed"),
         &vec!["/usr/lib/modules/1/kernel/drivers/gpu/amdgpu.ko".to_string()]
     );
 }
 
 #[test]
 fn generated_outputs_reject_non_utf8_paths() {
-    let temp_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().expect("test setup should succeed");
     let root = temp_dir.path();
     let bad_name = std::ffi::OsString::from_vec(b"bad-\xff".to_vec());
-    fs::write(root.join(bad_name), "bad").unwrap();
+    fs::write(root.join(bad_name), "bad").expect("test setup should succeed");
 
     let error = categorize_files_with_existing_outputs(root, &HashMap::new()).unwrap_err();
 

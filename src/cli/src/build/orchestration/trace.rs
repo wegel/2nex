@@ -36,7 +36,11 @@ pub fn trace_dependency_chains(
 }
 
 fn root_dependency_list(manifest_path: &Path) -> io::Result<(String, Vec<Dependency>)> {
-    let manifest_data = load_manifest(manifest_path.to_str().unwrap())?;
+    let manifest_data = load_manifest(
+        manifest_path
+            .to_str()
+            .expect("manifest path should be UTF-8"),
+    )?;
     Ok(match manifest_data {
         ManifestData::Package(manifest) => (manifest.package.slug.clone(), manifest.dependencies),
         ManifestData::System(manifest) => {

@@ -36,7 +36,10 @@ pub(super) fn create_file_symlinks_recursive(
 ) -> io::Result<()> {
     for entry in WalkDir::new(src_dir).min_depth(1) {
         let entry = entry?;
-        let rel_path = entry.path().strip_prefix(src_dir).unwrap();
+        let rel_path = entry
+            .path()
+            .strip_prefix(src_dir)
+            .expect("walked entry should stay under source directory");
         let dst_path = dst_dir.join(rel_path);
 
         if entry.file_type().is_dir() {

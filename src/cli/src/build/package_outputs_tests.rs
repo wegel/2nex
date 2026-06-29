@@ -70,5 +70,5 @@ fn check_without_update_rejects_stale_package_checksum() {
 #[test]
 fn check_with_update_allows_stale_package_checksum() {
     ensure_check_checksum_allows_package_publish(&opts(true, true), &manifest(Some("old")), "new")
-        .unwrap();
+        .expect("test setup should succeed");
 }

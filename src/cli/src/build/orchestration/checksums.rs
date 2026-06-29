@@ -70,7 +70,10 @@ fn update_from_store_checksum(
         Ok(checksum) => {
             println!("  Found checksum in store: {}", checksum);
             update_manifest_checksum_field(
-                source.path().to_str().unwrap(),
+                source
+                    .path()
+                    .to_str()
+                    .expect("manifest source path should be UTF-8"),
                 ManifestKind::Package,
                 &checksum,
             )?;

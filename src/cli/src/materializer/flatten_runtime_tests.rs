@@ -2,7 +2,8 @@ use std::io;
 
 use crate::manifest::{load_manifest_from_str, ManifestData, ManifestIndex};
 
-use super::{flatten_capsule_precomputed, flatten_export_error};
+use super::super::flatten_errors::flatten_export_error;
+use super::flatten_capsule_precomputed;
 
 #[test]
 fn flatten_export_error_names_commit_and_path() {
@@ -21,7 +22,7 @@ fn flatten_export_error_names_commit_and_path() {
 
 #[test]
 fn flatten_fails_when_root_manifest_is_missing() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("test setup should succeed");
     let index = ManifestIndex::default();
 
     let error = flatten_capsule_precomputed(
@@ -39,9 +40,9 @@ fn flatten_fails_when_root_manifest_is_missing() {
 
 #[test]
 fn flatten_fails_when_self_files_commit_cannot_be_derived() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(temp_dir.path().join("usr/bin")).unwrap();
-    std::fs::write(temp_dir.path().join("usr/bin/app"), b"").unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("test setup should succeed");
+    std::fs::create_dir_all(temp_dir.path().join("usr/bin")).expect("test setup should succeed");
+    std::fs::write(temp_dir.path().join("usr/bin/app"), b"").expect("test setup should succeed");
     let mut index = ManifestIndex::default();
     index.add_manifest(package_manifest(
         "apps",
@@ -78,9 +79,9 @@ resolution:
 
 #[test]
 fn flatten_fails_when_dependency_files_commit_cannot_be_derived() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(temp_dir.path().join("usr/bin")).unwrap();
-    std::fs::write(temp_dir.path().join("usr/bin/app"), b"").unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("test setup should succeed");
+    std::fs::create_dir_all(temp_dir.path().join("usr/bin")).expect("test setup should succeed");
+    std::fs::write(temp_dir.path().join("usr/bin/app"), b"").expect("test setup should succeed");
     let mut index = ManifestIndex::default();
     index.add_manifest(package_manifest(
         "apps",
@@ -128,9 +129,9 @@ resolution: {}
 
 #[test]
 fn flatten_fails_when_resolution_names_undeclared_dependency() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
-    std::fs::create_dir_all(temp_dir.path().join("usr/bin")).unwrap();
-    std::fs::write(temp_dir.path().join("usr/bin/app"), b"").unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("test setup should succeed");
+    std::fs::create_dir_all(temp_dir.path().join("usr/bin")).expect("test setup should succeed");
+    std::fs::write(temp_dir.path().join("usr/bin/app"), b"").expect("test setup should succeed");
     let mut index = ManifestIndex::default();
     index.add_manifest(package_manifest(
         "apps",
@@ -164,7 +165,7 @@ resolution:
 
 #[test]
 fn flatten_fails_when_transitive_self_library_is_missing() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("test setup should succeed");
     write_capsule_file(temp_dir.path(), "usr/bin/app");
     write_capsule_file(temp_dir.path(), "usr/lib/libfoo.so");
     let mut index = ManifestIndex::default();
@@ -207,7 +208,7 @@ resolution:
 
 #[test]
 fn flatten_fails_when_bundle_metadata_is_missing() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("test setup should succeed");
     let mut index = ManifestIndex::default();
     index.add_manifest(package_manifest(
         "apps",
@@ -234,7 +235,7 @@ resolution: {}
 
 #[test]
 fn flatten_fails_when_output_metadata_is_missing() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("test setup should succeed");
     let mut index = ManifestIndex::default();
     index.add_manifest(package_manifest(
         "apps",
@@ -263,7 +264,7 @@ resolution: {}
 
 #[test]
 fn flatten_fails_when_dependency_file_metadata_is_missing() {
-    let temp_dir = tempfile::TempDir::new().unwrap();
+    let temp_dir = tempfile::TempDir::new().expect("test setup should succeed");
     write_capsule_file(temp_dir.path(), "usr/bin/app");
     let mut index = ManifestIndex::default();
     index.add_manifest(package_manifest(
@@ -348,7 +349,7 @@ bundles: {{}}
 {body}
 "#
     );
-    match load_manifest_from_str(&yaml).unwrap() {
+    match load_manifest_from_str(&yaml).expect("test setup should succeed") {
         ManifestData::Package(manifest) => manifest,
         ManifestData::System(_) => panic!("expected package manifest"),
     }
@@ -356,6 +357,7 @@ bundles: {{}}
 
 fn write_capsule_file(root: &std::path::Path, relative_path: &str) {
     let path = root.join(relative_path);
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(path, b"").unwrap();
+    std::fs::create_dir_all(path.parent().expect("test setup should succeed"))
+        .expect("test setup should succeed");
+    std::fs::write(path, b"").expect("test setup should succeed");
 }

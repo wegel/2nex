@@ -86,7 +86,10 @@ impl ParallelBuildState {
         remaining: &[NodeIndex],
         dependencies: &HashMap<NodeIndex, Vec<NodeIndex>>,
     ) -> io::Result<Vec<NodeIndex>> {
-        let completed = self.completed.lock().unwrap();
+        let completed = self
+            .completed
+            .lock()
+            .expect("build scheduler completion set should not be poisoned");
         let wave = ready_wave(remaining, dependencies, &completed);
         if wave.is_empty() {
             Err(io::Error::other(
@@ -133,7 +136,10 @@ impl ParallelBuildState {
     }
 
     fn next_build_number(&self) -> usize {
-        let mut counter = self.build_counter.lock().unwrap();
+        let mut counter = self
+            .build_counter
+            .lock()
+            .expect("build scheduler counter should not be poisoned");
         *counter += 1;
         *counter
     }
@@ -192,7 +198,10 @@ impl ParallelBuildState {
             match result {
                 Ok(slug) => {
                     println!("Successfully built {}", slug);
-                    self.completed.lock().unwrap().insert(wave[index]);
+                    self.completed
+                        .lock()
+                        .expect("build scheduler completion set should not be poisoned")
+                        .insert(wave[index]);
                 }
                 Err(e) => return Err(io::Error::other(e.clone())),
             }
@@ -201,7 +210,10 @@ impl ParallelBuildState {
     }
 
     fn has_completed(&self, node: NodeIndex) -> bool {
-        self.completed.lock().unwrap().contains(&node)
+        self.completed
+            .lock()
+            .expect("build scheduler completion set should not be poisoned")
+            .contains(&node)
     }
 }
 
