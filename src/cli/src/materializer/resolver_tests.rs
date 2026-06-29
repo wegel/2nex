@@ -113,6 +113,20 @@ fn output_commit_derives_self_files_ref() {
 }
 
 #[test]
+fn output_commit_derives_self_files_ref_for_prefixed_namespace() {
+    let mut manifest = manifest_with_lib_output();
+    manifest.package.namespace = "pkg/libs/x11".to_string();
+    let commit = "x86_64/pkg/libs/x11/libx11/1.8.10/outputs/bin";
+
+    let files_ref = self_files_commit(commit, &manifest);
+
+    assert_eq!(
+        files_ref.as_deref(),
+        Some("x86_64/pkg/libs/x11/libx11/1.8.10/abc/files")
+    );
+}
+
+#[test]
 fn files_commit_uses_current_self_files_ref() {
     let manifest = manifest_with_lib_output();
     let commit = "x86_64/pkg/libs/x11/libx11/1.8.10/abc/files";

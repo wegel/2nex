@@ -21,7 +21,7 @@ pub(super) enum ResolveResult {
 
 pub(super) fn manifest_files_ref(manifest: &Manifest) -> Option<String> {
     let package_ref = ManifestPackageRef {
-        namespace_path: manifest.package.namespace.clone(),
+        namespace_path: manifest.package.namespace_path(),
         slug: manifest.package.slug.clone(),
         version: manifest.package.version.clone(),
     };
@@ -85,7 +85,7 @@ struct ManifestPackageRef {
 impl DependencyPackageRef {
     fn files_ref(&self, address_hash: &str) -> String {
         format!(
-            "x86_64/pkg/{}/{}/{}/{}/files",
+            "x86_64/{}/{}/{}/{}/files",
             self.namespace_path, self.slug, self.version, address_hash
         )
     }
@@ -94,7 +94,7 @@ impl DependencyPackageRef {
 impl ManifestPackageRef {
     fn files_ref(&self, address_hash: &str) -> String {
         format!(
-            "x86_64/pkg/{}/{}/{}/{}/files",
+            "x86_64/{}/{}/{}/{}/files",
             self.namespace_path, self.slug, self.version, address_hash
         )
     }
@@ -111,7 +111,7 @@ fn dependency_package_ref(commit: &str) -> Option<DependencyPackageRef> {
     }
 
     let slug = parts[end_idx - 2].to_string();
-    let namespace_path = parts[pkg_idx + 1..end_idx - 2].join("/");
+    let namespace_path = parts[pkg_idx..end_idx - 2].join("/");
     Some(DependencyPackageRef {
         package_path: format!("{}/{}", namespace_path, slug),
         namespace_path,
@@ -131,7 +131,7 @@ fn dependency_address_hash(
     }
 
     let manifest_path = PathBuf::from(format!(
-        "pkg/{}/{}.yaml",
+        "{}/{}.yaml",
         package_ref.namespace_path, package_ref.slug
     ));
     hash_file_content(&manifest_path).ok()
@@ -145,7 +145,7 @@ fn manifest_address_hash(manifest: &Manifest, package_ref: &ManifestPackageRef) 
     }
 
     let manifest_path = PathBuf::from(format!(
-        "pkg/{}/{}.yaml",
+        "{}/{}.yaml",
         package_ref.namespace_path, package_ref.slug
     ));
     hash_file_content(&manifest_path).ok()

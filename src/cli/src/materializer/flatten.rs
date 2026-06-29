@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 
 use crate::manifest::types::Manifest;
 use crate::manifest::ManifestIndex;
-use crate::utils::hash_file_content;
 
 use super::flatten_deps::{find_file_needs, resolve_transitive_deps};
 pub(super) use super::flatten_errors::flatten_export_error;
@@ -16,6 +15,7 @@ use super::flatten_errors::{
     missing_bundle_error, missing_file_metadata_error, missing_manifest_error,
     missing_output_error, missing_resolution_error, missing_self_files_commit_error,
 };
+use super::flatten_refs::derive_files_commit_for_manifest;
 
 #[cfg(test)]
 #[path = "flatten_runtime_tests.rs"]
@@ -221,29 +221,6 @@ fn flatten_external_libs(
         }
     }
     Ok(())
-}
-
-/// Derive the files commit for the current manifest (for self libs).
-/// Uses x86_64/pkg/{namespace}/{slug}/{version}/{checksum}/files for stable checksums.
-fn derive_files_commit_for_manifest(manifest: &Manifest) -> Option<String> {
-    let has_stable_checksum =
-        manifest.package.checksum.is_some() && manifest.package.stable_checksum.unwrap_or(true);
-
-    let address_hash = if has_stable_checksum {
-        manifest.package.checksum.clone()?
-    } else {
-        // use manifest's git blob SHA (input-addressed for bootstrap packages)
-        let manifest_path = PathBuf::from(format!(
-            "pkg/{}/{}.yaml",
-            manifest.package.namespace, manifest.package.slug
-        ));
-        hash_file_content(&manifest_path).ok()?
-    };
-
-    Some(format!(
-        "x86_64/pkg/{}/{}/{}/{}/files",
-        manifest.package.namespace, manifest.package.slug, manifest.package.version, address_hash
-    ))
 }
 
 /// Detect which outputs from a manifest are present in a capsule directory.

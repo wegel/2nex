@@ -29,6 +29,7 @@ mod checkout_store;
 pub mod flatten;
 mod flatten_deps;
 mod flatten_errors;
+mod flatten_refs;
 pub mod index;
 mod pathdiff;
 pub mod resolver;

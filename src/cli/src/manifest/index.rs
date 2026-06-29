@@ -101,8 +101,10 @@ impl ManifestIndex {
                 match load_manifest_from_source(&ManifestSource::Path(path.to_path_buf())) {
                     Ok(ManifestData::Package(manifest)) => {
                         // only add if not already present (priority to earlier directories)
-                        let key =
-                            format!("{}/{}", manifest.package.namespace, manifest.package.slug);
+                        let key = manifest_key(
+                            &manifest.package.namespace_path(),
+                            &manifest.package.slug,
+                        );
                         if !index.manifests.contains_key(&key) {
                             index.add_manifest(manifest);
                         }
@@ -120,7 +122,7 @@ impl ManifestIndex {
 
     /// Add a manifest to the index, indexing its outputs.
     pub fn add_manifest(&mut self, manifest: Manifest) {
-        let key = format!("{}/{}", manifest.package.namespace, manifest.package.slug);
+        let key = manifest_key(&manifest.package.namespace_path(), &manifest.package.slug);
         let arch = "x86_64"; // TODO: make configurable
 
         // index each output's files
@@ -247,7 +249,7 @@ impl ManifestIndex {
 
     /// Get a manifest by namespace/slug.
     pub fn get_manifest(&self, namespace: &str, slug: &str) -> Option<&Manifest> {
-        let key = format!("{}/{}", namespace, slug);
+        let key = manifest_key(&namespace_path(namespace), slug);
         self.manifests.get(&key)
     }
 
@@ -265,6 +267,18 @@ impl ManifestIndex {
     pub fn file_count(&self) -> usize {
         self.by_path.len()
     }
+}
+
+fn namespace_path(namespace: &str) -> String {
+    if namespace.starts_with("pkg/") {
+        namespace.to_string()
+    } else {
+        format!("pkg/{namespace}")
+    }
+}
+
+fn manifest_key(namespace_path: &str, slug: &str) -> String {
+    format!("{namespace_path}/{slug}")
 }
 
 #[cfg(test)]

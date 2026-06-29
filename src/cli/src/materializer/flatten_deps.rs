@@ -267,7 +267,7 @@ struct DependencyPackageRef {
 impl DependencyPackageRef {
     fn files_ref(&self, address_hash: &str) -> String {
         format!(
-            "x86_64/pkg/{}/{}/{}/{}/files",
+            "x86_64/{}/{}/{}/{}/files",
             self.namespace_path, self.slug, self.version, address_hash
         )
     }
@@ -284,7 +284,7 @@ fn dependency_package_ref(commit: &str) -> Option<DependencyPackageRef> {
     }
 
     Some(DependencyPackageRef {
-        namespace_path: parts[pkg_idx + 1..end_idx - 2].join("/"),
+        namespace_path: parts[pkg_idx..end_idx - 2].join("/"),
         slug: parts[end_idx - 2].to_string(),
         version: parts[end_idx - 1].to_string(),
     })
@@ -301,7 +301,7 @@ fn dependency_address_hash(
     }
 
     let manifest_path = PathBuf::from(format!(
-        "pkg/{}/{}.yaml",
+        "{}/{}.yaml",
         package_ref.namespace_path, package_ref.slug
     ));
     hash_file_content(&manifest_path).ok()

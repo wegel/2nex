@@ -339,7 +339,7 @@ package:
   name: {slug}
   slug: {slug}
   namespace: {namespace}
-  version: 1.0
+  version: "1.0"
 {checksum_line}sources: []
 build:
   environment: env/test.yaml
