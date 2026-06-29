@@ -1,9 +1,8 @@
-//! JIT Materializer for nex packages.
+//! Materialize package closures from the store into root filesystems.
 //!
-//! This module handles Just-In-Time resolution and checkout of packages
-//! from the content store. Instead of pre-computing runtime dependencies at build time,
-//! dependencies are resolved by scanning ELF DT_NEEDED entries at materialization
-//! time.
+//! This module resolves runtime dependencies from precomputed manifest metadata
+//! and checks out the required store refs. It does not scan ELF files while
+//! materializing a root.
 //!
 //! # Usage
 //!
@@ -25,12 +24,18 @@
 //! ```
 
 pub mod checkout;
+mod checkout_refs;
+mod checkout_store;
 pub mod flatten;
+mod flatten_deps;
 pub mod index;
+mod pathdiff;
 pub mod resolver;
+mod resolver_refs;
 pub mod types;
 
-pub use checkout::{checkout_closure, checkout_files};
+pub use checkout::checkout_closure;
+pub use checkout_store::checkout_files;
 pub use flatten::flatten_capsule_precomputed;
 pub use resolver::resolve_runtime_deps_precomputed;
 pub use types::{
@@ -41,12 +46,7 @@ use std::io;
 
 use crate::manifest::ManifestIndex;
 
-/// Main entry point for materializing packages.
-///
-/// This function:
-/// 1. Loads ManifestIndex for precomputed dependency resolution
-/// 2. Resolves runtime dependencies transitively using precomputed deps
-/// 3. Checks out all required commits to the target directory
+/// Materialize the requested package refs into the configured target directory.
 pub fn materialize(
     config: &MaterializeConfig,
     requests: &[MaterializeRequest],
@@ -57,55 +57,69 @@ pub fn materialize(
 
     println!("Materializing {} request(s)...", requests.len());
 
-    // collect initial commits
-    let initial_commits: Vec<String> = requests.iter().map(|r| r.commit().to_string()).collect();
+    let manifest_index = load_materializer_index(config)?;
+    let closure = runtime_closure(config, requests, &manifest_index)?;
+    report_unresolved_dependencies(&closure);
 
-    // load manifest index (required for precomputed deps)
-    let manifest_index = if !config.manifest_db_paths.is_empty() {
-        match ManifestIndex::load_layered(&config.manifest_db_paths) {
-            Ok(index) => {
-                println!(
-                    "  Loaded manifest index: {} manifests, {} files",
-                    index.manifest_count(),
-                    index.file_count()
-                );
-                index
-            }
-            Err(e) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    format!("Manifest index required for precomputed deps: {}", e),
-                ));
-            }
-        }
-    } else {
+    println!("  Checking out to {}...", config.target_dir.display());
+    let result = checkout_closure(config, &closure)?;
+
+    println!("Materialization complete.");
+    Ok(result)
+}
+
+fn load_materializer_index(config: &MaterializeConfig) -> io::Result<ManifestIndex> {
+    if config.manifest_db_paths.is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "manifest_db_paths is required for precomputed dependency resolution",
         ));
-    };
+    }
 
-    // resolve runtime dependencies using precomputed deps from manifests
+    let index = ManifestIndex::load_layered(&config.manifest_db_paths).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Manifest index required for precomputed deps: {}", e),
+        )
+    })?;
+    println!(
+        "  Loaded manifest index: {} manifests, {} files",
+        index.manifest_count(),
+        index.file_count()
+    );
+    Ok(index)
+}
+
+fn runtime_closure(
+    config: &MaterializeConfig,
+    requests: &[MaterializeRequest],
+    manifest_index: &ManifestIndex,
+) -> io::Result<RuntimeClosure> {
     let closure = if config.resolve_deps {
         println!("  Resolving runtime dependencies (precomputed)...");
         resolve_runtime_deps_precomputed(
             &config.repo_path,
             requests,
-            &manifest_index,
+            manifest_index,
             &config.fallback_repo_paths,
         )?
     } else {
-        // no resolution - just use the initial commits
-        let mut closure = RuntimeClosure::default();
-        for commit in &initial_commits {
-            closure.add(commit, format!("requested: {}", commit));
-        }
-        closure
+        requested_only_closure(requests)
     };
 
     println!("  Runtime closure: {} commit(s)", closure.commits.len());
+    Ok(closure)
+}
 
-    // report unresolved dependencies
+fn requested_only_closure(requests: &[MaterializeRequest]) -> RuntimeClosure {
+    let mut closure = RuntimeClosure::default();
+    for commit in requests.iter().map(|request| request.commit()) {
+        closure.add(commit, format!("requested: {}", commit));
+    }
+    closure
+}
+
+fn report_unresolved_dependencies(closure: &RuntimeClosure) {
     if closure.has_unresolved() {
         println!(
             "  Warning: {} unresolved dependencies:",
@@ -118,13 +132,6 @@ pub fn materialize(
             }
         }
     }
-
-    // checkout
-    println!("  Checking out to {}...", config.target_dir.display());
-    let result = checkout_closure(config, &closure)?;
-
-    println!("Materialization complete.");
-    Ok(result)
 }
 
 /// Convenience function to materialize a single bundle.
@@ -174,34 +181,5 @@ pub fn materialize_outputs_flat(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_materialize_config_default() {
-        let config = MaterializeConfig::default();
-        // repo_path is detected from environment, not hardcoded
-        assert!(!config.repo_path.is_empty());
-        assert_eq!(config.mode, MaterializeMode::Flat);
-        assert!(config.resolve_deps);
-    }
-
-    #[test]
-    fn test_materialize_request_commit() {
-        let bundle = MaterializeRequest::Bundle {
-            commit: "test/commit".to_string(),
-        };
-        assert_eq!(bundle.commit(), "test/commit");
-
-        let output = MaterializeRequest::Output {
-            commit: "test/output".to_string(),
-        };
-        assert_eq!(output.commit(), "test/output");
-
-        let files = MaterializeRequest::Files {
-            commit: "test/files".to_string(),
-            paths: vec!["/bin/foo".to_string()],
-        };
-        assert_eq!(files.commit(), "test/files");
-    }
-}
+#[path = "materializer_tests.rs"]
+mod materializer_tests;

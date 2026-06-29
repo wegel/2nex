@@ -1,0 +1,255 @@
+//! Source input fetchers and checksum checks for package builds.
+
+use std::fs;
+use std::io::{self, Read};
+use std::path::{Path, PathBuf};
+
+use sha2::{Digest, Sha256};
+
+use crate::manifest::Source;
+use crate::utils::create_deterministic_tarball_uncompressed;
+
+/// Fetch or verify a source input and return the local path to use for staging.
+pub fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Result<PathBuf> {
+    println!("Fetching and verifying input: {:?}", input_spec);
+
+    if let Some(cargo_lock_ref) = &input_spec.cargo_lock {
+        return fetch_cargo_lock(input_spec, cargo_lock_ref, download_dir);
+    }
+    if let Some(go_sum_ref) = &input_spec.go_sum {
+        return fetch_go_sum(input_spec, go_sum_ref, download_dir);
+    }
+    if let Some(zig_zon_ref) = &input_spec.zig_zon {
+        return fetch_zig_zon(input_spec, zig_zon_ref, download_dir);
+    }
+    if let Some(dev_path) = &input_spec.dev {
+        return fetch_dev_source(input_spec, dev_path, download_dir);
+    }
+    if let Some(file_path) = &input_spec.file {
+        return verify_local_file(input_spec, file_path);
+    }
+    if let Some(url) = &input_spec.url {
+        return fetch_url_source(input_spec, url, download_dir);
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::InvalidInput,
+        "No URL or file path specified for input.",
+    ))
+}
+
+fn fetch_cargo_lock(
+    input_spec: &Source,
+    cargo_lock_ref: &str,
+    download_dir: &str,
+) -> io::Result<PathBuf> {
+    crate::cargo_vendor::vendor_from_lock(
+        cargo_lock_ref,
+        input_spec.cargo_toml.as_deref(),
+        required_sha256(input_spec, "cargo_lock")?,
+        download_dir,
+    )
+}
+
+fn fetch_go_sum(input_spec: &Source, go_sum_ref: &str, download_dir: &str) -> io::Result<PathBuf> {
+    crate::go_vendor::vendor_from_sum(
+        go_sum_ref,
+        required_sha256(input_spec, "go_sum")?,
+        download_dir,
+    )
+}
+
+fn fetch_zig_zon(
+    input_spec: &Source,
+    zig_zon_ref: &str,
+    download_dir: &str,
+) -> io::Result<PathBuf> {
+    crate::zig_vendor::vendor_from_zon(
+        zig_zon_ref,
+        required_sha256(input_spec, "zig_zon")?,
+        download_dir,
+    )
+}
+
+fn fetch_dev_source(
+    input_spec: &Source,
+    dev_path: &str,
+    download_dir: &str,
+) -> io::Result<PathBuf> {
+    println!("Creating dev tarball from: {}", dev_path);
+    let source_dir = Path::new(dev_path);
+    validate_dev_source(source_dir, dev_path)?;
+
+    let tarball_path = Path::new(download_dir).join(format!("{}.tar", input_spec.name));
+    if tarball_path.exists() {
+        fs::remove_file(&tarball_path)?;
+    }
+
+    let prepare_script = source_dir.join(".nex-dev-prepare");
+    if prepare_script.exists() && is_executable(&prepare_script) {
+        run_prepare_script(source_dir, &prepare_script, &tarball_path)?;
+    } else {
+        create_deterministic_tarball_uncompressed(source_dir, &tarball_path)?;
+    }
+
+    println!("Dev tarball created: {}", tarball_path.display());
+    Ok(tarball_path)
+}
+
+fn validate_dev_source(source_dir: &Path, dev_path: &str) -> io::Result<()> {
+    if !source_dir.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Dev source directory not found: {}", dev_path),
+        ));
+    }
+    if !source_dir.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Dev source must be a directory: {}", dev_path),
+        ));
+    }
+    Ok(())
+}
+
+fn run_prepare_script(
+    source_dir: &Path,
+    prepare_script: &Path,
+    tarball_path: &Path,
+) -> io::Result<()> {
+    let cwd = std::env::current_dir()?;
+    let tarball_abs = cwd.join(tarball_path);
+    let script_abs = cwd.join(prepare_script);
+    let source_abs = cwd.join(source_dir);
+    println!("Running .nex-dev-prepare: {}", prepare_script.display());
+
+    if let Some(parent) = tarball_abs.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let output = std::process::Command::new(&script_abs)
+        .arg(&tarball_abs)
+        .current_dir(&source_abs)
+        .output()?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(io::Error::other(format!(
+            ".nex-dev-prepare failed with status: {}\nstderr: {}",
+            output.status, stderr
+        )));
+    }
+    Ok(())
+}
+
+fn verify_local_file(input_spec: &Source, file_path: &str) -> io::Result<PathBuf> {
+    println!("Verifying local file: {}", file_path);
+    let resolved_path = Path::new(file_path);
+    if !resolved_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Local file not found: {}", file_path),
+        ));
+    }
+
+    let expected_sha256 = required_sha256(input_spec, &format!("file source: {}", file_path))?;
+    let sha256_hash = sha256_file(resolved_path)?;
+    if sha256_hash != expected_sha256 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "SHA256 mismatch for local file '{}': expected {}, got {}",
+                file_path, expected_sha256, sha256_hash
+            ),
+        ));
+    }
+
+    println!("Local file verified: {}", file_path);
+    Ok(resolved_path.to_path_buf())
+}
+
+fn fetch_url_source(input_spec: &Source, url: &str, download_dir: &str) -> io::Result<PathBuf> {
+    let expected_sha256 = required_sha256(input_spec, &format!("url source: {}", url))?;
+    let dst_path = Path::new(download_dir).join(expected_sha256);
+
+    if dst_path.exists() {
+        println!("Cache hit: {}", expected_sha256);
+        return Ok(dst_path);
+    }
+
+    println!("Downloading from {}", url);
+    let tmp_path = Path::new(download_dir).join(format!("{}.tmp", expected_sha256));
+    download_to_temp_file(url, &tmp_path)?;
+    verify_download(&tmp_path, expected_sha256)?;
+    std::fs::rename(&tmp_path, &dst_path)?;
+    println!("Cached as {}", expected_sha256);
+
+    Ok(dst_path)
+}
+
+fn download_to_temp_file(url: &str, tmp_path: &Path) -> io::Result<()> {
+    let status = std::process::Command::new("curl")
+        .args([
+            "-L",
+            "-f",
+            "-s",
+            "--output",
+            tmp_path.to_str().unwrap(),
+            url,
+        ])
+        .status()?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        let _ = std::fs::remove_file(tmp_path);
+        Err(io::Error::other(format!(
+            "curl download failed with status: {}",
+            status
+        )))
+    }
+}
+
+fn verify_download(tmp_path: &Path, expected_sha256: &str) -> io::Result<()> {
+    let sha256_hash = sha256_file(tmp_path)?;
+    if sha256_hash == expected_sha256 {
+        return Ok(());
+    }
+
+    let _ = std::fs::remove_file(tmp_path);
+    Err(io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!(
+            "SHA256 mismatch: expected {}, got {}",
+            expected_sha256, sha256_hash
+        ),
+    ))
+}
+
+fn sha256_file(path: &Path) -> io::Result<String> {
+    let mut file = fs::File::open(path)?;
+    let mut contents = Vec::new();
+    file.read_to_end(&mut contents)?;
+    Ok(hex::encode(Sha256::digest(&contents)))
+}
+
+fn required_sha256<'a>(input_spec: &'a Source, source_kind: &str) -> io::Result<&'a str> {
+    input_spec.sha256.as_deref().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("sha256 required for {}", source_kind),
+        )
+    })
+}
+
+#[cfg(unix)]
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+
+    path.metadata()
+        .map(|metadata| metadata.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_executable(_path: &Path) -> bool {
+    false
+}

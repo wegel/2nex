@@ -1,3 +1,5 @@
+//! Public materializer request, config, and result types.
+
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::PathBuf;
 

@@ -9,7 +9,6 @@
 //! The resolution map points file paths to dependency names (or self for internal).
 //! The files commit is derived from the dependency's manifest.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::os::unix::fs::symlink;
@@ -17,6 +16,8 @@ use std::path::{Path, PathBuf};
 
 use crate::manifest::ManifestIndex;
 use crate::utils::hash_file_content;
+
+use super::flatten_deps::{find_file_needs, resolve_transitive_deps};
 
 /// Flatten runtime dependencies for a single package capsule using precomputed deps.
 ///
@@ -30,19 +31,47 @@ pub fn flatten_capsule_precomputed(
     manifest_index: &ManifestIndex,
     fallback_repos: &[PathBuf],
 ) -> io::Result<usize> {
-    // find manifest for this commit
     let manifest = match find_manifest_for_commit(commit, manifest_index) {
-        Some(m) => m,
-        None => {
-            // no manifest - can't flatten without precomputed deps
-            return Ok(0);
-        }
+        Some(manifest) => manifest,
+        None => return Ok(0),
     };
-
-    // get the current package's files commit for self libs
     let self_files_commit = derive_files_commit_for_manifest(manifest);
+    let output_names = output_names_for_commit(pkg_dir, commit, manifest)?;
+    let deps = collect_capsule_deps(&output_names, manifest);
 
-    // extract output type and name from commit
+    let mut flattened_files = Vec::new();
+    flatten_self_libs(
+        repo_path,
+        pkg_dir,
+        fallback_repos,
+        self_files_commit.as_deref(),
+        &deps.self_libs,
+        &mut flattened_files,
+    )?;
+    flatten_external_libs(
+        repo_path,
+        pkg_dir,
+        fallback_repos,
+        manifest,
+        manifest_index,
+        &deps.external_deps,
+        &mut flattened_files,
+    )?;
+    ensure_loader_symlink(pkg_dir, &flattened_files)?;
+
+    Ok(flattened_files.len())
+}
+
+struct CapsuleDeps {
+    self_libs: Vec<String>,
+    external_deps: Vec<(String, String)>,
+}
+
+fn output_names_for_commit(
+    pkg_dir: &Path,
+    commit: &str,
+    manifest: &crate::manifest::types::Manifest,
+) -> io::Result<Vec<String>> {
     let commit_parts: Vec<&str> = commit.split('/').collect();
     let commit_type = commit_parts
         .get(commit_parts.len().saturating_sub(2))
@@ -50,266 +79,130 @@ pub fn flatten_capsule_precomputed(
         .unwrap_or("");
     let commit_name = commit_parts.last().copied().unwrap_or("");
 
-    // determine which outputs to process
-    // important: capsules may have multiple outputs merged (e.g., bin + lib),
-    // so we need to process ALL outputs that have files present in the capsule
-    let output_names: Vec<String> = if commit_type == "bundles" {
-        // bundle - expand to constituent outputs
-        match manifest.bundles.get(commit_name) {
-            Some(bundle) => bundle.includes.clone(),
-            None => return Ok(0),
-        }
+    if commit_type == "bundles" {
+        Ok(manifest
+            .bundles
+            .get(commit_name)
+            .map(|bundle| bundle.includes.clone())
+            .unwrap_or_default())
     } else {
-        // single output specified, but check for other outputs in the capsule
-        // this handles the case where system assembly merges multiple outputs
-        detect_outputs_in_capsule(pkg_dir, manifest)
+        Ok(detect_outputs_in_capsule(pkg_dir, manifest))
+    }
+}
+
+fn collect_capsule_deps(
+    output_names: &[String],
+    manifest: &crate::manifest::types::Manifest,
+) -> CapsuleDeps {
+    let mut deps = CapsuleDeps {
+        self_libs: Vec::new(),
+        external_deps: Vec::new(),
     };
 
-    // collect all needed libs (both external deps and self libs)
-    // for self libs, we flatten from own {checksum}/files commit
-    // for external deps, we resolve transitively
-    let mut self_libs: Vec<String> = Vec::new(); // file paths for self libs
-    let mut external_deps: Vec<(String, String)> = Vec::new(); // (file_path, dep_name)
+    for output_name in output_names {
+        collect_output_deps(output_name, manifest, &mut deps);
+    }
+    collect_external_deps_from_self_libs(manifest, &mut deps);
+    deps.self_libs.sort();
+    deps.self_libs.dedup();
+    deps
+}
 
-    for output_name in &output_names {
-        let output_spec = match manifest.outputs.get(output_name) {
-            Some(spec) => spec,
-            None => continue,
-        };
-        for file_entry in &output_spec.files {
-            for needed_file in &file_entry.needs {
-                if let Some(dep_name) = manifest.resolution.get(needed_file) {
-                    if dep_name == "self" {
-                        // self lib - flatten from own package's files commit
-                        self_libs.push(needed_file.clone());
-                    } else {
-                        // external dependency - resolve transitively
-                        external_deps.push((needed_file.clone(), dep_name.clone()));
-                    }
-                }
-            }
+fn collect_output_deps(
+    output_name: &str,
+    manifest: &crate::manifest::types::Manifest,
+    deps: &mut CapsuleDeps,
+) {
+    let Some(output_spec) = manifest.outputs.get(output_name) else {
+        return;
+    };
+
+    for file_entry in &output_spec.files {
+        for needed_file in &file_entry.needs {
+            collect_needed_file(needed_file, manifest, deps);
         }
     }
+}
 
-    // also collect transitive deps from self libs
-    // (e.g., if libmount.so needs libblkid.so which is also self)
-    for self_lib in &self_libs {
+fn collect_needed_file(
+    needed_file: &str,
+    manifest: &crate::manifest::types::Manifest,
+    deps: &mut CapsuleDeps,
+) {
+    if let Some(dep_name) = manifest.resolution.get(needed_file) {
+        if dep_name == "self" {
+            deps.self_libs.push(needed_file.to_string());
+        } else {
+            deps.external_deps
+                .push((needed_file.to_string(), dep_name.clone()));
+        }
+    }
+}
+
+fn collect_external_deps_from_self_libs(
+    manifest: &crate::manifest::types::Manifest,
+    deps: &mut CapsuleDeps,
+) {
+    for self_lib in &deps.self_libs.clone() {
         let needs = find_file_needs(self_lib, manifest);
         for needed_file in needs {
             if let Some(dep_name) = manifest.resolution.get(&needed_file) {
-                if dep_name == "self" {
-                    if !self_libs.contains(&needed_file) {
-                        // will be handled by dedup below
-                    }
-                } else {
-                    external_deps.push((needed_file.clone(), dep_name.clone()));
+                if dep_name != "self" {
+                    deps.external_deps.push((needed_file, dep_name.clone()));
                 }
             }
         }
     }
-
-    // dedup self_libs
-    self_libs.sort();
-    self_libs.dedup();
-
-    let mut flattened_count = 0;
-    let mut flattened_files: Vec<String> = Vec::new();
-
-    // flatten self libs from own package's files commit
-    if let Some(ref self_commit) = self_files_commit {
-        for lib_path in &self_libs {
-            if flatten_library_preserving_path(
-                repo_path,
-                self_commit,
-                lib_path,
-                pkg_dir,
-                fallback_repos,
-            )? {
-                flattened_count += 1;
-                flattened_files.push(lib_path.clone());
-            }
-        }
-    }
-
-    // resolve transitive closure of external dependencies
-    if !external_deps.is_empty() {
-        let all_deps = resolve_transitive_deps(&external_deps, manifest, manifest_index);
-        for (file_path, _provider_key, provider_commit) in all_deps {
-            if flatten_library_preserving_path(
-                repo_path,
-                &provider_commit,
-                &file_path,
-                pkg_dir,
-                fallback_repos,
-            )? {
-                flattened_count += 1;
-                flattened_files.push(file_path.clone());
-            }
-        }
-    }
-
-    // create lib/ld-linux-x86-64.so.2 symlink for nex-ld-shim loader lookup
-    ensure_loader_symlink(pkg_dir, &flattened_files)?;
-
-    Ok(flattened_count)
 }
 
-/// Resolve transitive closure of dependencies.
-///
-/// Starting from direct deps, recursively find all transitive deps by looking up
-/// each dependency's manifest and checking what it needs.
-///
-/// Returns: Vec of (file_path, dep_name, files_commit)
-fn resolve_transitive_deps(
-    direct_deps: &[(String, String)], // (file_path, dep_name)
-    root_manifest: &crate::manifest::types::Manifest,
-    manifest_index: &ManifestIndex,
-) -> Vec<(String, String, String)> {
-    let mut result: Vec<(String, String, String)> = Vec::new();
-    let mut seen_files: HashSet<String> = HashSet::new();
-    // queue: (file_path, dep_name, source_manifest)
-    let mut queue: Vec<(String, String, &crate::manifest::types::Manifest)> = Vec::new();
-
-    // seed the queue with direct deps
-    for (file_path, dep_name) in direct_deps {
-        if seen_files.insert(file_path.clone()) {
-            queue.push((file_path.clone(), dep_name.clone(), root_manifest));
-        }
-    }
-
-    // cache for dep manifests we've looked up
-    let mut dep_manifest_cache: HashMap<String, Option<&crate::manifest::types::Manifest>> =
-        HashMap::new();
-
-    while let Some((file_path, dep_name, source_manifest)) = queue.pop() {
-        // handle __self: prefix for continuing resolution within same package
-        let (actual_dep_name, is_self_continuation) = if dep_name.starts_with("__self:") {
-            (dep_name.strip_prefix("__self:").unwrap().to_string(), true)
-        } else {
-            (dep_name.clone(), false)
-        };
-
-        // find the dependency by name in source manifest
-        let dep = match find_dependency_by_name(source_manifest, &actual_dep_name) {
-            Some(d) => d,
-            None => continue,
-        };
-
-        // derive files commit for this dependency
-        let files_commit = match derive_files_commit_for_dependency(dep, manifest_index) {
-            Some(c) => c,
-            None => continue, // can't derive files commit
-        };
-
-        // look up the dependency's manifest to get transitive deps
-        let dep_manifest = if let Some(cached) = dep_manifest_cache.get(&actual_dep_name) {
-            *cached
-        } else {
-            let m = find_manifest_for_dependency(dep, manifest_index);
-            dep_manifest_cache.insert(actual_dep_name.clone(), m);
-            m
-        };
-
-        if !is_self_continuation {
-            let result_paths = dep_manifest
-                .map(|m| expand_runtime_file_paths(&file_path, m))
-                .unwrap_or_else(|| vec![file_path.clone()]);
-            for result_path in result_paths {
-                result.push((result_path, actual_dep_name.clone(), files_commit.clone()));
-            }
-        }
-
-        let dep_manifest = match dep_manifest {
-            Some(m) => m,
-            None => continue, // can't find manifest, skip transitive deps
-        };
-
-        // find the file in the dependency's outputs to get its needs
-        let file_needs = find_file_needs(&file_path, dep_manifest);
-
-        // queue up transitive deps
-        for needed_file in file_needs {
-            if seen_files.insert(needed_file.clone()) {
-                // resolve using dependency manifest's resolution map
-                if let Some(transitive_dep_name) = dep_manifest.resolution.get(&needed_file) {
-                    if transitive_dep_name == "self" {
-                        // "self" means from the same package we're currently processing
-                        // add to results and queue for further resolution using same dep context
-                        for result_path in expand_runtime_file_paths(&needed_file, dep_manifest) {
-                            result.push((
-                                result_path,
-                                actual_dep_name.clone(),
-                                files_commit.clone(),
-                            ));
-                        }
-                        // queue with source_manifest (which has this package as a dep), not dep_manifest
-                        queue.push((
-                            needed_file,
-                            format!("__self:{}", actual_dep_name),
-                            source_manifest,
-                        ));
-                    } else {
-                        queue.push((needed_file, transitive_dep_name.clone(), dep_manifest));
-                    }
-                }
-            }
-        }
-    }
-
-    result
-}
-
-/// Expand runtime file paths that represent Python package imports.
-///
-/// A need such as `/usr/lib/python3.12/site-packages/requests/__init__.py`
-/// means Python may import sibling modules from `requests/`. The capsule
-/// flattener copies exact runtime paths, so it must copy the provider's whole
-/// import package directory for package-style Python imports.
-fn expand_runtime_file_paths(
-    file_path: &str,
-    manifest: &crate::manifest::types::Manifest,
-) -> Vec<String> {
-    let Some(prefix) = python_site_packages_dir_prefix(file_path) else {
-        return vec![file_path.to_string()];
+fn flatten_self_libs(
+    repo_path: &str,
+    pkg_dir: &Path,
+    fallback_repos: &[PathBuf],
+    self_files_commit: Option<&str>,
+    self_libs: &[String],
+    flattened_files: &mut Vec<String>,
+) -> io::Result<()> {
+    let Some(self_commit) = self_files_commit else {
+        return Ok(());
     };
-
-    let mut paths = BTreeSet::new();
-    paths.insert(file_path.to_string());
-
-    for output_spec in manifest.outputs.values() {
-        for file_entry in &output_spec.files {
-            if file_entry.path.starts_with(&prefix) {
-                paths.insert(file_entry.path.clone());
-            }
+    for lib_path in self_libs {
+        if flatten_library_preserving_path(
+            repo_path,
+            self_commit,
+            lib_path,
+            pkg_dir,
+            fallback_repos,
+        )? {
+            flattened_files.push(lib_path.clone());
         }
     }
-
-    paths.into_iter().collect()
+    Ok(())
 }
 
-fn python_site_packages_dir_prefix(file_path: &str) -> Option<String> {
-    let marker = "/site-packages/";
-    let marker_index = file_path.find(marker)?;
-    let package_start = marker_index + marker.len();
-    let after_marker = &file_path[package_start..];
-    let package_name = after_marker.split('/').next()?;
-
-    if package_name.is_empty() || !after_marker.contains('/') {
-        return None;
+fn flatten_external_libs(
+    repo_path: &str,
+    pkg_dir: &Path,
+    fallback_repos: &[PathBuf],
+    manifest: &crate::manifest::types::Manifest,
+    manifest_index: &ManifestIndex,
+    external_deps: &[(String, String)],
+    flattened_files: &mut Vec<String>,
+) -> io::Result<()> {
+    for (file_path, _provider_key, provider_commit) in
+        resolve_transitive_deps(external_deps, manifest, manifest_index)
+    {
+        if flatten_library_preserving_path(
+            repo_path,
+            &provider_commit,
+            &file_path,
+            pkg_dir,
+            fallback_repos,
+        )? {
+            flattened_files.push(file_path);
+        }
     }
-
-    Some(format!("{}{}/", &file_path[..package_start], package_name))
-}
-
-/// Find a dependency by name in a manifest.
-fn find_dependency_by_name<'a>(
-    manifest: &'a crate::manifest::types::Manifest,
-    name: &str,
-) -> Option<&'a crate::manifest::types::Dependency> {
-    manifest
-        .dependencies
-        .iter()
-        .find(|d| d.name.as_deref() == Some(name))
+    Ok(())
 }
 
 /// Derive the files commit for the current manifest (for self libs).
@@ -333,83 +226,6 @@ fn derive_files_commit_for_manifest(manifest: &crate::manifest::types::Manifest)
         "x86_64/pkg/{}/{}/{}/{}/files",
         manifest.package.namespace, manifest.package.slug, manifest.package.version, address_hash
     ))
-}
-
-/// Derive the files commit for a dependency.
-/// Uses x86_64/pkg/{namespace}/{slug}/{version}/{checksum}/files for stable checksums.
-fn derive_files_commit_for_dependency(
-    dep: &crate::manifest::types::Dependency,
-    manifest_index: &ManifestIndex,
-) -> Option<String> {
-    // parse the dependency commit to extract package info
-    // e.g., "x86_64/pkg/libs/system/glibc/2.39/outputs/lib" -> namespace="libs/system", slug="glibc", version="2.39"
-    let parts: Vec<&str> = dep.commit.split('/').collect();
-    let pkg_idx = parts.iter().position(|&p| p == "pkg")?;
-    let end_idx = parts
-        .iter()
-        .position(|&p| p == "outputs" || p == "bundles")?;
-
-    if end_idx <= pkg_idx + 2 {
-        return None;
-    }
-
-    let version = parts[end_idx - 1];
-    let slug = parts[end_idx - 2];
-    let namespace_path = parts[pkg_idx + 1..end_idx - 2].join("/");
-
-    // look up the dependency's manifest
-    let dep_manifest = manifest_index.get_manifest(&namespace_path, slug)?;
-
-    // determine address hash: use checksum if stable, else use manifest git blob SHA
-    let has_stable_checksum = dep_manifest.package.checksum.is_some()
-        && dep_manifest.package.stable_checksum.unwrap_or(true);
-
-    let address_hash = if has_stable_checksum {
-        dep_manifest.package.checksum.clone().unwrap()
-    } else {
-        // use manifest's git blob SHA (input-addressed for bootstrap packages)
-        let manifest_path = PathBuf::from(format!("pkg/{}/{}.yaml", namespace_path, slug));
-        hash_file_content(&manifest_path).ok()?
-    };
-
-    Some(format!(
-        "x86_64/pkg/{}/{}/{}/{}/files",
-        namespace_path, slug, version, address_hash
-    ))
-}
-
-/// Find the manifest for a dependency.
-fn find_manifest_for_dependency<'a>(
-    dep: &crate::manifest::types::Dependency,
-    manifest_index: &'a ManifestIndex,
-) -> Option<&'a crate::manifest::types::Manifest> {
-    // parse the dependency commit to extract package info
-    let parts: Vec<&str> = dep.commit.split('/').collect();
-    let pkg_idx = parts.iter().position(|&p| p == "pkg")?;
-    let end_idx = parts
-        .iter()
-        .position(|&p| p == "outputs" || p == "bundles")?;
-
-    if end_idx <= pkg_idx + 2 {
-        return None;
-    }
-
-    let slug = parts[end_idx - 2];
-    let namespace_path = parts[pkg_idx + 1..end_idx - 2].join("/");
-
-    manifest_index.get_manifest(&namespace_path, slug)
-}
-
-/// Find what a specific file needs by looking through the manifest's outputs.
-fn find_file_needs(file_path: &str, manifest: &crate::manifest::types::Manifest) -> Vec<String> {
-    for output_spec in manifest.outputs.values() {
-        for file_entry in &output_spec.files {
-            if file_entry.path == file_path {
-                return file_entry.needs.clone();
-            }
-        }
-    }
-    Vec::new()
 }
 
 /// Detect which outputs from a manifest are present in a capsule directory.
@@ -570,39 +386,4 @@ fn ensure_loader_symlink(pkg_dir: &Path, flattened_files: &[String]) -> io::Resu
     symlink(format!("../usr/lib/{}", loader_name), &loader_symlink)?;
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::python_site_packages_dir_prefix;
-
-    #[test]
-    fn finds_python_package_directory_prefix() {
-        assert_eq!(
-            python_site_packages_dir_prefix(
-                "/usr/lib/python3.12/site-packages/requests/__init__.py"
-            )
-            .as_deref(),
-            Some("/usr/lib/python3.12/site-packages/requests/")
-        );
-        assert_eq!(
-            python_site_packages_dir_prefix(
-                "/usr/lib/python3.12/site-packages/gi/_gi.cpython-312-x86_64-linux-gnu.so"
-            )
-            .as_deref(),
-            Some("/usr/lib/python3.12/site-packages/gi/")
-        );
-    }
-
-    #[test]
-    fn ignores_top_level_python_module_files() {
-        assert_eq!(
-            python_site_packages_dir_prefix("/usr/lib/python3.12/site-packages/libvirt.py"),
-            None
-        );
-        assert_eq!(
-            python_site_packages_dir_prefix("/usr/lib/libvirt.so.0"),
-            None
-        );
-    }
 }

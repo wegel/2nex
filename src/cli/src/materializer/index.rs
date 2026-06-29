@@ -21,7 +21,7 @@ pub fn phase_priority(commit: &str) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::phase_priority;
 
     #[test]
     fn test_phase_priority() {

@@ -1,3 +1,5 @@
+//! CLI arguments and option conversion for `nex build`.
+
 use std::sync::Arc;
 
 use clap::Args;

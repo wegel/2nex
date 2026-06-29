@@ -1,11 +1,13 @@
+//! Resolve runtime dependency closures from manifest metadata.
+
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io;
 use std::path::PathBuf;
 
 use crate::manifest::ManifestIndex;
 use crate::store::Store;
-use crate::utils::hash_file_content;
 
+use super::resolver_refs::{resolve_dependency_to_commit, ResolveResult};
 use super::types::{MaterializeRequest, RuntimeClosure};
 
 /// Resolve runtime dependencies using precomputed deps from manifests.
@@ -21,146 +23,217 @@ pub fn resolve_runtime_deps_precomputed(
     manifest_index: &ManifestIndex,
     fallback_repos: &[PathBuf],
 ) -> io::Result<RuntimeClosure> {
-    let mut closure = RuntimeClosure::default();
-    let mut visited: HashSet<String> = HashSet::new();
-    let mut pending: Vec<String> = Vec::new();
-    // cache: (manifest_ptr, dep_name) -> resolved_commit
-    let mut dep_commit_cache: HashMap<(usize, String), String> = HashMap::new();
-    let mut processed_file_paths: HashMap<String, BTreeSet<String>> = HashMap::new();
-
     let store = Store::open_with_fallback_chain(repo_path, fallback_repos)?;
+    let mut resolver = RuntimeResolver::new(manifest_index, store);
+    resolver.seed_requests(requests);
+    resolver.run();
+    Ok(resolver.closure)
+}
 
-    // seed with initial requests (mark as roots)
-    for req in requests {
-        let commit = req.commit().to_string();
-        if !visited.contains(&commit) {
-            closure.add_root(&commit, format!("requested: {}", commit));
-            pending.push(commit.clone());
-            visited.insert(commit.clone());
+struct RuntimeResolver<'a> {
+    manifest_index: &'a ManifestIndex,
+    store: Store,
+    closure: RuntimeClosure,
+    visited: HashSet<String>,
+    pending: Vec<String>,
+    dep_commit_cache: HashMap<(usize, String), String>,
+    processed_file_paths: HashMap<String, BTreeSet<String>>,
+}
+
+impl<'a> RuntimeResolver<'a> {
+    fn new(manifest_index: &'a ManifestIndex, store: Store) -> Self {
+        Self {
+            manifest_index,
+            store,
+            closure: RuntimeClosure::default(),
+            visited: HashSet::new(),
+            pending: Vec::new(),
+            dep_commit_cache: HashMap::new(),
+            processed_file_paths: HashMap::new(),
         }
-        if let MaterializeRequest::Files { paths, .. } = req {
-            for path in paths {
-                closure
-                    .files_needed
-                    .entry(commit.clone())
-                    .or_default()
-                    .insert(path.clone());
+    }
+
+    fn seed_requests(&mut self, requests: &[MaterializeRequest]) {
+        for req in requests {
+            let commit = req.commit().to_string();
+            self.add_root_commit(&commit);
+            if let MaterializeRequest::Files { paths, .. } = req {
+                self.add_requested_files(&commit, paths);
             }
         }
     }
 
-    // transitive resolution loop
-    while let Some(commit) = pending.pop() {
-        // find the manifest for this commit
-        let manifest = match find_manifest_for_commit(&commit, manifest_index) {
-            Some(m) => m,
-            None => {
-                // no manifest found - can't resolve deps for this commit
-                // this is expected for commits that haven't been processed by compute-deps
-                continue;
-            }
+    fn add_root_commit(&mut self, commit: &str) {
+        if self.visited.insert(commit.to_string()) {
+            self.closure
+                .add_root(commit, format!("requested: {}", commit));
+            self.pending.push(commit.to_string());
+        }
+    }
+
+    fn add_requested_files(&mut self, commit: &str, paths: &[String]) {
+        let files = self
+            .closure
+            .files_needed
+            .entry(commit.to_string())
+            .or_default();
+        files.extend(paths.iter().cloned());
+    }
+
+    fn run(&mut self) {
+        while let Some(commit) = self.pending.pop() {
+            self.process_commit(&commit);
+        }
+    }
+
+    fn process_commit(&mut self, commit: &str) {
+        let Some(manifest) = find_manifest_for_commit(commit, self.manifest_index) else {
+            return;
         };
+        let file_entries = file_entries_to_process(
+            commit,
+            manifest,
+            &self.closure,
+            &mut self.processed_file_paths,
+        );
 
-        let file_entries =
-            file_entries_to_process(&commit, manifest, &closure, &mut processed_file_paths);
-        if file_entries.is_empty() {
-            continue;
+        let manifest_key = manifest as *const _ as usize;
+        for (file_path, file_needs) in file_entries {
+            self.process_file_needs(commit, manifest, manifest_key, &file_path, file_needs);
+        }
+    }
+
+    fn process_file_needs(
+        &mut self,
+        commit: &str,
+        manifest: &crate::manifest::types::Manifest,
+        manifest_key: usize,
+        file_path: &str,
+        file_needs: Vec<String>,
+    ) {
+        for needed_file in file_needs {
+            self.process_needed_file(commit, manifest, manifest_key, file_path, &needed_file);
+        }
+    }
+
+    fn process_needed_file(
+        &mut self,
+        commit: &str,
+        manifest: &crate::manifest::types::Manifest,
+        manifest_key: usize,
+        file_path: &str,
+        needed_file: &str,
+    ) {
+        let Some(dep_name) = self.dependency_name(manifest, file_path, needed_file) else {
+            return;
+        };
+        if dep_name == "self" {
+            queue_self_file_dependency(
+                commit,
+                needed_file,
+                format!("{} needs {} from self", file_path, needed_file),
+                &mut self.closure,
+                &mut self.pending,
+            );
+            return;
         }
 
-        // use manifest pointer as cache key component
-        let manifest_key = manifest as *const _ as usize;
+        if let Some(dep_commit) =
+            self.dependency_commit(manifest, manifest_key, file_path, &dep_name)
+        {
+            self.queue_dependency_file(dep_commit, needed_file, file_path, &dep_name);
+        }
+    }
 
-        // collect all dependencies needed by these files
-        for (file_path, file_needs) in file_entries {
-            for needed_file in file_needs {
-                // resolve file path to dependency name via resolution map
-                let dep_name = match manifest.resolution.get(&needed_file) {
-                    Some(dn) => dn.clone(),
-                    None => {
-                        closure.add_unresolved(
-                            &needed_file,
-                            format!("{} needs {} (no resolution)", file_path, needed_file),
-                        );
-                        continue;
-                    }
-                };
-
-                if dep_name == "self" {
-                    queue_self_file_dependency(
-                        &commit,
-                        &needed_file,
-                        format!("{} needs {} from self", file_path, needed_file),
-                        &mut closure,
-                        &mut pending,
-                    );
-                    continue;
-                }
-
-                // resolve dependency name to commit
-                let cache_key = (manifest_key, dep_name.clone());
-                let dep_commit = if let Some(cached) = dep_commit_cache.get(&cache_key) {
-                    cached.clone()
-                } else {
-                    // find dependency by name and derive commit
-                    match resolve_dependency_to_commit(&dep_name, manifest, manifest_index, &store)
-                    {
-                        ResolveResult::Ok(c) => {
-                            dep_commit_cache.insert(cache_key, c.clone());
-                            c
-                        }
-                        ResolveResult::FilesCommitMissing { package, checksum } => {
-                            closure.add_unresolved(
-                                &format!(
-                                    "{} (run: nex compute-deps pkg/{}.yaml)",
-                                    package, package
-                                ),
-                                format!(
-                                    "{} needs {} - missing {}/files commit",
-                                    file_path,
-                                    dep_name,
-                                    &checksum[..12]
-                                ),
-                            );
-                            continue;
-                        }
-                        ResolveResult::ManifestNotFound(pkg) => {
-                            closure.add_unresolved(
-                                &dep_name,
-                                format!(
-                                    "{} needs {} - manifest not found for {}",
-                                    file_path, dep_name, pkg
-                                ),
-                            );
-                            continue;
-                        }
-                        ResolveResult::NotFound => {
-                            closure.add_unresolved(
-                                &dep_name,
-                                format!("{} needs dependency {} (not found)", file_path, dep_name),
-                            );
-                            continue;
-                        }
-                    }
-                };
-
-                let reason = format!("{} needs {} from {}", file_path, needed_file, dep_name);
-
-                if !visited.contains(&dep_commit) {
-                    // track the specific file needed from this commit
-                    closure.add_file_dep(&dep_commit, &needed_file, reason);
-                    pending.push(dep_commit.clone());
-                    visited.insert(dep_commit);
-                } else {
-                    let added_file = closure.add_file_dep(&dep_commit, &needed_file, reason);
-                    if added_file && is_checksum_files_commit_ref(&dep_commit) {
-                        pending.push(dep_commit);
-                    }
-                }
+    fn dependency_name(
+        &mut self,
+        manifest: &crate::manifest::types::Manifest,
+        file_path: &str,
+        needed_file: &str,
+    ) -> Option<String> {
+        match manifest.resolution.get(needed_file) {
+            Some(dep_name) => Some(dep_name.clone()),
+            None => {
+                self.closure.add_unresolved(
+                    needed_file,
+                    format!("{} needs {} (no resolution)", file_path, needed_file),
+                );
+                None
             }
         }
     }
 
-    Ok(closure)
+    fn dependency_commit(
+        &mut self,
+        manifest: &crate::manifest::types::Manifest,
+        manifest_key: usize,
+        file_path: &str,
+        dep_name: &str,
+    ) -> Option<String> {
+        let cache_key = (manifest_key, dep_name.to_string());
+        if let Some(cached) = self.dep_commit_cache.get(&cache_key) {
+            return Some(cached.clone());
+        }
+
+        match resolve_dependency_to_commit(dep_name, manifest, self.manifest_index, &self.store) {
+            ResolveResult::Ok(commit) => {
+                self.dep_commit_cache.insert(cache_key, commit.clone());
+                Some(commit)
+            }
+            result => {
+                self.record_resolve_failure(result, file_path, dep_name);
+                None
+            }
+        }
+    }
+
+    fn record_resolve_failure(&mut self, result: ResolveResult, file_path: &str, dep_name: &str) {
+        match result {
+            ResolveResult::FilesCommitMissing { package, checksum } => {
+                self.closure.add_unresolved(
+                    &format!("{} (run: nex compute-deps pkg/{}.yaml)", package, package),
+                    format!(
+                        "{} needs {} - missing {}/files commit",
+                        file_path,
+                        dep_name,
+                        &checksum[..12]
+                    ),
+                );
+            }
+            ResolveResult::ManifestNotFound(package) => {
+                self.closure.add_unresolved(
+                    dep_name,
+                    format!(
+                        "{} needs {} - manifest not found for {}",
+                        file_path, dep_name, package
+                    ),
+                );
+            }
+            ResolveResult::NotFound => {
+                self.closure.add_unresolved(
+                    dep_name,
+                    format!("{} needs dependency {} (not found)", file_path, dep_name),
+                );
+            }
+            ResolveResult::Ok(_) => {}
+        }
+    }
+
+    fn queue_dependency_file(
+        &mut self,
+        dep_commit: String,
+        needed_file: &str,
+        file_path: &str,
+        dep_name: &str,
+    ) {
+        let reason = format!("{} needs {} from {}", file_path, needed_file, dep_name);
+        let added_file = self.closure.add_file_dep(&dep_commit, needed_file, reason);
+        if self.visited.insert(dep_commit.clone())
+            || added_file && is_checksum_files_commit_ref(&dep_commit)
+        {
+            self.pending.push(dep_commit);
+        }
+    }
 }
 
 fn file_entries_to_process(
@@ -283,206 +356,6 @@ fn checksum_files_identity(commit: &str) -> Option<(String, String)> {
     Some((parts[2..slug_idx].join("/"), parts[slug_idx].to_string()))
 }
 
-/// Result of resolving a dependency to a commit.
-enum ResolveResult {
-    /// Successfully resolved to a files commit
-    Ok(String),
-    /// Dependency not found in manifest
-    NotFound,
-    /// Manifest not found for dependency
-    ManifestNotFound(String),
-    /// Files commit doesn't exist - need to run compute-deps
-    FilesCommitMissing { package: String, checksum: String },
-}
-
-/// Resolve a dependency name to a commit ref.
-/// Uses x86_64/pkg/{ns}/{slug}/{ver}/{checksum}/files for stable checksums,
-/// or {git_blob_sha}/files for bootstrap packages.
-fn resolve_dependency_to_commit(
-    dep_name: &str,
-    source_manifest: &crate::manifest::types::Manifest,
-    manifest_index: &ManifestIndex,
-    store: &Store,
-) -> ResolveResult {
-    // find the dependency by name in the source manifest
-    let dep = match source_manifest
-        .dependencies
-        .iter()
-        .find(|d| d.name.as_deref() == Some(dep_name))
-    {
-        Some(d) => d,
-        None => return ResolveResult::NotFound,
-    };
-
-    // parse the dependency's commit to extract package info
-    // e.g., "x86_64/pkg/libs/system/glibc/2.39/outputs/lib"
-    let parts: Vec<&str> = dep.commit.split('/').collect();
-    let pkg_idx = match parts.iter().position(|&p| p == "pkg") {
-        Some(i) => i,
-        None => return ResolveResult::NotFound,
-    };
-    let end_idx = match parts.iter().position(|&p| p == "outputs" || p == "bundles") {
-        Some(i) => i,
-        None => return ResolveResult::NotFound,
-    };
-
-    if end_idx <= pkg_idx + 2 {
-        return ResolveResult::NotFound;
-    }
-
-    let slug = parts[end_idx - 2];
-    let version = parts[end_idx - 1];
-    let namespace_path = parts[pkg_idx + 1..end_idx - 2].join("/");
-    let package_path = format!("{}/{}", namespace_path, slug);
-
-    // look up the dependency's manifest
-    let dep_manifest = match manifest_index.get_manifest(&namespace_path, slug) {
-        Some(m) => m,
-        None => return ResolveResult::ManifestNotFound(package_path),
-    };
-
-    // determine address hash: use checksum if stable, else use manifest git blob SHA
-    let has_stable_checksum = dep_manifest.package.checksum.is_some()
-        && dep_manifest.package.stable_checksum.unwrap_or(true);
-
-    let address_hash = if has_stable_checksum {
-        dep_manifest.package.checksum.clone().unwrap()
-    } else {
-        // use manifest's git blob SHA (input-addressed for bootstrap packages)
-        let manifest_path = PathBuf::from(format!("pkg/{}/{}.yaml", namespace_path, slug));
-        match hash_file_content(&manifest_path) {
-            Ok(h) => h,
-            Err(_) => return ResolveResult::NotFound,
-        }
-    };
-
-    let files_ref = format!(
-        "x86_64/pkg/{}/{}/{}/{}/files",
-        namespace_path, slug, version, address_hash
-    );
-    if store.resolve_ref(&files_ref).is_ok() {
-        return ResolveResult::Ok(files_ref);
-    }
-
-    // files commit doesn't exist - need to run compute-deps
-    ResolveResult::FilesCommitMissing {
-        package: package_path,
-        checksum: address_hash,
-    }
-}
-
 #[cfg(test)]
-mod tests {
-    use std::collections::{BTreeSet, HashMap};
-
-    use crate::manifest::types::{Build, FileEntry, Manifest, OutputSpec, Package};
-
-    use super::{file_entries_to_process, queue_self_file_dependency, RuntimeClosure};
-
-    fn manifest_with_lib_output() -> Manifest {
-        let mut outputs = HashMap::new();
-        outputs.insert(
-            "lib".to_string(),
-            OutputSpec {
-                files: vec![
-                    FileEntry {
-                        path: "/usr/lib/libX11.so.6".to_string(),
-                        needs: vec!["/usr/lib/libxcb.so.1".to_string()],
-                    },
-                    FileEntry {
-                        path: "/usr/lib/libX11-xcb.so.1".to_string(),
-                        needs: Vec::new(),
-                    },
-                ],
-            },
-        );
-
-        Manifest {
-            package: Package {
-                name: "libX11".to_string(),
-                slug: "libx11".to_string(),
-                version: "1.8.10".to_string(),
-                namespace: "libs/x11".to_string(),
-                checksum: Some("abc".to_string()),
-                stable_checksum: None,
-                seed: false,
-            },
-            dependencies: Vec::new(),
-            sources: Vec::new(),
-            build: Build {
-                environment: String::new(),
-                script: String::new(),
-                profile: Vec::new(),
-            },
-            outputs,
-            bundles: HashMap::new(),
-            resolution: HashMap::new(),
-        }
-    }
-
-    #[test]
-    fn files_commit_processes_needed_manifest_entries_once() {
-        let manifest = manifest_with_lib_output();
-        let commit = "x86_64/pkg/libs/x11/libx11/1.8.10/abc/files";
-        let mut closure = RuntimeClosure::default();
-        closure.add_file_dep(commit, "/usr/lib/libX11.so.6", "test".to_string());
-
-        let mut processed_file_paths = HashMap::new();
-        let entries =
-            file_entries_to_process(commit, &manifest, &closure, &mut processed_file_paths);
-        assert_eq!(
-            entries,
-            vec![(
-                "/usr/lib/libX11.so.6".to_string(),
-                vec!["/usr/lib/libxcb.so.1".to_string()]
-            )]
-        );
-
-        let entries =
-            file_entries_to_process(commit, &manifest, &closure, &mut processed_file_paths);
-        assert!(entries.is_empty());
-
-        closure.add_file_dep(
-            commit,
-            "/usr/lib/libX11-xcb.so.1",
-            "another need".to_string(),
-        );
-        let entries =
-            file_entries_to_process(commit, &manifest, &closure, &mut processed_file_paths);
-        assert_eq!(
-            entries,
-            vec![("/usr/lib/libX11-xcb.so.1".to_string(), Vec::new())]
-        );
-    }
-
-    #[test]
-    fn checksum_files_commit_queues_self_file_for_later_processing() {
-        let commit = "x86_64/pkg/libs/graphics/mesa/24.2.7/abc/files";
-        let mut closure = RuntimeClosure::default();
-        let mut pending = Vec::new();
-
-        queue_self_file_dependency(
-            commit,
-            "/usr/lib/libgallium-24.2.7.so",
-            "test".to_string(),
-            &mut closure,
-            &mut pending,
-        );
-
-        assert_eq!(pending, vec![commit.to_string()]);
-        assert_eq!(
-            closure.get_files(commit).cloned().unwrap_or_default(),
-            BTreeSet::from(["/usr/lib/libgallium-24.2.7.so".to_string()])
-        );
-
-        queue_self_file_dependency(
-            commit,
-            "/usr/lib/libgallium-24.2.7.so",
-            "duplicate".to_string(),
-            &mut closure,
-            &mut pending,
-        );
-
-        assert_eq!(pending, vec![commit.to_string()]);
-    }
-}
+#[path = "resolver_tests.rs"]
+mod resolver_tests;
