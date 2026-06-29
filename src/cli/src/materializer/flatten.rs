@@ -5,10 +5,15 @@ use std::io;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
+use crate::manifest::types::Manifest;
 use crate::manifest::ManifestIndex;
 use crate::utils::hash_file_content;
 
 use super::flatten_deps::{find_file_needs, resolve_transitive_deps};
+pub(super) use super::flatten_errors::flatten_export_error;
+use super::flatten_errors::{
+    missing_manifest_error, missing_resolution_error, missing_self_files_commit_error,
+};
 
 #[cfg(test)]
 #[path = "flatten_runtime_tests.rs"]
@@ -30,7 +35,7 @@ pub fn flatten_capsule_precomputed(
     };
     let self_files_commit = derive_files_commit_for_manifest(manifest);
     let output_names = output_names_for_commit(pkg_dir, commit, manifest)?;
-    let deps = collect_capsule_deps(&output_names, manifest);
+    let deps = collect_capsule_deps(&output_names, manifest)?;
 
     let mut flattened_files = Vec::new();
     flatten_self_libs(
@@ -38,6 +43,7 @@ pub fn flatten_capsule_precomputed(
         pkg_dir,
         fallback_repos,
         self_files_commit.as_deref(),
+        manifest,
         &deps.self_libs,
         &mut flattened_files,
     )?;
@@ -83,69 +89,71 @@ fn output_names_for_commit(
     }
 }
 
-fn collect_capsule_deps(
-    output_names: &[String],
-    manifest: &crate::manifest::types::Manifest,
-) -> CapsuleDeps {
+fn collect_capsule_deps(output_names: &[String], manifest: &Manifest) -> io::Result<CapsuleDeps> {
     let mut deps = CapsuleDeps {
         self_libs: Vec::new(),
         external_deps: Vec::new(),
     };
 
     for output_name in output_names {
-        collect_output_deps(output_name, manifest, &mut deps);
+        collect_output_deps(output_name, manifest, &mut deps)?;
     }
-    collect_external_deps_from_self_libs(manifest, &mut deps);
+    collect_external_deps_from_self_libs(manifest, &mut deps)?;
     deps.self_libs.sort();
     deps.self_libs.dedup();
-    deps
+    Ok(deps)
 }
 
 fn collect_output_deps(
     output_name: &str,
-    manifest: &crate::manifest::types::Manifest,
+    manifest: &Manifest,
     deps: &mut CapsuleDeps,
-) {
+) -> io::Result<()> {
     let Some(output_spec) = manifest.outputs.get(output_name) else {
-        return;
+        return Ok(());
     };
 
     for file_entry in &output_spec.files {
         for needed_file in &file_entry.needs {
-            collect_needed_file(needed_file, manifest, deps);
+            collect_needed_file(needed_file, manifest, deps)?;
         }
     }
+    Ok(())
 }
 
 fn collect_needed_file(
     needed_file: &str,
-    manifest: &crate::manifest::types::Manifest,
+    manifest: &Manifest,
     deps: &mut CapsuleDeps,
-) {
-    if let Some(dep_name) = manifest.resolution.get(needed_file) {
-        if dep_name == "self" {
-            deps.self_libs.push(needed_file.to_string());
-        } else {
-            deps.external_deps
-                .push((needed_file.to_string(), dep_name.clone()));
-        }
+) -> io::Result<()> {
+    let Some(dep_name) = manifest.resolution.get(needed_file) else {
+        return Err(missing_resolution_error(needed_file, manifest));
+    };
+    if dep_name == "self" {
+        deps.self_libs.push(needed_file.to_string());
+    } else {
+        deps.external_deps
+            .push((needed_file.to_string(), dep_name.clone()));
     }
+    Ok(())
 }
 
 fn collect_external_deps_from_self_libs(
-    manifest: &crate::manifest::types::Manifest,
+    manifest: &Manifest,
     deps: &mut CapsuleDeps,
-) {
+) -> io::Result<()> {
     for self_lib in &deps.self_libs.clone() {
         let needs = find_file_needs(self_lib, manifest);
         for needed_file in needs {
-            if let Some(dep_name) = manifest.resolution.get(&needed_file) {
-                if dep_name != "self" {
-                    deps.external_deps.push((needed_file, dep_name.clone()));
-                }
+            let Some(dep_name) = manifest.resolution.get(&needed_file) else {
+                return Err(missing_resolution_error(&needed_file, manifest));
+            };
+            if dep_name != "self" {
+                deps.external_deps.push((needed_file, dep_name.clone()));
             }
         }
     }
+    Ok(())
 }
 
 fn flatten_self_libs(
@@ -153,11 +161,15 @@ fn flatten_self_libs(
     pkg_dir: &Path,
     fallback_repos: &[PathBuf],
     self_files_commit: Option<&str>,
+    manifest: &Manifest,
     self_libs: &[String],
     flattened_files: &mut Vec<String>,
 ) -> io::Result<()> {
-    let Some(self_commit) = self_files_commit else {
+    if self_libs.is_empty() {
         return Ok(());
+    }
+    let Some(self_commit) = self_files_commit else {
+        return Err(missing_self_files_commit_error(manifest, self_libs));
     };
     for lib_path in self_libs {
         if flatten_library_preserving_path(
@@ -177,13 +189,13 @@ fn flatten_external_libs(
     repo_path: &str,
     pkg_dir: &Path,
     fallback_repos: &[PathBuf],
-    manifest: &crate::manifest::types::Manifest,
+    manifest: &Manifest,
     manifest_index: &ManifestIndex,
     external_deps: &[(String, String)],
     flattened_files: &mut Vec<String>,
 ) -> io::Result<()> {
     for (file_path, _provider_key, provider_commit) in
-        resolve_transitive_deps(external_deps, manifest, manifest_index)
+        resolve_transitive_deps(external_deps, manifest, manifest_index)?
     {
         if flatten_library_preserving_path(
             repo_path,
@@ -200,7 +212,7 @@ fn flatten_external_libs(
 
 /// Derive the files commit for the current manifest (for self libs).
 /// Uses x86_64/pkg/{namespace}/{slug}/{version}/{checksum}/files for stable checksums.
-fn derive_files_commit_for_manifest(manifest: &crate::manifest::types::Manifest) -> Option<String> {
+fn derive_files_commit_for_manifest(manifest: &Manifest) -> Option<String> {
     let has_stable_checksum =
         manifest.package.checksum.is_some() && manifest.package.stable_checksum.unwrap_or(true);
 
@@ -223,10 +235,7 @@ fn derive_files_commit_for_manifest(manifest: &crate::manifest::types::Manifest)
 
 /// Detect which outputs from a manifest are present in a capsule directory.
 /// Scans the capsule for files that match each output's file list.
-fn detect_outputs_in_capsule(
-    pkg_dir: &Path,
-    manifest: &crate::manifest::types::Manifest,
-) -> Vec<String> {
+fn detect_outputs_in_capsule(pkg_dir: &Path, manifest: &Manifest) -> Vec<String> {
     let mut present_outputs = Vec::new();
 
     for (output_name, output_spec) in &manifest.outputs {
@@ -244,10 +253,7 @@ fn detect_outputs_in_capsule(
 }
 
 /// Find the manifest that corresponds to a store commit ref.
-fn find_manifest_for_commit<'a>(
-    commit: &str,
-    index: &'a ManifestIndex,
-) -> Option<&'a crate::manifest::types::Manifest> {
+fn find_manifest_for_commit<'a>(commit: &str, index: &'a ManifestIndex) -> Option<&'a Manifest> {
     use crate::refs::PackageRef;
 
     let pkg_ref = PackageRef::parse(commit).ok()?;
@@ -307,26 +313,6 @@ fn flatten_library_preserving_path(
     }
 
     Ok(true)
-}
-
-fn flatten_export_error(commit: &str, path: &str, error: io::Error) -> io::Error {
-    io::Error::new(
-        error.kind(),
-        format!(
-            "failed to flatten declared runtime file {} from {}: {}",
-            path, commit, error
-        ),
-    )
-}
-
-fn missing_manifest_error(commit: &str) -> io::Error {
-    io::Error::new(
-        io::ErrorKind::NotFound,
-        format!(
-            "cannot flatten runtime dependencies for {} because no manifest was found",
-            commit
-        ),
-    )
 }
 
 /// Export a single file from a commit using zub's export_path.

@@ -1,21 +1,26 @@
 //! Transitive runtime dependency discovery for capsule flattening.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::io;
 use std::path::PathBuf;
 
+use crate::manifest::types::Manifest;
 use crate::manifest::ManifestIndex;
 use crate::utils::hash_file_content;
+
+use super::flatten_errors::{
+    missing_dependency_error, missing_dependency_files_commit_error, missing_resolution_error,
+};
 
 /// Resolve transitive closure of dependencies.
 pub(super) fn resolve_transitive_deps(
     direct_deps: &[(String, String)],
-    root_manifest: &crate::manifest::types::Manifest,
+    root_manifest: &Manifest,
     manifest_index: &ManifestIndex,
-) -> Vec<(String, String, String)> {
+) -> io::Result<Vec<(String, String, String)>> {
     let mut result: Vec<(String, String, String)> = Vec::new();
     let (mut seen_files, mut queue) = seed_dependency_queue(direct_deps, root_manifest);
-    let mut dep_manifest_cache: HashMap<String, Option<&crate::manifest::types::Manifest>> =
-        HashMap::new();
+    let mut dep_manifest_cache: HashMap<String, Option<&Manifest>> = HashMap::new();
 
     while let Some((file_path, dep_name, source_manifest)) = queue.pop() {
         process_dependency_queue_item(
@@ -27,17 +32,17 @@ pub(super) fn resolve_transitive_deps(
             &mut seen_files,
             &mut queue,
             &mut result,
-        );
+        )?;
     }
 
-    result
+    Ok(result)
 }
 
-type DependencyQueue<'a> = Vec<(String, String, &'a crate::manifest::types::Manifest)>;
+type DependencyQueue<'a> = Vec<(String, String, &'a Manifest)>;
 
 fn seed_dependency_queue<'a>(
     direct_deps: &[(String, String)],
-    root_manifest: &'a crate::manifest::types::Manifest,
+    root_manifest: &'a Manifest,
 ) -> (HashSet<String>, DependencyQueue<'a>) {
     let mut seen_files = HashSet::new();
     let mut queue = Vec::new();
@@ -53,19 +58,27 @@ fn seed_dependency_queue<'a>(
 fn process_dependency_queue_item<'a>(
     file_path: String,
     dep_name: String,
-    source_manifest: &'a crate::manifest::types::Manifest,
+    source_manifest: &'a Manifest,
     manifest_index: &'a ManifestIndex,
-    dep_manifest_cache: &mut HashMap<String, Option<&'a crate::manifest::types::Manifest>>,
+    dep_manifest_cache: &mut HashMap<String, Option<&'a Manifest>>,
     seen_files: &mut HashSet<String>,
     queue: &mut DependencyQueue<'a>,
     result: &mut Vec<(String, String, String)>,
-) {
+) -> io::Result<()> {
     let (actual_dep_name, is_self_continuation) = actual_dependency_name(&dep_name);
     let Some(dep) = find_dependency_by_name(source_manifest, &actual_dep_name) else {
-        return;
+        return Err(missing_dependency_error(
+            &file_path,
+            &actual_dep_name,
+            source_manifest,
+        ));
     };
     let Some(files_commit) = derive_files_commit_for_dependency(dep, manifest_index) else {
-        return;
+        return Err(missing_dependency_files_commit_error(
+            &file_path,
+            &actual_dep_name,
+            dep,
+        ));
     };
     let dep_manifest =
         cached_dependency_manifest(dep_manifest_cache, &actual_dep_name, dep, manifest_index);
@@ -90,8 +103,9 @@ fn process_dependency_queue_item<'a>(
             seen_files,
             queue,
             result,
-        );
+        )?;
     }
+    Ok(())
 }
 
 fn actual_dependency_name(dep_name: &str) -> (String, bool) {
@@ -103,10 +117,7 @@ fn actual_dependency_name(dep_name: &str) -> (String, bool) {
 }
 
 /// Find what a specific file needs by looking through the manifest's outputs.
-pub(super) fn find_file_needs(
-    file_path: &str,
-    manifest: &crate::manifest::types::Manifest,
-) -> Vec<String> {
+pub(super) fn find_file_needs(file_path: &str, manifest: &Manifest) -> Vec<String> {
     for output_spec in manifest.outputs.values() {
         for file_entry in &output_spec.files {
             if file_entry.path == file_path {
@@ -132,11 +143,11 @@ pub(super) fn python_site_packages_dir_prefix(file_path: &str) -> Option<String>
 }
 
 fn cached_dependency_manifest<'a>(
-    cache: &mut HashMap<String, Option<&'a crate::manifest::types::Manifest>>,
+    cache: &mut HashMap<String, Option<&'a Manifest>>,
     dep_name: &str,
     dep: &crate::manifest::types::Dependency,
     manifest_index: &'a ManifestIndex,
-) -> Option<&'a crate::manifest::types::Manifest> {
+) -> Option<&'a Manifest> {
     if let Some(cached) = cache.get(dep_name) {
         *cached
     } else {
@@ -151,7 +162,7 @@ fn push_result_paths(
     file_path: &str,
     dep_name: &str,
     files_commit: &str,
-    dep_manifest: Option<&crate::manifest::types::Manifest>,
+    dep_manifest: Option<&Manifest>,
 ) {
     let result_paths = dep_manifest
         .map(|manifest| expand_runtime_file_paths(file_path, manifest))
@@ -165,30 +176,32 @@ fn push_result_paths(
 fn queue_transitive_needs<'a>(
     file_path: &str,
     dep_name: &str,
-    source_manifest: &'a crate::manifest::types::Manifest,
-    dep_manifest: &'a crate::manifest::types::Manifest,
+    source_manifest: &'a Manifest,
+    dep_manifest: &'a Manifest,
     files_commit: &str,
     seen_files: &mut HashSet<String>,
-    queue: &mut Vec<(String, String, &'a crate::manifest::types::Manifest)>,
+    queue: &mut Vec<(String, String, &'a Manifest)>,
     result: &mut Vec<(String, String, String)>,
-) {
+) -> io::Result<()> {
     for needed_file in find_file_needs(file_path, dep_manifest) {
         if !seen_files.insert(needed_file.clone()) {
             continue;
         }
-        if let Some(transitive_dep_name) = dep_manifest.resolution.get(&needed_file) {
-            queue_one_need(
-                needed_file,
-                transitive_dep_name,
-                dep_name,
-                source_manifest,
-                dep_manifest,
-                files_commit,
-                queue,
-                result,
-            );
-        }
+        let Some(transitive_dep_name) = dep_manifest.resolution.get(&needed_file) else {
+            return Err(missing_resolution_error(&needed_file, dep_manifest));
+        };
+        queue_one_need(
+            needed_file,
+            transitive_dep_name,
+            dep_name,
+            source_manifest,
+            dep_manifest,
+            files_commit,
+            queue,
+            result,
+        );
     }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -196,10 +209,10 @@ fn queue_one_need<'a>(
     needed_file: String,
     transitive_dep_name: &str,
     dep_name: &str,
-    source_manifest: &'a crate::manifest::types::Manifest,
-    dep_manifest: &'a crate::manifest::types::Manifest,
+    source_manifest: &'a Manifest,
+    dep_manifest: &'a Manifest,
     files_commit: &str,
-    queue: &mut Vec<(String, String, &'a crate::manifest::types::Manifest)>,
+    queue: &mut Vec<(String, String, &'a Manifest)>,
     result: &mut Vec<(String, String, String)>,
 ) {
     if transitive_dep_name == "self" {
@@ -212,10 +225,7 @@ fn queue_one_need<'a>(
     }
 }
 
-fn expand_runtime_file_paths(
-    file_path: &str,
-    manifest: &crate::manifest::types::Manifest,
-) -> Vec<String> {
+fn expand_runtime_file_paths(file_path: &str, manifest: &Manifest) -> Vec<String> {
     let Some(prefix) = python_site_packages_dir_prefix(file_path) else {
         return vec![file_path.to_string()];
     };
@@ -235,7 +245,7 @@ fn expand_runtime_file_paths(
 }
 
 fn find_dependency_by_name<'a>(
-    manifest: &'a crate::manifest::types::Manifest,
+    manifest: &'a Manifest,
     name: &str,
 ) -> Option<&'a crate::manifest::types::Dependency> {
     manifest
@@ -258,7 +268,7 @@ fn derive_files_commit_for_dependency(
 fn find_manifest_for_dependency<'a>(
     dep: &crate::manifest::types::Dependency,
     manifest_index: &'a ManifestIndex,
-) -> Option<&'a crate::manifest::types::Manifest> {
+) -> Option<&'a Manifest> {
     let package_ref = dependency_package_ref(&dep.commit)?;
     manifest_index.get_manifest(&package_ref.namespace_path, &package_ref.slug)
 }
@@ -296,7 +306,7 @@ fn dependency_package_ref(commit: &str) -> Option<DependencyPackageRef> {
 }
 
 fn dependency_address_hash(
-    manifest: &crate::manifest::types::Manifest,
+    manifest: &Manifest,
     package_ref: &DependencyPackageRef,
 ) -> Option<String> {
     let has_stable_checksum =
