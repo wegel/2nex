@@ -5,8 +5,8 @@ use tempfile::TempDir;
 use crate::store::Store;
 
 use super::{
-    bundle_materialize_config, materialize, reject_unresolved_dependencies, MaterializeConfig,
-    MaterializeMode, MaterializeRequest, RuntimeClosure,
+    bundle_materialize_config, materialize, reject_unresolved_dependencies, requested_only_closure,
+    MaterializeConfig, MaterializeMode, MaterializeRequest, RuntimeClosure,
 };
 
 #[test]
@@ -79,6 +79,17 @@ fn requested_only_materialize_does_not_require_manifest_db() {
     let error = materialize(&config, &requests).unwrap_err();
 
     assert!(!error.to_string().contains("manifest_db_paths is required"));
+}
+
+#[test]
+fn requested_only_closure_marks_requests_as_roots_for_nex_checkout() {
+    let requests = [MaterializeRequest::Bundle {
+        commit: "x86_64/pkg/apps/example/1.0/bundles/full".to_string(),
+    }];
+
+    let closure = requested_only_closure(&requests);
+
+    assert!(closure.is_root("x86_64/pkg/apps/example/1.0/bundles/full"));
 }
 
 fn host_lacks_root_user_namespace_mapping(error: &io::Error) -> bool {

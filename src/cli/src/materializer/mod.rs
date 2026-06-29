@@ -118,7 +118,7 @@ fn runtime_closure(
 fn requested_only_closure(requests: &[MaterializeRequest]) -> RuntimeClosure {
     let mut closure = RuntimeClosure::default();
     for commit in requests.iter().map(|request| request.commit()) {
-        closure.add(commit, format!("requested: {}", commit));
+        closure.add_root(commit, format!("requested: {}", commit));
     }
     closure
 }
