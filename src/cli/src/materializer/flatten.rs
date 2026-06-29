@@ -9,7 +9,7 @@
 //! The resolution map points file paths to dependency names (or self for internal).
 //! The files commit is derived from the dependency's manifest.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::os::unix::fs::symlink;
@@ -201,15 +201,6 @@ fn resolve_transitive_deps(
             None => continue, // can't derive files commit
         };
 
-        // only add to results if not a self-continuation (already added when queued)
-        if !is_self_continuation {
-            result.push((
-                file_path.clone(),
-                actual_dep_name.clone(),
-                files_commit.clone(),
-            ));
-        }
-
         // look up the dependency's manifest to get transitive deps
         let dep_manifest = if let Some(cached) = dep_manifest_cache.get(&actual_dep_name) {
             *cached
@@ -218,6 +209,15 @@ fn resolve_transitive_deps(
             dep_manifest_cache.insert(actual_dep_name.clone(), m);
             m
         };
+
+        if !is_self_continuation {
+            let result_paths = dep_manifest
+                .map(|m| expand_runtime_file_paths(&file_path, m))
+                .unwrap_or_else(|| vec![file_path.clone()]);
+            for result_path in result_paths {
+                result.push((result_path, actual_dep_name.clone(), files_commit.clone()));
+            }
+        }
 
         let dep_manifest = match dep_manifest {
             Some(m) => m,
@@ -235,11 +235,13 @@ fn resolve_transitive_deps(
                     if transitive_dep_name == "self" {
                         // "self" means from the same package we're currently processing
                         // add to results and queue for further resolution using same dep context
-                        result.push((
-                            needed_file.clone(),
-                            actual_dep_name.clone(),
-                            files_commit.clone(),
-                        ));
+                        for result_path in expand_runtime_file_paths(&needed_file, dep_manifest) {
+                            result.push((
+                                result_path,
+                                actual_dep_name.clone(),
+                                files_commit.clone(),
+                            ));
+                        }
                         // queue with source_manifest (which has this package as a dep), not dep_manifest
                         queue.push((
                             needed_file,
@@ -255,6 +257,48 @@ fn resolve_transitive_deps(
     }
 
     result
+}
+
+/// Expand runtime file paths that represent Python package imports.
+///
+/// A need such as `/usr/lib/python3.12/site-packages/requests/__init__.py`
+/// means Python may import sibling modules from `requests/`. The capsule
+/// flattener copies exact runtime paths, so it must copy the provider's whole
+/// import package directory for package-style Python imports.
+fn expand_runtime_file_paths(
+    file_path: &str,
+    manifest: &crate::manifest::types::Manifest,
+) -> Vec<String> {
+    let Some(prefix) = python_site_packages_dir_prefix(file_path) else {
+        return vec![file_path.to_string()];
+    };
+
+    let mut paths = BTreeSet::new();
+    paths.insert(file_path.to_string());
+
+    for output_spec in manifest.outputs.values() {
+        for file_entry in &output_spec.files {
+            if file_entry.path.starts_with(&prefix) {
+                paths.insert(file_entry.path.clone());
+            }
+        }
+    }
+
+    paths.into_iter().collect()
+}
+
+fn python_site_packages_dir_prefix(file_path: &str) -> Option<String> {
+    let marker = "/site-packages/";
+    let marker_index = file_path.find(marker)?;
+    let package_start = marker_index + marker.len();
+    let after_marker = &file_path[package_start..];
+    let package_name = after_marker.split('/').next()?;
+
+    if package_name.is_empty() || !after_marker.contains('/') {
+        return None;
+    }
+
+    Some(format!("{}{}/", &file_path[..package_start], package_name))
 }
 
 /// Find a dependency by name in a manifest.
@@ -526,4 +570,39 @@ fn ensure_loader_symlink(pkg_dir: &Path, flattened_files: &[String]) -> io::Resu
     symlink(format!("../usr/lib/{}", loader_name), &loader_symlink)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::python_site_packages_dir_prefix;
+
+    #[test]
+    fn finds_python_package_directory_prefix() {
+        assert_eq!(
+            python_site_packages_dir_prefix(
+                "/usr/lib/python3.12/site-packages/requests/__init__.py"
+            )
+            .as_deref(),
+            Some("/usr/lib/python3.12/site-packages/requests/")
+        );
+        assert_eq!(
+            python_site_packages_dir_prefix(
+                "/usr/lib/python3.12/site-packages/gi/_gi.cpython-312-x86_64-linux-gnu.so"
+            )
+            .as_deref(),
+            Some("/usr/lib/python3.12/site-packages/gi/")
+        );
+    }
+
+    #[test]
+    fn ignores_top_level_python_module_files() {
+        assert_eq!(
+            python_site_packages_dir_prefix("/usr/lib/python3.12/site-packages/libvirt.py"),
+            None
+        );
+        assert_eq!(
+            python_site_packages_dir_prefix("/usr/lib/libvirt.so.0"),
+            None
+        );
+    }
 }

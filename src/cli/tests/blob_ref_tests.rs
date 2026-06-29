@@ -56,6 +56,10 @@ fn ostree(repo_path: &Path, args: &[&str]) -> io::Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+fn ostree_available() -> bool {
+    Command::new("ostree").arg("--version").output().is_ok()
+}
+
 /// Test A: The `nex link` Workflow
 /// 1. Create a temp directory initialized as a git repo
 /// 2. Create `library.yaml` and commit it
@@ -151,6 +155,11 @@ bundles:
 /// 5. Assert: It correctly returns the Commit ID for V1, not V2
 #[test]
 fn test_time_travel_history_search() -> io::Result<()> {
+    if !ostree_available() {
+        eprintln!("skipping legacy OSTree history test: ostree is not installed");
+        return Ok(());
+    }
+
     let temp_dir = TempDir::new()?;
     let temp_path = temp_dir.path();
 
