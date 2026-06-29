@@ -1,0 +1,934 @@
+package:
+  schema: 1
+  name: nvidia-580
+  slug: nvidia-580
+  namespace: libs/graphics
+  version: 580.159.04
+  description: NVIDIA 580 proprietary kernel modules and userspace driver
+  homepage: https://www.nvidia.com/
+  checksum: cc4e86a77f4e13f25d941e6bdbbcf4a9fd0fc5553791210bf2782fef63d166da
+
+sources:
+- name: nvidia
+  url: https://download.nvidia.com/XFree86/Linux-x86_64/580.159.04/NVIDIA-Linux-x86_64-580.159.04-no-compat32.run
+  sha256: eae631a3281b17b2cd2ac8fcc9cf370e4327d3b2c36a3b2646ff386501ab03a5
+- name: runtime_installer
+  file: pkg/libs/graphics/nvidia-install-runtime.sh
+  sha256: 58f5c452f399b6563542b3ea0327beff16d31bde76d35c9dfdfd4ae55a6146ef
+
+dependencies:
+- name: linux-module-sdk
+  commit: x86_64/pkg/core/kernel/linux/6.12.58/bundles/module-sdk
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: which
+  commit: x86_64/pkg/core/userland/which/2.23/outputs/bin
+
+build:
+  environment: env/standard.yaml
+  profile: [4111:5475, 8229:8304, 12441:9292, 16589:10438, 20727:12210, 26057:13383, 27030:15782]
+
+  script: |
+    set -eu
+
+    mkdir -p "${WORK_DIR}/nvidia"
+    nvidia_skip="$(awk -F= '/^skip=/{print $2; exit}' "/${SOURCE_nvidia}")"
+    tail -n +"${nvidia_skip}" "/${SOURCE_nvidia}" \
+      | zstd -d \
+      | tar --no-same-owner -xf - -C "${WORK_DIR}/nvidia"
+
+    make -C "${WORK_DIR}/nvidia/kernel" \
+      SYSSRC=/usr/src/linux-6.12.58 \
+      NV_EXCLUDE_KERNEL_MODULES="nvidia-peermem" \
+      modules
+
+    for module in nvidia nvidia-drm nvidia-modeset nvidia-uvm; do
+      install -Dm644 "${WORK_DIR}/nvidia/kernel/${module}.ko" \
+        "${OUT_DIR}/usr/lib/modules/6.12.58/extra/${module}.ko"
+      strip --strip-debug "${OUT_DIR}/usr/lib/modules/6.12.58/extra/${module}.ko"
+    done
+
+    bash "/${SOURCE_runtime_installer}" "${WORK_DIR}/nvidia" "${OUT_DIR}" "580.159.04"
+
+    find "${OUT_DIR}" -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  full:
+  - bin
+  - config
+  - doc
+  - firmware
+  - lib
+  - module
+  - systemd
+
+  runtime:
+  - bin
+  - config
+  - firmware
+  - lib
+  - module
+  - systemd
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/nvidia-bug-report.sh
+    - path: /usr/bin/nvidia-cuda-mps-control
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/bin/nvidia-cuda-mps-server
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/bin/nvidia-debugdump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnvidia-ml.so.1
+    - path: /usr/bin/nvidia-installer
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+    - path: /usr/bin/nvidia-modprobe
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/nvidia-ngx-updater
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/librt.so.1
+    - path: /usr/bin/nvidia-pcc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnvidia-glvkspirv.so.580.159.04
+      - /usr/lib/libnvidia-gpucomp.so.580.159.04
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/bin/nvidia-persistenced
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/bin/nvidia-powerd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/bin/nvidia-settings
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+    - path: /usr/bin/nvidia-sleep.sh
+    - path: /usr/bin/nvidia-smi
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnvidia-ml.so.1
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/bin/nvidia-uninstall
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+    - path: /usr/bin/nvidia-xconfig
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+
+  conf:
+    files:
+    - path: /etc/OpenCL/vendors/nvidia.icd
+    - path: /usr/share/X11/xorg.conf.d/nvidia-drm-outputclass.conf
+
+  config:
+    files:
+    - path: /usr/share/glvnd/egl_vendor.d/10_nvidia.json
+
+  doc:
+    files:
+    - path: /usr/share/doc/nvidia-580.159.04/LICENSE
+    - path: /usr/share/doc/nvidia-580.159.04/NVIDIA_Changelog
+    - path: /usr/share/doc/nvidia-580.159.04/README.txt
+    - path: /usr/share/doc/nvidia-580.159.04/html/acknowledgements.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/addressingcapabilities.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/addtlresources.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/appendices.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/audiosupport.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/commonproblems.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/configlaptop.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/configmultxscreens.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/configtwinview.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/depth30.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/displaydevicenames.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/dma_issues.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/dpi.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/dynamicboost.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/dynamicpowermanagement.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/editxconfig.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/egpu.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/faq.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/flippingubb.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/framelock.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/gbm.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/glxsupport.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/gpunames.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/gsp.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/i2c.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/index.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/installationandconfiguration.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/installdriver.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/installedcomponents.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/introduction.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/kernel_open.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/kms.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/knownissues.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/minimumrequirements.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/newusertips.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/ngx.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/nvidia-debugdump.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/nvidia-ml.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/nvidia-peermem.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/nvidia-persistenced.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/nvidia-smi.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/nvidiasettings.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/nvpresent.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/openglenvvariables.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/optimus.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/powermanagement.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/primerenderoffload.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/procinterface.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/profiles.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/programmingmodes.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/randr14.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/retpoline.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/selectdriver.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/sli.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/supportedchips.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/vdpausupport.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/wayland-issues.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/xcompositeextension.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/xconfigoptions.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/xineramaglx.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/xrandrextension.html
+    - path: /usr/share/doc/nvidia-580.159.04/html/xwayland.html
+    - path: /usr/share/doc/nvidia-580.159.04/pkg-history.txt
+    - path: /usr/share/doc/nvidia-580.159.04/supported-gpus/LICENSE
+    - path: /usr/share/doc/nvidia-580.159.04/supported-gpus/supported-gpus.json
+
+  firmware:
+    files:
+    - path: /usr/lib/firmware/nvidia/580.159.04/gsp_ga10x.bin
+    - path: /usr/lib/firmware/nvidia/580.159.04/gsp_tu10x.bin
+
+  lib:
+    files:
+    - path: /usr/lib/gbm/nvidia-drm_gbm.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libEGL.so
+      needs:
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libEGL.so.1
+      needs:
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libEGL.so.1.1.0
+      needs:
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libEGL.so.580.159.04
+      needs:
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libEGL_nvidia.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libnvidia-glsi.so.580.159.04
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libEGL_nvidia.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libnvidia-glsi.so.580.159.04
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libGL.so
+      needs:
+      - /usr/lib/libGLX.so.0
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libGL.so.1
+      needs:
+      - /usr/lib/libGLX.so.0
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libGL.so.1.7.0
+      needs:
+      - /usr/lib/libGLX.so.0
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libGLESv1_CM.so
+      needs:
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libGLESv1_CM.so.1
+      needs:
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libGLESv1_CM.so.1.2.0
+      needs:
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libGLESv1_CM_nvidia.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libGLESv1_CM_nvidia.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libGLESv2_nvidia.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libGLESv2_nvidia.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libGLESv2.so
+      needs:
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libGLESv2.so.2
+      needs:
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libGLESv2.so.2.1.0
+      needs:
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libGLX.so
+      needs:
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libGLX.so.0
+      needs:
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libGLX_indirect.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libnvidia-glcore.so.580.159.04
+      - /usr/lib/libnvidia-glsi.so.580.159.04
+      - /usr/lib/libnvidia-tls.so.580.159.04
+    - path: /usr/lib/libGLX_nvidia.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libnvidia-glcore.so.580.159.04
+      - /usr/lib/libnvidia-glsi.so.580.159.04
+      - /usr/lib/libnvidia-tls.so.580.159.04
+    - path: /usr/lib/libGLX_nvidia.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libnvidia-glcore.so.580.159.04
+      - /usr/lib/libnvidia-glsi.so.580.159.04
+      - /usr/lib/libnvidia-tls.so.580.159.04
+    - path: /usr/lib/libGLdispatch.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libOpenCL.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libOpenCL.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libOpenCL.so.1.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libOpenCL.so.1.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libOpenGL.so
+      needs:
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libOpenGL.so.0
+      needs:
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libcuda.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libcuda.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libcuda.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libcudadebugger.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+      - /usr/lib/libutil.so.1
+    - path: /usr/lib/libcudadebugger.so.580.159.04
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+      - /usr/lib/libutil.so.1
+    - path: /usr/lib/libnvcuvid.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libnvcuvid.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libnvcuvid.so.580.159.04
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libnvidia-allocator.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libnvidia-allocator.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libnvidia-allocator.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libnvidia-api.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libnvidia-cfg.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-cfg.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-cfg.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-egl-gbm.so.1.1.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libnvidia-egl-wayland.so.1.1.20
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libnvidia-egl-xcb.so.1.0.5
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-egl-xlib.so.1.0.5
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-eglcore.so.580.159.04
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnvidia-glsi.so.580.159.04
+      - /usr/lib/libnvidia-gpucomp.so.580.159.04
+    - path: /usr/lib/libnvidia-encode.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libnvcuvid.so.1
+    - path: /usr/lib/libnvidia-encode.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libnvcuvid.so.1
+    - path: /usr/lib/libnvidia-encode.so.580.159.04
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libnvcuvid.so.1
+    - path: /usr/lib/libnvidia-fbc.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-fbc.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-fbc.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-glcore.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnvidia-gpucomp.so.580.159.04
+      - /usr/lib/libnvidia-tls.so.580.159.04
+    - path: /usr/lib/libnvidia-glsi.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-glvkspirv.so.580.159.04
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-gpucomp.so.580.159.04
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-gtk2.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libnvidia-gtk3.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libnvidia-ml.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-ml.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-ml.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-ngx.so.580.159.04
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libnvidia-nvvm.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-nvvm.so.4
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-nvvm.so.580.159.04
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-nvvm70.so.4
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-opencl.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-opencl.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-opticalflow.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libnvcuvid.so.1
+    - path: /usr/lib/libnvidia-opticalflow.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libnvcuvid.so.1
+    - path: /usr/lib/libnvidia-opticalflow.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libnvcuvid.so.1
+    - path: /usr/lib/libnvidia-pkcs11-openssl3.so.580.159.04
+      needs:
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libnvidia-pkcs11.so.580.159.04
+      needs:
+      - /usr/lib/libdl.so.2
+    - path: /usr/lib/libnvidia-present.so.580.159.04
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcuda.so.1
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-ptxjitcompiler.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libnvidia-ptxjitcompiler.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libnvidia-ptxjitcompiler.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libnvidia-rtcore.so.580.159.04
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libnvidia-sandboxutils.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libnvidia-sandboxutils.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libnvidia-sandboxutils.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libnvidia-tls.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnvidia-vksc-core.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnvidia-glsi.so.580.159.04
+    - path: /usr/lib/libnvidia-vksc-core.so.580.159.04
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnvidia-glsi.so.580.159.04
+    - path: /usr/lib/libnvidia-wayland-client.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libnvoptix.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvoptix.so.580.159.04
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libvdpau_nvidia.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/nvidia_drv.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/systemd/system-sleep/nvidia
+    - path: /usr/lib/systemd/system/nvidia-hibernate.service
+    - path: /usr/lib/systemd/system/nvidia-resume.service
+    - path: /usr/lib/systemd/system/nvidia-suspend-then-hibernate.service
+    - path: /usr/lib/systemd/system/nvidia-suspend.service
+    - path: /usr/lib/vdpau/libvdpau_nvidia.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/vdpau/libvdpau_nvidia.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/xorg/modules/drivers/nvidia_drv.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/xorg/modules/extensions/libglxserver_nvidia.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnvidia-glcore.so.580.159.04
+      - /usr/lib/libnvidia-tls.so.580.159.04
+    - path: /usr/lib/xorg/modules/extensions/libglxserver_nvidia.so.580.159.04
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnvidia-glcore.so.580.159.04
+      - /usr/lib/libnvidia-tls.so.580.159.04
+
+  man:
+    files:
+    - path: /usr/share/man/man1/nvidia-cuda-mps-control.1.gz
+    - path: /usr/share/man/man1/nvidia-installer.1.gz
+    - path: /usr/share/man/man1/nvidia-modprobe.1.gz
+    - path: /usr/share/man/man1/nvidia-persistenced.1.gz
+    - path: /usr/share/man/man1/nvidia-settings.1.gz
+    - path: /usr/share/man/man1/nvidia-smi.1.gz
+    - path: /usr/share/man/man1/nvidia-xconfig.1.gz
+
+  misc:
+    files:
+    - path: /usr/share/applications/nvidia-settings.desktop
+    - path: /usr/share/egl/egl_external_platform.d/10_nvidia_wayland.json
+    - path: /usr/share/egl/egl_external_platform.d/15_nvidia_gbm.json
+    - path: /usr/share/egl/egl_external_platform.d/20_nvidia_xcb.json
+    - path: /usr/share/egl/egl_external_platform.d/20_nvidia_xlib.json
+    - path: /usr/share/icons/hicolor/128x128/apps/nvidia-settings.png
+    - path: /usr/share/nvidia/nvidia-application-profiles-580.159.04-key-documentation
+    - path: /usr/share/nvidia/nvidia-application-profiles-580.159.04-rc
+    - path: /usr/share/nvidia/nvoptix.bin
+    - path: /usr/share/nvidia/sandboxutils-filelist.json
+    - path: /usr/share/vulkan/icd.d/nvidia_icd.json
+    - path: /usr/share/vulkan/icd.d/nvidia_icd_vksc.json
+    - path: /usr/share/vulkan/implicit_layer.d/nvidia_layers.json
+
+  module:
+    files:
+    - path: /usr/lib/modules/6.12.58/extra/nvidia-drm.ko
+    - path: /usr/lib/modules/6.12.58/extra/nvidia-modeset.ko
+    - path: /usr/lib/modules/6.12.58/extra/nvidia-uvm.ko
+    - path: /usr/lib/modules/6.12.58/extra/nvidia.ko
+
+  systemd:
+    files:
+    - path: /usr/lib/systemd/system/nvidia-powerd.service
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libdl.so.2: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libpthread.so.0: glibc
+  /usr/lib/librt.so.1: glibc
+  /usr/lib/libutil.so.1: glibc
+  /usr/lib/libGLX.so.0: self
+  /usr/lib/libGLdispatch.so.0: self
+  /usr/lib/libcuda.so.1: self
+  /usr/lib/libnvcuvid.so.1: self
+  /usr/lib/libnvidia-glcore.so.580.159.04: self
+  /usr/lib/libnvidia-glsi.so.580.159.04: self
+  /usr/lib/libnvidia-glvkspirv.so.580.159.04: self
+  /usr/lib/libnvidia-gpucomp.so.580.159.04: self
+  /usr/lib/libnvidia-ml.so.1: self
+  /usr/lib/libnvidia-tls.so.580.159.04: self
