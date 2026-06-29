@@ -43,7 +43,7 @@ fn hydrated_dependencies(
     manifest_index: &ManifestIndex,
 ) -> io::Result<Vec<Dependency>> {
     let all_commits = resolve_dependency_closure(dependencies, manifest_index)?;
-    Ok(all_commits
+    all_commits
         .into_iter()
         .map(|commit| {
             Ok(Dependency {
@@ -52,7 +52,7 @@ fn hydrated_dependencies(
                 manifest_ref: None,
             })
         })
-        .collect::<io::Result<Vec<_>>>()?)
+        .collect()
 }
 
 fn hydrated_dependency_name(

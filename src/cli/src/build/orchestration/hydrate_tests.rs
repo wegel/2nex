@@ -18,7 +18,7 @@ fn hydrated_dependency_names_preserve_direct_names() {
         manifest_ref: None,
     };
 
-    let name = hydrated_dependency_name(&direct.commit, &[direct.clone()]).unwrap();
+    let name = hydrated_dependency_name(&direct.commit, std::slice::from_ref(&direct)).unwrap();
 
     assert_eq!(name.as_deref(), Some("libc"));
 }
