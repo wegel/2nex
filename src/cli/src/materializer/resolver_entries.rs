@@ -6,6 +6,7 @@ use crate::manifest::types::Manifest;
 
 use super::types::RuntimeClosure;
 
+#[derive(Default)]
 pub(super) struct FileEntriesToProcess {
     pub(super) entries: Vec<(String, Vec<String>)>,
     pub(super) missing_files: Vec<String>,
@@ -108,13 +109,4 @@ fn output_names_for_commit(commit: &str, manifest: &Manifest) -> Vec<String> {
             .unwrap_or_default();
     }
     vec![commit_name.to_string()]
-}
-
-impl Default for FileEntriesToProcess {
-    fn default() -> Self {
-        Self {
-            entries: Vec::new(),
-            missing_files: Vec::new(),
-        }
-    }
 }
