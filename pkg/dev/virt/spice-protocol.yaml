@@ -1,0 +1,84 @@
+package:
+  schema: 1
+  name: spice-protocol
+  slug: spice-protocol
+  namespace: dev/virt
+  version: 0.14.5
+  description: SPICE protocol headers
+  homepage: https://gitlab.freedesktop.org/spice/spice-protocol
+  checksum: a0451d04ab4aec6e7e958304ce15a32d3908b8295f66197f08362e62c8b17c32
+
+sources:
+- name: spice-protocol
+  url: https://gitlab.freedesktop.org/spice/spice-protocol/-/archive/v0.14.5/spice-protocol-v0.14.5.tar.gz
+  sha256: 1be179b3dfbb23946432275f4b7a4b59bb5e9acc25c3128bc930b8264a9f0a20
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+
+build:
+  environment: env/standard.yaml
+  profile: [1772:452]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "/${SOURCE_spice_protocol}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - misc
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/spice-1/spice/barrier.h
+    - path: /usr/include/spice-1/spice/end-packed.h
+    - path: /usr/include/spice-1/spice/enums.h
+    - path: /usr/include/spice-1/spice/ipc_ring.h
+    - path: /usr/include/spice-1/spice/macros.h
+    - path: /usr/include/spice-1/spice/protocol.h
+    - path: /usr/include/spice-1/spice/qxl_dev.h
+    - path: /usr/include/spice-1/spice/qxl_windows.h
+    - path: /usr/include/spice-1/spice/start-packed.h
+    - path: /usr/include/spice-1/spice/stats.h
+    - path: /usr/include/spice-1/spice/stream-device.h
+    - path: /usr/include/spice-1/spice/types.h
+    - path: /usr/include/spice-1/spice/vd_agent.h
+
+  misc:
+    files:
+    - path: /usr/share/pkgconfig/spice-protocol.pc
