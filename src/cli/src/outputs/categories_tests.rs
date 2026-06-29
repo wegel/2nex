@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
+use std::io;
+use std::os::unix::ffi::OsStringExt;
 
 use tempfile::TempDir;
 
@@ -35,7 +37,7 @@ fn generated_outputs_preserve_existing_output_names() {
         },
     );
 
-    let categorized = categorize_files_with_existing_outputs(root, &existing);
+    let categorized = categorize_files_with_existing_outputs(root, &existing).unwrap();
 
     assert_eq!(
         categorized.get("drv-eth-intel").unwrap(),
@@ -45,4 +47,17 @@ fn generated_outputs_preserve_existing_output_names() {
         categorized.get("lib").unwrap(),
         &vec!["/usr/lib/modules/1/kernel/drivers/gpu/amdgpu.ko".to_string()]
     );
+}
+
+#[test]
+fn generated_outputs_reject_non_utf8_paths() {
+    let temp_dir = TempDir::new().unwrap();
+    let root = temp_dir.path();
+    let bad_name = std::ffi::OsString::from_vec(b"bad-\xff".to_vec());
+    fs::write(root.join(bad_name), "bad").unwrap();
+
+    let error = categorize_files_with_existing_outputs(root, &HashMap::new()).unwrap_err();
+
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    assert!(error.to_string().contains("not valid UTF-8"));
 }

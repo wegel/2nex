@@ -312,7 +312,7 @@ fn maybe_generate_outputs(
     }
 
     let out_dir = Path::new(base_dir).join(&build_env.paths.out);
-    let categorized = categorize_files_with_existing_outputs(&out_dir, &manifest.outputs);
+    let categorized = categorize_files_with_existing_outputs(&out_dir, &manifest.outputs)?;
     crate::manifest::update::write_auto_outputs_to_manifest(&opts.manifest_file, &categorized)?;
 
     if let ManifestData::Package(reloaded_manifest) = load_manifest(&opts.manifest_file)? {

@@ -2,42 +2,70 @@
 
 use std::fs;
 use std::io::{self, Read};
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
 
-/// Calculate a deterministic checksum for every regular file in an output.
+/// Calculate a deterministic checksum for every regular file or symlink in an output.
 pub fn calculate_output_checksum(output_dir: &Path) -> io::Result<String> {
-    let mut file_paths = regular_file_paths(output_dir)?;
-    file_paths.sort();
+    let mut entries = output_entries(output_dir)?;
+    entries.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
 
     let mut final_hasher = blake3::Hasher::new();
-    for path in &file_paths {
-        let relative_path = path
-            .strip_prefix(output_dir)
-            .unwrap()
-            .to_string_lossy()
-            .into_owned();
-        let hash = file_hash(path)?;
-
-        final_hasher.update(relative_path.as_bytes());
+    for entry in entries {
+        final_hasher.update(entry.relative_path.as_os_str().as_bytes());
         final_hasher.update(b"\0");
-        final_hasher.update(&hash);
+        match entry.kind {
+            OutputEntryKind::File(hash) => {
+                final_hasher.update(b"file");
+                final_hasher.update(b"\0");
+                final_hasher.update(&hash);
+            }
+            OutputEntryKind::Symlink(target) => {
+                final_hasher.update(b"symlink");
+                final_hasher.update(b"\0");
+                final_hasher.update(&target);
+            }
+        }
         final_hasher.update(b"\0");
     }
 
     Ok(final_hasher.finalize().to_hex().to_string())
 }
 
-fn regular_file_paths(output_dir: &Path) -> io::Result<Vec<PathBuf>> {
-    let mut file_paths = Vec::new();
+struct OutputEntry {
+    relative_path: PathBuf,
+    kind: OutputEntryKind,
+}
+
+enum OutputEntryKind {
+    File([u8; 32]),
+    Symlink(Vec<u8>),
+}
+
+fn output_entries(output_dir: &Path) -> io::Result<Vec<OutputEntry>> {
+    let mut entries = Vec::new();
     for entry in WalkDir::new(output_dir) {
         let entry = entry?;
+        let relative_path = entry
+            .path()
+            .strip_prefix(output_dir)
+            .map_err(io::Error::other)?
+            .to_path_buf();
         if entry.file_type().is_file() {
-            file_paths.push(entry.path().to_path_buf());
+            entries.push(OutputEntry {
+                relative_path,
+                kind: OutputEntryKind::File(file_hash(entry.path())?),
+            });
+        } else if entry.file_type().is_symlink() {
+            entries.push(OutputEntry {
+                relative_path,
+                kind: OutputEntryKind::Symlink(symlink_target_bytes(entry.path())?),
+            });
         }
     }
-    Ok(file_paths)
+    Ok(entries)
 }
 
 fn file_hash(path: &Path) -> io::Result<[u8; 32]> {
@@ -55,3 +83,11 @@ fn file_hash(path: &Path) -> io::Result<[u8; 32]> {
 
     Ok(*hasher.finalize().as_bytes())
 }
+
+fn symlink_target_bytes(path: &Path) -> io::Result<Vec<u8>> {
+    Ok(fs::read_link(path)?.as_os_str().as_bytes().to_vec())
+}
+
+#[cfg(test)]
+#[path = "checksum_tests.rs"]
+mod checksum_tests;
