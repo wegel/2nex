@@ -1,0 +1,177 @@
+package:
+  schema: 1
+  name: libsodium
+  slug: libsodium
+  namespace: libs/crypto
+  version: 1.0.22
+  description: Modern cryptographic library
+  homepage: https://libsodium.org/
+  checksum: d5785aed721ae43033ec345458c74398538c62294d935b1ea2db0f48012153c7
+
+sources:
+- name: libsodium
+  url: https://download.libsodium.org/libsodium/releases/libsodium-1.0.22.tar.gz
+  sha256: adbdd8f16149e81ac6078a03aca6fc03b592b89ef7b5ed83841c086191be3349
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4391:1392, 8668:2137, 13189:2452, 17315:4390, 21430:6869, 25586:7103, 29693:7340, 33825:8738, 37929:8802, 39073:8853]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xzf /${SOURCE_libsodium} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    ./configure \
+      --prefix=/usr \
+      --disable-static
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -name '*.la' -delete
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/sodium.h
+    - path: /usr/include/sodium/core.h
+    - path: /usr/include/sodium/crypto_aead_aegis128l.h
+    - path: /usr/include/sodium/crypto_aead_aegis256.h
+    - path: /usr/include/sodium/crypto_aead_aes256gcm.h
+    - path: /usr/include/sodium/crypto_aead_chacha20poly1305.h
+    - path: /usr/include/sodium/crypto_aead_xchacha20poly1305.h
+    - path: /usr/include/sodium/crypto_auth.h
+    - path: /usr/include/sodium/crypto_auth_hmacsha256.h
+    - path: /usr/include/sodium/crypto_auth_hmacsha512.h
+    - path: /usr/include/sodium/crypto_auth_hmacsha512256.h
+    - path: /usr/include/sodium/crypto_box.h
+    - path: /usr/include/sodium/crypto_box_curve25519xchacha20poly1305.h
+    - path: /usr/include/sodium/crypto_box_curve25519xsalsa20poly1305.h
+    - path: /usr/include/sodium/crypto_core_ed25519.h
+    - path: /usr/include/sodium/crypto_core_hchacha20.h
+    - path: /usr/include/sodium/crypto_core_hsalsa20.h
+    - path: /usr/include/sodium/crypto_core_keccak1600.h
+    - path: /usr/include/sodium/crypto_core_ristretto255.h
+    - path: /usr/include/sodium/crypto_core_salsa20.h
+    - path: /usr/include/sodium/crypto_core_salsa208.h
+    - path: /usr/include/sodium/crypto_core_salsa2012.h
+    - path: /usr/include/sodium/crypto_generichash.h
+    - path: /usr/include/sodium/crypto_generichash_blake2b.h
+    - path: /usr/include/sodium/crypto_hash.h
+    - path: /usr/include/sodium/crypto_hash_sha3.h
+    - path: /usr/include/sodium/crypto_hash_sha256.h
+    - path: /usr/include/sodium/crypto_hash_sha512.h
+    - path: /usr/include/sodium/crypto_ipcrypt.h
+    - path: /usr/include/sodium/crypto_kdf.h
+    - path: /usr/include/sodium/crypto_kdf_blake2b.h
+    - path: /usr/include/sodium/crypto_kdf_hkdf_sha256.h
+    - path: /usr/include/sodium/crypto_kdf_hkdf_sha512.h
+    - path: /usr/include/sodium/crypto_kem.h
+    - path: /usr/include/sodium/crypto_kem_mlkem768.h
+    - path: /usr/include/sodium/crypto_kem_xwing.h
+    - path: /usr/include/sodium/crypto_kx.h
+    - path: /usr/include/sodium/crypto_onetimeauth.h
+    - path: /usr/include/sodium/crypto_onetimeauth_poly1305.h
+    - path: /usr/include/sodium/crypto_pwhash.h
+    - path: /usr/include/sodium/crypto_pwhash_argon2i.h
+    - path: /usr/include/sodium/crypto_pwhash_argon2id.h
+    - path: /usr/include/sodium/crypto_pwhash_scryptsalsa208sha256.h
+    - path: /usr/include/sodium/crypto_scalarmult.h
+    - path: /usr/include/sodium/crypto_scalarmult_curve25519.h
+    - path: /usr/include/sodium/crypto_scalarmult_ed25519.h
+    - path: /usr/include/sodium/crypto_scalarmult_ristretto255.h
+    - path: /usr/include/sodium/crypto_secretbox.h
+    - path: /usr/include/sodium/crypto_secretbox_xchacha20poly1305.h
+    - path: /usr/include/sodium/crypto_secretbox_xsalsa20poly1305.h
+    - path: /usr/include/sodium/crypto_secretstream_xchacha20poly1305.h
+    - path: /usr/include/sodium/crypto_shorthash.h
+    - path: /usr/include/sodium/crypto_shorthash_siphash24.h
+    - path: /usr/include/sodium/crypto_sign.h
+    - path: /usr/include/sodium/crypto_sign_ed25519.h
+    - path: /usr/include/sodium/crypto_sign_edwards25519sha512batch.h
+    - path: /usr/include/sodium/crypto_stream.h
+    - path: /usr/include/sodium/crypto_stream_chacha20.h
+    - path: /usr/include/sodium/crypto_stream_salsa20.h
+    - path: /usr/include/sodium/crypto_stream_salsa208.h
+    - path: /usr/include/sodium/crypto_stream_salsa2012.h
+    - path: /usr/include/sodium/crypto_stream_xchacha20.h
+    - path: /usr/include/sodium/crypto_stream_xsalsa20.h
+    - path: /usr/include/sodium/crypto_verify_16.h
+    - path: /usr/include/sodium/crypto_verify_32.h
+    - path: /usr/include/sodium/crypto_verify_64.h
+    - path: /usr/include/sodium/crypto_xof_shake128.h
+    - path: /usr/include/sodium/crypto_xof_shake256.h
+    - path: /usr/include/sodium/crypto_xof_turboshake128.h
+    - path: /usr/include/sodium/crypto_xof_turboshake256.h
+    - path: /usr/include/sodium/export.h
+    - path: /usr/include/sodium/randombytes.h
+    - path: /usr/include/sodium/randombytes_internal_random.h
+    - path: /usr/include/sodium/randombytes_sysrandom.h
+    - path: /usr/include/sodium/runtime.h
+    - path: /usr/include/sodium/utils.h
+    - path: /usr/include/sodium/version.h
+    - path: /usr/lib/pkgconfig/libsodium.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libsodium.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libsodium.so.26
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libsodium.so.26.4.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
