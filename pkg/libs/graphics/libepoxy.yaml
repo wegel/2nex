@@ -6,7 +6,7 @@ package:
   version: 1.5.10
   description: Library for handling OpenGL function pointer management
   homepage: https://github.com/anholt/libepoxy
-  checksum: 711b1aaa2c9d1451f1fa03e3aea7b0b0742c2b9f1c3238f5310e40516857577a
+  checksum: 1d04ee70552cb2f093727390f15361e5e109e345b283f2a0191529e36c65042f
 
 sources:
 - name: libepoxy
@@ -60,20 +60,10 @@ dependencies:
   commit: x86_64/pkg/libs/graphics/mesa/24.2.7/bundles/dev
 - name: libdrm
   commit: x86_64/pkg/libs/graphics/libdrm/2.4.123/bundles/dev
-- name: xorgproto
-  commit: x86_64/pkg/libs/x11/xorgproto/2024.1/bundles/dev
-- name: libx11
-  commit: x86_64/pkg/libs/x11/libx11/1.8.10/bundles/dev
-- name: libxcb
-  commit: x86_64/pkg/libs/x11/libxcb/1.17.0/bundles/dev
-- name: libxau
-  commit: x86_64/pkg/libs/x11/libxau/1.0.12/bundles/dev
-- name: libxdmcp
-  commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4133:6936, 5075:7072]
+  profile: [4097:6665, 4676:6690]
 
   script: |
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -82,6 +72,9 @@ build:
     meson setup build \
       --prefix=/usr \
       --buildtype=release \
+      -Dglx=no \
+      -Degl=yes \
+      -Dx11=false \
       -Dtests=false \
       -Ddocs=false
 
@@ -105,8 +98,6 @@ outputs:
     - path: /usr/include/epoxy/egl_generated.h
     - path: /usr/include/epoxy/gl.h
     - path: /usr/include/epoxy/gl_generated.h
-    - path: /usr/include/epoxy/glx.h
-    - path: /usr/include/epoxy/glx_generated.h
     - path: /usr/lib/pkgconfig/epoxy.pc
 
   lib:
