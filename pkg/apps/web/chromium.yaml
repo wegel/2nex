@@ -6,7 +6,7 @@ package:
   version: 143.0.7499.169
   description: Chromium web browser
   homepage: https://www.chromium.org/
-  checksum: 924af8518ffb1d5d0e81426903553fca589aecc03794f19ea09baf7572808ef8
+  checksum: 6d6472009cd00bb0c06c7e8fccf899448335cf8907014858e711548e6873001a
 
 sources:
 - name: chromium
@@ -257,7 +257,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [104065:273106, 402600:521190, 904252:829357, 1505431:1203792, 2006454:2160327, 2507869:2668243, 3008933:4361285, 3759042:5862777, 4510015:6790945, 5010542:7998481]
+  profile: [103958:213249, 402362:403969, 903402:652316, 1504530:964506, 2006194:1773155, 2508447:2202001, 3009393:3629849, 3759655:4899412, 4509500:5680408, 5010542:6702197]
 
   script: |
     # re-extract when the source archive changes
@@ -313,11 +313,17 @@ build:
     sed -i "s/default=False,$/default=True,/" \
       third_party/blink/renderer/bindings/scripts/generate_bindings.py
 
-    # symlink clang version dirs so chromium finds our clang's runtime libs
-    ln -sf 21 /usr/lib/clang/22
+    # point chromium at a writable clang view with the resource version it expects
+    clang_base="${WORK_DIR}/clang-base"
+    mkdir -p "${clang_base}/lib/clang"
+    ln -sfn /usr/bin "${clang_base}/bin"
+    ln -sfn /usr/lib/clang/21 "${clang_base}/lib/clang/21"
+    ln -sfn /usr/lib/clang/21 "${clang_base}/lib/clang/22"
 
     # symlink libffi_pic.a for swiftshader (our libffi is already PIC)
-    ln -sf libffi.a /usr/lib/libffi_pic.a
+    mkdir -p "${WORK_DIR}/libffi-pic"
+    ln -sfn /usr/lib/libffi.a "${WORK_DIR}/libffi-pic/libffi_pic.a"
+    export LIBRARY_PATH="${WORK_DIR}/libffi-pic:${LIBRARY_PATH:-}"
 
     # arch: unbundle system libraries - ONLY those compatible with use_custom_libcxx=true
     system_libs="flac fontconfig freetype harfbuzz-ng libjpeg libwebp libxml libxslt opus zlib"
@@ -362,8 +368,8 @@ build:
     python3 tools/gn/bootstrap/bootstrap.py -o out/gn --skip-generate-buildfiles
 
     # generate nss.pc since our NSS package doesn't include it
-    mkdir -p /usr/lib/pkgconfig
-    cat > /usr/lib/pkgconfig/nss.pc <<'PCEOF'
+    mkdir -p "${WORK_DIR}/pkgconfig"
+    cat > "${WORK_DIR}/pkgconfig/nss.pc" <<'PCEOF'
     prefix=/usr
     exec_prefix=${prefix}
     libdir=${prefix}/lib
@@ -376,6 +382,7 @@ build:
     Libs: -L${libdir} -lnss3 -lnssutil3 -lsmime3
     Cflags: -I${includedir}
     PCEOF
+    export PKG_CONFIG_PATH="${WORK_DIR}/pkgconfig:${PKG_CONFIG_PATH:-}"
 
     # arch: gn args - matching Arch Linux PKGBUILD exactly
     mkdir -p out/Default
@@ -404,7 +411,7 @@ build:
     use_qt6=true
     moc_qt6_path="/usr/lib/qt6"
     use_clang_modules=false
-    clang_base_path="/usr"
+    clang_base_path="/nex/work/clang-base"
     clang_use_chrome_plugins=false
     EOF
 
@@ -429,6 +436,9 @@ build:
     install -m755 out/Default/chrome ${OUT_DIR}/usr/lib/chromium/chromium
     install -m4755 out/Default/chrome_sandbox ${OUT_DIR}/usr/lib/chromium/chrome-sandbox
     install -m755 out/Default/chromedriver ${OUT_DIR}/usr/lib/chromium/chromedriver
+    if [ -f out/Default/chrome_crashpad_handler ]; then
+      install -m755 out/Default/chrome_crashpad_handler ${OUT_DIR}/usr/lib/chromium/chrome_crashpad_handler
+    fi
 
     cp -a out/Default/*.pak ${OUT_DIR}/usr/lib/chromium/
     cp -a out/Default/*.bin ${OUT_DIR}/usr/lib/chromium/ 2>/dev/null || true
@@ -483,6 +493,13 @@ outputs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/chromium/chrome_100_percent.pak
     - path: /usr/lib/chromium/chrome_200_percent.pak
+    - path: /usr/lib/chromium/chrome_crashpad_handler
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
     - path: /usr/lib/chromium/chromedriver
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -517,6 +534,8 @@ outputs:
       - /usr/lib/libexpat.so.1
       - /usr/lib/libffi.so.8
       - /usr/lib/libfontconfig.so.1
+      - /usr/lib/libfreebl3.so
+      - /usr/lib/libfreeblpriv3.so
       - /usr/lib/libfreetype.so.6
       - /usr/lib/libgbm.so.1
       - /usr/lib/libgcc_s.so.1
@@ -530,11 +549,15 @@ outputs:
       - /usr/lib/libminizip.so.1
       - /usr/lib/libnspr4.so
       - /usr/lib/libnss3.so
+      - /usr/lib/libnssckbi.so
+      - /usr/lib/libnsssysinit.so
       - /usr/lib/libnssutil3.so
       - /usr/lib/libopus.so.0
       - /usr/lib/libpango-1.0.so.0
       - /usr/lib/libpulse.so.0
       - /usr/lib/libsmime3.so
+      - /usr/lib/libsoftokn3.so
+      - /usr/lib/libsqlite3.so
       - /usr/lib/libudev.so.1
       - /usr/lib/libwebp.so.7
       - /usr/lib/libwebpdemux.so.2
@@ -1055,9 +1078,15 @@ resolution:
   /usr/lib/libxslt.so.1: libxslt
   /usr/lib/libgbm.so.1: mesa
   /usr/lib/libnspr4.so: nspr
+  /usr/lib/libfreebl3.so: nss
+  /usr/lib/libfreeblpriv3.so: nss
   /usr/lib/libnss3.so: nss
+  /usr/lib/libnssckbi.so: nss
+  /usr/lib/libnsssysinit.so: nss
   /usr/lib/libnssutil3.so: nss
   /usr/lib/libsmime3.so: nss
+  /usr/lib/libsoftokn3.so: nss
+  /usr/lib/libsqlite3.so: nss
   /usr/lib/libopus.so.0: opus
   /usr/lib/libpango-1.0.so.0: pango
   /usr/lib/libpulse.so.0: pulseaudio
