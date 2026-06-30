@@ -6,7 +6,7 @@ package:
   version: 24.2.7
   description: Open-source OpenGL/Vulkan graphics drivers
   homepage: https://mesa3d.org/
-  checksum: 709d703ea5537c3f3423c36dbbaecb87f39d66bc970d5c2518d2363ba9524bab
+  checksum: c17b4e9c18fe9583d5c8c60daeb5d47351e17c73cac06a49417053c0a2fa3a02
 
 sources:
 - name: mesa
@@ -70,7 +70,7 @@ dependencies:
 - name: wayland-protocols
   commit: x86_64/pkg/libs/wayland/wayland-protocols/1.46/bundles/dev
 - name: llvm
-  commit: x86_64/pkg/dev/toolchain/llvm/18.1.8/bundles/full
+  commit: x86_64/pkg/dev/toolchain/llvm/21.1.8/bundles/full
 - name: elfutils
   commit: x86_64/pkg/dev/util/elfutils/0.191/bundles/dev
 - name: zstd
@@ -104,7 +104,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4138:274, 16692:568, 37359:6152, 62134:8312, 82930:10613, 103564:14800, 124181:16259, 157401:19091, 186321:23864, 206281:223569]
+  profile: [4137:249, 16691:544, 37352:5812, 62310:7951, 83035:10192, 103634:14254, 124380:15672, 157555:18410, 186620:23118, 206198:225057]
 
   script: |
     # install python dependencies for mesa code generation first (before cd)
@@ -134,6 +134,9 @@ build:
 
     # fix missing includes in loader_wayland_helper.c (mesa bug)
     sed -i '/#include "loader_wayland_helper.h"/a #include <time.h>\n#include "util/timespec.h"' src/loader/loader_wayland_helper.c
+
+    # LLVM 21 changed Module::setTargetTriple to take llvm::Triple.
+    sed -i 's|setTargetTriple(TM->getTargetTriple().getTriple())|setTargetTriple(Triple(TM->getTargetTriple().getTriple()))|' src/amd/llvm/ac_llvm_helper.cpp
 
     export CFLAGS="${CFLAGS} -D_DEFAULT_SOURCE -D_GNU_SOURCE"
     export CXXFLAGS="${CXXFLAGS} -D_DEFAULT_SOURCE -D_GNU_SOURCE"

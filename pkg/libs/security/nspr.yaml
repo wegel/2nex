@@ -6,7 +6,7 @@ package:
   version: "4.35"
   description: Netscape Portable Runtime
   homepage: https://developer.mozilla.org/docs/Mozilla/Projects/NSPR
-  checksum: 931c81cfba52171103ee6c068f3b280c8332b69305219ee543050d39155145b1
+  checksum: c0962468a83571d15802e3a8260a9440116524e49b6002c0d792dba844ff4b23
 
 sources:
 - name: nspr
@@ -57,11 +57,18 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4150:1088, 9175:1300, 18529:1637, 27082:1917, 36768:2165, 46120:2444, 55613:2727, 69029:4275, 82103:4441, 87691:4686]
+  profile: [4150:1037, 9175:1253, 18529:1598, 27082:1877, 36768:2116, 46120:2389, 55613:2680, 69029:4201, 82103:4500, 87691:4766]
 
   script: |
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}/nspr
+
+    sed -i \
+      -e 's|^SH_DATE = .*$|SH_DATE = 2024-01-01 00:00:00|' \
+      -e 's|^SH_NOW = .*$|SH_NOW = 1704067200000000|' \
+      pr/src/Makefile.in \
+      lib/ds/Makefile.in \
+      lib/libc/src/Makefile.in
 
     ./configure --prefix=/usr --enable-64bit
 
