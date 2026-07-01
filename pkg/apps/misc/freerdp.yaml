@@ -6,7 +6,7 @@ package:
   version: 3.27.1
   description: Remote Desktop Protocol client tools
   homepage: https://www.freerdp.com/
-  checksum: 2360be476465e77dad5ae64b2adbe05f40a299885f3ebbd1c4ff3ea63ccfd32f
+  checksum: 47a3ce54853011e8713fe01f358e6c21b75e21a6a3b860a88b53ee667d2445ca
 
 sources:
 - name: freerdp
@@ -60,34 +60,18 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
 - name: openssl3
   commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
-- name: xorgproto
-  commit: x86_64/pkg/libs/x11/xorgproto/2024.1/bundles/dev
-- name: libx11
-  commit: x86_64/pkg/libs/x11/libx11/1.8.10/bundles/dev
-- name: libxcb
-  commit: x86_64/pkg/libs/x11/libxcb/1.17.0/bundles/dev
-- name: libxau
-  commit: x86_64/pkg/libs/x11/libxau/1.0.12/bundles/dev
-- name: libxdmcp
-  commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
-- name: libxext
-  commit: x86_64/pkg/libs/x11/libxext/1.3.6/bundles/dev
-- name: libxinerama
-  commit: x86_64/pkg/libs/x11/libxinerama/1.1.5/bundles/dev
-- name: libxcursor
-  commit: x86_64/pkg/libs/x11/libxcursor/1.2.3/bundles/dev
-- name: libxi
-  commit: x86_64/pkg/libs/x11/libxi/1.8.2/bundles/dev
-- name: libxrender
-  commit: x86_64/pkg/libs/x11/libxrender/0.9.11/bundles/dev
-- name: libxrandr
-  commit: x86_64/pkg/libs/x11/libxrandr/1.5.4/bundles/dev
-- name: libxfixes
-  commit: x86_64/pkg/libs/x11/libxfixes/6.0.1/bundles/dev
+- name: wayland
+  commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
+- name: wayland-protocols
+  commit: x86_64/pkg/libs/wayland/wayland-protocols/1.46/bundles/dev
+- name: libxkbcommon
+  commit: x86_64/pkg/libs/input/libxkbcommon/1.7.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [12381:2343, 45448:3182, 95131:3392, 157040:3624, 210799:3923, 264689:4033, 314252:4227, 393346:4584, 471994:4863, 522723:37113]
+  profile: [12308:8956, 41255:10454, 90775:11090, 152803:11615, 202545:12129, 252198:12314, 305979:12658, 380694:13249, 455421:14012, 504273:83149]
 
   script: |
     set -eu
@@ -121,16 +105,16 @@ build:
       -DWITH_CHANNELS=ON \
       -DWITH_CLIENT_CHANNELS=ON \
       -DCHANNEL_URBDRC=OFF \
-      -DWITH_X11=ON \
-      -DWITH_XINERAMA=ON \
-      -DWITH_XEXT=ON \
-      -DWITH_XCURSOR=ON \
+      -DWITH_X11=OFF \
+      -DWITH_XINERAMA=OFF \
+      -DWITH_XEXT=OFF \
+      -DWITH_XCURSOR=OFF \
       -DWITH_XV=OFF \
-      -DWITH_XI=ON \
-      -DWITH_XRENDER=ON \
-      -DWITH_XRANDR=ON \
-      -DWITH_XFIXES=ON \
-      -DWITH_WAYLAND=OFF \
+      -DWITH_XI=OFF \
+      -DWITH_XRENDER=OFF \
+      -DWITH_XRANDR=OFF \
+      -DWITH_XFIXES=OFF \
+      -DWITH_WAYLAND=ON \
       -DWITH_ALSA=OFF \
       -DWITH_PULSE=OFF \
       -DWITH_OSS=OFF \
@@ -177,21 +161,14 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libwinpr-tools3.so.3
-    - path: /usr/bin/xfreerdp
+    - path: /usr/bin/wlfreerdp
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libX11.so.6
-      - /usr/lib/libXcursor.so.1
-      - /usr/lib/libXext.so.6
-      - /usr/lib/libXfixes.so.3
-      - /usr/lib/libXi.so.6
-      - /usr/lib/libXinerama.so.1
-      - /usr/lib/libXrandr.so.2
-      - /usr/lib/libXrender.so.1
       - /usr/lib/libc.so.6
       - /usr/lib/libfreerdp-client3.so.3
       - /usr/lib/libfreerdp3.so.3
       - /usr/lib/libm.so.6
+      - /usr/lib/libuwac0.so.0
       - /usr/lib/libwinpr3.so.3
 
   dev:
@@ -382,6 +359,12 @@ outputs:
     - path: /usr/include/freerdp3/freerdp/utils/string.h
     - path: /usr/include/freerdp3/freerdp/version.h
     - path: /usr/include/freerdp3/freerdp/window.h
+    - path: /usr/include/uwac0/uwac/build-config.h
+    - path: /usr/include/uwac0/uwac/buildflags.h
+    - path: /usr/include/uwac0/uwac/config.h
+    - path: /usr/include/uwac0/uwac/uwac-tools.h
+    - path: /usr/include/uwac0/uwac/uwac.h
+    - path: /usr/include/uwac0/uwac/version.h
     - path: /usr/include/winpr3/winpr/asn1.h
     - path: /usr/include/winpr3/winpr/assert-api.h
     - path: /usr/include/winpr3/winpr/assert.h
@@ -457,6 +440,7 @@ outputs:
     - path: /usr/include/winpr3/winpr/wtypes.h
     - path: /usr/lib/pkgconfig/freerdp-client3.pc
     - path: /usr/lib/pkgconfig/freerdp3.pc
+    - path: /usr/lib/pkgconfig/uwac0.pc
     - path: /usr/lib/pkgconfig/winpr-tools3.pc
     - path: /usr/lib/pkgconfig/winpr3.pc
 
@@ -478,6 +462,10 @@ outputs:
     - path: /usr/lib/cmake/WinPR3/WinPRConfigVersion.cmake
     - path: /usr/lib/cmake/WinPR3/WinPRTargets-release.cmake
     - path: /usr/lib/cmake/WinPR3/WinPRTargets.cmake
+    - path: /usr/lib/cmake/uwac0/uwac-release.cmake
+    - path: /usr/lib/cmake/uwac0/uwac.cmake
+    - path: /usr/lib/cmake/uwac0/uwacConfig.cmake
+    - path: /usr/lib/cmake/uwac0/uwacConfigVersion.cmake
     - path: /usr/lib/libfreerdp-client3.so
       needs:
       - /usr/lib/libc.so.6
@@ -499,7 +487,6 @@ outputs:
     - path: /usr/lib/libfreerdp3.so
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libX11.so.6
       - /usr/lib/libc.so.6
       - /usr/lib/libcrypto.so.3
       - /usr/lib/libm.so.6
@@ -509,7 +496,6 @@ outputs:
     - path: /usr/lib/libfreerdp3.so.3
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libX11.so.6
       - /usr/lib/libc.so.6
       - /usr/lib/libcrypto.so.3
       - /usr/lib/libm.so.6
@@ -519,13 +505,39 @@ outputs:
     - path: /usr/lib/libfreerdp3.so.3.27.1
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libX11.so.6
       - /usr/lib/libc.so.6
       - /usr/lib/libcrypto.so.3
       - /usr/lib/libm.so.6
       - /usr/lib/libssl.so.3
       - /usr/lib/libwinpr3.so.3
       - /usr/lib/libz.so.1
+    - path: /usr/lib/libuwac0.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfreerdp3.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libwinpr3.so.3
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/lib/libuwac0.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfreerdp3.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libwinpr3.so.3
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/lib/libuwac0.so.0.2.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfreerdp3.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libwinpr3.so.3
+      - /usr/lib/libxkbcommon.so.0
     - path: /usr/lib/libwinpr-tools3.so
       needs:
       - /usr/lib/libc.so.6
@@ -565,18 +577,14 @@ resolution:
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
   /usr/lib/libm.so.6: glibc
-  /usr/lib/libX11.so.6: libx11
-  /usr/lib/libXcursor.so.1: libxcursor
-  /usr/lib/libXext.so.6: libxext
-  /usr/lib/libXfixes.so.3: libxfixes
-  /usr/lib/libXi.so.6: libxi
-  /usr/lib/libXinerama.so.1: libxinerama
-  /usr/lib/libXrandr.so.2: libxrandr
-  /usr/lib/libXrender.so.1: libxrender
+  /usr/lib/libxkbcommon.so.0: libxkbcommon
   /usr/lib/libcrypto.so.3: openssl3
   /usr/lib/libssl.so.3: openssl3
   /usr/lib/libfreerdp-client3.so.3: self
   /usr/lib/libfreerdp3.so.3: self
+  /usr/lib/libuwac0.so.0: self
   /usr/lib/libwinpr-tools3.so.3: self
   /usr/lib/libwinpr3.so.3: self
+  /usr/lib/libwayland-client.so.0: wayland
+  /usr/lib/libwayland-cursor.so.0: wayland
   /usr/lib/libz.so.1: zlib
