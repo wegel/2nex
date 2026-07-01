@@ -6,25 +6,19 @@ package:
   version: 1.3.1
   description: A Massively Spiffy Yet Delicately Unobtrusive Compression Library
   homepage: https://zlib.net/
-  checksum: 6d7155108c951b13b1fd3ccb199f788bf19e635637e5722dbc957ffdb0fd38e2
+  checksum: 325e097a6a91894a074ce5ab55b7a51d825272e94449439146469a08f4f4a78a
   seed: true
 
 sources:
 - name: zlib
-  url: https://zlib.net/zlib-1.3.1.tar.xz
-  sha256: 38ef96b8dfe510d42707d9c781877914792541133e1870841463bfa73f883e32
+  url: https://zlib.net/fossils/zlib-1.3.1.tar.gz
+  sha256: 9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
 
 dependencies:
 - name: linux-headers
   commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
-- name: gmp
-  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
-- name: perl
-  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
-- name: m4
-  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
 - name: binutils
   commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
 - name: gcc
@@ -37,6 +31,8 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
 - name: grep
   commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
 - name: diffutils
   commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
 - name: gawk
@@ -49,16 +45,10 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
 - name: xz
   commit: x86_64/pkg/bootstrap/phase1/xz/5.4.6/bundles/dev
-- name: autoconf
-  commit: x86_64/pkg/core/toolchain/autoconf/2.72/bundles/dev
-- name: automake
-  commit: x86_64/pkg/core/toolchain/automake/1.16.5/bundles/dev
-- name: libtool
-  commit: x86_64/pkg/core/toolchain/libtool/2.4.7/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4160:316, 8535:323, 12966:407, 17066:3528, 21866:4687, 26708:4710, 30821:4846, 32551:5288]
+  profile: [4160:256, 8535:266, 12966:359, 15682:1804]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_zlib} -C "${WORK_DIR}" --strip-components=1
@@ -69,12 +59,46 @@ build:
     make check
     make DESTDIR=${OUT_DIR} install
 
-    # build and install minizip from zlib contrib
+    # Build minizip directly from zlib's contrib tree. Using autoreconf here
+    # would pull normal Perl and autotools into this early package and create a
+    # bootstrap cycle.
     pushd contrib/minizip
-    autoreconf -fi
-    ./configure --prefix=/usr
-    make
-    make DESTDIR=${OUT_DIR} install
+    cc ${CFLAGS:-} -fPIC -I../.. -c ioapi.c unzip.c zip.c
+    cc -shared -Wl,-soname,libminizip.so.1 -o libminizip.so.1.0.0 ioapi.o unzip.o zip.o -L"${OUT_DIR}/usr/lib" -lz
+    ar rcs libminizip.a ioapi.o unzip.o zip.o
+    ranlib -D libminizip.a
+
+    install -d "${OUT_DIR}/usr/include/minizip" "${OUT_DIR}/usr/lib/pkgconfig"
+    install -m 0644 crypt.h ioapi.h mztools.h unzip.h zip.h "${OUT_DIR}/usr/include/minizip/"
+    install -m 0755 libminizip.so.1.0.0 "${OUT_DIR}/usr/lib/"
+    install -m 0644 libminizip.a "${OUT_DIR}/usr/lib/"
+    ln -sf libminizip.so.1.0.0 "${OUT_DIR}/usr/lib/libminizip.so.1"
+    ln -sf libminizip.so.1 "${OUT_DIR}/usr/lib/libminizip.so"
+    cat > "${OUT_DIR}/usr/lib/libminizip.la" <<'EOF'
+    # libminizip.la - a libtool library file
+    dlname='libminizip.so.1'
+    library_names='libminizip.so.1.0.0 libminizip.so.1 libminizip.so'
+    old_library='libminizip.a'
+    dependency_libs=' -lz'
+    installed=yes
+    shouldnotlink=no
+    dlopen=''
+    dlpreopen=''
+    libdir='/usr/lib'
+    EOF
+    cat > "${OUT_DIR}/usr/lib/pkgconfig/minizip.pc" <<'EOF'
+    prefix=/usr
+    exec_prefix=${prefix}
+    libdir=${exec_prefix}/lib
+    includedir=${prefix}/include
+
+    Name: minizip
+    Description: Minizip zip file manipulation library
+    Version: 1.3.1
+    Requires: zlib
+    Libs: -L${libdir} -lminizip
+    Cflags: -I${includedir}
+    EOF
     popd
 
     rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man ${OUT_DIR}/usr/share/doc

@@ -45,7 +45,7 @@ dependencies: []
 
 build:
   environment: cec6d21097655bd45c7ecf30e556ec4a77d14646
-  profile: [421142:36647, 1679771:67082, 3780430:202734, 6292896:207847, 8393918:211400, 10490920:215155, 12590111:220638, 15736674:228797, 18881528:235165, 20974790:283433]
+  profile: [420296:35618, 1668943:66035, 3756129:199919, 6255538:205009, 8341807:208606, 10425861:212301, 12508055:217838, 15634195:225864, 18760010:232118, 20843057:272801]
 
   script: |
     unset CFLAGS CXXFLAGS LDFLAGS
@@ -86,8 +86,16 @@ build:
 
     sed -e "/m64=/s/lib64/lib/" -i.orig gcc/config/i386/t-linux64
     sed -e "s#/lib64#/lib#g" -i.orig gcc/config/i386/t-linux64
+    # GCC 16's libstdc++ can expose locale declarations after safe-ctype.h
+    # poisons ctype names, so preload <locale> beside GCC's existing <string>
+    # workaround.
+    sed -e "/# include <string>/a # include <locale>" -i.orig gcc/system.h
 
     mkdir -v build && cd build
+    # GCC 13's bundled libcody uses u8 string literals as char arrays. Newer
+    # host GCC versions can expose those literals as char8_t during this host
+    # helper build, so keep host libraries in the older model.
+    export CXXFLAGS="-g -O2 -fno-char8_t"
     "${WORK_DIR}"/gcc/configure      \
         --target=${TARGET}           \
         --prefix=/usr                \
@@ -3195,15 +3203,8 @@ outputs:
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/crtprec80.o
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/README
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/X11/Xw32defs.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/libopenmpt/libopenmpt_config.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/libv4l1-videodev.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/libv4lconvert.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/msgpack/sysdep.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/msgpack/vrefbuffer.h
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/nss/secport.h
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/pthread.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/slang.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/winpr3/winpr/platform.h
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/install-tools/fixinc_list
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/install-tools/gsyslimits.h
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/install-tools/macro_list

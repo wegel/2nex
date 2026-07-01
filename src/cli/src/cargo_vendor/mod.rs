@@ -234,46 +234,7 @@ fn download_and_extract_registry_crate(
         return Ok(());
     }
 
-    // download crate tarball (cached)
-    let crate_file = cache_dir.join(format!("{}.crate", crate_dir_name));
-    if !crate_file.exists() {
-        let url = format!(
-            "https://static.crates.io/crates/{}/{}.crate",
-            pkg.name, crate_dir_name
-        );
-        println!("  Downloading {}", crate_dir_name);
-
-        let status = Command::new("curl")
-            .args([
-                "-L",
-                "-f",
-                "-s",
-                "--output",
-                crate_file.to_str().unwrap(),
-                &url,
-            ])
-            .status()?;
-
-        if !status.success() {
-            return Err(io::Error::other(format!("Failed to download {}", url)));
-        }
-    }
-
-    // verify checksum
-    let mut file = File::open(&crate_file)?;
-    let mut contents = Vec::new();
-    file.read_to_end(&mut contents)?;
-    let calculated_hash = hex::encode(Sha256::digest(&contents));
-
-    if calculated_hash != pkg.checksum {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!(
-                "Checksum mismatch for {}: expected {}, got {}",
-                crate_dir_name, pkg.checksum, calculated_hash
-            ),
-        ));
-    }
+    let crate_file = ensure_registry_crate(pkg, cache_dir)?;
 
     // extract to vendor directory
     let status = Command::new("tar")
@@ -299,6 +260,100 @@ fn download_and_extract_registry_crate(
     fs::write(&checksum_file, checksum_json)?;
 
     Ok(())
+}
+
+fn ensure_registry_crate(pkg: &RegistryPackage, cache_dir: &Path) -> io::Result<PathBuf> {
+    let crate_dir_name = format!("{}-{}", pkg.name, pkg.version);
+    let crate_file = cache_dir.join(format!("{}.crate", crate_dir_name));
+
+    if crate_file.exists() {
+        match verify_registry_crate(pkg, &crate_file)? {
+            CrateVerification::Matches => return Ok(crate_file),
+            CrateVerification::Mismatch { actual } => {
+                println!(
+                    "  Cached {} checksum mismatch, re-downloading (expected {}, got {})",
+                    crate_dir_name, pkg.checksum, actual
+                );
+                fs::remove_file(&crate_file)?;
+            }
+        }
+    }
+
+    download_registry_crate(pkg, &crate_file)?;
+
+    if let CrateVerification::Mismatch { actual } = verify_registry_crate(pkg, &crate_file)? {
+        return Err(registry_crate_checksum_error(
+            &crate_dir_name,
+            &pkg.checksum,
+            &actual,
+        ));
+    }
+
+    Ok(crate_file)
+}
+
+enum CrateVerification {
+    Matches,
+    Mismatch { actual: String },
+}
+
+fn verify_registry_crate(
+    pkg: &RegistryPackage,
+    crate_file: &Path,
+) -> io::Result<CrateVerification> {
+    let actual = file_sha256(crate_file)?;
+
+    if actual == pkg.checksum {
+        Ok(CrateVerification::Matches)
+    } else {
+        Ok(CrateVerification::Mismatch { actual })
+    }
+}
+
+fn download_registry_crate(pkg: &RegistryPackage, crate_file: &Path) -> io::Result<()> {
+    let crate_dir_name = format!("{}-{}", pkg.name, pkg.version);
+    let url = format!(
+        "https://static.crates.io/crates/{}/{}.crate",
+        pkg.name, crate_dir_name
+    );
+    let tmp_file = crate_file.with_extension("crate.tmp");
+
+    println!("  Downloading {}", crate_dir_name);
+
+    let status = Command::new("curl")
+        .args([
+            "-L",
+            "-f",
+            "-s",
+            "--output",
+            tmp_file.to_str().unwrap(),
+            &url,
+        ])
+        .status()?;
+
+    if !status.success() {
+        fs::remove_file(&tmp_file).ok();
+        return Err(io::Error::other(format!("Failed to download {}", url)));
+    }
+
+    fs::rename(tmp_file, crate_file)
+}
+
+fn file_sha256(path: &Path) -> io::Result<String> {
+    let mut file = File::open(path)?;
+    let mut contents = Vec::new();
+    file.read_to_end(&mut contents)?;
+    Ok(hex::encode(Sha256::digest(&contents)))
+}
+
+fn registry_crate_checksum_error(crate_dir_name: &str, expected: &str, actual: &str) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!(
+            "Checksum mismatch for {}: expected {}, got {}",
+            crate_dir_name, expected, actual
+        ),
+    )
 }
 
 /// download and extract a git package
@@ -504,5 +559,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
         assert_eq!(registry[0].name, "aho-corasick");
         assert_eq!(registry[0].version, "0.6.10");
         assert_eq!(registry[0].checksum, "0123456789abcdef");
+    }
+
+    #[test]
+    fn verifies_cached_registry_crate_checksum() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let crate_file = temp_dir.path().join("tiny-1.0.0.crate");
+        fs::write(&crate_file, b"crate bytes").unwrap();
+
+        let expected_hash = file_sha256(&crate_file).unwrap();
+        let matching_pkg = RegistryPackage {
+            name: "tiny".to_string(),
+            version: "1.0.0".to_string(),
+            checksum: expected_hash,
+        };
+        let mismatched_pkg = RegistryPackage {
+            name: "tiny".to_string(),
+            version: "1.0.0".to_string(),
+            checksum: "not-the-right-hash".to_string(),
+        };
+
+        assert!(matches!(
+            verify_registry_crate(&matching_pkg, &crate_file).unwrap(),
+            CrateVerification::Matches
+        ));
+        assert!(matches!(
+            verify_registry_crate(&mismatched_pkg, &crate_file).unwrap(),
+            CrateVerification::Mismatch { .. }
+        ));
     }
 }

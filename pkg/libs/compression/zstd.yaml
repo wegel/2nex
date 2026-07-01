@@ -6,7 +6,7 @@ package:
   version: 1.5.6
   description: Zstandard - Fast real-time compression algorithm
   homepage: https://facebook.github.io/zstd/
-  checksum: f20c788cc5719baf1b8b4a9ed358e96b487cfd3092ca14ae8fbaef4b7a5c1c04
+  checksum: 7dbf61bdedfd5a9b96ce9375875962f2becee33ae6eb47faade4b63f14ffb95d
 
 sources:
 - name: zstd
@@ -55,7 +55,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4108:1276, 6011:6159]
+  profile: [4105:1045, 6002:5252]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_zstd} -C "${WORK_DIR}" --strip-components=1
@@ -68,6 +68,7 @@ build:
     export CC=gcc
     make
     make DESTDIR=${OUT_DIR} PREFIX=/usr install
+    sed -i 's|^prefix=.*|prefix=/usr|' "${OUT_DIR}/usr/lib/pkgconfig/libzstd.pc"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true

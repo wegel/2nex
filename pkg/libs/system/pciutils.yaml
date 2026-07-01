@@ -6,7 +6,7 @@ package:
   version: 3.14.0
   description: PCI utilities and library
   homepage: https://mj.ucw.cz/sw/pciutils/
-  checksum: c65e8e3db4e94e99dc574189ea53a4508c8a16b28830d4290fc12dfc7764602d
+  checksum: 1c38be23dd3c9b7c1e0627eec6905e10f70c74d3953667641542b744df7d8d96
 
 sources:
 - name: pciutils
@@ -51,6 +51,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4426:53, 8556:112, 11201:520]
 
   script: |
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -58,6 +59,7 @@ build:
 
     make CC=gcc \
          PREFIX=/usr \
+         SBINDIR=/usr/bin \
          LIBDIR=/usr/lib \
          SHAREDIR=/usr/share/hwdata \
          SHARED=yes \
@@ -65,6 +67,7 @@ build:
 
     make CC=gcc \
          PREFIX=/usr \
+         SBINDIR=/usr/bin \
          LIBDIR=/usr/lib \
          SHAREDIR=/usr/share/hwdata \
          SHARED=yes \
@@ -121,23 +124,23 @@ outputs:
 
   misc:
     files:
+    - path: /usr/bin/pcilmr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpci.so.3
+    - path: /usr/bin/setpci
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpci.so.3
+    - path: /usr/bin/update-pciids
     - path: /usr/man/man5/pci.ids.5
     - path: /usr/man/man7/pcilib.7
     - path: /usr/man/man8/lspci.8
     - path: /usr/man/man8/pcilmr.8
     - path: /usr/man/man8/setpci.8
     - path: /usr/man/man8/update-pciids.8
-    - path: /usr/sbin/pcilmr
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/libpci.so.3
-    - path: /usr/sbin/setpci
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/libpci.so.3
-    - path: /usr/sbin/update-pciids
     - path: /usr/share/hwdata/pci.ids.gz
 
 resolution:
