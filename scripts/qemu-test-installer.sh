@@ -14,8 +14,8 @@ NEX_BIN="${NEX_BIN:-$ROOT_DIR/src/cli/target/debug/nex}"
 
 mkdir -p "$TMP_DIR"
 
-INSTALLER_IMG="$TMP_DIR/installer.img"
-TARGET_IMG="$TMP_DIR/installer-target.img"
+INSTALLER_IMG="${INSTALLER_IMG:-}"
+TARGET_IMG="${TARGET_IMG:-}"
 TARGET_SIZE_MB=16384
 BOOT_TARGET=false
 DIRECT_INITRAMFS=false
@@ -35,6 +35,9 @@ DIRECT_ROOT="$TMP_DIR/direct-initramfs-root"
 LINUX_BOOT_REF="${LINUX_BOOT_REF:-x86_64/pkg/core/kernel/linux/6.12.58/outputs/boot}"
 INITRAMFS_BOOT_REF="${INITRAMFS_BOOT_REF:-x86_64/pkg/core/kernel/initramfs/1.0.0/outputs/boot}"
 TARGET_REF="${TARGET_REF:-systems/desktop-vwl/0.0.1}"
+TARGET_SLUG=$(printf "%s" "$TARGET_REF" | tr '/:' '__')
+INSTALLER_IMG="${INSTALLER_IMG:-$TMP_DIR/installer-${TARGET_SLUG}.img}"
+TARGET_IMG="${TARGET_IMG:-$TMP_DIR/installer-target-${TARGET_SLUG}.img}"
 
 die() {
     echo "error: $*" >&2
@@ -166,6 +169,22 @@ assert_writable_dir() {
     rm -f "$probe"
 }
 
+wait_for_systemd_ready() {
+    deadline=$(($(date +%s) + 120))
+    state=""
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+        state=$(systemctl is-system-running --no-pager 2>/dev/null || true)
+        case "$state" in
+            running|degraded)
+                echo "systemd-state=$state"
+                return 0
+                ;;
+        esac
+        sleep 2
+    done
+    fail "systemd did not settle, last state: $state"
+}
+
 cmdline=$(cat /proc/cmdline)
 echo "cmdline=$cmdline"
 case " $cmdline " in
@@ -213,8 +232,7 @@ assert_writable_dir /nex/staging
 assert_writable_dir /nex/users
 assert_writable_dir /nex/manifests
 
-systemctl is-active --quiet multi-user.target || fail "multi-user.target is not active"
-systemctl is-system-running --no-pager || true
+wait_for_systemd_ready
 echo "ASSERT-BOOT-PASS"
 GUEST_ASSERT
 }
@@ -279,6 +297,22 @@ assert_writable_dir() {
     rm -f "$probe"
 }
 
+wait_for_systemd_ready() {
+    deadline=$(($(date +%s) + 120))
+    state=""
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+        state=$(systemctl is-system-running --no-pager 2>/dev/null || true)
+        case "$state" in
+            running|degraded)
+                say "systemd-state=$state"
+                return 0
+                ;;
+        esac
+        sleep 2
+    done
+    fail "systemd did not settle, last state: $state"
+}
+
 cmdline=$(cat /proc/cmdline)
 say "cmdline=$cmdline"
 case " $cmdline " in
@@ -326,7 +360,7 @@ assert_writable_dir /nex/staging
 assert_writable_dir /nex/users
 assert_writable_dir /nex/manifests
 
-systemctl is-system-running --no-pager || true
+wait_for_systemd_ready
 say "ASSERT-BOOT-PASS"
 poweroff -f
 GUEST_ASSERT
@@ -673,15 +707,15 @@ else
     # build installer image if missing or --rebuild
     if [ ! -f "$INSTALLER_IMG" ] || [ "$REBUILD" = "true" ]; then
         [ -x "$NEX_BIN" ] || die "nex binary not found or not executable: $NEX_BIN"
-        "$NEX_BIN" build asm/installer/installer.yaml --update-checksum
+        "$NEX_BIN" build asm/installer/installer.yaml --verbose
         echo "building installer image..."
         if [ "$AUTOINSTALL" = "true" ]; then
             KCMDLINE_TMP="$TMP_DIR/kcmdline.qemu-autoinstall.txt"
             cp "$ROOT_DIR/src/bootloader/kcmdline.vm.txt" "$KCMDLINE_TMP"
             printf "\ninstaller.autoinstall=/dev/sdb\n" >> "$KCMDLINE_TMP"
-            "$SCRIPT_DIR/create-installer-usb" --kcmdline "$KCMDLINE_TMP" systems/desktop-vwl/0.0.1 "$INSTALLER_IMG"
+            "$SCRIPT_DIR/create-installer-usb" --force --kcmdline "$KCMDLINE_TMP" "$TARGET_REF" "$INSTALLER_IMG"
         else
-            "$SCRIPT_DIR/create-installer-usb" systems/desktop-vwl/0.0.1 "$INSTALLER_IMG"
+            "$SCRIPT_DIR/create-installer-usb" --force "$TARGET_REF" "$INSTALLER_IMG"
         fi
         # also reset target disk when rebuilding installer
         rm -f "$TARGET_IMG"
@@ -696,6 +730,7 @@ else
     echo "booting installer..."
     echo "  installer: $INSTALLER_IMG"
     echo "  target:    $TARGET_IMG"
+    echo "  system:    $TARGET_REF"
     echo ""
     if [ "$AUTOINSTALL" != "true" ]; then
         echo "in the shell, run: nex-install /dev/sdb"
@@ -703,7 +738,7 @@ else
     fi
 
     DISPLAY_MODE=gtk
-    if [ "$AUTOINSTALL" = "true" ]; then
+    if [ "$AUTOINSTALL" = "true" ] || [ "$HEADLESS" = "true" ]; then
         DISPLAY_MODE=none
     fi
 

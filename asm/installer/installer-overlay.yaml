@@ -2,262 +2,7 @@ files:
 # install script
 - path: /usr/bin/nex-install
   mode: 493
-  content: |
-    #!/bin/bash
-    # nex-install: install nex system to disk
-    set -eu
-
-    SYSTEM_DIR="/nex/installer/system"
-    CHECKSUM_FILE="/nex/installer/system-checksum"
-    BOOTLOADER_PATH="/nex/installer/BOOTX64.EFI"
-
-    ESP_SIZE="512M"
-    ROOT_SIZE="${ROOT_SIZE:-8G}"
-    ASSUME_YES=0
-
-    die() {
-        printf "error: %s\n" "$*" >&2
-        exit 1
-    }
-
-    partition_path() {
-        dev=$1
-        num=$2
-        case "$dev" in
-            *[0-9]) printf "%sp%s" "$dev" "$num" ;;
-            *)      printf "%s%s" "$dev" "$num" ;;
-        esac
-    }
-
-    show_disks() {
-        printf "available disks:\n\n"
-        lsblk -d -o NAME,SIZE,MODEL | grep -v "^loop"
-        printf "\n"
-    }
-
-    confirm_destroy() {
-        dev=$1
-        if [ "$ASSUME_YES" -eq 1 ]; then
-            printf "target device: %s\n" "$dev"
-            printf "destroy confirmation skipped because --yes was passed\n"
-            return 0
-        fi
-
-        printf "\ntarget device: %s\n" "$dev"
-        lsblk -o NAME,SIZE,TYPE,MOUNTPOINT "$dev" 2>/dev/null || true
-        printf "\nWARNING: this will ERASE ALL DATA on %s\n" "$dev"
-        printf "type 'yes' to continue: "
-        read -r confirm
-        [ "$confirm" = "yes" ] || die "aborted"
-    }
-
-    partition_disk() {
-        dev=$1
-        printf "partitioning %s...\n" "$dev"
-
-        sfdisk --wipe always "$dev" <<EOF
-    label: gpt
-    size=${ESP_SIZE}, type=uefi, name="EFI"
-    size=${ROOT_SIZE}, type=linux, name="nex"
-    type=linux, name="nex-var"
-    EOF
-
-        partprobe "$dev" 2>/dev/null || sleep 1
-    }
-
-    format_partitions() {
-        dev=$1
-        esp=$(partition_path "$dev" 1)
-        root=$(partition_path "$dev" 2)
-        var=$(partition_path "$dev" 3)
-
-        printf "formatting ESP (%s)...\n" "$esp"
-        mkfs.fat -F32 "$esp" >/dev/null
-
-        printf "formatting root (%s)...\n" "$root"
-        mkfs.ext4 -q -L nex "$root"
-
-        printf "formatting var (%s)...\n" "$var"
-        mkfs.ext4 -q -L nex-var "$var"
-    }
-
-    find_installer_disk() {
-        root_src=$(findmnt -n -o SOURCE / 2>/dev/null || true)
-        [ -n "$root_src" ] || return 0
-        pkname=$(lsblk -no PKNAME "$root_src" 2>/dev/null | head -1 || true)
-        [ -n "$pkname" ] || return 0
-        printf "/dev/%s\n" "$pkname"
-    }
-
-    seed_installer_remotes() {
-        target_var=$1
-        mkdir -p "$target_var/nex/repo/remotes"
-
-        cmdline=$(cat /proc/cmdline 2>/dev/null || true)
-        for word in $cmdline; do
-            case "$word" in
-                nex.remote=*)
-                    remote=${word#nex.remote=}
-                    name=${remote%%=*}
-                    url=${remote#*=}
-                    [ -n "$name" ] || continue
-                    [ -n "$url" ] || continue
-                    printf "%s\n" "$url" > "$target_var/nex/repo/remotes/$name"
-                    ;;
-            esac
-        done
-    }
-
-    install_system() {
-        dev=$1
-        esp=$(partition_path "$dev" 1)
-        root=$(partition_path "$dev" 2)
-        var=$(partition_path "$dev" 3)
-
-        [ -f "$CHECKSUM_FILE" ] || die "system checksum not found at $CHECKSUM_FILE"
-        checksum=$(cat "$CHECKSUM_FILE")
-        checksum_len=$(printf "%s" "$checksum" | wc -c)
-        [ "$checksum_len" -eq 64 ] || die "invalid checksum length: $checksum_len"
-
-        deploy_dir="/nex/deployments/${checksum}.0"
-
-        printf "mounting partitions...\n"
-        mount "$root" /run/sysroot
-        mkdir -p /run/sysroot/var
-        mount "$var" /run/sysroot/var
-
-        mkdir -p "/run/sysroot${deploy_dir}"
-
-        printf "copying system (this may take a while)...\n"
-        cp -a "$SYSTEM_DIR"/* "/run/sysroot${deploy_dir}/"
-
-        printf "setting up /var...\n"
-        mkdir -p /run/sysroot/var/etc
-        mkdir -p /run/sysroot/var/home
-        mkdir -p /run/sysroot/var/root
-        mkdir -p /run/sysroot/var/log/journal
-        mkdir -p /run/sysroot/var/lib/systemd/{random-seed,timers,coredump}
-        mkdir -p /run/sysroot/var/lib/sshd
-        chmod 700 /run/sysroot/var/lib/sshd
-        mkdir -p /run/sysroot/var/cache/fontconfig
-        mkdir -p /run/sysroot/var/tmp
-        chmod 1777 /run/sysroot/var/tmp
-        ln -sf /run /run/sysroot/var/run
-        mkdir -p /run/sysroot/var/nex/repo
-        mkdir -p /run/sysroot/var/nex/staging
-        mkdir -p /run/sysroot/var/nex/users
-        mkdir -p /run/sysroot/var/nex/manifests
-        mkdir -p /run/sysroot/var/nex/system
-
-        if command -v zub >/dev/null 2>&1; then
-            zub --repo=/run/sysroot/var/nex/repo init --mode=bare-user 2>/dev/null || true
-        fi
-        seed_installer_remotes /run/sysroot/var
-
-        printf "copying /etc to /var/etc...\n"
-        cp -a "/run/sysroot${deploy_dir}/etc/." /run/sysroot/var/etc/
-        touch /run/sysroot/var/etc/.initialized
-
-        printf "creating root symlinks...\n"
-        deploy_rel="nex/deployments/${checksum}.0"
-        ln -sf "$deploy_rel/usr" /run/sysroot/usr
-        ln -sf /usr/lib /run/sysroot/lib
-        ln -sf "$deploy_rel/lib64" /run/sysroot/lib64
-        ln -sf /usr/bin /run/sysroot/bin
-        ln -sf /usr/bin /run/sysroot/sbin
-        ln -sf usr/bin/init /run/sysroot/init
-
-        mkdir -p /run/sysroot/proc /run/sysroot/sys /run/sysroot/dev /run/sysroot/run /run/sysroot/tmp
-
-        ln -sf /var/etc /run/sysroot/etc
-        ln -sf /var/home /run/sysroot/home
-        ln -sf /var/root /run/sysroot/root
-
-        ln -sfn "deployments/${checksum}.0" /run/sysroot/nex/current
-        ln -sfn "current/nex/pkg" /run/sysroot/nex/pkg
-        ln -sfn "current/nex/db" /run/sysroot/nex/db
-
-        printf "setting up ESP...\n"
-        mkdir -p /run/sysroot/boot/efi
-        mount "$esp" /run/sysroot/boot/efi
-        mkdir -p /run/sysroot/boot/efi/EFI/BOOT
-        cp "$BOOTLOADER_PATH" /run/sysroot/boot/efi/EFI/BOOT/BOOTX64.EFI
-
-        installer_disk=$(find_installer_disk)
-        if [ -n "$installer_disk" ]; then
-            installer_esp=$(partition_path "$installer_disk" 1)
-            if [ -b "$installer_esp" ]; then
-                mkdir -p /run/installer/esp
-                if mount -o ro "$installer_esp" /run/installer/esp 2>/dev/null; then
-                    if [ -f /run/installer/esp/EFI/BOOT/kcmdline.txt ]; then
-                        cp /run/installer/esp/EFI/BOOT/kcmdline.txt /run/sysroot/boot/efi/EFI/BOOT/kcmdline.txt
-                    fi
-                    umount /run/installer/esp 2>/dev/null || true
-                fi
-            fi
-        fi
-
-        printf "finalizing...\n"
-        umount /run/sysroot/boot/efi
-        umount /run/sysroot/var
-        umount /run/sysroot
-    }
-
-    main() {
-        [ "$(id -u)" -eq 0 ] || die "must be run as root"
-        [ -d "$SYSTEM_DIR" ] || die "installer system not found at $SYSTEM_DIR"
-        [ -f "$BOOTLOADER_PATH" ] || die "bootloader not found at $BOOTLOADER_PATH"
-
-        device=""
-        while [ $# -gt 0 ]; do
-            case "$1" in
-                --yes|-y) ASSUME_YES=1; shift ;;
-                --root-size)
-                    [ $# -ge 2 ] || die "--root-size requires a value"
-                    ROOT_SIZE=$2
-                    shift 2
-                    ;;
-                --*) die "unknown option: $1" ;;
-                *)
-                    [ -z "$device" ] || die "unexpected argument: $1"
-                    device=$1
-                    shift
-                    ;;
-            esac
-        done
-
-        if [ -z "$device" ]; then
-            show_disks
-            printf "target device (e.g., /dev/sda): "
-            read -r device
-        fi
-
-        [ -b "$device" ] || die "not a block device: $device"
-
-        installer_disk=$(find_installer_disk)
-        if [ -n "$installer_disk" ]; then
-            case "$device" in
-                "$installer_disk"|"$installer_disk"*) die "cannot install to the installer media" ;;
-            esac
-        fi
-
-        confirm_destroy "$device"
-
-        if [ "$ASSUME_YES" -eq 0 ]; then
-            printf "\nroot partition size (default: %s): " "$ROOT_SIZE"
-            read -r root_size
-            [ -n "$root_size" ] && ROOT_SIZE="$root_size"
-        fi
-
-        partition_disk "$device"
-        format_partitions "$device"
-        install_system "$device"
-
-        printf "\ninstallation complete!\n"
-        printf "remove the USB drive and reboot.\n"
-    }
-
-    main "$@"
+  source: ../../scripts/nex-install
 
 # os-release
 - path: /etc/os-release
@@ -312,6 +57,7 @@ files:
 
     mkdir -p /run /run/sysroot
     mount -t tmpfs run /run
+    mkdir -p /run/sysroot
 
     modprobe vfat 2>/dev/null || true
 
@@ -325,6 +71,18 @@ files:
     CMDLINE="$(cat /proc/cmdline)"
     echo "INSTALLER: cmdline: $CMDLINE" > /dev/kmsg
 
+    poweroff_now() {
+        sync
+        if command -v poweroff >/dev/null 2>&1; then
+            poweroff -f
+        fi
+        if command -v busybox >/dev/null 2>&1; then
+            busybox poweroff -f
+        fi
+        echo 1 > /proc/sys/kernel/sysrq 2>/dev/null || true
+        echo o > /proc/sysrq-trigger 2>/dev/null || true
+    }
+
     for word in $CMDLINE; do
         case "$word" in
             installer.autoinstall=*)
@@ -332,7 +90,7 @@ files:
                 echo "INSTALLER: autoinstall target $target" > /dev/kmsg
                 if nex-install --yes "$target"; then
                     echo "INSTALLER: autoinstall complete" > /dev/kmsg
-                    poweroff -f
+                    poweroff_now
                 else
                     echo "INSTALLER: autoinstall failed" > /dev/kmsg
                     exec /bin/bash

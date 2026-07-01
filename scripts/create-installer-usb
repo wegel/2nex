@@ -1,9 +1,12 @@
 #!/bin/sh
-# create-installer-usb: create a bootable USB disk image for installing nex
-# usage: create-installer-usb [--vm|--hardware] [--kcmdline <path>] <target-system-ref> <output.img>
-#
-# write to USB with: sudo dd if=output.img of=/dev/sdX bs=4M status=progress
+# create-installer-usb: create a bootable Nex installer disk image.
 set -eu
+
+INSTALLER_REF="systems/installer/0.0.1"
+ESP_START_MB=1
+ESP_SIZE_MB=64
+DEFAULT_MARGIN_MB=1024
+PARTITION_SLACK_MB=8
 
 die() {
     printf "error: %s\n" "$*" >&2
@@ -11,19 +14,234 @@ die() {
 }
 
 usage() {
-    printf "usage: %s [--vm|--hardware] [--kcmdline <path>] <target-system-ref> <output.img>\n" "$0"
-    printf "\n"
-    printf "example:\n"
-    printf "  %s systems/desktop-vwl/0.0.1 ./installer.img\n" "$0"
-    printf "  %s --hardware systems/desktop-vwl/0.0.1 ./installer.img\n" "$0"
-    printf "\n"
-    printf "then write to USB:\n"
-    printf "  sudo dd if=./installer.img of=/dev/sdX bs=4M status=progress\n"
+    cat <<USAGE
+usage: $0 [options] <target-system-ref> <output.img>
+
+Options:
+  --vm                  use the VM kernel command line (default)
+  --hardware            use the hardware kernel command line
+  --kcmdline <path>     use a custom kernel command line file
+  --root-size-mb <mb>   set the installer root filesystem size
+  --image-size-mb <mb>  set the final disk image size
+  --margin-mb <mb>      add this margin when computing root size (default: $DEFAULT_MARGIN_MB)
+  --force               overwrite an existing output image
+  --verbose             print filesystem inspection details
+  -h, --help            show this help
+
+Examples:
+  $0 systems/desktop-vwl/0.0.1 .nex/tmp/desktop-vwl-installer.img
+  $0 --hardware systems/desktop-vwl-nvidia-580/0.0.1 ./nex-vwl-nvidia-580.img
+
+Write the image to USB with a destructive command such as:
+  dd if=./nex-vwl-nvidia-580.img of=/dev/sdX bs=4M status=progress conv=fsync
+USAGE
     exit 1
+}
+
+need_tool() {
+    tool=$1
+    hint=$2
+    command -v "$tool" >/dev/null 2>&1 || die "$tool not found ($hint)"
+}
+
+parse_mb() {
+    value=$1
+    name=$2
+    case "$value" in
+        ""|*[!0-9]*) die "$name must be an integer number of MiB: $value" ;;
+        0) die "$name must be greater than zero" ;;
+        *) printf "%s\n" "$value" ;;
+    esac
+}
+
+show() {
+    printf "%s\n" "$*"
+}
+
+verbose() {
+    if [ "$VERBOSE" -eq 1 ]; then
+        printf "%s\n" "$*"
+    fi
+}
+
+zub_cmd() {
+    zub --repo "$ZUB_REPO" "$@"
+}
+
+ref_exists() {
+    ref=$1
+    zub_cmd refs 2>/dev/null | awk -v ref="$ref" '$NF == ref { found = 1 } END { exit found ? 0 : 1 }'
+}
+
+metadata_value() {
+    ref=$1
+    key=$2
+    zub_cmd show "$ref" 2>/dev/null | awk -v key="${key}:" '$1 == key { print $2; exit }'
+}
+
+checksum_for_ref() {
+    ref=$1
+    checksum=$(metadata_value "$ref" "nex.system.checksum")
+    if [ -z "$checksum" ]; then
+        checksum=$(metadata_value "$ref" "nex.build.checksum")
+    fi
+    if [ -z "$checksum" ]; then
+        checksum=$(zub_cmd rev-parse "$ref" 2>/dev/null || true)
+    fi
+    [ -n "$checksum" ] || die "could not get checksum for $ref"
+    printf "%s\n" "$checksum"
+}
+
+copy_kcmdline() {
+    dest=$1
+    if [ -n "$KCMDLINE_SRC" ]; then
+        [ -f "$KCMDLINE_SRC" ] || die "kernel command line file not found: $KCMDLINE_SRC"
+        cp "$KCMDLINE_SRC" "$dest"
+        return 0
+    fi
+
+    case "$KCMDLINE_MODE" in
+        vm) src="$BOOTLOADER_SRC/kcmdline.vm.txt" ;;
+        hardware) src="$BOOTLOADER_SRC/kcmdline.hardware.txt" ;;
+        *) die "unknown kernel command line mode: $KCMDLINE_MODE" ;;
+    esac
+
+    if [ -f "$src" ]; then
+        cp "$src" "$dest"
+    elif [ -f "$BOOTLOADER_SRC/kcmdline.txt" ]; then
+        cp "$BOOTLOADER_SRC/kcmdline.txt" "$dest"
+    else
+        show "warning: no kernel command line file found for mode '$KCMDLINE_MODE'"
+        return 1
+    fi
+}
+
+stage_root() {
+    show "staging installer root..."
+    ROOT_CONTENT="$STAGING/root"
+    mkdir -p "$ROOT_CONTENT"
+
+    DEPLOY_DIR="$ROOT_CONTENT/nex/deployments/${INSTALLER_CHECKSUM}.0"
+    mkdir -p "$DEPLOY_DIR"
+    zub_cmd checkout --copy "$INSTALLER_REF" "$DEPLOY_DIR"
+
+    mkdir -p "$DEPLOY_DIR/nex/installer"
+    zub_cmd checkout --copy "$TARGET_REF" "$DEPLOY_DIR/nex/installer/system"
+    printf "%s" "$TARGET_CHECKSUM" > "$DEPLOY_DIR/nex/installer/system-checksum"
+    cp "$BOOTLOADER_EFI" "$DEPLOY_DIR/nex/installer/BOOTX64.EFI"
+    copy_kcmdline "$DEPLOY_DIR/nex/installer/kcmdline.txt" || true
+
+    deploy_rel="nex/deployments/${INSTALLER_CHECKSUM}.0"
+    ln -sf "$deploy_rel/usr" "$ROOT_CONTENT/usr"
+    ln -sf /usr/lib "$ROOT_CONTENT/lib"
+    ln -sf "$deploy_rel/lib64" "$ROOT_CONTENT/lib64"
+    ln -sf /usr/bin "$ROOT_CONTENT/bin"
+    ln -sf /usr/bin "$ROOT_CONTENT/sbin"
+    ln -sf "$deploy_rel/etc" "$ROOT_CONTENT/etc"
+    ln -sf usr/bin/init "$ROOT_CONTENT/init"
+
+    mkdir -p \
+        "$ROOT_CONTENT/mnt" \
+        "$ROOT_CONTENT/proc" \
+        "$ROOT_CONTENT/sys" \
+        "$ROOT_CONTENT/dev" \
+        "$ROOT_CONTENT/run" \
+        "$ROOT_CONTENT/tmp" \
+        "$ROOT_CONTENT/nex/repo" \
+        "$ROOT_CONTENT/nex/staging"
+
+    ln -sfn "deployments/${INSTALLER_CHECKSUM}.0" "$ROOT_CONTENT/nex/current"
+    ln -sfn "current/nex/pkg" "$ROOT_CONTENT/nex/pkg"
+    ln -sfn "current/nex/db" "$ROOT_CONTENT/nex/db"
+    ln -sfn "current/nex/installer" "$ROOT_CONTENT/nex/installer"
+
+    mkdir -p \
+        "$DEPLOY_DIR/sysroot" \
+        "$DEPLOY_DIR/var" \
+        "$DEPLOY_DIR/proc" \
+        "$DEPLOY_DIR/sys" \
+        "$DEPLOY_DIR/dev" \
+        "$DEPLOY_DIR/run" \
+        "$DEPLOY_DIR/tmp" \
+        "$DEPLOY_DIR/home" \
+        "$DEPLOY_DIR/root" \
+        "$DEPLOY_DIR/nex/repo" \
+        "$DEPLOY_DIR/nex/deployments" \
+        "$DEPLOY_DIR/nex/staging" \
+        "$DEPLOY_DIR/nex/users"
+}
+
+compute_sizes() {
+    CONTENT_MB=$(du -sm "$ROOT_CONTENT" | awk '{ print $1 }')
+    if [ -z "$ROOT_SIZE_MB" ]; then
+        ROOT_SIZE_MB=$((CONTENT_MB + MARGIN_MB))
+    fi
+
+    min_disk_mb=$((ESP_START_MB + ESP_SIZE_MB + ROOT_SIZE_MB + PARTITION_SLACK_MB))
+    if [ -z "$IMAGE_SIZE_MB" ]; then
+        IMAGE_SIZE_MB=$min_disk_mb
+    elif [ "$IMAGE_SIZE_MB" -lt "$min_disk_mb" ]; then
+        die "image size ${IMAGE_SIZE_MB}MiB is smaller than required ${min_disk_mb}MiB"
+    fi
+}
+
+create_esp_image() {
+    show "creating EFI system partition..."
+    ESP_IMG="$STAGING/esp.img"
+    dd if=/dev/zero of="$ESP_IMG" bs=1M count="$ESP_SIZE_MB" status=none
+    mkfs.vfat -F 32 "$ESP_IMG" >/dev/null
+    mmd -i "$ESP_IMG" ::/EFI
+    mmd -i "$ESP_IMG" ::/EFI/BOOT
+    mcopy -i "$ESP_IMG" "$BOOTLOADER_EFI" ::/EFI/BOOT/BOOTX64.EFI
+
+    KCMDLINE_STAGED="$STAGING/kcmdline.txt"
+    if copy_kcmdline "$KCMDLINE_STAGED"; then
+        mcopy -i "$ESP_IMG" "$KCMDLINE_STAGED" ::/EFI/BOOT/kcmdline.txt
+    fi
+}
+
+create_root_image() {
+    show "creating ext4 installer root (${ROOT_SIZE_MB}MiB)..."
+    ROOT_IMG="$STAGING/root.img"
+    if command -v fakeroot >/dev/null 2>&1; then
+        fakeroot -- sh -c "chown -R 0:0 '$ROOT_CONTENT' && mke2fs -q -t ext4 -d '$ROOT_CONTENT' '$ROOT_IMG' ${ROOT_SIZE_MB}M"
+    else
+        show "warning: fakeroot not found, image file owners may differ from hardware install media"
+        mke2fs -q -t ext4 -d "$ROOT_CONTENT" "$ROOT_IMG" "${ROOT_SIZE_MB}M"
+    fi
+}
+
+create_disk_image() {
+    show "creating disk image (${IMAGE_SIZE_MB}MiB)..."
+    dd if=/dev/zero of="$OUTPUT_IMG" bs=1M count="$IMAGE_SIZE_MB" status=none
+
+    root_start_mb=$((ESP_START_MB + ESP_SIZE_MB))
+    parted -s "$OUTPUT_IMG" \
+        mklabel gpt \
+        mkpart ESP fat32 "${ESP_START_MB}MiB" "${root_start_mb}MiB" \
+        set 1 esp on \
+        mkpart nex ext4 "${root_start_mb}MiB" 100%
+
+    dd if="$ESP_IMG" of="$OUTPUT_IMG" bs=1M seek="$ESP_START_MB" conv=notrunc status=none
+    dd if="$ROOT_IMG" of="$OUTPUT_IMG" bs=1M seek="$root_start_mb" conv=notrunc status=none
+}
+
+verify_image() {
+    verbose "installer root image top level:"
+    if [ "$VERBOSE" -eq 1 ]; then
+        debugfs -R "ls -l /" "$ROOT_IMG" 2>/dev/null || true
+        debugfs -R "stat /init" "$ROOT_IMG" 2>/dev/null | head -10 || true
+        debugfs -R "stat /nex/deployments/${INSTALLER_CHECKSUM}.0/nex/installer/system/init" "$ROOT_IMG" 2>/dev/null | head -3 || true
+    fi
 }
 
 KCMDLINE_MODE="vm"
 KCMDLINE_SRC=""
+ROOT_SIZE_MB=""
+IMAGE_SIZE_MB=""
+MARGIN_MB="$DEFAULT_MARGIN_MB"
+FORCE=0
+VERBOSE=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -31,9 +249,26 @@ while [ $# -gt 0 ]; do
         --hardware) KCMDLINE_MODE="hardware"; shift ;;
         --kcmdline)
             [ $# -ge 2 ] || die "--kcmdline requires a path"
-            KCMDLINE_SRC="$2"
+            KCMDLINE_SRC=$2
             shift 2
             ;;
+        --root-size-mb)
+            [ $# -ge 2 ] || die "--root-size-mb requires a value"
+            ROOT_SIZE_MB=$(parse_mb "$2" "--root-size-mb")
+            shift 2
+            ;;
+        --image-size-mb)
+            [ $# -ge 2 ] || die "--image-size-mb requires a value"
+            IMAGE_SIZE_MB=$(parse_mb "$2" "--image-size-mb")
+            shift 2
+            ;;
+        --margin-mb)
+            [ $# -ge 2 ] || die "--margin-mb requires a value"
+            MARGIN_MB=$(parse_mb "$2" "--margin-mb")
+            shift 2
+            ;;
+        --force) FORCE=1; shift ;;
+        --verbose) VERBOSE=1; shift ;;
         -h|--help) usage ;;
         --) shift; break ;;
         -*) die "unknown option: $1" ;;
@@ -43,212 +278,64 @@ done
 
 [ $# -eq 2 ] || usage
 
-TARGET_REF="$1"
-OUTPUT_IMG="$2"
+TARGET_REF=$1
+OUTPUT_IMG=$2
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-
-INSTALLER_REF="systems/installer/0.0.1"
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+ROOT_DIR=$(dirname "$SCRIPT_DIR")
+ZUB_REPO="${ZUB_REPO:-$ROOT_DIR/.nex/repo}"
+NEX_BIN="${NEX_BIN:-$ROOT_DIR/src/cli/target/debug/nex}"
 BOOTLOADER_SRC="$ROOT_DIR/src/bootloader"
 BOOTLOADER_EFI="$BOOTLOADER_SRC/target/x86_64-unknown-uefi/debug/nex-bootloader.efi"
 
-# check dependencies
-command -v parted >/dev/null || die "parted not found"
-command -v mkfs.vfat >/dev/null || die "mkfs.vfat not found (install dosfstools)"
-command -v mke2fs >/dev/null || die "mke2fs not found (install e2fsprogs)"
-command -v mcopy >/dev/null || die "mcopy not found (install mtools)"
+[ ! -e "$OUTPUT_IMG" ] || [ "$FORCE" -eq 1 ] || die "output exists, pass --force to overwrite: $OUTPUT_IMG"
 
-# always rebuild installer system to avoid stale images
-printf "building installer system...\n"
-"$ROOT_DIR/nex" build "$ROOT_DIR/asm/installer/installer.yaml" --update-checksum --force || die "installer build failed"
+need_tool parted "install parted"
+need_tool mkfs.vfat "install dosfstools"
+need_tool mke2fs "install e2fsprogs"
+need_tool mcopy "install mtools"
+need_tool mmd "install mtools"
+need_tool debugfs "install e2fsprogs"
+need_tool zub "build or install zub"
+[ -x "$NEX_BIN" ] || die "nex binary not found or not executable: $NEX_BIN"
 
-# check refs exist
-zub refs 2>/dev/null | grep -q " ${INSTALLER_REF}$" || die "installer not found: ${INSTALLER_REF}"
-zub refs 2>/dev/null | grep -q " ${TARGET_REF}$" || die "target system not found: ${TARGET_REF}"
+show "building installer system..."
+"$NEX_BIN" build "$ROOT_DIR/asm/installer/installer.yaml" --verbose || die "installer build failed"
 
-# build bootloader if needed
-printf "building bootloader...\n"
+ref_exists "$INSTALLER_REF" || die "installer ref not found in $ZUB_REPO: $INSTALLER_REF"
+ref_exists "$TARGET_REF" || die "target ref not found in $ZUB_REPO: $TARGET_REF"
+
+show "building bootloader..."
 (cd "$BOOTLOADER_SRC" && cargo build) || die "bootloader build failed"
+[ -f "$BOOTLOADER_EFI" ] || die "bootloader was not created: $BOOTLOADER_EFI"
 
-# get target system checksum from ref metadata (or fall back to commit hash)
-TARGET_CHECKSUM=$(zub show "${TARGET_REF}" 2>/dev/null | grep "nex.system.checksum:" | awk '{print $2}')
-if [ -z "$TARGET_CHECKSUM" ]; then
-    TARGET_CHECKSUM=$(zub rev-parse "${TARGET_REF}" 2>/dev/null)
-fi
-[ -n "$TARGET_CHECKSUM" ] || die "could not get checksum for ${TARGET_REF}"
+TARGET_CHECKSUM=$(checksum_for_ref "$TARGET_REF")
+INSTALLER_CHECKSUM=$(checksum_for_ref "$INSTALLER_REF")
 
-# get installer checksum
-INSTALLER_CHECKSUM=$(zub show "${INSTALLER_REF}" 2>/dev/null | grep "nex.system.checksum:" | awk '{print $2}')
-if [ -z "$INSTALLER_CHECKSUM" ]; then
-    INSTALLER_CHECKSUM=$(zub rev-parse "${INSTALLER_REF}" 2>/dev/null)
-fi
-[ -n "$INSTALLER_CHECKSUM" ] || die "could not get checksum for ${INSTALLER_REF}"
-
-printf "creating installer USB image...\n"
-printf "  installer: %s (%s)\n" "$INSTALLER_REF" "$INSTALLER_CHECKSUM"
-printf "  target:    %s\n" "$TARGET_REF"
-printf "  checksum:  %s\n" "$TARGET_CHECKSUM"
-
-# create temp staging directory
 STAGING=$(mktemp -d)
-cleanup() { rm -rf "$STAGING"; }
+cleanup() {
+    rm -rf "$STAGING"
+}
 trap cleanup EXIT
 
-# disk layout: 1MB alignment + 64MB ESP + 3GB root
-ESP_SIZE_MB=64
-ROOT_SIZE_MB=3072
-DISK_SIZE_MB=$((1 + ESP_SIZE_MB + ROOT_SIZE_MB))
+stage_root
+compute_sizes
+create_esp_image
+create_root_image
+create_disk_image
+verify_image
 
-printf "creating %dMB disk image...\n" "$DISK_SIZE_MB"
-dd if=/dev/zero of="$OUTPUT_IMG" bs=1M count=$DISK_SIZE_MB status=none
-
-printf "creating GPT partition table...\n"
-parted -s "$OUTPUT_IMG" \
-    mklabel gpt \
-    mkpart ESP fat32 1MiB ${ESP_SIZE_MB}MiB \
-    set 1 esp on \
-    mkpart nex ext4 ${ESP_SIZE_MB}MiB 100%
-
-# create ESP with bootloader
-printf "creating ESP with bootloader...\n"
-ESP_IMG="$STAGING/esp.img"
-dd if=/dev/zero of="$ESP_IMG" bs=1M count=$((ESP_SIZE_MB - 1)) status=none
-mkfs.vfat -F 32 "$ESP_IMG" >/dev/null
-mmd -i "$ESP_IMG" ::/EFI
-mmd -i "$ESP_IMG" ::/EFI/BOOT
-mcopy -i "$ESP_IMG" "$BOOTLOADER_EFI" ::/EFI/BOOT/BOOTX64.EFI
-KCMDLINE_FILE=""
-if [ -n "$KCMDLINE_SRC" ]; then
-    KCMDLINE_FILE="$KCMDLINE_SRC"
-else
-    case "$KCMDLINE_MODE" in
-        vm) KCMDLINE_FILE="$BOOTLOADER_SRC/kcmdline.vm.txt" ;;
-        hardware) KCMDLINE_FILE="$BOOTLOADER_SRC/kcmdline.hardware.txt" ;;
-        *) die "unknown kcmdline mode: $KCMDLINE_MODE" ;;
-    esac
-fi
-if [ -n "$KCMDLINE_FILE" ]; then
-    if [ -f "$KCMDLINE_FILE" ]; then
-        mcopy -i "$ESP_IMG" "$KCMDLINE_FILE" ::/EFI/BOOT/kcmdline.txt
-    elif [ -n "$KCMDLINE_SRC" ]; then
-        die "kcmdline file not found: $KCMDLINE_FILE"
-    elif [ -f "$BOOTLOADER_SRC/kcmdline.txt" ]; then
-        mcopy -i "$ESP_IMG" "$BOOTLOADER_SRC/kcmdline.txt" ::/EFI/BOOT/kcmdline.txt
-    else
-        printf "warning: no kcmdline file found for mode '%s'\n" "$KCMDLINE_MODE"
-    fi
-fi
-dd if="$ESP_IMG" of="$OUTPUT_IMG" bs=1M seek=1 conv=notrunc status=none
-
-# build root filesystem content
-printf "building root filesystem...\n"
-ROOT_CONTENT="$STAGING/root"
-mkdir -p "$ROOT_CONTENT"
-
-# checkout installer system
-printf "  checking out installer system...\n"
-DEPLOY_DIR="$ROOT_CONTENT/nex/deployments/${INSTALLER_CHECKSUM}.0"
-mkdir -p "$DEPLOY_DIR"
-zub checkout --copy "$INSTALLER_REF" "$DEPLOY_DIR"
-
-# checkout target system to installer data area (inside deployment so accessible after switch_root)
-printf "  checking out target system...\n"
-mkdir -p "$DEPLOY_DIR/nex/installer"
-zub checkout --copy "$TARGET_REF" "$DEPLOY_DIR/nex/installer/system"
-
-# write target checksum
-printf "%s" "$TARGET_CHECKSUM" > "$DEPLOY_DIR/nex/installer/system-checksum"
-
-# copy bootloader for target installation
-cp "$BOOTLOADER_EFI" "$DEPLOY_DIR/nex/installer/BOOTX64.EFI"
-
-# copy kcmdline.txt into the installer rootfs so nex-install can install it without needing to mount the installer ESP
-if [ -n "$KCMDLINE_FILE" ] && [ -f "$KCMDLINE_FILE" ]; then
-    cp "$KCMDLINE_FILE" "$DEPLOY_DIR/nex/installer/kcmdline.txt"
-elif [ -f "$BOOTLOADER_SRC/kcmdline.txt" ]; then
-    cp "$BOOTLOADER_SRC/kcmdline.txt" "$DEPLOY_DIR/nex/installer/kcmdline.txt"
-fi
-
-# create root symlinks to deployment (kernel runs /init from root, not from deployment)
-DEPLOY_REL="nex/deployments/${INSTALLER_CHECKSUM}.0"
-ln -sf "$DEPLOY_REL/usr" "$ROOT_CONTENT/usr"
-ln -sf /usr/lib "$ROOT_CONTENT/lib"
-ln -sf "$DEPLOY_REL/lib64" "$ROOT_CONTENT/lib64"
-ln -sf /usr/bin "$ROOT_CONTENT/bin"
-ln -sf /usr/bin "$ROOT_CONTENT/sbin"
-ln -sf "$DEPLOY_REL/etc" "$ROOT_CONTENT/etc"
-ln -sf usr/bin/init "$ROOT_CONTENT/init"
-
-# create mount points
-mkdir -p "$ROOT_CONTENT/mnt"
-mkdir -p "$ROOT_CONTENT/proc" "$ROOT_CONTENT/sys" "$ROOT_CONTENT/dev" "$ROOT_CONTENT/run" "$ROOT_CONTENT/tmp"
-
-# ensure sysroot-level directories exist for deployment-root boot
-mkdir -p "$ROOT_CONTENT/nex/repo" "$ROOT_CONTENT/nex/staging"
-
-# create /nex/current and symlinks (needed for absolute package paths)
-ln -sfn "deployments/${INSTALLER_CHECKSUM}.0" "$ROOT_CONTENT/nex/current"
-ln -sfn "current/nex/pkg" "$ROOT_CONTENT/nex/pkg"
-ln -sfn "current/nex/db" "$ROOT_CONTENT/nex/db"
-ln -sfn "current/nex/installer" "$ROOT_CONTENT/nex/installer"
-
-# ensure deployment has mount points needed by initramfs deployment-root boot
-mkdir -p \
-  "$DEPLOY_DIR/sysroot" \
-  "$DEPLOY_DIR/var" \
-  "$DEPLOY_DIR/proc" \
-  "$DEPLOY_DIR/sys" \
-  "$DEPLOY_DIR/dev" \
-  "$DEPLOY_DIR/run" \
-  "$DEPLOY_DIR/tmp" \
-  "$DEPLOY_DIR/home" \
-  "$DEPLOY_DIR/root" \
-  "$DEPLOY_DIR/nex/repo" \
-  "$DEPLOY_DIR/nex/deployments" \
-  "$DEPLOY_DIR/nex/staging" \
-  "$DEPLOY_DIR/nex/users"
-
-# debug: show what we're putting in the image
-printf "DEBUG: root content structure:\n"
-ls -la "$ROOT_CONTENT/"
-printf "\nDEBUG: /init symlink:\n"
-ls -la "$ROOT_CONTENT/init"
-printf "\nDEBUG: deployment /init:\n"
-ls -la "$DEPLOY_DIR/init" || echo "NOT FOUND"
-head -5 "$DEPLOY_DIR/init" || echo "cannot read"
-printf "\n"
-
-# create ext4 filesystem
-printf "creating ext4 filesystem...\n"
-ROOT_IMG="$STAGING/root.img"
-if command -v fakeroot >/dev/null; then
-    fakeroot -- sh -c "chown -R 0:0 '$ROOT_CONTENT' && mke2fs -t ext4 -d '$ROOT_CONTENT' '$ROOT_IMG' ${ROOT_SIZE_MB}M" 2>/dev/null
-else
-    printf "  (warning: fakeroot not found, files may have wrong ownership)\n"
-    mke2fs -t ext4 -d "$ROOT_CONTENT" "$ROOT_IMG" ${ROOT_SIZE_MB}M 2>/dev/null
-fi
-dd if="$ROOT_IMG" of="$OUTPUT_IMG" bs=1M seek=$ESP_SIZE_MB conv=notrunc status=none
-
-# verify the ext4 image contents
-printf "verifying ext4 image contents...\n"
-debugfs -R "ls -l /" "$ROOT_IMG" 2>/dev/null
-printf "\n/init in image:\n"
-debugfs -R "stat /init" "$ROOT_IMG" 2>/dev/null | head -10
-printf "\n/init symlink target:\n"
-debugfs -R "cat /init" "$ROOT_IMG" 2>/dev/null | head -5
-printf "\n/init actual file content:\n"
-debugfs -R "cat /nex/deployments/${INSTALLER_CHECKSUM}.0/init" "$ROOT_IMG" 2>/dev/null | head -10
-printf "\nall root symlinks:\n"
-for f in bin sbin lib lib64 usr etc init; do
-    printf "  /$f -> "
-    debugfs -R "cat /$f" "$ROOT_IMG" 2>/dev/null || echo "(not symlink)"
-done
-printf "\ncheck for nested desktop init:\n"
-debugfs -R "stat /nex/deployments/${INSTALLER_CHECKSUM}.0/nex/installer/system/init" "$ROOT_IMG" 2>/dev/null | head -3
-
-printf "\ndisk image created: %s (%dMB)\n" "$OUTPUT_IMG" "$DISK_SIZE_MB"
-printf "\nto use:\n"
-printf "  sudo dd if=%s of=/dev/sdX bs=4M status=progress\n" "$OUTPUT_IMG"
-printf "  (replace /dev/sdX with your USB device)\n"
-printf "\nthen boot from USB and run 'nex-install'\n"
+show ""
+show "disk image created: $OUTPUT_IMG"
+show "  target ref:         $TARGET_REF"
+show "  target checksum:    $TARGET_CHECKSUM"
+show "  installer ref:      $INSTALLER_REF"
+show "  installer checksum: $INSTALLER_CHECKSUM"
+show "  content size:       ${CONTENT_MB}MiB"
+show "  root filesystem:    ${ROOT_SIZE_MB}MiB"
+show "  image size:         ${IMAGE_SIZE_MB}MiB"
+show "  partition slack:    ${PARTITION_SLACK_MB}MiB"
+show "  command line mode:  $KCMDLINE_MODE"
+show ""
+show "Write to USB only after checking the target device:"
+show "  dd if=$OUTPUT_IMG of=/dev/sdX bs=4M status=progress conv=fsync"
