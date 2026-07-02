@@ -6,7 +6,7 @@ system:
   description: Desktop system with vwl compositor, current Nvidia, and capture tools
   nex_structure: true
   extends: asm/desktop-vwl/desktop-vwl.yaml
-  checksum: 341d901ccb2d9cc41a2eb018c2fa0f64cd9f56c49db2b36166683f71ada0c0de
+  checksum: 046ed70664c59fcf303c32abb34f6b09c9ec10e70389e6bd9185cd3e60b6cb3d
 
 packages:
 # current Nvidia for Blackwell-class machines
@@ -24,3 +24,44 @@ build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
 
   script: |
+    set -eu
+
+    mkdir -p /target/etc/modprobe.d
+    {
+      printf '%s\n' 'blacklist nouveau'
+      printf '%s\n' 'blacklist nvidiafb'
+      printf '%s\n' 'options nouveau modeset=0'
+      printf '%s\n' 'options nvidia-drm modeset=1'
+    } > /target/etc/modprobe.d/nvidia.conf
+
+    mkdir -p /target/etc/modules-load.d
+    {
+      printf '%s\n' 'nvidia'
+      printf '%s\n' 'nvidia-modeset'
+      printf '%s\n' 'nvidia-uvm'
+      printf '%s\n' 'nvidia-drm'
+    } > /target/etc/modules-load.d/nvidia.conf
+
+    modules_dir=/target/usr/lib/modules/6.12.58
+    for metadata in "${modules_dir}"/modules.*; do
+      if [ -L "${metadata}" ]; then
+        target=$(readlink "${metadata}")
+        case "${target}" in
+          /*) cp -a "/target${target}" "${metadata}.tmp" ;;
+          *) cp -a "$(dirname "${metadata}")/${target}" "${metadata}.tmp" ;;
+        esac
+        rm "${metadata}"
+        mv "${metadata}.tmp" "${metadata}"
+      fi
+    done
+
+    chroot /target /usr/bin/depmod 6.12.58
+
+    chroot /target /usr/bin/modinfo -k 6.12.58 nvidia >/dev/null
+    chroot /target /usr/bin/modprobe --set-version 6.12.58 --show-depends nvidia-drm >/dev/null
+    grep -q '^extra/nvidia\.ko:' /target/usr/lib/modules/6.12.58/modules.dep
+    grep -q '^extra/nvidia-drm\.ko:' /target/usr/lib/modules/6.12.58/modules.dep
+    grep -q '^extra/v4l2loopback\.ko:' /target/usr/lib/modules/6.12.58/modules.dep
+    grep -q '^extra/kvmfr\.ko:' /target/usr/lib/modules/6.12.58/modules.dep
+
+    echo "Nvidia current module metadata generated."
