@@ -126,6 +126,7 @@ struct UefiBlockReader {
     block_size: u32,
     #[allow(dead_code)]
     num_blocks: u64,
+    start_lba: u64,
 }
 
 impl UefiBlockReader {
@@ -134,6 +135,7 @@ impl UefiBlockReader {
             handle: partition.handle,
             block_size: partition.block_size,
             num_blocks: partition.num_blocks,
+            start_lba: partition.start_lba,
         }
     }
 }
@@ -151,7 +153,11 @@ impl fmt::Display for UefiIoError {
 impl core::error::Error for UefiIoError {}
 
 impl ext4_view::Ext4Read for UefiBlockReader {
-    fn read(&mut self, start_byte: u64, dst: &mut [u8]) -> Result<(), Box<dyn core::error::Error + Send + Sync + 'static>> {
+    fn read(
+        &mut self,
+        start_byte: u64,
+        dst: &mut [u8],
+    ) -> Result<(), Box<dyn core::error::Error + Send + Sync + 'static>> {
         use uefi::proto::media::block::BlockIO;
 
         if dst.is_empty() {
@@ -169,9 +175,9 @@ impl ext4_view::Ext4Read for UefiBlockReader {
         let block_size = self.block_size as u64;
 
         // calculate which blocks we need to read
-        let start_block = start_byte / block_size;
+        let start_block = self.start_lba + start_byte / block_size;
         let end_byte = start_byte + dst.len() as u64;
-        let end_block = (end_byte + block_size - 1) / block_size;
+        let end_block = self.start_lba + (end_byte + block_size - 1) / block_size;
         let num_blocks = end_block - start_block;
 
         // allocate buffer for full blocks

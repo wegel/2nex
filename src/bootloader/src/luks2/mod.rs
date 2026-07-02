@@ -10,7 +10,6 @@ pub mod reader;
 use alloc::string::String;
 use alloc::vec;
 use core::fmt;
-use uefi::proto::media::block::BlockIO;
 
 use crate::disk::RootPartition;
 use crate::passphrase;
@@ -74,16 +73,12 @@ pub struct Luks2Volume {
 
 /// detect if partition contains a LUKS2 header
 pub fn is_luks2(partition: &RootPartition) -> Result<bool, Luks2Error> {
-    let block_io = uefi::boot::open_protocol_exclusive::<BlockIO>(partition.handle)
-        .map_err(|e| Luks2Error::IoError(alloc::format!("open BlockIO: {:?}", e)))?;
-
-    let media_id = block_io.media().media_id();
     let block_size = partition.block_size as usize;
 
     // read first block to check magic
     let mut buf = vec![0u8; block_size];
-    block_io
-        .read_blocks(media_id, 0, &mut buf)
+    partition
+        .read_blocks(0, &mut buf)
         .map_err(|e| Luks2Error::IoError(alloc::format!("read: {:?}", e)))?;
 
     Ok(header::is_luks2(&buf))
@@ -93,17 +88,13 @@ pub fn is_luks2(partition: &RootPartition) -> Result<bool, Luks2Error> {
 pub fn unlock(partition: &RootPartition) -> Result<Luks2Volume, Luks2Error> {
     log::info!("luks2: reading header...");
 
-    let block_io = uefi::boot::open_protocol_exclusive::<BlockIO>(partition.handle)
-        .map_err(|e| Luks2Error::IoError(alloc::format!("open BlockIO: {:?}", e)))?;
-
-    let media_id = block_io.media().media_id();
     let block_size = partition.block_size as usize;
 
     // read binary header (at least 4096 bytes, align to block size)
     let header_blocks = (header::BINARY_HEADER_SIZE + block_size - 1) / block_size;
     let mut header_buf = vec![0u8; header_blocks * block_size];
-    block_io
-        .read_blocks(media_id, 0, &mut header_buf)
+    partition
+        .read_blocks(0, &mut header_buf)
         .map_err(|e| Luks2Error::IoError(alloc::format!("read header: {:?}", e)))?;
 
     let bin_header = header::Luks2BinaryHeader::parse(&header_buf)?;
@@ -125,8 +116,8 @@ pub fn unlock(partition: &RootPartition) -> Result<Luks2Volume, Luks2Error> {
     let json_blocks = (json_read_size + block_size - 1) / block_size;
     let mut json_buf = vec![0u8; json_blocks * block_size];
 
-    block_io
-        .read_blocks(media_id, json_start_block, &mut json_buf)
+    partition
+        .read_blocks(json_start_block, &mut json_buf)
         .map_err(|e| Luks2Error::IoError(alloc::format!("read JSON: {:?}", e)))?;
 
     let metadata = json::Luks2Metadata::parse(&json_buf[..json_read_size])?;
@@ -154,13 +145,14 @@ pub fn unlock(partition: &RootPartition) -> Result<Luks2Volume, Luks2Error> {
     } else {
         // passphrase path: derive key and decrypt keyslot
         log::info!("luks2: TPM unavailable, falling back to passphrase");
-        recover_master_key_from_passphrase(&block_io, media_id, block_size, &metadata)?
+        recover_master_key_from_passphrase(partition, block_size, &metadata)?
     };
 
     // create decrypting reader
     let reader = DecryptingReader::new(
         partition.handle,
         partition.block_size,
+        partition.start_lba,
         &master_key,
         segment.offset,
         segment.sector_size,
@@ -178,7 +170,10 @@ fn verify_master_key_against_metadata(
     metadata: &json::Luks2Metadata,
 ) -> Result<(), Luks2Error> {
     // find any digest that covers segment 0
-    let digest = metadata.digests.values().find(|d| d.segments.iter().any(|s| s == "0"));
+    let digest = metadata
+        .digests
+        .values()
+        .find(|d| d.segments.iter().any(|s| s == "0"));
 
     if let Some(digest) = digest {
         log::info!("luks2: verifying master key against digest...");
@@ -201,8 +196,7 @@ fn verify_master_key_against_metadata(
 
 /// recover master key using passphrase + KDF + keyslot decryption
 fn recover_master_key_from_passphrase(
-    block_io: &BlockIO,
-    media_id: u32,
+    partition: &RootPartition,
     block_size: usize,
     metadata: &json::Luks2Metadata,
 ) -> Result<alloc::vec::Vec<u8>, Luks2Error> {
@@ -224,7 +218,8 @@ fn recover_master_key_from_passphrase(
 
     // derive key from passphrase
     log::info!("luks2: deriving key (this may take a while)...");
-    let derived_key = crypto::derive_key(&passphrase, &keyslot.kdf, keyslot.area.key_size as usize)?;
+    let derived_key =
+        crypto::derive_key(&passphrase, &keyslot.kdf, keyslot.area.key_size as usize)?;
 
     // read encrypted key material from keyslot area
     let area_offset = keyslot.area.offset;
@@ -234,8 +229,8 @@ fn recover_master_key_from_passphrase(
     let area_blocks = (area_size + block_size - 1) / block_size;
     let mut area_buf = vec![0u8; area_blocks * block_size];
 
-    block_io
-        .read_blocks(media_id, area_start_block, &mut area_buf)
+    partition
+        .read_blocks(area_start_block, &mut area_buf)
         .map_err(|e| Luks2Error::IoError(alloc::format!("read keyslot area: {:?}", e)))?;
 
     let offset_in_block = (area_offset % block_size as u64) as usize;

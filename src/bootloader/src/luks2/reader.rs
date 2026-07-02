@@ -14,6 +14,7 @@ use super::crypto::AesXts;
 pub struct DecryptingReader {
     handle: uefi::Handle,
     disk_block_size: u32,
+    start_lba: u64,
     cipher: AesXts,
     /// offset where encrypted data begins (after LUKS header)
     data_offset: u64,
@@ -27,6 +28,7 @@ impl DecryptingReader {
     pub fn new(
         handle: uefi::Handle,
         disk_block_size: u32,
+        start_lba: u64,
         master_key: &[u8],
         data_offset: u64,
         sector_size: u32,
@@ -38,6 +40,7 @@ impl DecryptingReader {
         Ok(Self {
             handle,
             disk_block_size,
+            start_lba,
             cipher,
             data_offset,
             sector_size,
@@ -58,7 +61,11 @@ impl fmt::Display for DecryptIoError {
 impl core::error::Error for DecryptIoError {}
 
 impl ext4_view::Ext4Read for DecryptingReader {
-    fn read(&mut self, start_byte: u64, dst: &mut [u8]) -> Result<(), Box<dyn core::error::Error + Send + Sync + 'static>> {
+    fn read(
+        &mut self,
+        start_byte: u64,
+        dst: &mut [u8],
+    ) -> Result<(), Box<dyn core::error::Error + Send + Sync + 'static>> {
         if dst.is_empty() {
             return Ok(());
         }
@@ -88,8 +95,10 @@ impl ext4_view::Ext4Read for DecryptingReader {
         let read_size = (num_sectors * sector_size) as usize;
 
         // align read to disk block boundaries
-        let disk_start_block = aligned_start / disk_block_size;
-        let disk_end_block = (aligned_start + read_size as u64 + disk_block_size - 1) / disk_block_size;
+        let partition_start_block = aligned_start / disk_block_size;
+        let disk_start_block = self.start_lba + partition_start_block;
+        let disk_end_block = self.start_lba
+            + (aligned_start + read_size as u64 + disk_block_size - 1) / disk_block_size;
         let disk_read_blocks = disk_end_block - disk_start_block;
         let disk_read_size = (disk_read_blocks * disk_block_size) as usize;
 
@@ -104,14 +113,17 @@ impl ext4_view::Ext4Read for DecryptingReader {
             })?;
 
         // extract sector-aligned portion from disk buffer
-        let sector_offset_in_disk = (aligned_start - disk_start_block * disk_block_size) as usize;
+        let sector_offset_in_disk =
+            (aligned_start - partition_start_block * disk_block_size) as usize;
         let mut sector_buf = vec![0u8; read_size];
-        sector_buf.copy_from_slice(&disk_buf[sector_offset_in_disk..sector_offset_in_disk + read_size]);
+        sector_buf
+            .copy_from_slice(&disk_buf[sector_offset_in_disk..sector_offset_in_disk + read_size]);
 
         // decrypt sectors in place
         // the tweak is the logical sector number relative to the start of the encrypted area
         let logical_sector = start_byte / sector_size;
-        self.cipher.decrypt_sectors(self.iv_tweak + logical_sector, &mut sector_buf);
+        self.cipher
+            .decrypt_sectors(self.iv_tweak + logical_sector, &mut sector_buf);
 
         // copy the requested portion to destination
         let offset_in_sector = (physical_start - aligned_start) as usize;
