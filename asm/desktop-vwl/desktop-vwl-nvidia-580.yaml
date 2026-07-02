@@ -6,7 +6,7 @@ system:
   description: Desktop system with vwl compositor, Nvidia 580, and capture tools
   nex_structure: true
   extends: asm/desktop-vwl/desktop-vwl.yaml
-  checksum: 3a072ce5d6ad87b8fe32f43fcc45d73a01ed6e9836a4dd80839dd597b60e68f4
+  checksum: bd1bc7f1039049b32e6310dfd2be803148618ade818ead8d5484f6370c215aca
 
 packages:
 # Nvidia 580 for Pascal/Turing machines
@@ -63,5 +63,16 @@ build:
     grep -q '^extra/nvidia-drm\.ko:' /target/usr/lib/modules/6.12.58/modules.dep
     grep -q '^extra/v4l2loopback\.ko:' /target/usr/lib/modules/6.12.58/modules.dep
     grep -q '^extra/kvmfr\.ko:' /target/usr/lib/modules/6.12.58/modules.dep
+
+    vwl_root="/target$(readlink /target/usr/bin/vwl)"
+    vwl_root="${vwl_root%/usr/bin/vwl}"
+    test -e "${vwl_root}/usr/share/glvnd/egl_vendor.d/10_nvidia.json" \
+      || test -L "${vwl_root}/usr/share/glvnd/egl_vendor.d/10_nvidia.json"
+    test -e "${vwl_root}/usr/share/egl/egl_external_platform.d/15_nvidia_gbm.json" \
+      || test -L "${vwl_root}/usr/share/egl/egl_external_platform.d/15_nvidia_gbm.json"
+    test -e "${vwl_root}/usr/lib/libEGL_nvidia.so.0" \
+      || test -L "${vwl_root}/usr/lib/libEGL_nvidia.so.0"
+    test -e "${vwl_root}/usr/lib/gbm/nvidia-drm_gbm.so" \
+      || test -L "${vwl_root}/usr/lib/gbm/nvidia-drm_gbm.so"
 
     echo "Nvidia 580 module metadata generated."

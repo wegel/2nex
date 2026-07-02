@@ -6,7 +6,7 @@ system:
   description: Desktop system with vwl compositor, current Nvidia, and capture tools
   nex_structure: true
   extends: asm/desktop-vwl/desktop-vwl.yaml
-  checksum: 046ed70664c59fcf303c32abb34f6b09c9ec10e70389e6bd9185cd3e60b6cb3d
+  checksum: 1484eebd474c5e0fa5ec2644ab0ef097a0b2ee80354e3e66c27d634d11e368e8
 
 packages:
 # current Nvidia for Blackwell-class machines
@@ -63,5 +63,16 @@ build:
     grep -q '^extra/nvidia-drm\.ko:' /target/usr/lib/modules/6.12.58/modules.dep
     grep -q '^extra/v4l2loopback\.ko:' /target/usr/lib/modules/6.12.58/modules.dep
     grep -q '^extra/kvmfr\.ko:' /target/usr/lib/modules/6.12.58/modules.dep
+
+    vwl_root="/target$(readlink /target/usr/bin/vwl)"
+    vwl_root="${vwl_root%/usr/bin/vwl}"
+    test -e "${vwl_root}/usr/share/glvnd/egl_vendor.d/10_nvidia.json" \
+      || test -L "${vwl_root}/usr/share/glvnd/egl_vendor.d/10_nvidia.json"
+    test -e "${vwl_root}/usr/share/egl/egl_external_platform.d/15_nvidia_gbm.json" \
+      || test -L "${vwl_root}/usr/share/egl/egl_external_platform.d/15_nvidia_gbm.json"
+    test -e "${vwl_root}/usr/lib/libEGL_nvidia.so.0" \
+      || test -L "${vwl_root}/usr/lib/libEGL_nvidia.so.0"
+    test -e "${vwl_root}/usr/lib/gbm/nvidia-drm_gbm.so" \
+      || test -L "${vwl_root}/usr/lib/gbm/nvidia-drm_gbm.so"
 
     echo "Nvidia current module metadata generated."

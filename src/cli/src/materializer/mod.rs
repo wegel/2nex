@@ -31,6 +31,7 @@ mod flatten_deps;
 mod flatten_errors;
 mod flatten_export;
 mod flatten_refs;
+mod graphics_providers;
 pub mod index;
 mod pathdiff;
 mod relative_symlink;
@@ -44,6 +45,7 @@ pub mod types;
 pub use checkout::checkout_closure;
 pub use checkout_store::checkout_files;
 pub use flatten::flatten_capsule_precomputed;
+pub use graphics_providers::flatten_graphics_provider_files;
 pub use resolver::resolve_runtime_deps_precomputed;
 pub use types::{
     MaterializeConfig, MaterializeMode, MaterializeRequest, MaterializeResult, RuntimeClosure,

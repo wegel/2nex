@@ -7,7 +7,7 @@ use std::path::Path;
 use walkdir::WalkDir;
 
 use crate::manifest::ManifestIndex;
-use crate::materializer::flatten_capsule_precomputed;
+use crate::materializer::{flatten_capsule_precomputed, flatten_graphics_provider_files};
 
 pub(super) fn deploy_manifests_to_nex_db(target_dir: &Path) -> io::Result<()> {
     let src_pkg_dir = Path::new("pkg");
@@ -36,6 +36,13 @@ pub(super) fn flatten_package_dependencies(
 
     for package_dir in package_capsule_dirs(nex_pkg_dir) {
         flatten_package_capsule(repo_path, nex_pkg_dir, &manifest_index, &package_dir)?;
+    }
+    let graphics_count = flatten_graphics_provider_files(repo_path, nex_pkg_dir, &manifest_index)?;
+    if graphics_count > 0 {
+        println!(
+            "  Flattened {} graphics provider files into capsules",
+            graphics_count
+        );
     }
     Ok(())
 }
