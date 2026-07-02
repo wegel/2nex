@@ -17,11 +17,56 @@ pub(super) fn flatten_library_preserving_path(
     pkg_dir: &Path,
     fallback_repos: &[PathBuf],
 ) -> io::Result<bool> {
+    flatten_library_preserving_path_with_policy(
+        repo_path,
+        commit,
+        lib_path,
+        pkg_dir,
+        fallback_repos,
+        ExistingFilePolicy::Keep,
+    )
+}
+
+/// Flatten a single library from a store commit and replace any existing file.
+pub(super) fn flatten_library_replacing_path(
+    repo_path: &str,
+    commit: &str,
+    lib_path: &str,
+    pkg_dir: &Path,
+    fallback_repos: &[PathBuf],
+) -> io::Result<bool> {
+    flatten_library_preserving_path_with_policy(
+        repo_path,
+        commit,
+        lib_path,
+        pkg_dir,
+        fallback_repos,
+        ExistingFilePolicy::Replace,
+    )
+}
+
+#[derive(Clone, Copy)]
+enum ExistingFilePolicy {
+    Keep,
+    Replace,
+}
+
+fn flatten_library_preserving_path_with_policy(
+    repo_path: &str,
+    commit: &str,
+    lib_path: &str,
+    pkg_dir: &Path,
+    fallback_repos: &[PathBuf],
+    existing_file_policy: ExistingFilePolicy,
+) -> io::Result<bool> {
     let rel_path = lib_path.trim_start_matches('/');
     let dest = pkg_dir.join(rel_path);
 
-    if dest.exists() {
-        return Ok(false);
+    if path_exists_or_link(&dest) {
+        match existing_file_policy {
+            ExistingFilePolicy::Keep => return Ok(false),
+            ExistingFilePolicy::Replace => remove_existing_file(&dest)?,
+        }
     }
 
     export_single_file(repo_path, commit, lib_path, &dest, fallback_repos)
@@ -30,6 +75,21 @@ pub(super) fn flatten_library_preserving_path(
     export_relative_symlink_targets(repo_path, commit, pkg_dir, &dest, fallback_repos, 0)?;
 
     Ok(true)
+}
+
+fn path_exists_or_link(path: &Path) -> bool {
+    path.exists() || path.symlink_metadata().is_ok()
+}
+
+fn remove_existing_file(path: &Path) -> io::Result<()> {
+    let metadata = path.symlink_metadata()?;
+    if metadata.is_dir() && !metadata.file_type().is_symlink() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("cannot replace directory {}", path.display()),
+        ));
+    }
+    fs::remove_file(path)
 }
 
 fn export_relative_symlink_targets(
@@ -60,7 +120,7 @@ fn export_relative_symlink_targets(
 
     let target_rel = relative_symlink_target_inside_root(pkg_dir, src, &link_target)?;
     let target_dest = pkg_dir.join(&target_rel);
-    if !target_dest.exists() && target_dest.symlink_metadata().is_err() {
+    if !path_exists_or_link(&target_dest) {
         let target_src_path = format!("/{}", target_rel.display());
         export_single_file(
             repo_path,

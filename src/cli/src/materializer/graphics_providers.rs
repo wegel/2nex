@@ -15,7 +15,7 @@ use crate::manifest::types::Manifest;
 use crate::manifest::ManifestIndex;
 use crate::refs::PackageRef;
 
-use super::flatten_export::flatten_library_preserving_path;
+use super::flatten_export::flatten_library_replacing_path;
 
 #[derive(Debug)]
 struct GraphicsProvider {
@@ -44,13 +44,8 @@ pub fn flatten_graphics_provider_files(
             continue;
         }
         for file in &provider.files {
-            if flatten_library_preserving_path(
-                repo_path,
-                &provider.commit,
-                file,
-                &package_dir,
-                &[],
-            )? {
+            if flatten_library_replacing_path(repo_path, &provider.commit, file, &package_dir, &[])?
+            {
                 flattened_count += 1;
             }
         }
@@ -183,11 +178,18 @@ fn output_names_for_commit(commit: &str, manifest: &Manifest) -> io::Result<Vec<
 }
 
 fn is_graphics_provider_path(path: &str) -> bool {
-    path.starts_with("/usr/lib/libEGL_nvidia.so")
+    path.starts_with("/usr/lib/libEGL.so")
+        || path.starts_with("/usr/lib/libEGL_nvidia.so")
+        || path.starts_with("/usr/lib/libGL.so")
+        || path.starts_with("/usr/lib/libGLESv1_CM.so")
         || path.starts_with("/usr/lib/libGLESv1_CM_nvidia.so")
+        || path.starts_with("/usr/lib/libGLESv2.so")
         || path.starts_with("/usr/lib/libGLESv2_nvidia.so")
+        || path.starts_with("/usr/lib/libGLX.so")
         || path.starts_with("/usr/lib/libGLX_nvidia.so")
+        || path.starts_with("/usr/lib/libGLdispatch.so")
         || path.starts_with("/usr/lib/libnvidia")
+        || path.starts_with("/usr/lib/libOpenGL.so")
         || path.starts_with("/usr/lib/gbm/")
         || path.starts_with("/usr/share/egl/egl_external_platform.d/")
         || path.starts_with("/usr/share/glvnd/egl_vendor.d/")
@@ -226,46 +228,5 @@ fn multiple_provider_error(providers: &[GraphicsProvider]) -> io::Error {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{is_graphics_provider_path, is_nvidia_provider_commit, uses_graphics_loader};
-
-    #[test]
-    fn detects_nvidia_provider_commits() {
-        assert!(is_nvidia_provider_commit(
-            "x86_64/pkg/libs/graphics/nvidia-580/580.159.04/bundles/runtime"
-        ));
-        assert!(is_nvidia_provider_commit(
-            "x86_64/pkg/libs/graphics/nvidia-current/595.84/bundles/runtime"
-        ));
-        assert!(!is_nvidia_provider_commit(
-            "x86_64/pkg/libs/graphics/mesa/24.2.7/outputs/lib"
-        ));
-    }
-
-    #[test]
-    fn selects_loader_provider_files() {
-        assert!(is_graphics_provider_path(
-            "/usr/share/glvnd/egl_vendor.d/10_nvidia.json"
-        ));
-        assert!(is_graphics_provider_path(
-            "/usr/share/egl/egl_external_platform.d/15_nvidia_gbm.json"
-        ));
-        assert!(is_graphics_provider_path("/usr/lib/gbm/nvidia-drm_gbm.so"));
-        assert!(is_graphics_provider_path("/usr/lib/libEGL_nvidia.so.0"));
-        assert!(is_graphics_provider_path(
-            "/usr/lib/libnvidia-allocator.so.1"
-        ));
-        assert!(!is_graphics_provider_path("/usr/bin/nvidia-smi"));
-        assert!(!is_graphics_provider_path("/usr/lib/libEGL.so.1"));
-    }
-
-    #[test]
-    fn detects_graphics_loader_capsules() {
-        let temp_dir = tempfile::TempDir::new().expect("test setup should succeed");
-        let lib_dir = temp_dir.path().join("usr/lib");
-        std::fs::create_dir_all(&lib_dir).expect("test setup should succeed");
-        std::fs::write(lib_dir.join("libEGL.so.1"), b"").expect("test setup should succeed");
-
-        assert!(uses_graphics_loader(temp_dir.path()));
-    }
-}
+#[path = "graphics_providers_tests.rs"]
+mod graphics_providers_tests;
