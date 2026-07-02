@@ -2,7 +2,6 @@ use clap::Args;
 use nix::unistd::Uid;
 use std::fs;
 use std::io;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -47,20 +46,6 @@ pub fn run(args: &DeployArgs) -> io::Result<()> {
         ));
     }
 
-    // hardlink constraint: /nex/repo and /nex/deployments must share a filesystem
-    let repo_dev = fs::metadata(repo_path).map(|m| m.dev())?;
-    let deploy_dev = fs::metadata(&deployments_dir).map(|m| m.dev())?;
-    if repo_dev != deploy_dev {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!(
-                "hardlink constraint violated: {} and {} are on different filesystems",
-                repo_path.display(),
-                deployments_dir.display()
-            ),
-        ));
-    }
-
     let store = Store::open(repo_path)?;
 
     // Determine checksum: prefer explicit system checksum metadata, otherwise use commit hash.
@@ -102,7 +87,7 @@ pub fn run(args: &DeployArgs) -> io::Result<()> {
         }
     }
 
-    // zub checkout into the deployment directory (hardlinks)
+    // zub uses hardlinks when possible and falls back to copies across filesystems.
     store.checkout(&args.system_ref, &deployment_path, false)?;
 
     // Remount back to RO if we toggled it.
@@ -209,3 +194,7 @@ impl Drop for RemountGuard<'_> {
         let _ = self.remount_ro();
     }
 }
+
+#[cfg(test)]
+#[path = "deploy_tests.rs"]
+mod deploy_tests;
