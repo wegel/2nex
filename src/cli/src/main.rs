@@ -75,8 +75,10 @@ enum Command {
     Commit(commands::commit::CommitArgs),
 
     /// Deploy a system ref to /nex/deployments
-    #[clap(alias = "upgrade")]
     Deploy(commands::deploy::DeployArgs),
+
+    /// Upgrade this machine by deploying a built system ref
+    Upgrade(commands::deploy::DeployArgs),
 
     /// List system deployments
     Deployments(commands::deployments::DeploymentsArgs),
@@ -138,6 +140,7 @@ fn main() -> io::Result<()> {
         Command::Switch(args) => commands::switch::run(&args),
         Command::Commit(args) => commands::commit::run(&args),
         Command::Deploy(args) => commands::deploy::run(&args),
+        Command::Upgrade(args) => commands::deploy::run(&args),
         Command::Deployments(args) => commands::deployments::run(&args),
         Command::Status(args) => commands::status::run(&args),
         Command::Rollback(args) => commands::rollback::run(&args),
@@ -334,6 +337,26 @@ dependencies: []
                 assert_eq!(sys.packages.len(), 1);
             }
             _ => panic!("Expected system manifest"),
+        }
+    }
+
+    #[test]
+    fn parses_upgrade_as_deploy_args() {
+        let cli = Cli::try_parse_from([
+            "nex",
+            "upgrade",
+            "systems/desktop-vwl/0.0.1",
+            "--sysroot",
+            "/",
+        ])
+        .expect("upgrade command should parse");
+
+        match cli.command {
+            Command::Upgrade(args) => {
+                assert_eq!(args.system_ref, "systems/desktop-vwl/0.0.1");
+                assert_eq!(args.sysroot, PathBuf::from("/"));
+            }
+            _ => panic!("expected upgrade command"),
         }
     }
 }
