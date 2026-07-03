@@ -1,9 +1,13 @@
-use clap::Args;
-use nix::unistd::Uid;
-use std::fs;
+//! Deploy built system refs into an installed Nex sysroot.
+
+use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+use clap::Args;
+use nix::unistd::Uid;
+use walkdir::WalkDir;
 
 use crate::store::Store;
 
@@ -23,6 +27,14 @@ pub struct DeployArgs {
     /// Print what would be done without writing
     #[clap(long)]
     pub dry_run: bool,
+
+    /// Deploy even when the checksum is already present
+    #[clap(long)]
+    pub force: bool,
+
+    /// Allow refs without nex.system.checksum metadata
+    #[clap(long)]
+    pub allow_commit_hash: bool,
 }
 
 pub fn run(args: &DeployArgs) -> io::Result<()> {
@@ -47,16 +59,15 @@ pub fn run(args: &DeployArgs) -> io::Result<()> {
     }
 
     let store = Store::open(repo_path)?;
+    let commit_hash = store.resolve_ref(&args.system_ref)?;
 
-    // Determine checksum: prefer explicit system checksum metadata, otherwise use commit hash.
-    let checksum = match store.get_metadata(&args.system_ref, "nex.system.checksum")? {
-        Some(v) => v,
-        None => store.resolve_ref(&args.system_ref)?,
-    };
+    let checksum = deployment_checksum(&store, &args.system_ref, &commit_hash, args)?;
+    reject_existing_checksum(&deployments_dir, &checksum, args.force)?;
 
     let next_serial = next_serial(&deployments_dir)?;
     let deployment_name = format!("{}.{}", checksum, next_serial);
     let deployment_path = deployments_dir.join(&deployment_name);
+    let temp_path = deployments_dir.join(format!(".{}.tmp", deployment_name));
 
     if deployment_path.exists() {
         return Err(io::Error::new(
@@ -69,6 +80,7 @@ pub fn run(args: &DeployArgs) -> io::Result<()> {
     println!("Checksum:    {}", checksum);
     println!("Next serial: {}", next_serial);
     println!("Target:      {}", deployment_path.display());
+    println!("Staging:     {}", temp_path.display());
     println!();
 
     if args.dry_run {
@@ -77,25 +89,139 @@ pub fn run(args: &DeployArgs) -> io::Result<()> {
 
     let mut remount = RemountGuard::new(sysroot)?;
 
-    // Ensure we can write into sysroot.
-    if let Err(e) = fs::create_dir_all(&deployment_path) {
-        if e.kind() == io::ErrorKind::ReadOnlyFilesystem {
-            remount.remount_rw()?;
-            fs::create_dir_all(&deployment_path)?;
-        } else {
-            return Err(e);
-        }
+    prepare_temp_deployment(&mut remount, &temp_path)?;
+
+    if let Err(error) = checkout_and_publish(&store, &args.system_ref, &temp_path, &deployment_path)
+    {
+        let _ = fs::remove_dir_all(&temp_path);
+        return Err(error);
     }
 
-    // zub uses hardlinks when possible and falls back to copies across filesystems.
-    store.checkout(&args.system_ref, &deployment_path, false)?;
-
-    // Remount back to RO if we toggled it.
     remount.remount_ro()?;
 
     println!("Deployed: {}", deployment_name);
     println!("Reboot to activate (bootloader picks highest serial).");
     Ok(())
+}
+
+fn deployment_checksum(
+    store: &Store,
+    system_ref: &str,
+    commit_hash: &str,
+    args: &DeployArgs,
+) -> io::Result<String> {
+    match store.get_metadata(system_ref, "nex.system.checksum")? {
+        Some(checksum) if is_checksum(&checksum) => Ok(checksum),
+        Some(checksum) => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("invalid nex.system.checksum for {}: {}", system_ref, checksum),
+        )),
+        None if args.allow_commit_hash => Ok(commit_hash.to_string()),
+        None => Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "{} is missing nex.system.checksum metadata; pass --allow-commit-hash to deploy by commit hash",
+                system_ref
+            ),
+        )),
+    }
+}
+
+fn reject_existing_checksum(deployments_dir: &Path, checksum: &str, force: bool) -> io::Result<()> {
+    if force {
+        return Ok(());
+    }
+
+    for dirent in fs::read_dir(deployments_dir)? {
+        let dirent = dirent?;
+        let Some(name) = dirent.file_name().to_str().map(str::to_string) else {
+            continue;
+        };
+        let Some((existing_checksum, _)) = parse_deployment_dir_name(&name) else {
+            continue;
+        };
+        if existing_checksum == checksum {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!(
+                    "deployment for checksum {} already exists; pass --force to deploy another serial",
+                    checksum
+                ),
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn prepare_temp_deployment(remount: &mut RemountGuard<'_>, temp_path: &Path) -> io::Result<()> {
+    if let Err(error) = replace_temp_deployment(temp_path) {
+        if error.kind() == io::ErrorKind::ReadOnlyFilesystem {
+            remount.remount_rw()?;
+            replace_temp_deployment(temp_path)?;
+        } else {
+            return Err(error);
+        }
+    }
+    Ok(())
+}
+
+fn replace_temp_deployment(temp_path: &Path) -> io::Result<()> {
+    if temp_path.exists() {
+        fs::remove_dir_all(temp_path)?;
+    }
+    fs::create_dir_all(temp_path)
+}
+
+fn checkout_and_publish(
+    store: &Store,
+    system_ref: &str,
+    temp_path: &Path,
+    deployment_path: &Path,
+) -> io::Result<()> {
+    store.checkout(system_ref, temp_path, false)?;
+    sync_tree(temp_path)?;
+    fs::rename(temp_path, deployment_path)?;
+    if let Some(parent) = deployment_path.parent() {
+        sync_path(parent)?;
+    }
+    Ok(())
+}
+
+fn sync_tree(root: &Path) -> io::Result<()> {
+    let mut first_error = None;
+    for entry in WalkDir::new(root).contents_first(true) {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                first_error.get_or_insert_with(|| io::Error::other(error.to_string()));
+                continue;
+            }
+        };
+        if entry.file_type().is_symlink() {
+            continue;
+        }
+        if let Err(error) = sync_path(entry.path()) {
+            first_error.get_or_insert(error);
+        }
+    }
+
+    match first_error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
+fn sync_path(path: &Path) -> io::Result<()> {
+    File::open(path)?.sync_all()
+}
+
+fn is_checksum(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .as_bytes()
+            .iter()
+            .all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 fn next_serial(deployments_dir: &Path) -> io::Result<u64> {
