@@ -20,6 +20,20 @@ fn is_cross_device_hardlink_error(err: &zub::Error) -> bool {
     }
 }
 
+fn retry_checkout_after_hardlink_failure(
+    repo: &Repo,
+    commit: &str,
+    target: &Path,
+    union: bool,
+    opts: zub::ops::CheckoutOptions,
+) -> io::Result<()> {
+    if !union && target.exists() {
+        std::fs::remove_dir_all(target)?;
+    }
+
+    zub::ops::checkout(repo, commit, target, opts).map_err(|e| io::Error::other(e.to_string()))
+}
+
 /// parse an SSH URL into (remote, path) components.
 /// supports formats:
 ///   - ssh://user@host/path -> ("user@host", "/path")
@@ -255,8 +269,13 @@ impl Store {
                 // cross-device hardlinks are not possible (e.g., fallback from /nex/repo to /var/*).
                 // retry with a full copy instead.
                 opts.hardlink = false;
-                zub::ops::checkout(&self.repo, commit, target, opts.clone())
-                    .map_err(|e| io::Error::other(e.to_string()))?;
+                retry_checkout_after_hardlink_failure(
+                    &self.repo,
+                    commit,
+                    target,
+                    union,
+                    opts.clone(),
+                )?;
                 return Ok(());
             }
             Err(e) => return Err(io::Error::other(e.to_string())),
@@ -270,8 +289,9 @@ impl Store {
                 Err(zub::Error::RefNotFound(_)) => continue,
                 Err(e) if fb_opts.hardlink && is_cross_device_hardlink_error(&e) => {
                     fb_opts.hardlink = false;
-                    zub::ops::checkout(fallback, commit, target, fb_opts)
-                        .map_err(|e| io::Error::other(e.to_string()))?;
+                    retry_checkout_after_hardlink_failure(
+                        fallback, commit, target, union, fb_opts,
+                    )?;
                     return Ok(());
                 }
                 Err(e) => return Err(io::Error::other(e.to_string())),
@@ -285,8 +305,7 @@ impl Store {
                 Ok(()) => return Ok(()),
                 Err(e) if opts.hardlink && is_cross_device_hardlink_error(&e) => {
                     opts.hardlink = false;
-                    zub::ops::checkout(&self.repo, commit, target, opts)
-                        .map_err(|e| io::Error::other(e.to_string()))?;
+                    retry_checkout_after_hardlink_failure(&self.repo, commit, target, union, opts)?;
                     return Ok(());
                 }
                 Err(e) => return Err(io::Error::other(e.to_string())),
