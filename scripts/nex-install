@@ -302,21 +302,59 @@ format_partitions() {
 
 seed_installer_remotes() {
     target_var=$1
-    mkdir -p "$target_var/nex/repo/remotes"
+    repo_dir="$target_var/nex/repo"
+    config_path="$repo_dir/config.toml"
+    mkdir -p "$repo_dir/remotes"
 
-    cmdline=$(cat /proc/cmdline 2>/dev/null || true)
+    cmdline_path=${NEX_INSTALL_CMDLINE:-/proc/cmdline}
+    cmdline=$(cat "$cmdline_path" 2>/dev/null || true)
     for word in $cmdline; do
         case "$word" in
             nex.remote=*)
                 remote=${word#nex.remote=}
+                case "$remote" in
+                    *=*) ;;
+                    *) continue ;;
+                esac
                 name=${remote%%=*}
                 url=${remote#*=}
                 [ -n "$name" ] || continue
                 [ -n "$url" ] || continue
-                printf "%s\n" "$url" > "$target_var/nex/repo/remotes/$name"
+                ensure_zub_config "$config_path"
+                append_zub_remote "$config_path" "$name" "$url"
+                printf "%s\n" "$url" > "$repo_dir/remotes/$name"
                 ;;
         esac
     done
+}
+
+ensure_zub_config() {
+    config_path=$1
+    if [ -f "$config_path" ]; then
+        return 0
+    fi
+
+    cat > "$config_path" <<'EOF'
+[namespace]
+uid_map = []
+gid_map = []
+EOF
+}
+
+append_zub_remote() {
+    config_path=$1
+    name=$(toml_escape "$2")
+    url=$(toml_escape "$3")
+    cat >> "$config_path" <<EOF
+
+[[remotes]]
+name = "$name"
+url = "$url"
+EOF
+}
+
+toml_escape() {
+    printf "%s" "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
 
 cleanup_mounts() {
@@ -453,5 +491,9 @@ main() {
     printf "\nInstallation complete.\n"
     printf "Remove the USB drive and reboot this machine.\n"
 }
+
+if [ "${NEX_INSTALL_SOURCE_ONLY:-0}" = 1 ]; then
+    return 0 2>/dev/null || exit 0
+fi
 
 main "$@"
