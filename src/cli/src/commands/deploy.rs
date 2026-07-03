@@ -32,7 +32,7 @@ pub struct DeployArgs {
     #[clap(long)]
     pub force: bool,
 
-    /// Allow refs without nex.system.checksum metadata
+    /// Allow refs without checksum metadata
     #[clap(long)]
     pub allow_commit_hash: bool,
 }
@@ -110,20 +110,27 @@ fn deployment_checksum(
     commit_hash: &str,
     args: &DeployArgs,
 ) -> io::Result<String> {
-    match store.get_metadata(system_ref, "nex.system.checksum")? {
+    match checksum_metadata(store, system_ref)? {
         Some(checksum) if is_checksum(&checksum) => Ok(checksum),
         Some(checksum) => Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("invalid nex.system.checksum for {}: {}", system_ref, checksum),
+            format!("invalid checksum metadata for {}: {}", system_ref, checksum),
         )),
         None if args.allow_commit_hash => Ok(commit_hash.to_string()),
         None => Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!(
-                "{} is missing nex.system.checksum metadata; pass --allow-commit-hash to deploy by commit hash",
+                "{} is missing nex.system.checksum or nex.build.checksum metadata; pass --allow-commit-hash to deploy by commit hash",
                 system_ref
             ),
         )),
+    }
+}
+
+fn checksum_metadata(store: &Store, system_ref: &str) -> io::Result<Option<String>> {
+    match store.get_metadata(system_ref, "nex.system.checksum")? {
+        Some(checksum) => Ok(Some(checksum)),
+        None => store.get_metadata(system_ref, "nex.build.checksum"),
     }
 }
 

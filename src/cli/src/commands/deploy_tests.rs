@@ -53,6 +53,36 @@ fn deploy_requires_system_checksum_metadata_by_default() -> io::Result<()> {
 
     assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     assert!(error.to_string().contains("nex.system.checksum"));
+    assert!(error.to_string().contains("nex.build.checksum"));
+    Ok(())
+}
+
+#[test]
+fn deploy_accepts_build_checksum_metadata() -> io::Result<()> {
+    let temp_dir = TempDir::new()?;
+    let checksum = checksum('d');
+    let Some(repo) = build_test_repo(
+        &temp_dir,
+        &[("nex.build.checksum".to_string(), checksum.clone())],
+    )?
+    else {
+        return Ok(());
+    };
+    let sysroot = build_sysroot(&temp_dir)?;
+
+    run(&DeployArgs {
+        system_ref: "systems/demo/0.0.1".to_string(),
+        sysroot: sysroot.clone(),
+        repo,
+        dry_run: false,
+        force: false,
+        allow_commit_hash: false,
+    })?;
+
+    assert!(sysroot
+        .join("nex/deployments")
+        .join(format!("{}.1", checksum))
+        .is_dir());
     Ok(())
 }
 
