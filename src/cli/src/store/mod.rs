@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use zub::transport::{pull_ssh, PullOptions};
+use zub::transport::{pull_local, pull_ssh, PullOptions};
 use zub::{ops::ExportOptions, Commit, Config, Hash, Repo};
 
 fn is_cross_device_hardlink_error(err: &zub::Error) -> bool {
@@ -47,8 +47,13 @@ fn parse_ssh_url(url: &str) -> Option<(String, PathBuf)> {
 #[derive(Clone, Debug)]
 pub struct ParsedRemote {
     pub name: String,
-    pub remote: String, // user@host or host
-    pub path: PathBuf,  // repo path on remote
+    source: RemoteSource,
+}
+
+#[derive(Clone, Debug)]
+enum RemoteSource {
+    Local(PathBuf),
+    Ssh { remote: String, path: PathBuf },
 }
 
 /// zub-backed content store for nex packages.
@@ -112,16 +117,13 @@ impl Store {
             if config_path.exists() {
                 if let Ok(config) = Config::load(&config_path) {
                     for remote in &config.remotes {
-                        if let Some((host, rpath)) = parse_ssh_url(&remote.url) {
-                            // avoid duplicates
-                            if !remotes.iter().any(|r: &ParsedRemote| r.name == remote.name) {
-                                remotes.push(ParsedRemote {
-                                    name: remote.name.clone(),
-                                    remote: host,
-                                    path: rpath,
-                                });
-                            }
+                        if remotes.iter().any(|r: &ParsedRemote| r.name == remote.name) {
+                            continue;
                         }
+                        remotes.push(ParsedRemote {
+                            name: remote.name.clone(),
+                            source: remote_source(&remote.url),
+                        });
                     }
                 }
             }
@@ -156,20 +158,13 @@ impl Store {
         }
 
         for remote in &self.remotes {
-            eprintln!(
-                "Trying to pull {} from remote '{}' ({}:{})...",
-                ref_name,
-                remote.name,
-                remote.remote,
-                remote.path.display()
-            );
-
             let opts = PullOptions {
                 fetch_only: false,
                 dry_run: false,
             };
 
-            match pull_ssh(&remote.remote, &remote.path, &self.repo, ref_name, &opts) {
+            eprintln!("{}", remote.pull_message(ref_name));
+            match remote.pull(&self.repo, ref_name, &opts) {
                 Ok(result) => {
                     eprintln!(
                         "Pulled {} from '{}': {} bytes, {} objects",
@@ -439,6 +434,48 @@ impl Store {
             io::ErrorKind::NotFound,
             format!("directory not found: {}", dirname),
         ))
+    }
+}
+
+impl ParsedRemote {
+    fn pull(
+        &self,
+        dst: &Repo,
+        ref_name: &str,
+        opts: &PullOptions,
+    ) -> Result<zub::transport::PullResult, zub::Error> {
+        match &self.source {
+            RemoteSource::Local(path) => {
+                let src = Repo::open(path)?;
+                pull_local(&src, dst, ref_name, opts)
+            }
+            RemoteSource::Ssh { remote, path } => pull_ssh(remote, path, dst, ref_name, opts),
+        }
+    }
+
+    fn pull_message(&self, ref_name: &str) -> String {
+        match &self.source {
+            RemoteSource::Local(path) => format!(
+                "Trying to pull {} from remote '{}' ({})...",
+                ref_name,
+                self.name,
+                path.display()
+            ),
+            RemoteSource::Ssh { remote, path } => format!(
+                "Trying to pull {} from remote '{}' ({}:{})...",
+                ref_name,
+                self.name,
+                remote,
+                path.display()
+            ),
+        }
+    }
+}
+
+fn remote_source(url: &str) -> RemoteSource {
+    match parse_ssh_url(url) {
+        Some((remote, path)) => RemoteSource::Ssh { remote, path },
+        None => RemoteSource::Local(PathBuf::from(url)),
     }
 }
 
@@ -877,3 +914,7 @@ pub fn init_repo_if_needed(repo_path: &str) -> io::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "store_tests.rs"]
+mod store_tests;
