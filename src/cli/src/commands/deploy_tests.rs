@@ -2,11 +2,12 @@
 
 use std::fs;
 use std::io;
+use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
 use tempfile::TempDir;
 
-use super::{run, DeployArgs};
+use super::{repo_path_for_checkout, run, DeployArgs};
 use crate::store::{commit_tree, Store};
 
 #[test]
@@ -182,6 +183,35 @@ fn deploy_allows_duplicate_checksum_with_force() -> io::Result<()> {
     })?;
 
     assert!(deployments_dir.join(format!("{}.1", checksum)).is_dir());
+    Ok(())
+}
+
+#[test]
+fn deploy_uses_sysroot_repo_alias_when_it_names_the_same_directory() -> io::Result<()> {
+    let temp_dir = TempDir::new()?;
+    let sysroot = temp_dir.path().join("sysroot");
+    let sysroot_repo = sysroot.join("nex/repo");
+    let repo_alias = temp_dir.path().join("repo-alias");
+    fs::create_dir_all(&sysroot_repo)?;
+    symlink(&sysroot_repo, &repo_alias)?;
+
+    assert_eq!(repo_path_for_checkout(&sysroot, &repo_alias)?, sysroot_repo);
+    Ok(())
+}
+
+#[test]
+fn deploy_keeps_external_repo_path_when_it_names_a_different_directory() -> io::Result<()> {
+    let temp_dir = TempDir::new()?;
+    let sysroot = temp_dir.path().join("sysroot");
+    let sysroot_repo = sysroot.join("nex/repo");
+    let external_repo = temp_dir.path().join("external-repo");
+    fs::create_dir_all(&sysroot_repo)?;
+    fs::create_dir_all(&external_repo)?;
+
+    assert_eq!(
+        repo_path_for_checkout(&sysroot, &external_repo)?,
+        external_repo
+    );
     Ok(())
 }
 

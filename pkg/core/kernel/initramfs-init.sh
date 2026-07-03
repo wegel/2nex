@@ -41,7 +41,7 @@ elif [ -c /dev/kmsg ]; then
     exec >/dev/kmsg 2>&1
 fi
 
-log "nex initramfs starting... (v6)"
+log "nex initramfs starting... (v7)"
 
 # parse cmdline
 ROOT=""
@@ -101,7 +101,8 @@ mkdirp_deploy() {
 
 log "mounting sysroot filesystem..."
 mkdir -p "$SYSROOT_MOUNT" || die "failed to create $SYSROOT_MOUNT"
-mount -o ro "$ROOT" "$SYSROOT_MOUNT" || die "failed to mount sysroot $ROOT"
+mount -o rw "$ROOT" "$SYSROOT_MOUNT" || die "failed to mount sysroot $ROOT"
+SYSROOT_RW=1
 
 if [ -z "$DEPLOY_PATH" ]; then
     die "no zub= parameter!"
@@ -129,8 +130,6 @@ ensure_var_dirs() {
         "${SYSROOT_MOUNT}/var/lib" \
         "${SYSROOT_MOUNT}/var/cache" \
         "${SYSROOT_MOUNT}/var/tmp" \
-        "${SYSROOT_MOUNT}/var/nex/repo" \
-        "${SYSROOT_MOUNT}/var/nex/staging" \
         "${SYSROOT_MOUNT}/var/nex/manifests" \
         "${SYSROOT_MOUNT}/var/nex/users" \
         || die "failed to create standard /var directories"
@@ -199,6 +198,7 @@ mkdirp_deploy "${DEPLOY}/tmp"
 # busybox switch_root requires NEW_ROOT to be a mount point; make the deployment
 # root a mount point before adding bind mounts under it.
 mount --bind "$DEPLOY" "$DEPLOY" || die "failed to make deployment root a mount point"
+mount -o remount,ro,bind "$DEPLOY" || die "failed to remount deployment root read-only"
 
 # Bind mounts for ostree-like layout
 mount --bind "$SYSROOT_MOUNT" "${DEPLOY}/sysroot" || die "failed to bind-mount sysroot"
@@ -207,9 +207,9 @@ mount --bind "${SYSROOT_MOUNT}/var/etc" "${DEPLOY}/etc" || die "failed to bind-m
 mount --bind "${SYSROOT_MOUNT}/var/home" "${DEPLOY}/home" || die "failed to bind-mount /home"
 mount --bind "${SYSROOT_MOUNT}/var/root" "${DEPLOY}/root" || die "failed to bind-mount /root"
 
-mount --bind "${SYSROOT_MOUNT}/var/nex/repo" "${DEPLOY}/nex/repo" || die "failed to bind-mount /nex/repo"
+mount --bind "${SYSROOT_MOUNT}/nex/repo" "${DEPLOY}/nex/repo" || die "failed to bind-mount /nex/repo"
 mount --bind "${SYSROOT_MOUNT}/nex/deployments" "${DEPLOY}/nex/deployments" || die "failed to bind-mount /nex/deployments"
-mount --bind "${SYSROOT_MOUNT}/var/nex/staging" "${DEPLOY}/nex/staging" || die "failed to bind-mount /nex/staging"
+mount --bind "${SYSROOT_MOUNT}/nex/staging" "${DEPLOY}/nex/staging" || die "failed to bind-mount /nex/staging"
 mkdir -p "${SYSROOT_MOUNT}/var/nex/users" 2>/dev/null || true
 mount --bind "${SYSROOT_MOUNT}/var/nex/users" "${DEPLOY}/nex/users" || die "failed to bind-mount /nex/users"
 
@@ -217,11 +217,9 @@ mount --bind "${SYSROOT_MOUNT}/var/nex/users" "${DEPLOY}/nex/users" || die "fail
 mkdir -p "${SYSROOT_MOUNT}/var/nex/manifests" 2>/dev/null || true
 mount --bind "${SYSROOT_MOUNT}/var/nex/manifests" "${DEPLOY}/nex/manifests" || die "failed to bind-mount /nex/manifests"
 
-# switch sysroot back to RO after any needed mkdirs
-if [ "$SYSROOT_RW" -eq 1 ]; then
-    mount -o remount,ro "$SYSROOT_MOUNT" 2>/dev/null || true
-fi
 mount -o remount,ro,bind "${DEPLOY}/sysroot" || die "failed to remount /sysroot read-only"
+mount -o remount,rw,bind "${DEPLOY}/nex/repo" || die "failed to remount /nex/repo writable"
+mount -o remount,rw,bind "${DEPLOY}/nex/staging" || die "failed to remount /nex/staging writable"
 
 # Move virtual filesystems into deployment root for systemd
 mount --move /proc "${DEPLOY}/proc" || die "failed to move /proc"

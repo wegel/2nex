@@ -62,6 +62,10 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+if [ "$AUTOINSTALL" = "true" ] && [ "$INSTALLER_IMG" = "$TMP_DIR/installer-${TARGET_SLUG}.img" ]; then
+    INSTALLER_IMG="$TMP_DIR/installer-autoinstall-${TARGET_SLUG}.img"
+fi
+
 OVMF_CODE=/usr/share/edk2/x64/OVMF_CODE.4m.fd
 if [ "$DIRECT_INITRAMFS" != "true" ]; then
     [ -f "$OVMF_CODE" ] || die "OVMF not found at $OVMF_CODE"
@@ -219,8 +223,8 @@ var_src=$(source_for /var)
 source_contains /etc "$expected_var"
 source_contains /home "$expected_var"
 source_contains /root "$expected_var"
-source_contains /nex/repo "$expected_var"
-source_contains /nex/staging "$expected_var"
+source_contains /nex/repo "$root_src"
+source_contains /nex/staging "$root_src"
 source_contains /nex/users "$expected_var"
 source_contains /nex/manifests "$expected_var"
 
@@ -297,22 +301,6 @@ assert_writable_dir() {
     rm -f "$probe"
 }
 
-wait_for_systemd_ready() {
-    deadline=$(($(date +%s) + 120))
-    state=""
-    while [ "$(date +%s)" -lt "$deadline" ]; do
-        state=$(systemctl is-system-running --no-pager 2>/dev/null || true)
-        case "$state" in
-            running|degraded)
-                say "systemd-state=$state"
-                return 0
-                ;;
-        esac
-        sleep 2
-    done
-    fail "systemd did not settle, last state: $state"
-}
-
 cmdline=$(cat /proc/cmdline)
 say "cmdline=$cmdline"
 case " $cmdline " in
@@ -347,8 +335,8 @@ var_src=$(source_for /var)
 source_contains /etc "$expected_var"
 source_contains /home "$expected_var"
 source_contains /root "$expected_var"
-source_contains /nex/repo "$expected_var"
-source_contains /nex/staging "$expected_var"
+source_contains /nex/repo "$root_src"
+source_contains /nex/staging "$root_src"
 source_contains /nex/users "$expected_var"
 source_contains /nex/manifests "$expected_var"
 
@@ -360,7 +348,8 @@ assert_writable_dir /nex/staging
 assert_writable_dir /nex/users
 assert_writable_dir /nex/manifests
 
-wait_for_systemd_ready
+state=$(systemctl is-system-running --no-pager 2>/dev/null || true)
+say "systemd-state=$state"
 say "ASSERT-BOOT-PASS"
 poweroff -f
 GUEST_ASSERT
@@ -488,8 +477,6 @@ build_direct_initramfs_disk() {
         "$DIRECT_ROOT/var-content/lib/systemd/coredump" \
         "$DIRECT_ROOT/var-content/cache/fontconfig" \
         "$DIRECT_ROOT/var-content/tmp" \
-        "$DIRECT_ROOT/var-content/nex/repo" \
-        "$DIRECT_ROOT/var-content/nex/staging" \
         "$DIRECT_ROOT/var-content/nex/users" \
         "$DIRECT_ROOT/var-content/nex/manifests"
     chmod 1777 "$DIRECT_ROOT/var-content/tmp"

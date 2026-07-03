@@ -2,6 +2,7 @@
 
 use std::fs::{self, File};
 use std::io;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -41,6 +42,7 @@ pub fn run(args: &DeployArgs) -> io::Result<()> {
     let sysroot = &args.sysroot;
     let deployments_dir = sysroot.join("nex/deployments");
     let repo_path = &args.repo;
+    let mut remount = RemountGuard::new(sysroot)?;
 
     if !deployments_dir.exists() {
         return Err(io::Error::new(
@@ -58,7 +60,13 @@ pub fn run(args: &DeployArgs) -> io::Result<()> {
         ));
     }
 
-    let store = Store::open(repo_path)?;
+    if !args.dry_run {
+        remount.remount_rw()?;
+        remount.remount_path_rw(repo_path)?;
+    }
+
+    let store_repo_path = repo_path_for_checkout(sysroot, repo_path)?;
+    let store = Store::open(&store_repo_path)?;
     let commit_hash = store.resolve_ref(&args.system_ref)?;
 
     let checksum = deployment_checksum(&store, &args.system_ref, &commit_hash, args)?;
@@ -86,8 +94,6 @@ pub fn run(args: &DeployArgs) -> io::Result<()> {
     if args.dry_run {
         return Ok(());
     }
-
-    let mut remount = RemountGuard::new(sysroot)?;
 
     prepare_temp_deployment(&mut remount, &temp_path)?;
 
@@ -195,6 +201,29 @@ fn checkout_and_publish(
     Ok(())
 }
 
+fn repo_path_for_checkout(sysroot: &Path, repo_path: &Path) -> io::Result<PathBuf> {
+    let sysroot_repo_path = sysroot.join("nex/repo");
+    if paths_name_same_inode(&sysroot_repo_path, repo_path)? {
+        return Ok(sysroot_repo_path);
+    }
+    Ok(repo_path.to_path_buf())
+}
+
+fn paths_name_same_inode(left: &Path, right: &Path) -> io::Result<bool> {
+    let left_metadata = match fs::metadata(left) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    let right_metadata = match fs::metadata(right) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+
+    Ok(left_metadata.dev() == right_metadata.dev() && left_metadata.ino() == right_metadata.ino())
+}
+
 fn sync_tree(root: &Path) -> io::Result<()> {
     let mut first_error = None;
     for entry in WalkDir::new(root).contents_first(true) {
@@ -282,6 +311,9 @@ impl<'a> RemountGuard<'a> {
     }
 
     fn remount_rw(&mut self) -> io::Result<()> {
+        if !is_mountpoint(self.mountpoint)? {
+            return Ok(());
+        }
         if !self.is_root {
             return Err(io::Error::new(
                 io::ErrorKind::PermissionDenied,
@@ -303,6 +335,30 @@ impl<'a> RemountGuard<'a> {
         Ok(())
     }
 
+    fn remount_path_rw(&self, path: &Path) -> io::Result<()> {
+        if !is_mountpoint(path)? {
+            return Ok(());
+        }
+        if !self.is_root {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                format!("{} is read-only; remount requires root", path.display()),
+            ));
+        }
+        let status = Command::new("mount")
+            .arg("-o")
+            .arg("remount,rw")
+            .arg(path)
+            .status()?;
+        if !status.success() {
+            return Err(io::Error::other(format!(
+                "failed to remount {} rw",
+                path.display()
+            )));
+        }
+        Ok(())
+    }
+
     fn remount_ro(&mut self) -> io::Result<()> {
         if !self.touched_rw {
             return Ok(());
@@ -320,6 +376,52 @@ impl<'a> RemountGuard<'a> {
         }
         Ok(())
     }
+}
+
+fn is_mountpoint(path: &Path) -> io::Result<bool> {
+    let path = path.to_string_lossy();
+    let mountinfo = fs::read_to_string("/proc/self/mountinfo")?;
+    for line in mountinfo.lines() {
+        let Some(mountpoint) = line.split_whitespace().nth(4) else {
+            continue;
+        };
+        if unescape_mountinfo_path(mountpoint) == path {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn unescape_mountinfo_path(path: &str) -> String {
+    let mut output = String::with_capacity(path.len());
+    let mut chars = path.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch != '\\' {
+            output.push(ch);
+            continue;
+        }
+
+        let mut octal = String::new();
+        for _ in 0..3 {
+            let Some(next) = chars.peek().copied() else {
+                break;
+            };
+            if !matches!(next, '0'..='7') {
+                break;
+            }
+            octal.push(next);
+            chars.next();
+        }
+        if octal.len() == 3 {
+            if let Ok(byte) = u8::from_str_radix(&octal, 8) {
+                output.push(byte as char);
+                continue;
+            }
+        }
+        output.push('\\');
+        output.push_str(&octal);
+    }
+    output
 }
 
 impl Drop for RemountGuard<'_> {
