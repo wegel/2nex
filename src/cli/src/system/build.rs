@@ -8,7 +8,7 @@ use crate::build::{
     layer_commits_into_rootfs, load_environment, run_build_script_with_env, setup_composite_rootfs,
     RootfsSetup,
 };
-use crate::deps::resolve_dependency_closure;
+use crate::deps::{resolve_dependency_closure, resolve_dependency_closure_with_providers};
 use crate::manifest::{
     update_manifest_checksum_field, ManifestIndex, ManifestKind, SystemManifest,
 };
@@ -84,7 +84,11 @@ fn prepare_system_build_inputs(
     let manifest_index = ManifestIndex::load("pkg")?;
     let dependency_commits = resolve_dependency_closure(&manifest.dependencies, &manifest_index)?;
     let package_dependency_specs = dependencies_from_system_packages(&manifest.packages);
-    let package_commits = resolve_dependency_closure(&package_dependency_specs, &manifest_index)?;
+    let package_commits = resolve_dependency_closure_with_providers(
+        &package_dependency_specs,
+        &manifest_index,
+        &manifest.providers,
+    )?;
     let original_package_commits = manifest
         .packages
         .iter()
@@ -149,13 +153,19 @@ fn materialize_system_package_set(
     inputs: &SystemBuildInputs,
 ) -> io::Result<()> {
     if manifest.system.nex_structure {
-        materialize_nex_structure(base_dir, &opts.repo_path, &inputs.original_package_commits)
+        materialize_nex_structure(
+            base_dir,
+            &opts.repo_path,
+            &inputs.original_package_commits,
+            &manifest.providers,
+        )
     } else {
         materialize_system_packages(
             base_dir,
             &opts.repo_path,
             &inputs.original_package_commits,
             &inputs.manifest_index,
+            &manifest.providers,
         )
     }
 }

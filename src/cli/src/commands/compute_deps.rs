@@ -18,6 +18,7 @@ use tempfile::TempDir;
 use crate::manifest::parser::load_manifest_from_source;
 use crate::manifest::types::FileEntry;
 use crate::manifest::types::ManifestSource;
+use crate::manifest::types::ResolutionTarget;
 use crate::repo::resolve_repo_path;
 use crate::store::{rewrite_branch_metadata, Store};
 use crate::utils::hash_file_content;
@@ -221,7 +222,7 @@ pub fn compute_deps_for_manifest(
 
     // process each output
     let mut new_outputs: HashMap<String, Vec<FileEntry>> = HashMap::new();
-    let mut resolution: HashMap<String, String> = manifest.resolution.clone();
+    let mut resolution: HashMap<String, ResolutionTarget> = manifest.resolution.clone();
 
     for output_ref in &all_refs {
         // extract output name from ref (e.g., "x86_64/.../outputs/bin" -> "bin")
@@ -305,10 +306,11 @@ pub fn compute_deps_for_manifest(
                         provider_key.clone()
                     };
 
-                    // add to resolution map (file_path -> dep_name or self)
-                    resolution
-                        .entry(lib_path.clone())
-                        .or_insert(resolution_value.clone());
+                    // add to resolution map (file_path -> dep_name, self, or capability)
+                    resolution.insert(
+                        lib_path.clone(),
+                        generated_resolution_target(&lib_path, resolution_value.clone()),
+                    );
 
                     if verbose {
                         println!("      {} -> {} ({})", lib_name, resolution_value, lib_path);
@@ -335,9 +337,9 @@ pub fn compute_deps_for_manifest(
 
     if dry_run {
         println!();
-        println!("Resolution map (file_path -> dependency_name):");
-        for (file_path, dep_name) in &resolution {
-            println!("  {} -> {}", file_path, dep_name);
+        println!("Resolution map (file_path -> dependency_name or capability):");
+        for (file_path, target) in &resolution {
+            println!("  {} -> {}", file_path, resolution_target_label(target));
         }
         println!();
         println!("(dry run - manifest not modified)");
@@ -371,6 +373,38 @@ fn merge_needs(existing: &[String], discovered: Vec<String>) -> Vec<String> {
     let mut merged: BTreeSet<String> = existing.iter().cloned().collect();
     merged.extend(discovered);
     merged.into_iter().collect()
+}
+
+fn generated_resolution_target(file_path: &str, fallback: String) -> ResolutionTarget {
+    match graphics_capability_for_path(file_path) {
+        Some(capability) if fallback != "self" => ResolutionTarget::Capability {
+            capability: capability.to_string(),
+            fallback: Some(fallback),
+        },
+        _ => ResolutionTarget::Dependency(fallback),
+    }
+}
+
+fn graphics_capability_for_path(file_path: &str) -> Option<&'static str> {
+    match file_path {
+        "/usr/lib/libEGL.so.1" => Some("graphics.egl"),
+        "/usr/lib/libGLESv1_CM.so.1" | "/usr/lib/libGLESv2.so.2" => Some("graphics.gles"),
+        "/usr/lib/libgbm.so.1" => Some("graphics.gbm"),
+        _ => None,
+    }
+}
+
+fn resolution_target_label(target: &ResolutionTarget) -> String {
+    match target {
+        ResolutionTarget::Dependency(dep_name) => dep_name.clone(),
+        ResolutionTarget::Capability {
+            capability,
+            fallback,
+        } => match fallback {
+            Some(fallback) => format!("{capability} (fallback {fallback})"),
+            None => capability.clone(),
+        },
+    }
 }
 
 /// Build a lookup table from library basename to (provider_key, file_path, files_commit).
@@ -903,7 +937,7 @@ fn scan_files_in_checkout(checkout_dir: &Path) -> io::Result<Vec<String>> {
 fn update_manifest_file(
     manifest_path: &Path,
     new_outputs: &HashMap<String, Vec<FileEntry>>,
-    resolution: &HashMap<String, String>,
+    resolution: &HashMap<String, ResolutionTarget>,
 ) -> io::Result<()> {
     // read the original file
     let content = fs::read_to_string(manifest_path)?;
@@ -970,12 +1004,7 @@ fn update_manifest_file(
     if !resolution.is_empty() {
         let resolution_map: serde_yaml::Mapping = resolution
             .iter()
-            .map(|(k, v)| {
-                (
-                    serde_yaml::Value::String(k.clone()),
-                    serde_yaml::Value::String(v.clone()),
-                )
-            })
+            .map(|(k, v)| (serde_yaml::Value::String(k.clone()), resolution_value(v)))
             .collect();
         doc.as_mapping_mut().unwrap().insert(
             serde_yaml::Value::String("resolution".to_string()),
@@ -999,6 +1028,29 @@ fn update_manifest_file(
     Ok(())
 }
 
+fn resolution_value(target: &ResolutionTarget) -> serde_yaml::Value {
+    match target {
+        ResolutionTarget::Dependency(dep_name) => serde_yaml::Value::String(dep_name.clone()),
+        ResolutionTarget::Capability {
+            capability,
+            fallback,
+        } => {
+            let mut mapping = serde_yaml::Mapping::new();
+            mapping.insert(
+                serde_yaml::Value::String("capability".to_string()),
+                serde_yaml::Value::String(capability.clone()),
+            );
+            if let Some(fallback) = fallback {
+                mapping.insert(
+                    serde_yaml::Value::String("fallback".to_string()),
+                    serde_yaml::Value::String(fallback.clone()),
+                );
+            }
+            serde_yaml::Value::Mapping(mapping)
+        }
+    }
+}
+
 /// Derive manifest base directory from a manifest path.
 /// e.g., /nex/db/pkg/dev/build/cmake.yaml -> /nex/db
 /// e.g., pkg/dev/build/cmake.yaml -> "" (empty, use relative paths)
@@ -1019,6 +1071,10 @@ fn derive_manifest_base_dir(manifest_path: &Path) -> String {
     // fallback: return empty (use relative paths)
     String::new()
 }
+
+#[cfg(test)]
+#[path = "compute_deps_tests.rs"]
+mod compute_deps_tests;
 
 #[cfg(test)]
 mod tests {

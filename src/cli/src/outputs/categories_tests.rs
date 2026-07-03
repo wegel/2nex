@@ -32,6 +32,8 @@ fn generated_outputs_preserve_existing_output_names() {
     existing.insert(
         "drv-eth-intel".to_string(),
         OutputSpec {
+            provides: Vec::new(),
+            capability_files: std::collections::BTreeMap::new(),
             files: vec![FileEntry {
                 path: "/usr/lib/modules/1/kernel/drivers/net/e1000e.ko".to_string(),
                 needs: Vec::new(),

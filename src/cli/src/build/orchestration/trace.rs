@@ -101,11 +101,13 @@ fn get_manifest_deps(commit: &str, manifest_index: &ManifestIndex) -> Vec<String
 
     let mut deps = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    for dep_name in manifest
-        .resolution
-        .values()
-        .filter(|dep_name| *dep_name != "self")
-    {
+    for dep_name in manifest.resolution.values().filter_map(|target| {
+        if target.is_self() {
+            None
+        } else {
+            target.dependency_name()
+        }
+    }) {
         if let Some(dep) = dependency_by_name(manifest, dep_name) {
             if seen.insert(dep.commit.clone()) {
                 deps.push(dep.commit.clone());

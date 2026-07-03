@@ -4,7 +4,7 @@ use std::collections::{BTreeSet, HashSet};
 use std::io;
 use std::path::PathBuf;
 
-use crate::manifest::types::Manifest;
+use crate::manifest::types::{Manifest, ResolutionTarget};
 use crate::manifest::ManifestIndex;
 use crate::utils::hash_file_content;
 
@@ -18,8 +18,8 @@ pub(super) fn resolve_transitive_deps(
     direct_deps: &[(String, String)],
     root_manifest: &Manifest,
     manifest_index: &ManifestIndex,
-) -> io::Result<Vec<(String, String, String)>> {
-    let mut result: Vec<(String, String, String)> = Vec::new();
+) -> io::Result<ResolvedRuntimeDeps> {
+    let mut result = ResolvedRuntimeDeps::default();
     let (mut seen_files, mut queue) = seed_dependency_queue(direct_deps, root_manifest);
 
     while let Some((file_path, dep_name, source_manifest)) = queue.pop() {
@@ -35,6 +35,12 @@ pub(super) fn resolve_transitive_deps(
     }
 
     Ok(result)
+}
+
+#[derive(Default)]
+pub(super) struct ResolvedRuntimeDeps {
+    pub files: Vec<(String, String, String)>,
+    pub capabilities: Vec<(String, String)>,
 }
 
 type DependencyQueue<'a> = Vec<(String, String, &'a Manifest)>;
@@ -61,7 +67,7 @@ fn process_dependency_queue_item<'a>(
     manifest_index: &'a ManifestIndex,
     seen_files: &mut HashSet<String>,
     queue: &mut DependencyQueue<'a>,
-    result: &mut Vec<(String, String, String)>,
+    result: &mut ResolvedRuntimeDeps,
 ) -> io::Result<()> {
     let (actual_dep_name, is_self_continuation) = actual_dependency_name(&dep_name);
     let Some(dep) = find_dependency_by_name(source_manifest, &actual_dep_name) else {
@@ -140,7 +146,7 @@ pub(super) fn python_site_packages_dir_prefix(file_path: &str) -> Option<String>
 }
 
 fn push_result_paths(
-    result: &mut Vec<(String, String, String)>,
+    result: &mut ResolvedRuntimeDeps,
     file_path: &str,
     dep_name: &str,
     files_commit: &str,
@@ -150,7 +156,9 @@ fn push_result_paths(
         .map(|manifest| expand_runtime_file_paths(file_path, manifest))
         .unwrap_or_else(|| vec![file_path.to_string()]);
     for result_path in result_paths {
-        result.push((result_path, dep_name.to_string(), files_commit.to_string()));
+        result
+            .files
+            .push((result_path, dep_name.to_string(), files_commit.to_string()));
     }
 }
 
@@ -163,7 +171,7 @@ fn queue_transitive_needs<'a>(
     files_commit: &str,
     seen_files: &mut HashSet<String>,
     queue: &mut Vec<(String, String, &'a Manifest)>,
-    result: &mut Vec<(String, String, String)>,
+    result: &mut ResolvedRuntimeDeps,
 ) -> io::Result<()> {
     let Some(needed_files) = find_file_needs(file_path, dep_manifest) else {
         return Err(missing_file_metadata_error(file_path, dep_manifest));
@@ -172,12 +180,12 @@ fn queue_transitive_needs<'a>(
         if !seen_files.insert(needed_file.clone()) {
             continue;
         }
-        let Some(transitive_dep_name) = dep_manifest.resolution.get(&needed_file) else {
+        let Some(target) = dep_manifest.resolution.get(&needed_file) else {
             return Err(missing_resolution_error(&needed_file, dep_manifest));
         };
         queue_one_need(
             needed_file,
-            transitive_dep_name,
+            target,
             dep_name,
             source_manifest,
             dep_manifest,
@@ -192,21 +200,29 @@ fn queue_transitive_needs<'a>(
 #[allow(clippy::too_many_arguments)]
 fn queue_one_need<'a>(
     needed_file: String,
-    transitive_dep_name: &str,
+    target: &ResolutionTarget,
     dep_name: &str,
     source_manifest: &'a Manifest,
     dep_manifest: &'a Manifest,
     files_commit: &str,
     queue: &mut Vec<(String, String, &'a Manifest)>,
-    result: &mut Vec<(String, String, String)>,
+    result: &mut ResolvedRuntimeDeps,
 ) {
-    if transitive_dep_name == "self" {
-        for result_path in expand_runtime_file_paths(&needed_file, dep_manifest) {
-            result.push((result_path, dep_name.to_string(), files_commit.to_string()));
+    match target {
+        ResolutionTarget::Dependency(transitive_dep_name) if transitive_dep_name == "self" => {
+            for result_path in expand_runtime_file_paths(&needed_file, dep_manifest) {
+                result
+                    .files
+                    .push((result_path, dep_name.to_string(), files_commit.to_string()));
+            }
+            queue.push((needed_file, format!("__self:{}", dep_name), source_manifest));
         }
-        queue.push((needed_file, format!("__self:{}", dep_name), source_manifest));
-    } else {
-        queue.push((needed_file, transitive_dep_name.to_string(), dep_manifest));
+        ResolutionTarget::Dependency(transitive_dep_name) => {
+            queue.push((needed_file, transitive_dep_name.to_string(), dep_manifest));
+        }
+        ResolutionTarget::Capability { capability, .. } => {
+            result.capabilities.push((needed_file, capability.clone()));
+        }
     }
 }
 

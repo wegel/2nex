@@ -1,8 +1,9 @@
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::io;
 use std::path::Path;
 
-use crate::manifest::types::{Build, FileEntry, Manifest, OutputSpec, Package};
+use crate::manifest::types::{Build, FileEntry, Manifest, OutputSpec, Package, ResolutionTarget};
 use crate::manifest::ManifestIndex;
 use crate::store::{commit_tree, Store};
 
@@ -14,6 +15,8 @@ fn manifest_with_lib_output() -> Manifest {
     outputs.insert(
         "lib".to_string(),
         OutputSpec {
+            provides: Vec::new(),
+            capability_files: BTreeMap::new(),
             files: vec![
                 FileEntry {
                     path: "/usr/lib/libX11.so.6".to_string(),
@@ -145,6 +148,8 @@ fn manifest_with_self_runtime_output() -> Manifest {
     manifest.outputs.insert(
         "bin".to_string(),
         OutputSpec {
+            provides: Vec::new(),
+            capability_files: BTreeMap::new(),
             files: vec![FileEntry {
                 path: "/usr/bin/demo".to_string(),
                 needs: vec!["/usr/lib/libX11.so.6".to_string()],
@@ -160,12 +165,14 @@ fn manifest_with_self_runtime_output() -> Manifest {
             path: "/usr/lib/libxcb.so.1".to_string(),
             needs: Vec::new(),
         });
-    manifest
-        .resolution
-        .insert("/usr/lib/libX11.so.6".to_string(), "self".to_string());
-    manifest
-        .resolution
-        .insert("/usr/lib/libxcb.so.1".to_string(), "self".to_string());
+    manifest.resolution.insert(
+        "/usr/lib/libX11.so.6".to_string(),
+        ResolutionTarget::Dependency("self".to_string()),
+    );
+    manifest.resolution.insert(
+        "/usr/lib/libxcb.so.1".to_string(),
+        ResolutionTarget::Dependency("self".to_string()),
+    );
     manifest
 }
 
@@ -207,7 +214,8 @@ fn output_commit_queues_derived_self_files_ref() -> io::Result<()> {
     let mut index = ManifestIndex::new();
     index.add_manifest(manifest_with_self_runtime_output());
     let store = Store::open(&repo_path)?;
-    let mut resolver = RuntimeResolver::new(&index, store);
+    let providers = BTreeMap::new();
+    let mut resolver = RuntimeResolver::new(&index, &providers, store);
     resolver.seed_requests(&[super::MaterializeRequest::Output {
         commit: "x86_64/pkg/libs/x11/libx11/1.8.10/outputs/bin".to_string(),
     }]);

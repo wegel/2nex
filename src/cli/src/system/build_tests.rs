@@ -1,4 +1,6 @@
 use crate::commands::build::BuildOpts;
+use std::collections::BTreeMap;
+
 use crate::manifest::{Build, SystemManifest, SystemMeta};
 
 use super::ensure_check_checksum_allows_system_publish;
@@ -44,6 +46,7 @@ fn manifest(checksum: Option<&str>) -> SystemManifest {
             extends: None,
         },
         packages: Vec::new(),
+        providers: BTreeMap::new(),
         dependencies: Vec::new(),
         sources: Vec::new(),
         overlays: Vec::new(),

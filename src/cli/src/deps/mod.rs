@@ -3,10 +3,10 @@
 //! this module resolves transitive dependencies by reading precomputed dependency
 //! information from package manifests instead of store metadata.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::io;
 
-use crate::manifest::{Dependency, ManifestIndex};
+use crate::manifest::{Dependency, ManifestIndex, ResolutionTarget};
 
 /// resolve the full dependency closure using manifests.
 ///
@@ -17,6 +17,33 @@ use crate::manifest::{Dependency, ManifestIndex};
 pub fn resolve_dependency_closure(
     dependencies: &[Dependency],
     manifest_index: &ManifestIndex,
+) -> io::Result<Vec<String>> {
+    resolve_dependency_closure_with_options(
+        dependencies,
+        manifest_index,
+        &BTreeMap::new(),
+        CapabilityMode::UseFallback,
+    )
+}
+
+pub fn resolve_dependency_closure_with_providers(
+    dependencies: &[Dependency],
+    manifest_index: &ManifestIndex,
+    providers: &BTreeMap<String, String>,
+) -> io::Result<Vec<String>> {
+    resolve_dependency_closure_with_options(
+        dependencies,
+        manifest_index,
+        providers,
+        CapabilityMode::RequireProvider,
+    )
+}
+
+fn resolve_dependency_closure_with_options(
+    dependencies: &[Dependency],
+    manifest_index: &ManifestIndex,
+    providers: &BTreeMap<String, String>,
+    capability_mode: CapabilityMode,
 ) -> io::Result<Vec<String>> {
     let mut resolved = Vec::new();
     let mut seen = HashSet::new();
@@ -33,10 +60,18 @@ pub fn resolve_dependency_closure(
             &mut visiting_packages,
             &mut stack,
             &mut resolved,
+            providers,
+            capability_mode,
         )?;
     }
 
     Ok(resolved)
+}
+
+#[derive(Clone, Copy)]
+enum CapabilityMode {
+    UseFallback,
+    RequireProvider,
 }
 
 /// extract package identity (namespace, slug) from a commit ref.
@@ -56,6 +91,8 @@ fn visit_commit(
     visiting_packages: &mut HashSet<(String, String)>,
     stack: &mut Vec<String>,
     resolved: &mut Vec<String>,
+    providers: &BTreeMap<String, String>,
+    capability_mode: CapabilityMode,
 ) -> io::Result<()> {
     if seen.contains(commit) {
         return Ok(());
@@ -86,7 +123,8 @@ fn visit_commit(
     stack.push(commit.to_string());
 
     // fetch runtime dependencies from manifest
-    let transitive_deps = fetch_deps_from_manifest(commit, manifest_index)?;
+    let transitive_deps =
+        fetch_deps_from_manifest(commit, manifest_index, providers, capability_mode)?;
 
     for dep_commit in &transitive_deps {
         visit_commit(
@@ -97,6 +135,8 @@ fn visit_commit(
             visiting_packages,
             stack,
             resolved,
+            providers,
+            capability_mode,
         )?;
     }
 
@@ -118,6 +158,8 @@ fn visit_commit(
 fn fetch_deps_from_manifest(
     commit: &str,
     manifest_index: &ManifestIndex,
+    providers: &BTreeMap<String, String>,
+    capability_mode: CapabilityMode,
 ) -> io::Result<Vec<String>> {
     use crate::refs::{PackageRef, RefType};
 
@@ -178,8 +220,8 @@ fn fetch_deps_from_manifest(
         for file_entry in &output_spec.files {
             for needed_file in &file_entry.needs {
                 // resolve file path to dependency name via resolution map
-                let dep_name = match manifest.resolution.get(needed_file) {
-                    Some(name) => name,
+                let target = match manifest.resolution.get(needed_file) {
+                    Some(target) => target,
                     None => {
                         return Err(io::Error::new(
                             io::ErrorKind::InvalidData,
@@ -191,28 +233,17 @@ fn fetch_deps_from_manifest(
                     }
                 };
 
-                // skip self entries - internal libs don't need resolution
-                if dep_name == "self" {
+                if target.is_self() {
                     continue;
                 }
-
-                // find the dependency commit from the manifest's dependencies
-                let dep_commit = match manifest
-                    .dependencies
-                    .iter()
-                    .find(|d| d.name.as_deref() == Some(dep_name))
-                {
-                    Some(d) => d.commit.clone(),
-                    None => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            format!(
-                                "{}: resolution refers to '{}' but no dependency with that name found",
-                                commit, dep_name
-                            ),
-                        ));
-                    }
-                };
+                let dep_commit = resolve_runtime_target(
+                    commit,
+                    manifest,
+                    needed_file,
+                    target,
+                    providers,
+                    capability_mode,
+                )?;
 
                 if seen_deps.insert(dep_commit.clone()) {
                     deps.push(dep_commit);
@@ -224,6 +255,62 @@ fn fetch_deps_from_manifest(
     Ok(deps)
 }
 
+fn resolve_runtime_target(
+    commit: &str,
+    manifest: &crate::manifest::Manifest,
+    needed_file: &str,
+    target: &ResolutionTarget,
+    providers: &BTreeMap<String, String>,
+    capability_mode: CapabilityMode,
+) -> io::Result<String> {
+    match target {
+        ResolutionTarget::Dependency(dep_name) => dependency_commit(commit, manifest, dep_name),
+        ResolutionTarget::Capability {
+            capability,
+            fallback,
+        } => match capability_mode {
+            CapabilityMode::RequireProvider => {
+                providers.get(capability).cloned().ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("{commit}: {needed_file} needs unbound capability {capability}"),
+                    )
+                })
+            }
+            CapabilityMode::UseFallback => {
+                let Some(dep_name) = fallback.as_deref() else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("{commit}: {needed_file} needs {capability} but has no fallback"),
+                    ));
+                };
+                dependency_commit(commit, manifest, dep_name)
+            }
+        },
+    }
+}
+
+fn dependency_commit(
+    commit: &str,
+    manifest: &crate::manifest::Manifest,
+    dep_name: &str,
+) -> io::Result<String> {
+    manifest
+        .dependencies
+        .iter()
+        .find(|dep| dep.name.as_deref() == Some(dep_name))
+        .map(|dep| dep.commit.clone())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "{}: resolution refers to '{}' but no dependency with that name found",
+                    commit, dep_name
+                ),
+            )
+        })
+}
+
 /// build a human-readable cycle path string.
 fn build_cycle_path(stack: &[String], repeat: &str) -> String {
     let mut path = stack.to_vec();
@@ -232,14 +319,5 @@ fn build_cycle_path(stack: &[String], repeat: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_empty_dependencies() {
-        let index = ManifestIndex::new();
-        let deps: Vec<Dependency> = vec![];
-        let result = resolve_dependency_closure(&deps, &index).unwrap();
-        assert!(result.is_empty());
-    }
-}
+#[path = "../deps_tests.rs"]
+mod deps_tests;

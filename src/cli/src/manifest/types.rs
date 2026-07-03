@@ -1,6 +1,6 @@
 use serde::de::{self, Deserializer, Visitor};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::path::PathBuf;
 
@@ -89,10 +89,9 @@ pub struct Manifest {
     pub outputs: HashMap<String, OutputSpec>,
     #[serde(deserialize_with = "deserialize_bundles")]
     pub bundles: HashMap<String, Bundle>,
-    /// resolution map: file_path (e.g., "/usr/lib/libc.so.6") -> dependency_name (e.g., "glibc")
-    /// internal libraries use "self" as the value
+    /// Map needed runtime file paths to dependency names, self, or assembly capabilities.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub resolution: HashMap<String, String>,
+    pub resolution: HashMap<String, ResolutionTarget>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -158,6 +157,9 @@ pub struct SystemManifest {
     pub system: SystemMeta,
     #[serde(default)]
     pub packages: Vec<SystemPackage>,
+    /// Assembly-selected providers for abstract runtime capabilities.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub providers: BTreeMap<String, String>,
     #[serde(default)]
     pub dependencies: Vec<Dependency>,
     #[serde(default)]
@@ -339,25 +341,56 @@ where
     Ok(raw.into_iter().map(|(k, v)| (k, v.into())).collect())
 }
 
-/// File entry with optional dependencies
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FileEntry {
-    /// file path in this output
     pub path: String,
-    /// runtime dependency file paths (empty for scripts, static binaries)
-    /// these are resolved via the manifest's `resolution` map
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub needs: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum ResolutionTarget {
+    Dependency(String),
+    Capability {
+        capability: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fallback: Option<String>,
+    },
+}
+
+impl ResolutionTarget {
+    pub fn dependency_name(&self) -> Option<&str> {
+        match self {
+            Self::Dependency(name) => Some(name),
+            Self::Capability { fallback, .. } => fallback.as_deref(),
+        }
+    }
+
+    pub fn capability(&self) -> Option<&str> {
+        match self {
+            Self::Dependency(_) => None,
+            Self::Capability { capability, .. } => Some(capability),
+        }
+    }
+
+    pub fn is_self(&self) -> bool {
+        matches!(self, Self::Dependency(name) if name == "self")
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OutputSpec {
+    /// Runtime capabilities this output can provide to an assembly.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub provides: Vec<String>,
+    /// Files to flatten when a specific runtime capability is selected.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub capability_files: BTreeMap<String, Vec<String>>,
     /// file entries with per-file dependencies
     #[serde(default)]
     pub files: Vec<FileEntry>,
 }
-
-// note: no backwards compatibility - OutputSpec is the only format now
 
 fn deserialize_outputs<'de, D>(deserializer: D) -> Result<HashMap<String, OutputSpec>, D::Error>
 where

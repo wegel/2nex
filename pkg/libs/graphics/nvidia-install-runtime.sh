@@ -23,6 +23,15 @@ install_link() {
   ln -sfn "${target}" "${out_dir}${dest}"
 }
 
+install_link_if_exists() {
+  local target="$1"
+  local dest="$2"
+
+  if [ -e "${src_dir}/${target}" ]; then
+    install_link "${target}" "${dest}"
+  fi
+}
+
 for tool in \
   nvidia-bug-report.sh \
   nvidia-cuda-mps-control \
@@ -111,6 +120,11 @@ install_link libnvidia-opticalflow.so.1 /usr/lib/libnvidia-opticalflow.so
 install_link "libnvidia-vksc-core.so.${version}" /usr/lib/libnvidia-vksc-core.so.1
 install_link "libnvidia-sandboxutils.so.${version}" /usr/lib/libnvidia-sandboxutils.so.1
 install_link libnvidia-sandboxutils.so.1 /usr/lib/libnvidia-sandboxutils.so
+install_link_if_exists libnvidia-egl-gbm.so.1.1.3 /usr/lib/libnvidia-egl-gbm.so.1
+install_link_if_exists libnvidia-egl-wayland.so.1.1.20 /usr/lib/libnvidia-egl-wayland.so.1
+install_link_if_exists libnvidia-egl-wayland2.so.1.0.1 /usr/lib/libnvidia-egl-wayland2.so.1
+install_link_if_exists libnvidia-egl-xcb.so.1.0.5 /usr/lib/libnvidia-egl-xcb.so.1
+install_link_if_exists libnvidia-egl-xlib.so.1.0.5 /usr/lib/libnvidia-egl-xlib.so.1
 
 install_file 0755 "libvdpau_nvidia.so.${version}" "/usr/lib/vdpau/libvdpau_nvidia.so.${version}"
 install_link "libvdpau_nvidia.so.${version}" /usr/lib/vdpau/libvdpau_nvidia.so.1

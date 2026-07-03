@@ -4,6 +4,8 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+use std::collections::BTreeMap;
+
 use crate::manifest::ManifestIndex;
 use crate::materializer::checkout_files;
 use crate::materializer::resolver::resolve_runtime_deps_precomputed;
@@ -16,10 +18,12 @@ pub fn materialize_system_packages(
     repo_path: &str,
     package_commits: &[String],
     manifest_index: &ManifestIndex,
+    providers: &BTreeMap<String, String>,
 ) -> io::Result<()> {
     let target_dir = fresh_target_dir(base_dir)?;
     let requests = output_requests(package_commits);
-    let closure = resolve_runtime_deps_precomputed(repo_path, &requests, manifest_index, &[])?;
+    let closure =
+        resolve_runtime_deps_precomputed(repo_path, &requests, manifest_index, providers, &[])?;
 
     if closure.has_unresolved() {
         return Err(unresolved_dependency_error(&closure));

@@ -1,10 +1,14 @@
 use clap::Args;
 use std::io;
 
-use crate::deps::resolve_dependency_closure;
+use crate::deps::{resolve_dependency_closure, resolve_dependency_closure_with_providers};
 use crate::manifest::types::Overlay;
-use crate::manifest::{load_manifest, ManifestData, ManifestIndex};
+use crate::manifest::types::{ManifestSource, SystemManifest};
+use crate::manifest::{load_manifest_from_source, Manifest, ManifestData, ManifestIndex};
+use crate::refs::{PackageRef, RefType};
+use crate::system::dependencies_from_system_packages;
 use std::path::Path;
+use std::path::PathBuf;
 
 const USRMERGE_FORBIDDEN_PREFIXES: [&str; 5] = ["/bin", "/sbin", "/lib", "/lib64", "/usr/sbin"];
 
@@ -67,7 +71,7 @@ pub fn run(args: &CheckArgs) -> io::Result<()> {
         }
 
         // check 2: no bootstrap dependencies unless seed package
-        let manifest_data = load_manifest(file)?;
+        let manifest_data = load_manifest_from_source(&ManifestSource::Path(PathBuf::from(file)))?;
 
         if let ManifestData::Package(ref manifest) = manifest_data {
             // check 2a: no forbidden usrmerge paths in outputs
@@ -111,11 +115,14 @@ pub fn run(args: &CheckArgs) -> io::Result<()> {
                 .filter_map(|dep| dep.name.as_deref())
                 .collect();
 
-            for (file_path, dep_name) in &manifest.resolution {
-                if dep_name == "self" {
+            for (file_path, target) in &manifest.resolution {
+                if target.is_self() {
                     continue;
                 }
-                if bootstrap_dep_names.contains(dep_name.as_str()) {
+                let Some(dep_name) = target.dependency_name() else {
+                    continue;
+                };
+                if bootstrap_dep_names.contains(dep_name) {
                     eprintln!(
                         "  error: resolution '{}' -> '{}' points to bootstrap dependency",
                         file_path, dep_name
@@ -180,6 +187,19 @@ pub fn run(args: &CheckArgs) -> io::Result<()> {
                     }
                 }
             }
+            if let Err(error) = validate_system_providers(manifest, &manifest_index) {
+                eprintln!("  error: {}", error);
+                has_errors = true;
+            }
+            let package_dependency_specs = dependencies_from_system_packages(&manifest.packages);
+            if let Err(error) = resolve_dependency_closure_with_providers(
+                &package_dependency_specs,
+                &manifest_index,
+                &manifest.providers,
+            ) {
+                eprintln!("  error: {}", error);
+                has_errors = true;
+            }
         }
 
         // check 4: no package identity cycles in dependency chain
@@ -198,3 +218,82 @@ pub fn run(args: &CheckArgs) -> io::Result<()> {
         Ok(())
     }
 }
+
+fn validate_system_providers(
+    manifest: &SystemManifest,
+    manifest_index: &ManifestIndex,
+) -> io::Result<()> {
+    for (capability, provider_ref) in &manifest.providers {
+        validate_provider_ref(capability, provider_ref, manifest_index)?;
+    }
+    Ok(())
+}
+
+fn validate_provider_ref(
+    capability: &str,
+    provider_ref: &str,
+    manifest_index: &ManifestIndex,
+) -> io::Result<()> {
+    let package_ref = PackageRef::parse(provider_ref).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("provider {capability} has invalid ref {provider_ref}: {error}"),
+        )
+    })?;
+    let manifest = manifest_index
+        .get_manifest(&package_ref.namespace, &package_ref.slug)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("provider {capability} ref {provider_ref} has no package manifest"),
+            )
+        })?;
+    let output_names = provider_output_names(provider_ref, manifest, &package_ref)?;
+    if output_names
+        .iter()
+        .any(|output_name| output_provides(manifest, output_name, capability))
+    {
+        return Ok(());
+    }
+    Err(io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!("provider {capability} ref {provider_ref} does not declare {capability}"),
+    ))
+}
+
+fn provider_output_names(
+    provider_ref: &str,
+    manifest: &Manifest,
+    package_ref: &PackageRef,
+) -> io::Result<Vec<String>> {
+    match &package_ref.ref_type {
+        RefType::Output { name, .. } => Ok(vec![name.clone()]),
+        RefType::Bundle { name, .. } => manifest
+            .bundles
+            .get(name)
+            .map(|bundle| bundle.includes.clone())
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("provider ref {provider_ref} names missing bundle {name}"),
+                )
+            }),
+        RefType::Files { .. } => Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("provider ref {provider_ref} must be an output or bundle ref"),
+        )),
+    }
+}
+
+fn output_provides(manifest: &Manifest, output_name: &str, capability: &str) -> bool {
+    manifest.outputs.get(output_name).is_some_and(|output| {
+        output
+            .provides
+            .iter()
+            .any(|provided| provided == capability)
+    })
+}
+
+#[cfg(test)]
+#[path = "check_tests.rs"]
+mod check_tests;

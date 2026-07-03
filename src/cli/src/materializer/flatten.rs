@@ -1,14 +1,16 @@
 //! Dependency flattening for Nex capsules using precomputed deps.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
 use crate::manifest::types::Manifest;
+use crate::manifest::types::ResolutionTarget;
 use crate::manifest::ManifestIndex;
 
+use super::capability_providers::flatten_capability_providers;
 use super::flatten_deps::{find_file_needs, resolve_transitive_deps};
 use super::flatten_errors::{
     missing_bundle_error, missing_file_metadata_error, missing_manifest_error,
@@ -33,6 +35,7 @@ pub fn flatten_capsule_precomputed(
     pkg_dir: &Path,
     commit: &str,
     manifest_index: &ManifestIndex,
+    providers: &BTreeMap<String, String>,
     fallback_repos: &[PathBuf],
 ) -> io::Result<usize> {
     let manifest = match find_manifest_for_commit(commit, manifest_index) {
@@ -53,13 +56,23 @@ pub fn flatten_capsule_precomputed(
         &deps.self_libs,
         &mut flattened_files,
     )?;
-    flatten_external_libs(
+    let mut capability_deps = deps.capabilities.clone();
+    capability_deps.extend(flatten_external_libs(
         repo_path,
         pkg_dir,
         fallback_repos,
         manifest,
         manifest_index,
         &deps.external_deps,
+        &mut flattened_files,
+    )?);
+    flatten_capability_providers(
+        repo_path,
+        pkg_dir,
+        fallback_repos,
+        manifest_index,
+        providers,
+        &capability_deps,
         &mut flattened_files,
     )?;
     ensure_loader_symlink(pkg_dir, &flattened_files)?;
@@ -70,6 +83,7 @@ pub fn flatten_capsule_precomputed(
 struct CapsuleDeps {
     self_libs: Vec<String>,
     external_deps: Vec<(String, String)>,
+    capabilities: Vec<(String, String)>,
 }
 
 fn output_names_for_commit(
@@ -100,6 +114,7 @@ fn collect_capsule_deps(output_names: &[String], manifest: &Manifest) -> io::Res
     let mut deps = CapsuleDeps {
         self_libs: Vec::new(),
         external_deps: Vec::new(),
+        capabilities: Vec::new(),
     };
 
     for output_name in output_names {
@@ -133,14 +148,21 @@ fn collect_needed_file(
     manifest: &Manifest,
     deps: &mut CapsuleDeps,
 ) -> io::Result<()> {
-    let Some(dep_name) = manifest.resolution.get(needed_file) else {
+    let Some(target) = manifest.resolution.get(needed_file) else {
         return Err(missing_resolution_error(needed_file, manifest));
     };
-    if dep_name == "self" {
-        deps.self_libs.push(needed_file.to_string());
-    } else {
-        deps.external_deps
-            .push((needed_file.to_string(), dep_name.clone()));
+    match target {
+        ResolutionTarget::Dependency(dep_name) if dep_name == "self" => {
+            deps.self_libs.push(needed_file.to_string());
+        }
+        ResolutionTarget::Dependency(dep_name) => {
+            deps.external_deps
+                .push((needed_file.to_string(), dep_name.clone()));
+        }
+        ResolutionTarget::Capability { capability, .. } => {
+            deps.capabilities
+                .push((needed_file.to_string(), capability.clone()));
+        }
     }
     Ok(())
 }
@@ -158,15 +180,21 @@ fn collect_external_deps_from_self_libs(
             return Err(missing_file_metadata_error(&self_lib, manifest));
         };
         for needed_file in needs {
-            let Some(dep_name) = manifest.resolution.get(&needed_file) else {
+            let Some(target) = manifest.resolution.get(&needed_file) else {
                 return Err(missing_resolution_error(&needed_file, manifest));
             };
-            if dep_name == "self" {
-                if seen_self_libs.insert(needed_file.clone()) {
-                    deps.self_libs.push(needed_file);
+            match target {
+                ResolutionTarget::Dependency(dep_name) if dep_name == "self" => {
+                    if seen_self_libs.insert(needed_file.clone()) {
+                        deps.self_libs.push(needed_file);
+                    }
                 }
-            } else {
-                deps.external_deps.push((needed_file, dep_name.clone()));
+                ResolutionTarget::Dependency(dep_name) => {
+                    deps.external_deps.push((needed_file, dep_name.clone()));
+                }
+                ResolutionTarget::Capability { capability, .. } => {
+                    deps.capabilities.push((needed_file, capability.clone()));
+                }
             }
         }
     }
@@ -210,10 +238,9 @@ fn flatten_external_libs(
     manifest_index: &ManifestIndex,
     external_deps: &[(String, String)],
     flattened_files: &mut Vec<String>,
-) -> io::Result<()> {
-    for (file_path, _provider_key, provider_commit) in
-        resolve_transitive_deps(external_deps, manifest, manifest_index)?
-    {
+) -> io::Result<Vec<(String, String)>> {
+    let deps = resolve_transitive_deps(external_deps, manifest, manifest_index)?;
+    for (file_path, _provider_key, provider_commit) in deps.files {
         if flatten_library_preserving_path(
             repo_path,
             &provider_commit,
@@ -224,7 +251,7 @@ fn flatten_external_libs(
             flattened_files.push(file_path);
         }
     }
-    Ok(())
+    Ok(deps.capabilities)
 }
 
 /// Detect which outputs from a manifest are present in a capsule directory.

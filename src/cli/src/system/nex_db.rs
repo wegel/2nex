@@ -1,5 +1,6 @@
 //! Manifest database deployment and dependency flattening for Nex capsules.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -7,7 +8,7 @@ use std::path::Path;
 use walkdir::WalkDir;
 
 use crate::manifest::ManifestIndex;
-use crate::materializer::{flatten_capsule_precomputed, flatten_graphics_provider_files};
+use crate::materializer::flatten_capsule_precomputed;
 
 pub(super) fn deploy_manifests_to_nex_db(target_dir: &Path) -> io::Result<()> {
     let src_pkg_dir = Path::new("pkg");
@@ -29,20 +30,20 @@ pub(super) fn flatten_package_dependencies(
     repo_path: &str,
     nex_pkg_dir: &Path,
     manifest_dir: &Path,
+    providers: &BTreeMap<String, String>,
 ) -> io::Result<()> {
     println!("Flattening runtime dependencies into package capsules...");
     let manifest_index = ManifestIndex::load(manifest_dir)?;
     println!("  Loaded {} manifests", manifest_index.manifest_count());
 
     for package_dir in package_capsule_dirs(nex_pkg_dir) {
-        flatten_package_capsule(repo_path, nex_pkg_dir, &manifest_index, &package_dir)?;
-    }
-    let graphics_count = flatten_graphics_provider_files(repo_path, nex_pkg_dir, &manifest_index)?;
-    if graphics_count > 0 {
-        println!(
-            "  Flattened {} graphics provider files into capsules",
-            graphics_count
-        );
+        flatten_package_capsule(
+            repo_path,
+            nex_pkg_dir,
+            &manifest_index,
+            &package_dir,
+            providers,
+        )?;
     }
     Ok(())
 }
@@ -90,6 +91,7 @@ fn flatten_package_capsule(
     nex_pkg_dir: &Path,
     manifest_index: &ManifestIndex,
     pkg_dir: &Path,
+    providers: &BTreeMap<String, String>,
 ) -> io::Result<()> {
     let commits = package_root_commits(pkg_dir)?;
     if commits.is_empty() {
@@ -97,8 +99,14 @@ fn flatten_package_capsule(
     }
     let mut flattened_count = 0;
     for commit in commits {
-        flattened_count +=
-            flatten_capsule_precomputed(repo_path, pkg_dir, &commit, manifest_index, &[])?;
+        flattened_count += flatten_capsule_precomputed(
+            repo_path,
+            pkg_dir,
+            &commit,
+            manifest_index,
+            providers,
+            &[],
+        )?;
     }
     if flattened_count > 0 {
         let rel_path = pkg_dir.strip_prefix(nex_pkg_dir).unwrap_or(pkg_dir);

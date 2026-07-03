@@ -1,10 +1,11 @@
 //! Resolve runtime dependency closures from manifest metadata.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io;
 use std::path::PathBuf;
 
 use crate::manifest::ManifestIndex;
+use crate::manifest::ResolutionTarget;
 use crate::store::Store;
 use crate::utils::short_hash;
 
@@ -24,10 +25,11 @@ pub fn resolve_runtime_deps_precomputed(
     repo_path: &str,
     requests: &[MaterializeRequest],
     manifest_index: &ManifestIndex,
+    providers: &BTreeMap<String, String>,
     fallback_repos: &[PathBuf],
 ) -> io::Result<RuntimeClosure> {
     let store = Store::open_with_fallback_chain(repo_path, fallback_repos)?;
-    let mut resolver = RuntimeResolver::new(manifest_index, store);
+    let mut resolver = RuntimeResolver::new(manifest_index, providers, store);
     resolver.seed_requests(requests);
     resolver.run();
     Ok(resolver.closure)
@@ -35,6 +37,7 @@ pub fn resolve_runtime_deps_precomputed(
 
 struct RuntimeResolver<'a> {
     manifest_index: &'a ManifestIndex,
+    providers: &'a BTreeMap<String, String>,
     store: Store,
     closure: RuntimeClosure,
     visited: HashSet<String>,
@@ -44,9 +47,14 @@ struct RuntimeResolver<'a> {
 }
 
 impl<'a> RuntimeResolver<'a> {
-    fn new(manifest_index: &'a ManifestIndex, store: Store) -> Self {
+    fn new(
+        manifest_index: &'a ManifestIndex,
+        providers: &'a BTreeMap<String, String>,
+        store: Store,
+    ) -> Self {
         Self {
             manifest_index,
+            providers,
             store,
             closure: RuntimeClosure::default(),
             visited: HashSet::new(),
@@ -162,29 +170,34 @@ impl<'a> RuntimeResolver<'a> {
         file_path: &str,
         needed_file: &str,
     ) {
-        let Some(dep_name) = self.dependency_name(manifest, file_path, needed_file) else {
+        let Some(target) = self.resolution_target(manifest, file_path, needed_file) else {
             return;
         };
-        if dep_name == "self" {
-            self.queue_self_file_dependency(commit, manifest, file_path, needed_file);
-            return;
-        }
-
-        if let Some(dep_commit) =
-            self.dependency_commit(manifest, manifest_key, file_path, &dep_name)
-        {
-            self.queue_dependency_file(dep_commit, needed_file, file_path, &dep_name);
+        match target {
+            ResolutionTarget::Dependency(dep_name) if dep_name == "self" => {
+                self.queue_self_file_dependency(commit, manifest, file_path, needed_file);
+            }
+            ResolutionTarget::Dependency(dep_name) => {
+                if let Some(dep_commit) =
+                    self.dependency_commit(manifest, manifest_key, file_path, &dep_name)
+                {
+                    self.queue_dependency_file(dep_commit, needed_file, file_path, &dep_name);
+                }
+            }
+            ResolutionTarget::Capability { capability, .. } => {
+                self.queue_capability_provider(file_path, needed_file, &capability);
+            }
         }
     }
 
-    fn dependency_name(
+    fn resolution_target(
         &mut self,
         manifest: &crate::manifest::types::Manifest,
         file_path: &str,
         needed_file: &str,
-    ) -> Option<String> {
+    ) -> Option<ResolutionTarget> {
         match manifest.resolution.get(needed_file) {
-            Some(dep_name) => Some(dep_name.clone()),
+            Some(target) => Some(target.clone()),
             None => {
                 self.closure.add_unresolved(
                     needed_file,
@@ -193,6 +206,20 @@ impl<'a> RuntimeResolver<'a> {
                 None
             }
         }
+    }
+
+    fn queue_capability_provider(&mut self, file_path: &str, needed_file: &str, capability: &str) {
+        let Some(provider_ref) = self.providers.get(capability) else {
+            self.closure.add_unresolved(
+                capability,
+                format!("{} needs {} ({})", file_path, needed_file, capability),
+            );
+            return;
+        };
+        self.closure.add(
+            provider_ref,
+            format!("{} needs {} ({})", file_path, needed_file, capability),
+        );
     }
 
     fn dependency_commit(

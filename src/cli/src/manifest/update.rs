@@ -250,6 +250,43 @@ mod tests {
         let updated = fs::read_to_string(manifest.path()).unwrap();
         assert!(updated.contains("needs:\n      - /usr/bin/python3"));
     }
+
+    #[test]
+    fn generated_outputs_preserve_existing_output_provides() {
+        let manifest = tempfile::NamedTempFile::new().unwrap();
+        fs::write(
+            manifest.path(),
+            "package:\n  name: test\n\noutputs:\n  lib:\n    provides:\n    - graphics.egl\n    files:\n    - path: /usr/lib/libEGL.so.1\n\nresolution: {}\n",
+        )
+        .unwrap();
+
+        let mut categorized = HashMap::new();
+        categorized.insert("lib".to_string(), vec!["/usr/lib/libEGL.so.1".to_string()]);
+
+        write_auto_outputs_to_manifest(manifest.path().to_str().unwrap(), &categorized).unwrap();
+
+        let updated = fs::read_to_string(manifest.path()).unwrap();
+        assert!(updated.contains("provides:\n    - graphics.egl\n"));
+    }
+
+    #[test]
+    fn generated_outputs_preserve_existing_capability_files() {
+        let manifest = tempfile::NamedTempFile::new().unwrap();
+        fs::write(
+            manifest.path(),
+            "package:\n  name: test\n\noutputs:\n  lib:\n    provides:\n    - graphics.gbm\n    capability_files:\n      graphics.gbm:\n      - /usr/lib/libgbm.so.1\n    files:\n    - path: /usr/lib/libgbm.so.1\n\nresolution: {}\n",
+        )
+        .unwrap();
+
+        let mut categorized = HashMap::new();
+        categorized.insert("lib".to_string(), vec!["/usr/lib/libgbm.so.1".to_string()]);
+
+        write_auto_outputs_to_manifest(manifest.path().to_str().unwrap(), &categorized).unwrap();
+
+        let updated = fs::read_to_string(manifest.path()).unwrap();
+        assert!(updated
+            .contains("capability_files:\n      graphics.gbm:\n      - /usr/lib/libgbm.so.1"));
+    }
 }
 
 fn collect_existing_file_needs(contents: &str) -> io::Result<HashMap<String, Value>> {
@@ -298,6 +335,8 @@ pub fn write_auto_outputs_to_manifest(
 ) -> io::Result<()> {
     let contents = fs::read_to_string(manifest_path)?;
     let existing_needs = collect_existing_file_needs(&contents)?;
+    let existing_provides = collect_existing_output_provides(&contents)?;
+    let existing_capability_files = collect_existing_output_capability_files(&contents)?;
 
     // build the outputs Value from categorized files
     let mut outputs_mapping = Mapping::new();
@@ -309,6 +348,17 @@ pub fn write_auto_outputs_to_manifest(
     for category in categories {
         let files = categorized.get(category).unwrap();
         let mut output_mapping = Mapping::new();
+
+        if let Some(provides) = existing_provides.get(category) {
+            output_mapping.insert(Value::String("provides".to_string()), provides.clone());
+        }
+
+        if let Some(capability_files) = existing_capability_files.get(category) {
+            output_mapping.insert(
+                Value::String("capability_files".to_string()),
+                capability_files.clone(),
+            );
+        }
 
         // files list - each file is an object with path field (new format)
         let files_seq: Vec<Value> = files
@@ -356,6 +406,54 @@ pub fn write_auto_outputs_to_manifest(
     );
 
     Ok(())
+}
+
+fn collect_existing_output_provides(contents: &str) -> io::Result<HashMap<String, Value>> {
+    let doc: Value = serde_yaml::from_str(contents)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+    let mut provides_by_output = HashMap::new();
+
+    let Some(outputs) = doc.get("outputs").and_then(|outputs| outputs.as_mapping()) else {
+        return Ok(provides_by_output);
+    };
+
+    for (output_name, output) in outputs {
+        let Some(output_name) = output_name.as_str() else {
+            continue;
+        };
+        let Some(output_map) = output.as_mapping() else {
+            continue;
+        };
+        if let Some(provides) = output_map.get(Value::String("provides".to_string())) {
+            provides_by_output.insert(output_name.to_string(), provides.clone());
+        }
+    }
+
+    Ok(provides_by_output)
+}
+
+fn collect_existing_output_capability_files(contents: &str) -> io::Result<HashMap<String, Value>> {
+    let doc: Value = serde_yaml::from_str(contents)
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+    let mut files_by_output = HashMap::new();
+
+    let Some(outputs) = doc.get("outputs").and_then(|outputs| outputs.as_mapping()) else {
+        return Ok(files_by_output);
+    };
+
+    for (output_name, output) in outputs {
+        let Some(output_name) = output_name.as_str() else {
+            continue;
+        };
+        let Some(output_map) = output.as_mapping() else {
+            continue;
+        };
+        if let Some(files) = output_map.get(Value::String("capability_files".to_string())) {
+            files_by_output.insert(output_name.to_string(), files.clone());
+        }
+    }
+
+    Ok(files_by_output)
 }
 
 /// update or insert the build.profile field in a manifest

@@ -1,6 +1,6 @@
 //! Nex package capsule materialization for system roots.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -29,6 +29,7 @@ pub fn materialize_nex_structure(
     base_dir: &str,
     repo_path: &str,
     package_commits: &[String],
+    providers: &BTreeMap<String, String>,
 ) -> io::Result<()> {
     let target_dir = fresh_target_dir(base_dir)?;
     let nex_pkg_dir = target_dir.join("nex/pkg");
@@ -48,7 +49,7 @@ pub fn materialize_nex_structure(
         )?;
     }
 
-    flatten_capsules_if_manifest_db_exists(repo_path, &nex_pkg_dir, &target_dir)?;
+    flatten_capsules_if_manifest_db_exists(repo_path, &nex_pkg_dir, &target_dir, providers)?;
     symlink_flattened_libs_to_usr(&nex_pkg_dir, &target_dir)?;
     install_nex_ld_shim(repo_path, &lib64_dir)?;
     create_target_fhs_symlinks(&target_dir)?;
@@ -200,10 +201,11 @@ fn flatten_capsules_if_manifest_db_exists(
     repo_path: &str,
     nex_pkg_dir: &Path,
     target_dir: &Path,
+    providers: &BTreeMap<String, String>,
 ) -> io::Result<()> {
     let nex_db_pkg = target_dir.join("nex/db/pkg");
     if nex_db_pkg.exists() {
-        flatten_package_dependencies(repo_path, nex_pkg_dir, &nex_db_pkg)
+        flatten_package_dependencies(repo_path, nex_pkg_dir, &nex_db_pkg, providers)
     } else {
         println!("  Skipping dependency flattening: /nex/db/pkg not found");
         Ok(())

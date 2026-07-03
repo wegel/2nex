@@ -91,6 +91,7 @@ fn merge_manifests(base: &SystemManifest, child: &SystemManifest) -> SystemManif
         schema: child.schema.or(base.schema),
         system: merge_meta(&base.system, &child.system),
         packages: merge_packages(&base.packages, &child.packages, &excludes.packages),
+        providers: merge_providers(&base.providers, &child.providers),
         dependencies: merge_deps(
             &base.dependencies,
             &child.dependencies,
@@ -101,6 +102,17 @@ fn merge_manifests(base: &SystemManifest, child: &SystemManifest) -> SystemManif
         build: merge_build(&base.build, &child.build),
         exclude: None, // doesn't propagate
     }
+}
+
+fn merge_providers(
+    base: &std::collections::BTreeMap<String, String>,
+    child: &std::collections::BTreeMap<String, String>,
+) -> std::collections::BTreeMap<String, String> {
+    let mut providers = base.clone();
+    for (capability, provider_ref) in child {
+        providers.insert(capability.clone(), provider_ref.clone());
+    }
+    providers
 }
 
 /// merge system metadata - child values override parent

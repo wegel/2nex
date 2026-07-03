@@ -56,6 +56,8 @@ pub struct MaterializeConfig {
     pub resolve_deps: bool,
     /// Manifest database paths for layered resolution (user -> system)
     pub manifest_db_paths: Vec<PathBuf>,
+    /// Assembly-selected providers for abstract runtime capabilities.
+    pub provider_bindings: BTreeMap<String, String>,
     /// Fallback stores for object/ref lookups (e.g., system repo for user installs)
     pub fallback_repo_paths: Vec<PathBuf>,
     /// Override for package directory (default: target_dir/nex/pkg)
@@ -74,6 +76,7 @@ impl Default for MaterializeConfig {
             db_path: None,
             resolve_deps: true,
             manifest_db_paths: Vec::new(),
+            provider_bindings: BTreeMap::new(),
             fallback_repo_paths: Vec::new(),
             pkg_dir_override: None,
             env_dir_override: None,

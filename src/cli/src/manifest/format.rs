@@ -188,6 +188,7 @@ fn format_root(
             "sources",
             "dependencies",
             "packages",
+            "providers",
             "exclude",
             "build",
         ]
@@ -224,6 +225,7 @@ fn format_root(
                 "sources" => output.push_str(&format_sources(value)?),
                 "dependencies" => output.push_str(&format_dependencies(value)?),
                 "packages" => output.push_str(&format_packages(value)?),
+                "providers" => output.push_str(&format_providers(value)?),
                 "exclude" => output.push_str(&format_generic_section("exclude", value)?),
                 "build" => output.push_str(&format_build(value)?),
                 "bundles" => output.push_str(&format_bundles(value)?),
@@ -518,6 +520,29 @@ fn format_packages(value: &Value) -> io::Result<String> {
     Ok(output)
 }
 
+fn format_providers(value: &Value) -> io::Result<String> {
+    let mapping = value
+        .as_mapping()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "providers must be a mapping"))?;
+
+    if mapping.is_empty() {
+        return Ok(String::from("providers: {}\n"));
+    }
+
+    let mut output = String::from("providers:\n");
+    let mut provider_names: Vec<&str> = mapping.keys().filter_map(|key| key.as_str()).collect();
+    provider_names.sort();
+
+    for name in provider_names {
+        let key = Value::String(name.to_string());
+        if let Some(provider_ref) = mapping.get(&key) {
+            output.push_str(&format!("  {}: {}\n", name, format_scalar(provider_ref)));
+        }
+    }
+
+    Ok(output)
+}
+
 fn format_build(value: &Value) -> io::Result<String> {
     let mapping = value
         .as_mapping()
@@ -640,6 +665,42 @@ fn format_outputs(value: &Value, skip_needs: bool) -> io::Result<String> {
             output.push_str(&format!("  {}:\n", name));
 
             if let Some(out_map) = val.as_mapping() {
+                let provides_key = Value::String("provides".to_string());
+                if let Some(provides) = out_map.get(&provides_key) {
+                    output.push_str("    provides:\n");
+                    if let Some(seq) = provides.as_sequence() {
+                        let mut items: Vec<&str> = seq.iter().filter_map(|v| v.as_str()).collect();
+                        items.sort();
+                        for item in items {
+                            output.push_str(&format!("    - {}\n", item));
+                        }
+                    }
+                }
+
+                let capability_files_key = Value::String("capability_files".to_string());
+                if let Some(capability_files) = out_map.get(&capability_files_key) {
+                    output.push_str("    capability_files:\n");
+                    if let Some(capability_map) = capability_files.as_mapping() {
+                        let mut capabilities: Vec<&str> =
+                            capability_map.keys().filter_map(|k| k.as_str()).collect();
+                        capabilities.sort();
+                        for capability in capabilities {
+                            output.push_str(&format!("      {}:\n", capability));
+                            let capability_key = Value::String(capability.to_string());
+                            if let Some(files) = capability_map.get(&capability_key) {
+                                if let Some(seq) = files.as_sequence() {
+                                    let mut paths: Vec<&str> =
+                                        seq.iter().filter_map(|v| v.as_str()).collect();
+                                    paths.sort_by(|a, b| natural_cmp(a, b));
+                                    for path in paths {
+                                        output.push_str(&format!("      - {}\n", path));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 let files_key = Value::String("files".to_string());
                 if let Some(files) = out_map.get(&files_key) {
                     output.push_str("    files:\n");
@@ -716,12 +777,20 @@ fn format_resolution(value: &Value) -> io::Result<String> {
 
     // group by target (value), then sort within groups
     let mut groups: HashMap<String, Vec<String>> = HashMap::new();
+    let mut capabilities: Vec<(String, String, Option<String>)> = Vec::new();
     for (key, val) in mapping {
-        if let (Some(path), Some(target)) = (key.as_str(), val.as_str()) {
+        let Some(path) = key.as_str() else {
+            continue;
+        };
+        if let Some(target) = val.as_str() {
             groups
                 .entry(target.to_string())
                 .or_default()
                 .push(path.to_string());
+            continue;
+        }
+        if let Some(target) = resolution_capability(val) {
+            capabilities.push((path.to_string(), target.0, target.1));
         }
     }
 
@@ -740,7 +809,34 @@ fn format_resolution(value: &Value) -> io::Result<String> {
         }
     }
 
+    capabilities.sort_by(|a, b| natural_cmp(&a.0, &b.0));
+    for (path, capability, fallback) in capabilities {
+        output.push_str(&format!("  {}:\n", path));
+        output.push_str(&format!(
+            "    capability: {}\n",
+            format_scalar(&Value::String(capability))
+        ));
+        if let Some(fallback) = fallback {
+            output.push_str(&format!(
+                "    fallback: {}\n",
+                format_scalar(&Value::String(fallback))
+            ));
+        }
+    }
+
     Ok(output)
+}
+
+fn resolution_capability(value: &Value) -> Option<(String, Option<String>)> {
+    let mapping = value.as_mapping()?;
+    let capability_key = Value::String("capability".to_string());
+    let fallback_key = Value::String("fallback".to_string());
+    let capability = mapping.get(&capability_key)?.as_str()?.to_string();
+    let fallback = mapping
+        .get(&fallback_key)
+        .and_then(|value| value.as_str())
+        .map(str::to_string);
+    Some((capability, fallback))
 }
 
 /// format a scalar value, quoting strings only when truly needed

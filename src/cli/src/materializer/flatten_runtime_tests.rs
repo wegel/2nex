@@ -1,9 +1,14 @@
+use std::collections::BTreeMap;
 use std::io;
 
 use crate::manifest::{load_manifest_from_str, ManifestData, ManifestIndex};
 
 use super::super::flatten_errors::flatten_export_error;
 use super::flatten_capsule_precomputed;
+
+fn empty_providers() -> BTreeMap<String, String> {
+    BTreeMap::new()
+}
 
 #[test]
 fn flatten_export_error_names_commit_and_path() {
@@ -30,6 +35,7 @@ fn flatten_fails_when_root_manifest_is_missing() {
         temp_dir.path(),
         "x86_64/pkg/apps/example/1.0/outputs/bin",
         &index,
+        &empty_providers(),
         &[],
     )
     .unwrap_err();
@@ -68,6 +74,7 @@ resolution:
         temp_dir.path(),
         "x86_64/pkg/apps/root/1.0/outputs/bin",
         &index,
+        &empty_providers(),
         &[],
     )
     .unwrap_err();
@@ -118,6 +125,7 @@ resolution: {}
         temp_dir.path(),
         "x86_64/pkg/apps/root/1.0/outputs/bin",
         &index,
+        &empty_providers(),
         &[],
     )
     .unwrap_err();
@@ -154,6 +162,7 @@ resolution:
         temp_dir.path(),
         "x86_64/pkg/apps/root/1.0/outputs/bin",
         &index,
+        &empty_providers(),
         &[],
     )
     .unwrap_err();
@@ -198,6 +207,7 @@ resolution:
         temp_dir.path(),
         "x86_64/pkg/apps/root/1.0/outputs/bin",
         &index,
+        &empty_providers(),
         &[],
     )
     .unwrap_err();
@@ -225,6 +235,7 @@ resolution: {}
         temp_dir.path(),
         "x86_64/pkg/apps/root/1.0/bundles/full",
         &index,
+        &empty_providers(),
         &[],
     )
     .unwrap_err();
@@ -254,6 +265,7 @@ resolution: {}
         temp_dir.path(),
         "x86_64/pkg/apps/root/1.0/outputs/lib",
         &index,
+        &empty_providers(),
         &[],
     )
     .unwrap_err();
@@ -302,6 +314,7 @@ resolution: {}
         temp_dir.path(),
         "x86_64/pkg/apps/root/1.0/outputs/bin",
         &index,
+        &empty_providers(),
         &[],
     )
     .unwrap_err();

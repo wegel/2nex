@@ -182,10 +182,11 @@ fn print_manifest_deps(
     let indent = "  ".repeat(depth);
 
     // collect unique dependency names from resolution (skip self)
-    let mut dep_names: Vec<&String> = manifest
+    let mut dep_names: Vec<&str> = manifest
         .resolution
         .values()
-        .filter(|v| *v != "self")
+        .filter(|target| !target.is_self())
+        .filter_map(|target| target.dependency_name())
         .collect();
     dep_names.sort();
     dep_names.dedup();

@@ -12,3 +12,6 @@ pub use parser::load_system_manifest_resolved;
 pub use parser::*;
 pub use types::*;
 pub use update::*;
+
+#[cfg(test)]
+mod format_tests;

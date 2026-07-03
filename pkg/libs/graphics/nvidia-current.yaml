@@ -6,7 +6,7 @@ package:
   version: "595.84"
   description: NVIDIA current open kernel modules and userspace driver
   homepage: https://www.nvidia.com/
-  checksum: eaf94b2ac60cf5fa7c53b989743ec2cbe6820bff8ddfd9bb34315723d7cabf6e
+  checksum: 6e816fd364b2bf663b99e9cf53b4c8a78d775b1e35b8171e6fed58692f1b6443
 
 sources:
 - name: nvidia
@@ -14,7 +14,7 @@ sources:
   sha256: 9e4f5d56e74e1ec12a05b2b0afda893c3187da71cbd8fb14c1a394bbeeeb4148
 - name: runtime_installer
   file: pkg/libs/graphics/nvidia-install-runtime.sh
-  sha256: 58f5c452f399b6563542b3ea0327beff16d31bde76d35c9dfdfd4ae55a6146ef
+  sha256: 49e2fb01b5ed26065bf2592f3aa944bfbc580de30cd0cfa5305685f6dde89965
 
 dependencies:
 - name: linux-module-sdk
@@ -50,7 +50,7 @@ dependencies:
 
 build:
   environment: env/standard.yaml
-  profile: [4101:5603, 8242:8414, 12363:9807, 16490:9967, 20648:11466, 24799:13015, 29200:13586, 30263:15580]
+  profile: [4101:10122, 8242:15515, 12341:18054, 16490:18591, 20648:21566, 24799:24536, 29200:25793, 30263:28665]
 
   script: |
     set -eu
@@ -274,6 +274,9 @@ outputs:
     - path: /usr/lib/firmware/nvidia/595.84/gsp_tu10x.bin
 
   lib:
+    provides:
+    - graphics.egl
+    - graphics.gles
     files:
     - path: /usr/lib/gbm/nvidia-drm_gbm.so
       needs:
@@ -543,7 +546,17 @@ outputs:
       - /usr/lib/libdl.so.2
       - /usr/lib/libpthread.so.0
       - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-egl-gbm.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
     - path: /usr/lib/libnvidia-egl-gbm.so.1.1.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libnvidia-egl-wayland.so.1
       needs:
       - /usr/lib/libc.so.6
       - /usr/lib/libdl.so.2
@@ -553,13 +566,31 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libdl.so.2
       - /usr/lib/libpthread.so.0
+    - path: /usr/lib/libnvidia-egl-wayland2.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
     - path: /usr/lib/libnvidia-egl-wayland2.so.1.0.1
       needs:
       - /usr/lib/libc.so.6
       - /usr/lib/libdl.so.2
       - /usr/lib/libpthread.so.0
       - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-egl-xcb.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
     - path: /usr/lib/libnvidia-egl-xcb.so.1.0.5
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/libnvidia-egl-xlib.so.1
       needs:
       - /usr/lib/libc.so.6
       - /usr/lib/libdl.so.2

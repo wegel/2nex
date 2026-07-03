@@ -102,6 +102,7 @@ fn checkout_nex(
             &paths.logical_pkg,
             &root_commits,
             idx,
+            &config.provider_bindings,
             &config.fallback_repo_paths,
         )?;
     }
@@ -247,6 +248,7 @@ fn flatten_all_capsules_split(
     logical_nex_pkg: &Path,
     root_commits: &RootCommitMap,
     manifest_index: &ManifestIndex,
+    providers: &BTreeMap<String, String>,
     fallback_repos: &[PathBuf],
 ) -> io::Result<()> {
     for (pkg_id, commits) in root_commits {
@@ -264,6 +266,7 @@ fn flatten_all_capsules_split(
                 &physical_pkg_dir,
                 commit,
                 manifest_index,
+                providers,
                 fallback_repos,
             )?;
             if flattened_count > 0 {

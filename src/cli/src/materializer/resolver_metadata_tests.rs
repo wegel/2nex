@@ -43,7 +43,16 @@ fn reports_missing_output_metadata() {
 fn manifest_with_outputs<const N: usize>(outputs: [&str; N]) -> Manifest {
     let outputs = outputs
         .into_iter()
-        .map(|name| (name.to_string(), OutputSpec { files: Vec::new() }))
+        .map(|name| {
+            (
+                name.to_string(),
+                OutputSpec {
+                    provides: Vec::new(),
+                    capability_files: std::collections::BTreeMap::new(),
+                    files: Vec::new(),
+                },
+            )
+        })
         .collect();
 
     Manifest {

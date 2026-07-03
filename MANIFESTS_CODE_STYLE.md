@@ -70,8 +70,9 @@ An assembly manifest must use this top-level order:
 3. `sources`
 4. `dependencies`
 5. `packages`
-6. `exclude`
-7. `build`
+6. `providers`
+7. `exclude`
+8. `build`
 
 Fields under `system` must use this order:
 
@@ -92,6 +93,15 @@ when the child must remove a named package or dependency from its parent. Keep
 overlay paths relative to the repository root. Put one blank line before the
 generated `checksum` field when the header also contains `nex_structure` or
 `extends`.
+
+Use `providers` when an assembly binds an abstract runtime capability to a
+specific package output or bundle. Sort capability names alphabetically. The
+value must be an exact output or bundle ref from a normal package manifest:
+
+```yaml
+providers:
+  graphics.egl: x86_64/pkg/libs/graphics/mesa/24.2.7/outputs/graphics-runtime
+```
 
 ## 4. Sources
 
@@ -202,7 +212,10 @@ that belong together for a concrete build or runtime use.
 
 Sort output names alphabetically. Put one blank line between outputs. Each
 output must contain a non-empty `files` list, and each file entry must put
-`path` before `needs`:
+`path` before `needs`. Put output `provides` before `capability_files`, and put
+both before `files`, when an output supplies a runtime capability. Use
+`capability_files` when a broad output provides several capabilities but an
+assembly should flatten only the files for one capability:
 
 ```yaml
 outputs:
@@ -212,6 +225,15 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+
+  graphics-runtime:
+    provides:
+    - graphics.egl
+    capability_files:
+      graphics.egl:
+      - /usr/lib/libEGL.so.1
+    files:
+    - path: /usr/lib/libEGL.so.1
 
   lib:
     files:
@@ -230,9 +252,20 @@ reproducibility check to keep stale output metadata.
 ## 9. Resolution
 
 `resolution` maps each required installed file to the package that supplies it.
-Use `self` when the same package supplies the file. Group entries by provider,
-sort provider names alphabetically, and sort paths naturally within each
-provider group.
+Use `self` when the same package supplies the file. A generated graphics entry
+may map a file to a capability with a concrete package fallback for
+package-level build and check contexts:
+
+```yaml
+resolution:
+  /usr/lib/libEGL.so.1:
+    capability: graphics.egl
+    fallback: mesa
+```
+
+Group string entries by provider, sort provider names alphabetically, and sort
+paths naturally within each provider group. Put nested capability entries after
+string entries and sort them naturally by path.
 
 Do not guess a provider. Build the dependency first and let `nex compute-deps`
 derive the map. Review the generated map before committing it.
