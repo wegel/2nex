@@ -1,0 +1,147 @@
+package:
+  schema: 1
+  name: libsigc++ 2
+  slug: libsigcxx2
+  namespace: dev/libs
+  version: 2.12.1
+  description: Type-safe callback framework for older GTKmm bindings
+  homepage: https://libsigcplusplus.github.io/libsigcplusplus/
+  checksum: 2615bbf71e17b93673755bb91ab0de918c3d3f4a3ce3ce807617f217c96b45c3
+
+sources:
+- name: libsigcxx2
+  url: https://download.gnome.org/sources/libsigc++/2.12/libsigc++-2.12.1.tar.xz
+  sha256: a9dbee323351d109b7aee074a9cb89ca3e7bcf8ad8edef1851f4cf359bd50843
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4130:1235, 7168:1288]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "${SOURCE_libsigcxx2}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --buildtype=release \
+      -Dmaintainer-mode=false \
+      -Dbuild-documentation=false \
+      -Dbuild-examples=false \
+      -Dbuild-tests=false \
+      -Dbenchmark=false \
+      -Dvalidation=false
+
+    sed -i \
+      '/#undef SIGC_GCC_TEMPLATE_SPECIALIZATION_OPERATOR_OVERLOAD/c #define SIGC_GCC_TEMPLATE_SPECIALIZATION_OPERATOR_OVERLOAD 1' \
+      build/sigc++config.h
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/sigc++-2.0/sigc++/adaptors/adaptor_trait.h
+    - path: /usr/include/sigc++-2.0/sigc++/adaptors/adaptors.h
+    - path: /usr/include/sigc++-2.0/sigc++/adaptors/bind.h
+    - path: /usr/include/sigc++-2.0/sigc++/adaptors/bind_return.h
+    - path: /usr/include/sigc++-2.0/sigc++/adaptors/bound_argument.h
+    - path: /usr/include/sigc++-2.0/sigc++/adaptors/compose.h
+    - path: /usr/include/sigc++-2.0/sigc++/adaptors/deduce_result_type.h
+    - path: /usr/include/sigc++-2.0/sigc++/adaptors/exception_catch.h
+    - path: /usr/include/sigc++-2.0/sigc++/adaptors/hide.h
+    - path: /usr/include/sigc++-2.0/sigc++/adaptors/lambda/base.h
+    - path: /usr/include/sigc++-2.0/sigc++/adaptors/lambda/select.h
+    - path: /usr/include/sigc++-2.0/sigc++/adaptors/retype.h
+    - path: /usr/include/sigc++-2.0/sigc++/adaptors/retype_return.h
+    - path: /usr/include/sigc++-2.0/sigc++/adaptors/track_obj.h
+    - path: /usr/include/sigc++-2.0/sigc++/bind.h
+    - path: /usr/include/sigc++-2.0/sigc++/bind_return.h
+    - path: /usr/include/sigc++-2.0/sigc++/connection.h
+    - path: /usr/include/sigc++-2.0/sigc++/functors/functor_trait.h
+    - path: /usr/include/sigc++-2.0/sigc++/functors/functors.h
+    - path: /usr/include/sigc++-2.0/sigc++/functors/mem_fun.h
+    - path: /usr/include/sigc++-2.0/sigc++/functors/ptr_fun.h
+    - path: /usr/include/sigc++-2.0/sigc++/functors/slot.h
+    - path: /usr/include/sigc++-2.0/sigc++/functors/slot_base.h
+    - path: /usr/include/sigc++-2.0/sigc++/limit_reference.h
+    - path: /usr/include/sigc++-2.0/sigc++/reference_wrapper.h
+    - path: /usr/include/sigc++-2.0/sigc++/retype_return.h
+    - path: /usr/include/sigc++-2.0/sigc++/sigc++.h
+    - path: /usr/include/sigc++-2.0/sigc++/signal.h
+    - path: /usr/include/sigc++-2.0/sigc++/signal_base.h
+    - path: /usr/include/sigc++-2.0/sigc++/slot.h
+    - path: /usr/include/sigc++-2.0/sigc++/trackable.h
+    - path: /usr/include/sigc++-2.0/sigc++/type_traits.h
+    - path: /usr/include/sigc++-2.0/sigc++/visit_each.h
+    - path: /usr/lib/pkgconfig/sigc++-2.0.pc
+    - path: /usr/lib/sigc++-2.0/include/sigc++config.h
+
+  lib:
+    files:
+    - path: /usr/lib/libsigc-2.0.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libsigc-2.0.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libsigc-2.0.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/libc.so.6: glibc
