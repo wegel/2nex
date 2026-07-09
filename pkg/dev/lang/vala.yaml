@@ -1,0 +1,515 @@
+package:
+  schema: 1
+  name: Vala
+  slug: vala
+  namespace: dev/lang
+  version: 0.56.19
+  description: Compiler for the Vala programming language
+  homepage: https://wiki.gnome.org/Projects/Vala
+  checksum: cc104406354065e9b320645fea1c05edc3f17a3bb5d2dccf27d84823aa7e96b3
+
+sources:
+- name: vala
+  url: https://download.gnome.org/sources/vala/0.56/vala-0.56.19.tar.xz
+  sha256: 5ad7cbbfcc0de61b403d6797c9ef60455bfbebd8e162aec33b5b0b097adfb9d5
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: flex
+  commit: x86_64/pkg/core/toolchain/flex/2.6.4/bundles/dev
+- name: bison
+  commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
+- name: m4
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+- name: gobject-introspection
+  commit: x86_64/pkg/dev/tools/gobject-introspection/1.84.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [8304:2316, 33164:3573, 70311:3696, 115752:4215, 152942:4476, 190056:4805, 231381:5236, 285158:8248, 343300:9056, 379435:15661]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "${SOURCE_vala}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
+
+    ./configure \
+      --prefix=/usr \
+      --disable-valadoc \
+      --disable-unversioned
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/vala-0.56
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libvala-0.56.so.0
+      - /usr/lib/vala-0.56/libvalaccodegen.so
+    - path: /usr/bin/vala-gen-introspect-0.56
+    - path: /usr/bin/valac-0.56
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libvala-0.56.so.0
+      - /usr/lib/vala-0.56/libvalaccodegen.so
+    - path: /usr/bin/vapigen-0.56
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libvala-0.56.so.0
+
+  dev:
+    files:
+    - path: /usr/include/vala-0.56/vala.h
+    - path: /usr/include/vala-0.56/valagee.h
+    - path: /usr/lib/libvala-0.56.la
+    - path: /usr/lib/pkgconfig/libvala-0.56.pc
+    - path: /usr/lib/pkgconfig/vapigen-0.56.pc
+    - path: /usr/lib/vala-0.56/libvalaccodegen.la
+    - path: /usr/share/vala-0.56/vapi/gio-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/glib-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gobject-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/posix.vapi
+
+  lib:
+    files:
+    - path: /usr/lib/libvala-0.56.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+    - path: /usr/lib/libvala-0.56.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+    - path: /usr/lib/libvala-0.56.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+    - path: /usr/lib/vala-0.56/gen-introspect-0.56
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+    - path: /usr/lib/vala-0.56/libvalaccodegen.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libvala-0.56.so.0
+
+  man:
+    files:
+    - path: /usr/share/man/man1/vala-gen-introspect-0.56.1
+    - path: /usr/share/man/man1/valac-0.56.1
+    - path: /usr/share/man/man1/vapigen-0.56.1
+
+  misc:
+    files:
+    - path: /usr/share/vala-0.56/vapi/SDL2_gfx.deps
+    - path: /usr/share/vala-0.56/vapi/SDL2_gfx.vapi
+    - path: /usr/share/vala-0.56/vapi/SDL2_image.deps
+    - path: /usr/share/vala-0.56/vapi/SDL2_image.vapi
+    - path: /usr/share/vala-0.56/vapi/SDL2_mixer.deps
+    - path: /usr/share/vala-0.56/vapi/SDL2_mixer.vapi
+    - path: /usr/share/vala-0.56/vapi/SDL2_net.deps
+    - path: /usr/share/vala-0.56/vapi/SDL2_net.vapi
+    - path: /usr/share/vala-0.56/vapi/SDL2_ttf.deps
+    - path: /usr/share/vala-0.56/vapi/SDL2_ttf.vapi
+    - path: /usr/share/vala-0.56/vapi/alsa.deps
+    - path: /usr/share/vala-0.56/vapi/alsa.vapi
+    - path: /usr/share/vala-0.56/vapi/atk.deps
+    - path: /usr/share/vala-0.56/vapi/atk.vapi
+    - path: /usr/share/vala-0.56/vapi/atspi-2.deps
+    - path: /usr/share/vala-0.56/vapi/atspi-2.vapi
+    - path: /usr/share/vala-0.56/vapi/avahi-client.vapi
+    - path: /usr/share/vala-0.56/vapi/avahi-gobject.deps
+    - path: /usr/share/vala-0.56/vapi/avahi-gobject.vapi
+    - path: /usr/share/vala-0.56/vapi/bzlib.vapi
+    - path: /usr/share/vala-0.56/vapi/cairo-gobject.deps
+    - path: /usr/share/vala-0.56/vapi/cairo-gobject.vapi
+    - path: /usr/share/vala-0.56/vapi/cairo-xcb.deps
+    - path: /usr/share/vala-0.56/vapi/cairo-xcb.vapi
+    - path: /usr/share/vala-0.56/vapi/cairo.vapi
+    - path: /usr/share/vala-0.56/vapi/ccss-1.vapi
+    - path: /usr/share/vala-0.56/vapi/clutter-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/clutter-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/clutter-gdk-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/clutter-gdk-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/clutter-gst-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/clutter-gst-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/clutter-gst-3.0.deps
+    - path: /usr/share/vala-0.56/vapi/clutter-gst-3.0.vapi
+    - path: /usr/share/vala-0.56/vapi/clutter-gtk-0.10.deps
+    - path: /usr/share/vala-0.56/vapi/clutter-gtk-0.10.vapi
+    - path: /usr/share/vala-0.56/vapi/clutter-gtk-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/clutter-gtk-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/clutter-x11-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/clutter-x11-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/cogl-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/cogl-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/cogl-pango-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/cogl-pango-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/curses.vapi
+    - path: /usr/share/vala-0.56/vapi/dbus-glib-1.vapi
+    - path: /usr/share/vala-0.56/vapi/enchant-2.vapi
+    - path: /usr/share/vala-0.56/vapi/enchant.vapi
+    - path: /usr/share/vala-0.56/vapi/fuse.deps
+    - path: /usr/share/vala-0.56/vapi/fuse.vapi
+    - path: /usr/share/vala-0.56/vapi/gconf-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gdesktopenums-3.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gdk-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/gdk-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gdk-3.0.deps
+    - path: /usr/share/vala-0.56/vapi/gdk-3.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gdk-pixbuf-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/gdk-pixbuf-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gdk-x11-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/gdk-x11-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gdk-x11-3.0.deps
+    - path: /usr/share/vala-0.56/vapi/gdk-x11-3.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gdl-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gdl-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gdl-3.0.deps
+    - path: /usr/share/vala-0.56/vapi/gdl-3.0.vapi
+    - path: /usr/share/vala-0.56/vapi/geocode-glib-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/geocode-glib-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/geocode-glib-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/geocode-glib-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gio-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/gio-unix-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/gio-unix-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gio-windows-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/gio-windows-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gmodule-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/gmodule-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gnet-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/gnet-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gnome-bg-4.deps
+    - path: /usr/share/vala-0.56/vapi/gnome-bg-4.vapi
+    - path: /usr/share/vala-0.56/vapi/gnome-desktop-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/gnome-desktop-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gnome-desktop-3.0.deps
+    - path: /usr/share/vala-0.56/vapi/gnome-desktop-3.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gnome-desktop-4.deps
+    - path: /usr/share/vala-0.56/vapi/gnome-desktop-4.vapi
+    - path: /usr/share/vala-0.56/vapi/gnome-rr-4.deps
+    - path: /usr/share/vala-0.56/vapi/gnome-rr-4.vapi
+    - path: /usr/share/vala-0.56/vapi/gnome-vfs-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gnu.deps
+    - path: /usr/share/vala-0.56/vapi/gnu.vapi
+    - path: /usr/share/vala-0.56/vapi/gnutls.vapi
+    - path: /usr/share/vala-0.56/vapi/gobject-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/gobject-introspection-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gobject-introspection-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/goocanvas-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/goocanvas-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/goocanvas.deps
+    - path: /usr/share/vala-0.56/vapi/goocanvas.vapi
+    - path: /usr/share/vala-0.56/vapi/graphene-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/graphene-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/graphene-gobject-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/graphene-gobject-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gsl.vapi
+    - path: /usr/share/vala-0.56/vapi/gst-editing-services-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gst-editing-services-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-allocators-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-allocators-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-app-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-app-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-audio-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-audio-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-bad-allocators-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-bad-allocators-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-base-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-base-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-check-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-check-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-controller-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-controller-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-fft-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-fft-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-net-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-net-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-pbutils-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-pbutils-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-play-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-play-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-player-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-player-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-riff-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-riff-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-rtp-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-rtp-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-rtsp-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-rtsp-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-rtsp-server-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-rtsp-server-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-sdp-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-sdp-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-tag-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-tag-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-video-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-video-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gstreamer-webrtc-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gstreamer-webrtc-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gtk+-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/gtk+-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gtk+-3.0.deps
+    - path: /usr/share/vala-0.56/vapi/gtk+-3.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gtk+-unix-print-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/gtk+-unix-print-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gtk+-unix-print-3.0.deps
+    - path: /usr/share/vala-0.56/vapi/gtk+-unix-print-3.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gtk4.deps
+    - path: /usr/share/vala-0.56/vapi/gtk4-unix-print.deps
+    - path: /usr/share/vala-0.56/vapi/gtk4-unix-print.vapi
+    - path: /usr/share/vala-0.56/vapi/gtk4.vapi
+    - path: /usr/share/vala-0.56/vapi/gtk4-wayland.deps
+    - path: /usr/share/vala-0.56/vapi/gtk4-wayland.vapi
+    - path: /usr/share/vala-0.56/vapi/gtk4-x11.deps
+    - path: /usr/share/vala-0.56/vapi/gtk4-x11.vapi
+    - path: /usr/share/vala-0.56/vapi/gtkmozembed.deps
+    - path: /usr/share/vala-0.56/vapi/gtkmozembed.vapi
+    - path: /usr/share/vala-0.56/vapi/gtksourceview-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/gtksourceview-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/gudev-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/gudev-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/hal.deps
+    - path: /usr/share/vala-0.56/vapi/hal.vapi
+    - path: /usr/share/vala-0.56/vapi/harfbuzz-gobject.deps
+    - path: /usr/share/vala-0.56/vapi/harfbuzz-gobject.vapi
+    - path: /usr/share/vala-0.56/vapi/hildon-1.deps
+    - path: /usr/share/vala-0.56/vapi/hildon-1.vapi
+    - path: /usr/share/vala-0.56/vapi/hildon-fm-2.deps
+    - path: /usr/share/vala-0.56/vapi/hildon-fm-2.vapi
+    - path: /usr/share/vala-0.56/vapi/javascriptcoregtk-4.0.vapi
+    - path: /usr/share/vala-0.56/vapi/javascriptcoregtk-4.1.vapi
+    - path: /usr/share/vala-0.56/vapi/javascriptcoregtk-5.0.vapi
+    - path: /usr/share/vala-0.56/vapi/javascriptcoregtk-6.0.vapi
+    - path: /usr/share/vala-0.56/vapi/json-glib-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/json-glib-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libarchive.deps
+    - path: /usr/share/vala-0.56/vapi/libarchive.vapi
+    - path: /usr/share/vala-0.56/vapi/libbonoboui-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libdaemon.vapi
+    - path: /usr/share/vala-0.56/vapi/libepc-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libesmtp.vapi
+    - path: /usr/share/vala-0.56/vapi/libftdi.deps
+    - path: /usr/share/vala-0.56/vapi/libftdi.vapi
+    - path: /usr/share/vala-0.56/vapi/libgeoclue-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/libgeoclue-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libglade-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/libglade-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libgnome-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libgnome-menu-3.0.deps
+    - path: /usr/share/vala-0.56/vapi/libgnome-menu-3.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libgnome-menu.vapi
+    - path: /usr/share/vala-0.56/vapi/libgnomeui-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/libgnomeui-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libgrss.deps
+    - path: /usr/share/vala-0.56/vapi/libgrss.vapi
+    - path: /usr/share/vala-0.56/vapi/libgsf-1.deps
+    - path: /usr/share/vala-0.56/vapi/libgsf-1.vapi
+    - path: /usr/share/vala-0.56/vapi/libgvc.vapi
+    - path: /usr/share/vala-0.56/vapi/libmagic.vapi
+    - path: /usr/share/vala-0.56/vapi/libnl-1.vapi
+    - path: /usr/share/vala-0.56/vapi/libnl-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/libnl-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libnl-3.0.deps
+    - path: /usr/share/vala-0.56/vapi/libnl-3.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libnotify.deps
+    - path: /usr/share/vala-0.56/vapi/libnotify.vapi
+    - path: /usr/share/vala-0.56/vapi/liboobs-1.vapi
+    - path: /usr/share/vala-0.56/vapi/libosso.vapi
+    - path: /usr/share/vala-0.56/vapi/libpanelapplet-2.0.deps
+    - path: /usr/share/vala-0.56/vapi/libpanelapplet-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libpeas-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/libpeas-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libpeas-gtk-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/libpeas-gtk-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libpq.vapi
+    - path: /usr/share/vala-0.56/vapi/libsexy.deps
+    - path: /usr/share/vala-0.56/vapi/libsexy.vapi
+    - path: /usr/share/vala-0.56/vapi/libsoup-2.4.deps
+    - path: /usr/share/vala-0.56/vapi/libsoup-2.4.vapi
+    - path: /usr/share/vala-0.56/vapi/libsoup-3.0.deps
+    - path: /usr/share/vala-0.56/vapi/libsoup-3.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libunwind-generic.vapi
+    - path: /usr/share/vala-0.56/vapi/libusb-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/libusb-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libusb.vapi
+    - path: /usr/share/vala-0.56/vapi/libwnck-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/libwnck-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libwnck-3.0.deps
+    - path: /usr/share/vala-0.56/vapi/libwnck-3.0.vapi
+    - path: /usr/share/vala-0.56/vapi/libxml-2.0.vapi
+    - path: /usr/share/vala-0.56/vapi/linux.deps
+    - path: /usr/share/vala-0.56/vapi/linux.vapi
+    - path: /usr/share/vala-0.56/vapi/loudmouth-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/lua.vapi
+    - path: /usr/share/vala-0.56/vapi/mysql.vapi
+    - path: /usr/share/vala-0.56/vapi/orc-0.4.vapi
+    - path: /usr/share/vala-0.56/vapi/packagekit-glib2.deps
+    - path: /usr/share/vala-0.56/vapi/packagekit-glib2.vapi
+    - path: /usr/share/vala-0.56/vapi/pango.deps
+    - path: /usr/share/vala-0.56/vapi/pango.vapi
+    - path: /usr/share/vala-0.56/vapi/pangocairo.deps
+    - path: /usr/share/vala-0.56/vapi/pangocairo.vapi
+    - path: /usr/share/vala-0.56/vapi/pixman-1.vapi
+    - path: /usr/share/vala-0.56/vapi/polkit-agent-1.deps
+    - path: /usr/share/vala-0.56/vapi/polkit-agent-1.vapi
+    - path: /usr/share/vala-0.56/vapi/polkit-gobject-1.deps
+    - path: /usr/share/vala-0.56/vapi/polkit-gobject-1.vapi
+    - path: /usr/share/vala-0.56/vapi/poppler-glib.deps
+    - path: /usr/share/vala-0.56/vapi/poppler-glib.vapi
+    - path: /usr/share/vala-0.56/vapi/purple.deps
+    - path: /usr/share/vala-0.56/vapi/purple.vapi
+    - path: /usr/share/vala-0.56/vapi/raptor.vapi
+    - path: /usr/share/vala-0.56/vapi/rasqal.deps
+    - path: /usr/share/vala-0.56/vapi/rasqal.vapi
+    - path: /usr/share/vala-0.56/vapi/readline.vapi
+    - path: /usr/share/vala-0.56/vapi/rest-0.7.deps
+    - path: /usr/share/vala-0.56/vapi/rest-0.7.vapi
+    - path: /usr/share/vala-0.56/vapi/rest-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/rest-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/rest-extras-0.7.deps
+    - path: /usr/share/vala-0.56/vapi/rest-extras-0.7.vapi
+    - path: /usr/share/vala-0.56/vapi/rest-extras-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/rest-extras-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/sdl2-android.deps
+    - path: /usr/share/vala-0.56/vapi/sdl2-android.vapi
+    - path: /usr/share/vala-0.56/vapi/sdl2-ios.deps
+    - path: /usr/share/vala-0.56/vapi/sdl2-ios.vapi
+    - path: /usr/share/vala-0.56/vapi/sdl2.vapi
+    - path: /usr/share/vala-0.56/vapi/sdl2-windows.deps
+    - path: /usr/share/vala-0.56/vapi/sdl2-windows.vapi
+    - path: /usr/share/vala-0.56/vapi/sdl2-winrt.deps
+    - path: /usr/share/vala-0.56/vapi/sdl2-winrt.vapi
+    - path: /usr/share/vala-0.56/vapi/sqlite3.vapi
+    - path: /usr/share/vala-0.56/vapi/taglib_c.vapi
+    - path: /usr/share/vala-0.56/vapi/tiff.vapi
+    - path: /usr/share/vala-0.56/vapi/tokyocabinet.vapi
+    - path: /usr/share/vala-0.56/vapi/udisks2.deps
+    - path: /usr/share/vala-0.56/vapi/udisks2.vapi
+    - path: /usr/share/vala-0.56/vapi/unique-1.0.deps
+    - path: /usr/share/vala-0.56/vapi/unique-1.0.vapi
+    - path: /usr/share/vala-0.56/vapi/v4l2.vapi
+    - path: /usr/share/vala-0.56/vapi/wayland-client.vapi
+    - path: /usr/share/vala-0.56/vapi/webkit2gtk-4.0.deps
+    - path: /usr/share/vala-0.56/vapi/webkit2gtk-4.0.vapi
+    - path: /usr/share/vala-0.56/vapi/webkit2gtk-4.1.deps
+    - path: /usr/share/vala-0.56/vapi/webkit2gtk-4.1.vapi
+    - path: /usr/share/vala-0.56/vapi/webkit2gtk-5.0.deps
+    - path: /usr/share/vala-0.56/vapi/webkit2gtk-5.0.vapi
+    - path: /usr/share/vala-0.56/vapi/webkit2gtk-web-extension-4.0.deps
+    - path: /usr/share/vala-0.56/vapi/webkit2gtk-web-extension-4.0.vapi
+    - path: /usr/share/vala-0.56/vapi/webkit2gtk-web-extension-4.1.deps
+    - path: /usr/share/vala-0.56/vapi/webkit2gtk-web-extension-4.1.vapi
+    - path: /usr/share/vala-0.56/vapi/webkit2gtk-web-extension-5.0.deps
+    - path: /usr/share/vala-0.56/vapi/webkit2gtk-web-extension-5.0.vapi
+    - path: /usr/share/vala-0.56/vapi/webkitgtk-6.0.deps
+    - path: /usr/share/vala-0.56/vapi/webkitgtk-6.0.vapi
+    - path: /usr/share/vala-0.56/vapi/webkitgtk-web-extension-6.0.deps
+    - path: /usr/share/vala-0.56/vapi/webkitgtk-web-extension-6.0.vapi
+    - path: /usr/share/vala-0.56/vapi/webkitgtk-web-process-extension-6.0.deps
+    - path: /usr/share/vala-0.56/vapi/webkitgtk-web-process-extension-6.0.vapi
+    - path: /usr/share/vala-0.56/vapi/x11.vapi
+    - path: /usr/share/vala-0.56/vapi/xcb-icccm.deps
+    - path: /usr/share/vala-0.56/vapi/xcb-icccm.vapi
+    - path: /usr/share/vala-0.56/vapi/xcb.vapi
+    - path: /usr/share/vala-0.56/vapi/xtst.deps
+    - path: /usr/share/vala-0.56/vapi/xtst.vapi
+    - path: /usr/share/vala-0.56/vapi/zlib.vapi
+    - path: /usr/share/vala/vapi/libvala-0.56.vapi
+
+resolution:
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgmodule-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libvala-0.56.so.0: self
+  /usr/lib/vala-0.56/libvalaccodegen.so: self
