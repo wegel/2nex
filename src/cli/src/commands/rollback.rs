@@ -1,9 +1,11 @@
 use clap::Args;
 use nix::unistd::Uid;
-use std::fs;
+use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+use walkdir::WalkDir;
 
 #[derive(Args)]
 pub struct RollbackArgs {
@@ -77,12 +79,21 @@ pub fn run(args: &RollbackArgs) -> io::Result<()> {
     let new_name = format!("{}.{}", target.checksum, next_serial);
     let src = deployments_dir.join(&target.name);
     let dst = deployments_dir.join(&new_name);
+    let temp = deployments_dir.join(format!(".{}.tmp", new_name));
+
+    if dst.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("rollback deployment already exists: {}", dst.display()),
+        ));
+    }
 
     println!("Current:  {}", current.as_deref().unwrap_or("(unknown)"));
     println!("Target:   {}", target.name);
     println!("New:      {}", new_name);
     println!("Source:   {}", src.display());
     println!("Dest:     {}", dst.display());
+    println!("Staging:  {}", temp.display());
     println!();
 
     if args.dry_run {
@@ -98,37 +109,110 @@ pub fn run(args: &RollbackArgs) -> io::Result<()> {
 
     let mut remount = RemountGuard::new(sysroot)?;
 
-    // Create destination dir (remount sysroot rw if needed)
-    if let Err(e) = fs::create_dir_all(&dst) {
-        if e.kind() == io::ErrorKind::ReadOnlyFilesystem {
-            remount.remount_rw()?;
-            fs::create_dir_all(&dst)?;
-        } else {
-            return Err(e);
-        }
-    }
+    prepare_temp_deployment(&mut remount, &temp)?;
 
-    // Hardlink-copy the selected deployment into the new deployment dir.
-    // This is safe even if the source deployment is the currently running one.
-    let status = Command::new("cp")
-        .args([
-            "-a",
-            "-l",
-            &format!("{}/.", src.display()),
-            dst.to_str().unwrap(),
-        ])
-        .status()?;
-    if !status.success() {
-        return Err(io::Error::other(
-            "failed to create rollback deployment (cp -a -l)",
-        ));
-    }
+    copy_and_publish_rollback(&src, &temp, &dst)?;
 
     remount.remount_ro()?;
 
     println!("Rollback deployment created: {}", new_name);
     println!("Reboot to activate (bootloader picks highest serial).");
     Ok(())
+}
+
+fn prepare_temp_deployment(remount: &mut RemountGuard<'_>, temp: &Path) -> io::Result<()> {
+    if let Err(error) = replace_temp_deployment(temp) {
+        if error.kind() == io::ErrorKind::ReadOnlyFilesystem {
+            remount.remount_rw()?;
+            replace_temp_deployment(temp)?;
+        } else {
+            return Err(error);
+        }
+    }
+
+    Ok(())
+}
+
+fn replace_temp_deployment(temp: &Path) -> io::Result<()> {
+    if temp.exists() {
+        fs::remove_dir_all(temp)?;
+    }
+    fs::create_dir_all(temp)
+}
+
+fn copy_and_publish_rollback(src: &Path, temp: &Path, dst: &Path) -> io::Result<()> {
+    copy_and_publish_rollback_with_command(Path::new("cp"), src, temp, dst)
+}
+
+fn copy_and_publish_rollback_with_command(
+    copy_command: &Path,
+    src: &Path,
+    temp: &Path,
+    dst: &Path,
+) -> io::Result<()> {
+    if let Err(error) = copy_and_publish_prepared_rollback(copy_command, src, temp, dst) {
+        let _ = fs::remove_dir_all(temp);
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn copy_and_publish_prepared_rollback(
+    copy_command: &Path,
+    src: &Path,
+    temp: &Path,
+    dst: &Path,
+) -> io::Result<()> {
+    hardlink_copy_deployment(copy_command, src, temp)?;
+    sync_tree(temp)?;
+    fs::rename(temp, dst)?;
+    if let Some(parent) = dst.parent() {
+        sync_path(parent)?;
+    }
+    Ok(())
+}
+
+fn hardlink_copy_deployment(copy_command: &Path, src: &Path, temp: &Path) -> io::Result<()> {
+    let status = Command::new(copy_command)
+        .arg("-a")
+        .arg("-l")
+        .arg(src.join("."))
+        .arg(temp)
+        .status()?;
+    if !status.success() {
+        return Err(io::Error::other(
+            "failed to create rollback deployment (cp -a -l)",
+        ));
+    }
+    Ok(())
+}
+
+fn sync_tree(root: &Path) -> io::Result<()> {
+    let mut first_error = None;
+    for entry in WalkDir::new(root).contents_first(true) {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                first_error.get_or_insert_with(|| io::Error::other(error.to_string()));
+                continue;
+            }
+        };
+        if entry.file_type().is_symlink() {
+            continue;
+        }
+        if let Err(error) = sync_path(entry.path()) {
+            first_error.get_or_insert(error);
+        }
+    }
+
+    match first_error {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
+fn sync_path(path: &Path) -> io::Result<()> {
+    File::open(path)?.sync_all()
 }
 
 fn choose_previous(deployments: &[Deployment], current: Option<&str>) -> io::Result<Deployment> {
@@ -275,3 +359,7 @@ impl Drop for RemountGuard<'_> {
         let _ = self.remount_ro();
     }
 }
+
+#[cfg(test)]
+#[path = "rollback_tests.rs"]
+mod rollback_tests;
