@@ -117,6 +117,10 @@ fn load_extra_initrd(fs: &ext4::Ext4Fs, deployment: &zub::Deployment) -> Option<
         }
     }
 
+    if let Some(base_initramfs) = load_deployment_initramfs(fs, deployment) {
+        initrd.extend_from_slice(&base_initramfs);
+    }
+
     if let Some(modules) = load_boot_modules(fs, deployment) {
         initrd.extend_from_slice(&modules);
     }
@@ -147,6 +151,21 @@ fn load_microcode_initrd(
             Some(data)
         }
         Err(_) => None,
+    }
+}
+
+fn load_deployment_initramfs(fs: &ext4::Ext4Fs, deployment: &zub::Deployment) -> Option<Vec<u8>> {
+    let path = alloc::format!("{}/boot/initramfs.cpio", deployment.path);
+
+    match fs.read_file(&path) {
+        Ok(data) => {
+            log::info!("initramfs: loaded deployment cpio ({} bytes)", data.len());
+            Some(data)
+        }
+        Err(e) => {
+            log::warn!("initramfs: failed to load {}: {:?}", path, e);
+            None
+        }
     }
 }
 

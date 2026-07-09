@@ -130,10 +130,31 @@ ensure_var_dirs() {
         "${SYSROOT_MOUNT}/var/lib" \
         "${SYSROOT_MOUNT}/var/cache" \
         "${SYSROOT_MOUNT}/var/tmp" \
+        "${SYSROOT_MOUNT}/var/nex/repo" \
         "${SYSROOT_MOUNT}/var/nex/manifests" \
         "${SYSROOT_MOUNT}/var/nex/users" \
         || die "failed to create standard /var directories"
     chmod 1777 "${SYSROOT_MOUNT}/var/tmp" 2>/dev/null || true
+}
+
+repo_bind_source() {
+    root_repo="${SYSROOT_MOUNT}/nex/repo"
+    var_repo="${SYSROOT_MOUNT}/var/nex/repo"
+
+    if [ -f "${root_repo}/config.toml" ] || [ -d "${root_repo}/objects" ]; then
+        echo "$root_repo"
+        return 0
+    fi
+    if [ -f "${var_repo}/config.toml" ] || [ -d "${var_repo}/objects" ]; then
+        echo "$var_repo"
+        return 0
+    fi
+    if [ -d "$root_repo" ]; then
+        echo "$root_repo"
+        return 0
+    fi
+    mkdir -p "$var_repo" || die "failed to create /var/nex/repo"
+    echo "$var_repo"
 }
 
 if [ -n "$ROOT" ]; then
@@ -207,7 +228,8 @@ mount --bind "${SYSROOT_MOUNT}/var/etc" "${DEPLOY}/etc" || die "failed to bind-m
 mount --bind "${SYSROOT_MOUNT}/var/home" "${DEPLOY}/home" || die "failed to bind-mount /home"
 mount --bind "${SYSROOT_MOUNT}/var/root" "${DEPLOY}/root" || die "failed to bind-mount /root"
 
-mount --bind "${SYSROOT_MOUNT}/nex/repo" "${DEPLOY}/nex/repo" || die "failed to bind-mount /nex/repo"
+REPO_SOURCE="$(repo_bind_source)"
+mount --bind "$REPO_SOURCE" "${DEPLOY}/nex/repo" || die "failed to bind-mount /nex/repo"
 mount --bind "${SYSROOT_MOUNT}/nex/deployments" "${DEPLOY}/nex/deployments" || die "failed to bind-mount /nex/deployments"
 mount --bind "${SYSROOT_MOUNT}/nex/staging" "${DEPLOY}/nex/staging" || die "failed to bind-mount /nex/staging"
 mkdir -p "${SYSROOT_MOUNT}/var/nex/users" 2>/dev/null || true

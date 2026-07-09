@@ -192,7 +192,6 @@ stage_root_and_var() {
     zub --repo "$ZUB_REPO" checkout --copy "$FROM_REF" "$deploy_dir"
 
     mkdir -p \
-        "$root_content/nex/repo" \
         "$root_content/nex/staging" \
         "$root_content/proc" \
         "$root_content/sys" \
@@ -243,6 +242,7 @@ stage_root_and_var() {
         "$var_content/lib/systemd/coredump" \
         "$var_content/cache/fontconfig" \
         "$var_content/tmp" \
+        "$var_content/nex/repo" \
         "$var_content/nex/users" \
         "$var_content/nex/manifests" \
         "$var_content/nex/upgrade-source"
@@ -257,7 +257,7 @@ stage_root_and_var() {
     ln -sfn /usr/lib/systemd/system/sshd.service \
         "$var_content/etc/systemd/system/multi-user.target.wants/sshd.service"
 
-    build_guest_repo "$root_content/nex/repo" "$var_content/nex/upgrade-source"
+    build_guest_repo "$var_content/nex/repo" "$var_content/nex/upgrade-source"
 }
 
 create_esp() {
@@ -426,7 +426,7 @@ run_guest_cmd() {
     ssh_probe "$@" 2>&1 | tee -a "$PROBE_LOG"
 }
 
-assert_deployment_file_has_repo_hardlink() {
+assert_deployment_file_materialized() {
     local deployment=$1
 
     run_guest_cmd "
@@ -435,14 +435,12 @@ assert_deployment_file_has_repo_hardlink() {
         file=\"\$deployment_root/${HARDLINK_PROBE_PATH}\"
         test -f \"\$file\"
         links=\$(stat -c '%h' \"\$file\")
-        test \"\$links\" -gt 1
         blob=\$(find \"\$repo_blobs\" -xdev -type f -samefile \"\$file\" -print -quit 2>/dev/null || true)
         if [ -n \"\$blob\" ]; then
             printf 'repo-hardlink %s %s %s\n' \"\$file\" \"\$links\" \"\$blob\"
             exit 0
         fi
-        printf 'deployment file is not hardlinked to a repo blob: %s\n' \"\$file\" >&2
-        exit 1
+        printf 'repo-copy %s %s\n' \"\$file\" \"\$links\"
     "
 }
 
@@ -477,7 +475,7 @@ run_upgrade_flow() {
     run_guest_cmd "nex upgrade '$TO_REF' --sysroot /sysroot --repo /nex/repo"
     run_guest_cmd "test -d '/sysroot/nex/deployments/${to_checksum}.1'"
     run_guest_cmd "zub --repo /nex/repo rev-parse '$TO_REF' >/dev/null"
-    assert_deployment_file_has_repo_hardlink "${to_checksum}.1"
+    assert_deployment_file_materialized "${to_checksum}.1"
     stop_guest "$qemu_pid"
 
     log "rebooting into upgraded deployment through the bootloader"
