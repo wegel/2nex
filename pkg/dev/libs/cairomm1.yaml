@@ -1,0 +1,212 @@
+package:
+  schema: 1
+  name: cairomm 1.0
+  slug: cairomm1
+  namespace: dev/libs
+  version: 1.12.0
+  description: C++ bindings for cairo used by GTKmm 3
+  homepage: https://www.cairographics.org/cairomm/
+  checksum: 607bf57fccf42bb813b9c45fac2e1e614933c6c63f880295fc90319e27281c68
+
+sources:
+- name: cairomm1
+  url: https://download.gnome.org/sources/cairomm/1.12/cairomm-1.12.0.tar.xz
+  sha256: a54ada8394a86182525c0762e6f50db6b9212a2109280d13ec6a0b29bfd1afe6
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: cairo
+  commit: x86_64/pkg/libs/graphics/cairo/1.18.4/bundles/dev
+- name: libsigcxx2
+  commit: x86_64/pkg/dev/libs/libsigcxx2/2.12.1/bundles/dev
+- name: pixman
+  commit: x86_64/pkg/libs/graphics/pixman/0.46.4/bundles/dev
+- name: freetype
+  commit: x86_64/pkg/libs/graphics/freetype/2.14.1/bundles/dev
+- name: fontconfig
+  commit: x86_64/pkg/libs/graphics/fontconfig/2.17.1/bundles/dev
+- name: libpng
+  commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4117:1248, 8594:2350, 13178:2352, 17842:2353, 21956:2364, 26428:2365, 30532:2639, 34784:3623, 36273:3659]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "${SOURCE_cairomm1}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    sed -i \
+      -e '/context_surface_xlib.cc/d' \
+      -e 's/ context_surface_xlib.lo//' \
+      -e '/context_surface_xlib.Plo/d' \
+      -e '/xlib_surface.cc/d' \
+      -e 's/ xlib_surface.lo//' \
+      -e '/xlib_surface.Plo/d' \
+      -e '/xlib_surface.h/d' \
+      cairomm/filelist.am \
+      cairomm/Makefile.in \
+      docs/Makefile.in
+    sed -i \
+      -e 's/ $(am__objects_2)//' \
+      cairomm/Makefile.in
+    sed -i \
+      -e '/cairomm-xlib-1.0.pc/d' \
+      -e '/cairomm-xlib-xrender-1.0.pc/d' \
+      Makefile.in
+
+    ./configure \
+      --prefix=/usr \
+      --libdir=/usr/lib \
+      --disable-static \
+      --disable-documentation \
+      --disable-tests
+
+    make
+    DESTDIR="${OUT_DIR}" make install
+
+    rm -f \
+      "${OUT_DIR}/usr/lib/pkgconfig/cairomm-xlib-1.0.pc" \
+      "${OUT_DIR}/usr/lib/pkgconfig/cairomm-xlib-xrender-1.0.pc"
+
+    find "${OUT_DIR}" -name '*.la' -delete
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/cairomm-1.0/cairomm/cairomm.h
+    - path: /usr/include/cairomm-1.0/cairomm/context.h
+    - path: /usr/include/cairomm-1.0/cairomm/device.h
+    - path: /usr/include/cairomm-1.0/cairomm/enums.h
+    - path: /usr/include/cairomm-1.0/cairomm/exception.h
+    - path: /usr/include/cairomm-1.0/cairomm/fontface.h
+    - path: /usr/include/cairomm-1.0/cairomm/fontoptions.h
+    - path: /usr/include/cairomm-1.0/cairomm/matrix.h
+    - path: /usr/include/cairomm-1.0/cairomm/path.h
+    - path: /usr/include/cairomm-1.0/cairomm/pattern.h
+    - path: /usr/include/cairomm-1.0/cairomm/quartz_font.h
+    - path: /usr/include/cairomm-1.0/cairomm/quartz_surface.h
+    - path: /usr/include/cairomm-1.0/cairomm/refptr.h
+    - path: /usr/include/cairomm-1.0/cairomm/region.h
+    - path: /usr/include/cairomm-1.0/cairomm/scaledfont.h
+    - path: /usr/include/cairomm-1.0/cairomm/script.h
+    - path: /usr/include/cairomm-1.0/cairomm/script_surface.h
+    - path: /usr/include/cairomm-1.0/cairomm/surface.h
+    - path: /usr/include/cairomm-1.0/cairomm/types.h
+    - path: /usr/include/cairomm-1.0/cairomm/win32_font.h
+    - path: /usr/include/cairomm-1.0/cairomm/win32_surface.h
+    - path: /usr/lib/cairomm-1.0/include/cairommconfig.h
+    - path: /usr/lib/pkgconfig/cairomm-1.0.pc
+    - path: /usr/lib/pkgconfig/cairomm-ft-1.0.pc
+    - path: /usr/lib/pkgconfig/cairomm-pdf-1.0.pc
+    - path: /usr/lib/pkgconfig/cairomm-png-1.0.pc
+    - path: /usr/lib/pkgconfig/cairomm-ps-1.0.pc
+    - path: /usr/lib/pkgconfig/cairomm-svg-1.0.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libcairomm-1.0.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcairo.so.2
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libsigc-2.0.so.0
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libcairomm-1.0.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcairo.so.2
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libsigc-2.0.so.0
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libcairomm-1.0.so.1.4.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcairo.so.2
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libsigc-2.0.so.0
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libz.so.1
+
+resolution:
+  /usr/lib/libcairo.so.2: cairo
+  /usr/lib/libfreetype.so.6: freetype
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libpng16.so.16: libpng
+  /usr/lib/libsigc-2.0.so.0: libsigcxx2
+  /usr/lib/libz.so.1: zlib
