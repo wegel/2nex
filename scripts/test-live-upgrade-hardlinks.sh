@@ -55,7 +55,7 @@ if [[ -z "$WORK_DIR" ]]; then
     WORK_DIR="$(mktemp -d "$TMP_PARENT/live-upgrade-hardlink.XXXXXX")"
 fi
 
-repo="$WORK_DIR/sysroot/nex/repo"
+repo="$WORK_DIR/nex/repo"
 sysroot="$WORK_DIR/sysroot"
 source_root="$WORK_DIR/source"
 probe_name="nex-hardlink-probe"

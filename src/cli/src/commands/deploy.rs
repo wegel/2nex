@@ -2,7 +2,6 @@
 
 use std::fs::{self, File};
 use std::io;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -65,8 +64,7 @@ pub fn run(args: &DeployArgs) -> io::Result<()> {
         remount.remount_path_rw(repo_path)?;
     }
 
-    let store_repo_path = repo_path_for_checkout(sysroot, repo_path)?;
-    let store = Store::open(&store_repo_path)?;
+    let store = Store::open(repo_path)?;
     let commit_hash = store.resolve_ref(&args.system_ref)?;
 
     let checksum = deployment_checksum(&store, &args.system_ref, &commit_hash, args)?;
@@ -199,29 +197,6 @@ fn checkout_and_publish(
         sync_path(parent)?;
     }
     Ok(())
-}
-
-fn repo_path_for_checkout(sysroot: &Path, repo_path: &Path) -> io::Result<PathBuf> {
-    let sysroot_repo_path = sysroot.join("nex/repo");
-    if paths_name_same_inode(&sysroot_repo_path, repo_path)? {
-        return Ok(sysroot_repo_path);
-    }
-    Ok(repo_path.to_path_buf())
-}
-
-fn paths_name_same_inode(left: &Path, right: &Path) -> io::Result<bool> {
-    let left_metadata = match fs::metadata(left) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => return Err(error),
-    };
-    let right_metadata = match fs::metadata(right) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => return Err(error),
-    };
-
-    Ok(left_metadata.dev() == right_metadata.dev() && left_metadata.ino() == right_metadata.ino())
 }
 
 fn sync_tree(root: &Path) -> io::Result<()> {

@@ -2,12 +2,12 @@
 
 use std::fs;
 use std::io;
-use std::os::unix::fs::symlink;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use tempfile::TempDir;
 
-use super::{repo_path_for_checkout, run, DeployArgs};
+use super::{run, DeployArgs};
 use crate::store::{commit_tree, Store};
 
 #[test]
@@ -187,31 +187,39 @@ fn deploy_allows_duplicate_checksum_with_force() -> io::Result<()> {
 }
 
 #[test]
-fn deploy_uses_sysroot_repo_alias_when_it_names_the_same_directory() -> io::Result<()> {
+fn deploy_hardlinks_from_repo_outside_sysroot() -> io::Result<()> {
     let temp_dir = TempDir::new()?;
-    let sysroot = temp_dir.path().join("sysroot");
-    let sysroot_repo = sysroot.join("nex/repo");
-    let repo_alias = temp_dir.path().join("repo-alias");
-    fs::create_dir_all(&sysroot_repo)?;
-    symlink(&sysroot_repo, &repo_alias)?;
+    let checksum = checksum('e');
+    let Some(repo) = build_test_repo(
+        &temp_dir,
+        &[("nex.system.checksum".to_string(), checksum.clone())],
+    )?
+    else {
+        return Ok(());
+    };
+    let sysroot = build_sysroot(&temp_dir)?;
 
-    assert_eq!(repo_path_for_checkout(&sysroot, &repo_alias)?, sysroot_repo);
-    Ok(())
-}
+    run(&DeployArgs {
+        system_ref: "systems/demo/0.0.1".to_string(),
+        sysroot: sysroot.clone(),
+        repo: repo.clone(),
+        dry_run: false,
+        force: false,
+        allow_commit_hash: false,
+    })?;
 
-#[test]
-fn deploy_keeps_external_repo_path_when_it_names_a_different_directory() -> io::Result<()> {
-    let temp_dir = TempDir::new()?;
-    let sysroot = temp_dir.path().join("sysroot");
-    let sysroot_repo = sysroot.join("nex/repo");
-    let external_repo = temp_dir.path().join("external-repo");
-    fs::create_dir_all(&sysroot_repo)?;
-    fs::create_dir_all(&external_repo)?;
+    let deployed_file = sysroot
+        .join("nex/deployments")
+        .join(format!("{}.1", checksum))
+        .join("usr/bin/demo");
+    let repo_blob = find_samefile_blob(&repo, &deployed_file)?
+        .expect("deployed file should share an inode with a repo blob");
+    let deployed_metadata = fs::metadata(&deployed_file)?;
+    let blob_metadata = fs::metadata(&repo_blob)?;
 
-    assert_eq!(
-        repo_path_for_checkout(&sysroot, &external_repo)?,
-        external_repo
-    );
+    assert_eq!(deployed_metadata.dev(), blob_metadata.dev());
+    assert_eq!(deployed_metadata.ino(), blob_metadata.ino());
+    assert!(deployed_metadata.nlink() > 1);
     Ok(())
 }
 
@@ -279,4 +287,22 @@ fn host_lacks_root_user_namespace_mapping(error: &io::Error) -> bool {
 
 fn checksum(fill: char) -> String {
     std::iter::repeat(fill).take(64).collect()
+}
+
+fn find_samefile_blob(repo: &Path, deployed_file: &Path) -> io::Result<Option<PathBuf>> {
+    let deployed_metadata = fs::metadata(deployed_file)?;
+    let blob_root = repo.join("objects/blobs");
+
+    for entry in walkdir::WalkDir::new(blob_root) {
+        let entry = entry?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let metadata = entry.metadata()?;
+        if metadata.dev() == deployed_metadata.dev() && metadata.ino() == deployed_metadata.ino() {
+            return Ok(Some(entry.path().to_path_buf()));
+        }
+    }
+
+    Ok(None)
 }
