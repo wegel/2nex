@@ -1,0 +1,329 @@
+#!/usr/bin/env bash
+# Build a Nex system from this checkout and stage it for an installed machine.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+
+NEX_BIN="${NEX_BIN:-$ROOT_DIR/src/cli/target/debug/nex}"
+ZUB_BIN="${ZUB_BIN:-zub}"
+SOURCE_REPO="${SOURCE_REPO:-$ROOT_DIR/.nex/repo}"
+TARGET_REPO="${TARGET_REPO:-/nex/repo}"
+SYSROOT="${SYSROOT:-/sysroot}"
+FALLBACK_REPOS="${FALLBACK_REPOS:-}"
+TARGET_SSH="${TARGET_SSH:-}"
+TARGET_SSH_KEY="${TARGET_SSH_KEY:-}"
+TARGET_NEX_BIN="${TARGET_NEX_BIN:-nex}"
+SYSTEM_MANIFEST="${SYSTEM_MANIFEST:-asm/desktop-vwl/desktop-vwl-nvidia-580.yaml}"
+SYSTEM_REF="${SYSTEM_REF:-systems/desktop-vwl-nvidia-580/0.0.1}"
+PREBUILD_MANIFESTS="${PREBUILD_MANIFESTS:-pkg/core/nex/nex.yaml}"
+DO_BUILD=1
+APPLY=0
+REBOOT=0
+FORCE=0
+
+die() {
+    printf 'error: %s\n' "$*" >&2
+    exit 1
+}
+
+log() {
+    printf '==> %s\n' "$*"
+}
+
+usage() {
+    cat <<EOF
+usage: scripts/dogfood-upgrade [options]
+
+Build the configured system from this checkout, pull the resulting system ref
+into the installed repo, and run nex upgrade.
+
+Options:
+  --apply              create the deployment after the dry-run passes
+  --reboot             reboot after --apply succeeds
+  --force              pass --force to nex upgrade
+  --no-build           skip package and system builds
+  --nex-bin PATH       nex binary used to build and upgrade
+  --source-repo PATH   zub repo that receives local build outputs
+  --target-repo PATH   installed zub repo, usually /nex/repo
+  --target-ssh HOST    run installed repo and upgrade commands through SSH
+  --target-ssh-key KEY SSH key for --target-ssh
+  --sysroot PATH       installed sysroot, usually /sysroot
+  --fallback-repo PATH fallback zub repo for build inputs, can repeat
+  --system PATH        system manifest to build
+  --ref REF            system ref to pull and upgrade
+
+Environment defaults:
+  NEX_BIN=$NEX_BIN
+  SOURCE_REPO=$SOURCE_REPO
+  TARGET_REPO=$TARGET_REPO
+  TARGET_SSH=$TARGET_SSH
+  TARGET_NEX_BIN=$TARGET_NEX_BIN
+  SYSROOT=$SYSROOT
+  FALLBACK_REPOS=$FALLBACK_REPOS
+  SYSTEM_MANIFEST=$SYSTEM_MANIFEST
+  SYSTEM_REF=$SYSTEM_REF
+  PREBUILD_MANIFESTS=$PREBUILD_MANIFESTS
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --apply)
+            APPLY=1
+            ;;
+        --reboot)
+            APPLY=1
+            REBOOT=1
+            ;;
+        --force)
+            FORCE=1
+            ;;
+        --no-build)
+            DO_BUILD=0
+            ;;
+        --nex-bin)
+            shift
+            [[ $# -gt 0 ]] || die "--nex-bin needs a path"
+            NEX_BIN=$1
+            ;;
+        --source-repo)
+            shift
+            [[ $# -gt 0 ]] || die "--source-repo needs a path"
+            SOURCE_REPO=$1
+            ;;
+        --target-repo)
+            shift
+            [[ $# -gt 0 ]] || die "--target-repo needs a path"
+            TARGET_REPO=$1
+            ;;
+        --target-ssh)
+            shift
+            [[ $# -gt 0 ]] || die "--target-ssh needs a host"
+            TARGET_SSH=$1
+            ;;
+        --target-ssh-key)
+            shift
+            [[ $# -gt 0 ]] || die "--target-ssh-key needs a path"
+            TARGET_SSH_KEY=$1
+            ;;
+        --sysroot)
+            shift
+            [[ $# -gt 0 ]] || die "--sysroot needs a path"
+            SYSROOT=$1
+            ;;
+        --fallback-repo)
+            shift
+            [[ $# -gt 0 ]] || die "--fallback-repo needs a path"
+            FALLBACK_REPOS="${FALLBACK_REPOS:+$FALLBACK_REPOS }$1"
+            ;;
+        --system)
+            shift
+            [[ $# -gt 0 ]] || die "--system needs a path"
+            SYSTEM_MANIFEST=$1
+            ;;
+        --ref)
+            shift
+            [[ $# -gt 0 ]] || die "--ref needs a zub ref"
+            SYSTEM_REF=$1
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            die "unknown option: $1"
+            ;;
+    esac
+    shift
+done
+
+if [[ "$REBOOT" -eq 1 && "$APPLY" -ne 1 ]]; then
+    die "--reboot requires --apply"
+fi
+
+if [[ "${NEX_DOGFOOD_ALLOW_NON_ROOT:-0}" != 1 && -z "$TARGET_SSH" && "$(id -u)" -ne 0 ]]; then
+    case "$TARGET_REPO:$SYSROOT" in
+        /nex/*:*|*:/sysroot|*:/)
+            die "run as root when TARGET_REPO or SYSROOT points at the installed system"
+            ;;
+    esac
+fi
+
+need_tool() {
+    command -v "$1" >/dev/null 2>&1 || die "$1 not found"
+}
+
+canonical_path() {
+    local path=$1
+    if [[ -d "$path" ]]; then
+        (cd "$path" && pwd -P)
+    else
+        printf '%s\n' "$path"
+    fi
+}
+
+ensure_nex_bin() {
+    if [[ -x "$NEX_BIN" ]]; then
+        return 0
+    fi
+    need_tool cargo
+    log "building host nex binary"
+    cargo build --manifest-path "$ROOT_DIR/src/cli/Cargo.toml"
+    [[ -x "$NEX_BIN" ]] || die "nex binary is still missing: $NEX_BIN"
+}
+
+build_manifest() {
+    local manifest=$1
+    local args=(
+        build "$manifest"
+        --verbose
+        --single
+        --check
+        --update-checksum
+        --force
+        --record-profile
+        --generate-outputs
+    )
+
+    case "$manifest" in
+        pkg/*)
+            args+=(--compute-deps)
+            ;;
+    esac
+    for fallback_repo in $FALLBACK_REPOS; do
+        args+=(--fallback-repo "$fallback_repo")
+    done
+
+    log "building $manifest"
+    "$NEX_BIN" "${args[@]}"
+
+    log "checking $manifest"
+    "$NEX_BIN" check "$manifest"
+}
+
+show_ref() {
+    local repo=$1
+    local ref=$2
+    "$ZUB_BIN" --repo "$repo" show-ref "$ref"
+}
+
+target_zub() {
+    local ssh_args=()
+    if [[ -n "$TARGET_SSH" ]]; then
+        [[ -n "$TARGET_SSH_KEY" ]] && ssh_args=(-i "$TARGET_SSH_KEY")
+        ssh "${ssh_args[@]}" "$TARGET_SSH" "$ZUB_BIN" --repo "$TARGET_REPO" "$@"
+    else
+        "$ZUB_BIN" --repo "$TARGET_REPO" "$@"
+    fi
+}
+
+target_nex() {
+    local ssh_args=()
+    if [[ -n "$TARGET_SSH" ]]; then
+        [[ -n "$TARGET_SSH_KEY" ]] && ssh_args=(-i "$TARGET_SSH_KEY")
+        ssh "${ssh_args[@]}" "$TARGET_SSH" "$TARGET_NEX_BIN" "$@"
+    else
+        "$NEX_BIN" "$@"
+    fi
+}
+
+pull_ref_into_target_repo() {
+    local source_commit
+    local target_commit
+    local source_real
+    local target_real
+
+    source_commit=$(show_ref "$SOURCE_REPO" "$SYSTEM_REF")
+    source_real=$(canonical_path "$SOURCE_REPO")
+    target_real=$(canonical_path "$TARGET_REPO")
+
+    if [[ -n "$TARGET_SSH" ]]; then
+        log "pulling $SYSTEM_REF into $TARGET_REPO through $TARGET_SSH"
+        target_zub pull "$SOURCE_REPO" "$SYSTEM_REF"
+    elif [[ "$source_real" != "$target_real" ]]; then
+        log "pulling $SYSTEM_REF into $TARGET_REPO"
+        target_zub pull "$SOURCE_REPO" "$SYSTEM_REF"
+    else
+        log "source repo and target repo are the same path"
+    fi
+
+    target_commit=$(target_zub show-ref "$SYSTEM_REF")
+    [[ "$target_commit" == "$source_commit" ]] ||
+        die "target repo has $target_commit for $SYSTEM_REF, expected $source_commit"
+
+    log "$SYSTEM_REF is ready in $TARGET_REPO at $target_commit"
+}
+
+run_upgrade_dry_run() {
+    local output
+    local status
+    local args=(upgrade "$SYSTEM_REF" --repo "$TARGET_REPO" --sysroot "$SYSROOT")
+    [[ "$FORCE" -eq 1 ]] && args+=(--force)
+
+    log "running upgrade dry-run"
+    set +e
+    output=$(target_nex "${args[@]}" --dry-run 2>&1)
+    status=$?
+    set -e
+    printf '%s\n' "$output"
+
+    if [[ "$status" -eq 0 ]]; then
+        return 0
+    fi
+    if grep -F "already exists" <<<"$output" >/dev/null; then
+        log "the target checksum already has a deployment; nothing to stage"
+        exit 0
+    fi
+    return "$status"
+}
+
+run_upgrade_apply() {
+    local args=(upgrade "$SYSTEM_REF" --repo "$TARGET_REPO" --sysroot "$SYSROOT")
+    [[ "$FORCE" -eq 1 ]] && args+=(--force)
+
+    log "creating new deployment"
+    target_nex "${args[@]}"
+}
+
+reboot_machine() {
+    local ssh_args=()
+    log "rebooting"
+    if [[ -n "$TARGET_SSH" ]]; then
+        [[ -n "$TARGET_SSH_KEY" ]] && ssh_args=(-i "$TARGET_SSH_KEY")
+        ssh "${ssh_args[@]}" "$TARGET_SSH" "if command -v systemctl >/dev/null 2>&1; then systemctl reboot; else reboot; fi"
+    elif command -v systemctl >/dev/null 2>&1; then
+        systemctl reboot
+    else
+        reboot
+    fi
+}
+
+need_tool "$ZUB_BIN"
+ensure_nex_bin
+
+if [[ "$DO_BUILD" -eq 1 ]]; then
+    for manifest in $PREBUILD_MANIFESTS; do
+        [[ -n "$manifest" ]] || continue
+        build_manifest "$manifest"
+    done
+    build_manifest "$SYSTEM_MANIFEST"
+else
+    log "skipping builds"
+fi
+
+pull_ref_into_target_repo
+run_upgrade_dry_run
+
+if [[ "$APPLY" -ne 1 ]]; then
+    log "dry-run passed; rerun with --apply to create the deployment"
+    exit 0
+fi
+
+run_upgrade_apply
+
+if [[ "$REBOOT" -eq 1 ]]; then
+    reboot_machine
+else
+    log "deployment created; reboot when ready"
+fi
