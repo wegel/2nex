@@ -17,11 +17,11 @@ sources:
   url: https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.xz
   sha256: e275e76442a6067341a27f04c5c6b83d8613144004c0413528863dc6b5c743da
 - name: gcc9_reproducible_builds_buildid_for_checksum
-  url: https://gist.githubusercontent.com/wegel/c8e0a7cfb7412176e9750fa2a5393b54/raw/0824a3699ec6911f2e80187499932b5b65c4080e/gcc9-reproducible-builds-buildid-for-checksum.patch
-  sha256: d99b1fb3b73ec438edf3ebe3c0044227ea057370167285f41342612411a7eaaa
+  file: pkg/core/toolchain/gcc-build-id-pch-checksum.patch
+  sha256: 5ff5cedd9dc2d18cf2854367801c4b5db8887bd801d68e91f21eb69c26531b11
 - name: gcc9_reproducible_builds
-  url: https://gist.githubusercontent.com/wegel/c8e0a7cfb7412176e9750fa2a5393b54/raw/0824a3699ec6911f2e80187499932b5b65c4080e/gcc9-reproducible-builds.patch
-  sha256: aefc58ae11ec254860c85163d32f3c74093ee9ce9ae90f39f8fdf5bc0bcc1096
+  file: pkg/core/toolchain/gcc-reproducible-ada-generated-file.patch
+  sha256: c65a469ad7723b14a957facd111be5cb0da5913ee17ca90165212b8a58c85b58
 - name: mpfr
   url: https://ftp.gnu.org/gnu/mpfr/mpfr-4.2.1.tar.xz
   sha256: 277807353a6726978996945af13e52829e3abd7a9a5b7fb2793894e18f1fcbb2
@@ -45,7 +45,7 @@ dependencies: []
 
 build:
   environment: cec6d21097655bd45c7ecf30e556ec4a77d14646
-  profile: [420296:35618, 1668943:66035, 3756129:199919, 6255538:205009, 8341807:208606, 10425861:212301, 12508055:217838, 15634195:225864, 18760010:232118, 20843057:272801]
+  profile: [419717:45362, 1668791:83842, 3752136:280352, 6255649:287479, 8341658:292290, 10425981:297368, 12511330:304998, 15634495:315855, 18760310:324062, 20842895:372567]
 
   script: |
     unset CFLAGS CXXFLAGS LDFLAGS
@@ -81,8 +81,8 @@ build:
     tar --no-same-owner -xf ${SOURCE_mpc} -C "${WORK_DIR}/gcc/mpc" --strip-components=1
     cd "${WORK_DIR}/gcc"
 
-    patch -p0 < ${SOURCE_gcc9_reproducible_builds}
-    patch -p1 < ${SOURCE_gcc9_reproducible_builds_buildid_for_checksum}
+    patch --batch --fuzz=0 -p0 < ${SOURCE_gcc9_reproducible_builds}
+    patch --batch --fuzz=0 -p1 < ${SOURCE_gcc9_reproducible_builds_buildid_for_checksum}
 
     sed -e "/m64=/s/lib64/lib/" -i.orig gcc/config/i386/t-linux64
     sed -e "s#/lib64#/lib#g" -i.orig gcc/config/i386/t-linux64
@@ -150,7 +150,7 @@ build:
     mkdir -p ${WORK_DIR}/glibc
     tar --no-same-owner -xf ${SOURCE_glibc} -C "${WORK_DIR}/glibc" --strip-components=1
     cd ${WORK_DIR}/glibc
-    patch -Np1 -i ${SOURCE_fhs_patch}
+    patch --batch --fuzz=0 -Np1 -i ${SOURCE_fhs_patch}
     mkdir ${WORK_DIR}/glibc/build && cd ${WORK_DIR}/glibc/build
 
     unset CFLAGS CXXFLAGS LDFLAGS
@@ -187,8 +187,8 @@ build:
     tar --no-same-owner -xf ${SOURCE_gcc} -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
 
-    patch -p0 < ${SOURCE_gcc9_reproducible_builds}
-    patch -p1 < ${SOURCE_gcc9_reproducible_builds_buildid_for_checksum}
+    patch --batch --fuzz=0 -p0 < ${SOURCE_gcc9_reproducible_builds}
+    patch --batch --fuzz=0 -p1 < ${SOURCE_gcc9_reproducible_builds_buildid_for_checksum}
 
     mkdir ${WORK_DIR}/build && cd "${WORK_DIR}/build"
     ../libstdc++-v3/configure           \
@@ -3203,8 +3203,15 @@ outputs:
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/crtprec80.o
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/README
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/X11/Xw32defs.h
+    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/libopenmpt/libopenmpt_config.h
+    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/libv4l1-videodev.h
+    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/libv4lconvert.h
+    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/msgpack/sysdep.h
+    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/msgpack/vrefbuffer.h
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/nss/secport.h
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/pthread.h
+    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/slang.h
+    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/winpr3/winpr/platform.h
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/install-tools/fixinc_list
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/install-tools/gsyslimits.h
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/install-tools/macro_list

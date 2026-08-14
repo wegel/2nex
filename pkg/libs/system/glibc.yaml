@@ -60,11 +60,11 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [282281:4999, 1128548:6623, 2531758:10933, 4219124:14725, 5626152:17778, 7032533:21077, 8440602:28616, 10549542:32947, 12658238:38789, 14062028:55175]
+  profile: [282283:6727, 1128583:9058, 2531793:15237, 4219159:20547, 5625037:24530, 7032552:29193, 8440621:38914, 10547973:45119, 12658257:52949, 14062080:72253]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_glibc} -C "${WORK_DIR}" --strip-components=1
-    cd ${WORK_DIR} && patch -Np1 -i /${SOURCE_fhs_patch} && mkdir build && cd build
+    cd ${WORK_DIR} && patch --batch --fuzz=0 -Np1 -i /${SOURCE_fhs_patch} && mkdir build && cd build
 
     echo "slibdir=/usr/lib" >> configparms
     echo "rtlddir=/usr/lib" >> configparms
@@ -1533,6 +1533,9 @@ outputs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/libm.so
     - path: /usr/lib/libm.so.6
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/lib/libmemusage.so
       needs:
       - /usr/lib/ld-linux-x86-64.so.2

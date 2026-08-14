@@ -14,7 +14,7 @@ sources:
   sha256: 87697d60a31e10b5cb86a9f0651e1ec7bee98320d048c0739431aac3d5764fb6
 - name: inetutils_patch
   file: pkg/net/misc/inetutils-no-proc.patch
-  sha256: ce74ce825b244be5ddb98fbb1d6573ef3854cd51782f59f612aa1386321fbb2d
+  sha256: c93382176d41ce0929b3273bb71a7f62aeaa5308932afe350cef9bb4b3900abd
 
 dependencies:
 - name: glibc
@@ -64,12 +64,12 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4098:10726, 8224:16714, 12338:23303, 20609:38215, 24739:47492, 28881:55483, 37131:63604, 45347:65332, 53561:78025, 56908:78230]
+  profile: [4098:1693, 8224:6085, 12338:8569, 20609:13751, 24739:17555, 28881:19562, 37131:24490, 45347:25664, 53561:30020, 56908:30191]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
-    patch -Np1 -i /${SOURCE1}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE1}
 
     ./configure --prefix=/usr        \
             --bindir=/usr/bin    \

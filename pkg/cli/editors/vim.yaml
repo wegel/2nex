@@ -14,7 +14,7 @@ sources:
   sha256: 0d64dfc60b744e878c4f99f1a043a60963bdc6000b059794610bfb1aae77a284
 - name: reproducible_patch
   file: pkg/cli/editors/vim-reproducible.patch
-  sha256: dfbcee613651206df579f03df2141357b53e0926a400b1704fabe67c27bd5109
+  sha256: eee0b4104caaf2c915a550a5271c699dbd50216b438a775b2c7280d6de676891
 
 dependencies:
 - name: acl
@@ -58,13 +58,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4106:1206, 12360:7516, 20661:7577, 33810:7892, 46971:8245, 55757:8500, 68712:9028, 85275:14368, 101776:14529, 109815:15883]
+  profile: [4106:1153, 12360:7329, 20661:7561, 33810:7907, 46636:8300, 55420:8585, 68712:9142, 85417:14445, 101911:14610, 109855:15972]
 
   script: |
     set -eu
     tar --no-same-owner -xf "${SOURCE_vim}" -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
-    patch -Np1 -i "/./${SOURCE_reproducible_patch}"
+    patch --batch --fuzz=0 -Np1 -i "/./${SOURCE_reproducible_patch}"
 
     ./configure \
       --prefix=/usr \

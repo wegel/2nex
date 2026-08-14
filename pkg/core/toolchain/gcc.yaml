@@ -14,11 +14,11 @@ sources:
   url: https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.xz
   sha256: e275e76442a6067341a27f04c5c6b83d8613144004c0413528863dc6b5c743da
 - name: gcc9_reproducible_builds_buildid_for_checksum
-  url: https://gist.githubusercontent.com/wegel/c8e0a7cfb7412176e9750fa2a5393b54/raw/0824a3699ec6911f2e80187499932b5b65c4080e/gcc9-reproducible-builds-buildid-for-checksum.patch
-  sha256: d99b1fb3b73ec438edf3ebe3c0044227ea057370167285f41342612411a7eaaa
+  file: pkg/core/toolchain/gcc-build-id-pch-checksum.patch
+  sha256: 5ff5cedd9dc2d18cf2854367801c4b5db8887bd801d68e91f21eb69c26531b11
 - name: gcc9_reproducible_builds
-  url: https://gist.githubusercontent.com/wegel/c8e0a7cfb7412176e9750fa2a5393b54/raw/0824a3699ec6911f2e80187499932b5b65c4080e/gcc9-reproducible-builds.patch
-  sha256: aefc58ae11ec254860c85163d32f3c74093ee9ce9ae90f39f8fdf5bc0bcc1096
+  file: pkg/core/toolchain/gcc-reproducible-ada-generated-file.patch
+  sha256: c65a469ad7723b14a957facd111be5cb0da5913ee17ca90165212b8a58c85b58
 - name: mpfr
   url: https://ftp.gnu.org/gnu/mpfr/mpfr-4.2.1.tar.xz
   sha256: 277807353a6726978996945af13e52829e3abd7a9a5b7fb2793894e18f1fcbb2
@@ -71,7 +71,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [117357:13655, 459232:18759, 1026454:26392, 1709326:41512, 2276179:79043, 2845635:137510, 3414345:142261, 4279397:173365, 5124394:204723, 5689934:220014]
+  profile: [118157:11680, 455425:16206, 1026470:23763, 1710172:39230, 2278704:83886, 2849877:155391, 3415722:161174, 4279397:201815, 5124394:242339, 5689934:260734]
 
   script: |
     # gcc's build system doesn't use gcc-ar/gcc-ranlib consistently, so disable LTO
@@ -91,8 +91,8 @@ build:
 
     cd ${WORK_DIR}
 
-    patch -p0 < /${SOURCE_gcc9_reproducible_builds}
-    patch -p1 < /${SOURCE_gcc9_reproducible_builds_buildid_for_checksum}
+    patch --batch --fuzz=0 -p0 < /${SOURCE_gcc9_reproducible_builds}
+    patch --batch --fuzz=0 -p1 < /${SOURCE_gcc9_reproducible_builds_buildid_for_checksum}
 
     sed -e "/m64=/s/lib64/lib/" -i.orig gcc/config/i386/t-linux64
 

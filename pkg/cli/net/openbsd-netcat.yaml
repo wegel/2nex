@@ -72,7 +72,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [1927:1680]
+  profile: [1927:370]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_netcat} -C "${WORK_DIR}" --strip-components=1
@@ -80,7 +80,7 @@ build:
     tar --no-same-owner -xf /./${SOURCE_debian} -C "${WORK_DIR}"
 
     while IFS= read -r patch_name; do
-      patch -p1 < "debian/patches/${patch_name}"
+      patch --batch --fuzz=0 -p1 < "debian/patches/${patch_name}"
     done < debian/patches/series
 
     make \

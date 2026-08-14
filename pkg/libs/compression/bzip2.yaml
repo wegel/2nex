@@ -47,13 +47,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4163:1185, 8263:1825, 9537:1853]
+  profile: [4163:1185, 8263:1862, 9537:1902]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_bzip2} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-    patch -Np1 -i /${SOURCE_install_docs_patch}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE_install_docs_patch}
     sed -i "s@\(ln -s -f \)\$(PREFIX)/bin/@\1@" Makefile
     sed -i "s@(PREFIX)/man@(PREFIX)/share/man@g" Makefile
     make -f Makefile-libbz2_so

@@ -13,7 +13,7 @@ sources:
   url: https://github.com/containers/conmon/archive/refs/tags/v2.1.8.tar.gz
   sha256: e72c090210a03ca3b43a0fad53f15bca90bbee65105c412468009cf3a5988325
 - name: seccomp_patch
-  url: https://raw.githubusercontent.com/buildroot/buildroot/master/package/conmon/0001-src-seccomp_notify.c-fix-static-build.patch
+  url: https://raw.githubusercontent.com/buildroot/buildroot/5e10a0678196a708eeb99b4a87006798bfab1572/package/conmon/0001-src-seccomp_notify.c-fix-static-build.patch
   sha256: 6e09ee2abf5f9dbb4f45f9240ed37469997f053c27968ad7dab00f881eef0fe7
 
 dependencies:
@@ -64,14 +64,14 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4296:263, 7615:1319]
+  profile: [4296:72, 7615:676]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_conmon} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
     # Apply the seccomp patch
-    patch -Np1 -i "/./${SOURCE_seccomp_patch}"
+    patch --batch --fuzz=0 -Np1 -i "/./${SOURCE_seccomp_patch}"
 
     # Create seccomp-notify script
     printf '#!/bin/bash\necho "0"\n' > hack/seccomp-notify.sh

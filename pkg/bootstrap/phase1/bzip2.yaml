@@ -6,6 +6,7 @@ package:
   version: 1.0.8
   description: A freely available, patent free, high-quality data compressor
   homepage: https://sourceware.org/bzip2/
+  checksum: 377a5ce608e5a67cf671c5313f263ae1da2312ac2ac7f3a6428df094a2174f49
   seed: true
 
 sources:
@@ -56,11 +57,12 @@ dependencies:
 
 build:
   environment: eeeb4cd406953b12ddf019ae34e4f0704a1b944a
+  profile: [4163:1188, 8263:1856, 9573:1888]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_bzip2} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
-    patch -Np1 -i /${SOURCE_install_docs_patch}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE_install_docs_patch}
 
     sed -i "s@\(ln -s -f \)\$(PREFIX)/bin/@\1@" Makefile
     sed -i "s@(PREFIX)/man@(PREFIX)/share/man@g" Makefile
@@ -93,7 +95,19 @@ outputs:
     files:
     - path: /usr/bin/bunzip2
     - path: /usr/bin/bzcat
+    - path: /usr/bin/bzcmp
+    - path: /usr/bin/bzdiff
+    - path: /usr/bin/bzegrep
+    - path: /usr/bin/bzfgrep
+    - path: /usr/bin/bzgrep
     - path: /usr/bin/bzip2
+    - path: /usr/bin/bzip2recover
+    - path: /usr/bin/bzless
+    - path: /usr/bin/bzmore
+
+  dev:
+    files:
+    - path: /usr/include/bzlib.h
 
   lib:
     files:

@@ -17,7 +17,7 @@ sources:
   sha256: 28cd5534fd3cf8e30b1c44cfc0e83c0b2f5d8fef7364219c6e2adf1a5086c6ca
 - name: kconfiglib-transitional
   file: pkg/core/kernel/kconfiglib-transitional.patch
-  sha256: a70d01acc10027aaea6140201b4d61a4d164d10e2f5492f965c8e824094ceda2
+  sha256: 1d880638fb2b91a1885e106644ba3a04146f3fbf0b9c5a37043bbeac535910ef
 - name: allmod
   file: pkg/core/kernel/allmod.py
   sha256: bfc2a1a0d951095038969241b4128f5fb3b962a3c0bdce0a687e658b71971577
@@ -138,7 +138,7 @@ dependencies:
 
 build:
   environment: env/linux-kernel.yaml
-  profile: [58142:7898, 224617:7917, 503492:7969, 838542:88797, 1118509:263176, 1394289:423325, 1674529:565395, 2090485:639690, 2507886:645593, 2786170:663296]
+  profile: [58114:8392, 224303:8409, 503178:8464, 838100:108007, 1118193:327096, 1394262:482153, 1674458:630925, 2090587:708663, 2508019:714881, 2785856:733617]
 
   script: |
     set -eu
@@ -155,7 +155,7 @@ build:
 
     # copy kconfiglib and add support for Linux's transitional symbols
     cp /${SOURCE_kconfiglib} kconfiglib.py
-    patch -p1 < /${SOURCE_kconfiglib_transitional}
+    patch --batch --fuzz=0 -p1 < /${SOURCE_kconfiglib_transitional}
     cp /${SOURCE_allmod} allmod.py
     chmod +x allmod.py
 
@@ -14294,11 +14294,17 @@ outputs:
     - path: /usr/src/linux-6.18.24/scripts/Makefile.vmlinux_o
     - path: /usr/src/linux-6.18.24/scripts/as-version.sh
     - path: /usr/src/linux-6.18.24/scripts/asn1_compiler
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/src/linux-6.18.24/scripts/asn1_compiler.c
     - path: /usr/src/linux-6.18.24/scripts/bash-completion/make
     - path: /usr/src/linux-6.18.24/scripts/basic/.gitignore
     - path: /usr/src/linux-6.18.24/scripts/basic/Makefile
     - path: /usr/src/linux-6.18.24/scripts/basic/fixdep
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/src/linux-6.18.24/scripts/basic/fixdep.c
     - path: /usr/src/linux-6.18.24/scripts/bloat-o-meter
     - path: /usr/src/linux-6.18.24/scripts/bootgraph.pl
@@ -14490,6 +14496,9 @@ outputs:
     - path: /usr/src/linux-6.18.24/scripts/genksyms/.gitignore
     - path: /usr/src/linux-6.18.24/scripts/genksyms/Makefile
     - path: /usr/src/linux-6.18.24/scripts/genksyms/genksyms
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/src/linux-6.18.24/scripts/genksyms/genksyms.c
     - path: /usr/src/linux-6.18.24/scripts/genksyms/genksyms.h
     - path: /usr/src/linux-6.18.24/scripts/genksyms/keywords.c
@@ -14523,6 +14532,9 @@ outputs:
     - path: /usr/src/linux-6.18.24/scripts/ipe/polgen/polgen.c
     - path: /usr/src/linux-6.18.24/scripts/jobserver-exec
     - path: /usr/src/linux-6.18.24/scripts/kallsyms
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/src/linux-6.18.24/scripts/kallsyms.c
     - path: /usr/src/linux-6.18.24/scripts/kernel-doc
     - path: /usr/src/linux-6.18.24/scripts/kernel-doc.pl
@@ -14559,6 +14571,9 @@ outputs:
     - path: /usr/src/linux-6.18.24/scripts/mod/file2alias.c
     - path: /usr/src/linux-6.18.24/scripts/mod/mk_elfconfig.c
     - path: /usr/src/linux-6.18.24/scripts/mod/modpost
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/src/linux-6.18.24/scripts/mod/modpost.c
     - path: /usr/src/linux-6.18.24/scripts/mod/modpost.h
     - path: /usr/src/linux-6.18.24/scripts/mod/sumversion.c
@@ -14601,6 +14616,9 @@ outputs:
     - path: /usr/src/linux-6.18.24/scripts/show_delta
     - path: /usr/src/linux-6.18.24/scripts/sign-file.c
     - path: /usr/src/linux-6.18.24/scripts/sorttable
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
     - path: /usr/src/linux-6.18.24/scripts/sorttable.c
     - path: /usr/src/linux-6.18.24/scripts/spdxcheck-test.sh
     - path: /usr/src/linux-6.18.24/scripts/spdxcheck.py
@@ -14627,6 +14645,10 @@ outputs:
     - path: /usr/src/linux-6.18.24/scripts/xen-hypercalls.sh
     - path: /usr/src/linux-6.18.24/scripts/xz_wrap.sh
     - path: /usr/src/linux-6.18.24/tools/objtool/objtool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
 
   modules-meta:
     files:
@@ -15148,3 +15170,8 @@ outputs:
     files:
     - path: /usr/lib/modules/6.18.24/kernel/net/sctp/sctp.ko
     - path: /usr/lib/modules/6.18.24/kernel/net/sctp/sctp_diag.ko
+
+resolution:
+  /usr/lib/libelf.so.1: elfutils
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
