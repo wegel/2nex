@@ -1,0 +1,51 @@
+From: Nex package maintainers
+Subject: [PATCH] libpam: read transient service policy from /run
+Source: Nex
+Upstream: not submitted; suitable for upstream review
+
+Linux-PAM already searches administrator service files in /etc/pam.d before
+vendor service files in /usr/lib/pam.d. Add /run/pam.d between those paths so
+a machine can apply temporary service policy without changing persistent
+state. Each service still comes from the first matching complete file, which
+matches the UAPI configuration-file rules for a non-mergeable format.
+
+diff --git a/libpam/pam_private.h b/libpam/pam_private.h
+index 967b4d5..fe38f99 100644
+--- a/libpam/pam_private.h
++++ b/libpam/pam_private.h
+@@ -27,6 +27,8 @@
+ #define PAM_CONFIG         "/etc/pam.conf"
+ #define PAM_CONFIG_D       "/etc/pam.d"
+ #define PAM_CONFIG_DF      "/etc/pam.d/%s"
++#define PAM_CONFIG_RUN_D   "/run/pam.d"
++#define PAM_CONFIG_RUN_DF  "/run/pam.d/%s"
+ #define PAM_CONFIG_DIST_D  "/usr/lib/pam.d"
+ #define PAM_CONFIG_DIST_DF "/usr/lib/pam.d/%s"
+ #ifdef VENDORDIR
+diff --git a/libpam/pam_handlers.c b/libpam/pam_handlers.c
+index e0466f6..385bec6 100644
+--- a/libpam/pam_handlers.c
++++ b/libpam/pam_handlers.c
+@@ -295,7 +295,8 @@ _pam_open_config_file(pam_handle_t *pamh
+ 			, char **path
+ 			, FILE **file)
+ {
+-    const char *const pamd_dirs[] = { PAM_CONFIG_DF, PAM_CONFIG_DIST_DF
++    const char *const pamd_dirs[] = { PAM_CONFIG_DF, PAM_CONFIG_RUN_DF,
++                                     PAM_CONFIG_DIST_DF
+ #ifdef VENDORDIR
+                                , PAM_CONFIG_DIST2_DF
+ #endif
+@@ -465,8 +466,10 @@ static int _pam_load_conf_file(pam_handle_t *pamh, const char *config_name
+ 
+ 	/* Is there a PAM_CONFIG_D directory? */
+ 	if (pamh->confdir != NULL ||
+-	    (stat(PAM_CONFIG_D, &test_d) == 0 && S_ISDIR(test_d.st_mode)) ||
+-	    (stat(PAM_CONFIG_DIST_D, &test_d) == 0 && S_ISDIR(test_d.st_mode))
++	    (stat(PAM_CONFIG_D, &test_d) == 0 && S_ISDIR(test_d.st_mode)) ||
++	    (stat(PAM_CONFIG_RUN_D, &test_d) == 0
++		&& S_ISDIR(test_d.st_mode)) ||
++	    (stat(PAM_CONFIG_DIST_D, &test_d) == 0 && S_ISDIR(test_d.st_mode))
+ #ifdef PAM_CONFIG_DIST2_D
+ 	    || (stat(PAM_CONFIG_DIST2_D, &test_d) == 0
+ 		&& S_ISDIR(test_d.st_mode))

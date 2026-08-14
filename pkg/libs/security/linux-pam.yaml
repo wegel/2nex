@@ -6,12 +6,18 @@ package:
   version: 1.7.1
   description: Pluggable Authentication Modules for Linux
   homepage: https://github.com/linux-pam/linux-pam
-  checksum: f636d2f2b96ad749f2d35a9efdeb5005cfb47e563ecb9b528fd1d98be3495dda
+  checksum: 76f9607c33b67a06942ce35292350df76062af36d867a4c5f76cad9ad71f0478
 
 sources:
 - name: linux-pam
   url: https://github.com/linux-pam/linux-pam/releases/download/v1.7.1/Linux-PAM-1.7.1.tar.xz
   sha256: 21dbcec6e01dd578f14789eac9024a18941e6f2702a05cf91b28c232eeb26ab0
+- name: uapi_services
+  file: pkg/libs/security/linux-pam-uapi-services.patch
+  sha256: b795c0fa16f9527bca63d68632e3925233d8d1f794058b4eb6aef24f35bb8e53
+- name: uapi_smoke
+  file: pkg/libs/security/linux-pam-uapi-smoke.c
+  sha256: f4545102e7c54c826196c8f7cbb33104aaa865a44656133991a3669182a0ecfc
 
 dependencies:
 - name: glibc
@@ -48,6 +54,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: libxcrypt
@@ -55,11 +63,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4110:8539, 8216:10531, 12313:13034, 16475:14800, 20585:17347, 24702:18348, 28125:19083]
+  profile: [4107:3005, 8249:3212, 12348:3365, 16515:3499, 20646:4448, 24814:4955, 28237:5110]
 
   script: |
+    set -eu
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_services}"
 
     meson setup build \
       --prefix=/usr \
@@ -73,6 +83,36 @@ build:
 
     # setuid for unix_chkpwd (needed for non-root password checks)
     chmod 4755 "${OUT_DIR}/usr/bin/unix_chkpwd"
+
+    smoke_bin="${WORK_DIR}/pam-uapi-smoke"
+    smoke_service=uapi-service-smoke
+    gcc "/${SOURCE_uapi_smoke}" \
+      -I"${OUT_DIR}/usr/include" \
+      -L"${OUT_DIR}/usr/lib" \
+      -Wl,-rpath,"${OUT_DIR}/usr/lib" \
+      -lpam \
+      -o "${smoke_bin}"
+
+    mkdir -p /etc/pam.d /run/pam.d /usr/lib/pam.d
+    printf 'auth required %s\n' \
+      "${OUT_DIR}/usr/lib/security/pam_permit.so" \
+      > "/usr/lib/pam.d/${smoke_service}"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" "${smoke_bin}" allow
+
+    printf 'auth required %s\n' \
+      "${OUT_DIR}/usr/lib/security/pam_deny.so" \
+      > "/run/pam.d/${smoke_service}"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" "${smoke_bin}" deny
+
+    printf 'auth required %s\n' \
+      "${OUT_DIR}/usr/lib/security/pam_permit.so" \
+      > "/etc/pam.d/${smoke_service}"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" "${smoke_bin}" allow
+
+    rm \
+      "/etc/pam.d/${smoke_service}" \
+      "/run/pam.d/${smoke_service}" \
+      "/usr/lib/pam.d/${smoke_service}"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
