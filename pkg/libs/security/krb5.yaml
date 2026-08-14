@@ -67,7 +67,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [21182:7313, 83991:8580, 185693:9995, 310657:10491, 413351:11929, 514872:12294, 617007:14108, 770534:20339, 922467:26733, 1023915:28405]
+  profile: [21226:9725, 84035:11354, 185737:13023, 310701:13584, 413395:15221, 514916:15623, 617051:17669, 770578:24992, 922511:32869, 1023959:34661]
 
   script: |
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -80,18 +80,14 @@ build:
       --localstatedir=/var/lib \
       --runstatedir=/run \
       --enable-shared \
-      --disable-rpath \
-      --without-system-et \
-      --without-system-ss \
-      --without-ldap \
-      --without-lmdb
+      --disable-rpath
 
     make -j$(nproc)
     make DESTDIR="${OUT_DIR}" install
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
-    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    find "${OUT_DIR}" -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
   dev:
@@ -152,7 +148,6 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libcom_err.so.3
       - /usr/lib/libkrb5.so.3
-    - path: /usr/bin/krb5-config
     - path: /usr/bin/kswitch
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -202,6 +197,7 @@ outputs:
 
   dev:
     files:
+    - path: /usr/bin/krb5-config
     - path: /usr/include/com_err.h
     - path: /usr/include/gssapi.h
     - path: /usr/include/gssapi/gssapi.h

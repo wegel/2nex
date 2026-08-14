@@ -1,0 +1,131 @@
+package:
+  schema: 1
+  name: libssh
+  slug: libssh
+  namespace: libs/net
+  version: 0.11.4
+  description: C library that implements the SSH protocol for clients and servers
+  homepage: https://www.libssh.org/
+  checksum: 822e077babf2292cdd3044ae17310038e683850d6128e04a5b78b683504def87
+
+sources:
+- name: libssh
+  url: https://gitlab.com/libssh/libssh-mirror/-/archive/libssh-0.11.4/libssh-mirror-libssh-0.11.4.tar.gz
+  sha256: 803bc55314493fbfdd2795463f11a1f038903ccfcdcf2e1ac7c2568f3f6e3301
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: krb5
+  commit: x86_64/pkg/libs/security/krb5/1.21.3/bundles/dev
+- name: libpcap
+  commit: x86_64/pkg/libs/net/libpcap/1.10.6/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4116:1933, 8252:4668, 12358:5367, 16466:5437, 20440:9762]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_libssh}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    cmake -S . -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DBUILD_SHARED_LIBS=ON \
+      -DUNIT_TESTING=OFF \
+      -DWITH_EXAMPLES=OFF \
+      -DWITH_GSSAPI=ON \
+      -DWITH_PCAP=ON \
+      -DWITH_SFTP=ON \
+      -DWITH_STATIC_LIB=OFF \
+      -DWITH_ZLIB=ON
+    cmake --build build
+    DESTDIR="${OUT_DIR}" cmake --install build
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/libssh/callbacks.h
+    - path: /usr/include/libssh/legacy.h
+    - path: /usr/include/libssh/libssh.h
+    - path: /usr/include/libssh/libssh_version.h
+    - path: /usr/include/libssh/libsshpp.hpp
+    - path: /usr/include/libssh/server.h
+    - path: /usr/include/libssh/sftp.h
+    - path: /usr/include/libssh/sftpserver.h
+    - path: /usr/include/libssh/ssh2.h
+    - path: /usr/lib/pkgconfig/libssh.pc
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/libssh/libssh-config-release.cmake
+    - path: /usr/lib/cmake/libssh/libssh-config-version.cmake
+    - path: /usr/lib/cmake/libssh/libssh-config.cmake
+    - path: /usr/lib/libssh.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libssh.so.4
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libssh.so.4.10.4
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgssapi_krb5.so.2
+      - /usr/lib/libz.so.1
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libgssapi_krb5.so.2: krb5
+  /usr/lib/libcrypto.so.3: openssl
+  /usr/lib/libz.so.1: zlib

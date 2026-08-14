@@ -1,0 +1,451 @@
+package:
+  schema: 1
+  name: gnupg
+  slug: gnupg
+  namespace: cli/crypto
+  version: 2.5.17
+  description: OpenPGP encryption and signing tools
+  homepage: https://gnupg.org/
+  checksum: 321c8c84846536f948d41be3e4ff34ce29d752fca4762fda582b57d2f1ea9120
+
+sources:
+- name: gnupg
+  url: https://gnupg.org/ftp/gcrypt/gnupg/gnupg-2.5.17.tar.bz2
+  sha256: 2c1fbe20e2958fd8fb53cf37d7c38e84a900edc0d561a1c4af4bc3a10888685d
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: gettext
+  commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: readline
+  commit: x86_64/pkg/libs/system/readline/8.2/bundles/dev
+- name: sqlite3
+  commit: x86_64/pkg/libs/data/sqlite3/3.51.1/bundles/dev
+- name: libusb
+  commit: x86_64/pkg/libs/system/libusb/1.0.29/bundles/dev
+- name: gnutls
+  commit: x86_64/pkg/libs/crypto/gnutls/3.8.8/bundles/dev
+- name: nettle
+  commit: x86_64/pkg/libs/crypto/nettle/3.1/bundles/dev
+- name: libtasn1
+  commit: x86_64/pkg/libs/crypto/libtasn1/4.19.0/bundles/dev
+- name: libidn2
+  commit: x86_64/pkg/libs/text/libidn2/2.3.7/bundles/dev
+- name: libunistring
+  commit: x86_64/pkg/libs/text/libunistring/1.3/bundles/dev
+- name: p11-kit
+  commit: x86_64/pkg/libs/crypto/p11-kit/0.25.5/bundles/dev
+- name: libgpg-error
+  commit: x86_64/pkg/dev/libs/libgpg-error/1.59/bundles/dev
+- name: libassuan
+  commit: x86_64/pkg/dev/libs/libassuan/3.0.2/bundles/dev
+- name: libgcrypt
+  commit: x86_64/pkg/libs/crypto/libgcrypt/1.12.1/bundles/dev
+- name: libksba
+  commit: x86_64/pkg/dev/libs/libksba/1.6.8/bundles/dev
+- name: npth
+  commit: x86_64/pkg/dev/libs/npth/1.8/bundles/dev
+- name: pinentry
+  commit: x86_64/pkg/cli/crypto/pinentry/1.3.2/bundles/full
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: inetutils
+  commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [12352:15221, 35293:17633, 78426:17799, 126487:17969, 168241:18473, 212337:19463, 253351:19758, 315632:23682, 377678:26243, 416395:29534]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_gnupg} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure \
+      --prefix=/usr \
+      --sbindir=/usr/bin \
+      --enable-gnutls \
+      --with-zlib=/usr \
+      --with-bzip2=/usr \
+      --with-readline=/usr
+
+    grep -q '^#define HTTP_USE_GNUTLS 1' config.h
+    grep -q '^#define BUILD_WITH_DIRMNGR 1' config.h
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR}/usr/bin ${OUT_DIR}/usr/libexec -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  full:
+  - bin
+  - doc
+  - info
+  - locale
+  - man
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/addgnupghome
+    - path: /usr/bin/applygnupgdefaults
+    - path: /usr/bin/dirmngr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libassuan.so.9
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libksba.so.8
+      - /usr/lib/libnpth.so.0
+    - path: /usr/bin/dirmngr-client
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libassuan.so.9
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+    - path: /usr/bin/gpg
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libassuan.so.9
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libnpth.so.0
+      - /usr/lib/libreadline.so.8
+      - /usr/lib/libsqlite3.so
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/gpg-agent
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libassuan.so.9
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libnpth.so.0
+    - path: /usr/bin/gpg-authcode-sign.sh
+    - path: /usr/bin/gpg-card
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libassuan.so.9
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libreadline.so.8
+    - path: /usr/bin/gpg-connect-agent
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libassuan.so.9
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libreadline.so.8
+    - path: /usr/bin/gpg-mail-tube
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+    - path: /usr/bin/gpg-wks-client
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libassuan.so.9
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+    - path: /usr/bin/gpg-wks-server
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+    - path: /usr/bin/gpgconf
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+    - path: /usr/bin/gpgparsemail
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/gpgscm
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libreadline.so.8
+    - path: /usr/bin/gpgsm
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libassuan.so.9
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libksba.so.8
+      - /usr/lib/libnpth.so.0
+      - /usr/lib/libreadline.so.8
+    - path: /usr/bin/gpgsplit
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/gpgtar
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+    - path: /usr/bin/gpgv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libassuan.so.9
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libnpth.so.0
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/kbxutil
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libksba.so.8
+    - path: /usr/bin/watchgnupg
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/libexec/gpg-auth
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libassuan.so.9
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+    - path: /usr/libexec/gpg-check-pattern
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+    - path: /usr/libexec/gpg-pair-tool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+    - path: /usr/libexec/gpg-preset-passphrase
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libassuan.so.9
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+    - path: /usr/libexec/gpg-protect-tool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libassuan.so.9
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+    - path: /usr/libexec/gpg-wks-client
+    - path: /usr/libexec/keyboxd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libassuan.so.9
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libksba.so.8
+      - /usr/lib/libnpth.so.0
+      - /usr/lib/libsqlite3.so
+    - path: /usr/libexec/scdaemon
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libassuan.so.9
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libksba.so.8
+      - /usr/lib/libnpth.so.0
+      - /usr/lib/libusb-1.0.so.0
+
+  doc:
+    files:
+    - path: /usr/share/doc/gnupg/DCO
+    - path: /usr/share/doc/gnupg/DETAILS
+    - path: /usr/share/doc/gnupg/FAQ
+    - path: /usr/share/doc/gnupg/HACKING
+    - path: /usr/share/doc/gnupg/KEYSERVER
+    - path: /usr/share/doc/gnupg/OpenPGP
+    - path: /usr/share/doc/gnupg/README
+    - path: /usr/share/doc/gnupg/TRANSLATE
+    - path: /usr/share/doc/gnupg/examples/README
+    - path: /usr/share/doc/gnupg/examples/common.conf
+    - path: /usr/share/doc/gnupg/examples/gpgconf.conf
+    - path: /usr/share/doc/gnupg/examples/gpgconf.rnames
+    - path: /usr/share/doc/gnupg/examples/pwpattern.list
+    - path: /usr/share/doc/gnupg/examples/qualified.txt
+    - path: /usr/share/doc/gnupg/examples/scd-event
+    - path: /usr/share/doc/gnupg/examples/trustlist.txt
+
+  info:
+    files:
+    - path: /usr/share/info/gnupg.info
+    - path: /usr/share/info/gnupg.info-1
+    - path: /usr/share/info/gnupg.info-2
+    - path: /usr/share/info/gnupg.info-3
+
+  locale:
+    files:
+    - path: /usr/share/locale/ca/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/en@boldquot/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/en@quot/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/et/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/gnupg2.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/gnupg2.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/dirmngr-client.1
+    - path: /usr/share/man/man1/gpg-agent.1
+    - path: /usr/share/man/man1/gpg-card.1
+    - path: /usr/share/man/man1/gpg-check-pattern.1
+    - path: /usr/share/man/man1/gpg-connect-agent.1
+    - path: /usr/share/man/man1/gpg-mail-tube.1
+    - path: /usr/share/man/man1/gpg-preset-passphrase.1
+    - path: /usr/share/man/man1/gpg-wks-client.1
+    - path: /usr/share/man/man1/gpg-wks-server.1
+    - path: /usr/share/man/man1/gpg.1
+    - path: /usr/share/man/man1/gpgconf.1
+    - path: /usr/share/man/man1/gpgparsemail.1
+    - path: /usr/share/man/man1/gpgsm.1
+    - path: /usr/share/man/man1/gpgtar.1
+    - path: /usr/share/man/man1/gpgv.1
+    - path: /usr/share/man/man1/scdaemon.1
+    - path: /usr/share/man/man1/watchgnupg.1
+    - path: /usr/share/man/man7/gnupg.7
+    - path: /usr/share/man/man8/addgnupghome.8
+    - path: /usr/share/man/man8/applygnupgdefaults.8
+    - path: /usr/share/man/man8/dirmngr.8
+
+  misc:
+    files:
+    - path: /usr/share/gnupg/distsigkey.gpg
+    - path: /usr/share/gnupg/help.be.txt
+    - path: /usr/share/gnupg/help.ca.txt
+    - path: /usr/share/gnupg/help.cs.txt
+    - path: /usr/share/gnupg/help.da.txt
+    - path: /usr/share/gnupg/help.de.txt
+    - path: /usr/share/gnupg/help.el.txt
+    - path: /usr/share/gnupg/help.eo.txt
+    - path: /usr/share/gnupg/help.es.txt
+    - path: /usr/share/gnupg/help.et.txt
+    - path: /usr/share/gnupg/help.fi.txt
+    - path: /usr/share/gnupg/help.fr.txt
+    - path: /usr/share/gnupg/help.gl.txt
+    - path: /usr/share/gnupg/help.hu.txt
+    - path: /usr/share/gnupg/help.id.txt
+    - path: /usr/share/gnupg/help.it.txt
+    - path: /usr/share/gnupg/help.ja.txt
+    - path: /usr/share/gnupg/help.nb.txt
+    - path: /usr/share/gnupg/help.pl.txt
+    - path: /usr/share/gnupg/help.pt.txt
+    - path: /usr/share/gnupg/help.pt_BR.txt
+    - path: /usr/share/gnupg/help.ro.txt
+    - path: /usr/share/gnupg/help.ru.txt
+    - path: /usr/share/gnupg/help.sk.txt
+    - path: /usr/share/gnupg/help.sv.txt
+    - path: /usr/share/gnupg/help.tr.txt
+    - path: /usr/share/gnupg/help.txt
+    - path: /usr/share/gnupg/help.zh_CN.txt
+    - path: /usr/share/gnupg/help.zh_TW.txt
+    - path: /usr/share/gnupg/mail-tube.de.txt
+    - path: /usr/share/gnupg/mail-tube.txt
+    - path: /usr/share/gnupg/wks-utils.de.txt
+    - path: /usr/share/gnupg/wks-utils.txt
+
+resolution:
+  /usr/lib/libbz2.so.1.0: bzip2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libgnutls.so.30: gnutls
+  /usr/lib/libassuan.so.9: libassuan
+  /usr/lib/libgcrypt.so.20: libgcrypt
+  /usr/lib/libgpg-error.so.0: libgpg-error
+  /usr/lib/libksba.so.8: libksba
+  /usr/lib/libusb-1.0.so.0: libusb
+  /usr/lib/libnpth.so.0: npth
+  /usr/lib/libreadline.so.8: readline
+  /usr/lib/libsqlite3.so: sqlite3
+  /usr/lib/libz.so.1: zlib

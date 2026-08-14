@@ -1,0 +1,271 @@
+package:
+  schema: 1
+  name: Cryptsetup
+  slug: cryptsetup
+  namespace: cli/crypto
+  version: 2.8.6
+  description: Commands and library for Linux encrypted block devices and LUKS volumes
+  homepage: https://gitlab.com/cryptsetup/cryptsetup
+  checksum: 7e5a864fc4cac7d849282c77195df3bcb5e9867aead2d105a87e25fd3a4fb590
+
+sources:
+- name: cryptsetup
+  url: https://www.kernel.org/pub/linux/utils/cryptsetup/v2.8/cryptsetup-2.8.6.tar.xz
+  sha256: 8004265fd993885d08f7b633dbe056851de1a210307613a4ebddc743fccefe5a
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: gettext
+  commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: json-c
+  commit: x86_64/pkg/libs/system/json-c/0.18/bundles/dev
+- name: libdevmapper
+  commit: x86_64/pkg/libs/system/libdevmapper/1.02.213/bundles/dev
+- name: libssh
+  commit: x86_64/pkg/libs/net/libssh/0.11.4/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: popt
+  commit: x86_64/pkg/libs/system/popt/1.19/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4104:1159, 8230:3064, 12360:4332, 16531:7399, 20697:7495, 23831:7764]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_cryptsetup}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
+    ./configure \
+      --prefix=/usr \
+      --sbindir=/usr/bin \
+      --libdir=/usr/lib \
+      --disable-asciidoc \
+      --enable-blkid \
+      --enable-cryptsetup \
+      --enable-integritysetup \
+      --enable-internal-argon2 \
+      --enable-kernel_crypto \
+      --enable-keyring \
+      --enable-luks2-reencryption \
+      --enable-ssh-token \
+      --enable-static \
+      --enable-udev \
+      --enable-veritysetup \
+      --disable-libargon2 \
+      --disable-static-cryptsetup \
+      --with-crypto_backend=openssl
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec ranlib -D {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - static
+
+  full:
+  - bin
+  - lib
+  - locale
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/cryptsetup
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcryptsetup.so.12
+      - /usr/lib/libpopt.so.0
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/cryptsetup-ssh
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcryptsetup.so.12
+      - /usr/lib/libjson-c.so.5
+      - /usr/lib/libssh.so.4
+    - path: /usr/bin/integritysetup
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcryptsetup.so.12
+      - /usr/lib/libpopt.so.0
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/veritysetup
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcryptsetup.so.12
+      - /usr/lib/libpopt.so.0
+
+  dev:
+    files:
+    - path: /usr/include/libcryptsetup.h
+    - path: /usr/lib/cryptsetup/libcryptsetup-token-ssh.la
+    - path: /usr/lib/libcryptsetup.la
+    - path: /usr/lib/pkgconfig/libcryptsetup.pc
+
+  lib:
+    files:
+    - path: /usr/lib/cryptsetup/libcryptsetup-token-ssh.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcryptsetup.so.12
+      - /usr/lib/libjson-c.so.5
+      - /usr/lib/libssh.so.4
+    - path: /usr/lib/libcryptsetup.so
+      needs:
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libdevmapper.so.1.02
+      - /usr/lib/libjson-c.so.5
+      - /usr/lib/libuuid.so.1
+    - path: /usr/lib/libcryptsetup.so.12
+      needs:
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libdevmapper.so.1.02
+      - /usr/lib/libjson-c.so.5
+      - /usr/lib/libuuid.so.1
+    - path: /usr/lib/libcryptsetup.so.12.11.0
+      needs:
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libdevmapper.so.1.02
+      - /usr/lib/libjson-c.so.5
+      - /usr/lib/libuuid.so.1
+    - path: /usr/lib/tmpfiles.d/cryptsetup.conf
+
+  locale:
+    files:
+    - path: /usr/share/locale/cs/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/cryptsetup.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/cryptsetup.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man8/cryptsetup-benchmark.8
+    - path: /usr/share/man/man8/cryptsetup-bitlkDump.8
+    - path: /usr/share/man/man8/cryptsetup-bitlkOpen.8
+    - path: /usr/share/man/man8/cryptsetup-close.8
+    - path: /usr/share/man/man8/cryptsetup-config.8
+    - path: /usr/share/man/man8/cryptsetup-convert.8
+    - path: /usr/share/man/man8/cryptsetup-create.8
+    - path: /usr/share/man/man8/cryptsetup-erase.8
+    - path: /usr/share/man/man8/cryptsetup-fvault2Open.8
+    - path: /usr/share/man/man8/cryptsetup-fvault2Dump.8
+    - path: /usr/share/man/man8/cryptsetup-isLuks.8
+    - path: /usr/share/man/man8/cryptsetup-loopaesOpen.8
+    - path: /usr/share/man/man8/cryptsetup-luksAddKey.8
+    - path: /usr/share/man/man8/cryptsetup-luksChangeKey.8
+    - path: /usr/share/man/man8/cryptsetup-luksConvertKey.8
+    - path: /usr/share/man/man8/cryptsetup-luksDump.8
+    - path: /usr/share/man/man8/cryptsetup-luksErase.8
+    - path: /usr/share/man/man8/cryptsetup-luksFormat.8
+    - path: /usr/share/man/man8/cryptsetup-luksHeaderBackup.8
+    - path: /usr/share/man/man8/cryptsetup-luksHeaderRestore.8
+    - path: /usr/share/man/man8/cryptsetup-luksKillSlot.8
+    - path: /usr/share/man/man8/cryptsetup-luksOpen.8
+    - path: /usr/share/man/man8/cryptsetup-luksRemoveKey.8
+    - path: /usr/share/man/man8/cryptsetup-luksResume.8
+    - path: /usr/share/man/man8/cryptsetup-luksSuspend.8
+    - path: /usr/share/man/man8/cryptsetup-luksUUID.8
+    - path: /usr/share/man/man8/cryptsetup-open.8
+    - path: /usr/share/man/man8/cryptsetup-plainOpen.8
+    - path: /usr/share/man/man8/cryptsetup-reencrypt.8
+    - path: /usr/share/man/man8/cryptsetup-refresh.8
+    - path: /usr/share/man/man8/cryptsetup-repair.8
+    - path: /usr/share/man/man8/cryptsetup-resize.8
+    - path: /usr/share/man/man8/cryptsetup-ssh.8
+    - path: /usr/share/man/man8/cryptsetup-status.8
+    - path: /usr/share/man/man8/cryptsetup-tcryptDump.8
+    - path: /usr/share/man/man8/cryptsetup-tcryptOpen.8
+    - path: /usr/share/man/man8/cryptsetup-token.8
+    - path: /usr/share/man/man8/cryptsetup.8
+    - path: /usr/share/man/man8/integritysetup.8
+    - path: /usr/share/man/man8/veritysetup.8
+
+  static:
+    files:
+    - path: /usr/lib/cryptsetup/libcryptsetup-token-ssh.a
+    - path: /usr/lib/libcryptsetup.a
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libjson-c.so.5: json-c
+  /usr/lib/libdevmapper.so.1.02: libdevmapper
+  /usr/lib/libssh.so.4: libssh
+  /usr/lib/libcrypto.so.3: openssl
+  /usr/lib/libpopt.so.0: popt
+  /usr/lib/libcryptsetup.so.12: self
+  /usr/lib/libblkid.so.1: util-linux
+  /usr/lib/libuuid.so.1: util-linux

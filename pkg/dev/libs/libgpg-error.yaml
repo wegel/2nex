@@ -3,15 +3,15 @@ package:
   name: libgpg-error
   slug: libgpg-error
   namespace: dev/libs
-  version: "1.51"
+  version: "1.59"
   description: Library that defines common error values for all GnuPG components
   homepage: https://www.gnupg.org/software/libgpg-error/
-  checksum: c19084fb0b17eb443d6753759bfa35e7db884f9c9574a7433aefc522315d4406
+  checksum: d7b2b074c78e5e539a71d4f0c207f70212903f8100eea59ee5ad04bd23831411
 
 sources:
 - name: libgpg_error
-  url: https://gnupg.org/ftp/gcrypt/libgpg-error/libgpg-error-1.51.tar.bz2
-  sha256: be0f1b2db6b93eed55369cdf79f19f72750c8c7c39fc20b577e724545427e6b2
+  url: https://gnupg.org/ftp/gcrypt/libgpg-error/libgpg-error-1.59.tar.bz2
+  sha256: a19bc5087fd97026d93cb4b45d51638d1a25202a5e1fbc3905799f424cfa6134
 
 dependencies:
 - name: glibc
@@ -52,10 +52,16 @@ dependencies:
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: bzip2
   commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: inetutils
+  commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4144:9641, 8240:18123, 12605:26123, 21627:26250, 30288:26422, 34388:26483, 43170:47649, 51997:47912, 60455:51151, 66868:53198]
+  profile: [4153:1162, 8254:3842, 17100:4243, 25387:4246, 29936:4282, 38387:4337, 46969:6586, 55691:6630, 68567:6939, 73078:7079]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_libgpg_error} -C "${WORK_DIR}" --strip-components=1
@@ -71,7 +77,7 @@ build:
     make DESTDIR="${OUT_DIR}" install
 
     # Set consistent timestamps for reproducible builds
-    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
 
     strip --strip-unneeded ${OUT_DIR}/usr/bin/gpg-error || true
     strip --strip-unneeded ${OUT_DIR}/usr/bin/yat2m || true
@@ -121,7 +127,7 @@ outputs:
     - path: /usr/lib/libgpg-error.so.0
       needs:
       - /usr/lib/libc.so.6
-    - path: /usr/lib/libgpg-error.so.0.38.0
+    - path: /usr/lib/libgpg-error.so.0.41.2
       needs:
       - /usr/lib/libc.so.6
 

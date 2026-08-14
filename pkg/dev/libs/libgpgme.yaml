@@ -3,15 +3,15 @@ package:
   name: GPGME
   slug: libgpgme
   namespace: dev/libs
-  version: 1.23.2
+  version: 2.0.1
   description: GnuPG Made Easy - a library for making GnuPG easier to use
   homepage: https://gnupg.org/software/gpgme/
-  checksum: 15fc7ccee371926a04d71fcdeb4e8ca68c378f4ada262e987879b3f1bbcb9a1d
+  checksum: 8473799fe1540e39531cac7eca6f943159db0b8b3b8054bb13ad8e9175ff02e4
 
 sources:
 - name: gpgme
-  url: https://gnupg.org/ftp/gcrypt/gpgme/gpgme-1.23.2.tar.bz2
-  sha256: 9499e8b1f33cccb6815527a1bc16049d35a6198a6c5fae0185f2bd561bce5224
+  url: https://gnupg.org/ftp/gcrypt/gpgme/gpgme-2.0.1.tar.bz2
+  sha256: 821ab0695c842eab51752a81980c92b0410c7eadd04103f791d5d2a526784966
 
 dependencies:
 - name: glibc
@@ -53,42 +53,44 @@ dependencies:
 - name: bzip2
   commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
 - name: libgpg-error
-  commit: x86_64/pkg/dev/libs/libgpg-error/1.51/bundles/dev
+  commit: x86_64/pkg/dev/libs/libgpg-error/1.59/bundles/dev
 - name: libassuan
-  commit: x86_64/pkg/dev/libs/libassuan/2.5.7/bundles/dev
+  commit: x86_64/pkg/dev/libs/libassuan/3.0.2/bundles/dev
+- name: gnupg
+  commit: x86_64/pkg/cli/crypto/gnupg/2.5.17/bundles/full
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: inetutils
+  commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4114:14991, 8214:20689, 21255:23784, 35019:25002, 44123:25344, 52526:26116, 65323:27284, 78368:29231, 96340:30843, 102070:32544]
+  profile: [8762:5301, 18070:5304, 40387:5350, 71091:5495, 92569:6662, 114064:7297, 136507:7527, 171017:8180, 202070:8549, 224007:9247]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_gpgme} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-    # Configure
-    ./configure --prefix=/usr \
-                --disable-gpgsm-test \
-                --disable-gpgconf-test \
-                --disable-g13-test \
-                --disable-gpg-test \
-                --enable-languages=cl
+    ./configure \
+      --prefix=/usr \
+      --disable-static
 
-    # Build
     make
 
-    # Install
     make DESTDIR="${OUT_DIR}" install
 
-    # Set consistent timestamps for reproducible builds
-    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" -name '*.la' -delete
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
 
-    strip --strip-unneeded ${OUT_DIR}/usr/bin/gpgme-json || true
-    strip --strip-unneeded ${OUT_DIR}/usr/bin/gpgme-tool || true
+    find ${OUT_DIR}/usr/bin -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR}/usr/lib -name "*.so*" -exec strip --strip-unneeded {} \; 2>/dev/null || true
 
 bundles:
   dev:
-  - bin
   - dev
   - lib
 
@@ -97,30 +99,36 @@ bundles:
   - dev
   - info
   - lib
+  - man
   - misc
 
 outputs:
   bin:
     files:
+    - path: /usr/bin/gnupg-key-manage
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libgpgme.so.45
     - path: /usr/bin/gpgme-json
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libgpg-error.so.0
-      - /usr/lib/libgpgme.so.11
+      - /usr/lib/libgpgme.so.45
       - /usr/lib/libm.so.6
     - path: /usr/bin/gpgme-tool
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libassuan.so.0
+      - /usr/lib/libassuan.so.9
       - /usr/lib/libc.so.6
       - /usr/lib/libgpg-error.so.0
-      - /usr/lib/libgpgme.so.11
+      - /usr/lib/libgpgme.so.45
 
   dev:
     files:
     - path: /usr/include/gpgme.h
-    - path: /usr/lib/libgpgme.la
     - path: /usr/lib/pkgconfig/gpgme-glib.pc
     - path: /usr/lib/pkgconfig/gpgme.pc
 
@@ -135,21 +143,25 @@ outputs:
     - path: /usr/lib/libgpgme.so
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libassuan.so.0
+      - /usr/lib/libassuan.so.9
       - /usr/lib/libc.so.6
       - /usr/lib/libgpg-error.so.0
-    - path: /usr/lib/libgpgme.so.11
+    - path: /usr/lib/libgpgme.so.45
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libassuan.so.0
+      - /usr/lib/libassuan.so.9
       - /usr/lib/libc.so.6
       - /usr/lib/libgpg-error.so.0
-    - path: /usr/lib/libgpgme.so.11.32.1
+    - path: /usr/lib/libgpgme.so.45.0.1
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libassuan.so.0
+      - /usr/lib/libassuan.so.9
       - /usr/lib/libc.so.6
       - /usr/lib/libgpg-error.so.0
+
+  man:
+    files:
+    - path: /usr/share/man/man1/gpgme-json.1
 
   misc:
     files:
@@ -163,6 +175,6 @@ resolution:
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
   /usr/lib/libm.so.6: glibc
-  /usr/lib/libassuan.so.0: libassuan
+  /usr/lib/libassuan.so.9: libassuan
   /usr/lib/libgpg-error.so.0: libgpg-error
-  /usr/lib/libgpgme.so.11: self
+  /usr/lib/libgpgme.so.45: self

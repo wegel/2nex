@@ -3,15 +3,15 @@ package:
   name: libgcrypt
   slug: libgcrypt
   namespace: libs/crypto
-  version: 1.11.3
+  version: 1.12.1
   description: General-purpose cryptographic library from GnuPG
   homepage: https://www.gnupg.org/software/libgcrypt/
-  checksum: f8e5a259ebc58cb2a71fb527635a95dd73e7b95e642b6344dc403d1560c00bee
+  checksum: c6f27945a70498f9df530209b58bf451192ab2307c9e8e30d1fd68d9cfb26709
 
 sources:
 - name: libgcrypt
-  url: https://gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.11.3.tar.bz2
-  sha256: 2c6d562e894b2b06eefbc427d12d51ee9d3e50e90012ad6596b4cb3e421a95f2
+  url: https://gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.12.1.tar.bz2
+  sha256: 7df5c08d952ba33f9b6bdabdb06a61a78b2cf62d2122c2d1d03a91a79832aa3c
 
 dependencies:
 - name: glibc
@@ -49,11 +49,19 @@ dependencies:
 - name: gmp
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: libgpg-error
-  commit: x86_64/pkg/dev/libs/libgpg-error/1.51/bundles/dev
+  commit: x86_64/pkg/dev/libs/libgpg-error/1.59/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: inetutils
+  commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
+- name: texinfo
+  commit: x86_64/pkg/cli/text/texinfo/7.1/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [8335:16914, 25351:30244, 51075:33709, 85592:37114, 112085:38682, 141803:43093, 171065:46610, 211493:51770, 254396:53853, 278479:57436]
+  profile: [8218:3772, 25450:7383, 51662:7596, 86038:7742, 116160:7881, 142551:7964, 172888:8124, 215383:10193, 258305:10675, 284480:12148]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_libgcrypt} -C "${WORK_DIR}" --strip-components=1
@@ -61,21 +69,28 @@ build:
 
     ./configure \
       --prefix=/usr \
-      --disable-static \
-      --disable-doc
+      --disable-static
 
     make
     make DESTDIR="${OUT_DIR}" install
 
+    find "${OUT_DIR}" -name '*.la' -delete
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
-    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    find "${OUT_DIR}" -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
   dev:
   - bin
   - dev
   - lib
+
+  full:
+  - bin
+  - info
+  - lib
+  - man
+  - misc
 
 outputs:
   bin:
@@ -98,9 +113,15 @@ outputs:
   dev:
     files:
     - path: /usr/include/gcrypt.h
-    - path: /usr/lib/libgcrypt.la
     - path: /usr/lib/libgcrypt.so
     - path: /usr/lib/pkgconfig/libgcrypt.pc
+
+  info:
+    files:
+    - path: /usr/share/info/dir
+    - path: /usr/share/info/gcrypt.info
+    - path: /usr/share/info/gcrypt.info-1
+    - path: /usr/share/info/gcrypt.info-2
 
   lib:
     files:
@@ -109,11 +130,15 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libgpg-error.so.0
-    - path: /usr/lib/libgcrypt.so.20.6.1
+    - path: /usr/lib/libgcrypt.so.20.7.1
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libgpg-error.so.0
+
+  man:
+    files:
+    - path: /usr/share/man/man1/hmac256.1
 
   misc:
     files:
