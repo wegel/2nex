@@ -6,7 +6,7 @@ package:
   version: 3.8.4
   description: Multi-format archive and compression library
   homepage: https://www.libarchive.org/
-  checksum: dce6da66e647e576ae796c024db8d73c70e31aedd67ebe8163ef90ad49938f01
+  checksum: 97c0d3099322384b7e5e50284487de50bc5b398e2b9b4a0a41b614de15e61a35
 
 sources:
 - name: libarchive
@@ -52,6 +52,10 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
 - name: sed
   commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
 - name: gawk
@@ -67,7 +71,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4131:5503, 8258:16767, 12371:34404, 16477:43371, 20583:45672, 24705:46610, 28635:52928]
+  profile: [4121:1293, 8259:3464, 12365:8137, 16470:12421, 20584:14784, 24709:15195, 28464:17758]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_libarchive} -C "${WORK_DIR}" --strip-components=1
@@ -83,6 +87,7 @@ build:
     make DESTDIR="${OUT_DIR}" install
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.la' -delete
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
@@ -120,7 +125,6 @@ outputs:
     files:
     - path: /usr/include/archive.h
     - path: /usr/include/archive_entry.h
-    - path: /usr/lib/libarchive.la
     - path: /usr/lib/pkgconfig/libarchive.pc
 
   lib:
