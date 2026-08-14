@@ -1,0 +1,131 @@
+package:
+  schema: 1
+  name: ACPI event daemon
+  slug: acpid
+  namespace: core/power
+  version: 2.0.34
+  description: Daemon that dispatches hardware ACPI events to configured handlers
+  homepage: https://sourceforge.net/projects/acpid2/
+  checksum: 641601483183db9647d3a757d38136f26d6207310306d36e2c77cc7e00a543db
+
+sources:
+- name: acpid
+  url: https://downloads.sourceforge.net/project/acpid2/acpid-2.0.34.tar.xz
+  sha256: 2d095c8cfcbc847caec746d62cdc8d0bff1ec1bc72ef7c674c721e04da6ab333
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4538:2338, 9059:2489, 13531:2491, 16764:2856]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "/${SOURCE_acpid}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    # acpid already enables large-file support. Use the normal stat API so the
+    # source also builds with C libraries that no longer expose stat64 names.
+    sed -i 's/struct stat64 st;/struct stat st;/; s/fstat64(fd, \&st)/fstat(fd, \&st)/' sock.c
+
+    ./configure \
+      --prefix=/usr \
+      --sbindir=/usr/bin
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    install -d "${OUT_DIR}/usr/lib/systemd/system"
+    cat > "${OUT_DIR}/usr/lib/systemd/system/acpid.service" << 'EOF'
+    [Unit]
+    Description=ACPI event daemon
+    Documentation=man:acpid(8)
+    ConditionVirtualization=!container
+    After=systemd-udevd.service
+
+    [Service]
+    ExecStart=/usr/bin/acpid --foreground
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+    chmod 644 "${OUT_DIR}/usr/lib/systemd/system/acpid.service"
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  full:
+  - bin
+  - doc
+  - lib
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/acpi_listen
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/acpid
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/kacpimon
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  doc:
+    files:
+    - path: /usr/share/doc/acpid/COPYING
+    - path: /usr/share/doc/acpid/Changelog
+    - path: /usr/share/doc/acpid/README
+    - path: /usr/share/doc/acpid/TESTPLAN
+    - path: /usr/share/doc/acpid/TODO
+
+  lib:
+    files:
+    - path: /usr/lib/systemd/system/acpid.service
+
+  man:
+    files:
+    - path: /usr/share/man/man8/acpi_listen.8
+    - path: /usr/share/man/man8/acpid.8
+    - path: /usr/share/man/man8/kacpimon.8
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
