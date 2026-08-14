@@ -6,7 +6,7 @@ package:
   version: 1.8.11
   description: Linux packet filtering and NAT tool
   homepage: https://www.netfilter.org/projects/iptables/
-  checksum: 74092e7f38472c5e3d5d79c95d5e04316ea89b66684a1d63dffa3090c74c31b0
+  checksum: 171688dc4bb4cc546ab85bb41b7dc30c5cc83387a7fe0b962b9338f86f416d53
 
 sources:
 - name: iptables
@@ -73,6 +73,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4105:1101, 17315:2330, 35714:2804, 54044:2870, 72994:2932, 87269:2985, 104378:3116, 130200:3671, 156261:3820, 172385:4923]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -83,10 +84,7 @@ build:
       --sbindir=/usr/bin \
       --libexecdir=/usr/lib \
       --sysconfdir=/etc \
-      --disable-static \
-      --disable-bpf-compiler \
-      --disable-nfsynproxy \
-      --enable-libipq
+      --disable-static
 
     make
     make DESTDIR=${OUT_DIR} install
@@ -98,10 +96,16 @@ build:
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.la' -delete
-    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    find "${OUT_DIR}" -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
   dev:
+  - lib
+  - misc
+
+  full:
+  - bin
+  - conf
   - lib
   - misc
 
@@ -122,7 +126,6 @@ outputs:
 
   dev:
     files:
-    - path: /usr/include/libipq.h
     - path: /usr/include/libiptc/ipt_kernel_headers.h
     - path: /usr/include/libiptc/libip6tc.h
     - path: /usr/include/libiptc/libiptc.h
@@ -132,7 +135,6 @@ outputs:
     - path: /usr/include/xtables.h
     - path: /usr/lib/pkgconfig/libip4tc.pc
     - path: /usr/lib/pkgconfig/libip6tc.pc
-    - path: /usr/lib/pkgconfig/libipq.pc
     - path: /usr/lib/pkgconfig/libiptc.pc
     - path: /usr/lib/pkgconfig/xtables.pc
 
@@ -154,15 +156,6 @@ outputs:
       needs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/libip6tc.so.2.0.0
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libipq.so
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libipq.so.0
-      needs:
-      - /usr/lib/libc.so.6
-    - path: /usr/lib/libipq.so.0.0.0
       needs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/libxtables.so
@@ -662,17 +655,6 @@ outputs:
   man:
     files:
     - path: /usr/share/man/man1/iptables-xml.1
-    - path: /usr/share/man/man3/ipq_create_handle.3
-    - path: /usr/share/man/man3/ipq_destroy_handle.3
-    - path: /usr/share/man/man3/ipq_errstr.3
-    - path: /usr/share/man/man3/ipq_get_msgerr.3
-    - path: /usr/share/man/man3/ipq_get_packet.3
-    - path: /usr/share/man/man3/ipq_message_type.3
-    - path: /usr/share/man/man3/ipq_perror.3
-    - path: /usr/share/man/man3/ipq_read.3
-    - path: /usr/share/man/man3/ipq_set_mode.3
-    - path: /usr/share/man/man3/ipq_set_verdict.3
-    - path: /usr/share/man/man3/libipq.3
     - path: /usr/share/man/man8/arptables-nft-restore.8
     - path: /usr/share/man/man8/arptables-nft-save.8
     - path: /usr/share/man/man8/arptables-nft.8

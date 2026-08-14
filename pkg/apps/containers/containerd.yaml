@@ -1,0 +1,112 @@
+package:
+  schema: 1
+  name: containerd
+  slug: containerd
+  namespace: apps/containers
+  version: 2.2.2+git5957d3334b
+  description: Container runtime daemon and command-line client
+  homepage: https://containerd.io/
+  checksum: 3989b9f2204da1014a248d207bce55b87e08e8ffc2685b21ce140dc30f99c47d
+
+sources:
+- name: containerd
+  url: https://github.com/containerd/containerd/archive/5957d3334bcaeddc2bd8e665f53cee318c298a2c.tar.gz
+  sha256: 0d11cb5bd1a56ead7af3d74feacb026e85bb316c2d8d34029a4889b6b215efd3
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: go
+  commit: x86_64/pkg/dev/lang/go/1.26.4/bundles/dev
+- name: kmod
+  commit: x86_64/pkg/core/kernel/kmod/32/bundles/full
+- name: runc
+  commit: x86_64/pkg/apps/containers/runc/1.2.4/bundles/full
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4179:23861, 4531:23885]
+
+  script: |
+    set -eux
+    tar --no-same-owner -xf /${SOURCE_containerd} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    export GOROOT=/usr/lib/go
+    export GOPATH="${WORK_DIR}/gopath"
+    export GOCACHE="${WORK_DIR}/gocache"
+    export GOENV=off
+    export GOTELEMETRY=off
+    export GOFLAGS=-mod=vendor
+    export CGO_ENABLED=1
+    export CGO_CFLAGS="${CFLAGS}"
+    export CGO_LDFLAGS="${LDFLAGS} -Wl,--build-id=none"
+    export SHIM_CGO_ENABLED=1
+
+    make \
+      GO_BUILD_FLAGS="-trimpath -buildvcs=false" \
+      EXTRA_LDFLAGS="-buildid=" \
+      VERSION="v2.2.2-11-g5957d3334" \
+      REVISION="5957d3334bcaeddc2bd8e665f53cee318c298a2c" \
+      binaries
+
+    install -Dm755 bin/containerd "${OUT_DIR}/usr/bin/containerd"
+    install -Dm755 bin/containerd-shim-runc-v2 "${OUT_DIR}/usr/bin/containerd-shim-runc-v2"
+    install -Dm755 bin/ctr "${OUT_DIR}/usr/bin/ctr"
+
+    install -Dm644 containerd.service "${OUT_DIR}/usr/lib/systemd/system/containerd.service"
+    sed -i \
+      -e 's:/usr/local/bin/containerd:/usr/bin/containerd:g' \
+      -e 's:/sbin/modprobe:/usr/bin/modprobe:g' \
+      "${OUT_DIR}/usr/lib/systemd/system/containerd.service"
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+  - lib
+
+  full:
+  - bin
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/containerd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/containerd-shim-runc-v2
+    - path: /usr/bin/ctr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  lib:
+    files:
+    - path: /usr/lib/systemd/system/containerd.service
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

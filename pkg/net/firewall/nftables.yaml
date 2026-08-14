@@ -6,7 +6,7 @@ package:
   version: 1.1.1
   description: Netfilter tables userspace utilities
   homepage: https://www.netfilter.org/projects/nftables/
-  checksum: 0d1732378cc6e86e30c4136d043c83e79603603bb7a0a36a31a6e49c6b19bc5a
+  checksum: d82c8ef9a12067a13ea84db84a90c061820fcecf70c2a66251bb912c634d78ca
 
 sources:
 - name: nftables
@@ -71,7 +71,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4132:15755, 8252:20893, 9100:21952]
+  profile: [4132:1206, 8252:7636, 9100:7705]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -88,15 +88,27 @@ build:
 
     make
     make DESTDIR=${OUT_DIR} install
+    install -Dm644 doc/libnftables-json.5 "${OUT_DIR}/usr/share/man/man5/libnftables-json.5"
+    install -Dm644 doc/libnftables.3 "${OUT_DIR}/usr/share/man/man3/libnftables.3"
+    install -Dm644 doc/nft.8 "${OUT_DIR}/usr/share/man/man8/nft.8"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.la' -delete
-    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    find "${OUT_DIR}" -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
   dev:
   - bin
+  - dev
   - lib
+
+  full:
+  - bin
+  - conf
+  - doc
+  - lib
+  - man
+  - misc
 
 outputs:
   bin:
@@ -150,6 +162,12 @@ outputs:
       - /usr/lib/libmnl.so.0
       - /usr/lib/libnftnl.so.11
       - /usr/lib/libreadline.so.8
+
+  man:
+    files:
+    - path: /usr/share/man/man3/libnftables.3
+    - path: /usr/share/man/man5/libnftables-json.5
+    - path: /usr/share/man/man8/nft.8
 
   misc:
     files:

@@ -1,0 +1,393 @@
+package:
+  schema: 1
+  name: Docker Moby
+  slug: docker
+  namespace: apps/containers
+  version: 29.3.0+git1da6517e1a
+  description: Docker container engine and command-line client built from Moby
+  homepage: https://www.docker.com/
+  checksum: 6f82e2a82020fb2a8701a3ca2818fc4a497ba5c619d3e26600926caa5e84ecdb
+
+sources:
+- name: moby
+  url: https://github.com/moby/moby/archive/1da6517e1a4381297e56862f6f373f265c28d102.tar.gz
+  sha256: 22170504140840d37bb3cbc14a0807c1803d71934f4e6f74793448cff7fcf30f
+- name: docker_cli
+  url: https://github.com/docker/cli/archive/df016a3a9538efb6d7d6e7c3baf291dbbe28eee0.tar.gz
+  sha256: 537f4ad7fad672dc3e084a2638711f08630715163d875f3fc4fbf2afc47b3c14
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: go
+  commit: x86_64/pkg/dev/lang/go/1.26.4/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: libseccomp
+  commit: x86_64/pkg/dev/libs/libseccomp/2.5.6/bundles/dev
+- name: nftables
+  commit: x86_64/pkg/net/firewall/nftables/1.1.1/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: containerd
+  commit: x86_64/pkg/apps/containers/containerd/2.2.2+git5957d3334b/bundles/full
+- name: runc
+  commit: x86_64/pkg/apps/containers/runc/1.2.4/bundles/full
+- name: tini
+  commit: x86_64/pkg/apps/containers/tini/0.19.0+git369448a167/bundles/full
+- name: iptables
+  commit: x86_64/pkg/net/firewall/iptables/1.8.11/bundles/full
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/full
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4137:45464, 8288:45465, 12387:45466, 16550:45466, 20717:45467, 24855:45479, 28967:45496, 32683:45996]
+
+  script: |
+    set -eux
+    mkdir -p "${WORK_DIR}/moby" "${WORK_DIR}/cli"
+    tar --no-same-owner -xf /${SOURCE_moby} -C "${WORK_DIR}/moby" --strip-components=1
+    tar --no-same-owner -xf /${SOURCE_docker_cli} -C "${WORK_DIR}/cli" --strip-components=1
+
+    export GOROOT=/usr/lib/go
+    export GOPATH="${WORK_DIR}/moby/.gopath:${WORK_DIR}/moby/vendor"
+    export GOCACHE="${WORK_DIR}/gocache"
+    export GOENV=off
+    export GOTELEMETRY=off
+    export GO111MODULE=off
+    export CGO_ENABLED=1
+    export CGO_CFLAGS="${CFLAGS}"
+    export CGO_LDFLAGS="${LDFLAGS} -Wl,--build-id=none"
+    export DISABLE_WARN_OUTSIDE_CONTAINER=1
+
+    cd "${WORK_DIR}/moby"
+    mkdir -p .gopath/src/github.com/moby/moby
+    ln -s ../../../../.. .gopath/src/github.com/moby/moby/v2
+    mkdir -p .gopath/src/github.com/docker
+    ln -s "${WORK_DIR}/cli" .gopath/src/github.com/docker/cli
+
+    export BUILDFLAGS="-trimpath -buildvcs=false"
+    export DOCKER_LDFLAGS="-buildid="
+    VERSION=v29.3.0-46-g1da6517e1a \
+      DOCKER_GITCOMMIT=1da6517e1a4381297e56862f6f373f265c28d102 \
+      ./hack/make.sh dynbinary
+
+    cd "${WORK_DIR}/cli"
+    export GOPATH="${WORK_DIR}/moby/.gopath:${WORK_DIR}/cli/vendor"
+    export CFLAGS=
+    export LDFLAGS=
+    export TARGET=build
+    export GO_LDFLAGS="-buildid="
+    export BUILDFLAGS="-trimpath -buildvcs=false"
+    VERSION=v29.3.0-46-g1da6517e1a GITCOMMIT=df016a3a95 make dynbinary
+    make manpages
+
+    install -d "${OUT_DIR}/usr/share/man"
+    cp -a man/man[1-9] "${OUT_DIR}/usr/share/man/"
+
+    cd "${WORK_DIR}/moby/man"
+    make DESTDIR="${OUT_DIR}" prefix=/usr mandir=/usr/share/man install
+
+    cd "${WORK_DIR}/cli"
+
+    install -Dm755 build/docker "${OUT_DIR}/usr/bin/docker"
+    install -Dm755 "${WORK_DIR}/moby/bundles/dynbinary-daemon/dockerd" \
+      "${OUT_DIR}/usr/bin/dockerd"
+    install -Dm755 "${WORK_DIR}/moby/bundles/dynbinary-daemon/docker-proxy" \
+      "${OUT_DIR}/usr/bin/docker-proxy"
+    ln -s tini "${OUT_DIR}/usr/bin/docker-init"
+
+    install -Dm644 contrib/completion/bash/docker \
+      "${OUT_DIR}/usr/share/bash-completion/completions/docker"
+    install -Dm644 contrib/completion/fish/docker.fish \
+      "${OUT_DIR}/usr/share/fish/vendor_completions.d/docker.fish"
+    install -Dm644 contrib/completion/zsh/_docker \
+      "${OUT_DIR}/usr/share/zsh/site-functions/_docker"
+
+    install -Dm644 "${WORK_DIR}/moby/contrib/init/systemd/docker.service" \
+      "${OUT_DIR}/usr/lib/systemd/system/docker.service"
+    sed -i 's:/bin/kill:/usr/bin/kill:g' \
+      "${OUT_DIR}/usr/lib/systemd/system/docker.service"
+    install -Dm644 "${WORK_DIR}/moby/contrib/init/systemd/docker.socket" \
+      "${OUT_DIR}/usr/lib/systemd/system/docker.socket"
+    install -Dm755 "${WORK_DIR}/moby/contrib/check-config.sh" \
+      "${OUT_DIR}/usr/share/docker/check-config.sh"
+
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  full:
+  - bin
+  - doc
+  - lib
+  - man
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/docker
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/docker-init
+      needs:
+      - /usr/bin/tini
+    - path: /usr/bin/docker-proxy
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/dockerd
+      needs:
+      - /usr/bin/containerd
+      - /usr/bin/docker-init
+      - /usr/bin/ip6tables
+      - /usr/bin/iptables
+      - /usr/bin/runc
+      - /usr/bin/unshare
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnftables.so.1
+      - /usr/lib/libsystemd.so.0
+
+  doc:
+    files:
+    - path: /usr/share/docker/check-config.sh
+
+  lib:
+    files:
+    - path: /usr/lib/systemd/system/docker.service
+      needs:
+      - /usr/bin/containerd
+      - /usr/bin/dockerd
+      - /usr/bin/kill
+    - path: /usr/lib/systemd/system/docker.socket
+
+  man:
+    files:
+    - path: /usr/share/man/man1/docker-attach.1
+    - path: /usr/share/man/man1/docker-bake.1
+    - path: /usr/share/man/man1/docker-build.1
+    - path: /usr/share/man/man1/docker-builder-build.1
+    - path: /usr/share/man/man1/docker-builder-prune.1
+    - path: /usr/share/man/man1/docker-builder.1
+    - path: /usr/share/man/man1/docker-checkpoint-create.1
+    - path: /usr/share/man/man1/docker-checkpoint-ls.1
+    - path: /usr/share/man/man1/docker-checkpoint-rm.1
+    - path: /usr/share/man/man1/docker-checkpoint.1
+    - path: /usr/share/man/man1/docker-commit.1
+    - path: /usr/share/man/man1/docker-config-create.1
+    - path: /usr/share/man/man1/docker-config-inspect.1
+    - path: /usr/share/man/man1/docker-config-ls.1
+    - path: /usr/share/man/man1/docker-config-rm.1
+    - path: /usr/share/man/man1/docker-config.1
+    - path: /usr/share/man/man1/docker-container-attach.1
+    - path: /usr/share/man/man1/docker-container-commit.1
+    - path: /usr/share/man/man1/docker-container-cp.1
+    - path: /usr/share/man/man1/docker-container-create.1
+    - path: /usr/share/man/man1/docker-container-diff.1
+    - path: /usr/share/man/man1/docker-container-exec.1
+    - path: /usr/share/man/man1/docker-container-export.1
+    - path: /usr/share/man/man1/docker-container-inspect.1
+    - path: /usr/share/man/man1/docker-container-kill.1
+    - path: /usr/share/man/man1/docker-container-logs.1
+    - path: /usr/share/man/man1/docker-container-ls.1
+    - path: /usr/share/man/man1/docker-container-pause.1
+    - path: /usr/share/man/man1/docker-container-port.1
+    - path: /usr/share/man/man1/docker-container-prune.1
+    - path: /usr/share/man/man1/docker-container-rename.1
+    - path: /usr/share/man/man1/docker-container-restart.1
+    - path: /usr/share/man/man1/docker-container-rm.1
+    - path: /usr/share/man/man1/docker-container-run.1
+    - path: /usr/share/man/man1/docker-container-start.1
+    - path: /usr/share/man/man1/docker-container-stats.1
+    - path: /usr/share/man/man1/docker-container-stop.1
+    - path: /usr/share/man/man1/docker-container-top.1
+    - path: /usr/share/man/man1/docker-container-unpause.1
+    - path: /usr/share/man/man1/docker-container-update.1
+    - path: /usr/share/man/man1/docker-container-wait.1
+    - path: /usr/share/man/man1/docker-container.1
+    - path: /usr/share/man/man1/docker-context-create.1
+    - path: /usr/share/man/man1/docker-context-export.1
+    - path: /usr/share/man/man1/docker-context-import.1
+    - path: /usr/share/man/man1/docker-context-inspect.1
+    - path: /usr/share/man/man1/docker-context-ls.1
+    - path: /usr/share/man/man1/docker-context-rm.1
+    - path: /usr/share/man/man1/docker-context-show.1
+    - path: /usr/share/man/man1/docker-context-update.1
+    - path: /usr/share/man/man1/docker-context-use.1
+    - path: /usr/share/man/man1/docker-context.1
+    - path: /usr/share/man/man1/docker-cp.1
+    - path: /usr/share/man/man1/docker-create.1
+    - path: /usr/share/man/man1/docker-diff.1
+    - path: /usr/share/man/man1/docker-events.1
+    - path: /usr/share/man/man1/docker-exec.1
+    - path: /usr/share/man/man1/docker-export.1
+    - path: /usr/share/man/man1/docker-history.1
+    - path: /usr/share/man/man1/docker-image-build.1
+    - path: /usr/share/man/man1/docker-image-history.1
+    - path: /usr/share/man/man1/docker-image-import.1
+    - path: /usr/share/man/man1/docker-image-inspect.1
+    - path: /usr/share/man/man1/docker-image-load.1
+    - path: /usr/share/man/man1/docker-image-ls.1
+    - path: /usr/share/man/man1/docker-image-prune.1
+    - path: /usr/share/man/man1/docker-image-pull.1
+    - path: /usr/share/man/man1/docker-image-push.1
+    - path: /usr/share/man/man1/docker-image-rm.1
+    - path: /usr/share/man/man1/docker-image-save.1
+    - path: /usr/share/man/man1/docker-image-tag.1
+    - path: /usr/share/man/man1/docker-image.1
+    - path: /usr/share/man/man1/docker-images.1
+    - path: /usr/share/man/man1/docker-import.1
+    - path: /usr/share/man/man1/docker-info.1
+    - path: /usr/share/man/man1/docker-inspect.1
+    - path: /usr/share/man/man1/docker-kill.1
+    - path: /usr/share/man/man1/docker-load.1
+    - path: /usr/share/man/man1/docker-login.1
+    - path: /usr/share/man/man1/docker-logout.1
+    - path: /usr/share/man/man1/docker-logs.1
+    - path: /usr/share/man/man1/docker-manifest-annotate.1
+    - path: /usr/share/man/man1/docker-manifest-create.1
+    - path: /usr/share/man/man1/docker-manifest-inspect.1
+    - path: /usr/share/man/man1/docker-manifest-push.1
+    - path: /usr/share/man/man1/docker-manifest-rm.1
+    - path: /usr/share/man/man1/docker-manifest.1
+    - path: /usr/share/man/man1/docker-network-connect.1
+    - path: /usr/share/man/man1/docker-network-create.1
+    - path: /usr/share/man/man1/docker-network-disconnect.1
+    - path: /usr/share/man/man1/docker-network-inspect.1
+    - path: /usr/share/man/man1/docker-network-ls.1
+    - path: /usr/share/man/man1/docker-network-prune.1
+    - path: /usr/share/man/man1/docker-network-rm.1
+    - path: /usr/share/man/man1/docker-network.1
+    - path: /usr/share/man/man1/docker-node-demote.1
+    - path: /usr/share/man/man1/docker-node-inspect.1
+    - path: /usr/share/man/man1/docker-node-ls.1
+    - path: /usr/share/man/man1/docker-node-promote.1
+    - path: /usr/share/man/man1/docker-node-ps.1
+    - path: /usr/share/man/man1/docker-node-rm.1
+    - path: /usr/share/man/man1/docker-node-update.1
+    - path: /usr/share/man/man1/docker-node.1
+    - path: /usr/share/man/man1/docker-pause.1
+    - path: /usr/share/man/man1/docker-plugin-create.1
+    - path: /usr/share/man/man1/docker-plugin-disable.1
+    - path: /usr/share/man/man1/docker-plugin-enable.1
+    - path: /usr/share/man/man1/docker-plugin-inspect.1
+    - path: /usr/share/man/man1/docker-plugin-install.1
+    - path: /usr/share/man/man1/docker-plugin-ls.1
+    - path: /usr/share/man/man1/docker-plugin-push.1
+    - path: /usr/share/man/man1/docker-plugin-rm.1
+    - path: /usr/share/man/man1/docker-plugin-set.1
+    - path: /usr/share/man/man1/docker-plugin-upgrade.1
+    - path: /usr/share/man/man1/docker-plugin.1
+    - path: /usr/share/man/man1/docker-port.1
+    - path: /usr/share/man/man1/docker-ps.1
+    - path: /usr/share/man/man1/docker-pull.1
+    - path: /usr/share/man/man1/docker-push.1
+    - path: /usr/share/man/man1/docker-rename.1
+    - path: /usr/share/man/man1/docker-restart.1
+    - path: /usr/share/man/man1/docker-rm.1
+    - path: /usr/share/man/man1/docker-rmi.1
+    - path: /usr/share/man/man1/docker-run.1
+    - path: /usr/share/man/man1/docker-save.1
+    - path: /usr/share/man/man1/docker-search.1
+    - path: /usr/share/man/man1/docker-secret-create.1
+    - path: /usr/share/man/man1/docker-secret-inspect.1
+    - path: /usr/share/man/man1/docker-secret-ls.1
+    - path: /usr/share/man/man1/docker-secret-rm.1
+    - path: /usr/share/man/man1/docker-secret.1
+    - path: /usr/share/man/man1/docker-service-create.1
+    - path: /usr/share/man/man1/docker-service-inspect.1
+    - path: /usr/share/man/man1/docker-service-logs.1
+    - path: /usr/share/man/man1/docker-service-ls.1
+    - path: /usr/share/man/man1/docker-service-ps.1
+    - path: /usr/share/man/man1/docker-service-rm.1
+    - path: /usr/share/man/man1/docker-service-rollback.1
+    - path: /usr/share/man/man1/docker-service-scale.1
+    - path: /usr/share/man/man1/docker-service-update.1
+    - path: /usr/share/man/man1/docker-service.1
+    - path: /usr/share/man/man1/docker-stack-config.1
+    - path: /usr/share/man/man1/docker-stack-deploy.1
+    - path: /usr/share/man/man1/docker-stack-ls.1
+    - path: /usr/share/man/man1/docker-stack-ps.1
+    - path: /usr/share/man/man1/docker-stack-rm.1
+    - path: /usr/share/man/man1/docker-stack-services.1
+    - path: /usr/share/man/man1/docker-stack.1
+    - path: /usr/share/man/man1/docker-start.1
+    - path: /usr/share/man/man1/docker-stats.1
+    - path: /usr/share/man/man1/docker-stop.1
+    - path: /usr/share/man/man1/docker-swarm-ca.1
+    - path: /usr/share/man/man1/docker-swarm-init.1
+    - path: /usr/share/man/man1/docker-swarm-join-token.1
+    - path: /usr/share/man/man1/docker-swarm-join.1
+    - path: /usr/share/man/man1/docker-swarm-leave.1
+    - path: /usr/share/man/man1/docker-swarm-unlock-key.1
+    - path: /usr/share/man/man1/docker-swarm-unlock.1
+    - path: /usr/share/man/man1/docker-swarm-update.1
+    - path: /usr/share/man/man1/docker-swarm.1
+    - path: /usr/share/man/man1/docker-system-df.1
+    - path: /usr/share/man/man1/docker-system-events.1
+    - path: /usr/share/man/man1/docker-system-info.1
+    - path: /usr/share/man/man1/docker-system-prune.1
+    - path: /usr/share/man/man1/docker-system.1
+    - path: /usr/share/man/man1/docker-tag.1
+    - path: /usr/share/man/man1/docker-top.1
+    - path: /usr/share/man/man1/docker-unpause.1
+    - path: /usr/share/man/man1/docker-update.1
+    - path: /usr/share/man/man1/docker-version.1
+    - path: /usr/share/man/man1/docker-volume-create.1
+    - path: /usr/share/man/man1/docker-volume-inspect.1
+    - path: /usr/share/man/man1/docker-volume-ls.1
+    - path: /usr/share/man/man1/docker-volume-prune.1
+    - path: /usr/share/man/man1/docker-volume-rm.1
+    - path: /usr/share/man/man1/docker-volume-update.1
+    - path: /usr/share/man/man1/docker-volume.1
+    - path: /usr/share/man/man1/docker-wait.1
+    - path: /usr/share/man/man1/docker.1
+    - path: /usr/share/man/man5/Dockerfile.5
+    - path: /usr/share/man/man5/docker-config-json.5
+    - path: /usr/share/man/man8/dockerd.8
+
+  misc:
+    files:
+    - path: /usr/share/bash-completion/completions/docker
+    - path: /usr/share/fish/vendor_completions.d/docker.fish
+    - path: /usr/share/zsh/site-functions/_docker
+
+resolution:
+  /usr/bin/containerd: containerd
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/bin/ip6tables: iptables
+  /usr/bin/iptables: iptables
+  /usr/lib/libnftables.so.1: nftables
+  /usr/bin/runc: runc
+  /usr/bin/docker-init: self
+  /usr/bin/dockerd: self
+  /usr/lib/libsystemd.so.0: systemd
+  /usr/bin/tini: tini
+  /usr/bin/kill: util-linux
+  /usr/bin/unshare: util-linux
