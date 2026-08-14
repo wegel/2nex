@@ -16,6 +16,7 @@ use crate::outputs::calculate_output_checksum;
 use crate::BuildOpts;
 
 use super::commit::commit_system_rootfs;
+use super::config::move_legacy_etc_to_factory;
 use super::dependencies::dependencies_from_system_packages;
 use super::env::build_system_env_vars;
 use super::flat::materialize_system_packages;
@@ -118,7 +119,11 @@ fn build_system_once(
     prepare_system_rootfs(opts, base_dir, inputs, reuse_rootfs)?;
     materialize_system_package_set(opts, manifest, base_dir, inputs)?;
     apply_overlays(&manifest.overlays, base_dir)?;
-    run_system_script(manifest, base_dir, download_dir, inputs)
+    run_system_script(manifest, base_dir, download_dir, inputs)?;
+    if manifest.system.nex_structure {
+        move_legacy_etc_to_factory(&Path::new(base_dir).join("target"))?;
+    }
+    Ok(())
 }
 
 fn prepare_system_rootfs(

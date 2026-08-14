@@ -180,23 +180,27 @@ if [ -n "$VAR_DEV" ]; then
     mount "$VAR_DEV" "${SYSROOT_MOUNT}/var" || die "failed to mount var partition"
     ensure_var_dirs
 
-    # first-boot: populate /var/etc from deployment template
-    if [ ! -f "${SYSROOT_MOUNT}/var/etc/.initialized" ]; then
-        log "first boot: copying /etc from deployment template..."
-        cp -a "$DEPLOY/etc/." "${SYSROOT_MOUNT}/var/etc/" || die "failed to copy /etc template into /var/etc"
-        touch "${SYSROOT_MOUNT}/var/etc/.initialized" || die "failed to create /var/etc initialization marker"
-        log "/var/etc initialized"
-    fi
-
-    # ensure machine-id exists and is writable for systemd
-    if [ ! -f "${SYSROOT_MOUNT}/var/etc/machine-id" ]; then
-        : > "${SYSROOT_MOUNT}/var/etc/machine-id" 2>/dev/null || true
-    fi
 else
     log "WARNING: var partition not found on root device; using sysroot /var and remounting sysroot rw"
     mkdir -p "${SYSROOT_MOUNT}/var" 2>/dev/null || true
     ensure_sysroot_rw || die "failed to remount sysroot rw for missing var partition"
     ensure_var_dirs
+fi
+
+# Seed only paths that the host does not already own. New deployments keep
+# legacy defaults in the UAPI factory tree. The fallback supports deployments
+# created before Nex adopted that layout.
+FACTORY_ETC="${DEPLOY}/usr/share/factory/etc"
+if [ ! -d "${FACTORY_ETC}" ]; then
+    FACTORY_ETC="${DEPLOY}/etc"
+fi
+log "populating missing /etc paths from ${FACTORY_ETC#${SYSROOT_MOUNT}}..."
+/bin/nex-populate-etc "${FACTORY_ETC}" "${SYSROOT_MOUNT}/var/etc" \
+    || die "failed to populate missing /etc paths"
+
+# Ensure machine-id exists and is writable for systemd.
+if [ ! -f "${SYSROOT_MOUNT}/var/etc/machine-id" ]; then
+    : > "${SYSROOT_MOUNT}/var/etc/machine-id" 2>/dev/null || true
 fi
 
 # Ensure deployment mount points exist (may require temporarily making sysroot writable)

@@ -209,6 +209,49 @@ package. Zub can hardlink every unchanged file, so Nex does not need to rebuild
 or duplicate the rest of the system. The project may still adjust how kernels
 and deployments relate as real machines expose constraints.
 
+## Packages Ship Defaults; Hosts Own Configuration
+
+Nex follows the UAPI Group Configuration Files Specification. Packages and
+assemblies place vendor defaults under `/usr`. Programs may accept temporary
+overrides under `/run`. The machine owner writes lasting, machine-specific
+settings under `/etc`. A Nex-managed machine mounts or otherwise supplies
+`/etc` from persistent host state outside the selected deployment, so the
+deployment can stay read-only while an administrator changes files such as
+`/etc/passwd`, `/etc/group`, `/etc/hosts`, or network settings.
+
+Programs should search `/etc`, then `/run`, then `/usr` when they choose one
+main file. A main file in a higher-priority tree completely replaces the same
+file below it. Programs that can safely combine drop-ins should read them in
+filename order across all three trees. A same-name file in a higher-priority
+tree replaces the lower file, and a later filename has higher priority. An
+empty file or a link to `/dev/null` masks the same file below it. Scripts and
+structured documents may use full-file selection when combining fragments
+would change their meaning.
+
+Package upgrades must not merge or overwrite host-owned files in `/etc`.
+Because programs read vendor defaults directly from `/usr`, a new deployment
+can update those defaults while leaving the host's explicit choices intact. A
+rollback selects the earlier `/usr` tree and keeps the same host-owned `/etc`.
+Tools may show the administrator how a local file differs from the vendor
+default, but they must not guess how to combine the two.
+
+Some programs still read only `/etc`. An immutable assembly may keep pristine
+copies for those programs under `/usr/share/factory/etc` and populate a missing
+host file from them. Software must not read that factory tree directly, and an
+upgrade must not replace a host file that already exists. A service may also
+pass an explicit config path as a narrow adapter. Nex should patch the program
+when native UAPI lookup gives users a clearer and safer result.
+
+Reusable package manifests must keep these changes useful outside Nex. They
+should enable an upstream vendor-directory option when one exists. A source
+patch must implement the standard `/usr`, `/run`, and `/etc` rules without a
+Nex path, product name, or assembly policy. A reusable package should otherwise
+install upstream's normal files; the immutable assembly, not the package,
+moves legacy defaults into the factory tree. Product repositories place their
+own vendor defaults and service choices in product packages or assemblies.
+Flat root filesystems must continue to work without the Nex deployment or boot
+tools.
+
 ## Nex Prefers Its Boot Path But Does Not Require It
 
 The Nex distribution prefers its custom UEFI boot manager, kernels with the

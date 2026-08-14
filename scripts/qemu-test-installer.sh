@@ -11,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 TMP_DIR="$ROOT_DIR/.nex/tmp"
 NEX_BIN="${NEX_BIN:-$ROOT_DIR/src/cli/target/debug/nex}"
+ZUB_BIN="${ZUB_BIN:-zub}"
 
 mkdir -p "$TMP_DIR"
 
@@ -360,6 +361,19 @@ assert_writable_dir /nex/staging
 assert_writable_dir /nex/users
 assert_writable_dir /nex/manifests
 
+[ -s /etc/passwd ] || fail "/etc/passwd was not populated from package defaults"
+root_user_found=false
+while IFS=: read -r user_name _; do
+    if [ "$user_name" = root ]; then
+        root_user_found=true
+        break
+    fi
+done < /etc/passwd
+[ "$root_user_found" = true ] || fail "/etc/passwd has no root user"
+
+IFS= read -r hosts_line < /etc/hosts || fail "/etc/hosts is missing"
+[ "$hosts_line" = "host-owned hosts" ] || fail "/etc/hosts was overwritten: $hosts_line"
+
 state=$(systemctl is-system-running --no-pager 2>/dev/null || true)
 say "systemd-state=$state"
 say "ASSERT-BOOT-PASS"
@@ -419,24 +433,24 @@ build_combined_initramfs() {
 build_direct_initramfs_disk() {
     command -v sfdisk >/dev/null 2>&1 || die "sfdisk not found"
     command -v mke2fs >/dev/null 2>&1 || die "mke2fs not found"
-    command -v zub >/dev/null 2>&1 || die "zub not found"
+    command -v "$ZUB_BIN" >/dev/null 2>&1 || die "zub not found: $ZUB_BIN"
     command -v qemu-system-x86_64 >/dev/null 2>&1 || die "qemu-system-x86_64 not found"
 
     rm -rf "$DIRECT_ROOT"
     mkdir -p "$DIRECT_ROOT"/{boot,initramfs,root-content,var-content}
 
-    zub checkout --copy "$LINUX_BOOT_REF" "$DIRECT_ROOT/boot"
-    zub checkout --copy "$INITRAMFS_BOOT_REF" "$DIRECT_ROOT/initramfs"
+    "$ZUB_BIN" checkout --copy "$LINUX_BOOT_REF" "$DIRECT_ROOT/boot"
+    "$ZUB_BIN" checkout --copy "$INITRAMFS_BOOT_REF" "$DIRECT_ROOT/initramfs"
 
-    TARGET_CHECKSUM=$(zub show "$TARGET_REF" 2>/dev/null | awk '/nex.system.checksum:/ {print $2; exit}')
+    TARGET_CHECKSUM=$("$ZUB_BIN" show "$TARGET_REF" 2>/dev/null | awk '/nex.system.checksum:/ {print $2; exit}')
     if [ -z "$TARGET_CHECKSUM" ]; then
-        TARGET_CHECKSUM=$(zub rev-parse "$TARGET_REF" 2>/dev/null)
+        TARGET_CHECKSUM=$("$ZUB_BIN" rev-parse "$TARGET_REF" 2>/dev/null)
     fi
     [ -n "$TARGET_CHECKSUM" ] || die "could not get checksum for $TARGET_REF"
 
     DEPLOY_DIR="$DIRECT_ROOT/root-content/nex/deployments/${TARGET_CHECKSUM}.0"
     mkdir -p "$DEPLOY_DIR"
-    zub checkout --copy "$TARGET_REF" "$DEPLOY_DIR"
+    "$ZUB_BIN" checkout --copy "$TARGET_REF" "$DEPLOY_DIR"
 
     mkdir -p \
         "$DIRECT_ROOT/root-content/nex/repo" \
@@ -492,8 +506,7 @@ build_direct_initramfs_disk() {
         "$DIRECT_ROOT/var-content/nex/users" \
         "$DIRECT_ROOT/var-content/nex/manifests"
     chmod 1777 "$DIRECT_ROOT/var-content/tmp"
-    cp -a "$DEPLOY_DIR/etc/." "$DIRECT_ROOT/var-content/etc/"
-    touch "$DIRECT_ROOT/var-content/etc/.initialized"
+    printf 'host-owned hosts\n' > "$DIRECT_ROOT/var-content/etc/hosts"
     write_serial_assert_script "$DIRECT_ROOT/var-content/etc/nex-assert-boot.sh"
     chmod +x "$DIRECT_ROOT/var-content/etc/nex-assert-boot.sh"
     cp "$DIRECT_ROOT/var-content/etc/nex-assert-boot.sh" "$DEPLOY_DIR/usr/lib/nex-assert-boot.sh"

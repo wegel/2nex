@@ -2,6 +2,7 @@
 
 mod build;
 mod commit;
+mod config;
 mod dependencies;
 mod env;
 mod flat;

@@ -6,12 +6,15 @@ package:
   version: 1.0.0
   description: Minimal initramfs for early userspace boot
   homepage: https://www.kernel.org/doc/html/latest/driver-api/early-userspace/
-  checksum: 881e9004842f900afc9138220389bc965202bcba6f9d5332c3b575eec4350520
+  checksum: 4453cc39632fcbc9e5f2d8505ef1dfd37eec2cbe12262c3d4778fe3c46c4291a
 
 sources:
 - name: init
   file: pkg/core/kernel/initramfs-init.sh
-  sha256: f0d0de977b1c97d495c5b72c96df7efb8a81b2d93efb58cb2e07d8f68963be41
+  sha256: d8257adff53950256e19753ac4660ad38f64c3a0077aeab397934e554d3c160f
+- name: populate_etc
+  file: pkg/core/kernel/initramfs-populate-etc.sh
+  sha256: bcaeeeefe0763f84c8f54f6200ef27fd0261b4ca9f4b040f55d9d5a4936ea2bd
 - name: gen_init_cpio
   file: pkg/core/kernel/gen_init_cpio.c
   sha256: 309cab96d2b43133a0758f165fbcf9cc1b671623555ef8dadd9983095c462345
@@ -57,7 +60,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [1068:322]
+  profile: [1068:315]
 
   script: |
     set -eu
@@ -101,6 +104,8 @@ build:
     # copy init script
     cp "/${SOURCE_init}" "${INITRAMFS}/init"
     chmod +x "${INITRAMFS}/init"
+    cp "/${SOURCE_populate_etc}" "${INITRAMFS}/bin/nex-populate-etc"
+    chmod +x "${INITRAMFS}/bin/nex-populate-etc"
 
     # minimal etc files
     echo "root:x:0:0:root:/root:/bin/sh" > "${INITRAMFS}/etc/passwd"
@@ -108,7 +113,11 @@ build:
 
     # set permissions first
     chmod -R u=rwX,go=rX "${INITRAMFS}"
-    chmod +x "${INITRAMFS}/bin/busybox" "${INITRAMFS}/sbin/blkid" "${INITRAMFS}/init"
+    chmod +x \
+      "${INITRAMFS}/bin/busybox" \
+      "${INITRAMFS}/bin/nex-populate-etc" \
+      "${INITRAMFS}/sbin/blkid" \
+      "${INITRAMFS}/init"
 
     # touch LAST to normalize all timestamps (including symlinks with -h)
     find "${INITRAMFS}" -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;
