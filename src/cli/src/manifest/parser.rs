@@ -5,9 +5,10 @@ use std::path::{Path, PathBuf};
 
 use super::inheritance;
 use super::repositories::repository_root_for_path;
+use super::source::RepositorySnapshot;
 use super::types::*;
 
-/// Load manifest from a ManifestSource (path or blob)
+/// Load manifest from a ManifestSource (path or repository revision)
 /// For system manifests loaded from path, inheritance is resolved
 pub fn load_manifest_from_source(source: &ManifestSource) -> io::Result<ManifestData> {
     match source {
@@ -22,22 +23,51 @@ pub fn load_manifest_from_source(source: &ManifestSource) -> io::Result<Manifest
                 Ok(ManifestData::System(resolved))
             } else {
                 let root = manifest_repository_root(path);
-                load_manifest_from_str_in_repository(&content, &root)
+                load_manifest_from_str_in_repository(&content, &root, None)
             }
         }
-        ManifestSource::Blob {
-            sha,
+        ManifestSource::Repository {
+            revision,
             path,
             git_root,
         } => {
-            let content = crate::utils::fetch_git_blob(&git_root, sha).map_err(|e| {
+            let relative_path = path.strip_prefix(git_root).map_err(|_| {
                 io::Error::new(
-                    io::ErrorKind::NotFound,
-                    format!("failed to fetch blob {} for {}: {}", sha, path.display(), e),
+                    io::ErrorKind::InvalidInput,
+                    format!("{} is outside {}", path.display(), git_root.display()),
                 )
             })?;
-            // note: blob manifests don't support inheritance
-            load_manifest_from_str_in_repository(&content, git_root)
+            let bytes =
+                crate::utils::fetch_git_file(git_root, revision, relative_path).map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!(
+                            "failed to fetch {} at revision {}: {}",
+                            path.display(),
+                            revision,
+                            e
+                        ),
+                    )
+                })?;
+            let content = String::from_utf8(bytes).map_err(|e| {
+                io::Error::new(io::ErrorKind::InvalidData, format!("invalid UTF-8: {}", e))
+            })?;
+            let document: Value = serde_yaml::from_str(&content)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            if detect_manifest_kind(&document) == ManifestKind::System {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "repository-pinned assembly manifests are not supported; pin the assembly repository checkout instead",
+                ));
+            }
+            load_manifest_from_str_in_repository(
+                &content,
+                git_root,
+                Some(RepositorySnapshot {
+                    git_root: git_root.clone(),
+                    revision: revision.clone(),
+                }),
+            )
         }
         ManifestSource::Skip => Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -52,8 +82,18 @@ pub fn compute_manifest_hash_from_source(source: &ManifestSource) -> io::Result<
 
     let content = match source {
         ManifestSource::Path(path) => fs::read(path)?,
-        ManifestSource::Blob { sha, git_root, .. } => {
-            crate::utils::fetch_git_blob(&git_root, sha)?.into_bytes()
+        ManifestSource::Repository {
+            revision,
+            path,
+            git_root,
+        } => {
+            let relative_path = path.strip_prefix(git_root).map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("{} is outside {}", path.display(), git_root.display()),
+                )
+            })?;
+            crate::utils::fetch_git_file(git_root, revision, relative_path)?
         }
         ManifestSource::Skip => {
             return Err(io::Error::new(
@@ -100,10 +140,10 @@ pub fn validate_system_manifest(manifest: &SystemManifest) -> io::Result<()> {
 pub fn load_manifest(file_path: &str) -> io::Result<ManifestData> {
     let manifest_str = fs::read_to_string(file_path)?;
     let root = manifest_repository_root(Path::new(file_path));
-    load_manifest_from_str_in_repository(&manifest_str, &root)
+    load_manifest_from_str_in_repository(&manifest_str, &root, None)
 }
 
-/// Load manifest from string content (for blob-ref mode)
+/// Load manifest from string content without a repository context.
 pub fn load_manifest_from_str(manifest_str: &str) -> io::Result<ManifestData> {
     let doc: Value = serde_yaml::from_str(manifest_str)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
@@ -123,7 +163,7 @@ pub fn load_manifest_from_str(manifest_str: &str) -> io::Result<ManifestData> {
 }
 
 pub(super) fn resolve_system_paths(manifest: &mut SystemManifest, repository_root: &Path) {
-    resolve_sources(&mut manifest.sources, repository_root);
+    resolve_sources(&mut manifest.sources, repository_root, None);
     for overlay in &mut manifest.overlays {
         if overlay.is_relative() {
             *overlay = repository_root.join(&*overlay);
@@ -134,17 +174,30 @@ pub(super) fn resolve_system_paths(manifest: &mut SystemManifest, repository_roo
 fn load_manifest_from_str_in_repository(
     manifest_str: &str,
     repository_root: &Path,
+    repository_snapshot: Option<RepositorySnapshot>,
 ) -> io::Result<ManifestData> {
     let mut manifest = load_manifest_from_str(manifest_str)?;
     match &mut manifest {
-        ManifestData::Package(package) => resolve_sources(&mut package.sources, repository_root),
+        ManifestData::Package(package) => resolve_sources(
+            &mut package.sources,
+            repository_root,
+            repository_snapshot.as_ref(),
+        ),
         ManifestData::System(system) => resolve_system_paths(system, repository_root),
     }
     Ok(manifest)
 }
 
-fn resolve_sources(sources: &mut [Source], repository_root: &Path) {
+fn resolve_sources(
+    sources: &mut [Source],
+    repository_root: &Path,
+    repository_snapshot: Option<&RepositorySnapshot>,
+) {
     for source in sources {
+        if let Some(snapshot) = repository_snapshot {
+            source.repository_snapshot = Some(snapshot.clone());
+            continue;
+        }
         resolve_local_reference(&mut source.file, repository_root);
         resolve_local_reference(&mut source.dev, repository_root);
         resolve_local_reference(&mut source.cargo_lock, repository_root);

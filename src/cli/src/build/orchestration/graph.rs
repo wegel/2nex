@@ -4,16 +4,17 @@ use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use petgraph::graph::{DiGraph, NodeIndex};
-use sha2::{Digest, Sha256};
-
 use crate::build::{check_if_built, compute_manifest_hash};
 use crate::manifest::types::{Dependency, ManifestSource};
-use crate::manifest::{load_manifest_from_source, repository_root_for_path, ManifestData};
+use crate::manifest::{
+    compute_manifest_hash_from_source, load_manifest_from_source, repository_root_for_path,
+    ManifestData,
+};
 use crate::refs::PackageRef;
 use crate::store::{ensure_branch_exists, Store};
 use crate::system;
 use crate::utils::short_hash;
+use petgraph::graph::{DiGraph, NodeIndex};
 
 use super::manifest_lookup::{build_exists_for_manifest, find_manifest_for_commit};
 
@@ -118,8 +119,8 @@ impl GraphBuilder<'_> {
     }
 
     fn dependency_is_cached(&mut self, dep: &Dependency) -> io::Result<bool> {
-        if let Some(blob_sha) = dep.manifest_ref.as_ref() {
-            self.pinned_dependency_is_cached(dep, blob_sha)
+        if let Some(revision) = dep.manifest_ref.as_ref() {
+            self.pinned_dependency_is_cached(dep, revision)
         } else {
             self.floating_dependency_is_cached(dep)
         }
@@ -128,12 +129,12 @@ impl GraphBuilder<'_> {
     fn pinned_dependency_is_cached(
         &mut self,
         dep: &Dependency,
-        blob_sha: &str,
+        revision: &str,
     ) -> io::Result<bool> {
         if !self.ref_is_available(&dep.commit) {
             self.print_needs_build(
                 dep,
-                &format!("pinned to {}, not in store", short_hash(blob_sha)),
+                &format!("pinned to {}, not in store", short_hash(revision)),
             );
             return Ok(false);
         }
@@ -141,28 +142,32 @@ impl GraphBuilder<'_> {
         let manifest_path = match find_manifest_for_commit(&dep.commit, self.manifest_dirs) {
             Ok(path) => path,
             Err(error) => {
-                self.print_pinned_blob_warning(dep, blob_sha, &error);
+                self.print_pinned_revision_warning(dep, revision, &error);
                 return Ok(false);
             }
         };
         let git_root = match repository_root_for_path(&manifest_path) {
             Ok(root) => root,
             Err(error) => {
-                self.print_pinned_blob_warning(dep, blob_sha, &error);
+                self.print_pinned_revision_warning(dep, revision, &error);
                 return Ok(false);
             }
         };
-        let content = match crate::utils::fetch_git_blob(&git_root, blob_sha) {
-            Ok(content) => content,
+        let manifest_source = ManifestSource::Repository {
+            revision: revision.to_string(),
+            path: manifest_path,
+            git_root,
+        };
+        let content_hash = match compute_manifest_hash_from_source(&manifest_source) {
+            Ok(hash) => hash,
             Err(e) => {
                 eprintln!(
-                    "  Warning: failed to fetch blob {} for {}: {}",
-                    blob_sha, dep.commit, e
+                    "  Warning: failed to fetch repository revision {} for {}: {}",
+                    revision, dep.commit, e
                 );
                 return Ok(false);
             }
         };
-        let content_hash = format!("{:x}", Sha256::digest(content.as_bytes()));
         self.cached_for_hash(dep, &dep.commit, &content_hash, "pinned")
     }
 
@@ -313,10 +318,10 @@ impl GraphBuilder<'_> {
         }
     }
 
-    fn print_pinned_blob_warning(&self, dep: &Dependency, blob_sha: &str, error: &io::Error) {
+    fn print_pinned_revision_warning(&self, dep: &Dependency, revision: &str, error: &io::Error) {
         eprintln!(
-            "  Warning: failed to locate blob {} for {}: {}",
-            blob_sha, dep.commit, error
+            "  Warning: failed to locate repository revision {} for {}: {}",
+            revision, dep.commit, error
         );
     }
 }
@@ -348,10 +353,10 @@ fn commit_ref_for_availability(commit: &str) -> String {
 }
 
 fn dependency_source(dep: &Dependency, path: PathBuf) -> io::Result<ManifestSource> {
-    if let Some(blob_sha) = dep.manifest_ref.as_ref() {
+    if let Some(revision) = dep.manifest_ref.as_ref() {
         let git_root = repository_root_for_path(&path)?;
-        Ok(ManifestSource::Blob {
-            sha: blob_sha.clone(),
+        Ok(ManifestSource::Repository {
+            revision: revision.clone(),
             path,
             git_root,
         })

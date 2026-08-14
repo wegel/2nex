@@ -590,8 +590,8 @@ fn format_dependencies(value: &Value) -> io::Result<String> {
             output.push_str("- ");
             let mut first = true;
 
-            // order: name, commit
-            for field in ["name", "commit"] {
+            // order: name, commit, manifest_ref
+            for field in ["name", "commit", "manifest_ref"] {
                 let key = Value::String(field.to_string());
                 if let Some(val) = mapping.get(&key) {
                     if first {
@@ -620,8 +620,8 @@ fn format_packages(value: &Value) -> io::Result<String> {
             output.push_str("- ");
             let mut first = true;
 
-            // order: name, commit, outputs
-            for field in ["name", "commit", "outputs"] {
+            // order: name, commit, manifest_ref, outputs
+            for field in ["name", "commit", "manifest_ref", "outputs"] {
                 let key = Value::String(field.to_string());
                 if let Some(val) = mapping.get(&key) {
                     if first {
@@ -1150,10 +1150,12 @@ dependencies:
 # runtime libs
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/outputs/lib
+  manifest_ref: a111111111111111111111111111111111111111
 packages:
 # init tools
 - name: systemd
   commit: x86_64/pkg/core/init/systemd/257.5/bundles/minimal
+  manifest_ref: b222222222222222222222222222222222222222
 # shell
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
@@ -1166,6 +1168,8 @@ build:
         assert!(formatted.contains("dependencies:\n# runtime libs\n- name: glibc\n"));
         assert!(formatted.contains("packages:\n# init tools\n- name: systemd\n"));
         assert!(formatted.contains("# shell\n- name: bash\n"));
+        assert!(formatted.contains("  manifest_ref: a111111111111111111111111111111111111111\n"));
+        assert!(formatted.contains("  manifest_ref: b222222222222222222222222222222222222222\n"));
     }
 
     #[test]

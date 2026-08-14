@@ -1,9 +1,12 @@
 use clap::Args;
+use sha2::{Digest, Sha256};
+use std::fs;
 use std::io;
+use std::process::Command;
 
 use crate::deps::{resolve_dependency_closure, resolve_dependency_closure_with_providers};
 use crate::manifest::types::Overlay;
-use crate::manifest::types::{ManifestSource, SystemManifest};
+use crate::manifest::types::{ManifestSource, Source, SystemManifest};
 use crate::manifest::{load_manifest_from_source, Manifest, ManifestData, ManifestIndex};
 use crate::refs::{PackageRef, RefType};
 use crate::system::dependencies_from_system_packages;
@@ -70,9 +73,19 @@ pub fn run(args: &CheckArgs) -> io::Result<()> {
             has_errors = true;
         }
 
+        for error in validate_declared_sources(Path::new(file), &original)? {
+            eprintln!("  error: {}", error);
+            has_errors = true;
+        }
+
         // check 2: no bootstrap dependencies unless seed package
         let manifest_path = Path::new(file).canonicalize()?;
         let manifest_data = load_manifest_from_source(&ManifestSource::Path(manifest_path))?;
+
+        for error in validate_manifest_refs(&manifest_data) {
+            eprintln!("  error: {}", error);
+            has_errors = true;
+        }
 
         if let ManifestData::Package(ref manifest) = manifest_data {
             // check 2a: no forbidden usrmerge paths in outputs
@@ -218,6 +231,226 @@ pub fn run(args: &CheckArgs) -> io::Result<()> {
         println!("all checks passed");
         Ok(())
     }
+}
+
+fn validate_manifest_refs(manifest: &ManifestData) -> Vec<String> {
+    let mut errors = Vec::new();
+    let dependencies = match manifest {
+        ManifestData::Package(package) => package.dependencies.as_slice(),
+        ManifestData::System(system) => system.dependencies.as_slice(),
+    };
+    for dependency in dependencies {
+        validate_manifest_ref(
+            dependency.manifest_ref.as_deref(),
+            &dependency.commit,
+            "dependency",
+            &mut errors,
+        );
+    }
+    if let ManifestData::System(system) = manifest {
+        for package in &system.packages {
+            validate_manifest_ref(
+                package.manifest_ref.as_deref(),
+                &package.commit,
+                "assembly package",
+                &mut errors,
+            );
+        }
+    }
+    errors
+}
+
+fn validate_manifest_ref(
+    manifest_ref: Option<&str>,
+    commit: &str,
+    kind: &str,
+    errors: &mut Vec<String>,
+) {
+    let Some(manifest_ref) = manifest_ref else {
+        return;
+    };
+    if !is_git_object_id(manifest_ref) {
+        errors.push(format!(
+            "{} '{}' manifest_ref must be a full lowercase Git object ID",
+            kind, commit
+        ));
+    }
+}
+
+fn is_git_object_id(value: &str) -> bool {
+    matches!(value.len(), 40 | 64)
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+fn validate_declared_sources(manifest_path: &Path, content: &str) -> io::Result<Vec<String>> {
+    let document: serde_yaml::Value = serde_yaml::from_str(content)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    let sources = match document.get("sources") {
+        Some(value) if !value.is_null() => serde_yaml::from_value::<Vec<Source>>(value.clone())
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?,
+        _ => Vec::new(),
+    };
+    let repository_root = crate::manifest::repository_root_for_path(manifest_path)?;
+    let mut errors = Vec::new();
+
+    for source in &sources {
+        validate_source_shape(source, &mut errors);
+        validate_source_paths(source, &repository_root, &mut errors);
+    }
+    Ok(errors)
+}
+
+fn validate_source_shape(source: &Source, errors: &mut Vec<String>) {
+    let selector_count = [
+        source.url.is_some(),
+        source.file.is_some(),
+        source.dev.is_some(),
+        source.cargo_lock.is_some(),
+        source.go_sum.is_some(),
+        source.zig_zon.is_some(),
+    ]
+    .into_iter()
+    .filter(|present| *present)
+    .count();
+    if selector_count != 1 {
+        errors.push(format!(
+            "source '{}' must set exactly one of url, file, dev, cargo_lock, go_sum, or zig_zon",
+            source.name
+        ));
+    }
+    if source.cargo_toml.is_some() && source.cargo_lock.is_none() {
+        errors.push(format!(
+            "source '{}' may set cargo_toml only with cargo_lock",
+            source.name
+        ));
+    }
+    if source.file.as_deref().is_some_and(is_remote_reference) {
+        errors.push(format!(
+            "source '{}' must use url, not file, for an HTTP address",
+            source.name
+        ));
+    }
+
+    if source.dev.is_none() {
+        match source.sha256.as_deref() {
+            Some(hash)
+                if hash.len() == 64
+                    && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+                    && hash.bytes().all(|byte| !byte.is_ascii_uppercase()) => {}
+            _ => errors.push(format!(
+                "source '{}' must set sha256 to 64 lowercase hexadecimal characters",
+                source.name
+            )),
+        }
+    }
+}
+
+fn validate_source_paths(source: &Source, repository_root: &Path, errors: &mut Vec<String>) {
+    for (field, reference) in [
+        ("file", source.file.as_deref()),
+        ("cargo_lock", source.cargo_lock.as_deref()),
+        ("cargo_toml", source.cargo_toml.as_deref()),
+        ("go_sum", source.go_sum.as_deref()),
+        ("zig_zon", source.zig_zon.as_deref()),
+    ]
+    .into_iter()
+    .filter_map(|(field, reference)| reference.map(|reference| (field, reference)))
+    .filter(|(_, reference)| !is_remote_reference(reference))
+    {
+        let path = Path::new(reference);
+        if path.is_absolute()
+            || path.components().any(|component| {
+                matches!(
+                    component,
+                    std::path::Component::ParentDir | std::path::Component::CurDir
+                )
+            })
+        {
+            errors.push(format!(
+                "source '{}' {} path must stay relative to its repository: {}",
+                source.name, field, reference
+            ));
+            continue;
+        }
+
+        let full_path = repository_root.join(path);
+        let canonical = match full_path.canonicalize() {
+            Ok(path) if path.is_file() && path == full_path => path,
+            Ok(_) => {
+                errors.push(format!(
+                    "source '{}' {} path must be a regular file without symlinks: {}",
+                    source.name, field, reference
+                ));
+                continue;
+            }
+            Err(error) => {
+                errors.push(format!(
+                    "source '{}' {} path cannot be read: {} ({})",
+                    source.name, field, reference, error
+                ));
+                continue;
+            }
+        };
+        let Ok(_) = canonical.strip_prefix(repository_root) else {
+            errors.push(format!(
+                "source '{}' {} path escapes its repository: {}",
+                source.name, field, reference
+            ));
+            continue;
+        };
+        if !git_tracks(repository_root, path) {
+            errors.push(format!(
+                "source '{}' {} path is not tracked by Git: {}",
+                source.name, field, reference
+            ));
+            continue;
+        }
+
+        if field == "file" {
+            validate_local_file_hash(source, &canonical, errors);
+        }
+    }
+}
+
+fn validate_local_file_hash(source: &Source, path: &Path, errors: &mut Vec<String>) {
+    let Some(expected) = source.sha256.as_deref() else {
+        return;
+    };
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            errors.push(format!(
+                "source '{}' file cannot be read: {} ({})",
+                source.name,
+                path.display(),
+                error
+            ));
+            return;
+        }
+    };
+    let actual = hex::encode(Sha256::digest(bytes));
+    if actual != expected {
+        errors.push(format!(
+            "source '{}' file sha256 mismatch: expected {}, got {}",
+            source.name, expected, actual
+        ));
+    }
+}
+
+fn git_tracks(repository_root: &Path, relative_path: &Path) -> bool {
+    Command::new("git")
+        .arg("-C")
+        .arg(repository_root)
+        .args(["ls-files", "--error-unmatch", "--"])
+        .arg(relative_path)
+        .output()
+        .is_ok_and(|output| output.status.success())
+}
+
+fn is_remote_reference(reference: &str) -> bool {
+    reference.starts_with("http://") || reference.starts_with("https://")
 }
 
 fn check_manifest_dirs(args: &CheckArgs) -> io::Result<Vec<PathBuf>> {

@@ -91,6 +91,7 @@ fn package(name: &str, commit: &str) -> SystemPackage {
     SystemPackage {
         commit: commit.to_string(),
         name: Some(name.to_string()),
+        manifest_ref: None,
     }
 }
 

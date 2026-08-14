@@ -77,27 +77,51 @@ fn is_kernel_module_sdk_path(file_path: &str) -> bool {
     false
 }
 
-/// Fetch content from a git blob by its SHA.
-pub fn fetch_git_blob(repo_root: &Path, sha: &str) -> io::Result<String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(repo_root)
-        .arg("cat-file")
-        .arg("-p")
-        .arg(sha)
-        .output()
-        .map_err(|e| io::Error::other(format!("failed to run git: {}", e)))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+/// Fetch one file from a committed Git repository snapshot.
+pub fn fetch_git_file(
+    repo_root: &Path,
+    revision: &str,
+    relative_path: &Path,
+) -> io::Result<Vec<u8>> {
+    if relative_path.is_absolute()
+        || relative_path.components().any(|component| {
+            matches!(
+                component,
+                std::path::Component::ParentDir | std::path::Component::CurDir
+            )
+        })
+    {
         return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("failed to fetch git blob {}: {}", sha, stderr),
+            io::ErrorKind::InvalidInput,
+            format!(
+                "Git source path must stay inside its repository: {}",
+                relative_path.display()
+            ),
         ));
     }
 
-    String::from_utf8(output.stdout)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("invalid UTF-8: {}", e)))
+    let object = format!("{}:{}", revision, relative_path.to_string_lossy());
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo_root)
+        .args(["cat-file", "blob", &object])
+        .output()
+        .map_err(|error| io::Error::other(format!("failed to run git: {}", error)))?;
+
+    if !output.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "failed to fetch {} from Git revision {} in {}: {}",
+                relative_path.display(),
+                revision,
+                repo_root.display(),
+                String::from_utf8_lossy(&output.stderr)
+            ),
+        ));
+    }
+
+    Ok(output.stdout)
 }
 
 /// Calculate the git blob SHA of a file's content.

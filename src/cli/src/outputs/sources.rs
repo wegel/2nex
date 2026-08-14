@@ -1,7 +1,7 @@
 //! Source input fetchers and checksum checks for package builds.
 
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
@@ -26,7 +26,7 @@ pub fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Re
         return fetch_dev_source(input_spec, dev_path, download_dir);
     }
     if let Some(file_path) = &input_spec.file {
-        return verify_local_file(input_spec, file_path);
+        return verify_local_file(input_spec, file_path, download_dir);
     }
     if let Some(url) = &input_spec.url {
         return fetch_url_source(input_spec, url, download_dir);
@@ -43,17 +43,28 @@ fn fetch_cargo_lock(
     cargo_lock_ref: &str,
     download_dir: &str,
 ) -> io::Result<PathBuf> {
+    let cargo_lock_ref =
+        materialize_repository_reference(input_spec, cargo_lock_ref, download_dir, "Cargo.lock")?;
+    let cargo_toml_ref = input_spec
+        .cargo_toml
+        .as_deref()
+        .map(|reference| {
+            materialize_repository_reference(input_spec, reference, download_dir, "Cargo.toml")
+        })
+        .transpose()?;
     crate::cargo_vendor::vendor_from_lock(
-        cargo_lock_ref,
-        input_spec.cargo_toml.as_deref(),
+        &cargo_lock_ref,
+        cargo_toml_ref.as_deref(),
         required_sha256(input_spec, "cargo_lock")?,
         download_dir,
     )
 }
 
 fn fetch_go_sum(input_spec: &Source, go_sum_ref: &str, download_dir: &str) -> io::Result<PathBuf> {
+    let go_sum_ref =
+        materialize_repository_reference(input_spec, go_sum_ref, download_dir, "go.sum")?;
     crate::go_vendor::vendor_from_sum(
-        go_sum_ref,
+        &go_sum_ref,
         required_sha256(input_spec, "go_sum")?,
         download_dir,
     )
@@ -64,8 +75,10 @@ fn fetch_zig_zon(
     zig_zon_ref: &str,
     download_dir: &str,
 ) -> io::Result<PathBuf> {
+    let zig_zon_ref =
+        materialize_repository_reference(input_spec, zig_zon_ref, download_dir, "build.zig.zon")?;
     crate::zig_vendor::vendor_from_zon(
-        zig_zon_ref,
+        &zig_zon_ref,
         required_sha256(input_spec, "zig_zon")?,
         download_dir,
     )
@@ -140,7 +153,15 @@ fn run_prepare_script(
     Ok(())
 }
 
-fn verify_local_file(input_spec: &Source, file_path: &str) -> io::Result<PathBuf> {
+fn verify_local_file(
+    input_spec: &Source,
+    file_path: &str,
+    download_dir: &str,
+) -> io::Result<PathBuf> {
+    if input_spec.repository_snapshot.is_some() {
+        return materialize_repository_file(input_spec, file_path, download_dir);
+    }
+
     println!("Verifying local file: {}", file_path);
     let resolved_path = Path::new(file_path);
     if !resolved_path.exists() {
@@ -171,7 +192,8 @@ fn fetch_url_source(input_spec: &Source, url: &str, download_dir: &str) -> io::R
     let dst_path = Path::new(download_dir).join(expected_sha256);
 
     if dst_path.exists() {
-        println!("Cache hit: {}", expected_sha256);
+        verify_download(&dst_path, expected_sha256)?;
+        println!("Verified cache hit: {}", expected_sha256);
         return Ok(dst_path);
     }
 
@@ -183,6 +205,71 @@ fn fetch_url_source(input_spec: &Source, url: &str, download_dir: &str) -> io::R
     println!("Cached as {}", expected_sha256);
 
     Ok(dst_path)
+}
+
+fn materialize_repository_file(
+    input_spec: &Source,
+    file_path: &str,
+    download_dir: &str,
+) -> io::Result<PathBuf> {
+    let snapshot = input_spec.repository_snapshot.as_ref().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "missing repository snapshot")
+    })?;
+    let expected_sha256 = required_sha256(input_spec, &format!("file source: {}", file_path))?;
+    let bytes =
+        crate::utils::fetch_git_file(&snapshot.git_root, &snapshot.revision, Path::new(file_path))?;
+    let actual_sha256 = hex::encode(Sha256::digest(&bytes));
+    if actual_sha256 != expected_sha256 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "SHA256 mismatch for '{}' at repository revision {}: expected {}, got {}",
+                file_path, snapshot.revision, expected_sha256, actual_sha256
+            ),
+        ));
+    }
+
+    let cache_path = Path::new(download_dir).join(expected_sha256);
+    write_atomic(&cache_path, &bytes)?;
+    Ok(cache_path)
+}
+
+fn materialize_repository_reference(
+    input_spec: &Source,
+    reference: &str,
+    download_dir: &str,
+    label: &str,
+) -> io::Result<String> {
+    if reference.starts_with("http://") || reference.starts_with("https://") {
+        return Ok(reference.to_string());
+    }
+    let Some(snapshot) = input_spec.repository_snapshot.as_ref() else {
+        return Ok(reference.to_string());
+    };
+
+    let bytes =
+        crate::utils::fetch_git_file(&snapshot.git_root, &snapshot.revision, Path::new(reference))?;
+    let cache_key = hex::encode(Sha256::digest(
+        format!("{}\0{}", snapshot.revision, reference).as_bytes(),
+    ));
+    let cache_path = Path::new(download_dir).join(format!("repository-{}-{}", cache_key, label));
+    write_atomic(&cache_path, &bytes)?;
+    Ok(cache_path.to_string_lossy().into_owned())
+}
+
+fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    let parent = path.parent().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("cache path has no parent: {}", path.display()),
+        )
+    })?;
+    fs::create_dir_all(parent)?;
+    let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+    temporary.write_all(bytes)?;
+    temporary.flush()?;
+    temporary.persist(path).map_err(|error| error.error)?;
+    Ok(())
 }
 
 fn download_to_temp_file(url: &str, tmp_path: &Path) -> io::Result<()> {

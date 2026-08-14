@@ -43,7 +43,7 @@ product/
 Nex finds this layout from the requested manifest, so the product does not need
 a workspace file. It reads packages from both `product/pkg/` and
 `product/upstream/nex/pkg/`. Package source paths, inherited assembly paths,
-overlay manifest paths, and pinned Git blobs resolve from the Git repository
+overlay manifest paths, and pinned Git revisions resolve from the Git repository
 that owns each manifest. A file named inside an overlay remains relative to
 that overlay file.
 
@@ -54,7 +54,8 @@ refuse to rewrite imported manifests while building a product assembly.
 
 ## Pinning
 
-Dependencies reference manifests by git blob sha:
+Dependencies and assembly packages reference the Git commit that contains a
+manifest and its repository-local source files:
 
 ```yaml
 dependencies:
@@ -63,9 +64,13 @@ dependencies:
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 ```
 
-The builder fetches manifest content from `git cat-file`, not from disk. Builds are reproducible regardless of working tree state. Without `manifest_ref`, dependency is "floating" (disk lookup). Useful for development, rejected by CI.
+The builder reads the manifest and each relative `file:` source from that Git
+commit, not from the working tree. Without `manifest_ref`, a dependency is
+"floating" and uses files from disk for development.
 
-`nex link <manifest>` pins all dependencies to current working tree versions.
+`nex link <manifest>` pins dependencies and direct assembly packages to the
+current commit of the Git repository that owns each package. It refuses to pin
+a package when its manifest or a local source differs from that commit.
 
 ## Flat vs nex-enabled rootfs
 

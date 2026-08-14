@@ -2,14 +2,21 @@
 
 use std::path::{Path, PathBuf};
 
-/// Source for loading a manifest from disk, a Git blob, or a graph skip marker.
+/// Git repository snapshot that owns a manifest and its local inputs.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RepositorySnapshot {
+    pub git_root: PathBuf,
+    pub revision: String,
+}
+
+/// Source for loading a manifest from disk, a Git revision, or a graph skip marker.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ManifestSource {
     /// Load from a file path on disk in floating mode.
     Path(PathBuf),
-    /// Load a pinned blob from the Git repository that owns its manifest.
-    Blob {
-        sha: String,
+    /// Load a pinned manifest and local inputs from one repository revision.
+    Repository {
+        revision: String,
         path: PathBuf,
         git_root: PathBuf,
     },
@@ -21,15 +28,15 @@ impl ManifestSource {
     /// Return the source path used for display and graph identity.
     pub fn path(&self) -> &Path {
         match self {
-            Self::Path(path) | Self::Blob { path, .. } => path,
+            Self::Path(path) | Self::Repository { path, .. } => path,
             Self::Skip => Path::new(""),
         }
     }
 
-    /// Return the Git root for a pinned blob source.
+    /// Return the Git root for a pinned repository source.
     pub fn git_root(&self) -> Option<&Path> {
         match self {
-            Self::Blob { git_root, .. } => Some(git_root),
+            Self::Repository { git_root, .. } => Some(git_root),
             Self::Path(_) | Self::Skip => None,
         }
     }

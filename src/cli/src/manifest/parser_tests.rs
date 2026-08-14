@@ -3,6 +3,7 @@ use std::process::Command;
 
 use super::{load_manifest, load_manifest_from_source};
 use crate::manifest::{ManifestData, ManifestSource};
+use crate::outputs::fetch_and_verify_input;
 
 #[test]
 fn package_local_sources_resolve_from_their_owning_repository() {
@@ -28,31 +29,94 @@ fn package_local_sources_resolve_from_their_owning_repository() {
 }
 
 #[test]
-fn pinned_manifest_blob_uses_the_git_repository_that_owns_it() {
+fn pinned_manifest_revision_uses_its_committed_local_source() {
     let temp_dir = tempfile::tempdir().expect("temp dir");
     let upstream = temp_dir.path().join("product/upstream/nex");
     let manifest_path = upstream.join("pkg/apps/demo.yaml");
+    let patch_path = upstream.join("pkg/apps/demo.patch");
     fs::create_dir_all(manifest_path.parent().unwrap()).expect("package dir");
     git(&upstream, &["init"]);
     git(&upstream, &["config", "user.email", "test@example.test"]);
     git(&upstream, &["config", "user.name", "Test"]);
-    fs::write(&manifest_path, named_package_manifest("Pinned Name")).expect("pinned manifest");
-    git(&upstream, &["add", "pkg/apps/demo.yaml"]);
+    fs::write(&patch_path, "patch from revision\n").expect("pinned patch");
+    let patch_sha = sha256("patch from revision\n");
+    fs::write(
+        &manifest_path,
+        named_package_manifest("Pinned Name").replace("abcdef", &patch_sha),
+    )
+    .expect("pinned manifest");
+    git(
+        &upstream,
+        &["add", "pkg/apps/demo.yaml", "pkg/apps/demo.patch"],
+    );
     git(&upstream, &["commit", "-m", "add manifest"]);
-    let sha = git(&upstream, &["rev-parse", "HEAD:pkg/apps/demo.yaml"]);
+    let revision = git(&upstream, &["rev-parse", "HEAD"]);
     fs::write(&manifest_path, named_package_manifest("Floating Name")).expect("floating manifest");
+    fs::write(&patch_path, "patch from working tree\n").expect("floating patch");
 
-    let loaded = load_manifest_from_source(&ManifestSource::Blob {
-        sha,
+    let loaded = load_manifest_from_source(&ManifestSource::Repository {
+        revision,
         path: manifest_path,
         git_root: upstream,
     })
-    .expect("pinned manifest blob");
+    .expect("pinned manifest revision");
     let ManifestData::Package(manifest) = loaded else {
         panic!("expected package manifest");
     };
 
     assert_eq!(manifest.package.name, "Pinned Name");
+    let download_dir = temp_dir.path().join("downloads");
+    fs::create_dir(&download_dir).expect("download dir");
+    let staged = fetch_and_verify_input(&manifest.sources[0], &download_dir.to_string_lossy())
+        .expect("committed local source");
+    assert_eq!(fs::read_to_string(staged).unwrap(), "patch from revision\n");
+}
+
+#[test]
+fn pinned_assembly_is_rejected_instead_of_reading_overlays_from_the_working_tree() {
+    let temp_dir = tempfile::tempdir().expect("temp dir");
+    let repository = temp_dir.path().join("product");
+    let manifest_path = repository.join("asm/device.yaml");
+    fs::create_dir_all(manifest_path.parent().unwrap()).expect("assembly dir");
+    git(&repository, &["init"]);
+    git(&repository, &["config", "user.email", "test@example.test"]);
+    git(&repository, &["config", "user.name", "Test"]);
+    fs::write(
+        &manifest_path,
+        r#"system:
+  name: Device
+  slug: device
+  version: 1
+packages:
+- commit: x86_64/pkg/apps/demo/1/bundles/full
+build:
+  environment: abcdef
+  script: "true"
+"#,
+    )
+    .expect("assembly manifest");
+    git(&repository, &["add", "asm/device.yaml"]);
+    git(&repository, &["commit", "-m", "add assembly"]);
+    let revision = git(&repository, &["rev-parse", "HEAD"]);
+
+    let error = match load_manifest_from_source(&ManifestSource::Repository {
+        revision,
+        path: manifest_path,
+        git_root: repository,
+    }) {
+        Ok(_) => panic!("pinned assembly must not float local inputs"),
+        Err(error) => error,
+    };
+
+    assert!(error
+        .to_string()
+        .contains("pin the assembly repository checkout"));
+}
+
+fn sha256(value: &str) -> String {
+    use sha2::{Digest, Sha256};
+
+    hex::encode(Sha256::digest(value.as_bytes()))
 }
 
 fn package_manifest() -> &'static str {

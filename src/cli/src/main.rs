@@ -53,7 +53,7 @@ enum Command {
     /// Search for packages
     Search(commands::search::SearchArgs),
 
-    /// Pin dependencies to their current git blob SHAs
+    /// Pin dependencies and assembly packages to their current Git commits
     Link(commands::link::LinkArgs),
 
     /// Enter staging mode (create overlay for transactional changes)

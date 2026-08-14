@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::path::PathBuf;
 
-pub use super::source::ManifestSource;
+pub use super::source::{ManifestSource, RepositorySnapshot};
 
 /// deserialize version field that accepts both strings and numbers
 fn deserialize_version<'de, D>(deserializer: D) -> Result<String, D::Error>
@@ -190,6 +190,8 @@ pub struct SystemPackage {
     pub commit: String,
     #[serde(default)]
     pub name: Option<String>,
+    #[serde(default)]
+    pub manifest_ref: Option<String>,
 }
 
 pub enum ManifestData {
@@ -229,6 +231,9 @@ pub struct Source {
     /// sha256 checksum (optional for dev sources)
     #[serde(default)]
     pub sha256: Option<String>,
+    /// Repository revision used to load relative inputs for a pinned manifest.
+    #[serde(skip)]
+    pub repository_snapshot: Option<RepositorySnapshot>,
 }
 
 /// Execution configuration for build environment

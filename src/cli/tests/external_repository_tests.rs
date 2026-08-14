@@ -67,7 +67,7 @@ fn write_fixture(product: &Path, upstream: &Path) -> io::Result<()> {
     write(upstream, "pkg/libs/runtime.yaml", runtime_manifest())?;
     git(upstream, &["add", "pkg/libs/runtime.yaml"])?;
     git(upstream, &["commit", "-m", "add runtime"])?;
-    let runtime_blob = git(upstream, &["rev-parse", "HEAD:pkg/libs/runtime.yaml"])?;
+    let runtime_revision = git(upstream, &["rev-parse", "HEAD"])?;
     write(upstream, "asm/base.yaml", base_assembly())?;
     write(
         upstream,
@@ -77,7 +77,7 @@ fn write_fixture(product: &Path, upstream: &Path) -> io::Result<()> {
     write(
         product,
         "pkg/product/product-agent.yaml",
-        agent_manifest(&runtime_blob),
+        agent_manifest(&runtime_revision),
     )?;
     write(product, "asm/device.yaml", product_assembly())?;
     write(
@@ -180,7 +180,7 @@ outputs:
 "#
 }
 
-fn agent_manifest(runtime_blob: &str) -> String {
+fn agent_manifest(runtime_revision: &str) -> String {
     format!(
         r#"package:
   schema: 1
@@ -194,7 +194,7 @@ sources: []
 dependencies:
 - name: runtime
   commit: x86_64/pkg/libs/runtime/1.0/outputs/lib
-  manifest_ref: {runtime_blob}
+  manifest_ref: {runtime_revision}
 
 build:
   environment: abcdef
