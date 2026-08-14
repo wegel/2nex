@@ -1,0 +1,531 @@
+From: Package maintainers <packages@localhost>
+Subject: [PATCH] follow UAPI configuration file precedence
+Source: https://ftp.gnu.org/gnu/glibc/glibc-2.39.tar.xz
+Upstream: Not submitted; this is a generic UAPI configuration proposal.
+
+Select nsswitch.conf and the RPC database from administrative, runtime,
+and vendor paths. Track the selected nsswitch.conf tier as part of the
+reload cache so long-lived processes notice files appearing, changing,
+and disappearing. Keep nscd tracing consistent with the same paths.
+diff --git a/nss/nss_database.c b/nss/nss_database.c
+index efe77aeaf..3359991aa 100644
+--- a/nss/nss_database.c
++++ b/nss/nss_database.c
+@@ -40,6 +40,72 @@ struct nss_database_state
+   dev_t root_dev;
+ };
+ 
++enum nsswitch_conf_path
++{
++  nsswitch_conf_none,
++  nsswitch_conf_etc,
++  nsswitch_conf_run,
++  nsswitch_conf_vendor,
++};
++
++struct nsswitch_conf_selection
++{
++  const char *path;
++  enum nsswitch_conf_path id;
++  struct file_change_detection file;
++};
++
++/* Select the first path which exists.  Errors other than a missing path
++   select that path as well, so an inaccessible higher-priority file does
++   not expose a lower-priority configuration.  */
++static bool
++nsswitch_conf_select (struct nsswitch_conf_selection *result)
++{
++  static const struct
++  {
++    const char *path;
++    enum nsswitch_conf_path id;
++  } paths[] =
++    {
++      { _PATH_NSSWITCH_CONF, nsswitch_conf_etc },
++      { _PATH_NSSWITCH_CONF_RUN, nsswitch_conf_run },
++      { _PATH_NSSWITCH_CONF_VENDOR, nsswitch_conf_vendor },
++    };
++
++  for (size_t i = 0; i < array_length (paths); ++i)
++    {
++      struct __stat64_t64 st;
++      if (__stat64_time64 (paths[i].path, &st) == 0)
++        {
++          result->path = paths[i].path;
++          result->id = paths[i].id;
++          __file_change_detection_for_stat (&result->file, &st);
++          return true;
++        }
++
++      if (errno != ENOENT && errno != ENOTDIR)
++        {
++          result->path = paths[i].path;
++          result->id = paths[i].id;
++          return __file_change_detection_for_path (&result->file,
++                                                   result->path);
++        }
++    }
++
++  result->path = NULL;
++  result->id = nsswitch_conf_none;
++  result->file.size = 0;
++  return true;
++}
++
++static bool
++nsswitch_conf_is_unchanged (const struct nsswitch_conf_selection *left,
++                            const struct nss_database_data *right)
++{
++  return left->id == right->nsswitch_conf_path
++    && __file_is_unchanged (&left->file, &right->nsswitch_conf);
++}
++
+ 
+ /* Global NSS database state.  Underlying type is "struct
+    nss_database_state *" but the allocate_once API requires
+@@ -55,6 +121,7 @@ global_state_allocate (void *closure)
+   if (result != NULL)
+     {
+       result->data.nsswitch_conf.size = -1; /* Force reload.  */
++      result->data.nsswitch_conf_path = nsswitch_conf_none;
+       memset (result->data.services, 0, sizeof (result->data.services));
+       result->data.initialized = true;
+       result->data.reload_disabled = false;
+@@ -301,26 +368,31 @@ nss_database_reload_1 (struct nss_database_data *data, FILE *fp)
+ 
+ static bool
+ nss_database_reload (struct nss_database_data *staging,
+-                     struct file_change_detection *initial)
++                     const struct nsswitch_conf_selection *initial)
+ {
+-  FILE *fp = fopen (_PATH_NSSWITCH_CONF, "rce");
++  FILE *fp = NULL;
++  if (initial->path != NULL)
++    fp = fopen (initial->path, "rce");
+   if (fp == NULL)
+-    switch (errno)
+-      {
+-      case EACCES:
+-      case EISDIR:
+-      case ELOOP:
+-      case ENOENT:
+-      case ENOTDIR:
+-      case EPERM:
+-        /* Ignore these errors.  They are persistent errors caused
+-           by file system contents.  */
+-        break;
+-      default:
+-        /* Other errors refer to resource allocation problems and
+-           need to be handled by the application.  */
+-        return false;
+-      }
++    {
++      if (initial->path != NULL)
++        switch (errno)
++          {
++          case EACCES:
++          case EISDIR:
++          case ELOOP:
++          case ENOENT:
++          case ENOTDIR:
++          case EPERM:
++            /* Ignore these errors.  They are persistent errors caused
++               by file system contents.  */
++            break;
++          default:
++            /* Other errors refer to resource allocation problems and
++               need to be handled by the application.  */
++            return false;
++          }
++    }
+   else
+     /* No other threads have access to fp.  */
+     __fsetlocking (fp, FSETLOCKING_BYCALLER);
+@@ -373,7 +445,10 @@ nss_database_reload (struct nss_database_data *staging,
+     }
+ 
+   if (ok)
+-    ok = __file_change_detection_for_fp (&staging->nsswitch_conf, fp);
++    {
++      staging->nsswitch_conf_path = initial->id;
++      ok = __file_change_detection_for_fp (&staging->nsswitch_conf, fp);
++    }
+ 
+   if (fp != NULL)
+     {
+@@ -382,9 +457,18 @@ nss_database_reload (struct nss_database_data *staging,
+       __set_errno (saved_errno);
+     }
+ 
+-  if (ok && !__file_is_unchanged (&staging->nsswitch_conf, initial))
+-    /* Reload is required because the file changed while reading.  */
+-    staging->nsswitch_conf.size = -1;
++  if (ok)
++    {
++      struct nsswitch_conf_selection current;
++      if (!nsswitch_conf_select (&current))
++        ok = false;
++      else if (!__file_is_unchanged (&staging->nsswitch_conf,
++                                     &initial->file)
++               || !nsswitch_conf_is_unchanged (&current, staging))
++        /* Reload is required because the file or selected path changed
++           while reading.  */
++        staging->nsswitch_conf.size = -1;
++    }
+ 
+   return ok;
+ }
+@@ -406,12 +490,12 @@ nss_database_check_reload_and_get (struct nss_database_state *local,
+       return true;
+     }
+ 
+-  struct file_change_detection initial;
+-  if (!__file_change_detection_for_path (&initial, _PATH_NSSWITCH_CONF))
++  struct nsswitch_conf_selection initial;
++  if (!nsswitch_conf_select (&initial))
+     return false;
+ 
+   __libc_lock_lock (local->lock);
+-  if (__file_is_unchanged (&initial, &local->data.nsswitch_conf))
++  if (nsswitch_conf_is_unchanged (&initial, &local->data))
+     {
+       /* Configuration is up-to-date.  Read it and return it to the
+          caller.  */
+diff --git a/nss/nss_database.h b/nss/nss_database.h
+index a81c4fae2..504284de4 100644
+--- a/nss/nss_database.h
++++ b/nss/nss_database.h
+@@ -68,6 +68,7 @@ nss_action_list __nss_database_get_noreload (enum nss_database db)
+ struct nss_database_data
+ {
+   struct file_change_detection nsswitch_conf;
++  unsigned int nsswitch_conf_path;
+   nss_action_list services[NSS_DATABASE_COUNT];
+   int reload_disabled;          /* Actually bool; int for atomic access.  */
+   bool initialized;
+diff --git a/nss/nss_files/files-XXX.c b/nss/nss_files/files-XXX.c
+index 558b2c364..f2926470d 100644
+--- a/nss/nss_files/files-XXX.c
++++ b/nss/nss_files/files-XXX.c
+@@ -39,7 +39,9 @@
+ 
+ #define ENTNAME_r	CONCAT(ENTNAME,_r)
+ 
+-#define DATAFILE	"/etc/" DATABASE
++#ifndef DATAFILE
++# define DATAFILE	"/etc/" DATABASE
++#endif
+ 
+ #ifdef NEED_H_ERRNO
+ # include <netdb.h>
+diff --git a/nss/nss_files/files-rpc.c b/nss/nss_files/files-rpc.c
+index 7432df332..ea406885b 100644
+--- a/nss/nss_files/files-rpc.c
++++ b/nss/nss_files/files-rpc.c
+@@ -18,9 +18,36 @@
+ 
+ #include <rpc/netdb.h>
+ #include <nss.h>
++#include <array_length.h>
++#include <errno.h>
++#include <sys/stat.h>
++
++/* Return the first existing administrative, runtime, or vendor RPC file.
++   Errors other than a missing path preserve the higher-priority choice.  */
++static const char *
++rpc_database_path (void)
++{
++  static const char *const paths[] =
++    {
++      "/etc/rpc",
++      "/run/rpc",
++      "/usr/lib/rpc",
++    };
++
++  for (size_t i = 0; i < array_length (paths); ++i)
++    {
++      struct __stat64_t64 st;
++      if (__stat64_time64 (paths[i], &st) == 0
++          || (errno != ENOENT && errno != ENOTDIR))
++        return paths[i];
++    }
++
++  return paths[array_length (paths) - 1];
++}
+ 
+ #define ENTNAME		rpcent
+ #define DATABASE	"rpc"
++#define DATAFILE	rpc_database_path ()
+ 
+ struct rpcent_data {};
+ 
+diff --git a/nss/nss_module.c b/nss/nss_module.c
+index 32ab8921a..53ba2be99 100644
+--- a/nss/nss_module.c
++++ b/nss/nss_module.c
+@@ -360,11 +360,33 @@ nss_load_all_libraries (enum nss_database service)
+       }
+ }
+ 
+-define_traced_file (pwd, _PATH_NSSWITCH_CONF);
+-define_traced_file (grp, _PATH_NSSWITCH_CONF);
+-define_traced_file (hst, _PATH_NSSWITCH_CONF);
+-define_traced_file (serv, _PATH_NSSWITCH_CONF);
+-define_traced_file (netgr, _PATH_NSSWITCH_CONF);
++#define define_traced_nsswitch_files(id) \
++  define_traced_file (id##_etc, _PATH_NSSWITCH_CONF); \
++  define_traced_file (id##_run, _PATH_NSSWITCH_CONF_RUN); \
++  define_traced_file (id##_vendor, _PATH_NSSWITCH_CONF_VENDOR)
++
++define_traced_nsswitch_files (pwd);
++define_traced_nsswitch_files (grp);
++define_traced_nsswitch_files (hst);
++define_traced_nsswitch_files (serv);
++define_traced_nsswitch_files (netgr);
++
++#undef define_traced_nsswitch_files
++
++#define register_traced_nsswitch_files(id, db) \
++  do \
++    { \
++      init_traced_file (&id##_etc_traced_file.file, \
++                        _PATH_NSSWITCH_CONF, 0); \
++      cb1 (db, &id##_etc_traced_file.file); \
++      init_traced_file (&id##_run_traced_file.file, \
++                        _PATH_NSSWITCH_CONF_RUN, 0); \
++      cb1 (db, &id##_run_traced_file.file); \
++      init_traced_file (&id##_vendor_traced_file.file, \
++                        _PATH_NSSWITCH_CONF_VENDOR, 0); \
++      cb1 (db, &id##_vendor_traced_file.file); \
++    } \
++  while (0)
+ 
+ /* Called by nscd and nscd alone.  */
+ void
+@@ -383,16 +405,13 @@ __nss_disable_nscd (void (*cb) (size_t, struct traced_file *))
+   nss_load_all_libraries (nss_database_services);
+ 
+   /* Make sure NSCD purges its cache if nsswitch.conf changes.  */
+-  init_traced_file (&pwd_traced_file.file, _PATH_NSSWITCH_CONF, 0);
+-  cb1 (pwddb, &pwd_traced_file.file);
+-  init_traced_file (&grp_traced_file.file, _PATH_NSSWITCH_CONF, 0);
+-  cb1 (grpdb, &grp_traced_file.file);
+-  init_traced_file (&hst_traced_file.file, _PATH_NSSWITCH_CONF, 0);
+-  cb1 (hstdb, &hst_traced_file.file);
+-  init_traced_file (&serv_traced_file.file, _PATH_NSSWITCH_CONF, 0);
+-  cb1 (servdb, &serv_traced_file.file);
+-  init_traced_file (&netgr_traced_file.file, _PATH_NSSWITCH_CONF, 0);
+-  cb1 (netgrdb, &netgr_traced_file.file);
++  register_traced_nsswitch_files (pwd, pwddb);
++  register_traced_nsswitch_files (grp, grpdb);
++  register_traced_nsswitch_files (hst, hstdb);
++  register_traced_nsswitch_files (serv, servdb);
++  register_traced_nsswitch_files (netgr, netgrdb);
++
++#undef register_traced_nsswitch_files
+ 
+   /* Disable all uses of NSCD.  */
+   __nss_not_use_nscd_passwd = -1;
+diff --git a/tmp/src-inspect.ep011/glibc-patch/nss/tst-uapi-config.c b/nss/tst-uapi-config.c
+new file mode 100644
+index 000000000..52bcf7ffb
+--- /dev/null
++++ b/nss/tst-uapi-config.c
+@@ -0,0 +1,184 @@
++/* Test UAPI system configuration precedence for NSS and RPC.  */
++
++#define _GNU_SOURCE
++#include <errno.h>
++#include <fcntl.h>
++#include <gnu/libc-version.h>
++#include <pwd.h>
++#include <rpc/netdb.h>
++#include <stdbool.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/stat.h>
++#include <unistd.h>
++
++static void
++fail (const char *message)
++{
++  fprintf (stderr, "FAIL: %s: %s\n", message, strerror (errno));
++  exit (1);
++}
++
++static void
++make_directory (const char *path)
++{
++  if (mkdir (path, 0755) != 0)
++    fail (path);
++}
++
++static void
++write_all (int fd, const char *contents)
++{
++  size_t length = strlen (contents);
++  while (length > 0)
++    {
++      ssize_t written = write (fd, contents, length);
++      if (written < 0)
++        fail ("write");
++      contents += written;
++      length -= written;
++    }
++}
++
++static void
++replace_file (const char *path, const char *contents)
++{
++  char temporary[256];
++  int length = snprintf (temporary, sizeof (temporary), "%s.new", path);
++  if (length < 0 || (size_t) length >= sizeof (temporary))
++    {
++      errno = ENAMETOOLONG;
++      fail (path);
++    }
++
++  int fd = open (temporary, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
++  if (fd < 0)
++    fail (temporary);
++  write_all (fd, contents);
++  if (close (fd) != 0)
++    fail (temporary);
++  if (rename (temporary, path) != 0)
++    fail (path);
++}
++
++static void
++remove_file (const char *path)
++{
++  if (unlink (path) != 0)
++    fail (path);
++}
++
++static void
++expect_passwd (bool found, const char *step)
++{
++  struct passwd value;
++  struct passwd *result = NULL;
++  char buffer[1024];
++  int status = getpwnam_r ("alice", &value, buffer, sizeof (buffer), &result);
++  bool status_ok = status == 0 || (!found && status == ENOENT);
++  if (!status_ok || (result != NULL) != found
++      || (found && result->pw_uid != 1000))
++    {
++      errno = status;
++      fail (step);
++    }
++}
++
++static void
++expect_rpc (int number, const char *step)
++{
++  struct rpcent value;
++  struct rpcent *result = NULL;
++  char buffer[1024];
++  int status = getrpcbyname_r ("uapi-rpc", &value, buffer, sizeof (buffer),
++                               &result);
++  bool found = number >= 0;
++  bool status_ok = status == 0 || (!found && status == ENOENT);
++  if (!status_ok || (result != NULL) != found
++      || (found && result->r_number != number))
++    {
++      errno = status;
++      fail (step);
++    }
++}
++
++int
++main (void)
++{
++  if (strcmp (gnu_get_libc_version (), "2.39") != 0)
++    {
++      errno = 0;
++      fail ("test did not load glibc 2.39");
++    }
++
++  char root[] = "/tmp/glibc-uapi-config-XXXXXX";
++  if (mkdtemp (root) == NULL)
++    fail ("mkdtemp");
++
++  char path[sizeof (root) + 16];
++#define MAKE_DIRECTORY(suffix) \
++  do \
++    { \
++      snprintf (path, sizeof (path), "%s%s", root, suffix); \
++      make_directory (path); \
++    } \
++  while (0)
++  MAKE_DIRECTORY ("/etc");
++  MAKE_DIRECTORY ("/run");
++  MAKE_DIRECTORY ("/usr");
++  MAKE_DIRECTORY ("/usr/lib");
++#undef MAKE_DIRECTORY
++
++  if (chroot (root) != 0 || chdir ("/") != 0)
++    fail ("chroot");
++
++  replace_file ("/etc/passwd",
++                "root:x:0:0:root:/root:/bin/sh\n"
++                "alice:x:1000:1000:Alice:/home/alice:/bin/sh\n");
++  replace_file ("/etc/group", "root:x:0:\nalice:x:1000:\n");
++  replace_file ("/etc/hosts", "127.0.0.1 localhost\n");
++
++  expect_passwd (true, "compiled NSS defaults without a configuration");
++  replace_file ("/usr/lib/nsswitch.conf", "passwd: dns\n");
++  expect_passwd (false, "vendor NSS configuration");
++  replace_file ("/run/nsswitch.conf", "");
++  expect_passwd (true, "empty runtime NSS mask");
++  replace_file ("/run/nsswitch.conf", "passwd: dns\n");
++  expect_passwd (false, "changed runtime NSS configuration");
++  replace_file ("/etc/nsswitch.conf", "passwd: files\n");
++  expect_passwd (true, "administrative NSS configuration");
++  replace_file ("/etc/nsswitch.conf", "passwd: dns\n");
++  expect_passwd (false, "changed administrative NSS configuration");
++  replace_file ("/run/nsswitch.conf", "passwd: files\n");
++  expect_passwd (false, "masked runtime NSS change");
++  remove_file ("/etc/nsswitch.conf");
++  expect_passwd (true, "administrative NSS configuration removal");
++  remove_file ("/run/nsswitch.conf");
++  expect_passwd (false, "runtime NSS configuration removal");
++  replace_file ("/usr/lib/nsswitch.conf", "passwd: files\n");
++  expect_passwd (true, "changed vendor NSS configuration");
++  replace_file ("/usr/lib/nsswitch.conf", "passwd: dns\n");
++  expect_passwd (false, "vendor NSS configuration before removal");
++  remove_file ("/usr/lib/nsswitch.conf");
++  expect_passwd (true, "compiled NSS defaults after removal");
++
++  expect_rpc (-1, "missing RPC configuration");
++  replace_file ("/usr/lib/rpc", "uapi-rpc 400001 uapi-vendor\n");
++  expect_rpc (400001, "vendor RPC configuration");
++  replace_file ("/run/rpc", "uapi-rpc 400002 uapi-runtime\n");
++  expect_rpc (400002, "runtime RPC configuration");
++  replace_file ("/etc/rpc", "uapi-rpc 400003 uapi-admin\n");
++  expect_rpc (400003, "administrative RPC configuration");
++  replace_file ("/etc/rpc", "");
++  expect_rpc (-1, "empty administrative RPC mask");
++  remove_file ("/etc/rpc");
++  expect_rpc (400002, "administrative RPC configuration removal");
++  remove_file ("/run/rpc");
++  expect_rpc (400001, "runtime RPC configuration removal");
++  remove_file ("/usr/lib/rpc");
++  expect_rpc (-1, "vendor RPC configuration removal");
++
++  puts ("UAPI NSS and RPC configuration tests passed");
++  return 0;
++}
+diff --git a/resolv/netdb.h b/resolv/netdb.h
+index 14228b0d9..9d0474ceb 100644
+--- a/resolv/netdb.h
++++ b/resolv/netdb.h
+@@ -44,6 +44,8 @@
+ #define	_PATH_HOSTS		"/etc/hosts"
+ #define	_PATH_NETWORKS		"/etc/networks"
+ #define	_PATH_NSSWITCH_CONF	"/etc/nsswitch.conf"
++#define	_PATH_NSSWITCH_CONF_RUN	"/run/nsswitch.conf"
++#define	_PATH_NSSWITCH_CONF_VENDOR "/usr/lib/nsswitch.conf"
+ #define	_PATH_PROTOCOLS		"/etc/protocols"
+ #define	_PATH_SERVICES		"/etc/services"

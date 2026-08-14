@@ -6,7 +6,7 @@ package:
   version: "2.39"
   description: The GNU C Library project provides the core libraries for the GNU system and GNU/Linux systems.
   homepage: https://www.gnu.org/software/libc/
-  checksum: e1d6eea1bae9f5d60d0c58ac93d9c70bc03b31ade4f840a89e36bf62a5ad169a
+  checksum: bf348eabcec257edace3e1e05458bf79ddad1a5164f25e706b7e50d93b25190d
   seed: true
 
 sources:
@@ -16,6 +16,9 @@ sources:
 - name: fhs_patch
   url: https://www.linuxfromscratch.org/patches/downloads/glibc/glibc-2.39-fhs-1.patch
   sha256: 643552db030e2f2d7ffde4f558e0f5f83d3fabf34a2e0e56ebdb49750ac27b0d
+- name: uapi_config_patch
+  file: pkg/libs/system/glibc-uapi-config.patch
+  sha256: 1d29f3d9c7c570d52504b8f5bfe0c1d7dd44fadac7bc834cfefb30d551e12f5c
 - name: tzdata
   url: https://ftp.iana.org/tz/releases/tzdata2024a.tar.gz
   sha256: 0d0434459acbd2059a7a8da1f3304a84a86591f6ed69c6248fffa502b6edffe3
@@ -60,11 +63,15 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [282283:6727, 1128583:9058, 2531793:15237, 4219159:20547, 5625037:24530, 7032552:29193, 8440621:38914, 10547973:45119, 12658257:52949, 14062080:72253]
+  profile: [282574:5645, 1128874:7412, 2532084:12140, 4224990:16313, 5630345:19461, 7033236:23144, 8441305:31095, 10550245:35909, 12663382:42251, 14065683:59204]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_glibc} -C "${WORK_DIR}" --strip-components=1
-    cd ${WORK_DIR} && patch --batch --fuzz=0 -Np1 -i /${SOURCE_fhs_patch} && mkdir build && cd build
+    cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE_fhs_patch}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE_uapi_config_patch}
+    mkdir build
+    cd build
 
     echo "slibdir=/usr/lib" >> configparms
     echo "rtlddir=/usr/lib" >> configparms
@@ -88,6 +95,11 @@ build:
     #make install
     sed "/RTLDLIST=/s@/usr@@g" -i ${OUT_DIR}/usr/bin/ldd
 
+    install -d ${OUT_DIR}/usr/lib
+    mv ${OUT_DIR}/etc/rpc ${OUT_DIR}/usr/lib/rpc
+    rm ${OUT_DIR}/etc/ld.so.cache
+    rmdir ${OUT_DIR}/etc
+
     #set -x
     ##exit 0
     #mkdir -pv ${OUT_DIR}/usr/lib/locale /usr/lib/locale
@@ -97,8 +109,8 @@ build:
     #/usr/bin/localedef -i en_US -f UTF-8 en_US.UTF-8
     #/usr/bin/localedef -i ja_JP -f SHIFT_JIS ja_JP.SJIS 2> /dev/null || true
 
-    cat > ${OUT_DIR}/etc/nsswitch.conf << "EOF"
-    # Begin /etc/nsswitch.conf
+    cat > ${OUT_DIR}/usr/lib/nsswitch.conf << "EOF"
+    # Begin /usr/lib/nsswitch.conf
 
     passwd: files systemd
     group: files systemd
@@ -112,8 +124,16 @@ build:
     ethers: files
     rpc: files
 
-    # End /etc/nsswitch.conf
+    # End /usr/lib/nsswitch.conf
     EOF
+
+    gcc -O2 -Wall -Wextra -Werror \
+      -I${OUT_DIR}/usr/include \
+      ${WORK_DIR}/nss/tst-uapi-config.c \
+      -o ${WORK_DIR}/tst-uapi-config
+    ${OUT_DIR}/usr/lib/ld-linux-x86-64.so.2 \
+      --library-path ${OUT_DIR}/usr/lib \
+      ${WORK_DIR}/tst-uapi-config
 
     cat > /etc/ld.so.conf << "EOF"
     # Begin /etc/ld.so.conf
@@ -225,8 +245,8 @@ outputs:
 
   conf:
     files:
-    - path: /etc/nsswitch.conf
-    - path: /etc/rpc
+    - path: /usr/lib/nsswitch.conf
+    - path: /usr/lib/rpc
 
   dev:
     files:
@@ -710,7 +730,6 @@ outputs:
 
   lib:
     files:
-    - path: /etc/ld.so.cache
     - path: /usr/bin/ld.so
     - path: /usr/lib/Mcrt1.o
     - path: /usr/lib/Scrt1.o

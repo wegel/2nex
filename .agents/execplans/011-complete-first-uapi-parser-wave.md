@@ -50,8 +50,9 @@ database batches recorded in `tmp/UAPI_TODO.md`.
 - [x] (2026-08-14 22:44Z) Patched OpenSSH 9.9p1, passed the client and server
   main-file, drop-in, explicit-path, Include, moduli, and live SIGHUP matrix in
   both strict builds, then ran both installed version commands.
-- [ ] Patch, build twice, and exercise Glibc 2.39 NSS and RPC database lookup,
-  including live NSS path changes.
+- [x] (2026-08-14 23:04Z) Patched Glibc 2.39, passed the NSS and RPC
+  precedence and live-change matrix in both strict builds, and verified that
+  its split output contains only the two vendor files below `/usr/lib`.
 - [ ] Rebuild and exercise every affected assembly, including `desktop-dev`
   after populating its declared GN dependency when needed.
 - [ ] Re-run the exhaustive `/etc` output scan, update `.agents/kb.md` and the
@@ -164,6 +165,32 @@ database batches recorded in `tmp/UAPI_TODO.md`.
   changing passwd, group, hosts, or other host databases. The RPC enumeration
   stream remains open between `setrpcent` and `endrpcent`, while keyed RPC
   lookups open a fresh stream.
+- Observation: Glibc's file metadata cache cannot represent UAPI selection by
+  itself because it deliberately treats every empty or missing file as the
+  same content.
+  Evidence: `io/file_change_detection.c:__file_is_unchanged` returns true when
+  both sizes are zero. The patch therefore stores the selected tier beside
+  the file metadata. The long-lived test observes higher files appearing,
+  changing, and disappearing without restarting.
+- Observation: nscd can register several traced files for one database and
+  watches parent directories when a target does not yet exist.
+  Evidence: `struct traced_file` links several records through `next`, and
+  `nscd/connections.c` installs file and directory watches. The Glibc patch
+  registers `/etc`, `/run`, and `/usr/lib` nsswitch paths for each of the five
+  nscd cache types even though this package builds with `--disable-nscd`.
+- Observation: Glibc's install target creates a target-root `ld.so.cache` in
+  addition to the FHS patch's `/etc/rpc`.
+  Evidence: the first install-layout assertion found only `ld.so.cache` after
+  moving `rpc`. The manifest deletes that generated runtime cache and removes
+  the empty output `/etc` directory.
+- Observation: Glibc now passes the complete strict check and packages no
+  defaults below `/etc`.
+  Evidence: both builds matched checksum
+  `bf348eabcec257edace3e1e05458bf79ddad1a5164f25e706b7e50d93b25190d`.
+  The same C process covered compiled defaults, all three nsswitch tiers, an
+  empty mask, replacements, removals, and all three RPC tiers inside a private
+  chroot. The split `conf` output contains only `/usr/lib/nsswitch.conf` and
+  `/usr/lib/rpc`.
 - Observation: The audit source bytes exactly match all four manifest pins.
   Evidence: SHA-256 was `ad028e49...` for BlueZ 5.85, `053794d6...` for
   PulseAudio 17.0, `b343fbcd...` for OpenSSH 9.9p1, and `f77bd47c...` for
@@ -246,13 +273,20 @@ database batches recorded in `tmp/UAPI_TODO.md`.
   Rationale: BlueZ, PulseAudio, OpenSSH, and Glibc can each remain a useful
   `git bisect` point with its own strict build and behavior test.
   Date/Author: 2026-08-14 / Codex.
+- Decision: Store the selected nsswitch tier as part of Glibc's reload cache
+  and trace every candidate path in nscd.
+  Rationale: Glibc considers empty and missing files equivalent for content
+  caching, while UAPI priority also depends on which path exists. Watching and
+  comparing every tier makes creation and removal visible to long-lived
+  processes and nscd.
+  Date/Author: 2026-08-14 / Codex.
 
 ## Outcomes & Retrospective
 
-BlueZ, PulseAudio, and OpenSSH now use tested layered readers and put their
-package defaults below `/usr`. Their strict two-build checks and
-installed-command smokes pass. Glibc and the affected assemblies remain in
-this ExecPlan.
+BlueZ, PulseAudio, OpenSSH, and Glibc now use tested layered readers and put
+their package defaults below `/usr`. Their strict two-build checks and focused
+behavior tests pass. The affected assemblies and final inventory audit remain
+in this ExecPlan.
 
 ## Context and Orientation
 

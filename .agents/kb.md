@@ -1104,8 +1104,8 @@ one output below `/etc`. The first UAPI package batch reduced that count to 36
 by removing those outputs from Shadow, Fish, Systemd, Swaylock, and Polkit.
 The Bash and e2fsprogs batch reduced it to 35 because Bash did not declare the
 assembly-owned profile and e2fsprogs moved its two package defaults. BlueZ,
-PulseAudio, and OpenSSH reduce the current count to 32; Glibc remains in their
-parser wave. This is an audit queue, not 32 mechanical moves. It includes
+PulseAudio, OpenSSH, and Glibc reduce the current count to 31. This is an audit
+queue, not 31 mechanical moves. It includes
 bootstrap copies, two Nvidia versions, generated certificate links,
 compatibility links, and files whose external specification still names
 `/etc`. Empty directories created for host configuration do not need a
@@ -1122,7 +1122,7 @@ The first high-value batch enabled Shadow's libeconf vendor directory, added
 Linux-PAM's transient service-policy directory, moved PAM services from
 Shadow, OpenSSH, Swaylock, and Polkit, added Fish's transient fragment
 directory, and moved Systemd defaults to its native vendor paths. The current
-parser wave has finished BlueZ, PulseAudio, and OpenSSH; Glibc remains. Keep
+parser wave has finished BlueZ, PulseAudio, OpenSSH, and Glibc. Keep
 account databases, machine identity, and other true host state out of reusable
 package defaults.
 
@@ -1149,11 +1149,16 @@ package defaults.
   as the vendor file, not in `/etc`. The runtime regression test exercised all
   three priorities, an empty local mask, the explicit override, and a live
   SIGHUP switch from `/run` to `/etc` inside the built Edgebox root.
-- Glibc 2.39 opens only `_PATH_NSSWITCH_CONF`, `/etc/nsswitch.conf`, and its
-  reload and nscd tracing code watches that same path. It has compiled defaults
-  when the file is absent. Supporting vendor and local NSS policy natively must
-  also preserve live reloads when a higher-priority file appears or disappears,
-  so this patch is substantially riskier than a simple fallback `open()`.
+- Glibc 2.39 now selects `nsswitch.conf` and `rpc` from `/etc`, `/run`, or
+  `/usr/lib`. Its NSS reload cache stores both file metadata and the selected
+  tier because Glibc treats every empty or missing file as equivalent content.
+  nscd registers all three nsswitch paths for each cache, so creating or
+  removing a higher file invalidates cached lookups. The package installs only
+  `/usr/lib/nsswitch.conf` and `/usr/lib/rpc`; it discards the generated
+  target-root `ld.so.cache`. A long-lived process in a private chroot covered
+  no-file compiled defaults, every tier, an empty mask, replacements,
+  removals, and RPC selection. Both strict builds matched checksum
+  `bf348eabcec257edace3e1e05458bf79ddad1a5164f25e706b7e50d93b25190d`.
 - Bash 5.2.21 now carries a generic patch that selects the first existing file
   from `/etc/profile`, `/run/profile`, and `/usr/lib/profile`. Because the file
   is executable shell code, Bash uses one whole file and does not combine
