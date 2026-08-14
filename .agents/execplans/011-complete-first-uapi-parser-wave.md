@@ -1,0 +1,503 @@
+# Complete the first UAPI configuration parser wave
+
+This ExecPlan is a living document. Keep `Progress`, `Surprises &
+Discoveries`, `Decision Log`, and `Outcomes & Retrospective` current while the
+work proceeds.
+
+Maintain this plan according to `.agents/PLANS.md`. Keep candidate facts in
+`.agents/SCRATCH_KNOWLEDGE.md`, then promote verified reusable facts into
+`.agents/knowledge/` before the human review gate.
+
+## Purpose / Big Picture
+
+After this plan, BlueZ, PulseAudio, OpenSSH, and Glibc will read packaged
+vendor policy from the active read-only `/usr` tree while preserving temporary
+machine policy in `/run` and persistent administrator policy in `/etc`.
+Changing or rolling back a Nex deployment will therefore change the vendor
+defaults without copying those defaults into the host-owned `/etc` tree.
+
+A person can prove the result by placing distinct values at the vendor,
+transient, and administrator paths and observing each program choose `/etc`
+before `/run` before `/usr`. Empty higher-priority files must mask lower files.
+Explicit command-line and environment overrides must keep their upstream
+meaning. Built Nex root filesystems must contain the vendor files below `/usr`
+and no package-owned copies of these files below `/etc`.
+
+This plan finishes the parser-heavy package wave named by the first UAPI audit.
+Bash and e2fsprogs are already complete. The four remaining packages are
+BlueZ, PulseAudio, OpenSSH, and Glibc. This plan does not absorb the later
+D-Bus, Slang, Libvirt, OpenSSL, certificate, Fontconfig, PAM-module, or account
+database batches recorded in `tmp/UAPI_TODO.md`.
+
+## Progress
+
+- [x] (2026-08-14 21:32Z) Wrote this ExecPlan from the verified package
+  manifests, `.agents/kb.md`, and `tmp/UAPI_TODO.md`.
+- [x] (2026-08-14 21:32Z) Fixed the scope to the four unfinished packages from
+  the first parser wave and kept the later UAPI inventory out of this plan.
+- [ ] Run the Ralph worktree pre-task and read the UAPI, package, assembly, and
+  test knowledge notes.
+- [ ] Re-audit every source reader in the four unpacked upstream trees and
+  record the exact files, functions, overrides, reload paths, and tests here.
+- [ ] Patch, build twice, and exercise BlueZ 5.85 configuration lookup.
+- [ ] Patch, build twice, and exercise PulseAudio 17.0 main files and drop-ins.
+- [ ] Patch, build twice, and exercise OpenSSH 9.9p1 client, server, drop-in,
+  explicit-path, reload, and moduli lookup.
+- [ ] Patch, build twice, and exercise Glibc 2.39 NSS and RPC database lookup,
+  including live NSS path changes.
+- [ ] Rebuild and exercise every affected assembly, including `desktop-dev`
+  after populating its declared GN dependency when needed.
+- [ ] Re-run the exhaustive `/etc` output scan, update `.agents/kb.md` and the
+  local `tmp/UAPI_TODO.md` when it exists, and complete the generic-manifest
+  review.
+- [ ] Record the final diff and checks in `Completion Check`, then stop at the
+  Ralph human review gate.
+
+## Surprises & Discoveries
+
+- Observation: The current BlueZ manifest packages 5.85, although an earlier
+  local audit note said 5.79.
+  Evidence: `pkg/net/bluetooth/bluez.yaml` names version `5.85` and the
+  `bluez-5.85.tar.xz` source.
+- Observation: BlueZ does not route all three files through one reader.
+  Evidence: `src/main.c` can inspect `CONFIGURATION_DIRECTORY` for
+  `main.conf`, while the input manager, HOG plugin, and network plugin open
+  compiled paths for `input.conf` or `network.conf`.
+- Observation: PulseAudio installs four main files in its `conf` output but
+  omits that output from both public bundles.
+  Evidence: `pkg/libs/audio/pulseaudio.yaml` lists `client.conf`,
+  `daemon.conf`, `default.pa`, and `system.pa` below `/etc/pulse`, while its
+  `dev` and `full` bundles contain only `bin`, `dev`, and `lib`.
+- Observation: Glibc supplies nearly every package build root, but the planned
+  source change should alter only its configuration output and NSS behavior.
+  Evidence: 494 manifests name a Glibc 2.39 dev bundle, while assemblies
+  normally select its library or command outputs rather than its `conf`
+  output.
+
+## Decision Log
+
+- Decision: Treat BlueZ, PulseAudio, OpenSSH, and Glibc as the remaining first
+  parser wave.
+  Rationale: The initial audit named these four with Bash and e2fsprogs. The
+  latter two already pass strict builds and tiered lookup tests. The later TODO
+  categories need separate plans because they involve different file classes
+  and specifications.
+  Date/Author: 2026-08-14 / Codex.
+- Decision: Use full-file selection for each main configuration file.
+  Rationale: Each parser already accepts one main file, and combining complete
+  files can change ordering, `Match` blocks, or executable startup commands.
+  The first existing `/etc`, `/run`, or `/usr` file must win; an empty file is
+  therefore a deliberate mask.
+  Date/Author: 2026-08-14 / Codex.
+- Decision: Preserve user-specific and explicit upstream overrides ahead of
+  the three system paths.
+  Rationale: UAPI system tiers do not replace a user's PulseAudio file,
+  `PULSE_*` override, OpenSSH `-F` or `-f`, BlueZ service-provided
+  `CONFIGURATION_DIRECTORY`, or another documented explicit path.
+  Date/Author: 2026-08-14 / Codex.
+- Decision: Make every source patch generic and keep product policy in
+  assemblies and their tests.
+  Rationale: Nex package manifests must work in unrelated assemblies. Package
+  patches may name only normal Linux paths and upstream program concepts.
+  Date/Author: 2026-08-14 / Codex.
+- Decision: Include Glibc's packaged `rpc` database in this wave.
+  Rationale: Moving only `nsswitch.conf` would leave Glibc's vendor database in
+  `/etc` and leave the Glibc manifest incomplete in the exhaustive inventory.
+  Date/Author: 2026-08-14 / Codex.
+- Decision: Land one checked package commit at a time, then land assembly and
+  audit updates after every package works.
+  Rationale: BlueZ, PulseAudio, OpenSSH, and Glibc can each remain a useful
+  `git bisect` point with its own strict build and behavior test.
+  Date/Author: 2026-08-14 / Codex.
+
+## Outcomes & Retrospective
+
+No package code has changed under this ExecPlan yet. The plan has fixed the
+scope, path rules, package order, artifact tests, and assembly checks so a
+stateless Ralph run can start with BlueZ and continue without a design prompt.
+
+## Context and Orientation
+
+UAPI.6 is the Linux convention used by this project for layered system
+configuration. Package-owned defaults live in `/usr`, temporary machine
+overrides live in `/run`, and persistent administrator choices live in
+`/etc`. For one main file, a program uses the first existing candidate in this
+order:
+
+1. `/etc`
+2. `/run`
+3. `/usr`
+
+An existing empty file wins and masks lower files. A program that has a real
+drop-in subsystem must collect filenames across the three trees, sort them as
+its documented parser requires, and let a higher tree shadow the same basename
+from a lower tree. An empty higher-tier drop-in or a link to `/dev/null` masks
+the same lower-tier file. A program must not concatenate complete startup
+scripts or ordered main files merely because it supports an explicit include
+statement.
+
+`PHILOSOPHY.md` defines why Nex keeps host-owned `/etc` outside read-only
+deployments. `.agents/MANIFESTS_CODE_STYLE.md` requires reusable package
+manifests and reviewable local patches. `.agents/TESTING.md` requires a test
+that exercises the built behavior. `.agents/kb.md`, under `UAPI.6
+configuration audit`, records the source findings already verified. The
+ignored `tmp/UAPI_TODO.md` records the live inventory in this shared worktree
+and must stay current here. A fresh clone does not contain that local file; the
+ExecPlan and tracked knowledge files contain everything required to work
+without it.
+
+The four package manifests are:
+
+- `pkg/net/bluetooth/bluez.yaml`, BlueZ 5.85. It installs
+  `/etc/bluetooth/main.conf`, `input.conf`, and `network.conf`.
+- `pkg/libs/audio/pulseaudio.yaml`, PulseAudio 17.0. It installs
+  `/etc/pulse/client.conf`, `daemon.conf`, `default.pa`, and `system.pa`.
+- `pkg/cli/net/openssh.yaml`, OpenSSH 9.9p1. It installs
+  `/etc/ssh/ssh_config`, `sshd_config`, and `moduli`.
+- `pkg/libs/system/glibc.yaml`, Glibc 2.39. It installs
+  `/etc/nsswitch.conf` and `/etc/rpc`.
+
+Nex carries an authored source patch beside the manifest that uses it. Each
+patch header names a subject, source, upstream status, and rationale. The
+manifest records the patch SHA-256 and applies it through `patch --batch
+--fuzz=0`. Do not use a series of `sed` commands for these multi-file source
+changes.
+
+Use `/home/wegel/work/perso/zub/target/debug/zub` through `ZUB_BIN` for every
+build and checkout. The older `/home/wegel/.local/bin/zub` does not support the
+store behavior that current Nex tests require.
+
+## Plan of Work
+
+### Milestone 1: freeze the source-reader map
+
+Unpack each source archive through its normal package build or inspect the
+retained build root. For every installed configuration file, record all source
+functions that open it, every command-line or environment override, every
+reload or file-watch path, and every upstream test that exercises the reader.
+
+Update this plan's `Surprises & Discoveries` before editing source. If a file
+has more readers than the current audit lists, add all of them to the same
+package patch. Do not ship a patch that fixes only the easiest reader.
+
+### Milestone 2: give BlueZ one shared system-file selector
+
+Add `pkg/net/bluetooth/bluez-uapi-config.patch` and list it as a local source
+in `pkg/net/bluetooth/bluez.yaml`. The patch must give `main.conf`,
+`input.conf`, and `network.conf` the same selector. A service-provided
+`CONFIGURATION_DIRECTORY` remains an explicit override: examine its
+colon-separated directories in their given order and select the first existing
+named file. Without that override, select:
+
+- `/etc/bluetooth/<name>`
+- `/run/bluetooth/<name>`
+- `/usr/lib/bluetooth/<name>`
+
+Move all three packaged defaults to `/usr/lib/bluetooth`. Keep the D-Bus policy
+under `/usr/share/dbus-1/system.d`; that file is already vendor data in the
+correct tree.
+
+Add a focused source or build-root test that calls the shared selector for all
+three filenames. The test must cover vendor-only, transient override,
+administrator override, empty administrator mask, colon-separated
+`CONFIGURATION_DIRECTORY`, and a missing explicit directory. Run an installed
+`bluetoothd --version` or equivalent command from the package root in addition
+to the selector test.
+
+### Milestone 3: cover every PulseAudio main-file and drop-in reader
+
+Add `pkg/libs/audio/pulseaudio-uapi-config.patch` and list it in
+`pkg/libs/audio/pulseaudio.yaml`. Preserve PulseAudio's user configuration and
+the documented `PULSE_CLIENTCONFIG`, `PULSE_CONFIG`, and `PULSE_SCRIPT`
+overrides. For system main files, select:
+
+- `/etc/pulse/<name>`
+- `/run/pulse/<name>`
+- `/usr/lib/pulse/<name>`
+
+Move `client.conf`, `daemon.conf`, `default.pa`, and `system.pa` to
+`/usr/lib/pulse`. Add `conf` to every bundle that upstream callers expect to
+contain the normal PulseAudio defaults.
+
+`client.conf` and `daemon.conf` have structured drop-ins. Make their effective
+result obey the UAPI filename rules across user, `/etc`, `/run`, and `/usr`
+trees. The higher tree must shadow the same basename from a lower tree; an
+empty file and a `/dev/null` link must mask the lower file. Feed the selected
+files to PulseAudio in the order required for lexicographically later names and
+higher tiers to produce the documented effective value.
+
+Treat `default.pa` and `system.pa` as complete executable startup scripts.
+Select one main script and preserve explicit `.include` behavior; do not
+automatically concatenate scripts from several tiers. Audit match and restore
+tables and ALSA mixer data, but leave existing `/usr/share/pulseaudio` vendor
+data there unless source evidence shows that a listed file is actually a
+host-editable main file.
+
+Extend upstream tests or add a focused build-root harness for all four main
+files and both structured drop-in families. Exercise user priority, each
+system tier, same-name shadowing, empty and `/dev/null` masks, and all three
+explicit environment overrides. Run `pulseaudio --dump-conf` from the built
+package and assert a chosen value, not only a zero exit status.
+
+### Milestone 4: separate OpenSSH vendor policy and administrator state
+
+Add `pkg/cli/net/openssh-uapi-config.patch` and list it in
+`pkg/cli/net/openssh.yaml`. Preserve `ssh -F` and `sshd -f` as exact explicit
+paths. Without those flags, select one client or server main file from:
+
+- `/etc/ssh/<name>`
+- `/run/ssh/<name>`
+- `/usr/lib/ssh/<name>`
+
+Move the packaged `ssh_config` and `sshd_config` to `/usr/lib/ssh`. Keep host
+keys and generated machine identity under `/etc/ssh`; the package manifest
+must not create them. Configure or patch the immutable `moduli` database to
+use `/usr/share/ssh/moduli`, and move the packaged file there.
+
+OpenSSH templates and parsers support `Include` statements and `.d`
+directories. Preserve arbitrary explicit includes. For the standard client
+and server drop-in families, collect `/usr`, `/run`, and `/etc` files so the
+effective result follows UAPI basename shadowing, empty and `/dev/null` masks,
+and filename order despite OpenSSH's first-obtained-value parser. The patch
+must feed files in the order that produces the required effective result; it
+must not depend on reading duplicate lower-tier basenames and hoping that the
+parser ignores them.
+
+Extend OpenSSH's regress tests or add a private package-root harness. Exercise
+client and server main-file priority, standard drop-in ordering and masks,
+`ssh -F`, `sshd -f`, `sshd -T`, SIGHUP reload of the default server path, and
+the relocated moduli path. Use generated throwaway host keys inside the test
+root. Never use a host key from the workstation.
+
+### Milestone 5: make Glibc follow live NSS and RPC path changes
+
+Add `pkg/libs/system/glibc-uapi-config.patch` and list it in
+`pkg/libs/system/glibc.yaml`. Move packaged defaults to
+`/usr/lib/nsswitch.conf` and `/usr/lib/rpc`. For both databases, select the
+first existing `/etc`, `/run`, or `/usr/lib` file. Keep Glibc's compiled NSS
+defaults when no file exists. An empty higher-tier file must mask lower policy
+and cause the same compiled-default behavior that an explicitly empty
+`/etc/nsswitch.conf` has upstream.
+
+Patch every NSS path consumer, including reload state, tracing, and nscd source
+code. Nex still builds Glibc with `--disable-nscd`; do not add nscd to the
+package output. The source must nevertheless remain internally consistent so
+an upstream build that enables nscd does not keep watching only `/etc`.
+
+Add focused Glibc tests for vendor-only, `/run`, `/etc`, empty masks, no-file
+compiled defaults, and `rpc` lookup. A long-lived C test process must prove
+that NSS notices a higher-priority file appearing, changing, and disappearing
+without restarting the process. Use a private chroot with synthetic passwd,
+group, hosts, and rpc data. Do not modify the workstation's `/etc`.
+
+### Milestone 6: rebuild real systems and close the inventory rows
+
+Run `nex format` and `nex check` after each strict package build updates its
+manifest. Rebuild all assemblies whose package content or embedded manifest
+snapshot changes. At minimum, cover:
+
+- `asm/flat-minimal.yaml`
+- `asm/flat-systemd.yaml`
+- `asm/installer/installer.yaml`
+- `asm/nex-minimal.yaml`
+- `asm/nex-systemd.yaml`
+- `asm/edgebox-rootfs.yaml`
+- `asm/flat-podman.yaml`
+- `asm/desktop-vwl/desktop-vwl.yaml`
+- `asm/desktop-vwl/desktop-vwl-nvidia-current.yaml`
+- `asm/desktop-vwl/desktop-vwl-nvidia-580.yaml`
+- `asm/desktop-dev.yaml`
+
+If `desktop-dev` still lacks GN 0.2289 in the disposable store, build
+`pkg/core/toolchain/gn.yaml` with its strict command, then resume the assembly.
+A missing disposable store ref is a normal prerequisite, not a reason to skip
+the final assembly.
+
+Extend `scripts/test-edgebox-rootfs.sh` for the OpenSSH and Glibc vendor paths.
+Add a focused checked-out desktop-root assertion for all three BlueZ files.
+Run the direct `nex-systemd` QEMU assertion and require
+`ASSERT-BOOT-PASS`. PulseAudio's package harness must prove its policy readers
+even if no current assembly materializes its `conf` output.
+
+Re-run the exhaustive package output scan. Starting from the 35-manifest count
+recorded on 2026-08-14, finishing these four manifests should reduce the count
+to 31 unless another concurrent checked change alters the inventory. Record
+the exact names, not only the number. Mark only the completed rows in the local
+`tmp/UAPI_TODO.md` when it exists, and add verified source and test facts to
+`.agents/kb.md` and the appropriate `.agents/knowledge/` theme files.
+
+## Concrete Steps
+
+Run every command from the Nex repository root. Prefix shell commands with
+`rtk` as `~/.codex/RTK.md` requires.
+
+Start and resume safely:
+
+    rtk git status --short --untracked-files=all
+    rtk rg --files .agents/knowledge
+    rtk semeja search "UAPI configuration lookup and package tests" .agents/knowledge .agents/kb.md
+    rtk sed -n '1,240p' .agents/MANIFESTS_CODE_STYLE.md
+    rtk sed -n '1,240p' .agents/TESTING.md
+
+Find all current package paths and assembly consumers:
+
+    rtk rg -n '^\s*- path: /etc/(bluetooth|pulse|ssh)|nsswitch\.conf|/etc/rpc' pkg
+    rtk rg -n 'name: (bluez|pulseaudio|openssh)|glibc/2\.39' asm pkg --glob '*.yaml'
+
+Hash each new local patch and place the exact value in its manifest:
+
+    rtk sha256sum pkg/net/bluetooth/bluez-uapi-config.patch
+    rtk sha256sum pkg/libs/audio/pulseaudio-uapi-config.patch
+    rtk sha256sum pkg/cli/net/openssh-uapi-config.patch
+    rtk sha256sum pkg/libs/system/glibc-uapi-config.patch
+
+Format and statically check each changed manifest:
+
+    rtk ./src/cli/target/debug/nex format <changed-manifest.yaml>
+    rtk ./src/cli/target/debug/nex check <changed-manifest.yaml>
+
+Run the strict package command separately for all four manifests:
+
+    rtk env ZUB_BIN=/home/wegel/work/perso/zub/target/debug/zub ./nex build pkg/net/bluetooth/bluez.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk env ZUB_BIN=/home/wegel/work/perso/zub/target/debug/zub ./nex build pkg/libs/audio/pulseaudio.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk env ZUB_BIN=/home/wegel/work/perso/zub/target/debug/zub ./nex build pkg/cli/net/openssh.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk env ZUB_BIN=/home/wegel/work/perso/zub/target/debug/zub ./nex build pkg/libs/system/glibc.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+
+Run each affected assembly through the strict assembly command:
+
+    rtk env ZUB_BIN=/home/wegel/work/perso/zub/target/debug/zub ./nex build <assembly.yaml> --single --check --update-checksum --verbose
+
+Check out and exercise the Edgebox result:
+
+    rtk mkdir -p .nex/tmp/uapi-edgebox-root
+    rtk /home/wegel/work/perso/zub/target/debug/zub --repo .nex/repo checkout --copy --force systems/edgebox-rootfs/0.0.1 .nex/tmp/uapi-edgebox-root
+    rtk scripts/test-edgebox-rootfs.sh .nex/tmp/uapi-edgebox-root
+
+Boot the rebuilt Systemd system:
+
+    rtk env ZUB_BIN=/home/wegel/work/perso/zub/target/debug/zub scripts/qemu-test-systemd.sh systems/nex-systemd/0.0.1 --timeout 120
+
+Count and list remaining package-owned `/etc` outputs:
+
+    rtk rg -l --glob '*.yaml' '^\s*- path: /etc(?:/|$)' pkg
+    rtk rg -l --glob '*.yaml' '^\s*- path: /etc(?:/|$)' pkg | rtk wc -l
+
+Run final text and generic-policy checks:
+
+    rtk rg -n -i 'yocto|soniq|edgebox|buildroot|nex[_-]uapi' pkg/net/bluetooth/bluez.yaml pkg/net/bluetooth/bluez-uapi-config.patch pkg/libs/audio/pulseaudio.yaml pkg/libs/audio/pulseaudio-uapi-config.patch pkg/cli/net/openssh.yaml pkg/cli/net/openssh-uapi-config.patch pkg/libs/system/glibc.yaml pkg/libs/system/glibc-uapi-config.patch
+    rtk proxy git diff --check -- . ':!*.patch'
+    rtk git status --short --untracked-files=all
+
+## Validation and Acceptance
+
+The human can accept this plan only when all of these facts hold:
+
+- Each package manifest passes `nex format --check` and `nex check`.
+- Each package passes the strict two-build command and records the resulting
+  checksum, build profile, outputs, and dependency map.
+- Each package test exercises the built reader rather than only checking that
+  the patch applied or the program started.
+- BlueZ applies one tested selector to `main.conf`, `input.conf`, and
+  `network.conf`, including `CONFIGURATION_DIRECTORY`.
+- PulseAudio preserves user and `PULSE_*` overrides, selects all four main
+  files correctly, and applies UAPI drop-in shadowing and masks.
+- OpenSSH preserves `-F`, `-f`, arbitrary `Include`, host-key state, reload,
+  drop-in semantics, and moduli use while package defaults live below `/usr`.
+- Glibc observes NSS tier changes in one long-lived process, uses compiled
+  defaults after an empty mask or no file, and reads the selected `rpc`
+  database.
+- The four reusable package manifests and patches contain no Nex, Edgebox,
+  Soniq, Yocto, Buildroot, or product policy.
+- Every affected assembly builds reproducibly. A checked-out Edgebox root and
+  desktop root contain the intended vendor files and no package-owned copies
+  at the replaced `/etc` paths.
+- `scripts/test-edgebox-rootfs.sh` passes against the rebuilt Edgebox root.
+- The direct QEMU test prints `ASSERT-BOOT-PASS`.
+- The exhaustive output list falls from 35 manifests to the expected 31, or
+  this plan records the exact concurrent manifest that explains a different
+  count.
+- `.agents/kb.md` and `.agents/knowledge/` contain the final verified facts and
+  no stale version claims. The ignored `tmp/UAPI_TODO.md` matches them in this
+  worktree when that local tracker exists.
+- Every commit passes its matching integrated checks and leaves a usable
+  `git bisect` point.
+
+### Completion Check
+
+Not started. Before the human review gate, replace this paragraph with the
+exact commit range, manifest checks, strict build checksums, behavior-test
+results, assembly checksums, QEMU result, `/etc` inventory, diff review, and
+remaining risks or skipped checks.
+
+## Idempotence and Recovery
+
+The strict package and assembly commands are safe to rerun. They rebuild twice
+and update manifest metadata only after reproducible output. Run `nex format`
+and `nex check` again after a strict build changes YAML.
+
+Every local patch applies with `--fuzz=0`, so stale source context fails rather
+than guessing. If a build stops after `--generate-outputs` edits a manifest,
+inspect the diff, fix the package, and rerun the same strict command. Do not
+hand-edit large generated output lists unless the builder cannot represent a
+required curated output.
+
+Keep private chroots and checked-out systems below `.nex/tmp/`. Add reusable
+disposable paths to `.agents/cleanup-workdirs.sh` instead of deleting broad
+paths by hand. Never modify workstation files below `/etc` while testing
+priority or reload behavior.
+
+If an assembly lacks a package ref in the disposable zub store, build the
+declared manifest that owns that ref, then resume the assembly. Do not change a
+correct assembly ref merely to match the current cache.
+
+If one package proves that the chosen full UAPI behavior cannot preserve an
+upstream invariant, stop before committing that package, record the exact
+source conflict and test in `Surprises & Discoveries`, and use the Ralph blocker
+protocol only when the plan permits no safe compatible design.
+
+## Artifacts and Notes
+
+Expected authored patch files:
+
+- `pkg/net/bluetooth/bluez-uapi-config.patch`
+- `pkg/libs/audio/pulseaudio-uapi-config.patch`
+- `pkg/cli/net/openssh-uapi-config.patch`
+- `pkg/libs/system/glibc-uapi-config.patch`
+
+Expected durable notes:
+
+- `.agents/kb.md`
+- `.agents/knowledge/package-manifests.md`
+- `.agents/knowledge/system-assemblies.md`
+- `tmp/UAPI_TODO.md`, which remains ignored local working state
+
+The package-output baseline on 2026-08-14 is 35 manifests with at least one
+declared `/etc` path. Bash and e2fsprogs already pass their tier tests with
+checksums recorded in `.agents/kb.md`.
+
+## Interfaces and Dependencies
+
+The patches add no public Nex manifest fields, command-line flags, libraries,
+or services. Each package keeps its upstream public interface. The source
+patches add only internal path-selection and drop-in helpers plus focused
+tests.
+
+The final system paths are:
+
+- BlueZ vendor files: `/usr/lib/bluetooth/{main,input,network}.conf`
+- BlueZ transient files: `/run/bluetooth/{main,input,network}.conf`
+- BlueZ administrator files: `/etc/bluetooth/{main,input,network}.conf`
+- PulseAudio vendor files and drop-ins: `/usr/lib/pulse/`
+- PulseAudio transient files and drop-ins: `/run/pulse/`
+- PulseAudio administrator files and drop-ins: `/etc/pulse/`
+- OpenSSH vendor files and drop-ins: `/usr/lib/ssh/`
+- OpenSSH transient files and drop-ins: `/run/ssh/`
+- OpenSSH administrator files, drop-ins, and host keys: `/etc/ssh/`
+- OpenSSH immutable moduli database: `/usr/share/ssh/moduli`
+- Glibc vendor databases: `/usr/lib/nsswitch.conf` and `/usr/lib/rpc`
+- Glibc transient databases: `/run/nsswitch.conf` and `/run/rpc`
+- Glibc administrator databases: `/etc/nsswitch.conf` and `/etc/rpc`
+
+The plan uses the existing package toolchains and the authorized zub binary at
+`/home/wegel/work/perso/zub/target/debug/zub`. Add no new runtime package unless
+the patched upstream source genuinely requires it.
