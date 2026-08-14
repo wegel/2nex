@@ -35,11 +35,15 @@ database batches recorded in `tmp/UAPI_TODO.md`.
   manifests, `.agents/kb.md`, and `tmp/UAPI_TODO.md`.
 - [x] (2026-08-14 21:32Z) Fixed the scope to the four unfinished packages from
   the first parser wave and kept the later UAPI inventory out of this plan.
-- [ ] Run the Ralph worktree pre-task and read the UAPI, package, assembly, and
-  test knowledge notes.
-- [ ] Re-audit every source reader in the four unpacked upstream trees and
-  record the exact files, functions, overrides, reload paths, and tests here.
-- [ ] Patch, build twice, and exercise BlueZ 5.85 configuration lookup.
+- [x] (2026-08-14 21:43Z) Ran the Ralph worktree pre-task, found a clean
+  worktree, listed the durable knowledge files, and read the UAPI, package,
+  assembly, reproducibility, builder, workflow, and test notes.
+- [x] (2026-08-14 21:51Z) Verified all four pinned source archives and mapped
+  every main-file reader, explicit override, drop-in path, reload path, RPC
+  open, and nscd trace point described under `Surprises & Discoveries`.
+- [x] (2026-08-14 21:57Z) Patched every BlueZ 5.85 reader, passed the
+  focused tier and override test in both strict builds, ran the installed
+  `bluetoothd --version`, and verified the packaged vendor paths.
 - [ ] Patch, build twice, and exercise PulseAudio 17.0 main files and drop-ins.
 - [ ] Patch, build twice, and exercise OpenSSH 9.9p1 client, server, drop-in,
   explicit-path, reload, and moduli lookup.
@@ -73,6 +77,63 @@ database batches recorded in `tmp/UAPI_TODO.md`.
   Evidence: 494 manifests name a Glibc 2.39 dev bundle, while assemblies
   normally select its library or command outputs rather than its `conf`
   output.
+- Observation: BlueZ has four calls that read the three packaged files.
+  Evidence: `src/main.c:load_config` reads `main.conf` and preserves `-f`;
+  `profiles/input/manager.c:input_init` and
+  `profiles/input/hog.c:hog_read_config` separately read `input.conf`; and
+  `profiles/network/manager.c:network_init` reads `network.conf`. Only the
+  main-file reader inspects `CONFIGURATION_DIRECTORY`, and it truncates the
+  value at the first colon without trying later entries. BlueZ has no reload
+  path for these files.
+- Observation: PulseAudio routes the four main files through two shared file
+  helpers but routes structured drop-ins through one selected pathname.
+  Evidence: `src/pulse/client-conf.c:pa_client_conf_load` and
+  `src/daemon/daemon-conf.c:pa_daemon_conf_load` call
+  `pa_open_config_file`, then `pa_config_parse(..., true, ...)` scans only
+  `<selected-main>.d`. `pa_daemon_conf_get_default_script_file` and
+  `pa_daemon_conf_open_default_script_file` call `pa_find_config_file` or
+  `pa_open_config_file` for `default.pa` and `system.pa`. The helpers preserve
+  `PULSE_CONFIG_PATH`, home files, `PULSE_CLIENTCONFIG`, `PULSE_CONFIG`, and
+  `PULSE_SCRIPT`. Optional `match.table` and `stream-restore.table` readers
+  also use `pa_open_config_file`, so the main-file patch must not accidentally
+  broaden their policy.
+- Observation: OpenSSH keeps explicit main-file arguments through reload but
+  does not ship standard drop-in includes upstream.
+  Evidence: `ssh.c:process_config_files` reads `-F` alone or reads the user
+  file before `_PATH_HOST_CONFIG_FILE`. `sshd.c` initializes
+  `config_file_name` from `_PATH_SERVER_CONFIG_FILE`, replaces it for `-f`,
+  and `execv`s the saved argument vector on SIGHUP. `readconf.c` and
+  `servconf.c` implement arbitrary `Include` globs with first-obtained-value
+  semantics. The pinned `ssh_config` and `sshd_config` templates contain no
+  `.d` include. `servconf.c` defaults `ModuliFile` to `_PATH_DH_MODULI`, and
+  `dh.c` opens that path unless the server option replaces it.
+- Observation: Glibc keeps both NSS selection and file-backed RPC paths in
+  shared internals.
+  Evidence: `nss/nss_database.c` opens and change-detects only
+  `_PATH_NSSWITCH_CONF`; `nss/nss_module.c` registers that same path five
+  times for nscd caches. `nss/nss_files/files-XXX.c` defines every database
+  path as `/etc/<database>`, so the RPC patch must select a path without
+  changing passwd, group, hosts, or other host databases. The RPC enumeration
+  stream remains open between `setrpcent` and `endrpcent`, while keyed RPC
+  lookups open a fresh stream.
+- Observation: The audit source bytes exactly match all four manifest pins.
+  Evidence: SHA-256 was `ad028e49...` for BlueZ 5.85, `053794d6...` for
+  PulseAudio 17.0, `b343fbcd...` for OpenSSH 9.9p1, and `f77bd47c...` for
+  Glibc 2.39.
+- Observation: A local patch source does not add the `patch` command to the
+  build root.
+  Evidence: BlueZ's first strict build stopped at `patch: command not found`.
+  Adding `x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev` let both strict
+  builds apply the patch with zero fuzz and complete with matching checksum
+  `f4b4a8aeac62ad3283a2f61ee7d895964372f09f92c3d72f42f5df2a9e0d7016`.
+- Observation: The BlueZ package now tests one selector across every packaged
+  filename.
+  Evidence: `unit/test-config-path.c` ran during both strict builds for
+  `main.conf`, `input.conf`, and `network.conf`; it covered vendor, transient,
+  administrator, empty administrator, ordered `CONFIGURATION_DIRECTORY`, and
+  missing explicit-directory cases. The retained installed daemon printed
+  `5.85`; the packaged tree contained all three files under
+  `/usr/lib/bluetooth` and no file under `/etc`.
 
 ## Decision Log
 
@@ -112,9 +173,10 @@ database batches recorded in `tmp/UAPI_TODO.md`.
 
 ## Outcomes & Retrospective
 
-No package code has changed under this ExecPlan yet. The plan has fixed the
-scope, path rules, package order, artifact tests, and assembly checks so a
-stateless Ralph run can start with BlueZ and continue without a design prompt.
+BlueZ now uses one tested full-file selector in all four readers and packages
+its three defaults below `/usr/lib/bluetooth`. Its strict two-build check and
+installed-daemon smoke pass. PulseAudio, OpenSSH, Glibc, and the affected
+assemblies remain in this ExecPlan.
 
 ## Context and Orientation
 

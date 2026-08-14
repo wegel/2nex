@@ -6,12 +6,15 @@ package:
   version: "5.85"
   description: official Linux Bluetooth protocol stack
   homepage: https://www.bluez.org/
-  checksum: 152495b640f919a5f35bfca069f82f923675f95227b41800b2270df066cc3b3e
+  checksum: f4b4a8aeac62ad3283a2f61ee7d895964372f09f92c3d72f42f5df2a9e0d7016
 
 sources:
 - name: bluez
   url: https://www.kernel.org/pub/linux/bluetooth/bluez-5.85.tar.xz
   sha256: ad028e49254bc4551a13f08fe7904c63d02ba650d77be8ae15bb3b0a0ad94a6f
+- name: uapi_config_patch
+  file: pkg/net/bluetooth/bluez-uapi-config.patch
+  sha256: 3cadab5944c42bb242982bc9024944b642f36591846ff9320aee5281c2fe225e
 
 dependencies:
 - name: bash
@@ -32,6 +35,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: ncurses
@@ -75,13 +80,18 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4141:78722, 8239:138197, 12376:172263, 16500:194027, 20627:211464, 24772:212873, 26507:216706]
+  profile: [4113:653, 8215:2573, 12337:3070, 16483:3600, 20583:4257, 24924:6954, 27174:7051]
 
   script: |
     set -eux
 
     tar --no-same-owner -xf /${SOURCE_bluez} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE_uapi_config_patch}
+
+    gcc -std=gnu11 -Wall -Wextra -Werror -I. \
+      unit/test-config-path.c -o unit/test-config-path
+    ./unit/test-config-path
 
     ./configure \
       --prefix=/usr \
@@ -98,6 +108,10 @@ build:
 
     make
     make DESTDIR="${OUT_DIR}" install
+
+    install -d "${OUT_DIR}/usr/lib/bluetooth"
+    mv "${OUT_DIR}"/etc/bluetooth/*.conf "${OUT_DIR}/usr/lib/bluetooth/"
+    rmdir "${OUT_DIR}/etc/bluetooth" "${OUT_DIR}/etc"
 
 bundles:
   dev:
@@ -172,9 +186,6 @@ outputs:
 
   conf:
     files:
-    - path: /etc/bluetooth/input.conf
-    - path: /etc/bluetooth/main.conf
-    - path: /etc/bluetooth/network.conf
     - path: /usr/share/dbus-1/system.d/bluetooth.conf
 
   dev:
@@ -195,6 +206,9 @@ outputs:
 
   lib:
     files:
+    - path: /usr/lib/bluetooth/input.conf
+    - path: /usr/lib/bluetooth/main.conf
+    - path: /usr/lib/bluetooth/network.conf
     - path: /usr/lib/libbluetooth.so
       needs:
       - /usr/lib/libc.so.6

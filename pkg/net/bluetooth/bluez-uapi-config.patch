@@ -1,0 +1,392 @@
+From: Package maintainers <packages@localhost>
+Subject: [PATCH] bluetoothd: search layered system configuration paths
+Source: https://www.kernel.org/pub/linux/bluetooth/bluez-5.85.tar.xz
+Upstream: Not submitted; this is a generic UAPI configuration proposal.
+
+Keep an explicit --configfile path exact. When systemd supplies
+CONFIGURATION_DIRECTORY, search every directory in its declared order and do
+not fall back outside that explicit list. Otherwise select the first existing
+configuration from the administrator, transient, and vendor trees.
+
+Use the same selector for main.conf, both input.conf readers, and
+network.conf. An existing empty file therefore masks lower policy.
+---
+ Makefile.am                |   2 +-
+ Makefile.in                |   6 ++-
+ profiles/input/hog.c       |   7 ++-
+ profiles/input/manager.c   |   5 ++-
+ profiles/network/manager.c |   5 ++-
+ src/config-path.h          |  85 +++++++++++++++++++++++++++++++++++
+ src/main.c                 |  22 ++--------
+ unit/test-config-path.c    | 107 +++++++++++++++++++++++++++++++++++++++++++++
+ 8 files changed, 214 insertions(+), 25 deletions(-)
+
+diff --git a/Makefile.am b/Makefile.am
+index 9f06d60..9ca8219 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -304,7 +304,7 @@ pkglibexec_PROGRAMS += src/bluetoothd
+ 
+ src_bluetoothd_SOURCES = $(builtin_sources) \
+ 			$(attrib_sources) $(btio_sources) \
+-			src/main.c src/log.h src/log.c \
++			src/main.c src/config-path.h src/log.h src/log.c \
+ 			src/backtrace.h src/backtrace.c \
+ 			src/rfkill.c src/btd.h src/sdpd.h \
+ 			src/sdpd-server.c src/sdpd-request.c \
+diff --git a/Makefile.in b/Makefile.in
+index 1b34250..f8a9cf5 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -1032,7 +1032,8 @@ am__src_bluetoothd_SOURCES_DIST = plugins/hostname.c \
+ 	profiles/audio/csip.c profiles/audio/asha.h \
+ 	profiles/audio/asha.c attrib/att.h attrib/att-database.h \
+ 	attrib/att.c attrib/gatt.h attrib/gatt.c attrib/gattrib.h \
+-	attrib/gattrib.c btio/btio.h btio/btio.c src/main.c src/log.h \
++	attrib/gattrib.c btio/btio.h btio/btio.c src/main.c \
++	src/config-path.h src/log.h \
+ 	src/log.c src/backtrace.h src/backtrace.c src/rfkill.c \
+ 	src/btd.h src/sdpd.h src/sdpd-server.c src/sdpd-request.c \
+ 	src/sdpd-service.c src/sdpd-database.c src/gatt-database.h \
+@@ -3337,7 +3338,8 @@ builtin_sources = plugins/hostname.c plugins/autopair.c \
+ builtin_cppflags = $(am__append_27)
+ builtin_ldadd = $(am__append_28) $(am__append_31)
+ src_bluetoothd_SOURCES = $(builtin_sources) $(attrib_sources) \
+-	$(btio_sources) src/main.c src/log.h src/log.c src/backtrace.h \
++	$(btio_sources) src/main.c src/config-path.h src/log.h src/log.c \
++	src/backtrace.h \
+ 	src/backtrace.c src/rfkill.c src/btd.h src/sdpd.h \
+ 	src/sdpd-server.c src/sdpd-request.c src/sdpd-service.c \
+ 	src/sdpd-database.c src/gatt-database.h src/gatt-database.c \
+diff --git a/profiles/input/hog.c b/profiles/input/hog.c
+index 1f5b82b..02ddd03 100644
+--- a/profiles/input/hog.c
++++ b/profiles/input/hog.c
+@@ -29,6 +29,7 @@
+ #include "bluetooth/uuid.h"
+ 
+ #include "src/log.h"
++#include "src/config-path.h"
+ #include "src/adapter.h"
+ #include "src/device.h"
+ #include "src/profile.h"
+@@ -225,7 +226,7 @@ static struct btd_profile hog_profile = {
+ 
+ static void hog_read_config(void)
+ {
+-	const char filename[] = CONFIGDIR "/input.conf";
++	char filename[PATH_MAX];
+ 	GKeyFile *config;
+ 	GError *err = NULL;
+ 	bool config_auto_sec;
+@@ -236,6 +237,10 @@ static void hog_read_config(void)
+ 		error("Failed to allocate memory for config");
+ 		return;
+ 	}
++	if (!btd_config_path(filename, "input.conf")) {
++		g_key_file_free(config);
++		return;
++	}
+ 
+ 	if (!g_key_file_load_from_file(config, filename, 0, &err)) {
+ 		if (!g_error_matches(err, G_FILE_ERROR, G_FILE_ERROR_NOENT))
+diff --git a/profiles/input/manager.c b/profiles/input/manager.c
+index b0e415f..1ae89da 100644
+--- a/profiles/input/manager.c
++++ b/profiles/input/manager.c
+@@ -22,6 +22,7 @@
+ #include "bluetooth/uuid.h"
+ 
+ #include "src/log.h"
++#include "src/config-path.h"
+ #include "src/plugin.h"
+ #include "src/adapter.h"
+ #include "src/device.h"
+@@ -79,10 +80,12 @@ static GKeyFile *load_config_file(const char *file)
+ 
+ static int input_init(void)
+ {
++	char filename[PATH_MAX];
+ 	GKeyFile *config;
+ 	GError *err = NULL;
+ 
+-	config = load_config_file(CONFIGDIR "/input.conf");
++	config = btd_config_path(filename, "input.conf") ?
++							load_config_file(filename) : NULL;
+ 	if (config) {
+ 		int idle_timeout;
+ 		gboolean classic_bonded_only;
+diff --git a/profiles/network/manager.c b/profiles/network/manager.c
+index 51f3825..ca66f40 100644
+--- a/profiles/network/manager.c
++++ b/profiles/network/manager.c
+@@ -23,6 +23,7 @@
+ #include "bluetooth/uuid.h"
+ 
+ #include "src/log.h"
++#include "src/config-path.h"
+ #include "src/plugin.h"
+ #include "src/adapter.h"
+ #include "src/device.h"
+@@ -156,9 +157,11 @@ static struct btd_profile nap_profile = {
+ 
+ static int network_init(void)
+ {
++	char filename[PATH_MAX];
+ 	int err;
+ 
+-	read_config(CONFIGDIR "/network.conf");
++	if (btd_config_path(filename, "network.conf"))
++		read_config(filename);
+ 
+ 	err = bnep_init();
+ 	if (err) {
+diff --git a/src/config-path.h b/src/config-path.h
+new file mode 100644
+index 0000000..fff8640
+--- /dev/null
++++ b/src/config-path.h
+@@ -0,0 +1,85 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++#ifndef BLUEZ_CONFIG_PATH_H
++#define BLUEZ_CONFIG_PATH_H
++
++#include <limits.h>
++#include <stdbool.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++
++static inline bool btd_config_path_join(char path[PATH_MAX],
++					const char *directory, size_t length,
++					const char *name)
++{
++	int written;
++
++	while (length > 1 && directory[length - 1] == '/')
++		length--;
++
++	written = snprintf(path, PATH_MAX, "%.*s/%s", (int) length,
++								directory, name);
++	if (written < 0 || written >= PATH_MAX) {
++		path[0] = '\0';
++		return false;
++	}
++
++	return access(path, F_OK) == 0;
++}
++
++static inline bool btd_config_path_from_list(char path[PATH_MAX],
++					const char *name, const char *directories)
++{
++	const char *start = directories;
++
++	while (start && *start) {
++		const char *end = strchr(start, ':');
++		size_t length = end ? (size_t) (end - start) : strlen(start);
++
++		if (length > 0 && btd_config_path_join(path, start, length, name))
++			return true;
++
++		start = end ? end + 1 : NULL;
++	}
++
++	path[0] = '\0';
++	return false;
++}
++
++static inline bool btd_config_path_from_dirs(char path[PATH_MAX],
++					const char *name,
++					const char *const directories[],
++					size_t count)
++{
++	size_t i;
++
++	for (i = 0; i < count; i++) {
++		if (btd_config_path_join(path, directories[i],
++							strlen(directories[i]), name))
++			return true;
++	}
++
++	path[0] = '\0';
++	return false;
++}
++
++static inline bool btd_config_path(char path[PATH_MAX], const char *name)
++{
++	const char *service_directories = getenv("CONFIGURATION_DIRECTORY");
++	const char *const system_directories[] = {
++		CONFIGDIR,
++		"/run/bluetooth",
++		"/usr/lib/bluetooth",
++	};
++
++	if (service_directories)
++		return btd_config_path_from_list(path, name, service_directories);
++
++	return btd_config_path_from_dirs(path, name, system_directories,
++					sizeof(system_directories) /
++					sizeof(system_directories[0]));
++}
++
++#endif
+diff --git a/src/main.c b/src/main.c
+index 1c7390e..5d6d685 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -39,6 +39,7 @@
+ 
+ #include "log.h"
+ #include "backtrace.h"
++#include "config-path.h"
+ 
+ #include "shared/att-types.h"
+ #include "shared/mainloop.h"
+@@ -248,28 +249,11 @@ static GKeyFile *load_config(const char *name)
+ {
+ 	GError *err = NULL;
+ 	GKeyFile *keyfile;
+-	int len;
+ 
+ 	if (name)
+ 		snprintf(main_conf_file_path, PATH_MAX, "%s", name);
+-	else {
+-		const char *configdir = getenv("CONFIGURATION_DIRECTORY");
+-
+-		/* Check if running as service */
+-		if (configdir) {
+-			/* Check if there multiple paths given */
+-			if (strstr(configdir, ":"))
+-				len = strstr(configdir, ":") - configdir;
+-			else
+-				len = strlen(configdir);
+-		} else {
+-			configdir = CONFIGDIR;
+-			len = strlen(configdir);
+-		}
+-
+-		snprintf(main_conf_file_path, PATH_MAX, "%*s/main.conf", len,
+-						 configdir);
+-	}
++	else if (!btd_config_path(main_conf_file_path, "main.conf"))
++		return NULL;
+ 
+ 	keyfile = g_key_file_new();
+ 
+diff --git a/unit/test-config-path.c b/unit/test-config-path.c
+new file mode 100644
+index 0000000..2434a76
+--- /dev/null
++++ b/unit/test-config-path.c
+@@ -0,0 +1,107 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++#define _GNU_SOURCE
++#define CONFIGDIR "/etc/bluetooth"
++
++#include <assert.h>
++#include <fcntl.h>
++#include <limits.h>
++#include <stdbool.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/stat.h>
++#include <unistd.h>
++
++#include "src/config-path.h"
++
++static void make_file(const char *path)
++{
++	int fd = open(path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
++
++	assert(fd >= 0);
++	assert(close(fd) == 0);
++}
++
++static void expect_path(const char *actual, const char *directory,
++					const char *name)
++{
++	char expected[PATH_MAX];
++
++	assert(snprintf(expected, sizeof(expected), "%s/%s", directory,
++							name) < (int) sizeof(expected));
++	assert(strcmp(actual, expected) == 0);
++}
++
++static void test_name(const char *root, const char *name)
++{
++	char admin[PATH_MAX], runtime[PATH_MAX], vendor[PATH_MAX];
++	char admin_file[PATH_MAX], runtime_file[PATH_MAX], vendor_file[PATH_MAX];
++	char explicit_dirs[PATH_MAX * 2], path[PATH_MAX];
++	const char *directories[3];
++
++	assert(snprintf(admin, sizeof(admin), "%s/admin", root) > 0);
++	assert(snprintf(runtime, sizeof(runtime), "%s/run", root) > 0);
++	assert(snprintf(vendor, sizeof(vendor), "%s/vendor", root) > 0);
++	assert(snprintf(admin_file, sizeof(admin_file), "%s/%s", admin, name) > 0);
++	assert(snprintf(runtime_file, sizeof(runtime_file), "%s/%s", runtime,
++							name) > 0);
++	assert(snprintf(vendor_file, sizeof(vendor_file), "%s/%s", vendor,
++							name) > 0);
++	directories[0] = admin;
++	directories[1] = runtime;
++	directories[2] = vendor;
++
++	make_file(vendor_file);
++	assert(btd_config_path_from_dirs(path, name, directories, 3));
++	expect_path(path, vendor, name);
++
++	make_file(runtime_file);
++	assert(btd_config_path_from_dirs(path, name, directories, 3));
++	expect_path(path, runtime, name);
++
++	make_file(admin_file);
++	assert(btd_config_path_from_dirs(path, name, directories, 3));
++	expect_path(path, admin, name);
++
++	assert(unlink(admin_file) == 0);
++	assert(unlink(runtime_file) == 0);
++	assert(snprintf(explicit_dirs, sizeof(explicit_dirs), "%s/missing:%s",
++							root, vendor) > 0);
++	assert(setenv("CONFIGURATION_DIRECTORY", explicit_dirs, 1) == 0);
++	assert(btd_config_path(path, name));
++	expect_path(path, vendor, name);
++
++	assert(setenv("CONFIGURATION_DIRECTORY", admin, 1) == 0);
++	assert(!btd_config_path(path, name));
++	assert(path[0] == '\0');
++	assert(unsetenv("CONFIGURATION_DIRECTORY") == 0);
++	assert(unlink(vendor_file) == 0);
++}
++
++int main(void)
++{
++	char root[] = "/tmp/bluez-config-path-XXXXXX";
++	char path[PATH_MAX];
++	const char *names[] = { "main.conf", "input.conf", "network.conf" };
++	size_t i;
++
++	assert(mkdtemp(root));
++	for (i = 0; i < 3; i++) {
++		assert(snprintf(path, sizeof(path), "%s/%s", root,
++							i == 0 ? "admin" :
++							i == 1 ? "run" : "vendor") > 0);
++		assert(mkdir(path, 0700) == 0);
++	}
++
++	for (i = 0; i < sizeof(names) / sizeof(names[0]); i++)
++		test_name(root, names[i]);
++
++	assert(snprintf(path, sizeof(path), "%s/admin", root) > 0);
++	assert(rmdir(path) == 0);
++	assert(snprintf(path, sizeof(path), "%s/run", root) > 0);
++	assert(rmdir(path) == 0);
++	assert(snprintf(path, sizeof(path), "%s/vendor", root) > 0);
++	assert(rmdir(path) == 0);
++	assert(rmdir(root) == 0);
++	return 0;
++}
+-- 
+2.50.1

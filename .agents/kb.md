@@ -3,8 +3,9 @@
 Keep this file current while working. Add a fact after a command, source file,
 or built artifact proves it. Correct or remove a fact when later evidence
 disproves it. Keep temporary logs, guesses, and one-off task notes elsewhere.
-Git ignores the whole `.agents/` directory in this repository, so this runbook
-persists in the shared worktree but does not travel in Nex commits.
+Git tracks this runbook and the durable `.agents/knowledge/` notes. Git ignores
+runtime state such as `.agents/SCRATCH_KNOWLEDGE.md`, waiting state, and paused
+local plans.
 
 ## Rootfs replication scope
 
@@ -1169,11 +1170,17 @@ reusable package defaults.
   `mke2fs.conf` emits a missing-policy warning, succeeds with compiled defaults,
   and masks lower files. The strict two-build checksum is
   `e58f06a4b3b9438bc06f79a5bc969b58bbfd51a13943d92c351e82a7f4f5475e`.
-- BlueZ 5.85 has several separate readers. `src/main.c` can inspect
-  `CONFIGURATION_DIRECTORY` for `main.conf`, but it uses only the first entry
-  from a colon-separated value. The input manager, HOG plugin, and network
-  plugin still open compiled `input.conf` or `network.conf` paths. A complete
-  generic patch must cover every reader instead of adapting only `main.conf`.
+- BlueZ 5.85 now uses one internal selector in its main, input-manager, HOG,
+  and network readers. It checks every colon-separated
+  `CONFIGURATION_DIRECTORY` entry in declared order and does not fall back
+  outside that explicit list. Without the variable it selects one complete
+  file from `/etc/bluetooth`, `/run/bluetooth`, or `/usr/lib/bluetooth`. The
+  package puts `main.conf`, `input.conf`, and `network.conf` below `/usr/lib`,
+  and an empty higher file masks a lower one. A focused test covered every
+  filename, all tiers, the empty mask, and explicit-directory cases in both
+  strict builds. The installed daemon printed `5.85`; the two builds matched
+  checksum
+  `f4b4a8aeac62ad3283a2f61ee7d895964372f09f92c3d72f42f5df2a9e0d7016`.
 - PulseAudio 17.0 has shared helpers that search a user path and one compiled
   global path. Its daemon, client, `default.pa`, `system.pa`, match tables,
   restore tables, startup includes, and drop-ins cross several readers. A
@@ -1222,7 +1229,9 @@ record its SHA-256. The builder verifies those bytes, stages the file, and
 exports both positional `SOURCE<n>` and named `SOURCE_<name>` variables. The
 package build script chooses where and how to apply it. A failed `patch`
 command stops normal `set -e` build scripts, and the strict two-build check
-proves that the resulting package output is reproducible.
+does not infer the patch tool from a local patch source. List the appropriate
+`patch` tool bundle explicitly when the build script invokes it. The strict
+check proves that the resulting package output is reproducible.
 
 `.agents/MANIFESTS_CODE_STYLE.md` now defines the carried-patch policy. An audit
 on 2026-08-14 found 17 package manifests that invoke `patch`. Nex now invokes
