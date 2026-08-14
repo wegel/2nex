@@ -44,7 +44,9 @@ database batches recorded in `tmp/UAPI_TODO.md`.
 - [x] (2026-08-14 21:57Z) Patched every BlueZ 5.85 reader, passed the
   focused tier and override test in both strict builds, ran the installed
   `bluetoothd --version`, and verified the packaged vendor paths.
-- [ ] Patch, build twice, and exercise PulseAudio 17.0 main files and drop-ins.
+- [x] (2026-08-14 22:18Z) Patched PulseAudio 17.0, passed the main-file and
+  drop-in matrix in both strict builds, asserted an installed `--dump-conf`
+  value, and ran the final packaged daemon's version command.
 - [ ] Patch, build twice, and exercise OpenSSH 9.9p1 client, server, drop-in,
   explicit-path, reload, and moduli lookup.
 - [ ] Patch, build twice, and exercise Glibc 2.39 NSS and RPC database lookup,
@@ -134,6 +136,34 @@ database batches recorded in `tmp/UAPI_TODO.md`.
   missing explicit-directory cases. The retained installed daemon printed
   `5.85`; the packaged tree contained all three files under
   `/usr/lib/bluetooth` and no file under `/etc`.
+- Observation: PulseAudio's installed daemon uses `DT_RPATH` for
+  `/usr/lib/pulseaudio`, so a host-side split-output smoke cannot replace an
+  older library through `LD_LIBRARY_PATH` alone.
+  Evidence: the first post-package command loaded the workstation's
+  `libpulsecommon-17.0.so` and reported the new helper as undefined. The
+  packaged library did export all three new symbols. Running the loader with
+  `--inhibit-rpath '' --library-path <package-lib-dirs>` selected the packaged
+  libraries and printed `pulseaudio 17.0`.
+- Observation: PulseAudio now keeps complete startup scripts separate from
+  the two structured drop-in families.
+  Evidence: the production-linked `layered-config-test` exercised all four
+  main files, `PULSE_CLIENTCONFIG`, `PULSE_CONFIG`, `PULSE_SCRIPT`, both
+  upstream user directories, all three system tiers, lexicographic drop-in
+  order, same-basename priority, an empty mask, and a `/dev/null` mask in both
+  strict builds. The installed `pulseaudio --dump-conf` command returned the
+  asserted `exit-idle-time = 4242` value. Both builds matched checksum
+  `ecd67b81b6a6dfde48df082245e94b837d53624306b65501b8124d2d02506a7d`.
+- Observation: An internal PulseAudio test must include `<stdbool.h>` before
+  `conf-parser.h` when no other included header supplies `bool`.
+  Evidence: the first package compile stopped at that type; adding the direct
+  include made the focused target and both complete builds pass.
+- Observation: PulseAudio's normal Meson test switch needs the Check framework,
+  whose declared bundle was absent from the disposable store.
+  Evidence: the first `-Dtests=true` build stopped while materializing
+  `x86_64/pkg/dev/util/check/0.15.2/bundles/dev`. A strict Check build refreshed
+  its stale checksum and profile in commit `492403f`, and a C smoke linked to
+  the packaged `libcheck`. PulseAudio then found Check 0.15.2, ran the focused
+  Meson test by name, and passed it twice.
 
 ## Decision Log
 
@@ -173,10 +203,10 @@ database batches recorded in `tmp/UAPI_TODO.md`.
 
 ## Outcomes & Retrospective
 
-BlueZ now uses one tested full-file selector in all four readers and packages
-its three defaults below `/usr/lib/bluetooth`. Its strict two-build check and
-installed-daemon smoke pass. PulseAudio, OpenSSH, Glibc, and the affected
-assemblies remain in this ExecPlan.
+BlueZ and PulseAudio now use tested layered readers and put their package
+defaults below `/usr/lib`. Both strict two-build checks and installed-command
+smokes pass. OpenSSH, Glibc, and the affected assemblies remain in this
+ExecPlan.
 
 ## Context and Orientation
 

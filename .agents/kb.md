@@ -1181,11 +1181,19 @@ reusable package defaults.
   strict builds. The installed daemon printed `5.85`; the two builds matched
   checksum
   `f4b4a8aeac62ad3283a2f61ee7d895964372f09f92c3d72f42f5df2a9e0d7016`.
-- PulseAudio 17.0 has shared helpers that search a user path and one compiled
-  global path. Its daemon, client, `default.pa`, `system.pa`, match tables,
-  restore tables, startup includes, and drop-ins cross several readers. A
-  generic patch must preserve explicit environment overrides and cover both
-  main files and include or drop-in lookup.
+- PulseAudio 17.0 now keeps `PULSE_CLIENTCONFIG`, `PULSE_CONFIG`,
+  `PULSE_SCRIPT`, `PULSE_CONFIG_PATH`, and upstream home paths ahead of system
+  policy. It then selects each complete main file from `/etc/pulse`,
+  `/run/pulse`, or `/usr/lib/pulse`. Its structured `client.conf.d` and
+  `daemon.conf.d` readers merge filenames from user and system trees, let the
+  higher tree shadow an equal basename, and parse selected names in lexical
+  order. Empty files and links to `/dev/null` mask lower entries. The package
+  leaves match tables, restore tables, ALSA data, and explicit startup-script
+  includes unchanged; it installs the four main defaults below `/usr/lib` and
+  includes them in both public bundles. The production-linked test covered
+  every priority and mask in both strict builds, the installed daemon returned
+  an asserted `--dump-conf` value, and both builds matched checksum
+  `ecd67b81b6a6dfde48df082245e94b837d53624306b65501b8124d2d02506a7d`.
 - Shadow 4.15.1 does not need a source patch for `login.defs`. When built with
   libeconf and `--enable-vendordir=DIR`, its `getdef.c` calls
   `econf_readDirs()` for vendor and host files. Nex enables that upstream

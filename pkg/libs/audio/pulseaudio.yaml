@@ -6,12 +6,15 @@ package:
   version: "17"
   description: PulseAudio sound server libraries
   homepage: https://www.freedesktop.org/wiki/Software/PulseAudio/
-  checksum: 6634b878aada10b5820e3f6d96bff6f1eef87bbd27fd1d9b8129abbb93e48bfa
+  checksum: ecd67b81b6a6dfde48df082245e94b837d53624306b65501b8124d2d02506a7d
 
 sources:
 - name: pulseaudio
   url: https://freedesktop.org/software/pulseaudio/releases/pulseaudio-17.0.tar.xz
   sha256: 053794d6671a3e397d849e478a80b82a63cb9d8ca296bd35b73317bb5ceb87b5
+- name: uapi_config_patch
+  file: pkg/libs/audio/pulseaudio-uapi-config.patch
+  sha256: c2c62c965e52700d6462b791bc585f1fcefd5bac1d2516112a61bee2a496b626
 
 dependencies:
 - name: glibc
@@ -40,12 +43,18 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: check
+  commit: x86_64/pkg/dev/util/check/0.15.2/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: meson
   commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
 - name: ninja
   commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: python3
   commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
 - name: pkgconf
@@ -71,23 +80,33 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4117:138298, 8250:155891, 12372:178286, 20665:195720, 28955:204252, 33087:209217, 41422:219619, 49711:223849, 57964:229509, 62130:232591]
+  profile: [4115:2714, 8239:2714, 16526:3089, 24819:3402, 28963:3612, 37262:4001, 45498:11325, 57899:13487, 66125:13509, 72277:13702]
 
   script: |
-    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    set -eux
+
+    tar --no-same-owner -xf /${SOURCE_pulseaudio} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE_uapi_config_patch}
 
     meson setup build \
       --prefix=/usr \
       --libdir=lib \
       --buildtype=release \
-      -Dtests=false \
+      -Dtests=true \
       -Ddatabase=simple \
       -Ddoxygen=false \
       -Dman=false
 
     ninja -C build
+    meson test -C build layered-config-test --print-errorlogs
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    printf 'exit-idle-time = 4242\n' > "${WORK_DIR}/dump-test.conf"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:${OUT_DIR}/usr/lib/pulseaudio" \
+      PULSE_CONFIG="${WORK_DIR}/dump-test.conf" \
+      "${OUT_DIR}/usr/bin/pulseaudio" --dump-conf | \
+      grep -Fx 'exit-idle-time = 4242'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -96,11 +115,13 @@ build:
 bundles:
   dev:
   - bin
+  - conf
   - dev
   - lib
 
   full:
   - bin
+  - conf
   - dev
   - lib
 
@@ -175,10 +196,6 @@ outputs:
 
   conf:
     files:
-    - path: /etc/pulse/client.conf
-    - path: /etc/pulse/daemon.conf
-    - path: /etc/pulse/default.pa
-    - path: /etc/pulse/system.pa
     - path: /usr/share/pulseaudio/alsa-mixer/paths/analog-input-aux.conf
     - path: /usr/share/pulseaudio/alsa-mixer/paths/analog-input-dock-mic.conf
     - path: /usr/share/pulseaudio/alsa-mixer/paths/analog-input-fm.conf
@@ -334,6 +351,10 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libm.so.6
       - /usr/lib/pulseaudio/libpulsecommon-17.0.so
+    - path: /usr/lib/pulse/client.conf
+    - path: /usr/lib/pulse/daemon.conf
+    - path: /usr/lib/pulse/default.pa
+    - path: /usr/lib/pulse/system.pa
     - path: /usr/lib/pulseaudio/libpulsecommon-17.0.so
       needs:
       - /usr/lib/libc.so.6

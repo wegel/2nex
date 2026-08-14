@@ -1,0 +1,744 @@
+From: Package maintainers <packages@localhost>
+Subject: [PATCH] pulse: follow layered system configuration paths
+Source: https://freedesktop.org/software/pulseaudio/releases/pulseaudio-17.0.tar.xz
+Upstream: Not submitted; this is a generic UAPI configuration proposal.
+
+Keep explicit environment paths and per-user files ahead of system policy.
+Select each complete system file from the administrator, transient, and
+vendor trees. Merge client.conf.d and daemon.conf.d by basename across those
+trees and the user tree, with higher trees shadowing lower entries before
+the selected files are parsed in lexical order.
+
+Install the four package defaults in the vendor tree. Keep startup scripts
+as complete files and preserve their explicit .include behavior.
+---
+diff --git a/meson.build b/meson.build
+index ba3d01d..bf853de 100644
+--- a/meson.build
++++ b/meson.build
+@@ -87,6 +87,10 @@ endif
+ pkgconfigdir = join_paths(libdir, 'pkgconfig')
+ pulselibexecdir = join_paths(libexecdir, 'pulse')
+ pulsesysconfdir = join_paths(sysconfdir, 'pulse')
++pulsevendorconfdir = pulsesysconfdir
++if host_machine.system() != 'windows'
++  pulsevendorconfdir = join_paths(prefix, 'lib', 'pulse')
++endif
+ 
+ modlibexecdir = get_option('modlibexecdir')
+ if modlibexecdir == ''
+@@ -159,6 +163,8 @@ else
+ endif
+ cdata.set_quoted('PA_DEFAULT_CONFIG_DIR', pulsesysconfdir)
+ cdata.set('PA_DEFAULT_CONFIG_DIR_UNQUOTED', pulsesysconfdir)
++cdata.set_quoted('PA_RUNTIME_CONFIG_DIR', '/run/pulse')
++cdata.set_quoted('PA_VENDOR_CONFIG_DIR', pulsevendorconfdir)
+ cdata.set_quoted('PA_BINARY', join_paths(bindir, 'pulseaudio'))
+ cdata.set_quoted('PA_SYSTEM_RUNTIME_PATH', join_paths(localstatedir, 'run', 'pulse'))
+ cdata.set_quoted('PA_SYSTEM_CONFIG_PATH', join_paths(localstatedir, 'lib', 'pulse'))
+diff --git a/src/daemon/daemon-conf.c b/src/daemon/daemon-conf.c
+index ffef554..3c668d3 100644
+--- a/src/daemon/daemon-conf.c
++++ b/src/daemon/daemon-conf.c
+@@ -666,6 +666,7 @@ int pa_daemon_conf_load(pa_daemon_conf *c, const char *filename) {
+     c->config_file = NULL;
+ 
+     const char *default_config_file = DEFAULT_CONFIG_FILE;
++    bool use_layered_config = true;
+ #ifdef HAVE_RUNNING_FROM_BUILD_TREE
+     if (pa_run_from_build_tree()) {
+         pa_log_notice("Detected that we are run from the build tree, fixing default daemon.conf file path.");
+@@ -674,12 +675,18 @@ int pa_daemon_conf_load(pa_daemon_conf *c, const char *filename) {
+ #else
+         default_config_file = PA_BUILDDIR PA_PATH_SEP "daemon.conf";
+ #endif // Endof #ifdef MESON_BUILD
++        use_layered_config = false;
+     }
+ #endif // Endof #ifdef HAVE_RUNNING_FROM_BUILD_TREE
+ 
+-    f = filename ?
+-        pa_fopen_cloexec(c->config_file = pa_xstrdup(filename), "r") :
+-        pa_open_config_file(default_config_file, DEFAULT_CONFIG_FILE_USER, ENV_CONFIG_FILE, &c->config_file);
++    if (filename)
++        f = pa_fopen_cloexec(c->config_file = pa_xstrdup(filename), "r");
++    else if (use_layered_config)
++        f = pa_open_layered_config_file("daemon.conf", DEFAULT_CONFIG_FILE_USER, ENV_CONFIG_FILE,
++                                        &c->config_file);
++    else
++        f = pa_open_config_file(default_config_file, DEFAULT_CONFIG_FILE_USER, ENV_CONFIG_FILE,
++                                &c->config_file);
+ 
+     if (!f && errno != ENOENT) {
+         pa_log_warn(_("Failed to open configuration file: %s"), pa_cstrerror(errno));
+@@ -689,7 +696,13 @@ int pa_daemon_conf_load(pa_daemon_conf *c, const char *filename) {
+     ci.default_channel_map_set = ci.default_sample_spec_set = false;
+     ci.conf = c;
+ 
+-    r = f ? pa_config_parse(c->config_file, f, table, NULL, true, NULL) : 0;
++    if (!f)
++        r = 0;
++    else if (filename || !use_layered_config)
++        r = pa_config_parse(c->config_file, f, table, NULL, true, NULL);
++    else
++        r = pa_config_parse_layered(c->config_file, f, table, NULL, "daemon.conf",
++                                    DEFAULT_CONFIG_FILE_USER, ENV_CONFIG_FILE, NULL);
+ 
+     if (r >= 0) {
+ 
+@@ -735,9 +748,10 @@ const char *pa_daemon_conf_get_default_script_file(pa_daemon_conf *c) {
+ 
+     if (!c->default_script_file) {
+         if (c->system_instance)
+-            c->default_script_file = pa_find_config_file(DEFAULT_SYSTEM_SCRIPT_FILE, NULL, ENV_SCRIPT_FILE);
++            c->default_script_file = pa_find_layered_config_file("system.pa", NULL, ENV_SCRIPT_FILE);
+         else
+-            c->default_script_file = pa_find_config_file(DEFAULT_SCRIPT_FILE, DEFAULT_SCRIPT_FILE_USER, ENV_SCRIPT_FILE);
++            c->default_script_file = pa_find_layered_config_file("default.pa", DEFAULT_SCRIPT_FILE_USER,
++                                                                  ENV_SCRIPT_FILE);
+     }
+ 
+     return c->default_script_file;
+@@ -749,9 +763,10 @@ FILE *pa_daemon_conf_open_default_script_file(pa_daemon_conf *c) {
+ 
+     if (!c->default_script_file) {
+         if (c->system_instance)
+-            f = pa_open_config_file(DEFAULT_SYSTEM_SCRIPT_FILE, NULL, ENV_SCRIPT_FILE, &c->default_script_file);
++            f = pa_open_layered_config_file("system.pa", NULL, ENV_SCRIPT_FILE, &c->default_script_file);
+         else
+-            f = pa_open_config_file(DEFAULT_SCRIPT_FILE, DEFAULT_SCRIPT_FILE_USER, ENV_SCRIPT_FILE, &c->default_script_file);
++            f = pa_open_layered_config_file("default.pa", DEFAULT_SCRIPT_FILE_USER, ENV_SCRIPT_FILE,
++                                             &c->default_script_file);
+     } else
+         f = pa_fopen_cloexec(c->default_script_file, "r");
+ 
+diff --git a/src/daemon/meson.build b/src/daemon/meson.build
+index 31e36ec..ff78f51 100644
+--- a/src/daemon/meson.build
++++ b/src/daemon/meson.build
+@@ -93,7 +93,7 @@ custom_target('daemon.conf',
+   command : [m4, '@INPUT@'],
+   build_by_default : true,
+   install : true,
+-  install_dir : pulsesysconfdir,
++  install_dir : pulsevendorconfdir,
+ )
+ 
+ default_conf = configuration_data()
+@@ -117,7 +117,7 @@ custom_target('default.pa',
+   command : [m4, '@INPUT@'],
+   build_by_default : true,
+   install : true,
+-  install_dir : pulsesysconfdir,
++  install_dir : pulsevendorconfdir,
+ )
+ 
+ system_conf = configuration_data()
+@@ -136,7 +136,7 @@ custom_target('system.pa',
+   command : [m4, '@INPUT@'],
+   build_by_default : true,
+   install : true,
+-  install_dir : pulsesysconfdir,
++  install_dir : pulsevendorconfdir,
+ )
+ 
+ if dbus_dep.found()
+diff --git a/src/pulse/client-conf.c b/src/pulse/client-conf.c
+index 1daaf91..e06b7b4 100644
+--- a/src/pulse/client-conf.c
++++ b/src/pulse/client-conf.c
+@@ -149,9 +149,10 @@ void pa_client_conf_load(pa_client_conf *c, bool load_from_x11, bool load_from_e
+         { NULL,                     NULL,                     NULL, NULL },
+     };
+ 
+-    f = pa_open_config_file(DEFAULT_CLIENT_CONFIG_FILE, DEFAULT_CLIENT_CONFIG_FILE_USER, ENV_CLIENT_CONFIG_FILE, &fn);
++    f = pa_open_layered_config_file("client.conf", DEFAULT_CLIENT_CONFIG_FILE_USER, ENV_CLIENT_CONFIG_FILE, &fn);
+     if (f) {
+-        pa_config_parse(fn, f, table, NULL, true, NULL);
++        pa_config_parse_layered(fn, f, table, NULL, "client.conf", DEFAULT_CLIENT_CONFIG_FILE_USER,
++                                ENV_CLIENT_CONFIG_FILE, NULL);
+         pa_xfree(fn);
+         fclose(f);
+     }
+diff --git a/src/pulse/meson.build b/src/pulse/meson.build
+index c132630..44dc3f1 100644
+--- a/src/pulse/meson.build
++++ b/src/pulse/meson.build
+@@ -140,5 +140,5 @@ client_conf_file = configure_file(
+   input : 'client.conf.in',
+   output : 'client.conf',
+   configuration : client_conf,
+-  install_dir : pulsesysconfdir,
++  install_dir : pulsevendorconfdir,
+ )
+diff --git a/src/pulsecore/conf-parser.c b/src/pulsecore/conf-parser.c
+index 7707904..97769fe 100644
+--- a/src/pulsecore/conf-parser.c
++++ b/src/pulsecore/conf-parser.c
+@@ -22,6 +22,7 @@
+ #endif
+ 
+ #include <dirent.h>
++#include <stdlib.h>
+ #include <string.h>
+ #include <stdio.h>
+ #include <errno.h>
+@@ -157,6 +158,57 @@ static int parse_line(pa_config_parser_state *state) {
+ static int conf_filter(const struct dirent *entry) {
+     return pa_endswith(entry->d_name, ".conf");
+ }
++
++struct layered_drop_in {
++    char *name;
++    char *path;
++};
++
++static void collect_drop_ins(struct layered_drop_in **drop_ins, size_t *n_drop_ins,
++                             const char *directory, const char *name) {
++    char *drop_in_directory;
++    struct dirent **entries = NULL;
++    int n, i;
++
++    drop_in_directory = pa_sprintf_malloc("%s" PA_PATH_SEP "%s.d", directory, name);
++    n = scandir(drop_in_directory, &entries, conf_filter, alphasort);
++    if (n < 0) {
++        if (errno != ENOENT)
++            pa_log_warn("scandir(\"%s\") failed: %s", drop_in_directory, pa_cstrerror(errno));
++        pa_xfree(drop_in_directory);
++        return;
++    }
++
++    for (i = 0; i < n; i++) {
++        char *path;
++        size_t j;
++
++        path = pa_sprintf_malloc("%s" PA_PATH_SEP "%s", drop_in_directory, entries[i]->d_name);
++        for (j = 0; j < *n_drop_ins; j++)
++            if (pa_streq((*drop_ins)[j].name, entries[i]->d_name))
++                break;
++
++        if (j == *n_drop_ins) {
++            *drop_ins = pa_xrealloc(*drop_ins, sizeof(**drop_ins) * (*n_drop_ins + 1));
++            (*drop_ins)[j].name = pa_xstrdup(entries[i]->d_name);
++            (*n_drop_ins)++;
++        } else
++            pa_xfree((*drop_ins)[j].path);
++
++        (*drop_ins)[j].path = path;
++        free(entries[i]);
++    }
++
++    free(entries);
++    pa_xfree(drop_in_directory);
++}
++
++static int compare_drop_ins(const void *a, const void *b) {
++    const struct layered_drop_in *left = a;
++    const struct layered_drop_in *right = b;
++
++    return strcmp(left->name, right->name);
++}
+ #endif
+ 
+ /* Go through the file and parse each line */
+@@ -294,6 +346,60 @@ finish:
+     return r;
+ }
+ 
++int pa_config_parse_layered(const char *filename, FILE *f, const pa_config_item *t, pa_proplist *proplist,
++                            const char *name, const char *local, const char *env, void *userdata) {
++#ifdef OS_IS_WIN32
++    return pa_config_parse(filename, f, t, proplist, true, userdata);
++#else
++    struct layered_drop_in *drop_ins = NULL;
++    size_t n_drop_ins = 0, i;
++    const char *config_path;
++    char *home = NULL;
++    int r;
++
++    pa_assert(name);
++
++    if (env && getenv(env))
++        return pa_config_parse(filename, f, t, proplist, true, userdata);
++
++    r = pa_config_parse(filename, f, t, proplist, false, userdata);
++    if (r < 0)
++        return r;
++
++    collect_drop_ins(&drop_ins, &n_drop_ins, PA_VENDOR_CONFIG_DIR, name);
++    collect_drop_ins(&drop_ins, &n_drop_ins, PA_RUNTIME_CONFIG_DIR, name);
++    collect_drop_ins(&drop_ins, &n_drop_ins, PA_DEFAULT_CONFIG_DIR, name);
++
++    if (local) {
++        if ((config_path = getenv("PULSE_CONFIG_PATH")))
++            collect_drop_ins(&drop_ins, &n_drop_ins, config_path, name);
++        else if ((home = pa_get_home_dir_malloc())) {
++            char *directory;
++
++            directory = pa_sprintf_malloc("%s" PA_PATH_SEP ".config" PA_PATH_SEP "pulse", home);
++            collect_drop_ins(&drop_ins, &n_drop_ins, directory, name);
++            pa_xfree(directory);
++
++            directory = pa_sprintf_malloc("%s" PA_PATH_SEP ".pulse", home);
++            collect_drop_ins(&drop_ins, &n_drop_ins, directory, name);
++            pa_xfree(directory);
++        }
++    }
++
++    if (n_drop_ins > 1)
++        qsort(drop_ins, n_drop_ins, sizeof(*drop_ins), compare_drop_ins);
++    for (i = 0; i < n_drop_ins; i++) {
++        pa_config_parse(drop_ins[i].path, NULL, t, proplist, false, userdata);
++        pa_xfree(drop_ins[i].name);
++        pa_xfree(drop_ins[i].path);
++    }
++
++    pa_xfree(home);
++    pa_xfree(drop_ins);
++    return r;
++#endif
++}
++
+ int pa_config_parse_int(pa_config_parser_state *state) {
+     int *i;
+     int32_t k;
+diff --git a/src/pulsecore/conf-parser.h b/src/pulsecore/conf-parser.h
+index 7dc0ff9..1bf2327 100644
+--- a/src/pulsecore/conf-parser.h
++++ b/src/pulsecore/conf-parser.h
+@@ -75,6 +75,8 @@ struct pa_config_parser_state {
+  * are not allowed at all in the configuration file. */
+ int pa_config_parse(const char *filename, FILE *f, const pa_config_item *t, pa_proplist *proplist, bool use_dot_d,
+                     void *userdata);
++int pa_config_parse_layered(const char *filename, FILE *f, const pa_config_item *t, pa_proplist *proplist,
++                            const char *name, const char *local, const char *env, void *userdata);
+ 
+ /* Generic parsers for integers, size_t, booleans and strings */
+ int pa_config_parse_int(pa_config_parser_state *state);
+diff --git a/src/pulsecore/core-util.c b/src/pulsecore/core-util.c
+index 5d2bae9..3ae543e 100644
+--- a/src/pulsecore/core-util.c
++++ b/src/pulsecore/core-util.c
+@@ -2085,6 +2085,122 @@ char *pa_find_config_file(const char *global, const char *local, const char *env
+     return NULL;
+ }
+ 
++/* Open a system configuration file according to the UAPI configuration file
++ * rules, while keeping PulseAudio's explicit and per-user paths ahead of the
++ * system paths. */
++FILE *pa_open_layered_config_file(const char *name, const char *local, const char *env, char **result) {
++#ifdef OS_IS_WIN32
++    char *global;
++    FILE *f;
++
++    global = pa_sprintf_malloc(PA_DEFAULT_CONFIG_DIR PA_PATH_SEP "%s", name);
++    f = pa_open_config_file(global, local, env, result);
++    pa_xfree(global);
++    return f;
++#else
++    const char *directories[] = {
++        PA_DEFAULT_CONFIG_DIR,
++        PA_RUNTIME_CONFIG_DIR,
++        PA_VENDOR_CONFIG_DIR,
++    };
++    FILE *f;
++    size_t i;
++
++    pa_assert(name);
++
++    if (env && getenv(env))
++        return pa_open_config_file(NULL, NULL, env, result);
++
++    if (local) {
++        f = pa_open_config_file(NULL, local, NULL, result);
++        if (f || errno != ENOENT)
++            return f;
++    }
++
++    for (i = 0; i < PA_ELEMENTSOF(directories); i++) {
++        char *path = pa_sprintf_malloc("%s" PA_PATH_SEP "%s", directories[i], name);
++        int saved_errno;
++
++        f = pa_fopen_cloexec(path, "r");
++        if (f) {
++            if (result)
++                *result = path;
++            else
++                pa_xfree(path);
++            return f;
++        }
++
++        saved_errno = errno;
++        if (saved_errno != ENOENT)
++            pa_log_warn("Failed to open configuration file '%s': %s", path, pa_cstrerror(saved_errno));
++        pa_xfree(path);
++        errno = saved_errno;
++
++        if (errno != ENOENT)
++            return NULL;
++    }
++
++    errno = ENOENT;
++    return NULL;
++#endif
++}
++
++char *pa_find_layered_config_file(const char *name, const char *local, const char *env) {
++#ifdef OS_IS_WIN32
++    char *global, *result;
++
++    global = pa_sprintf_malloc(PA_DEFAULT_CONFIG_DIR PA_PATH_SEP "%s", name);
++    result = pa_find_config_file(global, local, env);
++    pa_xfree(global);
++    return result;
++#else
++    const char *directories[] = {
++        PA_DEFAULT_CONFIG_DIR,
++        PA_RUNTIME_CONFIG_DIR,
++        PA_VENDOR_CONFIG_DIR,
++    };
++    size_t i;
++
++    pa_assert(name);
++
++    if (env && getenv(env))
++        return pa_find_config_file(NULL, NULL, env);
++
++    if (local) {
++        char *path = NULL;
++        FILE *f = pa_open_config_file(NULL, local, NULL, &path);
++
++        if (f) {
++            fclose(f);
++            return path;
++        }
++
++        if (errno != ENOENT)
++            return NULL;
++    }
++
++    for (i = 0; i < PA_ELEMENTSOF(directories); i++) {
++        char *path = pa_sprintf_malloc("%s" PA_PATH_SEP "%s", directories[i], name);
++        int saved_errno;
++
++        if (access(path, R_OK) == 0)
++            return path;
++
++        saved_errno = errno;
++        if (saved_errno != ENOENT)
++            pa_log_warn("Failed to access configuration file '%s': %s", path, pa_cstrerror(saved_errno));
++        pa_xfree(path);
++        errno = saved_errno;
++
++        if (errno != ENOENT)
++            return NULL;
++    }
++
++    errno = ENOENT;
++    return NULL;
++#endif
++}
++
+ /* Format the specified data as a hexademical string */
+ char *pa_hexstr(const uint8_t* d, size_t dlength, char *s, size_t slength) {
+     size_t i = 0, j = 0;
+diff --git a/src/pulsecore/core-util.h b/src/pulsecore/core-util.h
+index a69d53b..410aa33 100644
+--- a/src/pulsecore/core-util.h
++++ b/src/pulsecore/core-util.h
+@@ -137,6 +137,8 @@ bool pa_endswith(const char *s, const char *sfx) PA_GCC_PURE;
+ 
+ FILE *pa_open_config_file(const char *global, const char *local, const char *env, char **result);
+ char* pa_find_config_file(const char *global, const char *local, const char *env);
++FILE *pa_open_layered_config_file(const char *name, const char *local, const char *env, char **result);
++char *pa_find_layered_config_file(const char *name, const char *local, const char *env);
+ 
+ char *pa_get_runtime_dir(void);
+ char *pa_get_state_dir(void);
+diff --git a/pulseaudio-patch/src/tests/layered-config-test.c b/src/tests/layered-config-test.c
+new file mode 100644
+index 0000000..4ed0d59
+--- /dev/null
++++ b/src/tests/layered-config-test.c
+@@ -0,0 +1,261 @@
++/***
++  This file is part of PulseAudio.
++
++  PulseAudio is free software; you can redistribute it and/or modify
++  it under the terms of the GNU Lesser General Public License as published by
++  the Free Software Foundation; either version 2.1 of the License, or (at your
++  option) any later version.
++***/
++
++#ifdef HAVE_CONFIG_H
++#include <config.h>
++#endif
++
++#include <assert.h>
++#include <errno.h>
++#include <stdbool.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/stat.h>
++#include <unistd.h>
++
++#include <pulse/xmalloc.h>
++#include <pulsecore/conf-parser.h>
++#include <pulsecore/core-util.h>
++
++struct config_case {
++    const char *name;
++    const char *local;
++    const char *env;
++};
++
++static void make_directory(const char *path) {
++    char *copy, *p;
++
++    copy = strdup(path);
++    assert(copy);
++
++    for (p = copy + 1; *p; p++) {
++        if (*p != '/')
++            continue;
++
++        *p = '\0';
++        assert(mkdir(copy, 0700) == 0 || errno == EEXIST);
++        *p = '/';
++    }
++
++    assert(mkdir(copy, 0700) == 0 || errno == EEXIST);
++    free(copy);
++}
++
++static void write_file(const char *path, const char *contents) {
++    FILE *f;
++
++    f = fopen(path, "w");
++    assert(f);
++    assert(fputs(contents, f) >= 0);
++    assert(fclose(f) == 0);
++}
++
++static void assert_selected(const struct config_case *test, const char *expected_path,
++                            const char *expected_contents) {
++    char contents[128] = "";
++    char *path = NULL;
++    FILE *f;
++
++    f = pa_open_layered_config_file(test->name, test->local, test->env, &path);
++    assert(f);
++    assert(path);
++    assert(strcmp(path, expected_path) == 0);
++
++    if (expected_contents[0]) {
++        assert(fgets(contents, sizeof(contents), f));
++        assert(strcmp(contents, expected_contents) == 0);
++    } else
++        assert(fgetc(f) == EOF);
++
++    fclose(f);
++    pa_xfree(path);
++
++    path = pa_find_layered_config_file(test->name, test->local, test->env);
++    assert(path);
++    assert(strcmp(path, expected_path) == 0);
++    pa_xfree(path);
++}
++
++static void assert_missing(const struct config_case *test) {
++    char *path = NULL;
++
++    assert(!pa_open_layered_config_file(test->name, test->local, test->env, &path));
++    assert(!path);
++    assert(!pa_find_layered_config_file(test->name, test->local, test->env));
++}
++
++static void test_main_files(void) {
++    const struct config_case tests[] = {
++        { "client.conf", "client.conf", "PULSE_CLIENTCONFIG" },
++        { "daemon.conf", "/daemon.conf", "PULSE_CONFIG" },
++        { "default.pa", "/default.pa", "PULSE_SCRIPT" },
++        { "system.pa", NULL, "PULSE_SCRIPT" },
++    };
++    size_t i;
++
++    for (i = 0; i < PA_ELEMENTSOF(tests); i++) {
++        char admin[128], runtime[128], vendor[128];
++
++        assert(snprintf(admin, sizeof(admin), "/etc/pulse/%s", tests[i].name) > 0);
++        assert(snprintf(runtime, sizeof(runtime), "/run/pulse/%s", tests[i].name) > 0);
++        assert(snprintf(vendor, sizeof(vendor), "/usr/lib/pulse/%s", tests[i].name) > 0);
++
++        write_file(vendor, "vendor");
++        assert_selected(&tests[i], vendor, "vendor");
++
++        write_file(runtime, "runtime");
++        assert_selected(&tests[i], runtime, "runtime");
++
++        write_file(admin, "");
++        assert_selected(&tests[i], admin, "");
++
++        assert(unlink(admin) == 0);
++        assert(unlink(runtime) == 0);
++        assert(unlink(vendor) == 0);
++    }
++}
++
++static void test_user_and_environment_paths(void) {
++    const struct config_case client = { "client.conf", "client.conf", "PULSE_CLIENTCONFIG" };
++    const struct config_case tests[] = {
++        { "client.conf", "client.conf", "PULSE_CLIENTCONFIG" },
++        { "daemon.conf", "/daemon.conf", "PULSE_CONFIG" },
++        { "default.pa", "/default.pa", "PULSE_SCRIPT" },
++        { "system.pa", NULL, "PULSE_SCRIPT" },
++    };
++    size_t i;
++
++    write_file("/usr/lib/pulse/client.conf", "vendor");
++    write_file("/home/test/.config/pulse/client.conf", "modern-user");
++    assert_selected(&client, "/home/test/.config/pulse/client.conf", "modern-user");
++
++    write_file("/home/test/.pulse/client.conf", "legacy-user");
++    assert_selected(&client, "/home/test/.pulse/client.conf", "legacy-user");
++
++    write_file("/custom/client.conf", "config-path");
++    assert(setenv("PULSE_CONFIG_PATH", "/custom", 1) == 0);
++    assert_selected(&client, "/custom/client.conf", "config-path");
++    assert(unsetenv("PULSE_CONFIG_PATH") == 0);
++
++    assert(unlink("/home/test/.pulse/client.conf") == 0);
++    assert(unlink("/home/test/.config/pulse/client.conf") == 0);
++    assert(unlink("/custom/client.conf") == 0);
++    assert(unlink("/usr/lib/pulse/client.conf") == 0);
++
++    for (i = 0; i < PA_ELEMENTSOF(tests); i++) {
++        char explicit_path[128], vendor_path[128];
++
++        assert(snprintf(explicit_path, sizeof(explicit_path), "/explicit/%s", tests[i].name) > 0);
++        assert(snprintf(vendor_path, sizeof(vendor_path), "/usr/lib/pulse/%s", tests[i].name) > 0);
++        write_file(vendor_path, "vendor");
++        write_file(explicit_path, "explicit");
++
++        assert(setenv(tests[i].env, explicit_path, 1) == 0);
++        assert_selected(&tests[i], explicit_path, "explicit");
++        assert(unlink(explicit_path) == 0);
++        assert_missing(&tests[i]);
++        assert(unsetenv(tests[i].env) == 0);
++        assert(unlink(vendor_path) == 0);
++    }
++}
++
++static void test_layered_drop_ins(void) {
++    const struct config_case client = { "client.conf", "client.conf", "PULSE_CLIENTCONFIG" };
++    pa_config_item table[] = {
++        { "order", pa_config_parse_string, NULL, NULL },
++        { "shadow", pa_config_parse_string, NULL, NULL },
++        { "empty", pa_config_parse_string, NULL, NULL },
++        { "nullmask", pa_config_parse_string, NULL, NULL },
++        { NULL, NULL, NULL, NULL },
++    };
++    char *order = NULL, *shadow = NULL, *empty = NULL, *nullmask = NULL;
++    char *path = NULL;
++    FILE *f;
++
++    table[0].data = &order;
++    table[1].data = &shadow;
++    table[2].data = &empty;
++    table[3].data = &nullmask;
++
++    make_directory("/usr/lib/pulse/client.conf.d");
++    make_directory("/run/pulse/client.conf.d");
++    make_directory("/etc/pulse/client.conf.d");
++    make_directory("/home/test/.config/pulse/client.conf.d");
++
++    write_file("/usr/lib/pulse/client.conf",
++               "order=main\nshadow=main\nempty=main\nnullmask=main\n");
++    write_file("/usr/lib/pulse/client.conf.d/10-order.conf", "order=10\n");
++    write_file("/usr/lib/pulse/client.conf.d/90-order.conf", "order=90\n");
++    write_file("/usr/lib/pulse/client.conf.d/20-shadow.conf", "shadow=vendor\n");
++    write_file("/run/pulse/client.conf.d/20-shadow.conf", "shadow=runtime\n");
++    write_file("/etc/pulse/client.conf.d/20-shadow.conf", "shadow=admin\n");
++    write_file("/home/test/.config/pulse/client.conf.d/20-shadow.conf", "shadow=user\n");
++    write_file("/usr/lib/pulse/client.conf.d/30-empty.conf", "empty=vendor\n");
++    write_file("/etc/pulse/client.conf.d/30-empty.conf", "");
++    write_file("/usr/lib/pulse/client.conf.d/40-null.conf", "nullmask=vendor\n");
++    assert(symlink("/dev/null", "/run/pulse/client.conf.d/40-null.conf") == 0);
++
++    f = pa_open_layered_config_file(client.name, client.local, client.env, &path);
++    assert(f);
++    assert(pa_config_parse_layered(path, f, table, NULL, client.name, client.local, client.env, NULL) == 0);
++    fclose(f);
++    pa_xfree(path);
++
++    assert(strcmp(order, "90") == 0);
++    assert(strcmp(shadow, "user") == 0);
++    assert(strcmp(empty, "main") == 0);
++    assert(strcmp(nullmask, "main") == 0);
++    pa_xfree(order);
++    pa_xfree(shadow);
++    pa_xfree(empty);
++    pa_xfree(nullmask);
++
++    order = shadow = empty = nullmask = NULL;
++    make_directory("/explicit/client.conf.d");
++    write_file("/explicit/client.conf", "order=explicit-main\n");
++    write_file("/explicit/client.conf.d/10-explicit.conf", "order=explicit-drop-in\n");
++    write_file("/etc/pulse/client.conf.d/99-system.conf", "order=system\n");
++    assert(setenv("PULSE_CLIENTCONFIG", "/explicit/client.conf", 1) == 0);
++
++    f = pa_open_layered_config_file(client.name, client.local, client.env, &path);
++    assert(f);
++    assert(pa_config_parse_layered(path, f, table, NULL, client.name, client.local, client.env, NULL) == 0);
++    fclose(f);
++    pa_xfree(path);
++    assert(strcmp(order, "explicit-drop-in") == 0);
++    assert(!shadow && !empty && !nullmask);
++    pa_xfree(order);
++    assert(unsetenv("PULSE_CLIENTCONFIG") == 0);
++}
++
++int main(void) {
++    char root[] = "/tmp/pulse-layered-config-XXXXXX";
++
++    assert(mkdtemp(root));
++    assert(chroot(root) == 0);
++    assert(chdir("/") == 0);
++
++    make_directory("/etc/pulse");
++    make_directory("/dev");
++    make_directory("/run/pulse");
++    make_directory("/usr/lib/pulse");
++    make_directory("/home/test/.config/pulse");
++    make_directory("/home/test/.pulse");
++    make_directory("/custom");
++    make_directory("/explicit");
++    write_file("/dev/null", "");
++    assert(setenv("HOME", "/home/test", 1) == 0);
++
++    test_main_files();
++    test_user_and_environment_paths();
++    test_layered_drop_ins();
++    return 0;
++}
+diff --git a/src/tests/meson.build b/src/tests/meson.build
+index dceca55..066d7c2 100644
+--- a/src/tests/meson.build
++++ b/src/tests/meson.build
+@@ -10,6 +10,13 @@
+ default_tests = []
+ 
+ if get_option('client')
++  if host_machine.system() != 'windows'
++    default_tests += [
++      [ 'layered-config-test', 'layered-config-test.c',
++        [ libpulsecommon_dep ] ],
++    ]
++  endif
++
+   default_tests += [
+     [ 'channelmap-test', 'channelmap-test.c',
+       [ check_dep, libpulse_dep ] ],
+
+--
+2.50.1
