@@ -6,7 +6,7 @@ package:
   version: "257.5"
   description: System and Service Manager
   homepage: https://www.freedesktop.org/wiki/Software/systemd/
-  checksum: 31cd06e5d002a14306d61c5eb3d06a209045d118349b498b9fd9dd139b18b443
+  checksum: c9ca9f12fa799ce8632962dbb302578e239f1c04c7c1e3471d242af95dedb7ce
 
 sources:
 - name: systemd
@@ -83,7 +83,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [8222:3102, 20617:6711, 45541:8989, 70380:10542, 95136:12574, 115774:14547, 140565:47720, 173611:62125, 210963:62196, 230782:62879]
+  profile: [8222:3085, 20600:6730, 41226:8749, 70146:10774, 90932:12764, 115805:15301, 136469:51976, 173727:69583, 206898:69619, 226505:70369]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_systemd} -C "${WORK_DIR}" --strip-components=1
@@ -99,6 +99,7 @@ build:
       --sysconfdir=/etc \
       --localstatedir=/var \
       --buildtype=release \
+      -Dconfigfiledir=/usr/lib \
       -Dmode=release \
       -Ddefault-dnssec=no \
       -Dfirstboot=false \
@@ -113,6 +114,11 @@ build:
       -Dtranslations=true \
       -Danalyze=true \
       -Ddbuspolicydir=/usr/share/dbus-1/system.d \
+      -Dshellprofiledir=/usr/lib/profile.d \
+      -Dsshconfdir=/usr/lib/ssh/ssh_config.d \
+      -Dsysvinit-path= \
+      -Dsysvrcnd-path= \
+      -Dxinitrcdir=/usr/lib/X11/xinit/xinitrc.d \
       -Ddefault-hierarchy=unified \
       -Ddefault-kill-user-processes=false \
       -Ddefault-locale=C.UTF-8 \
@@ -130,8 +136,67 @@ build:
     ninja
     DESTDIR="${OUT_DIR}" ninja install
 
+    # Package defaults belong to the vendor trees. Keep /etc available for the
+    # machine owner without installing systemd's empty host templates there.
+    test ! -e "${OUT_DIR}/etc/environment"
+    rm "${OUT_DIR}/etc/xdg/systemd/user"
+    find "${OUT_DIR}/etc" -depth -type d -empty -delete
+    test ! -e "${OUT_DIR}/etc"
+
+    # Prove main-file replacement and same-name drop-in masking across the
+    # native systemd configuration hierarchy.
+    smoke_root="${WORK_DIR}/uapi-smoke-root"
+    smoke_output="${WORK_DIR}/uapi-smoke-output"
+    mkdir -p \
+      "${smoke_root}/usr/lib/systemd/system.conf.d" \
+      "${smoke_root}/run/systemd/system.conf.d" \
+      "${smoke_root}/etc/systemd/system.conf.d"
+
+    printf '[Manager]\n# uapi-test-vendor-main\n' \
+      > "${smoke_root}/usr/lib/systemd/system.conf"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib/systemd:${OUT_DIR}/usr/lib" \
+      "${OUT_DIR}/usr/bin/systemd-analyze" --root="${smoke_root}" \
+      cat-config systemd/system.conf > "${smoke_output}"
+    grep -q uapi-test-vendor-main "${smoke_output}"
+
+    printf '[Manager]\n# uapi-test-transient-main\n' \
+      > "${smoke_root}/run/systemd/system.conf"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib/systemd:${OUT_DIR}/usr/lib" \
+      "${OUT_DIR}/usr/bin/systemd-analyze" --root="${smoke_root}" \
+      cat-config systemd/system.conf > "${smoke_output}"
+    grep -q uapi-test-transient-main "${smoke_output}"
+    test "$(grep -c uapi-test-vendor-main "${smoke_output}")" -eq 0
+
+    printf '[Manager]\n# uapi-test-administrator-main\n' \
+      > "${smoke_root}/etc/systemd/system.conf"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib/systemd:${OUT_DIR}/usr/lib" \
+      "${OUT_DIR}/usr/bin/systemd-analyze" --root="${smoke_root}" \
+      cat-config systemd/system.conf > "${smoke_output}"
+    grep -q uapi-test-administrator-main "${smoke_output}"
+    test "$(grep -c uapi-test-transient-main "${smoke_output}")" -eq 0
+
+    printf '[Manager]\n# uapi-test-vendor-dropin\n' \
+      > "${smoke_root}/usr/lib/systemd/system.conf.d/50-tier.conf"
+    printf '[Manager]\n# uapi-test-transient-dropin\n' \
+      > "${smoke_root}/run/systemd/system.conf.d/50-tier.conf"
+    printf '[Manager]\n# uapi-test-administrator-dropin\n' \
+      > "${smoke_root}/etc/systemd/system.conf.d/50-tier.conf"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib/systemd:${OUT_DIR}/usr/lib" \
+      "${OUT_DIR}/usr/bin/systemd-analyze" --root="${smoke_root}" \
+      cat-config systemd/system.conf > "${smoke_output}"
+    grep -q uapi-test-administrator-dropin "${smoke_output}"
+    test "$(grep -c uapi-test-transient-dropin "${smoke_output}")" -eq 0
+    test "$(grep -c uapi-test-vendor-dropin "${smoke_output}")" -eq 0
+
+    : > "${smoke_root}/etc/systemd/system.conf.d/50-tier.conf"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib/systemd:${OUT_DIR}/usr/lib" \
+      "${OUT_DIR}/usr/bin/systemd-analyze" --root="${smoke_root}" \
+      cat-config systemd/system.conf > "${smoke_output}"
+    test "$(grep -c uapi-test-administrator-dropin "${smoke_output}")" -eq 0
+    test "$(grep -c uapi-test-transient-dropin "${smoke_output}")" -eq 0
+    test "$(grep -c uapi-test-vendor-dropin "${smoke_output}")" -eq 0
+
     # Create necessary directories
-    mkdir -p ${OUT_DIR}/etc/systemd/system
     mkdir -p ${OUT_DIR}/usr/lib/systemd/system
     mkdir -p ${OUT_DIR}/var/lib/systemd
 
@@ -275,12 +340,6 @@ outputs:
       - /usr/lib/libm.so.6
       - /usr/lib/systemd/libsystemd-shared-257.so
     - path: /usr/bin/run0
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/systemd/libsystemd-shared-257.so
-    - path: /usr/bin/runlevel
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
@@ -487,12 +546,6 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/systemd/libsystemd-shared-257.so
-    - path: /usr/bin/telinit
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/systemd/libsystemd-shared-257.so
     - path: /usr/bin/timedatectl
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -517,25 +570,6 @@ outputs:
 
   conf:
     files:
-    - path: /etc/X11/xinit/xinitrc.d/50-systemd-user.sh
-    - path: /etc/environment
-    - path: /etc/init.d/README
-    - path: /etc/profile.d/70-systemd-shell-extra.sh
-    - path: /etc/ssh/ssh_config.d/20-systemd-ssh-proxy.conf
-    - path: /etc/systemd/coredump.conf
-    - path: /etc/systemd/journald.conf
-    - path: /etc/systemd/logind.conf
-    - path: /etc/systemd/networkd.conf
-    - path: /etc/systemd/oomd.conf
-    - path: /etc/systemd/pstore.conf
-    - path: /etc/systemd/resolved.conf
-    - path: /etc/systemd/sleep.conf
-    - path: /etc/systemd/system.conf
-    - path: /etc/systemd/timesyncd.conf
-    - path: /etc/systemd/user.conf
-    - path: /etc/udev/iocost.conf
-    - path: /etc/udev/udev.conf
-    - path: /etc/xdg/systemd/user
     - path: /usr/share/dbus-1/system.d/org.freedesktop.hostname1.conf
     - path: /usr/share/dbus-1/system.d/org.freedesktop.locale1.conf
     - path: /usr/share/dbus-1/system.d/org.freedesktop.login1.conf
@@ -643,6 +677,7 @@ outputs:
 
   lib:
     files:
+    - path: /usr/lib/X11/xinit/xinitrc.d/50-systemd-user.sh
     - path: /usr/lib/environment.d/99-environment.conf
     - path: /usr/lib/kernel/install.conf
     - path: /usr/lib/kernel/install.d/50-depmod.install
@@ -719,6 +754,7 @@ outputs:
     - path: /usr/lib/modprobe.d/systemd.conf
     - path: /usr/lib/pam.d/systemd-run0
     - path: /usr/lib/pam.d/systemd-user
+    - path: /usr/lib/profile.d/70-systemd-shell-extra.sh
     - path: /usr/lib/security/pam_systemd.so
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -735,6 +771,7 @@ outputs:
       - /usr/lib/libcap.so.2
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/libpam.so.0
+    - path: /usr/lib/ssh/ssh_config.d/20-systemd-ssh-proxy.conf
     - path: /usr/lib/sysctl.d/50-coredump.conf
     - path: /usr/lib/sysctl.d/50-default.conf
     - path: /usr/lib/sysctl.d/50-pid-max.conf
@@ -756,6 +793,8 @@ outputs:
     - path: /usr/lib/systemd/catalog/systemd.sr.catalog
     - path: /usr/lib/systemd/catalog/systemd.zh_CN.catalog
     - path: /usr/lib/systemd/catalog/systemd.zh_TW.catalog
+    - path: /usr/lib/systemd/coredump.conf
+    - path: /usr/lib/systemd/journald.conf
     - path: /usr/lib/systemd/libsystemd-core-257.so
       needs:
       - /usr/lib/libc.so.6
@@ -777,6 +816,7 @@ outputs:
       - /usr/lib/libm.so.6
       - /usr/lib/libmount.so.1
       - /usr/lib/libpam.so.0
+    - path: /usr/lib/systemd/logind.conf
     - path: /usr/lib/systemd/network/80-6rd-tunnel.link
     - path: /usr/lib/systemd/network/80-6rd-tunnel.network
     - path: /usr/lib/systemd/network/80-auto-link-local.network.example
@@ -797,12 +837,14 @@ outputs:
     - path: /usr/lib/systemd/network/80-wifi-station.network.example
     - path: /usr/lib/systemd/network/89-ethernet.network.example
     - path: /usr/lib/systemd/network/99-default.link
+    - path: /usr/lib/systemd/networkd.conf
     - path: /usr/lib/systemd/ntp-units.d/80-systemd-timesync.list
+    - path: /usr/lib/systemd/oomd.conf
     - path: /usr/lib/systemd/portable/profile/default/service.conf
     - path: /usr/lib/systemd/portable/profile/nonetwork/service.conf
     - path: /usr/lib/systemd/portable/profile/strict/service.conf
     - path: /usr/lib/systemd/portable/profile/trusted/service.conf
-    - path: /usr/lib/systemd/profile.d/70-systemd-shell-extra.sh
+    - path: /usr/lib/systemd/pstore.conf
     - path: /usr/lib/systemd/repart/definitions/confext.repart.d/10-root.conf
     - path: /usr/lib/systemd/repart/definitions/confext.repart.d/20-root-verity.conf
     - path: /usr/lib/systemd/repart/definitions/confext.repart.d/30-root-verity-sig.conf
@@ -813,7 +855,8 @@ outputs:
     - path: /usr/lib/systemd/repart/definitions/sysext.repart.d/20-root-verity.conf
     - path: /usr/lib/systemd/repart/definitions/sysext.repart.d/30-root-verity-sig.conf
     - path: /usr/lib/systemd/resolv.conf
-    - path: /usr/lib/systemd/ssh_config.d/20-systemd-ssh-proxy.conf
+    - path: /usr/lib/systemd/resolved.conf
+    - path: /usr/lib/systemd/sleep.conf
     - path: /usr/lib/systemd/system-generators/systemd-debug-generator
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -844,11 +887,6 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/systemd/libsystemd-shared-257.so
-    - path: /usr/lib/systemd/system-generators/systemd-rc-local-generator
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/systemd/libsystemd-shared-257.so
     - path: /usr/lib/systemd/system-generators/systemd-run-generator
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -867,18 +905,13 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/systemd/libsystemd-shared-257.so
-    - path: /usr/lib/systemd/system-generators/systemd-sysv-generator
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/systemd/libsystemd-shared-257.so
     - path: /usr/lib/systemd/system-generators/systemd-tpm2-generator
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/systemd/libsystemd-shared-257.so
     - path: /usr/lib/systemd/system-preset/90-systemd.preset
+    - path: /usr/lib/systemd/system.conf
     - path: /usr/lib/systemd/system/autovt@.service
     - path: /usr/lib/systemd/system/basic.target
     - path: /usr/lib/systemd/system/blockdev@.target
@@ -909,7 +942,6 @@ outputs:
     - path: /usr/lib/systemd/system/getty.target
     - path: /usr/lib/systemd/system/getty@.service
     - path: /usr/lib/systemd/system/graphical.target
-    - path: /usr/lib/systemd/system/graphical.target.wants/systemd-update-utmp-runlevel.service
     - path: /usr/lib/systemd/system/halt.target
     - path: /usr/lib/systemd/system/hibernate.target
     - path: /usr/lib/systemd/system/hybrid-sleep.target
@@ -938,7 +970,6 @@ outputs:
     - path: /usr/lib/systemd/system/multi-user.target.wants/getty.target
     - path: /usr/lib/systemd/system/multi-user.target.wants/systemd-ask-password-wall.path
     - path: /usr/lib/systemd/system/multi-user.target.wants/systemd-logind.service
-    - path: /usr/lib/systemd/system/multi-user.target.wants/systemd-update-utmp-runlevel.service
     - path: /usr/lib/systemd/system/multi-user.target.wants/systemd-user-sessions.service
     - path: /usr/lib/systemd/system/network-online.target
     - path: /usr/lib/systemd/system/network-pre.target
@@ -952,22 +983,13 @@ outputs:
     - path: /usr/lib/systemd/system/proc-sys-fs-binfmt_misc.mount
     - path: /usr/lib/systemd/system/quotaon-root.service
     - path: /usr/lib/systemd/system/quotaon@.service
-    - path: /usr/lib/systemd/system/rc-local.service
     - path: /usr/lib/systemd/system/reboot.target
     - path: /usr/lib/systemd/system/remote-fs-pre.target
     - path: /usr/lib/systemd/system/remote-fs.target
     - path: /usr/lib/systemd/system/remote-fs.target.wants/var-lib-machines.mount
     - path: /usr/lib/systemd/system/rescue.service
     - path: /usr/lib/systemd/system/rescue.target
-    - path: /usr/lib/systemd/system/rescue.target.wants/systemd-update-utmp-runlevel.service
     - path: /usr/lib/systemd/system/rpcbind.target
-    - path: /usr/lib/systemd/system/runlevel0.target
-    - path: /usr/lib/systemd/system/runlevel1.target
-    - path: /usr/lib/systemd/system/runlevel2.target
-    - path: /usr/lib/systemd/system/runlevel3.target
-    - path: /usr/lib/systemd/system/runlevel4.target
-    - path: /usr/lib/systemd/system/runlevel5.target
-    - path: /usr/lib/systemd/system/runlevel6.target
     - path: /usr/lib/systemd/system/serial-getty@.service
     - path: /usr/lib/systemd/system/shutdown.target
     - path: /usr/lib/systemd/system/sigpwr.target
@@ -978,7 +1000,6 @@ outputs:
     - path: /usr/lib/systemd/system/sockets.target.wants/systemd-coredump.socket
     - path: /usr/lib/systemd/system/sockets.target.wants/systemd-creds.socket
     - path: /usr/lib/systemd/system/sockets.target.wants/systemd-hostnamed.socket
-    - path: /usr/lib/systemd/system/sockets.target.wants/systemd-initctl.socket
     - path: /usr/lib/systemd/system/sockets.target.wants/systemd-journald-dev-log.socket
     - path: /usr/lib/systemd/system/sockets.target.wants/systemd-journald.socket
     - path: /usr/lib/systemd/system/sockets.target.wants/systemd-sysext.socket
@@ -1053,8 +1074,6 @@ outputs:
     - path: /usr/lib/systemd/system/systemd-hostnamed.socket
     - path: /usr/lib/systemd/system/systemd-hwdb-update.service
     - path: /usr/lib/systemd/system/systemd-hybrid-sleep.service
-    - path: /usr/lib/systemd/system/systemd-initctl.service
-    - path: /usr/lib/systemd/system/systemd-initctl.socket
     - path: /usr/lib/systemd/system/systemd-journal-catalog-update.service
     - path: /usr/lib/systemd/system/systemd-journal-flush.service
     - path: /usr/lib/systemd/system/systemd-journald-audit.socket
@@ -1123,7 +1142,6 @@ outputs:
     - path: /usr/lib/systemd/system/systemd-udevd-kernel.socket
     - path: /usr/lib/systemd/system/systemd-udevd.service
     - path: /usr/lib/systemd/system/systemd-update-done.service
-    - path: /usr/lib/systemd/system/systemd-update-utmp-runlevel.service
     - path: /usr/lib/systemd/system/systemd-update-utmp.service
     - path: /usr/lib/systemd/system/systemd-user-sessions.service
     - path: /usr/lib/systemd/system/systemd-vconsole-setup.service
@@ -1213,12 +1231,6 @@ outputs:
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/systemd/libsystemd-shared-257.so
     - path: /usr/lib/systemd/systemd-hostnamed
-      needs:
-      - /usr/lib/ld-linux-x86-64.so.2
-      - /usr/lib/libc.so.6
-      - /usr/lib/libgcc_s.so.1
-      - /usr/lib/systemd/libsystemd-shared-257.so
-    - path: /usr/lib/systemd/systemd-initctl
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
@@ -1489,6 +1501,7 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/systemd/timesyncd.conf
     - path: /usr/lib/systemd/ukify
     - path: /usr/lib/systemd/user-environment-generators/30-systemd-environment-d-generator
       needs:
@@ -1503,6 +1516,7 @@ outputs:
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/systemd/libsystemd-shared-257.so
     - path: /usr/lib/systemd/user-preset/90-systemd.preset
+    - path: /usr/lib/systemd/user.conf
     - path: /usr/lib/systemd/user/app.slice
     - path: /usr/lib/systemd/user/background.slice
     - path: /usr/lib/systemd/user/basic.target
@@ -1525,7 +1539,6 @@ outputs:
     - path: /usr/lib/systemd/user/systemd-tmpfiles-setup.service
     - path: /usr/lib/systemd/user/timers.target
     - path: /usr/lib/systemd/user/xdg-desktop-autostart.target
-    - path: /usr/lib/tmpfiles.d/20-systemd-shell-extra.conf
     - path: /usr/lib/tmpfiles.d/20-systemd-ssh-generator.conf
     - path: /usr/lib/tmpfiles.d/20-systemd-stub.conf
     - path: /usr/lib/tmpfiles.d/README
@@ -1577,6 +1590,7 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/udev/iocost.conf
     - path: /usr/lib/udev/mtd_probe
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -1627,6 +1641,7 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/systemd/libsystemd-shared-257.so
+    - path: /usr/lib/udev/udev.conf
     - path: /usr/lib/udev/v4l_id
       needs:
       - /usr/lib/ld-linux-x86-64.so.2

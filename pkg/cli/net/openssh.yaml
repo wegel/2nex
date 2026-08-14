@@ -6,7 +6,7 @@ package:
   version: 9.9p1
   description: OpenSSH SSH client and server
   homepage: https://www.openssh.com/
-  checksum: 94fdcad0a71cc7806ed6b4b44ef5de73f6a76a43b6ef3c1408e2bcc380d77190
+  checksum: 240e0506c3d8b34a88eb7f6d64602386960f9fbc62a959ed983bdd0e44619f1b
 
 sources:
 - name: openssh
@@ -54,10 +54,12 @@ dependencies:
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: openssl
   commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: linux-pam
+  commit: x86_64/pkg/libs/security/linux-pam/1.7.1/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [8226:43987, 29443:206217, 63336:208505, 103144:209039, 139777:209734, 174048:210122, 205926:210535, 260481:211447, 311231:211783, 343059:228040]
+  profile: [8227:5555, 28944:23975, 62499:23980, 103846:24067, 141811:24205, 176434:24360, 208918:24451, 258363:24665, 314181:24965, 343556:27741]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_openssh} -C "${WORK_DIR}" --strip-components=1
@@ -74,6 +76,7 @@ build:
       --with-default-path=/usr/bin \
       --with-superuser-path=/usr/bin \
       --with-pid-dir=/run \
+      --with-pam \
       --with-ssl-dir=/usr \
       --disable-strip
 
@@ -85,7 +88,7 @@ build:
     rmdir ${OUT_DIR}/usr/sbin
 
     # install systemd service files
-    install -v -m644 -D contrib/sshd.pam.generic ${OUT_DIR}/etc/pam.d/sshd
+    install -v -m644 -D contrib/sshd.pam.generic ${OUT_DIR}/usr/lib/pam.d/sshd
 
     # create systemd unit file for sshd
     mkdir -p ${OUT_DIR}/usr/lib/systemd/system
@@ -210,17 +213,18 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcrypto.so.3
+      - /usr/lib/libpam.so.0
       - /usr/lib/libz.so.1
 
   conf:
     files:
-    - path: /etc/pam.d/sshd
     - path: /etc/ssh/moduli
     - path: /etc/ssh/ssh_config
     - path: /etc/ssh/sshd_config
 
   lib:
     files:
+    - path: /usr/lib/pam.d/sshd
     - path: /usr/lib/systemd/system/sshd-keygen.service
     - path: /usr/lib/systemd/system/sshd.service
     - path: /var/lib/sshd/.keep
@@ -246,5 +250,6 @@ outputs:
 resolution:
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
+  /usr/lib/libpam.so.0: linux-pam
   /usr/lib/libcrypto.so.3: openssl
   /usr/lib/libz.so.1: zlib

@@ -97,13 +97,13 @@ files:
 # systemd
 - path: /etc/systemd/network/80-dhcp.network
   mode: 420
-  replace: true
   content: |
     [Match]
     Name=nex-networkd-disabled
 
     [Network]
     DHCP=no
+  replace: true
 
 - path: /etc/systemd/system/systemd-networkd.service
   symlink: /dev/null
@@ -189,7 +189,7 @@ files:
     echo "$1 $2"
 
 # PAM
-- path: /etc/pam.d/system-auth
+- path: /usr/share/factory/etc/pam.d/system-auth
   mode: 420
   content: |
     auth      sufficient pam_unix.so nullok
@@ -205,6 +205,7 @@ files:
     -session  optional   pam_loginuid.so
     session   required   pam_systemd.so
     session   required   pam_unix.so
+  replace: true
 
 - path: /etc/pam.d/login
   mode: 420
@@ -214,13 +215,14 @@ files:
     password   include   system-auth
     session    include   system-auth
 
-- path: /etc/pam.d/other
+- path: /usr/share/factory/etc/pam.d/other
   mode: 420
   content: |
     auth      required pam_deny.so
     account   required pam_deny.so
     password  required pam_deny.so
     session   required pam_deny.so
+  replace: true
 
 # user dotfiles
 - path: /home/testuser/.zshrc
@@ -309,13 +311,13 @@ files:
     export XDG_RUNTIME_DIR=/run/user/0
 
 - path: /root
-  directory: true
   mode: 448
+  directory: true
 
 # directories
 - path: /var/lib/sshd
-  directory: true
   mode: 448
+  directory: true
 
 # symlinks
 - path: /var/run
@@ -576,3 +578,4 @@ files:
   content: |
     [org.gnome.TextEditor]
     spellcheck=false
+

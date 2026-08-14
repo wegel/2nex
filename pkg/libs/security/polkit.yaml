@@ -6,7 +6,7 @@ package:
   version: "124"
   description: Application authorization framework
   homepage: https://gitlab.freedesktop.org/polkit/polkit
-  checksum: 84e6f2bf54833a743fe49edd0c789ff872f7890c902fd83cb1d783d482c3642c
+  checksum: 43ec084dcc577a49ca9dfcf7ac211f06a9529460668b24bc229171364a786727
 
 sources:
 - name: polkit
@@ -73,7 +73,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4119:95994, 12361:141388, 20672:161980, 33043:194730, 45535:212456, 57890:227277, 66112:232760, 82734:242252, 99372:248707, 109587:251807]
+  profile: [4098:940, 12321:1285, 20658:1319, 33077:1338, 45494:1344, 57912:1377, 66229:1377, 82888:1399, 99549:1402, 109603:2875]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_polkit} -C "${WORK_DIR}" --strip-components=1
@@ -87,7 +87,7 @@ build:
       --buildtype=release \
       -Dsession_tracking=libsystemd-login \
       -Dauthfw=pam \
-      -Dpam_prefix=/etc/pam.d \
+      -Dpam_prefix=/usr/lib/pam.d \
       -Dos_type=lfs \
       -Djs_engine=duktape \
       -Dexamples=false \
@@ -114,6 +114,12 @@ bundles:
   - dev
   - lib
   - locale
+  - misc
+
+  runtime:
+  - bin
+  - conf
+  - lib
   - misc
 
 outputs:
@@ -154,7 +160,6 @@ outputs:
 
   conf:
     files:
-    - path: /etc/pam.d/polkit-1
     - path: /usr/share/dbus-1/system.d/org.freedesktop.PolicyKit1.conf
 
   dev:
@@ -234,6 +239,7 @@ outputs:
       - /usr/lib/libglib-2.0.so.0
       - /usr/lib/libgobject-2.0.so.0
       - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/pam.d/polkit-1
     - path: /usr/lib/polkit-1/polkit-agent-helper-1
       needs:
       - /usr/lib/ld-linux-x86-64.so.2

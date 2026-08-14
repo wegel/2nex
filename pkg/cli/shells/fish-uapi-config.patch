@@ -1,0 +1,27 @@
+From: Nex package maintainers
+Subject: [PATCH] config: add the transient UAPI configuration tier
+Source: Nex
+Upstream: not submitted; suitable for upstream review
+
+Fish already combines user, administrator, and vendor conf.d directories by
+filename, with the first directory winning and empty files acting as masks.
+Add /run/fish/conf.d between the administrator and vendor directories so a
+machine can apply temporary configuration without changing /etc or /usr.
+
+diff --git a/share/config.fish b/share/config.fish
+--- a/share/config.fish
++++ b/share/config.fish
+@@ -214,9 +214,11 @@ if status is-interactive || set -qgx __fish_force_load_default_theme
+ end
+ 
+ # As last part of initialization, source the conf directories.
+-# Implement precedence (User > Admin > Extra (e.g. vendors) > Fish) by basically doing "basename".
++# Implement precedence (User > Admin > Transient > Extra (e.g. vendors) > Fish)
++# by basically doing "basename".
++set -l __fish_runtime_confdir /run/fish/conf.d
+ set -l sourcelist
+-for file in $__fish_config_dir/conf.d/*.fish $__fish_sysconf_dir/conf.d/*.fish $__fish_vendor_confdirs/*.fish
++for file in $__fish_config_dir/conf.d/*.fish $__fish_sysconf_dir/conf.d/*.fish $__fish_runtime_confdir/*.fish $__fish_vendor_confdirs/*.fish
+     set -l basename (string replace -r '^.*/' '' -- $file)
+     contains -- $basename $sourcelist
+     and continue

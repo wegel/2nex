@@ -6,7 +6,7 @@ package:
   version: 4.15.1
   description: Shadow password file utilities
   homepage: https://github.com/shadow-maint/shadow
-  checksum: deb0819430b3c9a27d9044985711525b0d36ed574aa09461d57c2f0c8c6c0e50
+  checksum: 90a26bb7253e052daf3e545cb709724afe5395b06d91bc92ff8702e570503a2b
 
 sources:
 - name: shadow
@@ -75,7 +75,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4104:851, 8256:3609, 12372:5342, 16468:6028, 24695:6927, 28800:8252, 32938:8355, 41416:8436, 49724:8513, 52453:8940]
+  profile: [4104:945, 8256:3601, 12372:5327, 16468:6005, 24692:6921, 28800:8191, 32938:8302, 41416:8382, 49802:8458, 52453:8865]
 
   script: |
     set -eu
@@ -127,6 +127,8 @@ build:
       "${OUT_DIR}/etc/login.defs" \
       "${OUT_DIR}/usr/lib/login.defs"
     rm "${OUT_DIR}/etc/login.defs"
+    mkdir -p "${OUT_DIR}/usr/lib"
+    mv "${OUT_DIR}/etc/pam.d" "${OUT_DIR}/usr/lib/pam.d"
 
     prepare_smoke_root() {
       smoke_root="$1"
@@ -203,20 +205,22 @@ build:
 bundles:
   dev:
   - bin
-  - conf
   - dev
   - lib
   - static
 
   full:
   - bin
-  - conf
   - dev
   - lib
   - locale
   - man
   - man
   - static
+
+  runtime:
+  - bin
+  - lib
 
 outputs:
   bin:
@@ -412,17 +416,6 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libeconf.so.0
 
-  conf:
-    files:
-    - path: /etc/pam.d/chfn
-    - path: /etc/pam.d/chpasswd
-    - path: /etc/pam.d/chsh
-    - path: /etc/pam.d/groupmems
-    - path: /etc/pam.d/login
-    - path: /etc/pam.d/newusers
-    - path: /etc/pam.d/passwd
-    - path: /etc/pam.d/su
-
   dev:
     files:
     - path: /usr/include/shadow/subid.h
@@ -440,6 +433,14 @@ outputs:
       needs:
       - /usr/lib/libc.so.6
     - path: /usr/lib/login.defs
+    - path: /usr/lib/pam.d/chfn
+    - path: /usr/lib/pam.d/chpasswd
+    - path: /usr/lib/pam.d/chsh
+    - path: /usr/lib/pam.d/groupmems
+    - path: /usr/lib/pam.d/login
+    - path: /usr/lib/pam.d/newusers
+    - path: /usr/lib/pam.d/passwd
+    - path: /usr/lib/pam.d/su
 
   locale:
     files:

@@ -93,6 +93,13 @@ assert_contains systemd-analyze 257.5 systemd-analyze --version
 assert_contains python 3.12.2 python3 --version
 assert_contains lsusb-python Usage /usr/bin/lsusb.py --help
 
+[[ -f /usr/lib/login.defs ]] || fail "Shadow vendor login.defs is missing"
+[[ -f /usr/lib/pam.d/login ]] || fail "Shadow vendor PAM policy is missing"
+[[ -f /usr/lib/pam.d/sshd ]] || fail "OpenSSH vendor PAM policy is missing"
+[[ ! -e /etc/login.defs ]] || fail "Shadow installed a package default in /etc"
+[[ ! -e /etc/pam.d ]] || fail "a package installed PAM service policy in /etc"
+printf 'PASS: vendor account and PAM policy\n'
+
 [[ "$(locale charmap)" == UTF-8 ]] || fail "locale charmap is not UTF-8"
 locale -a | grep -Fx en_GB.UTF-8 >/dev/null || fail "en_GB.UTF-8 is not generated"
 printf 'PASS: en_GB locale\n'

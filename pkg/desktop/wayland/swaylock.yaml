@@ -6,7 +6,7 @@ package:
   version: 1.7.2
   description: Screen locker for Wayland
   homepage: https://github.com/swaywm/swaylock
-  checksum: 5bd26da77d4724b7f445fab00810f26ca3d1cb6c3f6225aa48517ab9ed62f567
+  checksum: 883fb2383f9c011646571b6651528802b0ce2d6105fa7cc6183ce89e47cf612a
 
 sources:
 - name: swaylock
@@ -96,10 +96,12 @@ dependencies:
   commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
 - name: scdoc
   commit: x86_64/pkg/dev/tools/scdoc/1.11.4/bundles/dev
+- name: linux-pam
+  commit: x86_64/pkg/libs/security/linux-pam/1.7.1/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [3869:2623]
+  profile: [3662:1526]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_swaylock} -C "${WORK_DIR}" --strip-components=1
@@ -111,11 +113,17 @@ build:
       --prefix=/usr \
       --buildtype=release \
       --pkg-config-path=/usr/lib/pkgconfig:/usr/share/pkgconfig \
-      -Dpam=disabled \
+      -Dpam=enabled \
       -Dgdk-pixbuf=enabled
 
     ninja -C build
     DESTDIR=${OUT_DIR} ninja -C build install
+
+    install -Dm644 \
+      "${OUT_DIR}/etc/pam.d/swaylock" \
+      "${OUT_DIR}/usr/lib/pam.d/swaylock"
+    rm "${OUT_DIR}/etc/pam.d/swaylock"
+    rmdir "${OUT_DIR}/etc/pam.d" "${OUT_DIR}/etc"
 
     strip --strip-unneeded ${OUT_DIR}/usr/bin/swaylock
 
@@ -124,6 +132,11 @@ build:
 bundles:
   dev:
   - bin
+  - lib
+
+  runtime:
+  - bin
+  - lib
 
 outputs:
   bin:
@@ -136,12 +149,13 @@ outputs:
       - /usr/lib/libcrypt.so.2
       - /usr/lib/libgdk_pixbuf-2.0.so.0
       - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpam.so.0
       - /usr/lib/libwayland-client.so.0
       - /usr/lib/libxkbcommon.so.0
 
-  conf:
+  lib:
     files:
-    - path: /etc/pam.d/swaylock
+    - path: /usr/lib/pam.d/swaylock
 
   man:
     files:
@@ -161,4 +175,5 @@ resolution:
   /usr/lib/libc.so.6: glibc
   /usr/lib/libcrypt.so.2: libxcrypt
   /usr/lib/libxkbcommon.so.0: libxkbcommon
+  /usr/lib/libpam.so.0: linux-pam
   /usr/lib/libwayland-client.so.0: wayland
