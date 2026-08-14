@@ -1,0 +1,82 @@
+From: Nex package maintainers
+Subject: [PATCH] lib: read the full UAPI configuration hierarchy
+Source: Nex
+Upstream: not submitted; suitable for upstream review
+
+Shadow's libeconf support calls the deprecated econf_readDirs interface. That
+interface receives only the vendor and administrator paths, so it cannot read
+the transient /run path required by the UAPI configuration-file specification.
+
+Use econf_readConfig, which searches the vendor, transient, and administrator
+locations and implements main-file replacement, drop-ins, and masks. Preserve
+the --prefix behavior by passing the prefix through libeconf's ROOT_PREFIX
+option instead of constructing only the vendor and administrator paths.
+
+diff --git a/lib/getdef.c b/lib/getdef.c
+index cb62869..268a30c 100644
+--- a/lib/getdef.c
++++ b/lib/getdef.c
+@@ -151,12 +151,12 @@ static struct itemdef knowndef_table[] = {
+ };
+ 
+ #ifdef USE_ECONF
++static const char* rootprefix = NULL;
+ #ifdef VENDORDIR
+ static const char* vendordir = VENDORDIR;
+ #else
+ static const char* vendordir = NULL;
+ #endif
+-static const char* sysconfdir = "/etc";
+ #else
+ #ifndef LOGINDEFS
+ #define LOGINDEFS "/etc/login.defs"
+@@ -427,14 +427,7 @@ static /*@observer@*/ /*@null@*/struct itemdef *def_find (const char *name, cons
+ void setdef_config_file (const char* file)
+ {
+ #ifdef USE_ECONF
+-	char  *cp;
+-
+-	xasprintf(&cp, "%s/%s", file, sysconfdir);
+-	sysconfdir = cp;
+-#ifdef VENDORDIR
+-	xasprintf(&cp, "%s/%s", file, vendordir);
+-	vendordir = cp;
+-#endif
++	rootprefix = file;
+ #else
+ 	def_fname = file;
+ #endif
+@@ -451,6 +443,7 @@ static void def_load (void)
+ 	econf_err error;
+ 	char **keys;
+ 	size_t key_number;
++	char *options = NULL;
+ 
+ 	/*
+ 	 * Set the initialized flag.
+@@ -459,7 +452,24 @@ static void def_load (void)
+ 	 */
+ 	def_loaded = true;
+ 
+-	error = econf_readDirs (&defs_file, vendordir, sysconfdir, "login", "defs", " \t", "#");
++	if (rootprefix != NULL) {
++		xasprintf(&options, "ROOT_PREFIX=%s", rootprefix);
++		error = econf_newKeyFile_with_options(&defs_file, options);
++		free(options);
++		if (error) {
++			SYSLOG ((LOG_CRIT, "cannot initialize login definitions [%s]",
++				econf_errString(error)));
++			exit (EXIT_FAILURE);
++		}
++	}
++
++	error = econf_readConfig (&defs_file,
++	                          NULL,
++	                          vendordir,
++	                          "login",
++	                          "defs",
++	                          " \t",
++	                          "#");
+ 	if (error) {
+ 		if (error == ECONF_NOFILE)
+ 			return;

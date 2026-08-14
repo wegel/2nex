@@ -6,7 +6,7 @@ package:
   version: 4.15.1
   description: Shadow password file utilities
   homepage: https://github.com/shadow-maint/shadow
-  checksum: 939be6b7c81d6fbfbbfec410490bc4de41fe07091398fcdf3833d212fd048c16
+  checksum: deb0819430b3c9a27d9044985711525b0d36ed574aa09461d57c2f0c8c6c0e50
 
 sources:
 - name: shadow
@@ -21,6 +21,9 @@ sources:
 - name: 0003-Add-Arch-Linux-defaults-for-login.defs.patch
   url: https://gitlab.archlinux.org/archlinux/packaging/packages/shadow/-/raw/e8ce898b2b59739cea8e8e5a94cf9e2993f26a0a/0003-Add-Arch-Linux-defaults-for-login.defs.patch
   sha256: 11549cd64a218332dfa712853bb4618c58f8c1c09d7fbc90e2323e0c7bae3bf2
+- name: uapi_config
+  file: pkg/core/userland/shadow-uapi-config.patch
+  sha256: 46db293eb886fae5db4f7b15f70e702fab16d007b1d2a34a3ab792f5a68f977c
 
 dependencies:
 - name: glibc
@@ -67,18 +70,22 @@ dependencies:
   commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
 - name: linux-pam
   commit: x86_64/pkg/libs/security/linux-pam/1.7.1/bundles/dev
+- name: libeconf
+  commit: x86_64/pkg/libs/system/libeconf/0.8.4/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4101:1377, 8228:4136, 12327:5854, 16435:6498, 24680:8700, 28828:8807, 32940:8898, 41160:8986, 49701:9069, 51833:9437]
+  profile: [4104:851, 8256:3609, 12372:5342, 16468:6028, 24695:6927, 28800:8252, 32938:8355, 41416:8436, 49724:8513, 52453:8940]
 
   script: |
+    set -eu
     tar --no-same-owner -xf ${SOURCE_shadow} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
     patch --batch --fuzz=0 -Np1 -i /${SOURCE1}
     patch --batch --fuzz=0 -Np1 -i /${SOURCE2}
     patch --batch --fuzz=0 -Np1 -i /${SOURCE3}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     sed -i "s/groups\$(EXEEXT) //" src/Makefile.in
     find man -name Makefile.in -exec sed -i "s/groups\.1 / /"   {} \;
@@ -97,6 +104,7 @@ build:
     ./configure \
       --bindir=/usr/bin \
       --disable-account-tools-setuid \
+      --enable-vendordir=/usr/lib \
       --libdir=/usr/lib \
       --mandir=/usr/share/man \
       --prefix=/usr \
@@ -114,6 +122,77 @@ build:
     sed -i -e "s/ -shared / -Wl,-O1,--as-needed\0/g" libtool
     make DESTDIR="${OUT_DIR}" install
     make DESTDIR="${OUT_DIR}" -C man install
+
+    install -Dm644 \
+      "${OUT_DIR}/etc/login.defs" \
+      "${OUT_DIR}/usr/lib/login.defs"
+    rm "${OUT_DIR}/etc/login.defs"
+
+    prepare_smoke_root() {
+      smoke_root="$1"
+      mkdir -p \
+        "${smoke_root}/etc" \
+        "${smoke_root}/run" \
+        "${smoke_root}/usr/lib"
+      printf 'root:x:0:0:root:/root:/usr/bin/bash\n' > "${smoke_root}/etc/passwd"
+      printf 'root:x:0:\n' > "${smoke_root}/etc/group"
+      printf 'root:*:19723:0:99999:7:::\n' > "${smoke_root}/etc/shadow"
+      printf 'root:*::\n' > "${smoke_root}/etc/gshadow"
+    }
+
+    write_smoke_login_defs() {
+      defs_path="$1"
+      uid_min="$2"
+      mkdir -p "$(dirname "${defs_path}")"
+      printf '%s\n' \
+        "UID_MIN ${uid_min}" \
+        'UID_MAX 60000' \
+        'GID_MIN 1000' \
+        'GID_MAX 60000' \
+        'CREATE_HOME no' \
+        'USERGROUPS_ENAB no' \
+        'SUB_UID_COUNT 0' \
+        'SUB_GID_COUNT 0' \
+        > "${defs_path}"
+    }
+
+    assert_smoke_uid() {
+      smoke_root="$1"
+      account_name="$2"
+      expected_uid="$3"
+      "${OUT_DIR}/usr/bin/useradd" \
+        --prefix "${smoke_root}" \
+        --no-create-home \
+        --no-user-group \
+        --gid 0 \
+        "${account_name}"
+      actual_uid="$(awk -F: -v name="${account_name}" '$1 == name { print $3 }' "${smoke_root}/etc/passwd")"
+      test "${actual_uid}" = "${expected_uid}"
+    }
+
+    vendor_smoke="${WORK_DIR}/uapi-vendor-smoke"
+    prepare_smoke_root "${vendor_smoke}"
+    write_smoke_login_defs "${vendor_smoke}/usr/lib/login.defs" 2100
+    assert_smoke_uid "${vendor_smoke}" vendor-user 2100
+
+    run_smoke="${WORK_DIR}/uapi-run-smoke"
+    prepare_smoke_root "${run_smoke}"
+    write_smoke_login_defs "${run_smoke}/usr/lib/login.defs" 2100
+    write_smoke_login_defs "${run_smoke}/run/login.defs" 2200
+    assert_smoke_uid "${run_smoke}" run-user 2200
+
+    admin_smoke="${WORK_DIR}/uapi-admin-smoke"
+    prepare_smoke_root "${admin_smoke}"
+    write_smoke_login_defs "${admin_smoke}/usr/lib/login.defs" 2100
+    write_smoke_login_defs "${admin_smoke}/run/login.defs" 2200
+    write_smoke_login_defs "${admin_smoke}/etc/login.defs" 2300
+    assert_smoke_uid "${admin_smoke}" admin-user 2300
+
+    dropin_smoke="${WORK_DIR}/uapi-dropin-smoke"
+    prepare_smoke_root "${dropin_smoke}"
+    write_smoke_login_defs "${dropin_smoke}/usr/lib/login.defs" 2100
+    write_smoke_login_defs "${dropin_smoke}/etc/login.defs.d/90-local.defs" 2400
+    assert_smoke_uid "${dropin_smoke}" dropin-user 2400
 
     rm ${OUT_DIR}/usr/sbin
 
@@ -146,10 +225,12 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/chfn
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
       - /usr/lib/libpam.so.0
       - /usr/lib/libpam_misc.so.0
     - path: /usr/bin/chgpasswd
@@ -157,16 +238,19 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcrypt.so.2
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/chpasswd
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcrypt.so.2
+      - /usr/lib/libeconf.so.0
       - /usr/lib/libpam.so.0
     - path: /usr/bin/chsh
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
       - /usr/lib/libpam.so.0
       - /usr/lib/libpam_misc.so.0
     - path: /usr/bin/expiry
@@ -187,40 +271,49 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcrypt.so.2
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/groupadd
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/groupdel
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/groupmems
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
       - /usr/lib/libpam.so.0
       - /usr/lib/libpam_misc.so.0
     - path: /usr/bin/groupmod
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/grpck
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/grpconv
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/grpunconv
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/login
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
       - /usr/lib/libpam.so.0
       - /usr/lib/libpam_misc.so.0
     - path: /usr/bin/logoutd
@@ -231,19 +324,23 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/newgrp
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcrypt.so.2
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/newuidmap
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/newusers
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
       - /usr/lib/libpam.so.0
     - path: /usr/bin/nologin
       needs:
@@ -254,29 +351,35 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcrypt.so.2
+      - /usr/lib/libeconf.so.0
       - /usr/lib/libpam.so.0
       - /usr/lib/libpam_misc.so.0
     - path: /usr/bin/pwck
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/pwconv
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/pwunconv
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/sg
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcrypt.so.2
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/su
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
       - /usr/lib/libpam.so.0
       - /usr/lib/libpam_misc.so.0
     - path: /usr/bin/useradd
@@ -285,28 +388,32 @@ outputs:
       - /usr/lib/libacl.so.1
       - /usr/lib/libattr.so.1
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/userdel
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/usermod
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libacl.so.1
       - /usr/lib/libattr.so.1
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/vigr
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
     - path: /usr/bin/vipw
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
 
   conf:
     files:
-    - path: /etc/login.defs
     - path: /etc/pam.d/chfn
     - path: /etc/pam.d/chpasswd
     - path: /etc/pam.d/chsh
@@ -332,6 +439,7 @@ outputs:
     - path: /usr/lib/libsubid.so.4.0.0
       needs:
       - /usr/lib/libc.so.6
+    - path: /usr/lib/login.defs
 
   locale:
     files:
@@ -796,6 +904,7 @@ resolution:
   /usr/lib/libattr.so.1: attr
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
+  /usr/lib/libeconf.so.0: libeconf
   /usr/lib/libcrypt.so.2: libxcrypt
   /usr/lib/libpam.so.0: linux-pam
   /usr/lib/libpam_misc.so.0: linux-pam
