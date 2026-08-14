@@ -19,7 +19,7 @@ TIMEOUT_SECS="${TIMEOUT_SECS:-300}"
 SSH_PORT="${SSH_PORT:-10024}"
 MEMORY="${MEMORY:-6G}"
 SMP="${SMP:-4}"
-LINUX_BOOT_REF="${LINUX_BOOT_REF:-x86_64/pkg/core/kernel/linux/6.12.58/outputs/boot}"
+LINUX_BOOT_REF="${LINUX_BOOT_REF:-x86_64/pkg/core/kernel/linux/6.18.24/outputs/boot}"
 INITRAMFS_BOOT_REF="${INITRAMFS_BOOT_REF:-x86_64/pkg/core/kernel/initramfs/1.0.0/outputs/boot}"
 
 WORK_DIR="$TMP_DIR/graphical-smoke"

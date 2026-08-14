@@ -9,17 +9,18 @@ if [ -z "${SKIP_PREPARE:-}" ]; then
 fi
 
 echo "=== building kernel ==="
-time ./nex build pkg/core/kernel/linux.yaml --update-checksum --record-profile --verbose --force
+time ./nex build pkg/core/kernel/linux.yaml \
+	--single --update-checksum --record-profile --verbose --force
 
 echo "=== extracting checksum ==="
 checksum=$(grep "checksum:" pkg/core/kernel/linux.yaml | awk '{print $2}')
+version=$(awk '$1 == "version:" { print $2; exit }' pkg/core/kernel/linux.yaml)
 echo "checksum: $checksum"
+echo "version: $version"
 
 echo "=== categorizing modules ==="
-zub ls-tree -r "x86_64/pkg/core/kernel/linux/6.12.58/${checksum}/files" \
-    | grep '\.ko' \
-    | awk '{print $4}' \
-    | python3 pkg/core/kernel/categorize-modules.py >> pkg/core/kernel/linux.yaml
+zub ls-tree -r "x86_64/pkg/core/kernel/linux/${version}/${checksum}/files" \
+	| python3 pkg/core/kernel/categorize-modules.py >> pkg/core/kernel/linux.yaml
 
 echo "=== restoring bundles ==="
 ./pkg/core/kernel/toggle-outputs.py restore

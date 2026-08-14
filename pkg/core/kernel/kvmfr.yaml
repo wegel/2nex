@@ -6,7 +6,7 @@ package:
   version: B7
   description: Looking Glass KVM frame relay kernel module
   homepage: https://looking-glass.io/
-  checksum: cedddc8669134ee32ad8ec57385f88b4d7fe323a6913a984770e33c1fe3f016f
+  checksum: 03e54ea2173dab1a1f087b6953e92c4a0f346495edb8ef70dc25fd8c5afdb9e1
 
 sources:
 - name: looking_glass
@@ -15,7 +15,9 @@ sources:
 
 dependencies:
 - name: linux-module-sdk
-  commit: x86_64/pkg/core/kernel/linux/6.12.58/bundles/module-sdk
+  commit: x86_64/pkg/core/kernel/linux/6.18.24/bundles/module-sdk
+- name: elfutils-lib
+  commit: x86_64/pkg/dev/util/elfutils/0.191/outputs/lib
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gcc
@@ -45,19 +47,19 @@ dependencies:
 
 build:
   environment: env/standard.yaml
-  profile: [589:720]
+  profile: [655:908]
 
   script: |
     set -eu
     tar --no-same-owner -xf "/${SOURCE_looking_glass}" -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}/module"
 
-    make KVER=6.12.58 KDIR=/usr/src/linux-6.12.58 all
+    make KVER=6.18.24 KDIR=/usr/src/linux-6.18.24 all
 
     install -Dm644 kvmfr.ko \
-      "${OUT_DIR}/usr/lib/modules/6.12.58/extra/kvmfr.ko"
+      "${OUT_DIR}/usr/lib/modules/6.18.24/extra/kvmfr.ko"
 
-    strip --strip-debug "${OUT_DIR}/usr/lib/modules/6.12.58/extra/kvmfr.ko"
+    strip --strip-debug "${OUT_DIR}/usr/lib/modules/6.18.24/extra/kvmfr.ko"
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
@@ -67,4 +69,4 @@ bundles:
 outputs:
   module:
     files:
-    - path: /usr/lib/modules/6.12.58/extra/kvmfr.ko
+    - path: /usr/lib/modules/6.18.24/extra/kvmfr.ko

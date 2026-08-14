@@ -32,7 +32,7 @@ ASSERT_SERIAL_LOG="$TMP_DIR/qemu-assert-boot.serial.log"
 ASSERT_PROBE_LOG="$TMP_DIR/qemu-assert-boot.probe.log"
 INSTALL_SERIAL_LOG="$TMP_DIR/qemu-installer.serial.log"
 DIRECT_ROOT="$TMP_DIR/direct-initramfs-root"
-LINUX_BOOT_REF="${LINUX_BOOT_REF:-x86_64/pkg/core/kernel/linux/6.12.58/outputs/boot}"
+LINUX_BOOT_REF="${LINUX_BOOT_REF:-x86_64/pkg/core/kernel/linux/6.18.24/outputs/boot}"
 INITRAMFS_BOOT_REF="${INITRAMFS_BOOT_REF:-x86_64/pkg/core/kernel/initramfs/1.0.0/outputs/boot}"
 TARGET_REF="${TARGET_REF:-systems/desktop-vwl/0.0.1}"
 TARGET_SLUG=$(printf "%s" "$TARGET_REF" | tr '/:' '__')
@@ -196,7 +196,13 @@ case " $cmdline " in
     *) fail "kernel command line does not contain zub=" ;;
 esac
 
-deploy_path=$(printf "%s\n" "$cmdline" | sed -n 's/.*zub=\([^ ]*\).*/\1/p')
+deploy_path=""
+for parameter in $cmdline; do
+    case "$parameter" in
+        zub=*) deploy_path=${parameter#zub=} ;;
+    esac
+done
+[ -n "$deploy_path" ] || fail "kernel command line has an empty zub= value"
 deploy_name=${deploy_path##*/}
 root_mount=$(findmnt -n -o SOURCE / 2>/dev/null || true)
 case "$root_mount" in
@@ -308,7 +314,13 @@ case " $cmdline " in
     *) fail "kernel command line does not contain zub=" ;;
 esac
 
-deploy_path=$(printf "%s\n" "$cmdline" | sed -n 's/.*zub=\([^ ]*\).*/\1/p')
+deploy_path=""
+for parameter in $cmdline; do
+    case "$parameter" in
+        zub=*) deploy_path=${parameter#zub=} ;;
+    esac
+done
+[ -n "$deploy_path" ] || fail "kernel command line has an empty zub= value"
 deploy_name=${deploy_path##*/}
 root_mount=$(findmnt -n -o SOURCE / 2>/dev/null || true)
 case "$root_mount" in
@@ -524,7 +536,7 @@ EOF
     dd if="$ROOT_IMG" of="$TARGET_IMG" bs=512 seek="$ROOT_START" conv=notrunc status=none
     dd if="$VAR_IMG" of="$TARGET_IMG" bs=512 seek="$VAR_START" conv=notrunc status=none
 
-    DIRECT_KERNEL="$DIRECT_ROOT/boot/boot/vmlinuz-6.12.58"
+    DIRECT_KERNEL="$DIRECT_ROOT/boot/boot/vmlinuz-6.18.24"
     DIRECT_BASE_INITRAMFS="$DIRECT_ROOT/initramfs/boot/initramfs.cpio"
     DIRECT_INITRAMFS="$DIRECT_ROOT/initramfs/boot/combined-initramfs.cpio"
     build_combined_initramfs "$DIRECT_ROOT/root-content" "$DEPLOY_DIR" "$DIRECT_BASE_INITRAMFS" "$DIRECT_INITRAMFS"

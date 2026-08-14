@@ -6,7 +6,7 @@ package:
   version: "595.84"
   description: NVIDIA current open kernel modules and userspace driver
   homepage: https://www.nvidia.com/
-  checksum: 6e816fd364b2bf663b99e9cf53b4c8a78d775b1e35b8171e6fed58692f1b6443
+  checksum: 1bf7490765156c555325cfd1efa3ff26466e3f20af023677085a88f057b97b06
 
 sources:
 - name: nvidia
@@ -18,7 +18,9 @@ sources:
 
 dependencies:
 - name: linux-module-sdk
-  commit: x86_64/pkg/core/kernel/linux/6.12.58/bundles/module-sdk
+  commit: x86_64/pkg/core/kernel/linux/6.18.24/bundles/module-sdk
+- name: elfutils-lib
+  commit: x86_64/pkg/dev/util/elfutils/0.191/outputs/lib
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gcc
@@ -50,7 +52,7 @@ dependencies:
 
 build:
   environment: env/standard.yaml
-  profile: [4101:10122, 8242:15515, 12341:18054, 16490:18591, 20648:21566, 24799:24536, 29200:25793, 30263:28665]
+  profile: [4102:7248, 8243:10945, 12341:12787, 16445:15317, 20585:18130, 21056:19592]
 
   script: |
     set -eu
@@ -62,14 +64,14 @@ build:
       | tar --no-same-owner -xf - -C "${WORK_DIR}/nvidia"
 
     make -C "${WORK_DIR}/nvidia/kernel-open" \
-      SYSSRC=/usr/src/linux-6.12.58 \
+      SYSSRC=/usr/src/linux-6.18.24 \
       NV_EXCLUDE_KERNEL_MODULES="nvidia-peermem" \
       modules
 
     for module in nvidia nvidia-drm nvidia-modeset nvidia-uvm; do
       install -Dm644 "${WORK_DIR}/nvidia/kernel-open/${module}.ko" \
-        "${OUT_DIR}/usr/lib/modules/6.12.58/extra/${module}.ko"
-      strip --strip-debug "${OUT_DIR}/usr/lib/modules/6.12.58/extra/${module}.ko"
+        "${OUT_DIR}/usr/lib/modules/6.18.24/extra/${module}.ko"
+      strip --strip-debug "${OUT_DIR}/usr/lib/modules/6.18.24/extra/${module}.ko"
     done
 
     bash "/${SOURCE_runtime_installer}" "${WORK_DIR}/nvidia" "${OUT_DIR}" "595.84"
@@ -954,10 +956,10 @@ outputs:
 
   module:
     files:
-    - path: /usr/lib/modules/6.12.58/extra/nvidia-drm.ko
-    - path: /usr/lib/modules/6.12.58/extra/nvidia-modeset.ko
-    - path: /usr/lib/modules/6.12.58/extra/nvidia-uvm.ko
-    - path: /usr/lib/modules/6.12.58/extra/nvidia.ko
+    - path: /usr/lib/modules/6.18.24/extra/nvidia-drm.ko
+    - path: /usr/lib/modules/6.18.24/extra/nvidia-modeset.ko
+    - path: /usr/lib/modules/6.18.24/extra/nvidia-uvm.ko
+    - path: /usr/lib/modules/6.18.24/extra/nvidia.ko
 
   systemd:
     files:

@@ -6,7 +6,7 @@ system:
   description: Desktop system with vwl compositor, Nvidia 580, and capture tools
   nex_structure: true
   extends: asm/desktop-vwl/desktop-vwl.yaml
-  checksum: 54c530c0d068f1d634f481706cf51c0d26573d1e9a8b8018dec190a1eb916a36
+  checksum: 6aa96771e5a64f649f955a36b51df020ba76765a48042be7f643f264a53cb942
 
 packages:
 # Nvidia 580 for Pascal/Turing machines
@@ -14,7 +14,7 @@ packages:
   commit: x86_64/pkg/libs/graphics/nvidia-580/580.159.04/bundles/runtime
 # host capture modules and client
 - name: v4l2loopback
-  commit: x86_64/pkg/core/kernel/v4l2loopback/0.12.7/bundles/runtime
+  commit: x86_64/pkg/core/kernel/v4l2loopback/0.15.4/bundles/runtime
 - name: kvmfr
   commit: x86_64/pkg/core/kernel/kvmfr/B7/bundles/runtime
 - name: looking-glass
@@ -47,7 +47,7 @@ build:
       printf '%s\n' 'nvidia-drm'
     } > /target/etc/modules-load.d/nvidia.conf
 
-    modules_dir=/target/usr/lib/modules/6.12.58
+    modules_dir=/target/usr/lib/modules/6.18.24
     for metadata in "${modules_dir}"/modules.*; do
       if [ -L "${metadata}" ]; then
         target=$(readlink "${metadata}")
@@ -60,14 +60,14 @@ build:
       fi
     done
 
-    chroot /target /usr/bin/depmod 6.12.58
+    chroot /target /usr/bin/depmod 6.18.24
 
-    chroot /target /usr/bin/modinfo -k 6.12.58 nvidia >/dev/null
-    chroot /target /usr/bin/modprobe --set-version 6.12.58 --show-depends nvidia-drm >/dev/null
-    grep -q '^extra/nvidia\.ko:' /target/usr/lib/modules/6.12.58/modules.dep
-    grep -q '^extra/nvidia-drm\.ko:' /target/usr/lib/modules/6.12.58/modules.dep
-    grep -q '^extra/v4l2loopback\.ko:' /target/usr/lib/modules/6.12.58/modules.dep
-    grep -q '^extra/kvmfr\.ko:' /target/usr/lib/modules/6.12.58/modules.dep
+    chroot /target /usr/bin/modinfo -k 6.18.24 nvidia >/dev/null
+    chroot /target /usr/bin/modprobe --set-version 6.18.24 --show-depends nvidia-drm >/dev/null
+    grep -q '^extra/nvidia\.ko:' /target/usr/lib/modules/6.18.24/modules.dep
+    grep -q '^extra/nvidia-drm\.ko:' /target/usr/lib/modules/6.18.24/modules.dep
+    grep -q '^extra/v4l2loopback\.ko:' /target/usr/lib/modules/6.18.24/modules.dep
+    grep -q '^extra/kvmfr\.ko:' /target/usr/lib/modules/6.18.24/modules.dep
 
     vwl_root="/target$(readlink /target/usr/bin/vwl)"
     vwl_root="${vwl_root%/usr/bin/vwl}"

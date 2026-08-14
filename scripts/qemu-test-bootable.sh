@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 REPO="bootstrap_store"
 ZUB="$ROOT_DIR/src/zub/target/debug/zub"
-KERNEL_REF="x86_64/linux/6.12.58/sys/kernel/outputs/boot"
+KERNEL_REF="x86_64/linux/6.18.24/sys/kernel/outputs/boot"
 SYSTEM_REF="asm/bootable-minimal/0.0.1"
 
 # build zub if needed

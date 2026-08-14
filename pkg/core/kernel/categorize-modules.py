@@ -3,11 +3,11 @@ r"""
 categorize kernel modules into logical outputs based on their path structure.
 
 usage:
-    # from a built kernel's module directory:
-    find /path/to/modules -name '*.ko' | ./categorize-modules.py
+    # from zub store (the parser skips directory entries):
+    zub ls-tree -r <ref> | ./categorize-modules.py
 
-    # or from zub store:
-    zub ls-tree -r <ref> | grep '\.ko$' | awk '{print $4}' | ./categorize-modules.py
+    # a newline-separated path list also works:
+    find <root> -type f -printf '%P\n' | ./categorize-modules.py
 
 outputs yaml-formatted outputs section to stdout.
 """
@@ -15,7 +15,6 @@ outputs yaml-formatted outputs section to stdout.
 import sys
 import re
 from collections import defaultdict
-from pathlib import Path
 
 # category rules: (pattern, category_name)
 # order matters - first match wins
@@ -110,7 +109,7 @@ CATEGORY_RULES = [
     (r'/drivers/bluetooth/', 'drv-bluetooth'),
 
     # sound drivers
-    (r'/sound/pci/hda/', 'drv-sound-hda'),
+    (r'/sound/(?:pci/)?hda/', 'drv-sound-hda'),
     (r'/sound/pci/', 'drv-sound-pci'),
     (r'/sound/usb/', 'drv-sound-usb'),
     (r'/sound/soc/', 'drv-sound-soc'),
@@ -285,15 +284,62 @@ def categorize_module(path: str) -> str:
 
 def main():
     categories = defaultdict(list)
+    release = None
 
     for line in sys.stdin:
         path = line.strip()
         if not path:
             continue
 
+        fields = path.split(maxsplit=3)
+        if (
+            len(fields) == 4
+            and re.fullmatch(r'[0-7]{6}', fields[0])
+            and fields[1] in {'directory', 'regular', 'symlink'}
+        ):
+            if fields[1] == 'directory':
+                continue
+            path = fields[3]
+
         # normalize path to start with /
         if not path.startswith('/'):
             path = '/' + path
+
+        release_match = (
+            re.match(r'^/usr/lib/modules/([^/]+)/', path)
+            or re.match(r'^/usr/src/linux-([^/]+)/', path)
+            or re.match(
+                r'^/boot/(?:System\.map|config|vmlinuz)-(.+)$', path
+            )
+        )
+        if release_match:
+            path_release = release_match.group(1)
+            if release is None:
+                release = path_release
+            elif release != path_release:
+                raise SystemExit(
+                    f"mixed kernel releases: {release} and {path_release}"
+                )
+
+        if re.match(r'^/boot/(?:System\.map|config|vmlinuz)-', path):
+            categories['boot'].append(path)
+            continue
+
+        module_root_match = re.match(r'^/usr/lib/modules/([^/]+)/([^/]+)$', path)
+        if module_root_match:
+            if module_root_match.group(2) in {'build', 'source'}:
+                categories['module-sdk'].append(path)
+            else:
+                categories['modules-meta'].append(path)
+            continue
+
+        if re.match(r'^/usr/src/linux-[^/]+/', path):
+            categories['module-sdk'].append(path)
+            continue
+
+        if path.startswith('/usr/lib/kernel/size/'):
+            categories['lib'].append(path)
+            continue
 
         # handle compressed modules (.ko.zst)
         original_path = path
@@ -307,38 +353,15 @@ def main():
         category = categorize_module(path)
         categories[category].append(original_path)
 
+    if release is None:
+        raise SystemExit("no module path supplied a kernel release")
+
     # sort categories and files within each
     print("outputs:")
 
-    # boot files first (handled separately in the yaml, but included for completeness)
-    print("  boot:")
-    print("    files:")
-    print("    - path: /boot/System.map-6.12.58")
-    print("    - path: /boot/config-6.12.58")
-    print("    - path: /boot/vmlinuz-6.12.58")
-    print()
-
-    # module metadata
-    print("  modules-meta:")
-    print("    files:")
-    print("    - path: /usr/lib/modules/6.12.58/modules.alias")
-    print("    - path: /usr/lib/modules/6.12.58/modules.alias.bin")
-    print("    - path: /usr/lib/modules/6.12.58/modules.builtin")
-    print("    - path: /usr/lib/modules/6.12.58/modules.builtin.alias.bin")
-    print("    - path: /usr/lib/modules/6.12.58/modules.builtin.bin")
-    print("    - path: /usr/lib/modules/6.12.58/modules.builtin.modinfo")
-    print("    - path: /usr/lib/modules/6.12.58/modules.dep")
-    print("    - path: /usr/lib/modules/6.12.58/modules.dep.bin")
-    print("    - path: /usr/lib/modules/6.12.58/modules.devname")
-    print("    - path: /usr/lib/modules/6.12.58/modules.order")
-    print("    - path: /usr/lib/modules/6.12.58/modules.softdep")
-    print("    - path: /usr/lib/modules/6.12.58/modules.symbols")
-    print("    - path: /usr/lib/modules/6.12.58/modules.symbols.bin")
-    print()
-
     # output each category
     for category in sorted(categories.keys()):
-        files = sorted(categories[category])
+        files = sorted(set(categories[category]))
         print(f"  {category}:")
         print("    files:")
         for f in files:
@@ -346,10 +369,16 @@ def main():
         print()
 
     # print summary to stderr
-    total = sum(len(files) for files in categories.values())
+    total = sum(
+        1
+        for files in categories.values()
+        for path in set(files)
+        if path.endswith(('.ko', '.ko.zst'))
+    )
     print(f"# total: {total} modules in {len(categories)} categories", file=sys.stderr)
     for category in sorted(categories.keys()):
-        print(f"#   {category}: {len(categories[category])} modules", file=sys.stderr)
+        entries = len(set(categories[category]))
+        print(f"#   {category}: {entries} entries", file=sys.stderr)
 
 if __name__ == '__main__':
     main()
