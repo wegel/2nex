@@ -18,6 +18,8 @@ pub struct RootfsSetup<'a> {
     pub fallback_repos: &'a [String],
     /// Dependency commits to layer or hydrate.
     pub dependency_commits: &'a [String],
+    /// Package manifest databases used to hydrate runtime dependencies.
+    pub manifest_dirs: &'a [PathBuf],
     /// Build environment paths used to find the output directory.
     pub paths: &'a BuildPaths,
     /// Print verbose checkout output.
@@ -68,6 +70,7 @@ pub fn setup_composite_rootfs(setup: RootfsSetup<'_>) -> io::Result<()> {
         repo_path,
         fallback_repos,
         dependency_commits,
+        manifest_dirs,
         paths,
         verbose,
         reuse_rootfs,
@@ -78,7 +81,13 @@ pub fn setup_composite_rootfs(setup: RootfsSetup<'_>) -> io::Result<()> {
     reset_build_root(base_dir, paths, verbose, reuse_rootfs)?;
 
     if hydrate_runtime_deps && !dependency_commits.is_empty() {
-        materialize_build_dependencies(base_dir, repo_path, fallback_repos, dependency_commits)?;
+        materialize_build_dependencies(
+            base_dir,
+            repo_path,
+            fallback_repos,
+            dependency_commits,
+            manifest_dirs,
+        )?;
     } else {
         layer_commits_into_rootfs(
             base_dir,
@@ -220,6 +229,7 @@ fn materialize_build_dependencies(
     repo_path: &str,
     fallback_repos: &[String],
     dependency_commits: &[String],
+    manifest_dirs: &[PathBuf],
 ) -> io::Result<()> {
     let fallback_repo_paths: Vec<PathBuf> = fallback_repos.iter().map(PathBuf::from).collect();
     let requests: Vec<MaterializeRequest> = dependency_commits
@@ -231,7 +241,7 @@ fn materialize_build_dependencies(
         target_dir: PathBuf::from(base_dir),
         mode: MaterializeMode::Flat,
         resolve_deps: true,
-        manifest_db_paths: vec![PathBuf::from("pkg")],
+        manifest_db_paths: manifest_dirs.to_vec(),
         fallback_repo_paths,
         ..Default::default()
     };

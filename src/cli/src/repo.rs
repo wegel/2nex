@@ -1,10 +1,11 @@
 //! repository detection and runtime context utilities.
 //!
-//! implements layered search for repos and manifests:
+//! Combines local and installed repositories used by CLI commands:
 //! 1. CWD/.nex/ - local build-time/development
 //! 2. /nex/users/$USER/ - user-specific
 //! 3. /nex/ - system-wide
-//! 4. (future: remote repos)
+//! A local product repository may also import ordinary Nex manifests from its
+//! conventional `upstream/nex` Git submodule.
 
 use std::fs;
 use std::io;
@@ -14,6 +15,8 @@ use std::process::Command;
 
 use nix::unistd::Uid;
 use zub;
+
+use crate::manifest::ManifestRepositories;
 
 /// detect the appropriate repo path based on environment.
 /// checks in order: .nex/repo (local build-time) -> /nex/repo (runtime)
@@ -30,53 +33,13 @@ pub fn detect_repo_path() -> String {
     ".nex/repo".to_string()
 }
 
-/// detect manifest directories in priority order.
-/// returns all existing manifest directories for layered search.
+/// Detect all manifest directories visible from the current directory.
 pub fn detect_manifest_dirs() -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
     let user = std::env::var("USER").unwrap_or_else(|_| "unknown".into());
-
-    // 1. local build-time directory
-    if Path::new("pkg").exists() {
-        dirs.push(PathBuf::from("pkg"));
-    }
-
-    // 2. user manifest worktree
-    let user_manifests = PathBuf::from(format!("/nex/users/{}/manifests/pkg", user));
-    if user_manifests.exists() {
-        dirs.push(user_manifests);
-    }
-
-    // 3. system manifest database
-    if Path::new("/nex/db/pkg").exists() {
-        dirs.push(PathBuf::from("/nex/db/pkg"));
-    }
-
-    dirs
-}
-
-/// detect the manifest database directory for ManifestIndex.
-/// checks in order: pkg/ -> /nex/users/$USER/manifests/pkg -> /nex/db/pkg
-/// returns None if no manifest directory is found.
-pub fn detect_manifest_dir() -> Option<String> {
-    // build-time: local pkg/ directory
-    if Path::new("pkg").exists() {
-        return Some("pkg".to_string());
-    }
-
-    // user manifest worktree
-    let user = std::env::var("USER").unwrap_or_else(|_| "unknown".into());
-    let user_manifests = format!("/nex/users/{}/manifests/pkg", user);
-    if Path::new(&user_manifests).exists() {
-        return Some(user_manifests);
-    }
-
-    // runtime: system manifests at /nex/db/pkg
-    if Path::new("/nex/db/pkg").exists() {
-        return Some("/nex/db/pkg".to_string());
-    }
-
-    None
+    prefer_local_manifest_dirs(
+        detect_local_manifest_dirs(),
+        detect_installed_manifest_dirs(&user),
+    )
 }
 
 /// check if running as root (to skip unshare wrapper).
@@ -131,7 +94,7 @@ pub struct NexContext {
     pub needs_staging: bool,
     /// state directory for InstalledState
     pub var_path: PathBuf,
-    /// manifest directories for layered search, in priority order
+    /// package manifest directories that must contain unique package identities
     pub manifest_dirs: Vec<PathBuf>,
     /// manifest worktree directory (for user builds, None for system)
     pub manifests_path: Option<PathBuf>,
@@ -159,10 +122,7 @@ pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
 
     // build-time context: if .nex/repo exists, use it (for development)
     if Path::new(".nex/repo").exists() && !system_flag {
-        let mut manifest_dirs = Vec::new();
-        if Path::new("pkg").exists() {
-            manifest_dirs.push(PathBuf::from("pkg"));
-        }
+        let manifest_dirs = detect_local_manifest_dirs();
 
         // in build-time context, still use /nex/repo as fallback if it exists
         // (useful when building on a system that already has packages)
@@ -220,15 +180,10 @@ pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
         fallback_repos.push(PathBuf::from("/nex/repo"));
     }
 
-    // build manifest search chain: user manifests -> system manifests
-    let mut manifest_dirs = Vec::new();
-    let user_manifests_pkg = user_base.join("manifests/pkg");
-    if user_manifests_pkg.exists() {
-        manifest_dirs.push(user_manifests_pkg);
-    }
-    if Path::new("/nex/db/pkg").exists() {
-        manifest_dirs.push(PathBuf::from("/nex/db/pkg"));
-    }
+    let manifest_dirs = prefer_local_manifest_dirs(
+        detect_local_manifest_dirs(),
+        detect_installed_manifest_dirs(&user),
+    );
 
     Ok(NexContext {
         repo_path: user_base.join("repo"),
@@ -241,6 +196,32 @@ pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
         manifest_dirs,
         manifests_path: Some(user_base.join("manifests")),
     })
+}
+
+fn detect_local_manifest_dirs() -> Vec<PathBuf> {
+    ManifestRepositories::discover(Path::new("."))
+        .map(|repositories| repositories.package_dirs())
+        .unwrap_or_default()
+}
+
+fn detect_installed_manifest_dirs(user: &str) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    let user_manifests = PathBuf::from(format!("/nex/users/{user}/manifests/pkg"));
+    if user_manifests.exists() {
+        dirs.push(user_manifests);
+    }
+    if Path::new("/nex/db/pkg").exists() {
+        dirs.push(PathBuf::from("/nex/db/pkg"));
+    }
+    dirs
+}
+
+fn prefer_local_manifest_dirs(local: Vec<PathBuf>, installed: Vec<PathBuf>) -> Vec<PathBuf> {
+    if local.is_empty() {
+        installed
+    } else {
+        local
+    }
 }
 
 /// ensure user directories exist, creating them if needed.
@@ -313,3 +294,7 @@ fn setup_user_manifests_worktree(manifests_path: &Path) -> io::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "repo_tests.rs"]
+mod repo_tests;

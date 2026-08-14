@@ -11,13 +11,13 @@ use crate::system;
 pub fn trace_dependency_chains(
     _repo_path: &str,
     manifest_path: &Path,
-    _manifest_dirs: &[PathBuf],
+    manifest_dirs: &[PathBuf],
     pattern: &str,
 ) -> io::Result<()> {
     println!("Tracing dependencies matching pattern: '{}'", pattern);
     println!("Starting from: {}\n", manifest_path.display());
 
-    let manifest_index = ManifestIndex::load("pkg")?;
+    let manifest_index = ManifestIndex::load_many(manifest_dirs)?;
     let (root_slug, root_deps) = root_dependency_list(manifest_path)?;
     let mut found_matches = false;
 

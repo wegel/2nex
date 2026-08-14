@@ -2,7 +2,8 @@ use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::parser::detect_manifest_kind;
+use super::parser::{detect_manifest_kind, resolve_system_paths};
+use super::repositories::repository_root_for_path;
 use super::types::*;
 
 /// resolve inheritance chain, loading and merging parent manifests
@@ -39,9 +40,12 @@ fn resolve_inheritance_chain(
 
     match &manifest.system.extends {
         Some(extends_path) => {
-            // resolve relative to repo root (current working directory)
-            let repo_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            let base_path = repo_root.join(extends_path);
+            let repo_root = manifest_repository_root(manifest_path);
+            let base_path = if extends_path.is_absolute() {
+                extends_path.clone()
+            } else {
+                repo_root.join(extends_path)
+            };
             let base_canonical = base_path.canonicalize().map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::NotFound,
@@ -77,10 +81,18 @@ fn load_raw_system_manifest(path: &Path) -> io::Result<SystemManifest> {
         ));
     }
 
-    let sys: SystemManifest =
+    let mut sys: SystemManifest =
         serde_yaml::from_value(doc).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let repository_root = manifest_repository_root(path);
+    resolve_system_paths(&mut sys, &repository_root);
 
     Ok(sys)
+}
+
+fn manifest_repository_root(manifest_path: &Path) -> PathBuf {
+    repository_root_for_path(manifest_path)
+        .or_else(|_| std::env::current_dir())
+        .unwrap_or_else(|_| PathBuf::from("."))
 }
 
 /// merge parent and child manifests
@@ -268,71 +280,5 @@ fn merge_build(base: &Build, child: &Build) -> Build {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_should_exclude_package_by_name() {
-        let pkg = SystemPackage {
-            commit: "x86_64/pkg/foo/1.0/outputs/bin".to_string(),
-            name: Some("foo".to_string()),
-        };
-        let excludes = vec![ExcludeSpec::ByName {
-            name: "foo".to_string(),
-        }];
-        assert!(should_exclude_package(&pkg, &excludes));
-    }
-
-    #[test]
-    fn test_should_exclude_package_by_commit() {
-        let pkg = SystemPackage {
-            commit: "x86_64/pkg/foo/1.0/outputs/bin".to_string(),
-            name: Some("foo".to_string()),
-        };
-        let excludes = vec![ExcludeSpec::ByCommit {
-            commit: "x86_64/pkg/foo/1.0/outputs/bin".to_string(),
-        }];
-        assert!(should_exclude_package(&pkg, &excludes));
-    }
-
-    #[test]
-    fn test_should_not_exclude_package() {
-        let pkg = SystemPackage {
-            commit: "x86_64/pkg/foo/1.0/outputs/bin".to_string(),
-            name: Some("foo".to_string()),
-        };
-        let excludes = vec![ExcludeSpec::ByName {
-            name: "bar".to_string(),
-        }];
-        assert!(!should_exclude_package(&pkg, &excludes));
-    }
-
-    #[test]
-    fn test_merge_packages_override() {
-        let base = vec![SystemPackage {
-            commit: "old-commit".to_string(),
-            name: Some("foo".to_string()),
-        }];
-        let child = vec![SystemPackage {
-            commit: "new-commit".to_string(),
-            name: Some("foo".to_string()),
-        }];
-        let result = merge_packages(&base, &child, &[]);
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].commit, "new-commit");
-    }
-
-    #[test]
-    fn test_merge_packages_append() {
-        let base = vec![SystemPackage {
-            commit: "foo-commit".to_string(),
-            name: Some("foo".to_string()),
-        }];
-        let child = vec![SystemPackage {
-            commit: "bar-commit".to_string(),
-            name: Some("bar".to_string()),
-        }];
-        let result = merge_packages(&base, &child, &[]);
-        assert_eq!(result.len(), 2);
-    }
-}
+#[path = "inheritance_tests.rs"]
+mod inheritance_tests;

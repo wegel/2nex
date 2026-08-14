@@ -9,7 +9,7 @@ use sha2::{Digest, Sha256};
 
 use crate::build::{check_if_built, compute_manifest_hash};
 use crate::manifest::types::{Dependency, ManifestSource};
-use crate::manifest::{load_manifest_from_source, ManifestData};
+use crate::manifest::{load_manifest_from_source, repository_root_for_path, ManifestData};
 use crate::refs::PackageRef;
 use crate::store::{ensure_branch_exists, Store};
 use crate::system;
@@ -138,7 +138,20 @@ impl GraphBuilder<'_> {
             return Ok(false);
         }
 
-        let git_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let manifest_path = match find_manifest_for_commit(&dep.commit, self.manifest_dirs) {
+            Ok(path) => path,
+            Err(error) => {
+                self.print_pinned_blob_warning(dep, blob_sha, &error);
+                return Ok(false);
+            }
+        };
+        let git_root = match repository_root_for_path(&manifest_path) {
+            Ok(root) => root,
+            Err(error) => {
+                self.print_pinned_blob_warning(dep, blob_sha, &error);
+                return Ok(false);
+            }
+        };
         let content = match crate::utils::fetch_git_blob(&git_root, blob_sha) {
             Ok(content) => content,
             Err(e) => {
@@ -229,7 +242,7 @@ impl GraphBuilder<'_> {
             );
         }
 
-        let dep_source = dependency_source(dep, dep_manifest_path);
+        let dep_source = dependency_source(dep, dep_manifest_path)?;
         let dep_node = self.collect(&dep_source)?;
         Ok(self.add_edge_if_buildable(dep_node, node))
     }
@@ -299,6 +312,13 @@ impl GraphBuilder<'_> {
             println!("  [floating] {} skipping ({})", dep.commit, reason);
         }
     }
+
+    fn print_pinned_blob_warning(&self, dep: &Dependency, blob_sha: &str, error: &io::Error) {
+        eprintln!(
+            "  Warning: failed to locate blob {} for {}: {}",
+            blob_sha, dep.commit, error
+        );
+    }
 }
 
 fn summarize_manifest(manifest_data: &ManifestData) -> ManifestSummary {
@@ -327,13 +347,15 @@ fn commit_ref_for_availability(commit: &str) -> String {
     }
 }
 
-fn dependency_source(dep: &Dependency, path: PathBuf) -> ManifestSource {
+fn dependency_source(dep: &Dependency, path: PathBuf) -> io::Result<ManifestSource> {
     if let Some(blob_sha) = dep.manifest_ref.as_ref() {
-        ManifestSource::Blob {
+        let git_root = repository_root_for_path(&path)?;
+        Ok(ManifestSource::Blob {
             sha: blob_sha.clone(),
             path,
-        }
+            git_root,
+        })
     } else {
-        ManifestSource::Path(path)
+        Ok(ManifestSource::Path(path))
     }
 }

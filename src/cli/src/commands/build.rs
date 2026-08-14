@@ -1,5 +1,7 @@
 //! CLI arguments and option conversion for `nex build`.
 
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use clap::Args;
@@ -19,9 +21,9 @@ pub struct BuildArgs {
     #[clap(long)]
     pub system: bool,
 
-    /// Base directory for searching manifests
-    #[clap(long, default_value = ".")]
-    pub manifest_dir: String,
+    /// Override the directories Nex searches for package manifests
+    #[clap(long)]
+    pub manifest_dir: Option<PathBuf>,
 
     /// Compute runtime dependencies (needs/resolution) and update manifest
     #[clap(long)]
@@ -110,6 +112,10 @@ pub struct BuildOpts {
     pub repo_path: String,
     /// Manifest path passed on the command line.
     pub manifest_file: String,
+    /// Package manifest directories used for dependency and runtime lookup.
+    pub manifest_dirs: Vec<PathBuf>,
+    /// Git repository whose manifests this command may rewrite.
+    pub writable_manifest_root: Option<PathBuf>,
     /// Run a second build and compare output checksums.
     pub check: bool,
     /// Rewrite the manifest checksum when a build produces a new checksum.
@@ -150,10 +156,18 @@ pub struct BuildOpts {
 
 impl BuildOpts {
     /// Convert parsed CLI arguments into internal builder options.
-    pub fn from_args(args: &BuildArgs, repo_path: String) -> Self {
+    pub fn from_args(
+        args: &BuildArgs,
+        repo_path: String,
+        manifest_path: &Path,
+        manifest_dirs: Vec<PathBuf>,
+        writable_manifest_root: PathBuf,
+    ) -> Self {
         Self {
             repo_path,
-            manifest_file: args.manifest.clone(),
+            manifest_file: manifest_path.to_string_lossy().into_owned(),
+            manifest_dirs,
+            writable_manifest_root: Some(writable_manifest_root),
             check: args.check,
             update_checksum: args.update_checksum,
             compute_deps: args.compute_deps,
@@ -174,4 +188,57 @@ impl BuildOpts {
             reuse_rootfs: args.reuse_rootfs,
         }
     }
+
+    /// Refuse a write flag when the current manifest belongs to an imported repository.
+    pub fn ensure_manifest_write_allowed(&self) -> io::Result<()> {
+        if !self.requests_manifest_write() {
+            return Ok(());
+        }
+        let Some(writable_root) = &self.writable_manifest_root else {
+            return Ok(());
+        };
+        let manifest_path = Path::new(&self.manifest_file);
+        let owner = crate::manifest::repository_root_for_path(manifest_path)?;
+        if &owner == writable_root {
+            return Ok(());
+        }
+        Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!(
+                "refusing to modify imported manifest {}; update it in its own repository",
+                manifest_path.display()
+            ),
+        ))
+    }
+
+    /// Drop flags that can rewrite a manifest before the scheduler builds an imported package.
+    pub fn restrict_imported_manifest_writes(&mut self) -> io::Result<()> {
+        let Some(writable_root) = &self.writable_manifest_root else {
+            return Ok(());
+        };
+        let owner = crate::manifest::repository_root_for_path(Path::new(&self.manifest_file))?;
+        if &owner == writable_root {
+            return Ok(());
+        }
+        self.update_checksum = false;
+        self.compute_deps = false;
+        self.refresh_metadata = false;
+        self.generate_outputs = false;
+        self.record_profile = false;
+        self.add_checksums = false;
+        Ok(())
+    }
+
+    fn requests_manifest_write(&self) -> bool {
+        self.update_checksum
+            || self.compute_deps
+            || self.refresh_metadata
+            || self.generate_outputs
+            || self.record_profile
+            || self.add_checksums
+    }
 }
+
+#[cfg(test)]
+#[path = "build_tests.rs"]
+mod build_tests;

@@ -4,7 +4,7 @@
 //! Instead of scanning store refs, we read the manifest files which declare
 //! exactly what files each package provides.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -73,20 +73,15 @@ impl ManifestIndex {
         Ok(index)
     }
 
-    /// Load manifests from multiple directories in priority order (first = highest).
-    ///
-    /// Directories are processed in order, with earlier directories taking precedence.
-    /// This enables layered search: user manifests -> system manifests.
-    pub fn load_layered(dirs: &[PathBuf]) -> io::Result<Self> {
+    /// Load manifests from several directories and reject identities found more than once.
+    pub fn load_many(dirs: &[PathBuf]) -> io::Result<Self> {
         let mut index = Self::new();
+        let mut manifest_paths = HashMap::new();
 
-        // process directories in order (first = highest priority)
         for dir in dirs {
             if !dir.exists() {
                 continue;
             }
-
-            let mut layer_keys = HashSet::new();
 
             for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
                 let path = entry.path();
@@ -102,20 +97,23 @@ impl ManifestIndex {
                 // try to parse as package manifest
                 match load_manifest_from_source(&ManifestSource::Path(path.to_path_buf())) {
                     Ok(ManifestData::Package(manifest)) => {
-                        // only add if not already present (priority to earlier directories)
                         let key = manifest_key(
                             &manifest.package.namespace_path(),
                             &manifest.package.slug,
                         );
-                        if !layer_keys.insert(key.clone()) {
+                        if let Some(first_path) =
+                            manifest_paths.insert(key.clone(), path.to_path_buf())
+                        {
                             return Err(io::Error::new(
                                 io::ErrorKind::InvalidData,
-                                format!("duplicate package manifest identity: {key}"),
+                                format!(
+                                    "duplicate package manifest identity {key}: {} and {}",
+                                    first_path.display(),
+                                    path.display()
+                                ),
                             ));
                         }
-                        if !index.manifests.contains_key(&key) {
-                            index.add_manifest(manifest);
-                        }
+                        index.add_manifest(manifest);
                     }
                     Ok(ManifestData::System(_)) | Err(_) => {
                         // skip system manifests and files that aren't valid manifests
@@ -303,58 +301,5 @@ fn manifest_key(namespace_path: &str, slug: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-
-    #[test]
-    fn test_empty_index() {
-        let index = ManifestIndex::new();
-        assert_eq!(index.manifest_count(), 0);
-        assert_eq!(index.file_count(), 0);
-        assert!(index.resolve("libc.so.6").is_none());
-    }
-
-    #[test]
-    fn load_rejects_duplicate_package_identity() {
-        let temp_dir = tempfile::tempdir().expect("temp dir");
-        let pkg_dir = temp_dir.path().join("pkg");
-        let package_dir = pkg_dir.join("libs/system");
-        fs::create_dir_all(&package_dir).expect("package dir");
-
-        let manifest = r#"
-package:
-  schema: 1
-  name: demo
-  slug: demo
-  namespace: libs/system
-  version: 1.0
-
-sources: []
-dependencies: []
-
-build:
-  environment: env/test.yaml
-  script: |
-    touch "${OUT_DIR}/demo"
-
-bundles:
-  dev:
-  - bin
-
-outputs:
-  bin:
-    files:
-    - path: /usr/bin/demo
-"#;
-
-        fs::write(package_dir.join("demo.yaml"), manifest).expect("first manifest");
-        fs::write(package_dir.join("demo.debug.yaml"), manifest).expect("duplicate manifest");
-
-        let error = ManifestIndex::load(&pkg_dir).expect_err("duplicate should fail");
-        assert!(error
-            .to_string()
-            .contains("duplicate package manifest identity"));
-        assert!(error.to_string().contains("pkg/libs/system/demo"));
-    }
-}
+#[path = "index_tests.rs"]
+mod index_tests;

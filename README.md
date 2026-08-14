@@ -25,6 +25,33 @@ Everything can always be rebuilt deterministically from manifests alone. No stor
 
 The vision: official manifest repos (curated packages) + public build cache repos (pre-built binaries). Trust the manifests, verify the checksums. Anyone can run their own build cache, or rebuild from source.
 
+## Product repositories
+
+A device maker can keep its manifests in a separate Git repository and add Nex
+as the `upstream/nex` submodule:
+
+```text
+product/
+  .git/
+  asm/
+  pkg/
+  upstream/nex/
+    .git
+    pkg/
+```
+
+Nex finds this layout from the requested manifest, so the product does not need
+a workspace file. It reads packages from both `product/pkg/` and
+`product/upstream/nex/pkg/`. Package source paths, inherited assembly paths,
+overlay manifest paths, and pinned Git blobs resolve from the Git repository
+that owns each manifest. A file named inside an overlay remains relative to
+that overlay file.
+
+Nex rejects the same package namespace and slug in both repositories. Product
+packages should use a product-owned namespace instead of replacing an upstream
+package. Commands that update manifests may write product manifests, but they
+refuse to rewrite imported manifests while building a product assembly.
+
 ## Pinning
 
 Dependencies reference manifests by git blob sha:

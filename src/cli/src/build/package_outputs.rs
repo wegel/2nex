@@ -88,6 +88,8 @@ pub fn maybe_compute_runtime_deps(opts: &BuildOpts, manifest: &mut Manifest) -> 
         manifest,
         &opts.repo_path,
         manifest_path,
+        &opts.manifest_dirs,
+        opts.writable_manifest_root.as_deref(),
         opts.runtime_deps_verbose,
         false,
     )?;

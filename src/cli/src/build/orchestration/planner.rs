@@ -152,7 +152,8 @@ impl ParallelBuildState {
         manifest: &mut crate::manifest::types::Manifest,
     ) -> Result<String, String> {
         let build_dir = get_build_dir_for_package(manifest);
-        let build_opts = build_opts_for_node(opts, path, self.multi_progress.clone());
+        let build_opts = build_opts_for_node(opts, path, self.multi_progress.clone())
+            .map_err(|error| format!("Failed to prepare {}: {}", path.display(), error))?;
         println!(
             "[{}/{}] Building: {}",
             build_num, self.total, manifest.package.slug
@@ -176,7 +177,8 @@ impl ParallelBuildState {
             ".nex/tmp/build_rootfs_{}_system",
             manifest.system.slug.replace("/", "_")
         );
-        let build_opts = build_opts_for_node(opts, path, self.multi_progress.clone());
+        let build_opts = build_opts_for_node(opts, path, self.multi_progress.clone())
+            .map_err(|error| format!("Failed to prepare {}: {}", path.display(), error))?;
         println!(
             "[{}/{}] Building system: {}",
             build_num, self.total, manifest.system.slug
@@ -287,10 +289,12 @@ fn build_opts_for_node(
     opts: &BuildOpts,
     path: &Path,
     multi_progress: Arc<indicatif::MultiProgress>,
-) -> BuildOpts {
-    BuildOpts {
+) -> io::Result<BuildOpts> {
+    let mut build_opts = BuildOpts {
         repo_path: opts.repo_path.clone(),
         manifest_file: path.to_string_lossy().to_string(),
+        manifest_dirs: opts.manifest_dirs.clone(),
+        writable_manifest_root: opts.writable_manifest_root.clone(),
         check: opts.check,
         update_checksum: opts.update_checksum,
         compute_deps: opts.compute_deps,
@@ -309,7 +313,9 @@ fn build_opts_for_node(
         trace_dependency: opts.trace_dependency.clone(),
         multi_progress: Some(multi_progress),
         reuse_rootfs: opts.reuse_rootfs,
-    }
+    };
+    build_opts.restrict_imported_manifest_writes()?;
+    Ok(build_opts)
 }
 
 fn cleanup_build_dir(build_dir: &str) {
@@ -320,3 +326,7 @@ fn cleanup_build_dir(build_dir: &str) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "planner_tests.rs"]
+mod planner_tests;

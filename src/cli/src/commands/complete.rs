@@ -48,27 +48,7 @@ pub fn run(args: &CompleteArgs) -> io::Result<()> {
 }
 
 fn collect_manifest_dirs(ctx: &NexContext) -> Vec<std::path::PathBuf> {
-    let mut dirs = Vec::new();
-
-    // user worktree
-    if let Some(ref manifests_path) = ctx.manifests_path {
-        let pkg_dir = manifests_path.join("pkg");
-        if pkg_dir.exists() {
-            dirs.push(pkg_dir);
-        }
-    }
-
-    // system manifests
-    if Path::new("/nex/db/pkg").exists() {
-        dirs.push(std::path::PathBuf::from("/nex/db/pkg"));
-    }
-
-    // local development
-    if Path::new("pkg").exists() {
-        dirs.push(std::path::PathBuf::from("pkg"));
-    }
-
-    dirs
+    ctx.manifest_dirs.clone()
 }
 
 fn generate_refs_from_dir(

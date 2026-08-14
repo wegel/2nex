@@ -102,6 +102,8 @@ fn checksum_build_opts(source: &ManifestSource, repo_path: &str, opts: &BuildOpt
     BuildOpts {
         repo_path: repo_path.to_string(),
         manifest_file: source.path().to_string_lossy().to_string(),
+        manifest_dirs: opts.manifest_dirs.clone(),
+        writable_manifest_root: opts.writable_manifest_root.clone(),
         check: false,
         update_checksum: true,
         compute_deps: opts.compute_deps,

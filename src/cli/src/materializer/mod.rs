@@ -83,7 +83,7 @@ fn load_materializer_index(config: &MaterializeConfig) -> io::Result<ManifestInd
         ));
     }
 
-    let index = ManifestIndex::load_layered(&config.manifest_db_paths).map_err(|e| {
+    let index = ManifestIndex::load_many(&config.manifest_db_paths).map_err(|e| {
         io::Error::new(
             io::ErrorKind::NotFound,
             format!("Manifest index required for precomputed deps: {}", e),

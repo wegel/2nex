@@ -4,7 +4,7 @@ use std::io;
 
 use crate::manifest::ManifestIndex;
 use crate::materializer::{resolve_runtime_deps_precomputed, MaterializeRequest};
-use crate::repo::{detect_manifest_dir, resolve_repo_path};
+use crate::repo::{detect_manifest_dirs, resolve_repo_path};
 use crate::store::Store;
 
 #[derive(Args)]
@@ -29,8 +29,9 @@ pub fn run(args: &ResolveArgs) -> io::Result<()> {
     let repo_path = resolve_repo_path(args.repo.as_deref())?;
 
     // load manifest index (required for precomputed deps)
-    let manifest_index = if let Some(manifest_dir) = detect_manifest_dir() {
-        match ManifestIndex::load(&manifest_dir) {
+    let manifest_dirs = detect_manifest_dirs();
+    let manifest_index = if !manifest_dirs.is_empty() {
+        match ManifestIndex::load_many(&manifest_dirs) {
             Ok(index) => {
                 println!(
                     "Using manifest index: {} manifests, {} files",

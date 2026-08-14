@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::io;
+use std::path::PathBuf;
 
 use crate::deps::resolve_dependency_closure;
 use crate::manifest::types::Dependency;
@@ -9,10 +10,14 @@ use crate::manifest::{load_manifest, ManifestData, ManifestIndex};
 use crate::refs::PackageRef;
 
 /// Hydrate direct package dependencies with their transitive dependency closure.
-pub fn hydrate_dependencies(_repo_path: &str, manifest_file: &str) -> io::Result<()> {
+pub fn hydrate_dependencies(
+    _repo_path: &str,
+    manifest_file: &str,
+    manifest_dirs: &[PathBuf],
+) -> io::Result<()> {
     let manifest_data = load_manifest(manifest_file)?;
     let dependencies = package_dependencies(&manifest_data)?;
-    let manifest_index = ManifestIndex::load("pkg")?;
+    let manifest_index = ManifestIndex::load_many(manifest_dirs)?;
     let hydrated_deps = hydrated_dependencies(dependencies, &manifest_index)?;
 
     let content = fs::read_to_string(manifest_file)?;

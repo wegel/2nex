@@ -29,6 +29,7 @@ use super::status::check_if_built;
 
 /// Build the package or system named by the CLI options.
 pub fn build_single(opts: &BuildOpts) -> io::Result<()> {
+    opts.ensure_manifest_write_allowed()?;
     fs::create_dir_all(".nex/tmp")?;
 
     let manifest_data = load_manifest_data(opts)?;
@@ -56,11 +57,13 @@ pub fn build_package_manifest_with_dir(
     manifest: &mut Manifest,
     base_dir: &str,
 ) -> io::Result<()> {
+    opts.ensure_manifest_write_allowed()?;
     let download_dir = "./inputs_cache";
     fs::create_dir_all(download_dir)?;
 
     let build_env = load_environment(&opts.repo_path, &manifest.build.environment)?;
-    let dependency_commits = resolve_dependency_commits(&manifest.dependencies, &opts.repo_path)?;
+    let dependency_commits =
+        resolve_dependency_commits(&manifest.dependencies, &opts.repo_path, &opts.manifest_dirs)?;
     prepare_package_root(
         opts,
         base_dir,
@@ -242,6 +245,7 @@ fn prepare_package_root(
         repo_path: &opts.repo_path,
         fallback_repos: &opts.fallback_repos,
         dependency_commits,
+        manifest_dirs: &opts.manifest_dirs,
         paths: &build_env.paths,
         verbose: opts.verbose,
         reuse_rootfs,

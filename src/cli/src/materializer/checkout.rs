@@ -33,7 +33,7 @@ pub fn checkout_closure(
 
     let manifest_index = if config.mode == MaterializeMode::Nex {
         if !config.manifest_db_paths.is_empty() {
-            Some(ManifestIndex::load_layered(&config.manifest_db_paths)?)
+            Some(ManifestIndex::load_many(&config.manifest_db_paths)?)
         } else {
             None
         }

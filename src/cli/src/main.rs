@@ -156,49 +156,80 @@ fn main() -> io::Result<()> {
 }
 
 fn run_build(args: &commands::build::BuildArgs) -> io::Result<()> {
-    // determine repo path based on context
-    let repo_path = if let Some(ref r) = args.repo {
-        // explicit repo path provided
-        repo::resolve_repo_path(Some(r))?
-    } else if args.system || Path::new(".nex/repo").exists() {
-        // explicit --system flag or build-time context (local .nex/repo)
-        repo::resolve_repo_path(None)?
-    } else {
-        // user context: use user's repo
-        let ctx = repo::detect_context(false)?;
-        if !ctx.repo_path.exists() {
-            repo::ensure_user_dirs(&ctx)?;
-            eprintln!(
-                "Created user environment at {}",
-                ctx.repo_path.parent().unwrap_or(&ctx.repo_path).display()
-            );
-        }
-        ctx.repo_path.to_string_lossy().to_string()
-    };
-
-    // configure rayon thread pool if jobs specified
-    if let Some(num_jobs) = args.jobs {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(num_jobs)
-            .build_global()
-            .map_err(|e| io::Error::other(format!("Failed to configure thread pool: {}", e)))?;
-    }
-
-    let manifest_path = Path::new(&args.manifest);
-    let manifest_dirs = vec![PathBuf::from(&args.manifest_dir)];
-    let opts = BuildOpts::from_args(args, repo_path.clone());
+    let manifest_path = Path::new(&args.manifest).canonicalize()?;
+    let repositories = manifest::ManifestRepositories::discover(&manifest_path)?;
+    let manifest_dirs = build_manifest_dirs(args, &repositories)?;
+    let repo_path = resolve_build_repo_path(args, &repositories)?;
+    configure_build_jobs(args.jobs)?;
+    let opts = BuildOpts::from_args(
+        args,
+        repo_path.clone(),
+        &manifest_path,
+        manifest_dirs.clone(),
+        repositories.product_root().to_path_buf(),
+    );
 
     if args.hydrate_dependencies {
-        // hydrate mode: expand dependencies to include all transitive deps
-        hydrate_dependencies(&repo_path, &args.manifest)
+        hydrate_dependencies(&repo_path, &opts.manifest_file, &manifest_dirs)
     } else if args.single || args.refresh_metadata {
-        // single mode: build only the specified manifest without dependencies
-        // refresh_metadata also uses single mode (no deps needed)
         build::build_single(&opts)
     } else {
-        // default: build with full dependency resolution
-        build_with_dependencies(manifest_path, &manifest_dirs, &opts)
+        build_with_dependencies(&manifest_path, &manifest_dirs, &opts)
     }
+}
+
+fn build_manifest_dirs(
+    args: &commands::build::BuildArgs,
+    repositories: &manifest::ManifestRepositories,
+) -> io::Result<Vec<PathBuf>> {
+    match &args.manifest_dir {
+        Some(directory) => Ok(vec![directory.canonicalize()?]),
+        None => Ok(repositories.package_dirs()),
+    }
+}
+
+fn resolve_build_repo_path(
+    args: &commands::build::BuildArgs,
+    repositories: &manifest::ManifestRepositories,
+) -> io::Result<String> {
+    if let Some(repo_path) = &args.repo {
+        return repo::resolve_repo_path(Some(repo_path));
+    }
+    let product_repo = repositories.product_root().join(".nex/repo");
+    if !args.system && product_repo.exists() {
+        return canonical_path_string(&product_repo);
+    }
+    if args.system {
+        return repo::resolve_repo_path(None);
+    }
+
+    let context = repo::detect_context(false)?;
+    if !context.repo_path.exists() {
+        repo::ensure_user_dirs(&context)?;
+        eprintln!(
+            "Created user environment at {}",
+            context
+                .repo_path
+                .parent()
+                .unwrap_or(&context.repo_path)
+                .display()
+        );
+    }
+    Ok(context.repo_path.to_string_lossy().into_owned())
+}
+
+fn canonical_path_string(path: &Path) -> io::Result<String> {
+    Ok(path.canonicalize()?.to_string_lossy().into_owned())
+}
+
+fn configure_build_jobs(jobs: Option<usize>) -> io::Result<()> {
+    let Some(num_jobs) = jobs else {
+        return Ok(());
+    };
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(num_jobs)
+        .build_global()
+        .map_err(|error| io::Error::other(format!("Failed to configure thread pool: {error}")))
 }
 
 impl fmt::Display for Package {

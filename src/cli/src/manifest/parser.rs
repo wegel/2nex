@@ -1,9 +1,10 @@
 use serde_yaml::Value;
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::inheritance;
+use super::repositories::repository_root_for_path;
 use super::types::*;
 
 /// Load manifest from a ManifestSource (path or blob)
@@ -20,13 +21,15 @@ pub fn load_manifest_from_source(source: &ManifestSource) -> io::Result<Manifest
                 let resolved = load_system_manifest_resolved(path)?;
                 Ok(ManifestData::System(resolved))
             } else {
-                load_manifest_from_str(&content)
+                let root = manifest_repository_root(path);
+                load_manifest_from_str_in_repository(&content, &root)
             }
         }
-        ManifestSource::Blob { sha, path } => {
-            // find git repo root
-            let git_root =
-                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        ManifestSource::Blob {
+            sha,
+            path,
+            git_root,
+        } => {
             let content = crate::utils::fetch_git_blob(&git_root, sha).map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::NotFound,
@@ -34,7 +37,7 @@ pub fn load_manifest_from_source(source: &ManifestSource) -> io::Result<Manifest
                 )
             })?;
             // note: blob manifests don't support inheritance
-            load_manifest_from_str(&content)
+            load_manifest_from_str_in_repository(&content, git_root)
         }
         ManifestSource::Skip => Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -49,9 +52,7 @@ pub fn compute_manifest_hash_from_source(source: &ManifestSource) -> io::Result<
 
     let content = match source {
         ManifestSource::Path(path) => fs::read(path)?,
-        ManifestSource::Blob { sha, .. } => {
-            let git_root =
-                std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        ManifestSource::Blob { sha, git_root, .. } => {
             crate::utils::fetch_git_blob(&git_root, sha)?.into_bytes()
         }
         ManifestSource::Skip => {
@@ -98,7 +99,8 @@ pub fn validate_system_manifest(manifest: &SystemManifest) -> io::Result<()> {
 
 pub fn load_manifest(file_path: &str) -> io::Result<ManifestData> {
     let manifest_str = fs::read_to_string(file_path)?;
-    load_manifest_from_str(&manifest_str)
+    let root = manifest_repository_root(Path::new(file_path));
+    load_manifest_from_str_in_repository(&manifest_str, &root)
 }
 
 /// Load manifest from string content (for blob-ref mode)
@@ -120,9 +122,68 @@ pub fn load_manifest_from_str(manifest_str: &str) -> io::Result<ManifestData> {
     }
 }
 
+pub(super) fn resolve_system_paths(manifest: &mut SystemManifest, repository_root: &Path) {
+    resolve_sources(&mut manifest.sources, repository_root);
+    for overlay in &mut manifest.overlays {
+        if overlay.is_relative() {
+            *overlay = repository_root.join(&*overlay);
+        }
+    }
+}
+
+fn load_manifest_from_str_in_repository(
+    manifest_str: &str,
+    repository_root: &Path,
+) -> io::Result<ManifestData> {
+    let mut manifest = load_manifest_from_str(manifest_str)?;
+    match &mut manifest {
+        ManifestData::Package(package) => resolve_sources(&mut package.sources, repository_root),
+        ManifestData::System(system) => resolve_system_paths(system, repository_root),
+    }
+    Ok(manifest)
+}
+
+fn resolve_sources(sources: &mut [Source], repository_root: &Path) {
+    for source in sources {
+        resolve_local_reference(&mut source.file, repository_root);
+        resolve_local_reference(&mut source.dev, repository_root);
+        resolve_local_reference(&mut source.cargo_lock, repository_root);
+        resolve_local_reference(&mut source.cargo_toml, repository_root);
+        resolve_local_reference(&mut source.go_sum, repository_root);
+        resolve_local_reference(&mut source.zig_zon, repository_root);
+    }
+}
+
+fn resolve_local_reference(reference: &mut Option<String>, repository_root: &Path) {
+    let Some(value) = reference else {
+        return;
+    };
+    if is_remote_reference(value) || Path::new(value.as_str()).is_absolute() {
+        return;
+    }
+    *value = repository_root
+        .join(value.as_str())
+        .to_string_lossy()
+        .into_owned();
+}
+
+fn is_remote_reference(reference: &str) -> bool {
+    reference.starts_with("http://") || reference.starts_with("https://")
+}
+
+fn manifest_repository_root(manifest_path: &Path) -> PathBuf {
+    repository_root_for_path(manifest_path)
+        .or_else(|_| std::env::current_dir())
+        .unwrap_or_else(|_| PathBuf::from("."))
+}
+
 /// Load a system manifest with inheritance resolution
 pub fn load_system_manifest_resolved(file_path: &Path) -> io::Result<SystemManifest> {
     let resolved = inheritance::resolve_inheritance(file_path)?;
     validate_system_manifest(&resolved)?;
     Ok(resolved)
 }
+
+#[cfg(test)]
+#[path = "parser_tests.rs"]
+mod parser_tests;

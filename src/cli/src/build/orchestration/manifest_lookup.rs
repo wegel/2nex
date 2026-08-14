@@ -1,5 +1,6 @@
 //! Manifest and store-ref lookup helpers for build orchestration.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -46,10 +47,26 @@ pub fn find_manifest_for_commit(commit: &str, manifest_dirs: &[PathBuf]) -> io::
         )
     })?;
 
+    let mut matches = BTreeSet::new();
     for base_dir in manifest_dirs {
         if let Some(path) = find_manifest_in_base_dir(&pkg_ref, base_dir) {
-            return Ok(path);
+            matches.insert(path.canonicalize()?);
         }
+    }
+
+    if matches.len() == 1 {
+        return Ok(matches.pop_first().expect("one manifest match"));
+    }
+    if matches.len() > 1 {
+        let paths = matches
+            .iter()
+            .map(|path| path.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("duplicate manifests for {}: {}", commit, paths),
+        ));
     }
 
     Err(io::Error::new(

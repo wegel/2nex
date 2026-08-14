@@ -103,10 +103,12 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
         ctx.repo_path.to_string_lossy().to_string()
     };
 
-    // derive manifest db path from manifest location for dependency resolution
-    let manifest_db_paths = derive_manifest_db_path(manifest_path)
-        .map(|p| vec![p])
-        .unwrap_or_else(|| ctx.manifest_dirs.clone());
+    let manifest_db_paths = match crate::manifest::ManifestRepositories::discover(manifest_path) {
+        Ok(repositories) => repositories.package_dirs(),
+        Err(_) => derive_manifest_db_path(manifest_path)
+            .map(|path| vec![path])
+            .unwrap_or_else(|| ctx.manifest_dirs.clone()),
+    };
 
     // system installs require staging mode (unless build-time or --no-stage-check)
     if ctx.is_system && ctx.needs_staging {
@@ -509,6 +511,10 @@ fn build_package_to_user_repo(
     let opts = BuildOpts {
         repo_path: repo_path.to_string(),
         manifest_file: manifest_path.to_string_lossy().to_string(),
+        manifest_dirs: crate::manifest::ManifestRepositories::discover(manifest_path)
+            .map(|repositories| repositories.package_dirs())
+            .unwrap_or_else(|_| vec![PathBuf::from("pkg")]),
+        writable_manifest_root: None,
         check: false,
         update_checksum: false,
         compute_deps: false,

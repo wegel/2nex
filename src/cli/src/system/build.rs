@@ -81,7 +81,7 @@ fn prepare_system_build_inputs(
     opts: &BuildOpts,
     manifest: &SystemManifest,
 ) -> io::Result<SystemBuildInputs> {
-    let manifest_index = ManifestIndex::load("pkg")?;
+    let manifest_index = ManifestIndex::load_many(&opts.manifest_dirs)?;
     let dependency_commits = resolve_dependency_closure(&manifest.dependencies, &manifest_index)?;
     let package_dependency_specs = dependencies_from_system_packages(&manifest.packages);
     let package_commits = resolve_dependency_closure_with_providers(
@@ -132,6 +132,7 @@ fn prepare_system_rootfs(
         repo_path: &opts.repo_path,
         fallback_repos: &opts.fallback_repos,
         dependency_commits: &inputs.dependency_commits,
+        manifest_dirs: &opts.manifest_dirs,
         paths: &inputs.build_env.paths,
         verbose: opts.verbose,
         reuse_rootfs,
@@ -158,6 +159,7 @@ fn materialize_system_package_set(
             &opts.repo_path,
             &inputs.original_package_commits,
             &manifest.providers,
+            &opts.manifest_dirs,
         )
     } else {
         materialize_system_packages(

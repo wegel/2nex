@@ -79,6 +79,7 @@ fn prepare_second_build_root(
         repo_path: &opts.repo_path,
         fallback_repos: &opts.fallback_repos,
         dependency_commits,
+        manifest_dirs: &opts.manifest_dirs,
         paths: &build_env.paths,
         verbose: opts.verbose,
         reuse_rootfs: false,

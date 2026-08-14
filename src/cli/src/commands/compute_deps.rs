@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use goblin::Object;
 use tempfile::TempDir;
 
+use crate::build::orchestration::find_manifest_for_commit;
 use crate::manifest::parser::load_manifest_from_source;
 use crate::manifest::types::FileEntry;
 use crate::manifest::types::ManifestSource;
@@ -64,11 +65,14 @@ pub fn run(args: &ComputeDepsArgs) -> io::Result<()> {
             ));
         }
     };
+    let (manifest_dirs, writable_manifest_root) = manifest_context(manifest_path);
 
     compute_deps_for_manifest(
         &manifest,
         &repo_path,
         manifest_path,
+        &manifest_dirs,
+        writable_manifest_root.as_deref(),
         args.verbose,
         args.dry_run,
     )?;
@@ -91,6 +95,8 @@ pub fn compute_deps_for_manifest(
     manifest: &crate::manifest::types::Manifest,
     repo_path: &str,
     manifest_path: &Path,
+    manifest_dirs: &[PathBuf],
+    writable_manifest_root: Option<&Path>,
     verbose: bool,
     dry_run: bool,
 ) -> io::Result<()> {
@@ -201,17 +207,14 @@ pub fn compute_deps_for_manifest(
         manifest.package.namespace, manifest.package.slug, manifest.package.version
     );
 
-    // derive manifest base directory from manifest_path
-    // e.g., /nex/db/pkg/dev/build/cmake.yaml -> /nex/db (parent of pkg/)
-    let manifest_base_dir = derive_manifest_base_dir(manifest_path);
-
     // build provider lookup from dependencies + self outputs (for internal libs)
     let provider_lookup = build_provider_lookup(
         repo_path,
         &dep_commits,
         &all_refs,
         &self_provider_key,
-        &manifest_base_dir,
+        manifest_dirs,
+        writable_manifest_root,
         verbose,
     )?;
     if verbose {
@@ -416,7 +419,8 @@ fn build_provider_lookup(
     dep_commits: &[String],
     self_output_refs: &[String],
     self_provider_key: &str,
-    manifest_base_dir: &str,
+    manifest_dirs: &[PathBuf],
+    writable_manifest_root: Option<&Path>,
     verbose: bool,
 ) -> io::Result<HashMap<String, (String, String, String)>> {
     let store = Store::open(repo_path)?;
@@ -438,13 +442,8 @@ fn build_provider_lookup(
     let mut needs_build: Vec<String> = Vec::new();
 
     for (provider_key, commits) in &packages {
-        match find_or_create_files_commit(
-            repo_path,
-            provider_key,
-            commits,
-            manifest_base_dir,
-            verbose,
-        ) {
+        match find_or_create_files_commit(repo_path, provider_key, commits, manifest_dirs, verbose)
+        {
             Ok(files_commit) => {
                 files_commits.insert(provider_key.clone(), files_commit);
             }
@@ -471,6 +470,8 @@ fn build_provider_lookup(
             let build_opts = super::build::BuildOpts {
                 repo_path: repo_path.to_string(),
                 manifest_file: manifest_path.clone(),
+                manifest_dirs: manifest_dirs.to_vec(),
+                writable_manifest_root: writable_manifest_root.map(Path::to_path_buf),
                 check: false,
                 update_checksum: false,
                 compute_deps: false, // avoid recursion
@@ -490,10 +491,9 @@ fn build_provider_lookup(
                 multi_progress: None,
                 reuse_rootfs: false,
             };
-            let manifest_dirs = vec![PathBuf::from(".")];
             crate::build::orchestration::build_with_dependencies(
                 Path::new(manifest_path),
-                &manifest_dirs,
+                manifest_dirs,
                 &build_opts,
             )?;
         }
@@ -507,7 +507,7 @@ fn build_provider_lookup(
                 repo_path,
                 provider_key,
                 commits,
-                manifest_base_dir,
+                manifest_dirs,
                 verbose,
             )?;
             files_commits.insert(provider_key.clone(), files_commit);
@@ -570,7 +570,7 @@ fn build_provider_lookup(
         repo_path,
         self_provider_key,
         self_output_refs,
-        manifest_base_dir,
+        manifest_dirs,
         verbose,
     )?;
 
@@ -641,7 +641,7 @@ fn find_or_create_files_commit(
     repo_path: &str,
     provider_key: &str,
     commits: &[String],
-    manifest_base_dir: &str,
+    manifest_dirs: &[PathBuf],
     verbose: bool,
 ) -> io::Result<String> {
     // parse provider key to get package info
@@ -656,16 +656,12 @@ fn find_or_create_files_commit(
     let slug = parts.get(parts.len().saturating_sub(2)).unwrap();
     let namespace_path = parts[..parts.len().saturating_sub(2)].join("/");
 
-    // try to find the manifest and determine the address hash
-    // manifest path: {manifest_base_dir}/pkg/{namespace_path}/{slug}.yaml
-    let manifest_path = if manifest_base_dir.is_empty() {
-        PathBuf::from(format!("pkg/{}/{}.yaml", namespace_path, slug))
-    } else {
-        PathBuf::from(format!(
-            "{}/pkg/{}/{}.yaml",
-            manifest_base_dir, namespace_path, slug
-        ))
-    };
+    let manifest_path = find_manifest_for_commit(
+        commits.first().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "package has no output commits")
+        })?,
+        manifest_dirs,
+    )?;
 
     let manifest_data = load_manifest_from_source(&ManifestSource::Path(manifest_path.clone()))
         .map_err(|e| {
@@ -762,36 +758,12 @@ fn find_or_create_files_commit(
     }
 
     // build better error message
-    let manifest_path_str = if manifest_base_dir.is_empty() {
-        format!("pkg/{}/{}.yaml", namespace_path, slug)
-    } else {
-        format!("{}/pkg/{}/{}.yaml", manifest_base_dir, namespace_path, slug)
-    };
-    let manifest_exists = std::path::Path::new(&manifest_path_str).exists();
+    let manifest_path_str = manifest_path.to_string_lossy().into_owned();
 
-    // check what outputs would be looked for
-    let sample_ref = format!(
-        "x86_64/pkg/{}/{}/{}/outputs/lib",
-        namespace_path, slug, version
-    );
-    let ref_path = Path::new(repo_path).join("refs/heads").join(&sample_ref);
-
-    if manifest_exists {
-        // use a special error kind to signal that this package needs building
-        // format: "NEEDS_BUILD:{manifest_path}"
-        Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("NEEDS_BUILD:{}", manifest_path_str),
-        ))
-    } else {
-        Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!(
-                "Could not find manifest for {} (expected at {}, sample_ref_path={}, ref_exists={})",
-                provider_key, manifest_path_str, ref_path.display(), ref_path.exists()
-            ),
-        ))
-    }
+    Err(io::Error::new(
+        io::ErrorKind::NotFound,
+        format!("NEEDS_BUILD:{}", manifest_path_str),
+    ))
 }
 
 /// Extract provider key from commit ref.
@@ -1070,6 +1042,24 @@ fn derive_manifest_base_dir(manifest_path: &Path) -> String {
 
     // fallback: return empty (use relative paths)
     String::new()
+}
+
+fn manifest_context(manifest_path: &Path) -> (Vec<PathBuf>, Option<PathBuf>) {
+    match crate::manifest::ManifestRepositories::discover(manifest_path) {
+        Ok(repositories) => (
+            repositories.package_dirs(),
+            Some(repositories.product_root().to_path_buf()),
+        ),
+        Err(_) => {
+            let base = derive_manifest_base_dir(manifest_path);
+            let directory = if base.is_empty() {
+                PathBuf::from(".")
+            } else {
+                PathBuf::from(base)
+            };
+            (vec![directory], None)
+        }
+    }
 }
 
 #[cfg(test)]

@@ -48,15 +48,15 @@ pub struct CheckArgs {
     pub files: Vec<String>,
 
     /// Directory containing manifests for dependency resolution
-    #[clap(long, default_value = "pkg")]
-    pub pkg_dir: String,
+    #[clap(long)]
+    pub pkg_dir: Option<PathBuf>,
 }
 
 pub fn run(args: &CheckArgs) -> io::Result<()> {
     let mut has_errors = false;
 
-    // load manifest index for dependency chain validation
-    let manifest_index = ManifestIndex::load(&args.pkg_dir)?;
+    let manifest_dirs = check_manifest_dirs(args)?;
+    let manifest_index = ManifestIndex::load_many(&manifest_dirs)?;
 
     for file in &args.files {
         println!("checking {}", file);
@@ -71,7 +71,8 @@ pub fn run(args: &CheckArgs) -> io::Result<()> {
         }
 
         // check 2: no bootstrap dependencies unless seed package
-        let manifest_data = load_manifest_from_source(&ManifestSource::Path(PathBuf::from(file)))?;
+        let manifest_path = Path::new(file).canonicalize()?;
+        let manifest_data = load_manifest_from_source(&ManifestSource::Path(manifest_path))?;
 
         if let ManifestData::Package(ref manifest) = manifest_data {
             // check 2a: no forbidden usrmerge paths in outputs
@@ -217,6 +218,15 @@ pub fn run(args: &CheckArgs) -> io::Result<()> {
         println!("all checks passed");
         Ok(())
     }
+}
+
+fn check_manifest_dirs(args: &CheckArgs) -> io::Result<Vec<PathBuf>> {
+    if let Some(directory) = &args.pkg_dir {
+        return Ok(vec![directory.canonicalize()?]);
+    }
+    let first_file = args.files.first().expect("clap requires a manifest file");
+    let repositories = crate::manifest::ManifestRepositories::discover(Path::new(first_file))?;
+    Ok(repositories.package_dirs())
 }
 
 fn validate_system_providers(

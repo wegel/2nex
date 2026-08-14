@@ -9,6 +9,8 @@ fn opts(check: bool, update_checksum: bool) -> BuildOpts {
     BuildOpts {
         repo_path: ".nex/repo".to_string(),
         manifest_file: "asm/test.yaml".to_string(),
+        manifest_dirs: vec!["pkg".into()],
+        writable_manifest_root: None,
         check,
         update_checksum,
         compute_deps: false,

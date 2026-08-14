@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::io;
 
 use crate::manifest::ManifestIndex;
-use crate::repo::resolve_repo_path;
+use crate::repo::{detect_manifest_dirs, resolve_repo_path};
 use crate::store::Store;
 
 #[derive(Args)]
@@ -142,7 +142,7 @@ fn show_dependency_tree(_repo: &str, refs: &[String]) -> io::Result<()> {
     );
 
     // load manifest index and show deps from manifest
-    let manifest_index = match ManifestIndex::load("pkg") {
+    let manifest_index = match ManifestIndex::load_many(&detect_manifest_dirs()) {
         Ok(idx) => idx,
         Err(e) => {
             println!("  (could not load manifests: {})", e);

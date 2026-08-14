@@ -4,6 +4,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::path::PathBuf;
 
+pub use super::source::ManifestSource;
+
 /// deserialize version field that accepts both strings and numbers
 fn deserialize_version<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
@@ -48,35 +50,6 @@ where
     }
 
     deserializer.deserialize_any(VersionVisitor)
-}
-
-/// Source for loading a manifest - either from disk, git blob, or a skip marker
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum ManifestSource {
-    /// Load from file path on disk (floating mode)
-    Path(PathBuf),
-    /// Load from git blob SHA (pinned mode), with path for identification
-    Blob { sha: String, path: PathBuf },
-    /// Skip marker for already-built packages in dependency graph
-    Skip,
-}
-
-impl ManifestSource {
-    /// Get the path (for identification/display). Returns empty path for Skip.
-    pub fn path(&self) -> &PathBuf {
-        // static empty path for Skip variant
-        static EMPTY_PATH: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-        match self {
-            ManifestSource::Path(p) => p,
-            ManifestSource::Blob { path, .. } => path,
-            ManifestSource::Skip => EMPTY_PATH.get_or_init(PathBuf::new),
-        }
-    }
-
-    /// Check if this is a skip marker (for already-built packages)
-    pub fn is_skip(&self) -> bool {
-        matches!(self, ManifestSource::Skip)
-    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

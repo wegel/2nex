@@ -3,27 +3,43 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
 
 use crate::manifest::ManifestIndex;
 use crate::materializer::flatten_capsule_precomputed;
 
-pub(super) fn deploy_manifests_to_nex_db(target_dir: &Path) -> io::Result<()> {
-    let src_pkg_dir = Path::new("pkg");
+pub(super) fn deploy_manifests_to_nex_db(
+    target_dir: &Path,
+    manifest_dirs: &[PathBuf],
+) -> io::Result<()> {
     let dst_db_dir = target_dir.join("nex/db/pkg");
 
-    if !src_pkg_dir.exists() {
-        println!("  Warning: pkg/ directory not found, skipping manifest deployment");
+    if manifest_dirs.is_empty() {
+        println!("  Warning: no package manifests found, skipping manifest deployment");
         return Ok(());
     }
 
+    ManifestIndex::load_many(manifest_dirs)?;
     println!("Deploying manifests to /nex/db/pkg...");
     fs::create_dir_all(&dst_db_dir)?;
-    let count = copy_package_manifest_tree(src_pkg_dir, &dst_db_dir)?;
+    let mut count = 0;
+    for manifest_dir in manifest_dirs {
+        let package_dir = package_tree_root(manifest_dir);
+        count += copy_package_manifest_tree(&package_dir, &dst_db_dir)?;
+    }
     println!("  Deployed {} manifest files to /nex/db/pkg", count);
     Ok(())
+}
+
+fn package_tree_root(manifest_dir: &Path) -> PathBuf {
+    let nested = manifest_dir.join("pkg");
+    if nested.is_dir() {
+        nested
+    } else {
+        manifest_dir.to_path_buf()
+    }
 }
 
 pub(super) fn flatten_package_dependencies(
@@ -69,6 +85,16 @@ fn copy_package_manifest_tree(src_pkg_dir: &Path, dst_db_dir: &Path) -> io::Resu
 }
 
 fn copy_manifest_file(src_path: &Path, dst_path: &Path) -> io::Result<()> {
+    if dst_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!(
+                "manifest database path collision: {} would overwrite {}",
+                src_path.display(),
+                dst_path.display()
+            ),
+        ));
+    }
     if let Some(parent) = dst_path.parent() {
         fs::create_dir_all(parent)?;
     }
