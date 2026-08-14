@@ -47,8 +47,9 @@ database batches recorded in `tmp/UAPI_TODO.md`.
 - [x] (2026-08-14 22:18Z) Patched PulseAudio 17.0, passed the main-file and
   drop-in matrix in both strict builds, asserted an installed `--dump-conf`
   value, and ran the final packaged daemon's version command.
-- [ ] Patch, build twice, and exercise OpenSSH 9.9p1 client, server, drop-in,
-  explicit-path, reload, and moduli lookup.
+- [x] (2026-08-14 22:44Z) Patched OpenSSH 9.9p1, passed the client and server
+  main-file, drop-in, explicit-path, Include, moduli, and live SIGHUP matrix in
+  both strict builds, then ran both installed version commands.
 - [ ] Patch, build twice, and exercise Glibc 2.39 NSS and RPC database lookup,
   including live NSS path changes.
 - [ ] Rebuild and exercise every affected assembly, including `desktop-dev`
@@ -109,6 +110,51 @@ database batches recorded in `tmp/UAPI_TODO.md`.
   semantics. The pinned `ssh_config` and `sshd_config` templates contain no
   `.d` include. `servconf.c` defaults `ModuliFile` to `_PATH_DH_MODULI`, and
   `dh.c` opens that path unless the server option replaces it.
+- Observation: OpenSSH's first-obtained-value parser reverses the usual
+  drop-in feed order needed to make later filenames win.
+  Evidence: the client and server only fill options that remain unset. The
+  new shared selector first removes shadowed lower-tier basenames, then sorts
+  the surviving paths in descending lexical order. Its focused test passes
+  for vendor, transient, administrator, empty, and `/dev/null` cases, and a
+  host-side build links both `ssh` and `sshd` against the selector.
+- Observation: `sshd` reparses its saved configuration text for `Match`
+  blocks and sends the same text through its re-exec path.
+  Evidence: `servconf.c:parse_server_match_config` consumes the saved `cfg`
+  buffer after startup. The patch therefore stores ordered absolute `Include`
+  lines in that buffer for default-path startup instead of parsing drop-ins in
+  a one-shot loop.
+- Observation: A strict OpenSSH build root has no `/etc/passwd`, so even
+  `ssh -G` exits before reading configuration because UID 0 has no name.
+  Evidence: the first strict build reached the client behavior test and
+  printed `No user exists for uid 0`. The package test now creates temporary
+  root and sshd entries inside the disposable build root before it runs any
+  client or daemon command; those files are outside `OUT_DIR`.
+- Observation: The OpenSSH package builds `ssh-keygen` before its behavior
+  test but has no installed `ssh-keygen` command in the build-root `PATH`.
+  Evidence: the second strict attempt passed every client assertion, then
+  stopped at `ssh-keygen: command not found`. The test now invokes the freshly
+  built `./ssh-keygen` directly.
+- Observation: `sshd -T` validates the privilege-separation directory before
+  it prints effective configuration.
+  Evidence: the third strict attempt passed the client matrix and generated a
+  throwaway key, then reported `Missing privilege separation directory:
+  /var/lib/sshd`. The test now creates that disposable directory before its
+  first server assertion.
+- Observation: A pre-install OpenSSH daemon validates the compiled
+  `/usr/libexec/sshd-session` path before it starts listening.
+  Evidence: the fourth strict attempt passed the complete client and
+  `sshd -T` matrix, then the reload daemon logged that the session helper did
+  not exist. The reload-only configs now set `SshdSessionPath` to the freshly
+  built `${WORK_DIR}/sshd-session`; package defaults keep the installed path.
+- Observation: OpenSSH's complete strict check now passes and packages no SSH
+  defaults below `/etc`.
+  Evidence: both builds matched checksum
+  `b9b50e17f25c18b3bb3e19f4e4bc4f2ae9e9de278b53daa2bd493b85f3f91558`.
+  The behavior matrix passed twice, including system-main `Include` files and
+  a live default-path SIGHUP change from port 40222 to 40223. The split output
+  contains `ssh_config` and `sshd_config` under `/usr/lib/ssh`, `moduli` under
+  `/usr/share/ssh`, and no `etc` tree. Both packaged commands print OpenSSH
+  9.9p1 with the build-root OpenSSL 3.3.1.
 - Observation: Glibc keeps both NSS selection and file-backed RPC paths in
   shared internals.
   Evidence: `nss/nss_database.c` opens and change-detects only
@@ -203,10 +249,10 @@ database batches recorded in `tmp/UAPI_TODO.md`.
 
 ## Outcomes & Retrospective
 
-BlueZ and PulseAudio now use tested layered readers and put their package
-defaults below `/usr/lib`. Both strict two-build checks and installed-command
-smokes pass. OpenSSH, Glibc, and the affected assemblies remain in this
-ExecPlan.
+BlueZ, PulseAudio, and OpenSSH now use tested layered readers and put their
+package defaults below `/usr`. Their strict two-build checks and
+installed-command smokes pass. Glibc and the affected assemblies remain in
+this ExecPlan.
 
 ## Context and Orientation
 

@@ -6,12 +6,15 @@ package:
   version: 9.9p1
   description: OpenSSH SSH client and server
   homepage: https://www.openssh.com/
-  checksum: 240e0506c3d8b34a88eb7f6d64602386960f9fbc62a959ed983bdd0e44619f1b
+  checksum: b9b50e17f25c18b3bb3e19f4e4bc4f2ae9e9de278b53daa2bd493b85f3f91558
 
 sources:
 - name: openssh
   url: https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.9p1.tar.gz
   sha256: b343fbcdbff87f15b1986e6e15d6d4fc9a7d36066be6b7fb507087ba8f966c02
+- name: uapi_config_patch
+  file: pkg/cli/net/openssh-uapi-config.patch
+  sha256: 82960c13c7cfdf3ecf14722f22cec2872052ffc6558a4d69778a6d1dfed34963
 
 dependencies:
 - name: glibc
@@ -36,6 +39,8 @@ dependencies:
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: sed
   commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
 - name: tar
@@ -59,11 +64,14 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [8227:5555, 28944:23975, 62499:23980, 103846:24067, 141811:24205, 176434:24360, 208918:24451, 258363:24665, 314181:24965, 343556:27741]
+  profile: [8238:4171, 32904:20222, 70791:20226, 115691:20294, 153607:20426, 189066:20530, 227111:20636, 280500:20785, 336605:20991, 372109:23563]
 
   script: |
-    tar --no-same-owner -xf ${SOURCE_openssh} -C "${WORK_DIR}" --strip-components=1
+    set -eux
+
+    tar --no-same-owner -xf /${SOURCE_openssh} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE_uapi_config_patch}
 
     # create privilege separation directory with marker file (zub doesn't support empty dirs)
     install -v -m700 -d ${OUT_DIR}/var/lib/sshd
@@ -81,6 +89,158 @@ build:
       --disable-strip
 
     make
+    make regress/system-config-test
+    ./regress/system-config-test
+
+    install -d /etc/ssh /run/ssh /usr/lib/ssh /root/.ssh
+    install -d /etc/ssh/ssh_config.d /run/ssh/ssh_config.d /usr/lib/ssh/ssh_config.d
+    install -d /etc/ssh/sshd_config.d /run/ssh/sshd_config.d /usr/lib/ssh/sshd_config.d
+    if [ ! -e /etc/passwd ]; then
+      printf '%s\n' \
+        'root:x:0:0:root:/root:/bin/sh' \
+        'sshd:x:74:74:Privilege-separated SSH:/var/lib/sshd:/usr/bin/nologin' > /etc/passwd
+    elif ! grep -q '^sshd:' /etc/passwd; then
+      printf '%s\n' 'sshd:x:74:74:Privilege-separated SSH:/var/lib/sshd:/usr/bin/nologin' >> /etc/passwd
+    fi
+    if [ ! -e /etc/group ]; then
+      printf '%s\n' 'root:x:0:' 'sshd:x:74:' > /etc/group
+    elif ! grep -q '^sshd:' /etc/group; then
+      printf '%s\n' 'sshd:x:74:' >> /etc/group
+    fi
+
+    assert_client_value() {
+      expected="$1"
+      shift
+      ./ssh -G "$@" config-test.invalid | grep -Fx "$expected"
+    }
+
+    printf 'ConnectTimeout 11\n' > /usr/lib/ssh/ssh_config
+    assert_client_value 'connecttimeout 11'
+    printf 'ConnectTimeout 22\n' > /run/ssh/ssh_config
+    assert_client_value 'connecttimeout 22'
+    printf 'ConnectTimeout 33\n' > /etc/ssh/ssh_config
+    assert_client_value 'connecttimeout 33'
+    : > /etc/ssh/ssh_config
+    assert_client_value 'connecttimeout none'
+    rm /etc/ssh/ssh_config
+    ln -s /dev/null /etc/ssh/ssh_config
+    assert_client_value 'connecttimeout none'
+
+    printf 'ConnectTimeout 44\n' > /root/.ssh/config
+    assert_client_value 'connecttimeout 44'
+    printf 'ConnectTimeout 55\n' > "${WORK_DIR}/explicit-ssh-config"
+    assert_client_value 'connecttimeout 55' -F "${WORK_DIR}/explicit-ssh-config"
+    printf 'ConnectTimeout 66\n' > "${WORK_DIR}/included-ssh-config"
+    printf 'Include %s\n' "${WORK_DIR}/included-ssh-config" > "${WORK_DIR}/explicit-ssh-include"
+    assert_client_value 'connecttimeout 66' -F "${WORK_DIR}/explicit-ssh-include"
+    rm /root/.ssh/config /etc/ssh/ssh_config /run/ssh/ssh_config
+
+    printf 'ConnectTimeout 77\n' > "${WORK_DIR}/included-system-ssh-config"
+    printf 'Include %s\n' "${WORK_DIR}/included-system-ssh-config" > /usr/lib/ssh/ssh_config
+    assert_client_value 'connecttimeout 77'
+
+    printf 'ConnectTimeout 11\n' > /usr/lib/ssh/ssh_config
+    printf 'ServerAliveInterval 10\n' > /usr/lib/ssh/ssh_config.d/10-early.conf
+    printf 'ServerAliveInterval 90\n' > /usr/lib/ssh/ssh_config.d/90-late.conf
+    assert_client_value 'serveraliveinterval 90'
+    printf 'ServerAliveInterval 91\n' > /run/ssh/ssh_config.d/90-late.conf
+    assert_client_value 'serveraliveinterval 91'
+    : > /etc/ssh/ssh_config.d/90-late.conf
+    assert_client_value 'serveraliveinterval 10'
+    rm /etc/ssh/ssh_config.d/90-late.conf
+    ln -s /dev/null /etc/ssh/ssh_config.d/90-late.conf
+    assert_client_value 'serveraliveinterval 10'
+
+    ./ssh-keygen -q -t ed25519 -N '' -f "${WORK_DIR}/test-host-key"
+    install -d -m700 /var/lib/sshd
+
+    assert_server_value() {
+      expected="$1"
+      shift
+      ./sshd -T -h "${WORK_DIR}/test-host-key" "$@" | grep -Fx "$expected"
+    }
+
+    printf 'MaxAuthTries 2\n' > /usr/lib/ssh/sshd_config
+    assert_server_value 'maxauthtries 2'
+    assert_server_value 'modulifile /usr/share/ssh/moduli'
+    printf 'MaxAuthTries 3\n' > /run/ssh/sshd_config
+    assert_server_value 'maxauthtries 3'
+    printf 'MaxAuthTries 4\n' > /etc/ssh/sshd_config
+    assert_server_value 'maxauthtries 4'
+    : > /etc/ssh/sshd_config
+    assert_server_value 'maxauthtries 6'
+    rm /etc/ssh/sshd_config
+    ln -s /dev/null /etc/ssh/sshd_config
+    assert_server_value 'maxauthtries 6'
+    rm /etc/ssh/sshd_config /run/ssh/sshd_config
+
+    printf 'MaxAuthTries 9\n' > "${WORK_DIR}/included-system-sshd-config"
+    printf 'Include %s\n' "${WORK_DIR}/included-system-sshd-config" > /usr/lib/ssh/sshd_config
+    assert_server_value 'maxauthtries 9'
+
+    printf 'MaxAuthTries 2\n' > /usr/lib/ssh/sshd_config
+    printf 'MaxAuthTries 3\n' > /usr/lib/ssh/sshd_config.d/10-early.conf
+    printf 'MaxAuthTries 4\n' > /usr/lib/ssh/sshd_config.d/90-late.conf
+    assert_server_value 'maxauthtries 4'
+    printf 'MaxAuthTries 5\n' > /run/ssh/sshd_config.d/90-late.conf
+    assert_server_value 'maxauthtries 5'
+    : > /etc/ssh/sshd_config.d/90-late.conf
+    assert_server_value 'maxauthtries 3'
+    rm /etc/ssh/sshd_config.d/90-late.conf
+    ln -s /dev/null /etc/ssh/sshd_config.d/90-late.conf
+    assert_server_value 'maxauthtries 3'
+
+    printf 'MaxAuthTries 7\n' > "${WORK_DIR}/explicit-sshd-config"
+    assert_server_value 'maxauthtries 7' -f "${WORK_DIR}/explicit-sshd-config"
+    printf 'MaxAuthTries 8\n' > "${WORK_DIR}/included-sshd-config"
+    printf 'Include %s\n' "${WORK_DIR}/included-sshd-config" > "${WORK_DIR}/explicit-sshd-include"
+    assert_server_value 'maxauthtries 8' -f "${WORK_DIR}/explicit-sshd-include"
+
+    rm -f /etc/ssh/sshd_config /run/ssh/sshd_config
+    rm -f /etc/ssh/sshd_config.d/*.conf /run/ssh/sshd_config.d/*.conf /usr/lib/ssh/sshd_config.d/*.conf
+    printf '%s\n' \
+      'Port 40222' \
+      'ListenAddress 127.0.0.1' \
+      'UsePAM no' \
+      "SshdSessionPath ${WORK_DIR}/sshd-session" > /usr/lib/ssh/sshd_config
+
+    sshd_pid=
+    trap 'if [ -n "${sshd_pid}" ]; then kill "${sshd_pid}" 2>/dev/null || true; fi' EXIT
+    "${WORK_DIR}/sshd" -D -e -h "${WORK_DIR}/test-host-key" > "${WORK_DIR}/sshd-reload.log" 2>&1 &
+    sshd_pid=$!
+    initial_ready=
+    for attempt in $(seq 1 100); do
+      if grep -Fq 'Server listening on 127.0.0.1 port 40222.' "${WORK_DIR}/sshd-reload.log"; then
+        initial_ready=yes
+        break
+      fi
+      kill -0 "${sshd_pid}"
+      sleep 0.05
+    done
+    test "${initial_ready}" = yes
+
+    printf '%s\n' \
+      'Port 40223' \
+      'ListenAddress 127.0.0.1' \
+      'UsePAM no' \
+      "SshdSessionPath ${WORK_DIR}/sshd-session" > /etc/ssh/sshd_config
+    kill -HUP "${sshd_pid}"
+    reload_ready=
+    for attempt in $(seq 1 100); do
+      if grep -Fq 'Server listening on 127.0.0.1 port 40223.' "${WORK_DIR}/sshd-reload.log"; then
+        reload_ready=yes
+        break
+      fi
+      kill -0 "${sshd_pid}"
+      sleep 0.05
+    done
+    test "${reload_ready}" = yes
+    grep -F 'Received SIGHUP; restarting.' "${WORK_DIR}/sshd-reload.log"
+    kill "${sshd_pid}"
+    wait "${sshd_pid}" || true
+    sshd_pid=
+    trap - EXIT
+
     make DESTDIR="${OUT_DIR}" install
 
     # move sshd from /usr/sbin to /usr/bin
@@ -123,6 +283,7 @@ build:
 
     [Service]
     Type=oneshot
+    ExecStart=/usr/bin/install -d -m0755 -o root -g root /etc/ssh
     ExecStart=/usr/bin/ssh-keygen -A
     RemainAfterExit=yes
 
@@ -218,9 +379,9 @@ outputs:
 
   conf:
     files:
-    - path: /etc/ssh/moduli
-    - path: /etc/ssh/ssh_config
-    - path: /etc/ssh/sshd_config
+    - path: /usr/lib/ssh/ssh_config
+    - path: /usr/lib/ssh/sshd_config
+    - path: /usr/share/ssh/moduli
 
   lib:
     files:

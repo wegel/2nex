@@ -1103,13 +1103,13 @@ The first exhaustive 2026-08-14 scan found 41 manifests that declare at least
 one output below `/etc`. The first UAPI package batch reduced that count to 36
 by removing those outputs from Shadow, Fish, Systemd, Swaylock, and Polkit.
 The Bash and e2fsprogs batch reduced it to 35 because Bash did not declare the
-assembly-owned profile and e2fsprogs moved its two package defaults.
-OpenSSH remains in the queue because its editable SSH main files still belong
-under `/etc`; its PAM service no longer does. This is an audit queue, not 36
-mechanical moves. It includes bootstrap copies, two Nvidia versions, generated
-certificate links, compatibility links, and files whose external specification
-still names `/etc`. Empty directories created for host configuration do not
-need a vendor-file conversion.
+assembly-owned profile and e2fsprogs moved its two package defaults. BlueZ,
+PulseAudio, and OpenSSH reduce the current count to 32; Glibc remains in their
+parser wave. This is an audit queue, not 32 mechanical moves. It includes
+bootstrap copies, two Nvidia versions, generated certificate links,
+compatibility links, and files whose external specification still names
+`/etc`. Empty directories created for host configuration do not need a
+vendor-file conversion.
 
 Do not blanket-change `--sysconfdir=/etc` to a path below `/usr`. That option
 usually tells a program where the administrator writes local configuration;
@@ -1121,18 +1121,23 @@ program's lookup order or leave the file in the assembly factory fallback.
 The first high-value batch enabled Shadow's libeconf vendor directory, added
 Linux-PAM's transient service-policy directory, moved PAM services from
 Shadow, OpenSSH, Swaylock, and Polkit, added Fish's transient fragment
-directory, and moved Systemd defaults to its native vendor paths. OpenSSH main
-files, BlueZ, PulseAudio, and Glibc NSS need separate parser or lookup work.
-Keep account databases, machine identity, and other true host state out of
-reusable package defaults.
+directory, and moved Systemd defaults to its native vendor paths. The current
+parser wave has finished BlueZ, PulseAudio, and OpenSSH; Glibc remains. Keep
+account databases, machine identity, and other true host state out of reusable
+package defaults.
 
-- OpenSSH 9.9p1 compiles `_PATH_SERVER_CONFIG_FILE` and
-  `_PATH_HOST_CONFIG_FILE` from its single `SSHDIR`, which Nex sets to
-  `/etc/ssh`. `sshd` starts with that one path unless `-f` is supplied, and the
-  client reads that one system path unless `-F` is supplied. Both parsers have
-  `Include`, but their first-obtained-value rule does not directly match
-  UAPI.6's later-drop-in-wins order. Native UAPI.6 support needs a source patch
-  or a deliberately narrower service adapter.
+- OpenSSH 9.9p1 now selects its client and server main files from `/etc/ssh`,
+  `/run/ssh`, or `/usr/lib/ssh`. It preserves exact `-F` and `-f` paths, user
+  client policy, arbitrary `Include` files, and fresh default-path selection
+  on SIGHUP. Its first-obtained-value parsers receive standard drop-ins in
+  descending filename order after the selector removes shadowed basenames, so
+  later filenames retain UAPI priority. Empty files and `/dev/null` links mask
+  lower files. The package puts both main defaults under `/usr/lib/ssh`, puts
+  moduli under `/usr/share/ssh`, and leaves host keys under `/etc/ssh`. The
+  strict two-build checksum is
+  `b9b50e17f25c18b3bb3e19f4e4bc4f2ae9e9de278b53daa2bd493b85f3f91558`.
+  The test drove `ssh -G`, `sshd -T`, nested Includes, and a live SIGHUP port
+  change, then both packaged version commands printed OpenSSH 9.9p1.
 - Smartmontools 7.5 sets `smartd`'s default to
   `${sysconfdir}/smartd.conf`, and `-c` selects one alternate file. Its ordered
   device grammar, including `DEVICESCAN` ignoring later lines, makes full-file
