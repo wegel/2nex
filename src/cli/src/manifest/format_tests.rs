@@ -44,7 +44,14 @@ fn formats_overlay_without_losing_files_or_comments() {
 
 #[test]
 fn preserves_overlay_content_chomping() {
-    for content in ["no newline", "one newline\n", "two newlines\n\n", "\n", ""] {
+    for content in [
+        "no newline",
+        "one newline\n",
+        "two newlines\n\n",
+        "first\n\nthird\n",
+        "\n",
+        "",
+    ] {
         let input = serde_yaml::to_string(&Overlay {
             files: vec![OverlayEntry {
                 path: "/test".into(),
@@ -65,6 +72,10 @@ fn preserves_overlay_content_chomping() {
             overlay.files[0].content.as_deref(),
             Some(content),
             "formatter changed this overlay:\n{formatted}"
+        );
+        assert!(
+            !formatted.lines().any(|line| line == "    "),
+            "formatter added whitespace to a blank line:\n{formatted}"
         );
     }
 }

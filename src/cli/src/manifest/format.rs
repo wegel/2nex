@@ -476,8 +476,10 @@ fn format_overlay_content(content: &str, output: &mut String) {
 
     let body = content.strip_suffix('\n').unwrap_or(content);
     for line in body.split('\n') {
-        output.push_str("    ");
-        output.push_str(line);
+        if !line.is_empty() {
+            output.push_str("    ");
+            output.push_str(line);
+        }
         output.push('\n');
     }
 }
