@@ -1,0 +1,158 @@
+package:
+  schema: 1
+  name: I2C Tools
+  slug: i2c-tools
+  namespace: cli/system
+  version: "4.4"
+  description: Utilities and libraries for Linux I2C devices
+  homepage: https://i2c.wiki.kernel.org/index.php/I2C_Tools
+  checksum: 2363c4c0b24114b227e453d6104166886f06e1b7aa27ff98be6bb2d4f178f094
+
+sources:
+- name: i2c_tools
+  url: https://www.kernel.org/pub/software/utils/i2c-tools/i2c-tools-4.4.tar.gz
+  sha256: 04d1e3b0cd88df8fb96e7709f374dd0b3561191b4c0363eaf873a074b8b7cb22
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: kmod
+  commit: x86_64/pkg/core/kernel/kmod/32/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4109:30, 6660:305]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_i2c_tools}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    make CC=gcc PREFIX=/usr sbindir=/usr/bin BUILD_STATIC_LIB=0 EXTRA=eeprog
+    make CC=gcc DESTDIR="${OUT_DIR}" PREFIX=/usr sbindir=/usr/bin BUILD_STATIC_LIB=0 EXTRA=eeprog install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  full:
+  - bin
+  - dev
+  - lib
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/ddcmon
+      needs:
+      - /usr/bin/perl
+    - path: /usr/bin/decode-dimms
+      needs:
+      - /usr/bin/cat
+      - /usr/bin/perl
+    - path: /usr/bin/decode-edid
+      needs:
+      - /usr/bin/perl
+    - path: /usr/bin/decode-vaio
+      needs:
+      - /usr/bin/perl
+    - path: /usr/bin/eeprog
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libi2c.so.0
+    - path: /usr/bin/i2c-stub-from-dump
+      needs:
+      - /usr/bin/modprobe
+      - /usr/bin/perl
+      - /usr/bin/rmmod
+      - /usr/bin/udevadm
+      - /usr/bin/uname
+    - path: /usr/bin/i2cdetect
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libi2c.so.0
+    - path: /usr/bin/i2cdump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libi2c.so.0
+    - path: /usr/bin/i2cget
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libi2c.so.0
+    - path: /usr/bin/i2cset
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libi2c.so.0
+    - path: /usr/bin/i2ctransfer
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  dev:
+    files:
+    - path: /usr/include/i2c/smbus.h
+
+  lib:
+    files:
+    - path: /usr/lib/libi2c.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libi2c.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libi2c.so.0.1.1
+      needs:
+      - /usr/lib/libc.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man1/decode-dimms.1
+    - path: /usr/share/man/man1/decode-vaio.1
+    - path: /usr/share/man/man3/libi2c.3
+    - path: /usr/share/man/man8/eeprog.8
+    - path: /usr/share/man/man8/i2c-stub-from-dump.8
+    - path: /usr/share/man/man8/i2cdetect.8
+    - path: /usr/share/man/man8/i2cdump.8
+    - path: /usr/share/man/man8/i2cget.8
+    - path: /usr/share/man/man8/i2cset.8
+    - path: /usr/share/man/man8/i2ctransfer.8
+
+resolution:
+  /usr/bin/cat: coreutils
+  /usr/bin/uname: coreutils
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/bin/modprobe: kmod
+  /usr/bin/rmmod: kmod
+  /usr/bin/perl: perl
+  /usr/lib/libi2c.so.0: self
+  /usr/bin/udevadm: systemd

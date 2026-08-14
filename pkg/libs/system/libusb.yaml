@@ -1,0 +1,109 @@
+package:
+  schema: 1
+  name: libusb
+  slug: libusb
+  namespace: libs/system
+  version: 1.0.29
+  description: Userspace library for accessing USB devices
+  homepage: https://libusb.info/
+  checksum: a510d04413873217e1b4e2b88b420f8faebe51020cffc64be46fceb3503b38c0
+
+sources:
+- name: libusb
+  url: https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.tar.bz2
+  sha256: 5977fc950f8d1395ccea9bd48c06b3f808fd3c2c961b44b0c2e6e29fc3a70a85
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: libtool
+  commit: x86_64/pkg/core/toolchain/libtool/2.4.7/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4194:1229, 8323:3914, 8572:3928]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_libusb}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
+    ./configure --prefix=/usr --libdir=/usr/lib --enable-udev --disable-static
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/libusb-1.0/libusb.h
+    - path: /usr/lib/libusb-1.0.la
+    - path: /usr/lib/pkgconfig/libusb-1.0.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libusb-1.0.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libudev.so.1
+    - path: /usr/lib/libusb-1.0.so.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libudev.so.1
+    - path: /usr/lib/libusb-1.0.so.0.5.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libudev.so.1
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libudev.so.1: systemd

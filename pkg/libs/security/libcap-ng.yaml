@@ -1,0 +1,170 @@
+package:
+  schema: 1
+  name: libcap-ng
+  slug: libcap-ng
+  namespace: libs/security
+  version: 0.9.1
+  description: Library and tools for managing Linux process capabilities
+  homepage: https://github.com/stevegrubb/libcap-ng
+  checksum: 7e5701aa79a54ea5abc6afcd80d0724b52e380069ad5b8b7dae821f7d72c8222
+
+sources:
+- name: libcap_ng
+  url: https://github.com/stevegrubb/libcap-ng/archive/refs/tags/v0.9.1.tar.gz
+  sha256: 52418b8940f83dcc00dcd01d187e67c3399ff65f3fa558442e3a21b415cc46c0
+
+dependencies:
+- name: autoconf
+  commit: x86_64/pkg/core/toolchain/autoconf/2.72/bundles/dev
+- name: automake
+  commit: x86_64/pkg/core/toolchain/automake/1.16.5/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: libtool
+  commit: x86_64/pkg/core/toolchain/libtool/2.4.7/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: m4
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4101:3472, 8199:4668, 12382:4767, 16854:5039, 20968:5243, 23400:5333]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_libcap_ng}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    ./autogen.sh
+    ./configure \
+      --prefix=/usr \
+      --libdir=/usr/lib \
+      --disable-static
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -name '*.la' -delete
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - lib
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/filecap
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap-ng.so.0
+    - path: /usr/bin/netcap
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap-ng.so.0
+    - path: /usr/bin/pscap
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap-ng.so.0
+
+  dev:
+    files:
+    - path: /usr/include/cap-ng.h
+    - path: /usr/lib/libcap-ng.so
+    - path: /usr/lib/libdrop_ambient.so
+    - path: /usr/lib/pkgconfig/libcap-ng.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libcap-ng.so.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libcap-ng.so.0.0.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libdrop_ambient.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libdrop_ambient.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man3/capng_apply.3
+    - path: /usr/share/man/man3/capng_apply_caps_fd.3
+    - path: /usr/share/man/man3/capng_capability_to_name.3
+    - path: /usr/share/man/man3/capng_change_id.3
+    - path: /usr/share/man/man3/capng_clear.3
+    - path: /usr/share/man/man3/capng_fill.3
+    - path: /usr/share/man/man3/capng_get_caps_fd.3
+    - path: /usr/share/man/man3/capng_get_caps_process.3
+    - path: /usr/share/man/man3/capng_get_rootid.3
+    - path: /usr/share/man/man3/capng_have_capabilities.3
+    - path: /usr/share/man/man3/capng_have_capability.3
+    - path: /usr/share/man/man3/capng_lock.3
+    - path: /usr/share/man/man3/capng_name_to_capability.3
+    - path: /usr/share/man/man3/capng_print_caps_numeric.3
+    - path: /usr/share/man/man3/capng_print_caps_text.3
+    - path: /usr/share/man/man3/capng_restore_state.3
+    - path: /usr/share/man/man3/capng_save_state.3
+    - path: /usr/share/man/man3/capng_set_rootid.3
+    - path: /usr/share/man/man3/capng_setpid.3
+    - path: /usr/share/man/man3/capng_update.3
+    - path: /usr/share/man/man3/capng_updatev.3
+    - path: /usr/share/man/man7/libdrop_ambient.7
+    - path: /usr/share/man/man8/filecap.8
+    - path: /usr/share/man/man8/netcap.8
+    - path: /usr/share/man/man8/pscap.8
+
+  misc:
+    files:
+    - path: /usr/share/aclocal/cap-ng.m4
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libcap-ng.so.0: self

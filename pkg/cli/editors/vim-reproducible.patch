@@ -1,0 +1,23 @@
+From: Nex package maintainers
+Subject: [PATCH] src/Makefile: omit build host details
+
+Keep the version output and binary independent of compiler command lines,
+the build user, and the build host.
+
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -3146,10 +3146,4 @@ auto/pathdef.c: Makefile auto/config.mk
+-	-@echo 'char_u *all_cflags = (char_u *)"$(CC) -c -I$(srcdir) $(ALL_CFLAGS)";' | $(QUOTESED) >>  $@
+-	-@echo 'char_u *all_lflags = (char_u *)"$(CC) $(ALL_LIB_DIRS) $(LDFLAGS) -o $(VIMTARGET) $(ALL_LIBS) ";' | $(QUOTESED) >>  $@
+-	-@echo 'char_u *compiled_user = (char_u *)"' | tr -d $(NL) >> $@
+-	-@if test -n "$(COMPILEDBY)"; then \
+-		echo "$(COMPILEDBY)" | tr -d $(NL) >> $@; \
+-		else (logname 2>/dev/null || whoami) | tr -d $(NL) >> $@; fi
+-	-@echo '";' >> $@
+-	-@echo 'char_u *compiled_sys = (char_u *)"' | tr -d $(NL) >> $@
+-	-@if test -z "$(COMPILEDBY)"; then hostname | tr -d $(NL) >> $@; fi
+-	-@echo '";' >> $@
++	-@echo 'char_u *all_cflags = (char_u *)"";' | $(QUOTESED) >>  $@
++	-@echo 'char_u *all_lflags = (char_u *)"";' | $(QUOTESED) >>  $@
++	-@echo 'char_u *compiled_user = (char_u *)"";' >> $@
++	-@echo 'char_u *compiled_sys = (char_u *)"";' >> $@

@@ -1,0 +1,94 @@
+package:
+  schema: 1
+  name: Bridge Utilities
+  slug: bridge-utils
+  namespace: net/misc
+  version: 1.7.1
+  description: Utilities for configuring Linux Ethernet bridges
+  homepage: https://wiki.linuxfoundation.org/networking/bridge
+  checksum: c553824613c34c8c2addc8da9e0bb17f36888173fc1a49b5877a3e7566c54f3a
+
+sources:
+- name: bridge_utils
+  url: https://www.kernel.org/pub/linux/utils/net/bridge-utils/bridge-utils-1.7.1.tar.xz
+  sha256: a61d8be4f1a1405c60c8ef38d544f0c18c05b33b9b07e5b4b31033536165e60e
+
+dependencies:
+- name: autoconf
+  commit: x86_64/pkg/core/toolchain/autoconf/2.72/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: m4
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4168:1143, 6952:1446]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_bridge_utils}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    autoheader
+    autoconf
+    ./configure \
+      --prefix=/usr \
+      --sbindir=/usr/bin \
+      --with-linux-headers=/usr/include
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  full:
+  - bin
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/brctl
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man8/brctl.8
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
