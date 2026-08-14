@@ -1,6 +1,83 @@
+use std::io::ErrorKind;
+
 use serde_yaml::Value;
 
 use super::format::format_manifest_string;
+use super::{Overlay, OverlayEntry};
+
+#[test]
+fn formats_overlay_without_losing_files_or_comments() {
+    let input = r#"files:
+# locale policy
+- path: /etc/locale.conf
+  replace: true
+  content: |
+    LANG=en_GB.UTF-8
+  mode: 420
+
+# resolver policy
+- path: /etc/resolv.conf
+  symlink: /run/systemd/resolve/stub-resolv.conf
+"#;
+
+    let formatted = format_manifest_string(input).expect("overlay should format");
+    assert!(
+        formatted.contains(
+            "files:\n# locale policy\n- path: /etc/locale.conf\n  mode: 420\n  content: |\n    LANG=en_GB.UTF-8\n  replace: true\n"
+        ),
+        "formatter lost the locale entry or its comment:\n{formatted}"
+    );
+    assert!(formatted.contains(
+        "# resolver policy\n- path: /etc/resolv.conf\n  symlink: /run/systemd/resolve/stub-resolv.conf\n"
+    ));
+
+    let overlay: Overlay =
+        serde_yaml::from_str(&formatted).expect("formatted overlay should parse");
+    assert_eq!(overlay.files.len(), 2);
+    assert_eq!(overlay.files[0].mode, Some(420));
+    assert_eq!(
+        overlay.files[0].content.as_deref(),
+        Some("LANG=en_GB.UTF-8\n")
+    );
+    assert!(overlay.files[0].replace);
+}
+
+#[test]
+fn preserves_overlay_content_chomping() {
+    for content in ["no newline", "one newline\n", "two newlines\n\n", "\n", ""] {
+        let input = serde_yaml::to_string(&Overlay {
+            files: vec![OverlayEntry {
+                path: "/test".into(),
+                mode: None,
+                content: Some(content.to_string()),
+                source: None,
+                symlink: None,
+                directory: false,
+                replace: false,
+            }],
+        })
+        .expect("test overlay should serialize");
+
+        let formatted = format_manifest_string(&input).expect("overlay should format");
+        let overlay: Overlay =
+            serde_yaml::from_str(&formatted).expect("formatted overlay should parse");
+        assert_eq!(
+            overlay.files[0].content.as_deref(),
+            Some(content),
+            "formatter changed this overlay:\n{formatted}"
+        );
+    }
+}
+
+#[test]
+fn rejects_unknown_manifest_roots_instead_of_erasing_them() {
+    let error = format_manifest_string("unexpected: value\n")
+        .expect_err("formatter should reject an unknown manifest root");
+    assert_eq!(error.kind(), ErrorKind::InvalidData);
+    assert!(error
+        .to_string()
+        .contains("manifest must contain package, system, or files"));
+}
 
 #[test]
 fn formats_graphics_providers_after_packages() {

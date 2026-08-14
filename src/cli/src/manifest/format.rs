@@ -27,8 +27,21 @@ pub fn format_manifest_string(contents: &str) -> io::Result<String> {
         .as_mapping()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "manifest must be a mapping"))?;
 
-    let is_system = mapping.contains_key(Value::String("system".to_string()));
-    let formatted = format_root(mapping, is_system, original_version.as_deref())?;
+    let system_key = Value::String("system".to_string());
+    let package_key = Value::String("package".to_string());
+    let files_key = Value::String("files".to_string());
+    let formatted = if mapping.contains_key(&system_key) {
+        format_root(mapping, true, original_version.as_deref())?
+    } else if mapping.contains_key(&package_key) {
+        format_root(mapping, false, original_version.as_deref())?
+    } else if mapping.contains_key(&files_key) {
+        format_overlay(mapping)?
+    } else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "manifest must contain package, system, or files",
+        ));
+    };
     Ok(restore_section_item_comments(contents, &formatted))
 }
 
@@ -46,8 +59,8 @@ fn restore_section_item_comments(original: &str, formatted: &str) -> String {
             section = line.trim_end_matches(':');
         }
 
-        if matches!(section, "sources" | "dependencies" | "packages") {
-            if let Some(name) = parse_item_name(line) {
+        if matches!(section, "sources" | "dependencies" | "packages" | "files") {
+            if let Some(name) = parse_item_identity(section, line) {
                 if let Some(lines) = comments.get(&(section.to_string(), name)) {
                     for comment in lines {
                         output.push_str(comment);
@@ -76,7 +89,7 @@ fn collect_section_item_comments(contents: &str) -> HashMap<(String, String), Ve
             continue;
         }
 
-        if !matches!(section, "sources" | "dependencies" | "packages") {
+        if !matches!(section, "sources" | "dependencies" | "packages" | "files") {
             continue;
         }
 
@@ -86,7 +99,7 @@ fn collect_section_item_comments(contents: &str) -> HashMap<(String, String), Ve
             continue;
         }
 
-        if let Some(name) = parse_item_name(line) {
+        if let Some(name) = parse_item_identity(section, line) {
             if !pending.is_empty() {
                 comments.insert((section.to_string(), name), std::mem::take(&mut pending));
             }
@@ -110,10 +123,12 @@ fn is_top_level_section(line: &str) -> bool {
         && !trimmed.starts_with('-')
 }
 
-fn parse_item_name(line: &str) -> Option<String> {
+fn parse_item_identity(section: &str, line: &str) -> Option<String> {
     let trimmed = line.trim_start();
-    let name = trimmed.strip_prefix("- name:")?.trim();
-    Some(unquote_scalar(name))
+    let field = if section == "files" { "path" } else { "name" };
+    let prefix = format!("- {field}:");
+    let value = trimmed.strip_prefix(&prefix)?.trim();
+    Some(unquote_scalar(value))
 }
 
 fn unquote_scalar(value: &str) -> String {
@@ -348,6 +363,123 @@ fn format_generic_section(name: &str, value: &Value) -> io::Result<String> {
     }
 
     Ok(output)
+}
+
+fn format_overlay(mapping: &Mapping) -> io::Result<String> {
+    let files_key = Value::String("files".to_string());
+    if mapping.keys().any(|key| key != &files_key) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "overlay manifest may only contain files",
+        ));
+    }
+
+    let files = mapping
+        .get(&files_key)
+        .and_then(Value::as_sequence)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "files must be a sequence"))?;
+    if files.is_empty() {
+        return Ok(String::from("files: []\n"));
+    }
+
+    let mut output = String::from("files:\n");
+    for file in files {
+        format_overlay_entry(file, &mut output)?;
+    }
+
+    Ok(output)
+}
+
+const OVERLAY_FIELDS: [&str; 7] = [
+    "path",
+    "mode",
+    "content",
+    "source",
+    "symlink",
+    "directory",
+    "replace",
+];
+
+fn format_overlay_entry(value: &Value, output: &mut String) -> io::Result<()> {
+    let file = value.as_mapping().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "overlay file must be a mapping")
+    })?;
+    validate_overlay_fields(file)?;
+
+    let path = overlay_field(file, "path")
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "overlay file requires path"))?;
+    output.push_str(&format!("- path: {}\n", format_scalar(path)));
+
+    for field in OVERLAY_FIELDS.iter().skip(1) {
+        if let Some(value) = overlay_field(file, field) {
+            format_overlay_field(field, value, output)?;
+        }
+    }
+    output.push('\n');
+    Ok(())
+}
+
+fn validate_overlay_fields(file: &Mapping) -> io::Result<()> {
+    for key in file.keys() {
+        let field = key.as_str().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "overlay file fields must be strings",
+            )
+        })?;
+        if !OVERLAY_FIELDS.contains(&field) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unknown overlay file field: {field}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn overlay_field<'a>(file: &'a Mapping, field: &str) -> Option<&'a Value> {
+    file.get(Value::String(field.to_string()))
+}
+
+fn format_overlay_field(field: &str, value: &Value, output: &mut String) -> io::Result<()> {
+    if field != "content" {
+        output.push_str(&format!("  {field}: {}\n", format_scalar(value)));
+        return Ok(());
+    }
+
+    let content = value.as_str().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "overlay file content must be a string",
+        )
+    })?;
+    format_overlay_content(content, output);
+    Ok(())
+}
+
+fn format_overlay_content(content: &str, output: &mut String) {
+    if !content.is_empty() && content.bytes().all(|byte| byte == b'\n') {
+        output.push_str("  content: \"");
+        output.push_str(&"\\n".repeat(content.len()));
+        output.push_str("\"\n");
+        return;
+    }
+
+    let chomping = if content.ends_with("\n\n") {
+        "+"
+    } else if content.ends_with('\n') {
+        ""
+    } else {
+        "-"
+    };
+    output.push_str(&format!("  content: |{chomping}\n"));
+
+    let body = content.strip_suffix('\n').unwrap_or(content);
+    for line in body.split('\n') {
+        output.push_str("    ");
+        output.push_str(line);
+        output.push('\n');
+    }
 }
 
 /// format version field, quoting only if it looks like a number
