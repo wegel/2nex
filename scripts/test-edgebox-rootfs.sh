@@ -85,6 +85,7 @@ assert_contains smartmontools 7.5 smartctl --version
 assert_contains usbutils 019 lsusb --version
 assert_contains dmidecode 3.7 dmidecode --version
 assert_contains e2fsprogs 1.47.0 e2fsck -V
+assert_contains e2scrub 1.47.0 e2scrub -V
 assert_contains kbd 2.9.0 loadkeys -V
 assert_contains vim 9.2 vim --version
 assert_contains wireplumber 0.5.12 wireplumber --version
@@ -99,6 +100,25 @@ assert_contains lsusb-python Usage /usr/bin/lsusb.py --help
 [[ ! -e /etc/login.defs ]] || fail "Shadow installed a package default in /etc"
 [[ ! -e /etc/pam.d ]] || fail "a package installed PAM service policy in /etc"
 printf 'PASS: vendor account and PAM policy\n'
+
+[[ -f /usr/lib/profile ]] || fail "Bash vendor profile is missing"
+[[ ! -e /etc/profile ]] || fail "the assembly installed its Bash profile in /etc"
+[[ "$(HOME=/root bash --login -c 'printf "%s|%s" "$PS1" "$TERM"')" == '# |linux' ]] ||
+    fail "Bash did not read the vendor profile"
+printf 'PASS: Bash vendor profile\n'
+
+[[ -f /usr/lib/e2scrub.conf ]] || fail "e2scrub vendor policy is missing"
+[[ -f /usr/lib/mke2fs.conf ]] || fail "mke2fs vendor policy is missing"
+[[ ! -e /etc/e2scrub.conf ]] || fail "e2fsprogs installed e2scrub policy in /etc"
+[[ ! -e /etc/mke2fs.conf ]] || fail "e2fsprogs installed mke2fs policy in /etc"
+e2fs_image=$(mktemp /tmp/e2fsprogs-rootfs-test.XXXXXX)
+truncate -s 32M "$e2fs_image"
+mke2fs -q -F -t ext4 "$e2fs_image"
+dumpe2fs -h "$e2fs_image" 2>/dev/null |
+    grep -Fx 'Filesystem magic number:  0xEF53' >/dev/null ||
+    fail "mke2fs did not create an ext4 filesystem"
+rm -f "$e2fs_image"
+printf 'PASS: e2fsprogs vendor policy and filesystem creation\n'
 
 [[ "$(locale charmap)" == UTF-8 ]] || fail "locale charmap is not UTF-8"
 locale -a | grep -Fx en_GB.UTF-8 >/dev/null || fail "en_GB.UTF-8 is not generated"
