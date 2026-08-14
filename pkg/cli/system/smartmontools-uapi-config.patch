@@ -1,0 +1,123 @@
+From: Nex package maintainers
+Subject: [PATCH] smartd: follow UAPI configuration file precedence
+Source: Nex
+Upstream: not submitted; suitable for upstream review
+
+Let a machine owner override temporary or vendor configuration without copying
+the vendor file into /etc. The ordered smartd grammar cannot safely merge
+drop-ins, so select one complete file as UAPI.6 permits. Re-evaluate the
+default path on reload so a newly created or removed local override takes
+effect. An explicit --configfile continues to select exactly that file.
+
+diff --git a/smartd.cpp b/smartd.cpp
+index 510e0f6..c74d1a7 100644
+--- a/smartd.cpp
++++ b/smartd.cpp
+@@ -168,0 +169,2 @@ static const char * configfile;
++// true unless -c selected an explicit file or standard input
++static bool configfile_default;
+@@ -173,0 +176,30 @@ static std::string configfile_alt;
++#ifndef _WIN32
++#ifndef SMARTMONTOOLS_SMARTDCONFRUNDIR
++#define SMARTMONTOOLS_SMARTDCONFRUNDIR "/run/smartmontools"
++#endif
++#ifndef SMARTMONTOOLS_SMARTDCONFVENDORDIR
++#define SMARTMONTOOLS_SMARTDCONFVENDORDIR "/usr/lib/smartmontools"
++#endif
++
++static const char * select_default_configfile()
++{
++  static const char * const paths[] = {
++    SMARTMONTOOLS_SYSCONFDIR "/smartd.conf",
++    SMARTMONTOOLS_SMARTDCONFRUNDIR "/smartd.conf",
++    SMARTMONTOOLS_SMARTDCONFVENDORDIR "/smartd.conf"
++  };
++
++  for (const char * path : paths) {
++    if (!access(path, F_OK))
++      return path;
++  }
++  return paths[0];
++}
++
++static void refresh_default_configfile()
++{
++  if (configfile_default)
++    configfile = select_default_configfile();
++}
++#endif
++
+@@ -5467,9 +5499,11 @@ static int parse_options(int argc, char **argv)
+ {
+   // Init default path names
+ #ifndef _WIN32
+-  configfile = SMARTMONTOOLS_SYSCONFDIR "/smartd.conf";
++  configfile_default = true;
++  configfile = select_default_configfile();
+   warning_script = SMARTMONTOOLS_SMARTDSCRIPTDIR "/smartd_warning.sh";
+ #else
++  configfile_default = false;
+   std::string exedir = get_exe_dir();
+   static std::string configfile_str = exedir + "/smartd.conf";
+   configfile = configfile_str.c_str();
+@@ -5641,6 +5675,7 @@ static int parse_options(int argc, char **argv)
+       break;
+     case 'c':
+       // alternate configuration file
++      configfile_default = false;
+       if (strcmp(optarg,"-"))
+         configfile = (configfile_alt = optarg).c_str();
+       else // read from stdin
+@@ -6140,6 +6175,9 @@ static int main_worker(int argc, char **argv)
+   do {
+     // Should we (re)read the config file?
+     if (firstpass || caughtsigHUP){
++#ifndef _WIN32
++      refresh_default_configfile();
++#endif
+       if (!firstpass) {
+         // Write state files
+         if (!state_path_prefix.empty())
+diff --git a/smartd.8.in b/smartd.8.in
+index 3a0fe36..00ff684 100644
+--- a/smartd.8.in
++++ b/smartd.8.in
+@@ -72,6 +72,10 @@ every 30 minutes.
+ .PP
+ \fBsmartd\fP can be configured at start-up using the configuration
+ file \fB/usr/local/etc/smartd.conf\fP (Windows: \fBEXEDIR/smartd.conf\fP).
++On Linux, if that file does not exist, \fBsmartd\fP next checks
++\fB/run/smartmontools/smartd.conf\fP and then
++\fB/usr/lib/smartmontools/smartd.conf\fP.  A file found earlier completely
++replaces files later in this list.
+ If the configuration file is subsequently modified, \fBsmartd\fP
+ can be told to re-read the configuration file by sending it a
+ \fBHUP\fP signal, for example with the command:
+@@ -225,6 +229,9 @@ Please see the \fBsmartctl\fP(8) man page for further details.
+ Read \fBsmartd\fP configuration Directives from FILE, instead of from
+ the default location \fB/usr/local/etc/smartd.conf\fP
+ (Windows: \fBEXEDIR/smartd.conf\fP).
++On Linux, the default also falls back through
++\fB/run/smartmontools/smartd.conf\fP and
++\fB/usr/lib/smartmontools/smartd.conf\fP when the earlier files do not exist.
+ If FILE does \fBnot\fP exist, then \fBsmartd\fP will print an error
+ message and exit with nonzero status.
+ Thus, \*(Aq\-c /usr/local/etc/smartd.conf\*(Aq can be used to verify the
+diff --git a/smartd.conf.5.in b/smartd.conf.5.in
+index 9bcf35d..257ccdb 100644
+--- a/smartd.conf.5.in
++++ b/smartd.conf.5.in
+@@ -35,8 +35,11 @@ smartd.conf.5 \- SMART Disk Monitoring Daemon Configuration File
+ .\"! It does not contain info specific to other platforms.]
+ .\"! .PP
+ .\" %ENDIF NOT OS ALL
+-\fB/usr/local/etc/smartd.conf\fP is the configuration file for the \fBsmartd\fP
+-daemon.
++\fB/usr/local/etc/smartd.conf\fP is the local configuration file for the
++\fBsmartd\fP daemon.  On Linux, if that file does not exist, \fBsmartd\fP next
++checks \fB/run/smartmontools/smartd.conf\fP and then
++\fB/usr/lib/smartmontools/smartd.conf\fP.  A file found earlier completely
++replaces files later in this list.
+ .PP
+ If the configuration file \fB/usr/local/etc/smartd.conf\fP is present,
+ \fBsmartd\fP reads it at startup.
