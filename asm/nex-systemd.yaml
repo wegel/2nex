@@ -5,7 +5,7 @@ system:
   version: 0.0.1
   description: Minimal nex rootfs with systemd, networking, and SSH
   nex_structure: true
-  checksum: b25e5ad96c14ae4d7d1f196aa752a30b533596340e6482c9add9fa132301d852
+  checksum: 362e0a1bb8ff78d7869c9f81075cdbf87474aa0e2a95329f35b80c3d3c80e94f
 
 overlays:
 - asm/nex-systemd-overlay.yaml
@@ -128,8 +128,13 @@ build:
       ln -sf "../../$relpath" "/target/usr/libexec/$name"
     done
 
-    chroot /target /usr/bin/update-ca-certificates
-    test -s /target/etc/ssl/certs/ca-certificates.crt
-    test "$(find /target/etc/ssl/certs -type l | wc -l)" -gt 0
+    test "$(readlink /target/etc/ssl/certs)" = /run/ssl/certs
+    grep -Fq \
+      'ExecStart=/usr/bin/update-ca-certificates --output-dir /run/ssl/certs' \
+      /target/usr/lib/systemd/system/update-ca-certificates.service.d/runtime-store.conf
+    chroot /target /usr/bin/bash -c '
+      test -s /usr/lib/ssl/certs/ca-certificates.crt
+      test "$(find /usr/lib/ssl/certs -type l | wc -l)" -gt 0
+    '
 
     echo "nex-systemd base configuration done."

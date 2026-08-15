@@ -249,6 +249,15 @@ if [ -x /usr/bin/update-ca-certificates ]; then
         fail "update-ca-certificates.service is not active"
     [ -s /etc/ssl/certs/ca-certificates.crt ] ||
         fail "generated CA bundle is missing after boot"
+    if [ -f /usr/lib/systemd/system/update-ca-certificates.service.d/runtime-store.conf ]; then
+        [ -L /etc/ssl/certs ] ||
+            fail "/etc/ssl/certs is not the runtime-cache compatibility link"
+        [ "$(readlink /etc/ssl/certs)" = /run/ssl/certs ] ||
+            fail "/etc/ssl/certs does not target /run/ssl/certs"
+        [ -d /run/ssl/certs ] && [ ! -L /run/ssl/certs ] ||
+            fail "/run/ssl/certs is not a generated directory"
+        echo "system-ca-runtime=ready"
+    fi
     echo "system-ca=ready"
 fi
 echo "ASSERT-BOOT-PASS"
@@ -386,6 +395,15 @@ if [ -x /usr/bin/update-ca-certificates ]; then
         fail "update-ca-certificates.service is not active"
     [ -s /etc/ssl/certs/ca-certificates.crt ] ||
         fail "generated CA bundle is missing after boot"
+    if [ -f /usr/lib/systemd/system/update-ca-certificates.service.d/runtime-store.conf ]; then
+        [ -L /etc/ssl/certs ] ||
+            fail "/etc/ssl/certs is not the runtime-cache compatibility link"
+        [ "$(readlink /etc/ssl/certs)" = /run/ssl/certs ] ||
+            fail "/etc/ssl/certs does not target /run/ssl/certs"
+        [ -d /run/ssl/certs ] && [ ! -L /run/ssl/certs ] ||
+            fail "/run/ssl/certs is not a generated directory"
+        say "system-ca-runtime=ready"
+    fi
     say "system-ca=ready"
 fi
 

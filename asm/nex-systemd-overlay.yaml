@@ -202,6 +202,19 @@ files:
 - path: /etc/resolv.conf
   symlink: /run/systemd/resolve/stub-resolv.conf
 
+# OpenSSL compatibility path; the early boot service regenerates this cache.
+- path: /etc/ssl/certs
+  symlink: /run/ssl/certs
+
+- path: /usr/lib/systemd/system/update-ca-certificates.service.d/runtime-store.conf
+  mode: 420
+  content: |
+    [Service]
+    ExecStartPre=/usr/bin/mkdir -p /run/ssl
+    ExecStartPre=-/usr/bin/ln -s /usr/lib/ssl/certs /run/ssl/certs
+    ExecStart=
+    ExecStart=/usr/bin/update-ca-certificates --output-dir /run/ssl/certs
+
 - path: /init
   symlink: usr/bin/init
 
