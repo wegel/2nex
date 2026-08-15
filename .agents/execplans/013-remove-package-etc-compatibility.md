@@ -103,6 +103,10 @@ package groups.
   both reproducibility passes and reproduced checksum
   `3bda80d32c30f056fc983fce370d64086d6ae6ca4eec9879bd622e1d34561b18`.
   The remaining inventory has two paths across the two Nvidia manifests.
+- [x] (2026-08-15 15:31Z) Audited every local source patch added by this plan,
+  added the required subject, source, upstream status, and rationale where they
+  were missing, and reran all five strict package checks. Tig, Wget, OSTree,
+  Logrotate, and CUPS kept their previously recorded output checksums.
 - [ ] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
   loader that reads all three configuration tiers, then move both Nvidia ICD
   files below `/usr`.
@@ -224,6 +228,14 @@ package groups.
   `/etc/cups/ssl`, `/run/cups/certs`, and empty directories below `/var`. The
   manifest now configures mutable state at `/var` and `/run` and removes those
   empty package-output directories after installing the immutable files.
+
+- Observation: The first Tig, Wget, OSTree, and CUPS patch files lacked the
+  provenance header required by `.agents/MANIFESTS_CODE_STYLE.md`; Logrotate
+  used `Description` where the rule requires `Subject`.
+  Evidence: a patch-only audit of commits after the plan's starting revision
+  found exactly five added patch files. After correcting their headers, all
+  five strict builds reproduced their prior output checksums, which proves the
+  patch bodies and installed results did not change.
 
 ## Decision Log
 
@@ -659,7 +671,7 @@ with a broad exception.
   SHA-256
   `42b4080ee99c9fb6a7d12d8e787637d057a635194e25971997eebbe8d5e57618`.
   Its local UAPI patch has SHA-256
-  `ab2f23d8f11842133d9264b2727095c0a43e4f342be8bed663ec5e08f4f7ae89`.
+  `d99c03ae392baa51a205e34a69b3a362d247f5d52c41069559dc380e3aa08d5f`.
   The package checksum is
   `ac3b8e243fd2b635ec26ec32455a8d32a91dbae9509c3e6f91c2988745cc676e`;
   Libvirt's relocated package checksum is
@@ -671,22 +683,22 @@ with a broad exception.
   Logrotate rotations, `systemd-analyze verify`, and the factory-tree timer
   link check inside that finished root.
 - Tig's local UAPI patch has SHA-256
-  `5a6244ee6b57e40fc31e2a5cf071fa048625cfa915938280260585ceef132f6e`
+  `7d7de1e6f653232f7a55b959a11535efa25d50b61d181a8c1f0329e3ece6b7d7`
   and its package checksum is
   `719e941eeb2fba518741a3e0aabae2a306c62679832ef0cedc5a298270f47bed`.
   Wget's local UAPI patch has SHA-256
-  `ad7318bc67f49d9fed1ec17ec1802545bad15bcfb11ce27833cc2a9a3e7c8b65`
+  `26e921d168fa00d550c484f706622e9c785cae7181c93ba19997a36d0994173e`
   and its package checksum is
   `a876127cd537d03c83ff475d14e65b3373429f17d45dca29b47b3d9ffb53520f`.
 - OSTree's POSIX command-lookup patch has SHA-256
-  `b2ecddbd25144d0583fd4920b582c9d39faaa5133f8e221320d1e4f2c9af6970`.
+  `5c0800da2eac70c9fb79c77c2a179fb7c22be10a49e52fef18b8e0761ec71401`.
   Two strict builds reproduced package checksum
   `bed476afcea258b6e3c106192767dff807fde5a2f64d9c48c6fc0f0be06d26a9`.
   The embedded test ran the installed GRUB integration script with mocked GRUB
   helpers and OSTree, checked its parent-process error, and checked its BLS
   skip path.
 - CUPS's local UAPI patch has SHA-256
-  `6e1ee3b80f9423bec4d656765f3f118702443538196c1b7f05d09e677e9bb65d`.
+  `54c67a2bf048f9340ac097de89bbb928a5eaa0807b39996326026d75a2c3422b`.
   Two strict reproducibility builds produced package checksum
   `3bda80d32c30f056fc983fce370d64086d6ae6ca4eec9879bd622e1d34561b18`.
   The embedded smoke validated separate main-file tiers, empty masks, explicit
