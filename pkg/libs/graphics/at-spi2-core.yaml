@@ -6,7 +6,7 @@ package:
   version: 2.54.0
   description: Assistive Technology Service Provider Interface (core)
   homepage: https://wiki.gnome.org/Accessibility
-  checksum: c4cfc4e2f63e73d1ba383cc68f48e114051ceb13795472c11a3bc3b54acb3499
+  checksum: f0095818e1a16ccac0a82439d22715662d6e21108cce23484cad434951d23bf9
 
 sources:
 - name: at-spi2-core
@@ -64,6 +64,8 @@ dependencies:
   commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
 - name: dbus
   commit: x86_64/pkg/core/ipc/dbus/1.16.2/bundles/dev
+- name: dbus-broker
+  commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/bin
 - name: systemd
   commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
 - name: libcap
@@ -73,7 +75,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4158:1140, 8327:1474, 12502:1679, 16608:1842, 20709:4446, 24852:4446, 27042:4518]
+  profile: [4109:1120, 8259:1486, 12408:1714, 16522:1903, 20630:4478, 24754:4478, 27114:4553]
 
   script: |
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -84,6 +86,9 @@ build:
       --sysconfdir=/etc \
       --libdir=lib \
       --buildtype=release \
+      -Ddbus_daemon=/usr/bin/dbus-daemon \
+      -Ddbus_broker=/usr/bin/dbus-broker-launch \
+      -Ddefault_bus=dbus-broker \
       -Dx11=disabled \
       -Dintrospection=enabled
 
@@ -99,6 +104,15 @@ build:
       "${OUT_DIR}/usr/share/xdg/autostart/at-spi-dbus-bus.desktop"
     grep -qx 'Exec=/usr/libexec/at-spi-bus-launcher --launch-immediately' \
       "${OUT_DIR}/usr/share/xdg/autostart/at-spi-dbus-bus.desktop"
+    strings "${OUT_DIR}/usr/libexec/at-spi-bus-launcher" \
+      | grep -qx '/usr/bin/dbus-daemon'
+    strings "${OUT_DIR}/usr/libexec/at-spi-bus-launcher" \
+      | grep -qx '/usr/bin/dbus-broker-launch'
+    if strings "${OUT_DIR}/usr/libexec/at-spi-bus-launcher" \
+        | grep -q '^/usr/sbin/dbus-daemon$'; then
+      echo 'at-spi-bus-launcher retained the host dbus-daemon path' >&2
+      exit 1
+    fi
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -120,11 +134,15 @@ outputs:
     files:
     - path: /usr/libexec/at-spi-bus-launcher
       needs:
+      - /usr/bin/dbus-broker
+      - /usr/bin/dbus-broker-launch
+      - /usr/bin/dbus-daemon
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libgio-2.0.so.0
       - /usr/lib/libglib-2.0.so.0
       - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libsystemd.so.0
     - path: /usr/libexec/at-spi2-registryd
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -297,7 +315,10 @@ outputs:
     - path: /usr/share/gir-1.0/Atspi-2.0.gir
 
 resolution:
+  /usr/bin/dbus-daemon: dbus
   /usr/lib/libdbus-1.so.3: dbus
+  /usr/bin/dbus-broker: dbus-broker
+  /usr/bin/dbus-broker-launch: dbus-broker
   /usr/lib/libgio-2.0.so.0: glib2
   /usr/lib/libglib-2.0.so.0: glib2
   /usr/lib/libgmodule-2.0.so.0: glib2
@@ -310,3 +331,4 @@ resolution:
   /usr/lib/libatk-1.0.so.0: self
   /usr/lib/libatk-bridge-2.0.so.0: self
   /usr/lib/libatspi.so.0: self
+  /usr/lib/libsystemd.so.0: systemd
