@@ -1,0 +1,376 @@
+From: Package maintainers <packages@localhost>
+Subject: [PATCH] search layered system configuration before vendor defaults
+Source: https://github.com/ErikReider/SwayNotificationCenter/archive/refs/tags/v0.10.1.tar.gz
+Upstream: Not submitted; this is a generic UAPI configuration proposal.
+
+Install package defaults below /usr/share and search the normal user and
+administrator XDG paths first. Add /run/xdg for temporary machine overrides,
+then use the package files as the final fallback. Re-run that search on reload
+instead of treating the file selected at startup as an explicit override.
+
+Add a focused test for the full priority order. This keeps the behavior useful
+on any normal Linux system and makes an empty higher-priority file mask lower
+defaults.
+---
+ meson.build                       |  8 +++++--
+ data/meson.build                  |  2 +-
+ src/configModel/configModel.vala |  7 +++---
+ src/configPaths.vala             | 46 ++++++++++++++++++++++++++++++++++++++++
+ src/constants.vala.in            |  1 +
+ src/functions.vala               | 74 ++++++++++++++++------------------------
+ src/meson.build                  | 12 ++++++++----
+ tests/config-paths-test.vala     | 52 +++++++++++++++++++++++++++++++++++++++++++++
+ tests/meson.build                |  8 +++++++
+ 9 files changed, 150 insertions(+), 59 deletions(-)
+ create mode 100644 src/configPaths.vala
+ create mode 100644 tests/config-paths-test.vala
+ create mode 100644 tests/meson.build
+
+diff --git a/meson.build b/meson.build
+index 5bb7643..72fba2b 100644
+--- a/meson.build
++++ b/meson.build
+@@ -13,10 +13,16 @@ gnome = import('gnome')
+ 
+ app_resources = []
+ 
+-config_path = join_paths(get_option('sysconfdir'), 'xdg', 'swaync')
++vendor_config_install_dir = join_paths(get_option('datadir'), 'xdg', 'swaync')
++if vendor_config_install_dir.startswith('/')
++  vendor_config_dir = vendor_config_install_dir
++else
++  vendor_config_dir = join_paths(get_option('prefix'), vendor_config_install_dir)
++endif
+ 
+ subdir('data')
+ subdir('src')
++subdir('tests')
+ 
+ datadir = get_option('datadir')
+ libdir = get_option('libdir')
+diff --git a/data/meson.build b/data/meson.build
+index 48bc63a..9046841 100644
+--- a/data/meson.build
++++ b/data/meson.build
+@@ -23,7 +23,7 @@ style_css = custom_target(
+   input : 'style/style.scss',
+   output : 'style.css',
+   install: true,
+-  install_dir: config_path,
++  install_dir: vendor_config_install_dir,
+   command : [
+     sassc,
+     '-t',
+diff --git a/src/configModel/configModel.vala b/src/configModel/configModel.vala
+index 56f6547..eee4f47 100644
+--- a/src/configModel/configModel.vala
++++ b/src/configModel/configModel.vala
+@@ -262,6 +262,7 @@ namespace SwayNotificationCenter {
+ 
+         private static ConfigModel _instance;
+         private static string _path = "";
++        private static string ? _requested_path = null;
+ 
+         /** Get the static singleton */
+         public static unowned ConfigModel instance {
+@@ -274,7 +275,7 @@ namespace SwayNotificationCenter {
+ 
+         /** Get the static singleton and reload the config */
+         public static unowned ConfigModel init (string ? path) {
+-            _path = Functions.get_config_path (path);
++            _requested_path = path;
+             reload_config ();
+             return _instance;
+         }
+@@ -283,8 +284,8 @@ namespace SwayNotificationCenter {
+ 
+         /** Reloads the config and calls `ModifyNode` before deserializing */
+         public static void reload_config (ModifyNode modify_cb = () => {}) {
+-            // Re-check if config file path still exists
+-            string path = Functions.get_config_path (_path);
++            // Re-run the layered search so a new higher-priority file wins.
++            string path = Functions.get_config_path (_requested_path);
+             path = File.new_for_path (path).get_path () ?? path;
+             message ("Loading Config: \"%s\"", path);
+ 
+diff --git a/src/configPaths.vala b/src/configPaths.vala
+new file mode 100644
+index 0000000..16e26e4
+--- /dev/null
++++ b/src/configPaths.vala
+@@ -0,0 +1,46 @@
++namespace SwayNotificationCenter {
++    public class ConfigPaths {
++        private ConfigPaths () {}
++
++        public static string[] build_search_paths (
++                owned string ? custom_path,
++                bool include_user,
++                string relative_path,
++                string user_config_dir,
++                string[] system_config_dirs,
++                string runtime_config_dir,
++                string vendor_config_dir) {
++            string[] paths = {};
++
++            if (custom_path != null &&
++                    (custom_path = custom_path.strip ()).length > 0) {
++                if (custom_path.get (0) == '~') {
++                    custom_path = Environment.get_home_dir () + custom_path[1:];
++                }
++                paths += custom_path;
++            }
++
++            if (include_user) {
++                paths += Path.build_path (Path.DIR_SEPARATOR.to_string (),
++                                          user_config_dir, relative_path);
++            }
++            foreach (unowned string path in system_config_dirs) {
++                paths += Path.build_path (Path.DIR_SEPARATOR.to_string (),
++                                          path, relative_path);
++            }
++            paths += Path.build_path (Path.DIR_SEPARATOR.to_string (),
++                                      runtime_config_dir, relative_path);
++            paths += Path.build_path (Path.DIR_SEPARATOR.to_string (),
++                                      vendor_config_dir, relative_path);
++
++            return paths;
++        }
++
++        public static string ? find_first_existing (string[] paths) {
++            foreach (unowned string path in paths) {
++                if (File.new_for_path (path).query_exists ()) return path;
++            }
++            return null;
++        }
++    }
++}
+diff --git a/src/constants.vala.in b/src/constants.vala.in
+index 31779bc..9d5672a 100644
+--- a/src/constants.vala.in
++++ b/src/constants.vala.in
+@@ -1,5 +1,6 @@
+ public class Constants {
+     public const string VERSION = @VERSION@;
+     public const string VERSIONNUM = @VERSION_NUM@;
++    public const string VENDOR_CONFIG_DIR = @VENDOR_CONFIG_DIR@;
+     public const uint ANIMATION_DURATION = 400;
+ }
+diff --git a/src/functions.vala b/src/functions.vala
+index 7429830..c7b1800 100644
+--- a/src/functions.vala
++++ b/src/functions.vala
+@@ -114,38 +114,20 @@ namespace SwayNotificationCenter {
+ 
+         public static string get_style_path (owned string ? custom_path,
+                                              bool only_system = false) {
+-            string[] paths = {};
+-            if (custom_path != null && custom_path.length > 0) {
+-                // Replaces the home directory relative path with a absolute path
+-                if (custom_path.get (0) == '~') {
+-                    custom_path = Environment.get_home_dir () + custom_path[1:];
+-                }
+-                paths += custom_path;
+-            }
+-            if (!only_system) {
+-                paths += Path.build_path (Path.DIR_SEPARATOR.to_string (),
+-                                          Environment.get_user_config_dir (),
+-                                          "swaync/style.css");
+-            }
+-
+-            foreach (var path in Environment.get_system_config_dirs ()) {
+-                paths += Path.build_path (Path.DIR_SEPARATOR.to_string (),
+-                                          path, "swaync/style.css");
+-            }
+-            // Fallback location. Specified in postinstall.py. Mostly for Debian
+-            paths += "/usr/local/etc/xdg/swaync/style.css";
++            string[] paths = ConfigPaths.build_search_paths (
++                custom_path,
++                !only_system,
++                "swaync/style.css",
++                Environment.get_user_config_dir (),
++                Environment.get_system_config_dirs (),
++                "/run/xdg",
++                Constants.VENDOR_CONFIG_DIR);
+ 
+             info ("Looking for CSS file in these directories:\n\t- %s",
+                   string.joinv ("\n\t- ", paths));
+ 
+-            string path = "";
+-            foreach (string try_path in paths) {
+-                if (File.new_for_path (try_path).query_exists ()) {
+-                    path = try_path;
+-                    break;
+-                }
+-            }
+-            if (path == "") {
++            string ? path = ConfigPaths.find_first_existing (paths);
++            if (path == null) {
+                 stderr.printf (
+                     "COULD NOT FIND CSS FILE! REINSTALL THE PACKAGE!\n");
+                 Process.exit (1);
+@@ -154,40 +136,20 @@ namespace SwayNotificationCenter {
+         }
+ 
+         public static string get_config_path (owned string ? custom_path) {
+-            string[] paths = {};
+-            if (custom_path != null && (custom_path = custom_path.strip ()).length > 0) {
+-                // Replaces the home directory relative path with a absolute path
+-                if (custom_path.get (0) == '~') {
+-                    custom_path = Environment.get_home_dir () + custom_path[1:];
+-                }
+-
+-                if (File.new_for_path (custom_path).query_exists ()) {
+-                    paths += custom_path;
+-                } else {
+-                    critical ("Custom config file \"%s\" not found, skipping...", custom_path);
+-                }
+-            }
+-            paths += Path.build_path (Path.DIR_SEPARATOR.to_string (),
+-                                      Environment.get_user_config_dir (),
+-                                      "swaync/config.json");
+-            foreach (var path in Environment.get_system_config_dirs ()) {
+-                paths += Path.build_path (Path.DIR_SEPARATOR.to_string (),
+-                                          path, "swaync/config.json");
+-            }
+-            // Fallback location. Specified in postinstall.py. Mostly for Debian
+-            paths += "/usr/local/etc/xdg/swaync/config.json";
++            string[] paths = ConfigPaths.build_search_paths (
++                custom_path,
++                true,
++                "swaync/config.json",
++                Environment.get_user_config_dir (),
++                Environment.get_system_config_dirs (),
++                "/run/xdg",
++                Constants.VENDOR_CONFIG_DIR);
+ 
+             info ("Looking for config file in these directories:\n\t- %s",
+                   string.joinv ("\n\t- ", paths));
+ 
+-            string path = "";
+-            foreach (string try_path in paths) {
+-                if (File.new_for_path (try_path).query_exists ()) {
+-                    path = try_path;
+-                    break;
+-                }
+-            }
+-            if (path == "") {
++            string ? path = ConfigPaths.find_first_existing (paths);
++            if (path == null) {
+                 stderr.printf (
+                     "COULD NOT FIND CONFIG FILE! REINSTALL THE PACKAGE!\n");
+                 Process.exit (1);
+diff --git a/src/meson.build b/src/meson.build
+index 2c26e4c..7e80373 100644
+--- a/src/meson.build
++++ b/src/meson.build
+@@ -16,6 +16,8 @@ version = 'swaync @0@'.format(version)
+ const_config_data = configuration_data()
+ const_config_data.set_quoted('VERSION', version)
+ const_config_data.set_quoted('VERSION_NUM', meson.project_version())
++const_config_data.set_quoted('VENDOR_CONFIG_DIR', vendor_config_dir)
++config_paths_source = files('configPaths.vala')
+ constants = configure_file(
+   input : 'constants.vala.in',
+   output : 'constants.vala',
+@@ -64,6 +66,7 @@ app_sources = [
+   widget_sources,
+   'blankWindow/blankWindow.vala',
+   'functions.vala',
++  config_paths_source,
+   constants,
+ ]
+ 
+@@ -132,12 +135,12 @@ executable('swaync-client',
+ )
+ 
+ config_data = configuration_data()
+-config_data.set_quoted('JSONPATH', join_paths('/', config_path, 'configSchema.json'))
++config_data.set_quoted('JSONPATH', join_paths(vendor_config_dir, 'configSchema.json'))
+ config_json = configure_file(
+   input : 'config.json.in',
+   output : 'config.json',
+   configuration : config_data
+ )
+ 
+-install_data(config_json, install_dir : config_path)
+-install_data('configSchema.json', install_dir : config_path)
++install_data(config_json, install_dir : vendor_config_install_dir)
++install_data('configSchema.json', install_dir : vendor_config_install_dir)
+ install_data('org.erikreider.swaync.gschema.xml',
+   install_dir: join_paths(get_option('datadir'), 'glib-2.0/schemas')
+ )
+diff --git a/tests/config-paths-test.vala b/tests/config-paths-test.vala
+new file mode 100644
+index 0000000..87776ee
+--- /dev/null
++++ b/tests/config-paths-test.vala
+@@ -0,0 +1,52 @@
++using SwayNotificationCenter;
++
++private void write_file (string path) throws FileError {
++    DirUtils.create_with_parents (Path.get_dirname (path), 0700);
++    FileUtils.set_contents (path, "{}");
++}
++
++private void test_priority () {
++    try {
++        string root = DirUtils.make_tmp ("swaync-config-paths-XXXXXX");
++        string custom = Path.build_filename (root, "custom.json");
++        string user = Path.build_filename (root, "user");
++        string admin_first = Path.build_filename (root, "admin-first");
++        string admin_second = Path.build_filename (root, "admin-second");
++        string runtime = Path.build_filename (root, "runtime");
++        string vendor = Path.build_filename (root, "vendor");
++        string[] system_dirs = { admin_first, admin_second };
++        string[] paths = ConfigPaths.build_search_paths (
++            custom, true, "swaync/config.json", user, system_dirs,
++            runtime, vendor);
++
++        assert (paths.length == 6);
++        assert (paths[0] == custom);
++        assert (paths[1] == Path.build_filename (user, "swaync/config.json"));
++        assert (paths[2] == Path.build_filename (admin_first, "swaync/config.json"));
++        assert (paths[3] == Path.build_filename (admin_second, "swaync/config.json"));
++        assert (paths[4] == Path.build_filename (runtime, "swaync/config.json"));
++        assert (paths[5] == Path.build_filename (vendor, "swaync/config.json"));
++
++        write_file (paths[5]);
++        assert (ConfigPaths.find_first_existing (paths) == paths[5]);
++        write_file (paths[4]);
++        assert (ConfigPaths.find_first_existing (paths) == paths[4]);
++        write_file (paths[3]);
++        assert (ConfigPaths.find_first_existing (paths) == paths[3]);
++        write_file (paths[2]);
++        assert (ConfigPaths.find_first_existing (paths) == paths[2]);
++        write_file (paths[1]);
++        assert (ConfigPaths.find_first_existing (paths) == paths[1]);
++        write_file (paths[0]);
++        assert (ConfigPaths.find_first_existing (paths) == paths[0]);
++    } catch (FileError e) {
++        Test.fail ();
++        critical ("Could not create test files: %s", e.message);
++    }
++}
++
++public int main (string[] args) {
++    Test.init (ref args);
++    Test.add_func ("/config-paths/priority", test_priority);
++    return Test.run ();
++}
+diff --git a/tests/meson.build b/tests/meson.build
+new file mode 100644
+index 0000000..7ba0a0b
+--- /dev/null
++++ b/tests/meson.build
+@@ -0,0 +1,8 @@
++config_paths_test = executable(
++  'config-paths-test',
++  ['config-paths-test.vala', config_paths_source],
++  dependencies: [dependency('gio-2.0')],
++  install: false,
++)
++
++test('Config path search order', config_paths_test)
+-- 
+2.51.0

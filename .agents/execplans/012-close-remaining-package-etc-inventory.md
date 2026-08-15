@@ -41,6 +41,10 @@ named below.
   files from `/etc/xdg` to their documentation trees, strictly rebuilt both
   packages and all four desktop images, and parsed each installed example
   with the matching program.
+- [x] (2026-08-15 01:35Z) Moved SwayNC's required package defaults to
+  `/usr/share/xdg/swaync`, added `/run/xdg` below the normal XDG system
+  directories, fixed layered reloads, strictly rebuilt the package and four
+  desktop images, and ran the new path-order test in both package builds.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -104,6 +108,18 @@ named below.
   Evidence: `asm/desktop-vwl/desktop-vwl.yaml` names both `outputs/bin` refs,
   while `desktop-vwl-overlay.yaml` creates the user-specific Foot file.
 
+- Observation: SwayNC remembered the file that won its startup search and
+  passed that selected path back as an explicit path during reload.
+  Evidence: `ConfigModel.reload_config()` called
+  `Functions.get_config_path(_path)`, so a vendor file selected at startup
+  kept winning after an administrator created a higher-priority file.
+
+- Observation: An assembly build without `--single` tried to rebuild 43 stale
+  dependencies before it reached the image.
+  Evidence: the first desktop-vwl command reported a 44-node build graph and
+  started the phase-zero bootstrap chain. The same command with `--single`
+  built only the image twice from its declared store refs.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -155,6 +171,21 @@ named below.
   either one in `/etc/xdg` claims an administrator choice without changing
   program behavior. The programs still honor the XDG Base Directory
   specification, including its default `/etc/xdg` administrator path.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Install SwayNC's required defaults below `/usr/share/xdg/swaync`
+  and search `/run/xdg` between the XDG administrator directories and that
+  vendor directory.
+  Rationale: SwayNC exits when it cannot find its JSON file and style sheet,
+  so these files are package data rather than examples. User files and ordered
+  `XDG_CONFIG_DIRS` entries still win. A temporary machine file can now
+  override the package without writing persistent `/etc`.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Keep only the caller's explicit SwayNC path across reloads.
+  Rationale: SwayNC must rerun the layered search when the caller did not pass
+  `--config`; otherwise a new user, administrator, or transient file cannot
+  replace the fallback until the process restarts.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -497,6 +528,42 @@ affected assemblies, and commit.
    and desktop-dev
    `5a1291abece4a8ff9a5b4ee5ca8b9c0b14b135578012a627ff2a6574384167ae`.
    Commit: `pkg: move XDG config samples to docs`.
+
+12. `pkg/desktop/wayland/swaync.yaml`
+
+   The old `conf` output declared `/etc/xdg/swaync/config.json`,
+   `configSchema.json`, and `style.css`. Unlike the Foot and Fuzzel examples,
+   SwayNC requires its JSON file and style sheet and exits when neither a
+   caller nor the package supplies them. Outcome 1 applies. The package now
+   installs all three files below `/usr/share/xdg/swaync`. The reader checks
+   an explicit path, the user's XDG directory, each ordered
+   `XDG_CONFIG_DIRS` entry, `/run/xdg`, and the compiled vendor directory.
+   Style lookup uses the same layers while its packaged base style omits the
+   user layer.
+
+   The patch also keeps the caller's explicit `--config` path separately from
+   the selected file. Reload now reruns the layer search when the caller did
+   not specify a path, so a new higher-priority file wins without a process
+   restart. A new Meson test creates files one layer at a time and proves
+   vendor, transient, both ordered system directories, user, and explicit
+   priority. Both strict builds passed that test and the upstream schema test,
+   with package checksum
+   `7bff7d16653b7f33fe8774d4fd2a743d78046dd97a68e092792df9d4c7e6e5b1`.
+   The built executable contains `/run/xdg` and `/usr/share/xdg/swaync`, and
+   the installed JSON schema path names
+   `/usr/share/xdg/swaync/configSchema.json`.
+
+   All four affected images built twice and matched: desktop-vwl
+   `e3232eeedb410b7c68c2a309e71b0413c0ad7dd6eae6c77601564acbcb539075`,
+   Nvidia 580
+   `2d18167c0c57feffc940ba92ba86ddcb844f59e2bb142a16d0cf62abb0242947`,
+   Nvidia current
+   `631a6104ac9c59b17c89ec6735f5558080a96a9d47ddfe6936d02a6bf9b01168`,
+   and desktop-dev
+   `11fb5bcff706e44ea51cd1d49408dbf9f5aec2e21bc58f7d774686882e4f31ed`.
+   Each retained root contains the three vendor files below `/usr/share/xdg`
+   and no SwayNC file below `/etc/xdg`. Commit: `pkg: layer swaync system
+   configuration`.
 
 21. `pkg/libs/graphics/nvidia-580.yaml`
 

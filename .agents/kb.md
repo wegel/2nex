@@ -1497,6 +1497,21 @@ XDG lookup. Each program's `--check-config` command parses its packaged
 example. Keep real product choices in an assembly-owned user or host file; the
 desktop-vwl overlay does this for Foot.
 
+SwayNC 0.10.1 requires its JSON configuration, JSON schema, and style sheet.
+It now installs those package files below `/usr/share/xdg/swaync` and checks
+an explicit path, the user XDG directory, ordered `XDG_CONFIG_DIRS` entries,
+`/run/xdg`, and the vendor directory in that order. Its package test adds a
+file at each tier and proves every priority change. `ConfigModel` keeps only a
+real `--config` argument across reloads; it reruns the layered search when the
+caller used defaults. The strict checksum is
+`7bff7d16653b7f33fe8774d4fd2a743d78046dd97a68e092792df9d4c7e6e5b1`.
+
+Use `--single` when a package change only requires a consumer image rebuild.
+Without it, `nex build <assembly>` follows stale dependency manifests and may
+start unrelated package rebuilds. EP012's first desktop-vwl attempt found 43
+stale dependencies and entered the phase-zero bootstrap chain; the corrected
+commands built each image twice from its declared store refs.
+
 Manifest `extends` paths resolve from the repository root, so `flat-podman`
 extends `asm/flat-systemd.yaml`. After EP011 added Glibc's vendor databases,
 its strict checksum is

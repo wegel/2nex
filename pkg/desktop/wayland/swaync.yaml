@@ -6,12 +6,15 @@ package:
   version: 0.10.1
   description: GTK3 notification daemon and control center for Wayland
   homepage: https://github.com/ErikReider/SwayNotificationCenter
-  checksum: 09664dac9bcb34fbd002c6515a81f567e5cb52dfb5aa6474b2328b1cb04c9e89
+  checksum: 7bff7d16653b7f33fe8774d4fd2a743d78046dd97a68e092792df9d4c7e6e5b1
 
 sources:
 - name: swaync
   url: https://github.com/ErikReider/SwayNotificationCenter/archive/refs/tags/v0.10.1.tar.gz
   sha256: 5586d8a679dde5e530cb8b6f0c86abdd0d5e41362fc1c4e56e2211edea0f7a13
+- name: uapi_config_patch
+  file: pkg/desktop/wayland/swaync-uapi-config.patch
+  sha256: acac11a8bf35456f3cc01a5c290a04f19cc4429ba1ed7378d1755a01e5aff973
 
 dependencies:
 - name: bash
@@ -26,6 +29,8 @@ dependencies:
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gcc
@@ -143,7 +148,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [8296:1236, 29078:1560, 62316:1827, 99659:1840, 132753:1883, 166197:1895, 199325:1950, 249504:1969, 299364:1998, 331326:5158]
+  profile: [8346:798, 29052:1162, 62652:1544, 104133:1651, 141476:1680, 174686:1714, 207956:1745, 262258:1766, 312156:1805, 344515:4954]
 
   script: |
     set -eu
@@ -160,6 +165,7 @@ build:
     export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
 
     sed -i 's/--pkg=GtkLayerShell-0.1/--pkg=gtk-layer-shell-0/' src/meson.build
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE_uapi_config_patch}
 
     meson setup build \
       --prefix=/usr \
@@ -176,6 +182,7 @@ build:
       -Dfish-completions=true
 
     ninja -C build
+    meson test -C build --print-errorlogs
     DESTDIR="${OUT_DIR}" ninja -C build install
     glib-compile-schemas "${OUT_DIR}/usr/share/glib-2.0/schemas"
 
@@ -186,7 +193,6 @@ build:
 bundles:
   full:
   - bin
-  - conf
   - misc
 
 outputs:
@@ -218,12 +224,6 @@ outputs:
       - /usr/lib/libglib-2.0.so.0
       - /usr/lib/libgobject-2.0.so.0
 
-  conf:
-    files:
-    - path: /etc/xdg/swaync/config.json
-    - path: /etc/xdg/swaync/configSchema.json
-    - path: /etc/xdg/swaync/style.css
-
   misc:
     files:
     - path: /usr/lib/systemd/user/swaync.service
@@ -237,6 +237,9 @@ outputs:
     - path: /usr/share/man/man1/swaync-client.1
     - path: /usr/share/man/man1/swaync.1
     - path: /usr/share/man/man5/swaync.5
+    - path: /usr/share/xdg/swaync/config.json
+    - path: /usr/share/xdg/swaync/configSchema.json
+    - path: /usr/share/xdg/swaync/style.css
     - path: /usr/share/zsh/site-functions/_swaync
     - path: /usr/share/zsh/site-functions/_swaync-client
 
