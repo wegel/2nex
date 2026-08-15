@@ -45,12 +45,19 @@ package groups.
 - [x] (2026-08-15 13:24Z) Moved Bash Completion, VTE, Elfutils, and Rust shell
   files into `/usr/lib/profile.d` or `/usr/share`, removed their nine package
   paths below `/etc` and `/usr/etc`, and ran their executable package smokes.
-  The remaining inventory has 19 paths across nine manifests. The system
-  profile still needs its layered fragment reader before this milestone closes.
+  The remaining inventory has 19 paths across nine manifests.
 - [ ] Move XDG autostart files into a vendor tree and prove the Nex desktop
   session discovers them through the standard XDG environment interface.
-- [ ] Move Bash Completion, VTE, Elfutils, and Cargo shell integration into
-  vendor trees and prove login shells load the applicable hooks.
+- [x] (2026-08-15 13:39Z) Added the assembly-owned `/usr/lib/profile` reader,
+  layered fragment basenames from `/usr/lib/profile.d`, `/run/profile.d`, and
+  `/etc/profile.d`, and proved transient and administrator replacement plus
+  `/dev/null` masking in a finished Edgebox root. Two strict commands
+  reproduced Flat Systemd checksum
+  `1212c60ff0f42d8f5910cae5644c08f8d23bbd7af9d2f1c2247932b253028ba8`
+  and Edgebox checksum
+  `bef9bc7ebe717608fc48b5c261e802c973c8b6836f4be35c2f5a4f634bc78841`.
+  The finished-root test also loaded the installed Bash Completion hook and
+  preserved caller shell settings while ignoring a neighboring `.csh` hook.
 - [ ] Move Libvirt's Logrotate and OpenSSH fragments into vendor trees, add the
   missing Nex-built Logrotate reader, and exercise both integrations.
 - [ ] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
@@ -115,6 +122,14 @@ package groups.
   smokes require each C shell hook to be nonempty and execute the sibling Bash
   hook. The final report must retain this narrow skipped semantic check.
 
+- Observation: A noninteractive Bash login shell discards an inherited `PS1`
+  and supplies `TERM=dumb` when the caller omits `TERM`.
+  Evidence: the first finished-root profile test saw `# |dumb` after the vendor
+  profile ran, but could not pass a custom `PS1` through a second Bash process.
+  The final test sources `/usr/lib/profile` with explicit shell variables to
+  prove it preserves them and separately proves a login shell preserves an
+  explicit `TERM=xterm-256color`.
+
 ## Decision Log
 
 - Decision: Treat `/usr/etc` package output as part of this cleanup.
@@ -156,6 +171,13 @@ package groups.
   `/usr/lib/profile.d`, and Bash Completion already uses `/usr/share` for its
   main script and command completions. The assembly's vendor profile can source
   the three profile fragment tiers.
+  Date/Author: 2026-08-15 / Carlos
+
+- Decision: Let Bash choose its terminal default and keep the vendor profile
+  silent about `TERM`.
+  Rationale: Bash already supplies `dumb` when no terminal exists, while a real
+  terminal or caller provides the correct value. A vendor profile cannot infer
+  a better terminal type and must not replace a caller's choice.
   Date/Author: 2026-08-15 / Carlos
 
 - Decision: Add a source-built Logrotate package and teach it the three-tier

@@ -103,9 +103,59 @@ printf 'PASS: vendor account and PAM policy\n'
 
 [[ -f /usr/lib/profile ]] || fail "Bash vendor profile is missing"
 [[ ! -e /etc/profile ]] || fail "the assembly installed its Bash profile in /etc"
-[[ "$(HOME=/root bash --login -c 'printf "%s|%s" "$PS1" "$TERM"')" == '# |linux' ]] ||
+[[ "$(env -u PS1 -u TERM HOME=/root bash --login -c 'printf "%s|%s" "$PS1" "$TERM"')" == '# |dumb' ]] ||
     fail "Bash did not read the vendor profile"
-printf 'PASS: Bash vendor profile\n'
+[[ "$(TERM=xterm-256color HOME=/root bash --login -c \
+    'printf "%s|%s" "$PS1" "$TERM"')" == '# |xterm-256color' ]] ||
+    fail "the vendor profile replaced the caller terminal setting"
+[[ "$(
+    PS1='custom$ '
+    TERM=xterm-256color
+    export PS1 TERM
+    . /usr/lib/profile
+    printf '%s|%s' "$PS1" "$TERM"
+)" == 'custom$ |xterm-256color' ]] ||
+    fail "the vendor profile replaced caller shell settings"
+
+profile_test_name=zz-profile-layer-test.sh
+mkdir -p /usr/lib/profile.d /run/profile.d /etc/profile.d
+printf '%s\n' 'export PROFILE_LAYER=vendor' > "/usr/lib/profile.d/$profile_test_name"
+printf '%s\n' 'PROFILE_NON_SH_SOURCED=yes' > /usr/lib/profile.d/zz-profile-layer-test.csh
+[[ "$(env -u PROFILE_LAYER -u PROFILE_NON_SH_SOURCED HOME=/root bash --login -c \
+    'printf "%s|%s" "$PROFILE_LAYER" "${PROFILE_NON_SH_SOURCED-unset}"')" == vendor\|unset ]] ||
+    fail "Bash did not load the vendor profile fragment"
+
+printf '%s\n' 'export PROFILE_LAYER=transient' > "/run/profile.d/$profile_test_name"
+[[ "$(env -u PROFILE_LAYER HOME=/root bash --login -c 'printf %s "$PROFILE_LAYER"')" == transient ]] ||
+    fail "the transient profile fragment did not replace the vendor fragment"
+
+printf '%s\n' 'export PROFILE_LAYER=administrator' > "/etc/profile.d/$profile_test_name"
+[[ "$(env -u PROFILE_LAYER HOME=/root bash --login -c 'printf %s "$PROFILE_LAYER"')" == administrator ]] ||
+    fail "the administrator profile fragment did not replace lower fragments"
+
+rm -f "/etc/profile.d/$profile_test_name"
+ln -s /dev/null "/etc/profile.d/$profile_test_name"
+[[ "$(env -u PROFILE_LAYER HOME=/root bash --login -c \
+    'printf %s "${PROFILE_LAYER-unset}"')" == unset ]] ||
+    fail "the administrator profile mask did not hide lower fragments"
+rm -f "/etc/profile.d/$profile_test_name"
+
+cat > /etc/profile << 'PROFILE_TEST'
+export PROFILE_MAIN=administrator
+PROFILE_TEST
+[[ "$(env -u PROFILE_LAYER -u PROFILE_MAIN HOME=/root bash --login -c \
+    'printf "%s|%s" "$PROFILE_MAIN" "${PROFILE_LAYER-unset}"')" == administrator\|unset ]] ||
+    fail "the administrator main profile did not replace the vendor profile"
+rm -f /etc/profile "/run/profile.d/$profile_test_name" \
+    "/usr/lib/profile.d/$profile_test_name" /usr/lib/profile.d/zz-profile-layer-test.csh
+
+completion_result=$(HOME=/root PS1='test$ ' bash --login -ic '
+    declare -F _comp_complete_load >/dev/null
+    complete -p -D | grep -q _comp_complete_load
+    printf loaded
+' 2>/dev/null)
+[[ "$completion_result" == loaded ]] || fail "the Bash Completion vendor hook did not load"
+printf 'PASS: layered Bash profile and vendor completion hook\n'
 
 [[ -f /usr/lib/e2scrub.conf ]] || fail "e2scrub vendor policy is missing"
 [[ -f /usr/lib/mke2fs.conf ]] || fail "mke2fs vendor policy is missing"

@@ -4,7 +4,7 @@ system:
   slug: flat-systemd
   version: 0.0.1
   description: Minimal flat rootfs with systemd init
-  checksum: a69b1dbbb5cf138dc3b5fb8ecad29c64815a114f97e1845a04ddcd16f45462bb
+  checksum: 1212c60ff0f42d8f5910cae5644c08f8d23bbd7af9d2f1c2247932b253028ba8
 
 dependencies:
 - name: findutils
@@ -99,8 +99,41 @@ build:
     mkdir -p /target/var/lib/systemd
 
     cat > /target/usr/lib/profile << 'EOF'
-    export PS1='# '
-    export TERM=linux
+    : "${PS1:=# }"
+    export PS1
+
+    _profile_fragment_names=$(
+        for _profile_fragment_dir in \
+            /usr/lib/profile.d /run/profile.d /etc/profile.d
+        do
+            [ -d "${_profile_fragment_dir}" ] || continue
+            for _profile_fragment in "${_profile_fragment_dir}"/*.sh; do
+                [ -e "${_profile_fragment}" ] || [ -L "${_profile_fragment}" ] || continue
+                printf '%s\n' "${_profile_fragment##*/}"
+            done
+        done | LC_ALL=C sort -u
+    )
+
+    _profile_saved_ifs=${IFS}
+    IFS='
+    '
+    for _profile_fragment_name in ${_profile_fragment_names}; do
+        _profile_fragment=
+        for _profile_fragment_dir in \
+            /usr/lib/profile.d /run/profile.d /etc/profile.d
+        do
+            _profile_candidate=${_profile_fragment_dir}/${_profile_fragment_name}
+            if [ -e "${_profile_candidate}" ] || [ -L "${_profile_candidate}" ]; then
+                _profile_fragment=${_profile_candidate}
+            fi
+        done
+
+        [ -f "${_profile_fragment}" ] && . "${_profile_fragment}"
+    done
+    IFS=${_profile_saved_ifs}
+
+    unset _profile_candidate _profile_fragment _profile_fragment_dir
+    unset _profile_fragment_name _profile_fragment_names _profile_saved_ifs
     EOF
 
     ln -sf /usr/lib/systemd/systemd /target/init
