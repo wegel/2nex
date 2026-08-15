@@ -5,6 +5,7 @@
 #   scripts/qemu-test-graphical.sh --target-ref systems/desktop-vwl/0.0.1 --app chromium --timeout 300
 #   scripts/qemu-test-graphical.sh --graphics-mode gtk-debug --app chromium
 #   scripts/qemu-test-graphical.sh --self-test-zub-override
+#   scripts/qemu-test-graphical.sh --self-test-image-sizing
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -32,8 +33,10 @@ QEMU_LOG="$WORK_DIR/qemu.log"
 ARTIFACT_DIR="$WORK_DIR/artifacts"
 ASSERT_KEY="$WORK_DIR/qemu-assert-ed25519"
 
-ROOT_SIZE_MB="${ROOT_SIZE_MB:-16384}"
-VAR_SIZE_MB="${VAR_SIZE_MB:-2048}"
+ROOT_SIZE_MB="${ROOT_SIZE_MB:-}"
+VAR_SIZE_MB="${VAR_SIZE_MB:-}"
+ROOT_MIN_SIZE_MB="${ROOT_MIN_SIZE_MB:-16384}"
+VAR_MIN_SIZE_MB="${VAR_MIN_SIZE_MB:-2048}"
 ESP_SIZE_MB=64
 
 qemu_pid=""
@@ -42,6 +45,7 @@ DIRECT_KERNEL=""
 DIRECT_INITRAMFS=""
 DIRECT_DEPLOY=""
 SELF_TEST_ZUB_OVERRIDE=0
+SELF_TEST_IMAGE_SIZING=0
 
 die() {
     printf 'error: %s\n' "$*" >&2
@@ -49,11 +53,28 @@ die() {
 }
 
 usage() {
-    sed -n '2,9p' "$0" >&2
+    sed -n '2,10p' "$0" >&2
 }
 
 run_zub() {
     "$ZUB_BIN" "$@"
+}
+
+filesystem_image_size_mb() {
+    local content_kib=$1
+    local minimum_mb=$2
+    local content_mb=$(((content_kib + 1023) / 1024))
+    local sized_mb=$((content_mb + content_mb / 4 + 512))
+    if ((sized_mb < minimum_mb)); then
+        sized_mb=$minimum_mb
+    fi
+    printf '%s\n' "$sized_mb"
+}
+
+graphical_var_content_kib() {
+    local base_kib=$1
+    local manifest_seed_kib=$2
+    printf '%s\n' "$((base_kib + manifest_seed_kib * 2))"
 }
 
 while (($# > 0)); do
@@ -82,6 +103,10 @@ while (($# > 0)); do
             SELF_TEST_ZUB_OVERRIDE=1
             shift
             ;;
+        --self-test-image-sizing)
+            SELF_TEST_IMAGE_SIZING=1
+            shift
+            ;;
         --help|-h)
             usage
             exit 0
@@ -96,6 +121,17 @@ if ((SELF_TEST_ZUB_OVERRIDE)); then
     result=$(ZUB_BIN=printf run_zub '%s\n' 'PASS: graphical QEMU honors ZUB_BIN')
     [[ "$result" == 'PASS: graphical QEMU honors ZUB_BIN' ]] || exit 1
     printf '%s\n' "$result"
+    exit 0
+fi
+
+if ((SELF_TEST_IMAGE_SIZING)); then
+    [[ "$(filesystem_image_size_mb 1024 16384)" == 16384 ]] ||
+        die "small root did not keep the minimum image size"
+    [[ "$(filesystem_image_size_mb 8388608 2048)" == 10752 ]] ||
+        die "large writable seed did not receive 25 percent plus 512 MiB headroom"
+    [[ "$(graphical_var_content_kib 1024 4096)" == 9216 ]] ||
+        die "writable estimate did not count the manifest seed and Git copy"
+    printf 'PASS: graphical image sizing\n'
     exit 0
 fi
 
@@ -120,6 +156,7 @@ require_commands() {
         "$ZUB_BIN" \
         sfdisk \
         mke2fs \
+        truncate \
         ssh \
         scp \
         ssh-keygen
@@ -322,6 +359,23 @@ fail() {
     exit 1
 }
 
+dump_user_session_state() {
+    echo "=== Systemd user environment ==="
+    systemctl --user show-environment || true
+    echo "=== AT-SPI user units ==="
+    systemctl --user status --no-pager \
+        'app-at\x2dspi\x2ddbus\x2dbus@autostart.service' \
+        at-spi-dbus-bus.service || true
+    echo "=== AT-SPI user journal ==="
+    journalctl --user --boot --no-pager \
+        -u 'app-at\x2dspi\x2ddbus\x2dbus@autostart.service' \
+        -u at-spi-dbus-bus.service || true
+    echo "=== user D-Bus names ==="
+    busctl --user --no-pager list || true
+    echo "=== test-user processes ==="
+    ps -f -u "$(id -u)" || true
+}
+
 cleanup() {
     if [ -n "${chromium_pid:-}" ]; then
         kill "$chromium_pid" 2>/dev/null || true
@@ -340,6 +394,9 @@ command -v wlr-randr >/dev/null 2>&1 || fail "wlr-randr not found"
 command -v identify >/dev/null 2>&1 || fail "identify not found"
 command -v convert >/dev/null 2>&1 || fail "convert not found"
 command -v python3 >/dev/null 2>&1 || fail "python3 not found"
+command -v systemctl >/dev/null 2>&1 || fail "systemctl not found"
+command -v pgrep >/dev/null 2>&1 || fail "pgrep not found"
+command -v busctl >/dev/null 2>&1 || fail "busctl not found"
 
 if ! ls /dev/dri/card* /dev/dri/renderD* >/dev/null 2>&1; then
     fail "no DRM device exists under /dev/dri"
@@ -347,6 +404,61 @@ fi
 
 mkdir -p "$PROFILE"
 chmod 700 "$PROFILE"
+
+export XDG_CONFIG_DIRS=/etc/xdg:/run/xdg:/usr/share/xdg
+# Systemd leaves entries with X-GNOME-Autostart-Phase to the GNOME session
+# manager when GNOME is current.  This minimal smoke session has no GNOME
+# session manager, so select the generic Systemd path shared by these entries.
+export XDG_CURRENT_DESKTOP=Unity
+systemctl --user import-environment XDG_CONFIG_DIRS XDG_CURRENT_DESKTOP ||
+    fail "could not set the Systemd user environment"
+mkdir -p "$XDG_RUNTIME_DIR/systemd/user"
+cat > "$XDG_RUNTIME_DIR/systemd/user/nex-graphical-smoke-session.target" <<'SESSION_TARGET'
+[Unit]
+Description=Nex graphical smoke session
+Requires=graphical-session-pre.target graphical-session.target
+After=graphical-session-pre.target graphical-session.target
+Wants=xdg-desktop-autostart.target
+After=xdg-desktop-autostart.target
+SESSION_TARGET
+systemctl --user daemon-reload || fail "could not rerun Systemd user generators"
+systemctl --user start nex-graphical-smoke-session.target ||
+    fail "could not start the graphical smoke session target"
+sleep 1
+
+for unit in \
+    'app-at\x2dspi\x2ddbus\x2dbus@autostart.service' \
+    'app-gnome\x2dkeyring\x2dpkcs11@autostart.service' \
+    'app-gnome\x2dkeyring\x2dsecrets@autostart.service'
+do
+    invocation_id=$(systemctl --user show --property=InvocationID --value "$unit")
+    result=$(systemctl --user show --property=Result --value "$unit")
+    if [ -z "$invocation_id" ] || [ "$result" != success ]; then
+        systemctl --user status --no-pager "$unit" || true
+        fail "$unit did not run successfully"
+    fi
+    echo "$unit=result:$result"
+done
+if ! systemctl --user is-active --quiet \
+    'app-at\x2dspi\x2ddbus\x2dbus@autostart.service'; then
+    dump_user_session_state
+    fail "AT-SPI autostart service is not active"
+fi
+if ! at_spi_address=$(busctl --user call \
+    org.a11y.Bus /org/a11y/bus org.a11y.Bus GetAddress); then
+    dump_user_session_state
+    fail "AT-SPI bus did not answer GetAddress"
+fi
+printf '%s\n' "$at_spi_address" | grep -Eq '^s "unix:' || {
+    dump_user_session_state
+    fail "AT-SPI bus returned an invalid address: $at_spi_address"
+}
+if ! pgrep -u "$(id -u)" -f '[g]nome-keyring-daemon' >/dev/null; then
+    dump_user_session_state
+    fail "GNOME keyring daemon process is missing"
+fi
+echo "at-spi-autostart=$at_spi_address"
+echo "gnome-keyring-autostart=active"
 
 cat > "$PAGE" <<'HTML'
 <!doctype html>
@@ -510,6 +622,10 @@ build_direct_initramfs_disk() {
     local root_content
     local public_key
     local base_initramfs
+    local root_content_kib
+    local var_content_kib
+    local manifest_seed_kib
+    local expected_var_kib
 
     "$NEX_BIN" check "$ROOT_DIR/asm/desktop-vwl/desktop-vwl.yaml"
 
@@ -660,6 +776,24 @@ SERVICE
 
     root_img="$DIRECT_ROOT/root.img"
     var_img="$DIRECT_ROOT/var.img"
+    root_content_kib=$(du -sk "$root_content" | awk '{print $1}')
+    var_content_kib=$(du -sk "$var_content" | awk '{print $1}')
+    manifest_seed_kib=0
+    if [[ -d "$deploy_dir/usr/share/nex/manifests" ]]; then
+        manifest_seed_kib=$(du -sk "$deploy_dir/usr/share/nex/manifests" | awk '{print $1}')
+    fi
+    if [[ -z "$ROOT_SIZE_MB" ]]; then
+        ROOT_SIZE_MB=$(filesystem_image_size_mb "$root_content_kib" "$ROOT_MIN_SIZE_MB")
+    fi
+    if [[ -z "$VAR_SIZE_MB" ]]; then
+        expected_var_kib=$(graphical_var_content_kib \
+            "$var_content_kib" "$manifest_seed_kib")
+        VAR_SIZE_MB=$(filesystem_image_size_mb "$expected_var_kib" "$VAR_MIN_SIZE_MB")
+    fi
+    [[ "$ROOT_SIZE_MB" =~ ^[0-9]+$ ]] || die "ROOT_SIZE_MB must be an integer"
+    [[ "$VAR_SIZE_MB" =~ ^[0-9]+$ ]] || die "VAR_SIZE_MB must be an integer"
+    printf 'creating graphical images: root=%sMiB var=%sMiB\n' \
+        "$ROOT_SIZE_MB" "$VAR_SIZE_MB"
     if command -v fakeroot >/dev/null 2>&1; then
         fakeroot -- bash -c "chown -R 0:0 '$root_content' '$var_content' && mke2fs -q -t ext4 -L nex-root -d '$root_content' '$root_img' ${ROOT_SIZE_MB}M && mke2fs -q -t ext4 -L nex-var -d '$var_content' '$var_img' ${VAR_SIZE_MB}M"
     else
@@ -672,7 +806,7 @@ SERVICE
     var_start=$((root_start + root_sectors))
     disk_size_mb=$((ESP_SIZE_MB + ROOT_SIZE_MB + VAR_SIZE_MB + 64))
 
-    dd if=/dev/zero of="$TARGET_IMG" bs=1M count="$disk_size_mb" status=none
+    truncate -s "${disk_size_mb}M" "$TARGET_IMG"
     sfdisk "$TARGET_IMG" >/dev/null <<EOF
 label: gpt
 unit: sectors
@@ -681,8 +815,10 @@ start=2048, size=$((ESP_SIZE_MB * 2048)), type=uefi, name="EFI"
 start=${root_start}, size=${root_sectors}, type=linux, name="nex-root"
 start=${var_start}, type=linux, name="nex-var"
 EOF
-    dd if="$root_img" of="$TARGET_IMG" bs=512 seek="$root_start" conv=notrunc status=none
-    dd if="$var_img" of="$TARGET_IMG" bs=512 seek="$var_start" conv=notrunc status=none
+    dd if="$root_img" of="$TARGET_IMG" bs=1M seek="$((root_start / 2048))" \
+      conv=notrunc,sparse status=none
+    dd if="$var_img" of="$TARGET_IMG" bs=1M seek="$((var_start / 2048))" \
+      conv=notrunc,sparse status=none
 
     DIRECT_KERNEL=$(find "$DIRECT_ROOT/boot/boot" -maxdepth 1 -type f -name 'vmlinuz-*' | sort | head -n 1)
     base_initramfs=$(find "$DIRECT_ROOT/initramfs/boot" -maxdepth 1 -type f -name 'initramfs*.cpio' ! -name 'combined-*' | sort | head -n 1)

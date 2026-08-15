@@ -494,6 +494,7 @@ build_combined_initramfs() {
 build_direct_initramfs_disk() {
     command -v sfdisk >/dev/null 2>&1 || die "sfdisk not found"
     command -v mke2fs >/dev/null 2>&1 || die "mke2fs not found"
+    command -v truncate >/dev/null 2>&1 || die "truncate not found"
     command -v "$ZUB_BIN" >/dev/null 2>&1 || die "zub not found: $ZUB_BIN"
     command -v qemu-system-x86_64 >/dev/null 2>&1 || die "qemu-system-x86_64 not found"
 
@@ -605,7 +606,7 @@ SERVICE
     ROOT_SECTORS=$((root_size_mb * 2048))
     VAR_START=$((ROOT_START + ROOT_SECTORS))
     disk_size_mb=$((ESP_SIZE_MB + root_size_mb + var_size_mb + 64))
-    dd if=/dev/zero of="$TARGET_IMG" bs=1M count="$disk_size_mb" status=none
+    truncate -s "${disk_size_mb}M" "$TARGET_IMG"
     sfdisk "$TARGET_IMG" >/dev/null <<EOF
 label: gpt
 unit: sectors
@@ -614,8 +615,10 @@ start=2048, size=$((ESP_SIZE_MB * 2048)), type=uefi, name="EFI"
 start=${ROOT_START}, size=${ROOT_SECTORS}, type=linux, name="nex-root"
 start=${VAR_START}, type=linux, name="nex-var"
 EOF
-    dd if="$ROOT_IMG" of="$TARGET_IMG" bs=512 seek="$ROOT_START" conv=notrunc status=none
-    dd if="$VAR_IMG" of="$TARGET_IMG" bs=512 seek="$VAR_START" conv=notrunc status=none
+    dd if="$ROOT_IMG" of="$TARGET_IMG" bs=1M seek="$((ROOT_START / 2048))" \
+      conv=notrunc,sparse status=none
+    dd if="$VAR_IMG" of="$TARGET_IMG" bs=1M seek="$((VAR_START / 2048))" \
+      conv=notrunc,sparse status=none
 
     DIRECT_KERNEL="$DIRECT_ROOT/boot/boot/vmlinuz-6.18.24"
     DIRECT_BASE_INITRAMFS="$DIRECT_ROOT/initramfs/boot/initramfs.cpio"
