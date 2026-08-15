@@ -162,6 +162,12 @@ package groups.
   The Systemd QEMU test booted the stored system and printed
   `system-ca-runtime=ready`, `system-ca=ready`, and `ASSERT-BOOT-PASS`.
   The installer runtime test remains paired with the final desktop target.
+- [x] (2026-08-15 16:40Z) Replaced the installer QEMU harness's fixed 6 GiB
+  direct-root image with a measured size that adds 25 percent plus 512 MiB of
+  headroom and retains configurable minimums. Its numeric self-test passes.
+  The old image failed while copying the 11 GiB desktop root; the corrected
+  harness chose 13,584 MiB, built the filesystem, booted that exact desktop
+  ref, reached both certificate assertions, and printed `ASSERT-BOOT-PASS`.
 - [x] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
   loader that reads all three configuration tiers, then move both Nvidia ICD
   files below `/usr`.
@@ -332,6 +338,12 @@ package groups.
   already accepted `ZUB_BIN`; replacing every graphical store invocation with
   one wrapper left no bare `zub` command and its self-test proved that wrapper
   executes the override.
+
+- Observation: the direct-initramfs installer test could not fit the current
+  desktop in its hard-coded 6 GiB root filesystem.
+  Evidence: `mke2fs -d` failed with `Could not allocate block` while copying a
+  Windows import library. Sizing from `du -sk` plus 25 percent and 512 MiB
+  selected a 13,584 MiB image and the complete QEMU assertion then passed.
 
 ## Decision Log
 

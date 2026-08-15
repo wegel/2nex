@@ -1,6 +1,7 @@
 #!/bin/sh
 # qemu-test-installer.sh: test the nex installer in QEMU
 # usage: qemu-test-installer.sh [--boot-target] [--direct-initramfs] [--rebuild] [--autoinstall] [--headless] [--timeout <secs>] [--extra-nex-var] [--assert-boot]
+#        qemu-test-installer.sh --self-test-image-sizing
 #   default: boots from installer.img with empty target disk
 #   --boot-target: boots from the installed target disk
 #   --rebuild: force rebuild of installer image
@@ -27,6 +28,7 @@ HEADLESS=false
 EXTRA_NEX_VAR=false
 EXTRA_NEX_VAR_IMG="$TMP_DIR/extra-nex-var.img"
 ASSERT_BOOT=false
+SELF_TEST_IMAGE_SIZING=false
 ASSERT_PORT="${ASSERT_PORT:-10022}"
 ASSERT_KEY="$TMP_DIR/qemu-assert-ed25519"
 ASSERT_SERIAL_LOG="$TMP_DIR/qemu-assert-boot.serial.log"
@@ -39,10 +41,24 @@ TARGET_REF="${TARGET_REF:-systems/desktop-vwl/0.0.1}"
 TARGET_SLUG=$(printf "%s" "$TARGET_REF" | tr '/:' '__')
 INSTALLER_IMG="${INSTALLER_IMG:-$TMP_DIR/installer-${TARGET_SLUG}.img}"
 TARGET_IMG="${TARGET_IMG:-$TMP_DIR/installer-target-${TARGET_SLUG}.img}"
+DIRECT_ROOT_MIN_MB="${DIRECT_ROOT_MIN_MB:-6144}"
+DIRECT_VAR_MIN_MB="${DIRECT_VAR_MIN_MB:-1024}"
+ESP_SIZE_MB=64
 
 die() {
     echo "error: $*" >&2
     exit 1
+}
+
+filesystem_image_size_mb() {
+    content_kib=$1
+    minimum_mb=$2
+    content_mb=$(((content_kib + 1023) / 1024))
+    sized_mb=$((content_mb + content_mb / 4 + 512))
+    if [ "$sized_mb" -lt "$minimum_mb" ]; then
+        sized_mb=$minimum_mb
+    fi
+    printf '%s\n' "$sized_mb"
 }
 
 while [ $# -gt 0 ]; do
@@ -54,6 +70,7 @@ while [ $# -gt 0 ]; do
         --headless) HEADLESS=true; shift ;;
         --extra-nex-var) EXTRA_NEX_VAR=true; shift ;;
         --assert-boot) ASSERT_BOOT=true; shift ;;
+        --self-test-image-sizing) SELF_TEST_IMAGE_SIZING=true; shift ;;
         --timeout)
             [ $# -ge 2 ] || die "--timeout requires seconds"
             TIMEOUT_SECS="${2:-}"
@@ -62,6 +79,17 @@ while [ $# -gt 0 ]; do
         *) die "unknown option: $1" ;;
     esac
 done
+
+if [ "$SELF_TEST_IMAGE_SIZING" = "true" ]; then
+    [ "$(filesystem_image_size_mb 1024 6144)" -eq 6144 ] ||
+        die "small root did not keep the minimum image size"
+    [ "$(filesystem_image_size_mb 8388608 6144)" -eq 10752 ] ||
+        die "large root did not receive 25 percent plus 512 MiB headroom"
+    [ "$(filesystem_image_size_mb 1048576 256)" -eq 1792 ] ||
+        die "content-based size did not supersede a smaller minimum"
+    echo "PASS: installer direct image sizing"
+    exit 0
+fi
 
 if [ "$AUTOINSTALL" = "true" ] && [ "$INSTALLER_IMG" = "$TMP_DIR/installer-${TARGET_SLUG}.img" ]; then
     INSTALLER_IMG="$TMP_DIR/installer-autoinstall-${TARGET_SLUG}.img"
@@ -561,22 +589,29 @@ SERVICE
 
     ROOT_IMG="$DIRECT_ROOT/root.img"
     VAR_IMG="$DIRECT_ROOT/var.img"
+    root_content_kib=$(du -sk "$DIRECT_ROOT/root-content" | awk '{print $1}')
+    var_content_kib=$(du -sk "$DIRECT_ROOT/var-content" | awk '{print $1}')
+    root_size_mb=$(filesystem_image_size_mb "$root_content_kib" "$DIRECT_ROOT_MIN_MB")
+    var_size_mb=$(filesystem_image_size_mb "$var_content_kib" "$DIRECT_VAR_MIN_MB")
+    echo "creating direct images: root=${root_size_mb}MiB var=${var_size_mb}MiB"
     if command -v fakeroot >/dev/null 2>&1; then
-        fakeroot -- sh -c "chown -R 0:0 '$DIRECT_ROOT/root-content' '$DIRECT_ROOT/var-content' && mke2fs -q -t ext4 -L nex-root -d '$DIRECT_ROOT/root-content' '$ROOT_IMG' 6144M && mke2fs -q -t ext4 -L nex-var -d '$DIRECT_ROOT/var-content' '$VAR_IMG' 1024M"
+        fakeroot -- sh -c "chown -R 0:0 '$DIRECT_ROOT/root-content' '$DIRECT_ROOT/var-content' && mke2fs -q -t ext4 -L nex-root -d '$DIRECT_ROOT/root-content' '$ROOT_IMG' ${root_size_mb}M && mke2fs -q -t ext4 -L nex-var -d '$DIRECT_ROOT/var-content' '$VAR_IMG' ${var_size_mb}M"
     else
-        mke2fs -q -t ext4 -L nex-root -d "$DIRECT_ROOT/root-content" "$ROOT_IMG" 6144M
-        mke2fs -q -t ext4 -L nex-var -d "$DIRECT_ROOT/var-content" "$VAR_IMG" 1024M
+        mke2fs -q -t ext4 -L nex-root -d "$DIRECT_ROOT/root-content" "$ROOT_IMG" "${root_size_mb}M"
+        mke2fs -q -t ext4 -L nex-var -d "$DIRECT_ROOT/var-content" "$VAR_IMG" "${var_size_mb}M"
     fi
 
-    ROOT_START=133120
-    VAR_START=12716032
-    dd if=/dev/zero of="$TARGET_IMG" bs=1M count=8192 status=none
+    ROOT_START=$((ESP_SIZE_MB * 2048 + 2048))
+    ROOT_SECTORS=$((root_size_mb * 2048))
+    VAR_START=$((ROOT_START + ROOT_SECTORS))
+    disk_size_mb=$((ESP_SIZE_MB + root_size_mb + var_size_mb + 64))
+    dd if=/dev/zero of="$TARGET_IMG" bs=1M count="$disk_size_mb" status=none
     sfdisk "$TARGET_IMG" >/dev/null <<EOF
 label: gpt
 unit: sectors
 
-start=2048, size=131072, type=uefi, name="EFI"
-start=${ROOT_START}, size=12582912, type=linux, name="nex-root"
+start=2048, size=$((ESP_SIZE_MB * 2048)), type=uefi, name="EFI"
+start=${ROOT_START}, size=${ROOT_SECTORS}, type=linux, name="nex-root"
 start=${VAR_START}, type=linux, name="nex-var"
 EOF
     dd if="$ROOT_IMG" of="$TARGET_IMG" bs=512 seek="$ROOT_START" conv=notrunc status=none
