@@ -6,7 +6,7 @@ package:
   version: 5.1.0
   description: Graphical virtual machine manager for libvirt
   homepage: https://virt-manager.org/
-  checksum: e1bafdf2a4e26d0c9005c13f0b1658e8038c73e828d1435727edf3d4f4fd804f
+  checksum: c3aafc97ebe9ce0eb1ee4636a0514d3051aa8b6abc0b5f78b356e098fd370cca
 
 sources:
 - name: virt_manager
@@ -73,7 +73,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4132:1632, 8278:3706, 12473:4993, 16599:5706, 20695:6329, 24814:6938, 28952:7986, 31258:8455]
+  profile: [4126:453, 8278:914, 12473:914, 16599:922, 20695:922, 24814:929, 28952:929, 31258:1124]
 
   script: |
     set -eu
@@ -103,8 +103,12 @@ build:
 
     shim = (
         "import os, sys\n"
-        "sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "
-        "\"lib\", \"python3.12\", \"site-packages\"))\n"
+        "_prefix = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))\n"
+        "sys.path.insert(0, os.path.join(_prefix, \"lib\", \"python3.12\", \"site-packages\"))\n"
+        "_typelib_path = os.path.join(_prefix, \"lib\", \"girepository-1.0\")\n"
+        "if os.environ.get(\"GI_TYPELIB_PATH\"):\n"
+        "    _typelib_path += os.pathsep + os.environ[\"GI_TYPELIB_PATH\"]\n"
+        "os.environ[\"GI_TYPELIB_PATH\"] = _typelib_path\n"
     )
 
     for arg in sys.argv[1:]:
