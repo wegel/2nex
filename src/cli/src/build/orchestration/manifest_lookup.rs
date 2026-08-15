@@ -81,15 +81,8 @@ pub fn find_manifest_for_commit(commit: &str, manifest_dirs: &[PathBuf]) -> io::
 fn find_manifests_in_base_dir(pkg_ref: &PackageRef, base_dir: &Path) -> Vec<PathBuf> {
     let mut matches = BTreeSet::new();
     for namespace_path in namespace_search_paths(pkg_ref, base_dir) {
-        let direct_path = namespace_path.join(format!("{}.yaml", pkg_ref.slug));
-        if direct_path.exists() {
-            matches.insert(direct_path);
-        }
-
         for path in manifest_paths(&namespace_path) {
-            if is_yaml_with_slug_suffix(&path, &pkg_ref.slug)
-                || declares_package_slug(&path, &pkg_ref.slug)
-            {
+            if declares_package_slug(&path, &pkg_ref.slug) {
                 matches.insert(path);
             }
         }
@@ -123,12 +116,6 @@ fn manifest_paths(namespace_path: &Path) -> Vec<PathBuf> {
         .collect::<Vec<_>>();
     paths.sort();
     paths
-}
-
-fn is_yaml_with_slug_suffix(path: &Path, slug: &str) -> bool {
-    path.file_stem()
-        .and_then(|s| s.to_str())
-        .is_some_and(|filename| filename.ends_with(&format!("-{}", slug)))
 }
 
 fn is_yaml(path: &Path) -> bool {

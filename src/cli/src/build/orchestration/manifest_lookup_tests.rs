@@ -34,6 +34,21 @@ fn rejects_duplicate_declared_slugs() {
     );
 }
 
+#[test]
+fn ignores_a_filename_suffix_when_the_manifest_declares_another_slug() {
+    let root = TempDir::new().expect("create manifest root");
+    let expected = write_manifest(root.path(), "atk.yaml", "atk");
+    write_manifest(root.path(), "at-spi2-atk.yaml", "at-spi2-atk");
+
+    let found = find_manifest_for_commit(
+        "x86_64/pkg/core/userland/atk/2.38.0/bundles/dev",
+        &[root.path().to_path_buf()],
+    )
+    .expect("find only the manifest whose declared slug matches");
+
+    assert_eq!(found, expected.canonicalize().expect("canonical path"));
+}
+
 fn write_manifest(root: &Path, filename: &str, slug: &str) -> std::path::PathBuf {
     let namespace = root.join("pkg/core/userland");
     fs::create_dir_all(&namespace).expect("create namespace");

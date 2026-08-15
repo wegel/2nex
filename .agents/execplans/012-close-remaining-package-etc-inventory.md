@@ -132,6 +132,9 @@ named below.
 - [x] (2026-08-15 08:26Z) Moved PipeWire's resource-limits fragment below
   `/usr`, strictly rebuilt it, and ran the installed PAM limits reader against
   its package file, a transient override, and an administrator mask.
+- [x] (2026-08-15 08:39Z) Fixed semantic manifest lookup to trust declared
+  slugs instead of filename suffixes after GTK's dependency refresh confused
+  `at-spi2-atk.yaml` with `atk`; all 190 CLI tests pass.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -408,6 +411,12 @@ named below.
   `Could not find manifest for commit .../nex-utilities/.../outputs/bin`.
   Looking up the declared YAML slug fixed the command, and duplicate-slug
   tests now reject ambiguous files.
+
+- Observation: A filename-suffix fallback makes two valid package names
+  ambiguous when one ends with another, such as `at-spi2-atk` and `atk`.
+  Evidence: GTK built reproducibly, then its dependency refresh rejected both
+  manifests for the `atk` ref. Looking only at the YAML `package.slug` chose
+  `atk.yaml`, retained the `2nex-utilities.yaml` case, and passed 190 CLI tests.
 
 - Observation: Nex-minimal declared `nex-utilities` only as a build
   dependency but never called its sole `nex_strip_binaries` command.

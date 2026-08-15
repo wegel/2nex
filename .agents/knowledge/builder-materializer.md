@@ -187,6 +187,16 @@ Evidence:
 `hydrated_dependency_names_preserve_direct_names`, and
 `formatted_hydrated_dependencies_use_meaningful_names` passed during EP005.
 
+Resolve a semantic package ref from the `package.slug` declared in YAML, not
+from a filename or filename suffix. Filenames can differ from slugs, and one
+valid package filename can end in another package's slug. For example,
+`2nex-utilities.yaml` declares `nex-utilities`, while `at-spi2-atk.yaml` must
+not match `atk`. Reject two manifests that declare the same slug.
+
+Evidence: EP012's GTK dependency refresh first reported both `atk.yaml` and
+`at-spi2-atk.yaml` for the `atk` ref. The declared-slug-only lookup passed all
+190 CLI tests, including both filename cases and duplicate declarations.
+
 ## Display Hashes
 
 Use `utils::short_hash` for display prefixes of untrusted or variable-length

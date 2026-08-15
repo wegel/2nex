@@ -1798,8 +1798,9 @@ cross-device link`.
 Build orchestration resolves semantic package refs from the package slug
 declared inside YAML. Do not assume the filename equals that slug:
 `pkg/core/userland/2nex-utilities.yaml` declares `nex-utilities`. The lookup
-checks direct and prefixed filenames, then reads declared slugs and rejects
-duplicates. Keep its focused tests beside
+reads declared slugs and rejects duplicates. It must not accept filename
+suffixes: `at-spi2-atk.yaml` ends in `-atk` but declares a different package.
+Keep its focused tests beside
 `src/cli/src/build/orchestration/manifest_lookup.rs`.
 
 Reusable packages must not publish `passwd` or `group` records. The assembly
