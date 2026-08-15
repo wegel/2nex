@@ -1684,3 +1684,11 @@ and run these large strict assembly builds one at a time on this host because
 concurrent builds can exhaust `/tmp` and race on the shared parent ref. A
 finished base root contains seventeen public XML files in total, no
 `/etc/ImageMagick-7`, and a working installed image conversion path.
+
+P11-kit 0.25.5 reads trust policy from the colon-separated paths configured
+at build time and gives the first path highest priority. Nex configures
+`/etc/pki/trust:/run/pki/trust:/usr/share/pki/trust`, which lets one normal
+trust store merge administrator, transient, and vendor anchors and
+blocklists. The installed extraction test covers all three tiers and an
+administrator blocklist; the strict package checksum is
+`d8524f53a7e4fc14400f74404828eff6059072c1457baab610eac5dc5ba889a6`.

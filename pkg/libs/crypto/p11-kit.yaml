@@ -6,7 +6,7 @@ package:
   version: 0.25.5
   description: "PKCS#11 module management library"
   homepage: https://p11-glue.github.io/p11-glue/p11-kit.html
-  checksum: ab9167443ea2da82819d9545033c4db0d3a401ffcacdb47ca283c8129f878670
+  checksum: d8524f53a7e4fc14400f74404828eff6059072c1457baab610eac5dc5ba889a6
 
 sources:
 - name: p11-kit
@@ -59,7 +59,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4102:1862, 8232:1979, 12371:2178, 16504:2358, 20610:2552, 24750:5246, 28887:19673, 33062:21262, 33662:21308]
+  profile: [4102:1651, 8202:1767, 12301:1974, 16461:2164, 20578:2360, 24688:4855, 28798:19318, 32909:21146, 33938:21205]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_p11_kit} -C "${WORK_DIR}" --strip-components=1
@@ -68,13 +68,66 @@ build:
     meson setup builddir \
       --prefix=/usr \
       --buildtype=release \
-      -Dtrust_paths=/etc/pki/anchors
+      -Denv_override_paths=enabled \
+      -Dtrust_paths=/etc/pki/trust:/run/pki/trust:/usr/share/pki/trust
 
     ninja -C builddir
 
     meson test -C builddir --print-errorlogs test-conf
 
     DESTDIR="${OUT_DIR}" ninja -C builddir install
+
+    trust_paths=$(PKG_CONFIG_PATH="${OUT_DIR}/usr/lib/pkgconfig" \
+      pkgconf --variable=p11_trust_paths p11-kit-1)
+    test "${trust_paths}" = \
+      /etc/pki/trust:/run/pki/trust:/usr/share/pki/trust
+
+    mkdir -p \
+      /etc/pki/trust/anchors \
+      /run/pki/trust/anchors \
+      /usr/share/pki/trust/anchors
+    cp trust/fixtures/thawte.pem /etc/pki/trust/anchors/admin.pem
+    cp trust/input/extensions.pem /run/pki/trust/anchors/transient.pem
+    cp trust/fixtures/cacert3.pem /usr/share/pki/trust/anchors/vendor.pem
+
+    P11_PACKAGE_CONFIG_MODULES="${OUT_DIR}/usr/share/p11-kit/modules" \
+      P11_MODULE_PATH="${OUT_DIR}/usr/lib/pkcs11" \
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${OUT_DIR}/usr/bin/trust" extract \
+        --filter=ca-anchors \
+        --format=pem-bundle \
+        "${WORK_DIR}/all-trust.pem"
+    test "$(sed -n '/BEGIN CERTIFICATE/p' "${WORK_DIR}/all-trust.pem" | wc -l)" \
+      -eq 3
+
+    mkdir -p /etc/pki/trust/blocklist
+    cp trust/fixtures/cacert3.pem /etc/pki/trust/blocklist/vendor.pem
+    P11_PACKAGE_CONFIG_MODULES="${OUT_DIR}/usr/share/p11-kit/modules" \
+      P11_MODULE_PATH="${OUT_DIR}/usr/lib/pkcs11" \
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${OUT_DIR}/usr/bin/trust" extract \
+        --filter=ca-anchors \
+        --format=pem-bundle \
+        "${WORK_DIR}/masked-trust.pem"
+    test "$(sed -n '/BEGIN CERTIFICATE/p' "${WORK_DIR}/masked-trust.pem" | wc -l)" \
+      -eq 2
+
+    rm -f \
+      /etc/pki/trust/anchors/admin.pem \
+      /etc/pki/trust/blocklist/vendor.pem \
+      /run/pki/trust/anchors/transient.pem \
+      /usr/share/pki/trust/anchors/vendor.pem
+    rmdir \
+      /etc/pki/trust/anchors \
+      /etc/pki/trust/blocklist \
+      /etc/pki/trust \
+      /etc/pki \
+      /run/pki/trust/anchors \
+      /run/pki/trust \
+      /run/pki \
+      /usr/share/pki/trust/anchors \
+      /usr/share/pki/trust \
+      /usr/share/pki
 
     install -Dm644 \
       "${OUT_DIR}/etc/pkcs11/pkcs11.conf.example" \

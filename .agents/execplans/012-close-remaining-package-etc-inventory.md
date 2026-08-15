@@ -91,6 +91,9 @@ named below.
   assemblies twice, checked the finished base root's seventeen XML files and
   absence of `/etc/ImageMagick-7`, and used its installed tools to read policy
   and create and identify a one-pixel PNG.
+- [x] (2026-08-15 07:33Z) Prepared the shared trust source by configuring
+  p11-kit to merge administrator, transient, and vendor trust paths, then
+  strictly rebuilt it with real extraction and blocklist tests.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -442,6 +445,15 @@ named below.
   The package must provide every source in the documented order instead of
   replacing that model with whole-file selection. An empty XML file adds no
   rules; ImageMagick does not define it as a mask.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Use p11-kit's ordered trust store as the source for system trust
+  and generate compatibility databases from it.
+  Rationale: trust anchors and blocklists form one merged policy, not a
+  whole-file override. P11-kit already defines input priority and extraction
+  formats for OpenSSL and other consumers. `/etc/pki/trust` holds lasting
+  administrator choices, `/run/pki/trust` holds transient choices, and
+  `/usr/share/pki/trust` holds package anchors.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -961,13 +973,16 @@ affected assemblies, and commit.
    through a `doc` output. The program's real administrator path remains
    `/etc/pkcs11/pkcs11.conf`.
 
-   Both strict builds passed p11-kit's real `test-conf` parser test and
-   matched package checksum
-   `ab9167443ea2da82819d9545033c4db0d3a401ffcacdb47ca283c8129f878670`.
+   P11-kit now also loads trust policy from `/etc/pki/trust`,
+   `/run/pki/trust`, and `/usr/share/pki/trust` in descending priority. Both
+   strict builds passed its real `test-conf` parser, extracted three anchors
+   placed across those tiers, and proved that an administrator blocklist entry
+   removed the same vendor certificate. They matched package checksum
+   `d8524f53a7e4fc14400f74404828eff6059072c1457baab610eac5dc5ba889a6`.
    The generated package output contains the documentation file and declares
    no `/etc` path. No assembly selects p11-kit's only public `dev` bundle, so
-   this package change affected no finished assembly. Commit: `pkg: move
-   configuration samples to docs`.
+   this package change alone affected no finished assembly. Commits: `pkg:
+   move configuration samples to docs` and `pkg: layer p11 trust sources`.
 
 18. `pkg/libs/graphics/at-spi2-core.yaml`
 

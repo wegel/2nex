@@ -589,9 +589,22 @@ administrator copies it to `/etc/pkcs11/pkcs11.conf`; both strict builds
 passed its `test-conf` parser after the sample moved. FUSE 3.17.4's shipped
 `fuse.conf` contains only comments, while `fusermount3` still opens
 `/etc/fuse.conf` for active machine choices. Their strict checksums are
-`ab9167443ea2da82819d9545033c4db0d3a401ffcacdb47ca283c8129f878670`
+`d8524f53a7e4fc14400f74404828eff6059072c1457baab610eac5dc5ba889a6`
 and
 `9829fa1b95f94bc0a3185e52c6b618b5b1d5e9eb6a26b51edbdd0b5536c79047`.
+
+P11-kit accepts colon-separated trust input paths and gives the first path
+the highest priority. Configure `/etc/pki/trust`, `/run/pki/trust`, and
+`/usr/share/pki/trust` in that order so one shared trust module merges lasting
+administrator policy, transient policy, and package anchors. An
+administrator blocklist entry can suppress the same certificate in a lower
+vendor source.
+
+Evidence: p11-kit 0.25.5's installed `trust` extracted three test anchors from
+those three trees, then extracted only two after the test copied the vendor
+certificate into `/etc/pki/trust/blocklist`. Both strict builds passed with
+checksum
+`d8524f53a7e4fc14400f74404828eff6059072c1457baab610eac5dc5ba889a6`.
 
 Treat system shell integration paths as a contract that spans the package
 hook and the system profile that sources it. Bash itself does not scan
