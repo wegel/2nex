@@ -135,6 +135,9 @@ named below.
 - [x] (2026-08-15 08:39Z) Fixed semantic manifest lookup to trust declared
   slugs instead of filename suffixes after GTK's dependency refresh confused
   `at-spi2-atk.yaml` with `atk`; all 190 CLI tests pass.
+- [x] (2026-08-15 08:42Z) Moved GTK 3's multipress input data below `/usr`,
+  added whole-file administrator and transient lookup, and strictly rebuilt it
+  with the installed input module proving every tier and an empty mask.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -671,6 +674,14 @@ named below.
   account. Linux-PAM now reads that fragment below `/usr`, lets an equal
   basename in `/run` or `/etc` replace it, and treats an empty higher file as
   a mask, so PipeWire no longer needs to write package policy below `/etc`.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Treat GTK 3's multipress key map as active package data and layer
+  its one reader across `/etc`, `/run`, and `/usr/share`.
+  Rationale: the file calls itself an example, but the multipress module has no
+  compiled key map and loads this file whenever the input method starts. The
+  package file therefore belongs below `/usr/share`; a lasting administrator
+  file, transient file, or empty mask must replace it as one complete map.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -1506,6 +1517,28 @@ affected assemblies, and commit.
 
    The four system checksums and factory-tree assertions match row 4.
    Commit: `pkg: complete desktop autostart runtimes`.
+
+20. `pkg/libs/graphics/gtk3.yaml`
+
+   The old `conf` output declared `/etc/gtk-3.0/im-multipress.conf`.
+   Although its header calls it an example, GTK's multipress input module has
+   no built-in key sequences and loads this active map when the module starts.
+   Outcome 2 applies. The generic patch with SHA-256
+   `195b6ce1640ebd6f47001bef242dc9511adf07f24ec38084503b3250ceb43774`
+   selects the first complete file from the administrator path, the matching
+   `/run/gtk-3.0` path, and `/usr/share/gtk-3.0`. An existing empty higher file
+   masks lower data. The package installs its unchanged map only below
+   `/usr/share`.
+
+   Both strict builds generated an input-module cache, loaded the installed
+   `im-multipress.so` through GTK's public input-context API, sent keypad 2,
+   and observed `a`, `r`, and `e` from vendor, transient, and administrator
+   files. The empty administrator file produced no multipress preedit, proving
+   it masked the lower maps. The two builds reproduced checksum
+   `c7cf0e30c274e863ed37a5c4dee01ef196b0ec0c94b66e459d82642d3d67bf3c`.
+   Store inspection found the map only below `/usr/share` and no `/etc` output.
+   Affected assembly results will be recorded after the remaining package rows
+   finish. Commit: `pkg: layer gtk multipress data`.
 
 21. `pkg/libs/graphics/nvidia-580.yaml`
 

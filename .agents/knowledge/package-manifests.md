@@ -794,3 +794,18 @@ zero, applying the real fragment returns a PAM denial even though PAM applies
 its 4 GiB memory-lock request. Assert both facts so the test proves the actual
 file was parsed. PipeWire's strict checksum is
 `39dcd9b0b389cba437384c51390d1367fe36af49834f9457181ebae588bf0af0`.
+
+## GTK multipress data
+
+GTK 3.24.43 labels `im-multipress.conf` as an example, but its multipress
+input module has no built-in key sequences and loads this file when it creates
+a context. Inspect the reader as well as comments before moving a supposed
+example to documentation.
+
+The generic patch installs the package map below `/usr/share/gtk-3.0` and
+selects one complete map from `/etc`, `/run`, then `/usr/share`. An empty
+higher file masks the package map. Test the installed module through
+`GtkIMContext`, not only the path helper: generate a module cache, select the
+multipress module, send a keypad event, and inspect its preedit. The strict
+checksum is
+`c7cf0e30c274e863ed37a5c4dee01ef196b0ec0c94b66e459d82642d3d67bf3c`.

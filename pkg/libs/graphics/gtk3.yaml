@@ -6,12 +6,18 @@ package:
   version: 3.24.43
   description: GTK3 toolkit for creating graphical user interfaces
   homepage: https://www.gtk.org/
-  checksum: 6e67001b3fa13a057288a9c9e2ba4c6471d7cb50caf4d40b0fa535416e992aa5
+  checksum: c7cf0e30c274e863ed37a5c4dee01ef196b0ec0c94b66e459d82642d3d67bf3c
 
 sources:
 - name: gtk3
   url: https://download.gnome.org/sources/gtk+/3.24/gtk+-3.24.43.tar.xz
   sha256: 7e04f0648515034b806b74ae5d774d87cffb1a2a96c468cb5be476d51bf2f3c7
+- name: multipress_config
+  file: pkg/libs/graphics/gtk3-uapi-multipress.patch
+  sha256: 195b6ce1640ebd6f47001bef242dc9511adf07f24ec38084503b3250ceb43774
+- name: multipress_smoke
+  file: pkg/libs/graphics/gtk3-multipress-smoke.c
+  sha256: c55c3c0cce41a30f0a0a2fb364feb87d29a06ff8b30dd837e7508cf0eaa77a2b
 
 dependencies:
 - name: glibc
@@ -22,6 +28,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
   commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: sed
@@ -133,11 +141,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4124:3817, 20575:8052, 37132:12592, 62073:18557, 82766:23317, 103394:27750, 124094:31418, 157192:33889, 186071:35809, 206037:36645]
+  profile: [4147:2974, 12415:3104, 28960:4156, 49568:7031, 66126:8514, 78490:10434, 95103:12412, 119983:18022, 140622:18042, 154947:18470]
 
   script: |
+    set -eu
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_multipress_config}"
 
     # set TMPDIR for LTO linker temp files (workaround for namespace /tmp issues)
     export TMPDIR=/nex/work/tmp
@@ -169,6 +179,45 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    multipress_module="${OUT_DIR}/usr/lib/gtk-3.0/3.0.0/immodules/im-multipress.so"
+    multipress_cache="${WORK_DIR}/immodules.cache"
+    multipress_smoke="${WORK_DIR}/gtk3-multipress-smoke"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${OUT_DIR}/usr/bin/gtk-query-immodules-3.0" \
+      "${multipress_module}" > "${multipress_cache}"
+    PKG_CONFIG_PATH="${OUT_DIR}/usr/lib/pkgconfig:/usr/lib/pkgconfig" \
+      gcc "/${SOURCE_multipress_smoke}" \
+      -I"${OUT_DIR}/usr/include/gtk-3.0" \
+      -I"${OUT_DIR}/usr/lib/gtk-3.0/include" \
+      -L"${OUT_DIR}/usr/lib" \
+      $(PKG_CONFIG_PATH="${OUT_DIR}/usr/lib/pkgconfig:/usr/lib/pkgconfig" \
+        pkg-config --cflags --libs gtk+-3.0) \
+      -o "${multipress_smoke}"
+
+    mkdir -p /usr/share/gtk-3.0 /run/gtk-3.0 /etc/gtk-3.0
+    cp "${OUT_DIR}/usr/share/gtk-3.0/im-multipress.conf" \
+      /usr/share/gtk-3.0/im-multipress.conf
+    GTK_IM_MODULE_FILE="${multipress_cache}" \
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${multipress_smoke}" a
+    printf '[keys]\nKP_2 = r\n' > /run/gtk-3.0/im-multipress.conf
+    GTK_IM_MODULE_FILE="${multipress_cache}" \
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${multipress_smoke}" r
+    printf '[keys]\nKP_2 = e\n' > /etc/gtk-3.0/im-multipress.conf
+    GTK_IM_MODULE_FILE="${multipress_cache}" \
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${multipress_smoke}" e
+    : > /etc/gtk-3.0/im-multipress.conf
+    GTK_IM_MODULE_FILE="${multipress_cache}" \
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${multipress_smoke}" masked
+    rm \
+      /etc/gtk-3.0/im-multipress.conf \
+      /run/gtk-3.0/im-multipress.conf \
+      /usr/share/gtk-3.0/im-multipress.conf
+    rmdir /etc/gtk-3.0 /run/gtk-3.0 /usr/share/gtk-3.0
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -285,7 +334,7 @@ outputs:
 
   conf:
     files:
-    - path: /etc/gtk-3.0/im-multipress.conf
+    - path: /usr/share/gtk-3.0/im-multipress.conf
 
   dev:
     files:
@@ -983,7 +1032,7 @@ resolution:
   /usr/lib/libcairo.so.2: cairo
   /usr/lib/libfontconfig.so.1: fontconfig
   /usr/lib/libfribidi.so.0: fribidi
-  /usr/lib/libgdk_pixbuf-2.0.so.0: gdk-pixbuf
+  /usr/lib/libgdk_pixbuf-2.0.so.0: gdk-pixbuf-gir
   /usr/lib/libgio-2.0.so.0: glib2
   /usr/lib/libglib-2.0.so.0: glib2
   /usr/lib/libgmodule-2.0.so.0: glib2
@@ -991,12 +1040,12 @@ resolution:
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
   /usr/lib/libm.so.6: glibc
-  /usr/lib/libharfbuzz.so.0: harfbuzz
+  /usr/lib/libharfbuzz.so.0: harfbuzz-gir
   /usr/lib/libepoxy.so.0: libepoxy
   /usr/lib/libxkbcommon.so.0: libxkbcommon
-  /usr/lib/libpango-1.0.so.0: pango
-  /usr/lib/libpangocairo-1.0.so.0: pango
-  /usr/lib/libpangoft2-1.0.so.0: pango
+  /usr/lib/libpango-1.0.so.0: pango-gir
+  /usr/lib/libpangocairo-1.0.so.0: pango-gir
+  /usr/lib/libpangoft2-1.0.so.0: pango-gir
   /usr/lib/libgdk-3.so.0: self
   /usr/lib/libgtk-3.so.0: self
   /usr/lib/libwayland-client.so.0: wayland

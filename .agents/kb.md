@@ -1566,6 +1566,14 @@ installed PAM limits reader against that file, a transient same-basename
 override, and an empty administrator mask. The package checksum is
 `39dcd9b0b389cba437384c51390d1367fe36af49834f9457181ebae588bf0af0`.
 
+GTK 3.24.43's `im-multipress.conf` is active package data even though its
+header calls it an example: the input module has no compiled fallback map and
+loads the file when it creates a context. The generic patch selects one map
+from `/etc/gtk-3.0`, `/run/gtk-3.0`, then `/usr/share/gtk-3.0`. An empty
+higher file masks lower maps. The strict build loads the installed module and
+sends a real keypad event for every tier; its checksum is
+`c7cf0e30c274e863ed37a5c4dee01ef196b0ec0c94b66e459d82642d3d67bf3c`.
+
 The first PAM consumer batch installed service files below `/usr/lib/pam.d`.
 At that point OpenSSH 9.9p1 enabled PAM but kept its SSH main files below
 `/etc/ssh`; those two builds used checksum
