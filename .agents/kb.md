@@ -1721,3 +1721,12 @@ P11-kit's PEM-directory extractor creates a mode-`0555` directory. Remove
 disposable extracted stores after package assertions and make any retained
 output directory owner-writable before Nex starts its second build, or the
 runner cannot clean its work root.
+
+File-level runtime closure overlays must unlink a distinct destination before
+copying a regular file. Build inputs often use mode `0444` or `0555`, so
+opening an existing path in place can fail. It can also follow a destination
+symlink and overwrite a file outside the intended path. Nex's materializer
+keeps an existing path only when it is the same regular-file inode, otherwise
+it removes the path before `fs::copy`. The CLI tests cover read-only files and
+symlink targets; the OpenSSL strict build exercises the real overlapping Perl
+closure case that exposed this rule.

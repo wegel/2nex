@@ -137,6 +137,9 @@ fn copy_regular_file(src: &Path, dst: &Path) -> io::Result<()> {
     if is_same_inode(src, dst) {
         return Ok(());
     }
+    if dst.exists() || dst.symlink_metadata().is_ok() {
+        fs::remove_file(dst)?;
+    }
     fs::copy(src, dst)?;
     Ok(())
 }
@@ -145,11 +148,10 @@ fn is_same_inode(src: &Path, dst: &Path) -> bool {
     use std::os::unix::fs::MetadataExt;
 
     let src_ino = fs::metadata(src).map(|metadata| metadata.ino()).ok();
-    let dst_ino = if dst.exists() {
-        fs::metadata(dst).map(|metadata| metadata.ino()).ok()
-    } else {
-        None
-    };
+    let dst_ino = fs::symlink_metadata(dst)
+        .ok()
+        .filter(|metadata| metadata.file_type().is_file())
+        .map(|metadata| metadata.ino());
     src_ino.is_some() && src_ino == dst_ino
 }
 

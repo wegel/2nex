@@ -99,6 +99,10 @@ named below.
   and blocklist tests, rebuilt all six affected assemblies twice, exercised
   the merged trust policy in Nex and Edgebox roots, and booted nex-systemd in
   QEMU with the CA refresh service active.
+- [x] (2026-08-15 10:15Z) Fixed file-level runtime materialization so an
+  overlapping closure file replaces a read-only regular file or symlink
+  instead of opening it in place, passed all 187 CLI tests, and resumed the
+  OpenSSL strict build past the dependency checkout that exposed the bug.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -325,6 +329,15 @@ named below.
   build. The build now removes its disposable extracted stores and restores
   owner write permission only on the immutable output copy before Nex stores
   it.
+
+- Observation: File-level closure materialization copied regular files over
+  existing paths without unlinking them first.
+  Evidence: OpenSSL's build root first received Perl's full development
+  bundle, then tried to overlay one read-only Perl runtime file and failed
+  with `Permission denied`. After `copy_regular_file` unlinked a distinct
+  destination first, the same strict build materialized all twenty closure
+  commits and began compiling OpenSSL. Dedicated tests also prove that a
+  regular file replaces a symlink without modifying the symlink target.
 
 ## Decision Log
 
