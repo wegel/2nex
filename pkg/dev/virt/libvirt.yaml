@@ -6,7 +6,7 @@ package:
   version: 11.0.0
   description: Toolkit for virtualization management
   homepage: https://libvirt.org/
-  checksum: e6df5e656abb84c32f752902dc9b8bcededd5fbcf3d950d08aa5820f5a16c039
+  checksum: b79faa31ca1b2f43e7c474b0ee3ac8350358f39d1a90e94bbe856ea2e664627b
 
 sources:
 - name: libvirt
@@ -96,7 +96,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4122:1476, 12334:3215, 24681:3735, 37009:4421, 49503:5614, 61944:6934, 70220:8094, 90838:45905, 107397:45921, 116682:49484]
+  profile: [4122:1585, 12334:3474, 24681:3995, 37010:4665, 49402:5826, 61767:7049, 74113:8544, 90663:47391, 107248:47406, 116798:50996]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_libvirt} -C "${WORK_DIR}" --strip-components=1
@@ -153,6 +153,8 @@ build:
 
     mkdir -p \
       "${OUT_DIR}/usr/lib/libvirt" \
+      "${OUT_DIR}/usr/lib/logrotate.d" \
+      "${OUT_DIR}/usr/lib/ssh/ssh_config.d" \
       "${OUT_DIR}/usr/share/libvirt/initial-state"
     for config in "${OUT_DIR}"/etc/libvirt/*.conf; do
       mv "${config}" "${OUT_DIR}/usr/lib/libvirt/"
@@ -164,13 +166,35 @@ build:
     mv \
       "${OUT_DIR}/etc/libvirt/qemu/networks" \
       "${OUT_DIR}/usr/share/libvirt/initial-state/qemu/networks"
+    mv \
+      "${OUT_DIR}"/etc/logrotate.d/libvirtd* \
+      "${OUT_DIR}/usr/lib/logrotate.d/"
+    mv \
+      "${OUT_DIR}/etc/ssh/ssh_config.d/30-libvirt-ssh-proxy.conf" \
+      "${OUT_DIR}/usr/lib/ssh/ssh_config.d/"
     rmdir \
       "${OUT_DIR}/etc/libvirt/qemu/autostart" \
       "${OUT_DIR}/etc/libvirt/qemu" \
       "${OUT_DIR}/etc/libvirt/secrets" \
       "${OUT_DIR}/etc/libvirt/storage/autostart" \
       "${OUT_DIR}/etc/libvirt/storage" \
-      "${OUT_DIR}/etc/libvirt"
+      "${OUT_DIR}/etc/libvirt" \
+      "${OUT_DIR}/etc/logrotate.d" \
+      "${OUT_DIR}/etc/ssh/ssh_config.d" \
+      "${OUT_DIR}/etc/ssh"
+
+    test -s "${OUT_DIR}/usr/lib/logrotate.d/libvirtd"
+    test -s "${OUT_DIR}/usr/lib/logrotate.d/libvirtd.libxl"
+    test -s "${OUT_DIR}/usr/lib/logrotate.d/libvirtd.lxc"
+    test -s "${OUT_DIR}/usr/lib/logrotate.d/libvirtd.qemu"
+    grep -F '/var/log/libvirt/libvirtd.log' \
+      "${OUT_DIR}/usr/lib/logrotate.d/libvirtd"
+    grep -F '/var/log/libvirt/qemu/*.log' \
+      "${OUT_DIR}/usr/lib/logrotate.d/libvirtd.qemu"
+    grep -F 'ProxyCommand /usr/libexec/libvirt-ssh-proxy %h %p' \
+      "${OUT_DIR}/usr/lib/ssh/ssh_config.d/30-libvirt-ssh-proxy.conf"
+    test ! -e "${OUT_DIR}/etc/logrotate.d"
+    test ! -e "${OUT_DIR}/etc/ssh"
 
     mkdir -p /usr/lib/libvirt /run/libvirt /etc/libvirt
     printf '%s\n' 'invalid vendor syntax' > /usr/lib/libvirt/virtlogd.conf
@@ -330,11 +354,6 @@ outputs:
 
   conf:
     files:
-    - path: /etc/logrotate.d/libvirtd
-    - path: /etc/logrotate.d/libvirtd.libxl
-    - path: /etc/logrotate.d/libvirtd.lxc
-    - path: /etc/logrotate.d/libvirtd.qemu
-    - path: /etc/ssh/ssh_config.d/30-libvirt-ssh-proxy.conf
     - path: /usr/lib/libvirt/libvirt-admin.conf
     - path: /usr/lib/libvirt/libvirt.conf
     - path: /usr/lib/libvirt/libvirtd.conf
@@ -350,6 +369,11 @@ outputs:
     - path: /usr/lib/libvirt/virtqemud.conf
     - path: /usr/lib/libvirt/virtsecretd.conf
     - path: /usr/lib/libvirt/virtstoraged.conf
+    - path: /usr/lib/logrotate.d/libvirtd
+    - path: /usr/lib/logrotate.d/libvirtd.libxl
+    - path: /usr/lib/logrotate.d/libvirtd.lxc
+    - path: /usr/lib/logrotate.d/libvirtd.qemu
+    - path: /usr/lib/ssh/ssh_config.d/30-libvirt-ssh-proxy.conf
     - path: /usr/share/libvirt/initial-state/nwfilter/allow-arp.xml
     - path: /usr/share/libvirt/initial-state/nwfilter/allow-dhcp-server.xml
     - path: /usr/share/libvirt/initial-state/nwfilter/allow-dhcp.xml
