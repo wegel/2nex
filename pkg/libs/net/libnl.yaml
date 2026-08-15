@@ -6,12 +6,18 @@ package:
   version: 3.11.0
   description: Library for applications dealing with netlink sockets
   homepage: https://github.com/thom311/libnl
-  checksum: d50114cb2795b83a70f2252444834920a050871677a7a94d3c2e497de19a4c0c
+  checksum: 8f4f682f99ed34326397ea95a798e672bc3b7b97ba1005850d86c8cf8926b7ec
 
 sources:
 - name: libnl
   url: https://github.com/thom311/libnl/releases/download/libnl3_11_0/libnl-3.11.0.tar.gz
   sha256: 2a56e1edefa3e68a7c00879496736fdbf62fc94ed3232c0baba127ecfa76874d
+- name: databases_config
+  file: pkg/libs/net/libnl-uapi-databases.patch
+  sha256: 2a520e037b0fb0a9fe064a18981ab051024f4990e4d47af40261850b0c10a5ca
+- name: databases_smoke
+  file: pkg/libs/net/libnl-databases-smoke.c
+  sha256: 8d313f73538c0ac4eed0444a31a142007841d2dd49eb1e1f5398156727b8cea4
 
 dependencies:
 - name: bash
@@ -30,6 +36,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
   commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
 - name: linux-headers
@@ -52,6 +60,10 @@ dependencies:
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: grep
   commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
 - name: bison
   commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
 - name: flex
@@ -61,11 +73,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4110:9784, 12365:21650, 20623:28700, 33024:35686, 41784:43381, 54539:45792, 62834:46768, 79383:49377, 96007:51772, 103301:52986]
+  profile: [4104:871, 12413:2214, 20671:2216, 33084:2594, 41696:5815, 54451:7188, 62844:8722, 79393:9343, 96017:9970, 103311:10445]
 
   script: |
-    tar --no-same-owner -xf ${SOURCE_libnl} -C "${WORK_DIR}" --strip-components=1
-    cd ${WORK_DIR}
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_libnl}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_databases_config}"
 
     ./configure --prefix=/usr --sysconfdir=/etc --disable-static
 
@@ -73,8 +87,38 @@ build:
 
     make DESTDIR="${OUT_DIR}" install
 
-    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
-    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    mkdir -p "${OUT_DIR}/usr/lib/libnl"
+    mv "${OUT_DIR}/etc/libnl/classid" "${OUT_DIR}/usr/lib/libnl/classid"
+    mv "${OUT_DIR}/etc/libnl/pktloc" "${OUT_DIR}/usr/lib/libnl/pktloc"
+    rmdir "${OUT_DIR}/etc/libnl" "${OUT_DIR}/etc"
+
+    if [ -e /etc/libnl ] || [ -e /run/libnl ] || [ -e /usr/lib/libnl ]; then
+      echo 'libnl smoke-test paths already exist' >&2
+      exit 1
+    fi
+    mkdir -p /etc /run /usr/lib/libnl
+    cp "${OUT_DIR}/usr/lib/libnl/classid" /usr/lib/libnl/classid
+    cp "${OUT_DIR}/usr/lib/libnl/pktloc" /usr/lib/libnl/pktloc
+    printf '\n1:1 vendor-class\n' >> /usr/lib/libnl/classid
+    touch -d "2024-01-01T00:00:00+00:00" \
+      /usr/lib/libnl/classid /usr/lib/libnl/pktloc
+
+    databases_smoke="${WORK_DIR}/libnl-databases-smoke"
+    gcc \
+      -I"${OUT_DIR}/usr/include/libnl3" \
+      -L"${OUT_DIR}/usr/lib" \
+      "/${SOURCE_databases_smoke}" \
+      -lnl-route-3 -lnl-3 \
+      -o "${databases_smoke}"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${databases_smoke}" "${WORK_DIR}/libnl-explicit"
+
+    rm /usr/lib/libnl/classid /usr/lib/libnl/pktloc
+    rmdir /usr/lib/libnl
+    rmdir /etc /run 2>/dev/null || true
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
@@ -412,8 +456,8 @@ outputs:
 
   conf:
     files:
-    - path: /etc/libnl/classid
-    - path: /etc/libnl/pktloc
+    - path: /usr/lib/libnl/classid
+    - path: /usr/lib/libnl/pktloc
 
   dev:
     files:

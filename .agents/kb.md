@@ -1840,3 +1840,12 @@ usually exposes that path as an absolute link into `/nex/pkg`. A host-side
 for an absolute target, copy from `/target${link}`. Handle relative links from
 the public path's directory. The desktop Libvirt seed uses this pattern and
 produces regular factory XML files.
+
+Libnl's class and packet-location files are whole databases. The package puts
+them in `/usr/lib/libnl`; the library selects `/etc`, `/run`, then `/usr`, and
+keeps `NLSYSCONFDIR` as an exact override. Cache the chosen path as well as its
+mtime. Before `rtnl_classid_generate()` appends to a new administrator file,
+copy the selected lower class map so package entries remain visible. Libnl
+3.11.0 also needs `tdestroy(id_root, free_nothing)`, not
+`tdestroy(&id_root, &free_nothing)`, for safe reloads. Its strict checksum is
+`8f4f682f99ed34326397ea95a798e672bc3b7b97ba1005850d86c8cf8926b7ec`.

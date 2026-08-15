@@ -138,6 +138,11 @@ named below.
 - [x] (2026-08-15 08:42Z) Moved GTK 3's multipress input data below `/usr`,
   added whole-file administrator and transient lookup, and strictly rebuilt it
   with the installed input module proving every tier and an empty mask.
+- [x] (2026-08-15) Moved Libnl's class and packet-location databases below
+  `/usr`, added whole-file administrator and transient lookup, fixed its
+  broken reload cleanup, and strictly rebuilt it with the installed library
+  proving every tier, an empty mask, its exact override, and copy-on-write
+  class generation.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -171,6 +176,18 @@ named below.
   and SSH files to test its reader, but its generated outputs contain no
   package-owned SSH default below `/etc`. Count output entries, not every
   build-script string, for the final package inventory.
+
+- Observation: Libnl 3.11.0 crashes when it reloads a nonempty class database.
+  Evidence: the installed-library smoke aborted with `free(): invalid pointer`
+  on its first tier change. `clear_hashtable()` passed `&id_root` to
+  `tdestroy()` instead of `id_root`; the corrected call survives every
+  database switch in the strict two-pass build.
+
+- Observation: Libnl's Autoconf and Libtool probes continue after missing
+  `cmp`, `diff`, and `file` commands.
+  Evidence: the first successful compile logged all three missing commands.
+  Adding Diffutils and File made `configure` find `file`, use `dd` for binary
+  pipes, and complete the compiler probes before producing the same raw files.
 
 - Observation: The RTK `find` wrapper omits GNU `find` features needed for the
   knowledge and ExecPlan listings.
@@ -682,6 +699,14 @@ named below.
   compiled key map and loads this file whenever the input method starts. The
   package file therefore belongs below `/usr/share`; a lasting administrator
   file, transient file, or empty mask must replace it as one complete map.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Treat Libnl's class and packet-location maps as whole-file
+  databases and copy the selected lower class map before a library write.
+  Rationale: the readers parse complete databases rather than independent
+  fragments. Administrator and transient files must replace lower maps, while
+  `rtnl_classid_generate()` must write only below `/etc` without discarding
+  the selected package or transient entries.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -1573,6 +1598,34 @@ affected assemblies, and commit.
    and reproduced with checksum
    `43c20f709c15622e278ae0f1bf486be49f1ae578d377d6586d47498b91fc0a57`.
    Commit: `pkg: include nvidia OpenCL ICDs at runtime`.
+
+23. `pkg/libs/net/libnl.yaml`
+
+   The old `conf` output declared `/etc/libnl/classid` and
+   `/etc/libnl/pktloc`. Libnl reads each as a complete database. Outcome 2
+   applies. The generic patch with SHA-256
+   `2a520e037b0fb0a9fe064a18981ab051024f4990e4d47af40261850b0c10a5ca`
+   selects the first database from `/etc/libnl`, `/run/libnl`, and
+   `/usr/lib/libnl`; an exact `NLSYSCONFDIR` value still replaces that search.
+   An empty higher file masks lower data. The reader cache now keys on both
+   path and modification time, so equal timestamps do not hide a tier change.
+
+   `rtnl_classid_generate()` writes only to the administrator path. When that
+   file does not exist, it copies the selected lower class database before it
+   appends the generated entry. The patch also corrects upstream's invalid
+   `tdestroy(&id_root, ...)` call, which made any nonempty class-map reload
+   abort. The package installs both upstream databases only below `/usr` and
+   declares Diffutils and File so Autoconf and Libtool run complete probes.
+
+   The strict command built twice with checksum
+   `8f4f682f99ed34326397ea95a798e672bc3b7b97ba1005850d86c8cf8926b7ec`.
+   Its installed-library smoke used identical mtimes across different tiers
+   and proved vendor, transient, administrator, empty-mask, restored-vendor,
+   and exact-override selection for both databases. It also proved that class
+   generation copied the transient map into `/etc` before appending. Store
+   inspection found `/usr/lib/libnl/{classid,pktloc}` and no package file
+   below `/etc`. Affected assembly results will be recorded after the final
+   package rows finish. Commit: `pkg: layer libnl databases`.
 
 25. `pkg/libs/security/linux-pam.yaml`
 

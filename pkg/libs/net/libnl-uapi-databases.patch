@@ -1,0 +1,234 @@
+From: Package maintainers <packages@localhost>
+Subject: [PATCH] layer the classid and packet-location databases
+Source: downstream
+Upstream: not submitted; suitable for upstream review
+
+Read complete databases from the administrator, transient, and vendor paths.
+Keep NLSYSCONFDIR as an exact override. When the library generates a class ID,
+seed the administrator database from the selected lower file before appending
+so the new whole-file override retains package entries.
+
+Track the selected path as part of each reader cache, and correct the invalid
+tree-destruction call that made a nonempty class-database reload abort.
+
+diff --git a/Makefile.am b/Makefile.am
+index 227fa56..daf1724 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -46,6 +46,8 @@ warn_cppflags = \
+ 
+ defines_cppflags = \
+ 	-D_NL_SYSCONFDIR_LIBNL=\"$(sysconfdir)/libnl\" \
++	-D_NL_RUNTIMEDIR_LIBNL=\"/run/libnl\" \
++	-D_NL_VENDORDIR_LIBNL=\"$(prefix)/lib/libnl\" \
+ 	-D_NL_PKGLIBDIR=\"$(pkglibdir)\" \
+ 	$(NULL)
+ 
+diff --git a/Makefile.in b/Makefile.in
+index b8941d3..8b8c8d9 100644
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -1655,6 +1655,8 @@ warn_cppflags = \
+ 
+ defines_cppflags = \
+ 	-D_NL_SYSCONFDIR_LIBNL=\"$(sysconfdir)/libnl\" \
++	-D_NL_RUNTIMEDIR_LIBNL=\"/run/libnl\" \
++	-D_NL_VENDORDIR_LIBNL=\"$(prefix)/lib/libnl\" \
+ 	-D_NL_PKGLIBDIR=\"$(pkglibdir)\" \
+ 	$(NULL)
+ 
+diff --git a/lib/route/nl-route.h b/lib/route/nl-route.h
+index 53d8b9f..0b319ae 100644
+--- a/lib/route/nl-route.h
++++ b/lib/route/nl-route.h
+@@ -152,14 +152,35 @@ static inline void rtnl_rcopy_ratespec(struct tc_ratespec *dst,
+ 
+ static inline int build_sysconf_path(char **strp, const char *filename)
+ {
+-	char *sysconfdir;
++	const char *override;
++	const char *directories[] = {
++		_NL_SYSCONFDIR_LIBNL,
++		_NL_RUNTIMEDIR_LIBNL,
++		_NL_VENDORDIR_LIBNL,
++	};
++	size_t i;
+ 
+-	sysconfdir = getenv("NLSYSCONFDIR");
++	override = getenv("NLSYSCONFDIR");
++	if (override)
++		return asprintf(strp, "%s/%s", override, filename);
+ 
+-	if (!sysconfdir)
+-		sysconfdir = _NL_SYSCONFDIR_LIBNL;
++	for (i = 0; i < ARRAY_SIZE(directories) - 1; i++) {
++		if (asprintf(strp, "%s/%s", directories[i], filename) < 0)
++			return -1;
++		if (access(*strp, F_OK) == 0 || errno != ENOENT)
++			return 0;
++		free(*strp);
++	}
+ 
+-	return asprintf(strp, "%s/%s", sysconfdir, filename);
++	return asprintf(strp, "%s/%s", _NL_VENDORDIR_LIBNL, filename);
++}
++
++static inline int build_admin_path(char **strp, const char *filename)
++{
++	const char *override = getenv("NLSYSCONFDIR");
++
++	return asprintf(strp, "%s/%s",
++			override ? override : _NL_SYSCONFDIR_LIBNL, filename);
+ }
+ 
+ /*****************************************************************************/
+diff --git a/lib/route/classid.c b/lib/route/classid.c
+index f5a75f0..1a0def7 100644
+--- a/lib/route/classid.c
++++ b/lib/route/classid.c
+@@ -273,7 +273,7 @@ static void clear_hashtable(void)
+ 	}
+ 
+ 	if (id_root) {
+-		tdestroy(&id_root, &free_nothing);
++		tdestroy(id_root, free_nothing);
+ 		id_root = NULL;
+ 	}
+ }
+@@ -311,6 +311,7 @@ static int classid_map_add(uint32_t classid, const char *name)
+ int rtnl_tc_read_classid_file(void)
+ {
+ 	static time_t last_read;
++	static char *last_path;
+ 	struct stat st;
+ 	char buf[256], *path;
+ 	FILE *fd;
+@@ -322,7 +323,8 @@ int rtnl_tc_read_classid_file(void)
+ 	/* if stat fails, just (re-)read the file */
+ 	if (stat(path, &st) == 0) {
+ 		/* Don't re-read file if file is unchanged */
+-		if (last_read == st.st_mtime) {
++		if (last_path && !strcmp(last_path, path) &&
++		    last_read == st.st_mtime) {
+ 			err = 0;
+ 			goto errout;
+ 		}
+@@ -363,6 +365,8 @@ int rtnl_tc_read_classid_file(void)
+ 
+ 	err = 0;
+ 	last_read = st.st_mtime;
++	free(last_path);
++	last_path = strdup(path);
+ 
+ errout_close:
+ 	fclose(fd);
+@@ -373,6 +377,67 @@ errout:
+ 
+ }
+ 
++static int prepare_classid_file(char **path)
++{
++	char *source_path = NULL;
++	FILE *source = NULL;
++	FILE *destination = NULL;
++	char buffer[4096];
++	size_t length;
++	int err = 0;
++
++	if (build_admin_path(path, "classid") < 0)
++		return -NLE_NOMEM;
++
++	if (getenv("NLSYSCONFDIR") || access(*path, F_OK) == 0 || errno != ENOENT)
++		return 0;
++
++	if (mkdir(_NL_SYSCONFDIR_LIBNL, 0755) < 0 && errno != EEXIST) {
++		err = -nl_syserr2nlerr(errno);
++		goto out;
++	}
++
++	if (build_sysconf_path(&source_path, "classid") < 0) {
++		err = -NLE_NOMEM;
++		goto out;
++	}
++	if (!strcmp(source_path, *path))
++		goto out;
++
++	source = fopen(source_path, "re");
++	if (!source)
++		goto out;
++
++	destination = fopen(*path, "wxe");
++	if (!destination) {
++		if (errno != EEXIST)
++			err = -nl_syserr2nlerr(errno);
++		goto out;
++	}
++
++	while ((length = fread(buffer, 1, sizeof(buffer), source)) > 0) {
++		if (fwrite(buffer, 1, length, destination) != length) {
++			err = -nl_syserr2nlerr(errno);
++			break;
++		}
++	}
++	if (ferror(source))
++		err = -nl_syserr2nlerr(errno);
++	if (fclose(destination) != 0 && err == 0)
++		err = -nl_syserr2nlerr(errno);
++	destination = NULL;
++	if (err < 0)
++		unlink(*path);
++
++out:
++	if (destination)
++		fclose(destination);
++	if (source)
++		fclose(source);
++	free(source_path);
++	return err;
++}
++
+ int rtnl_classid_generate(const char *name, uint32_t *result, uint32_t parent)
+ {
+ 	static uint32_t base = 0x4000 << 16;
+@@ -399,8 +464,8 @@ int rtnl_classid_generate(const char *name, uint32_t *result, uint32_t parent)
+ 
+ 	NL_DBG(2, "Generated new classid %#x\n", classid);
+ 
+-	if (build_sysconf_path(&path, "classid") < 0)
+-		return -NLE_NOMEM;
++	if ((err = prepare_classid_file(&path)) < 0)
++		return err;
+ 
+ 	if (!(fd = fopen(path, "ae"))) {
+ 		err = -nl_syserr2nlerr(errno);
+diff --git a/lib/route/pktloc.c b/lib/route/pktloc.c
+index 7f320d9..1363a38 100644
+--- a/lib/route/pktloc.c
++++ b/lib/route/pktloc.c
+@@ -88,6 +88,7 @@ static int read_pktlocs(void)
+ 	YY_BUFFER_STATE buf = NULL;
+ 	yyscan_t scanner = NULL;
+ 	static time_t last_read;
++	static char *last_path;
+ 	struct stat st;
+ 	char *path;
+ 	int i, err;
+@@ -99,7 +100,8 @@ static int read_pktlocs(void)
+ 	/* if stat fails, just try to read the file */
+ 	if (stat(path, &st) == 0) {
+ 		/* Don't re-read file if file is unchanged */
+-		if (last_read == st.st_mtime) {
++		if (last_path && !strcmp(last_path, path) &&
++		    last_read == st.st_mtime) {
+ 			err = 0;
+ 			goto errout;
+ 		}
+@@ -136,6 +138,8 @@ static int read_pktlocs(void)
+ 	}
+ 
+ 	last_read = st.st_mtime;
++	free(last_path);
++	last_path = strdup(path);
+ 
+ errout_scanner:
+ 	pktloc_lex_destroy(scanner);

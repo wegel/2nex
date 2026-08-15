@@ -809,3 +809,20 @@ higher file masks the package map. Test the installed module through
 multipress module, send a keypad event, and inspect its preedit. The strict
 checksum is
 `c7cf0e30c274e863ed37a5c4dee01ef196b0ec0c94b66e459d82642d3d67bf3c`.
+
+## Libnl databases
+
+Libnl 3.11.0 reads `classid` and `pktloc` as complete databases. Install the
+package copies below `/usr/lib/libnl` and select one whole file from
+`/etc/libnl`, `/run/libnl`, then `/usr/lib/libnl`. Keep `NLSYSCONFDIR` as an
+exact directory override. Cache both the selected path and its modification
+time because two tier files can have identical timestamps.
+
+`rtnl_classid_generate()` writes a new class name. When `/etc/libnl/classid`
+does not exist, copy the currently selected lower database there before
+appending so the writable override retains lower entries. Libnl 3.11.0 also
+passes `&id_root` to `tdestroy()` while reloading class data; pass `id_root`
+instead or the first nonempty reload can abort with an invalid free. The
+installed-library smoke proves every tier, an empty mask, the exact override,
+equal-mtime path switches, and copy-on-first-write. The strict checksum is
+`8f4f682f99ed34326397ea95a798e672bc3b7b97ba1005850d86c8cf8926b7ec`.
