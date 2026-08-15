@@ -64,6 +64,9 @@ named below.
   rebuilt all eleven affected assemblies, exercised the policy through the
   installed Coreutils `cp`, passed the Edgebox smoke, and booted nex-systemd
   in QEMU.
+- [x] (2026-08-15 03:46Z) Moved Slsh's startup file to `/usr/lib/slsh.rc`,
+  added whole-file system lookup without weakening its existing environment
+  override, and strictly rebuilt the package with six reader cases.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -211,6 +214,13 @@ named below.
   to the five standalone base assemblies made the policy explicit and carried
   it into all six descendants.
 
+- Observation: Slsh treats `SLSH_CONF_DIR` and its older `SLSH_LIB_DIR` alias
+  as explicit single-directory overrides, then loads one system `slsh.rc`
+  before a user's optional startup file.
+  Evidence: the pinned `load_startup_file()` checks those environment
+  variables first and returns after the first system file loads. The package
+  test proved that an empty selected system file also stops the search.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -335,6 +345,16 @@ named below.
   empty higher-priority file intentionally masks every lower rule. Libraries
   do not cause a split policy output to appear in a system, so each base that
   supplies file-copy tools must choose that output explicitly.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Give Slsh whole-file system startup lookup through its configured
+  administrator directory, `/run`, and `/usr/lib`, while retaining
+  `SLSH_CONF_DIR` and `SLSH_LIB_DIR` as explicit overrides.
+  Rationale: Slsh loads exactly one machine startup file, so the UAPI model
+  maps directly to its existing reader. A lasting administrator file, a
+  temporary file, or an empty mask can now replace the packaged startup file
+  without modifying `/usr`; callers that name a directory keep the old exact
+  behavior.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -979,6 +999,27 @@ affected assemblies, and commit.
    encoded the current directory successfully. No assembly selects VTE
    directly, so this audit changed no finished system. Commit: `pkg: document
    system shell integration paths`.
+
+29. `pkg/libs/tui/slang.yaml`
+
+   The old `conf` output declared `/etc/slsh.rc`. Slsh loads this system
+   startup file before the optional per-user file. Outcome 2 applies. The
+   generic patch with SHA-256
+   `9c95e4314ad6f2c7a284a3d11e431fa9173b8e55a6029feae6404ba4dd2a1a7a`
+   retains `SLSH_CONF_DIR` and `SLSH_LIB_DIR` as explicit single-directory
+   overrides; without one, Slsh selects the first `slsh.rc` in its configured
+   administrator directory, `/run`, or `/usr/lib`. The packaged file now
+   lives only at `/usr/lib/slsh.rc`, and an empty selected file masks lower
+   startup files.
+
+   The strict package command built twice with checksum
+   `9dbe12cf16e3dbdf85decc1ba685c5f27dfd8afa7924f02cd10e64947d5cc1be`.
+   Both builds ran the installed Slsh and proved vendor, transient,
+   administrator, empty-mask, explicit-environment, and no-file behavior.
+   Store inspection found the complete installed startup file below
+   `/usr/lib` and no old `/etc/slsh.rc` output. No assembly selects Slsh's
+   `conf` or `bin` output; Newt and NetworkManager use only its library bundle,
+   whose source was unchanged. Commit: `pkg: layer slsh startup files`.
 
 ## Interfaces and Dependencies
 

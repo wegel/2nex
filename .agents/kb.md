@@ -1186,6 +1186,14 @@ root can prove the real behavior by setting `user.keep` and
 `cp --preserve=xattr` in a rootless chroot, and checking which attributes
 reach the destination.
 
+Slsh 2.3.3 loads one system `slsh.rc` before its optional user startup file.
+Keep `SLSH_CONF_DIR` and the older `SLSH_LIB_DIR` alias as explicit
+single-directory overrides. Without either variable, the generic reader
+selects the configured administrator directory, `/run`, then `/usr/lib`; an
+empty selected file masks lower files. Run a fresh Slsh process for each
+startup-file test. The strict package checksum is
+`9dbe12cf16e3dbdf85decc1ba685c5f27dfd8afa7924f02cd10e64947d5cc1be`.
+
 After a strict assembly build commits a system, its temporary `target` tree
 may no longer exist. Use `zub cat-file systems/<slug>/<version>:<path>` to
 inspect a directory, symlink target, or regular file in the durable system

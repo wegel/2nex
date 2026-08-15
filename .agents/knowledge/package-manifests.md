@@ -626,6 +626,15 @@ policy. EP012 proved the assembled result with the packaged `cp`: a normal
 user attribute copied, `user.Beagle.*` followed the vendor skip rule, and a
 new `/etc/xattr.conf` replaced the vendor file.
 
+Slsh 2.3.3 uses `SLSH_CONF_DIR`, or its older `SLSH_LIB_DIR` alias, as an
+explicit single-directory startup override. Without either variable, its
+generic system reader selects the configured administrator directory,
+`/run`, then `/usr/lib`. It loads one `slsh.rc`, so an empty selected file is
+a complete mask. The strict package test exercised the installed interpreter
+for every tier, the mask, the explicit override, and the no-file case; its
+checksum is
+`9dbe12cf16e3dbdf85decc1ba685c5f27dfd8afa7924f02cd10e64947d5cc1be`.
+
 ## Namespace Reference
 
 - `libs/system`: glibc, zlib, ncurses, acl, attr.

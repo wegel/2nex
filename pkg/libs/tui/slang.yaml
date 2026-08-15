@@ -6,12 +6,15 @@ package:
   version: 2.3.3
   description: S-Lang library for text mode user interfaces
   homepage: https://www.jedsoft.org/slang/
-  checksum: b1b422457c73d0aa88d9be9b9b6a527d8b7bbd3d1fa06f9896e3f69d71badf29
+  checksum: 9dbe12cf16e3dbdf85decc1ba685c5f27dfd8afa7924f02cd10e64947d5cc1be
 
 sources:
 - name: slang
   url: https://www.jedsoft.org/releases/slang/slang-2.3.3.tar.bz2
   sha256: f9145054ae131973c61208ea82486d5dd10e3c5cdad23b7c4a0617743c8f5a18
+- name: uapi_config
+  file: pkg/libs/tui/slang-uapi-config.patch
+  sha256: 9c95e4314ad6f2c7a284a3d11e431fa9173b8e55a6029feae6404ba4dd2a1a7a
 
 dependencies:
 - name: glibc
@@ -32,6 +35,8 @@ dependencies:
   commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: ncurses
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
 - name: acl
@@ -65,16 +70,57 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4096:13050, 8244:21600, 12466:25584, 20816:27086, 25049:28128, 33288:30246, 37415:31287, 45648:32900, 53858:36261, 59760:39183]
+  profile: [4122:1396, 8270:6217, 12492:6439, 20842:6477, 25075:6514, 33314:9594, 37441:9753, 45664:10214, 53884:10345, 59786:10481]
 
   script: |
-    tar --no-same-owner -xjf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    tar --no-same-owner -xjf /${SOURCE_slang} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch -Np1 --batch --fuzz=0 < "/${SOURCE_uapi_config}"
 
     ./configure --prefix=/usr --sysconfdir=/etc --with-readline=gnu
 
     make
     make DESTDIR="${OUT_DIR}" install
+
+    install -Dm644 "${OUT_DIR}/etc/slsh.rc" "${OUT_DIR}/usr/lib/slsh.rc"
+    rm "${OUT_DIR}/etc/slsh.rc"
+    rmdir "${OUT_DIR}/etc"
+
+    mkdir -p /etc /run /usr/lib "${WORK_DIR}/slsh-explicit"
+    rm -f /etc/slsh.rc /run/slsh.rc /usr/lib/slsh.rc
+    printf 'variable Uapi_Selected = "vendor";\n' > /usr/lib/slsh.rc
+    test "$(LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      SLSH_PATH="${OUT_DIR}/usr/share/slsh" \
+      "${OUT_DIR}/usr/bin/slsh" -n -e \
+      '() = printf("%s\n", Uapi_Selected);')" = vendor
+    printf 'variable Uapi_Selected = "transient";\n' > /run/slsh.rc
+    test "$(LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      SLSH_PATH="${OUT_DIR}/usr/share/slsh" \
+      "${OUT_DIR}/usr/bin/slsh" -n -e \
+      '() = printf("%s\n", Uapi_Selected);')" = transient
+    printf 'variable Uapi_Selected = "administrator";\n' > /etc/slsh.rc
+    test "$(LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      SLSH_PATH="${OUT_DIR}/usr/share/slsh" \
+      "${OUT_DIR}/usr/bin/slsh" -n -e \
+      '() = printf("%s\n", Uapi_Selected);')" = administrator
+    : > /etc/slsh.rc
+    test "$(LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      SLSH_PATH="${OUT_DIR}/usr/share/slsh" \
+      "${OUT_DIR}/usr/bin/slsh" -n -e \
+      '() = printf("masked\n");')" = masked
+    printf 'variable Uapi_Selected = "explicit";\n' \
+      > "${WORK_DIR}/slsh-explicit/slsh.rc"
+    test "$(SLSH_CONF_DIR="${WORK_DIR}/slsh-explicit" \
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      SLSH_PATH="${OUT_DIR}/usr/share/slsh" \
+      "${OUT_DIR}/usr/bin/slsh" -n -e \
+      '() = printf("%s\n", Uapi_Selected);')" = explicit
+    rm -f /etc/slsh.rc /run/slsh.rc /usr/lib/slsh.rc
+    test "$(LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      SLSH_PATH="${OUT_DIR}/usr/share/slsh" \
+      "${OUT_DIR}/usr/bin/slsh" -n -e \
+      '() = printf("no-files\n");')" = no-files
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -97,7 +143,7 @@ outputs:
 
   conf:
     files:
-    - path: /etc/slsh.rc
+    - path: /usr/lib/slsh.rc
 
   dev:
     files:
