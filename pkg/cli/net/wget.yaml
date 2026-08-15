@@ -6,12 +6,15 @@ package:
   version: 1.25.0
   description: Non-interactive network downloader
   homepage: https://www.gnu.org/software/wget/
-  checksum: abebeac53833aa2a24567e63a28d4044963e3b67e76892ecfb89baef0021460c
+  checksum: a876127cd537d03c83ff475d14e65b3373429f17d45dca29b47b3d9ffb53520f
 
 sources:
 - name: wget
   url: https://ftp.gnu.org/gnu/wget/wget-1.25.0.tar.gz
   sha256: 766e48423e79359ea31e41db9e5c289675947a7fcf2efdcedb726ac9d0da3784
+- name: uapi_config
+  file: pkg/cli/net/wget-uapi-config.patch
+  sha256: ad7318bc67f49d9fed1ec17ec1802545bad15bcfb11ce27833cc2a9a3e7c8b65
 
 dependencies:
 - name: linux-headers
@@ -36,6 +39,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: bash
@@ -59,14 +64,17 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4126:6349, 8249:16988, 12403:25482, 16506:29690, 24721:50846, 28829:58083, 32930:59875, 41368:60564, 49623:62784, 51757:62888]
+  profile: [4099:1415, 8223:4635, 12364:7991, 16481:9857, 24688:18516, 28792:21174, 32888:22396, 41086:22803, 49474:23921, 51782:23978]
 
   script: |
-    tar --no-same-owner -xf ${SOURCE_wget} -C "${WORK_DIR}" --strip-components=1
-    cd ${WORK_DIR}
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_wget}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     ./configure \
       --prefix=/usr \
+      --sysconfdir=/usr/lib \
       --with-ssl=openssl \
       --without-libpsl \
       --without-libidn \
@@ -75,6 +83,90 @@ build:
 
     make
     make DESTDIR="${OUT_DIR}" install
+
+    test -s "${OUT_DIR}/usr/lib/wgetrc"
+
+    test_root=/tmp/wget-uapi-test
+    rm -rf "${test_root}"
+    mkdir -p "${test_root}/home" /etc /run
+
+    run_default_wget() {
+      set +e
+      output="$(env -u SYSTEM_WGETRC -u WGETRC \
+        HOME="${test_root}/home" \
+        "${OUT_DIR}/usr/bin/wget" --version 2>&1)"
+      status=$?
+      set -e
+    }
+
+    check_failed_at() {
+      expected=$1
+      test "${status}" -ne 0
+      case "${output}" in
+        *"${expected}"*) ;;
+        *)
+          printf '%s\n' "${output}" >&2
+          printf 'wget did not read %s\n' "${expected}" >&2
+          exit 1
+          ;;
+      esac
+    }
+
+    check_not_mentioned() {
+      rejected=$1
+      case "${output}" in
+        *"${rejected}"*)
+          printf '%s\n' "${output}" >&2
+          printf 'wget also read %s\n' "${rejected}" >&2
+          exit 1
+          ;;
+      esac
+    }
+
+    printf '%s\n' 'nex-invalid-vendor-option = on' > /usr/lib/wgetrc
+    run_default_wget
+    check_failed_at /usr/lib/wgetrc
+
+    printf '%s\n' 'nex-invalid-transient-option = on' > /run/wgetrc
+    run_default_wget
+    check_failed_at /run/wgetrc
+    check_not_mentioned nex-invalid-vendor-option
+
+    printf '%s\n' 'nex-invalid-administrator-option = on' > /etc/wgetrc
+    run_default_wget
+    check_failed_at /etc/wgetrc
+    check_not_mentioned nex-invalid-transient-option
+    check_not_mentioned nex-invalid-vendor-option
+
+    : > /etc/wgetrc
+    run_default_wget
+    test "${status}" -eq 0
+    check_not_mentioned nex-invalid-transient-option
+    check_not_mentioned nex-invalid-vendor-option
+
+    printf '%s\n' 'nex-invalid-explicit-option = on' > "${test_root}/explicit-wgetrc"
+    set +e
+    output="$(env -u WGETRC \
+      HOME="${test_root}/home" \
+      SYSTEM_WGETRC="${test_root}/explicit-wgetrc" \
+      "${OUT_DIR}/usr/bin/wget" --version 2>&1)"
+    status=$?
+    set -e
+    check_failed_at "${test_root}/explicit-wgetrc"
+    check_not_mentioned nex-invalid-administrator-option
+
+    set +e
+    output="$(env -u SYSTEM_WGETRC -u WGETRC \
+      HOME="${test_root}/home" \
+      "${OUT_DIR}/usr/bin/wget" \
+      --config="${test_root}/explicit-wgetrc" --version 2>&1)"
+    status=$?
+    set -e
+    check_failed_at "${test_root}/explicit-wgetrc"
+    check_not_mentioned nex-invalid-administrator-option
+
+    rm -f /etc/wgetrc /run/wgetrc /usr/lib/wgetrc
+    rm -rf "${test_root}"
 
     find "${OUT_DIR}" -name '*.la' -delete
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
@@ -100,7 +192,7 @@ outputs:
 
   conf:
     files:
-    - path: /usr/etc/wgetrc
+    - path: /usr/lib/wgetrc
 
   info:
     files:
