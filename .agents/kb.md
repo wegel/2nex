@@ -1679,3 +1679,8 @@ last match, while resource ceilings cannot be raised by later files. An empty
 XML file contributes no rules and is not a mask. Test the real reader with
 `magick -list policy`. The strict checksum is
 `93c38ea45acc7aefa96ca7635ad18c02813147ea872c98d4db5eb9666fe230fd`.
+Desktop-vwl selects the full bundle. Rebuild it before its child assemblies,
+and run these large strict assembly builds one at a time on this host because
+concurrent builds can exhaust `/tmp` and race on the shared parent ref. A
+finished base root contains seventeen public XML files in total, no
+`/etc/ImageMagick-7`, and a working installed image conversion path.

@@ -293,3 +293,23 @@ checkouts of `systems/desktop-vwl/0.0.1`,
 using Mesa EGL, GLES, and GBM; the Nvidia capsules using Nvidia EGL and GLES;
 and the Nvidia capsules using Mesa GBM. The current Nvidia capsule also showed
 `libnvidia-egl-wayland2.so.1` and `09_nvidia_wayland2.json`.
+
+## ImageMagick layered configuration
+
+After ImageMagick 7.1.2-26 moved fourteen package configuration XML files from
+`/etc/ImageMagick-7` to `/usr/share/ImageMagick-7`, rebuild the base desktop
+before its child assemblies and run these large strict builds sequentially.
+Four concurrent builds exhausted this host's `/tmp` allowance and raced while
+refreshing the shared parent ref; each build passed twice when run alone.
+
+The finished base root contains seventeen XML files in total: the fourteen
+configuration files plus three locale files that were already package data
+below `/usr/share`. It contains no `/etc/ImageMagick-7`. In a checked-out
+`systems/desktop-vwl/0.0.1` root, the public `magick -list policy` reports
+`/usr/share/ImageMagick-7/policy.xml`, and `magick` plus `identify` can create
+and inspect a one-pixel PNG. The reproducible checksums are:
+
+- desktop-vwl: `5805c8a10426ec29b4df0702148c63613822e008bf9a4c7a53fc67c3ad24a9e4`
+- desktop-vwl-nvidia-580: `358a03b813a2b7a1946638b0f9d5b189bb35537bbe4089ba77da5fde098c5aed`
+- desktop-vwl-nvidia-current: `46da14b8f6da8121ce207efe7980cb6f714edd1e1b3ef343eb6b9267673c08d6`
+- desktop-dev: `3808ccac10d339f557a918166f38c140f2c0004b9b748675e0f01f0305055339`

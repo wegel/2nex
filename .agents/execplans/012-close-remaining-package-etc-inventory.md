@@ -87,6 +87,10 @@ named below.
   `/usr/share/ImageMagick-7`, added its transient `/run` source without
   changing upstream merge rules, and strictly rebuilt it with the installed
   policy reader covering every source tier.
+- [x] (2026-08-15 07:14Z) Rebuilt the four ImageMagick-consuming desktop
+  assemblies twice, checked the finished base root's seventeen XML files and
+  absence of `/etc/ImageMagick-7`, and used its installed tools to read policy
+  and create and identify a one-pixel PNG.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -105,6 +109,14 @@ named below.
   review gate.
 
 ## Surprises & Discoveries
+
+- Observation: Large desktop assembly checks must run one at a time on this
+  host.
+  Evidence: four concurrent strict builds filled the task's available `/tmp`
+  space and reported `Disk quota exceeded`; after removing only this plan's
+  disposable audit roots, each assembly built twice and reproduced when run
+  sequentially. The concurrent builds also raced while refreshing the shared
+  `systems/desktop-vwl/0.0.1` parent ref.
 
 - Observation: A literal search finds `/etc` in build-time tests and scratch
   build-root setup after a package stops declaring `/etc` output.
@@ -754,8 +766,20 @@ affected assemblies, and commit.
    package, transient, administrator, empty, explicit-environment, and
    restored-package files, and checked their load order. Store inspection
    found all fourteen complete files below `/usr/share` and no `/etc` output.
-   Desktop-vwl selects the full bundle; rebuild it and its three child images
-   after this package commit. Commit: `pkg: layer imagemagick configuration`.
+   Desktop-vwl selects the full bundle. Its four affected images built twice
+   and matched: desktop-vwl
+   `5805c8a10426ec29b4df0702148c63613822e008bf9a4c7a53fc67c3ad24a9e4`,
+   Nvidia 580
+   `358a03b813a2b7a1946638b0f9d5b189bb35537bbe4089ba77da5fde098c5aed`,
+   Nvidia current
+   `46da14b8f6da8121ce207efe7980cb6f714edd1e1b3ef343eb6b9267673c08d6`,
+   and desktop-dev
+   `3808ccac10d339f557a918166f38c140f2c0004b9b748675e0f01f0305055339`.
+   The checked-out base root exposed all seventeen installed XML files, no
+   `/etc/ImageMagick-7`, and a working public `magick`. `magick -list policy`
+   reported `/usr/share/ImageMagick-7/policy.xml`; a one-pixel PNG round trip
+   printed `1x1 srgb(255,0,0)`. Commits: `pkg: layer imagemagick
+   configuration` and `asm: refresh imagemagick desktop roots`.
 
 4. `pkg/apps/security/gnome-keyring.yaml`
 
