@@ -103,10 +103,12 @@ named below.
   overlapping closure file replaces a read-only regular file or symlink
   instead of opening it in place, passed all 187 CLI tests, and resumed the
   OpenSSL strict build past the dependency checkout that exposed the bug.
-- [x] (2026-08-15 06:26Z) Moved OpenSSL's package-owned configuration and
+- [x] (2026-08-15 11:05Z) Moved OpenSSL's package-owned configuration and
   helper scripts to `/usr/lib/ssl`, added administrator, transient, and vendor
   whole-file lookup without changing its certificate directory, strictly
-  rebuilt it, and exercised the installed package in a copy-mode root.
+  rebuilt the package and all eight affected assemblies, exercised both
+  readers in the finished Edgebox root, passed the full Edgebox smoke, and
+  booted nex-systemd in QEMU.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -1132,10 +1134,37 @@ affected assemblies, and commit.
    legacy provider. The installed CT API probe likewise selected vendor,
    transient, administrator-mask, and explicit `CTLOG_FILE` cases.
 
-   The direct assembly consumers and their descendants still need their
-   explicit `conf` selections, reproducible rebuilds, and finished-root tests
-   before this row closes. Planned package commit: `pkg: layer openssl
-   configuration`.
+   Flat-systemd and nex-systemd now select the sibling `conf` output
+   explicitly, which supplies the configuration to their existing OpenSSL
+   library consumers without adding the command-line tools. Both bases and
+   all six descendants built twice and matched. Their final checksums are
+   flat-systemd
+   `a69b1dbbb5cf138dc3b5fb8ecad29c64815a114f97e1845a04ddcd16f45462bb`,
+   flat-podman
+   `4d09d72f7a7fa592f9183d6b70adcb1b3ce70b189ee9b75366658187794b283a`,
+   Edgebox
+   `90a6295f1c7f5fe3a823dc64c961b258d729529602421e6be923a3ed25f609d8`,
+   nex-systemd
+   `b25e5ad96c14ae4d7d1f196aa752a30b533596340e6482c9add9fa132301d852`,
+   desktop-vwl
+   `db2289b058f776e232fea1526cf1895dc384bd15854461ae712950102e1cfcea`,
+   Nvidia 580
+   `9326e0cb5b3b03c09a65da44d938e10aa4822b96211b0a831e79f0f40781a7b5`,
+   Nvidia current
+   `39974275fd144236035356692fb3cc760c3805ea2a5d2ec0ccbae65e6a9dcd9f`,
+   and desktop-dev
+   `8f2d83f00eb70c0eb226ddd988e4388c974a2e1a5de58fd0ab5d51dc28af531a`.
+
+   The checked-out Edgebox root contained both vendor files below
+   `/usr/lib/ssl` and neither policy file below `/etc`. Its assembled OpenSSL
+   library retained `OPENSSLDIR: "/etc/ssl"`, loaded the default provider,
+   rejected an invalid transient main file, and accepted an empty
+   administrator mask. Its CT reader selected a valid transient file, then
+   let invalid and empty administrator files override or mask that file. The
+   full Edgebox root smoke passed. A direct nex-systemd QEMU boot refreshed
+   the live CA database, printed `system-ca=ready` and `ASSERT-BOOT-PASS`, and
+   powered off. Commits: `pkg: layer openssl configuration` and `asm: include
+   openssl vendor configuration`.
 
 17. `pkg/libs/crypto/p11-kit.yaml`
 

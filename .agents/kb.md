@@ -1747,3 +1747,17 @@ parents when relocating package files. Do not recursively remove the tree,
 because an unexpected package file must fail the build. The configure script
 can also continue after it reports a missing `grep`; declare Grep explicitly
 when package tests or configure probes need it.
+
+Assembly dependency closure does not include sibling package outputs.
+Flat-systemd and nex-systemd already consumed OpenSSL's libraries, but each
+base must select `openssl3/outputs/conf` explicitly to publish
+`/usr/lib/ssl/openssl.cnf` and `ct_log_list.cnf`. Descendant assemblies inherit
+those files after their base rebuilds. EP012 reproduced the two bases and all
+six descendants, passed the focused and full Edgebox root tests, and booted
+nex-systemd to `system-ca=ready` and `ASSERT-BOOT-PASS`.
+
+OpenSSL 3.3.1 ships a comment-only `ct_log_list.cnf` template with no
+`enabled_logs` key, so `CTLOG_STORE_load_default_file` rejects the untouched
+vendor file. Test CT path precedence with a valid transient `enabled_logs =`
+file, then place invalid and empty administrator files above it to prove
+override and mask behavior.
