@@ -113,6 +113,10 @@ named below.
   transient system and session drop-in directories between its existing
   vendor and administrator directories, and strictly rebuilt it with a live
   policy reload test across all three tiers.
+- [x] (2026-08-15) Removed the RPC database, NSS policy, and generated loader
+  cache from the two private bootstrap roots, rebuilt both toolchains, built
+  the next-phase test package twice, and ran its binary through the cleaned
+  phase-zero loader in an `/etc`-free capsule.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -122,7 +126,7 @@ named below.
   weakening their administrator paths or explicit overrides.
 - [ ] Resolve OpenSSL, CA certificates, Fontconfig, Linux-PAM secondary files,
   and the account databases with focused security and trust tests.
-- [ ] Audit both bootstrap manifests and keep only paths required to build the
+- [x] Audit both bootstrap manifests and keep only paths required to build the
   next phase in their private bootstrap roots.
 - [ ] Audit every affected assembly overlay, rebuild every affected root
   twice, run focused root tests, and boot the affected Nex system in QEMU.
@@ -362,6 +366,26 @@ named below.
   but the package's focused provider tests could not run. Declaring phase-one
   Grep gave the build and its tests the command as an explicit input.
 
+- Observation: The phase-zero toolchain published `/etc/rpc` through its
+  development bundle even though no bootstrap command needed RPC lookup.
+  Evidence: removing the file and its `conf` bundle member still built the
+  complete phase-one Glibc package and the separate phase-one test package.
+  A combined toolchain and test capsule ran `hello` through the packaged
+  loader without an `/etc` directory.
+
+- Observation: Phase-one Glibc declared `nsswitch.conf` and `rpc` in a sibling
+  `conf` output that its development bundle did not select, while its `lib`
+  output leaked the generated `/etc/ld.so.cache`.
+  Evidence: the old `dev` bundle named only `dev`, `lib`, and `static`.
+  Removing all three files still let the phase-one build compile, link, and
+  run a program with the new sysroot and its `/usr/lib` loader path.
+
+- Observation: Phase zero explicitly sets `stable_checksum: false`.
+  Evidence: the standard strict command accepted `--check` but performed one
+  build and published the semantic toolchain refs without a manifest
+  checksum. Phase-one Glibc and the separate phase-one test package retained
+  normal two-build reproducibility checks.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -551,6 +575,15 @@ named below.
   package defaults, so lasting and transient machine files must replace them
   without changing the read-only package tree. `OPENSSL_CONF` and
   `CTLOG_FILE` retain exact explicit-file behavior.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Keep both private bootstrap sysroots free of host policy and
+  generated loader state.
+  Rationale: no next-phase command consumes their RPC or NSS databases, and
+  the loader finds the bootstrap libraries directly below `/usr/lib` without
+  a cache. Compile, link, and execution tests now prove those facts after the
+  build removes `/etc`, while the normal runtime Glibc package continues to
+  provide layered NSS and RPC defaults for real systems.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -993,6 +1026,50 @@ affected assemblies, and commit.
    desktop-dev root ran `foot --version`, kept its assembly-owned user file,
    and contained no Foot file below `/etc/xdg` or the factory `/etc` tree.
    Commit: `pkg: move XDG config samples to docs`.
+
+6. `pkg/bootstrap/phase0/toolchain.yaml`
+
+   The old `conf` output declared `/etc/rpc`, and the public `dev` bundle
+   selected that output. Glibc's RPC NSS functions can read this database,
+   but no concrete phase-zero or phase-one build command uses an RPC lookup.
+   Outcome 3 applies. The build now removes Glibc's generated file and the
+   empty `/etc` directory before publishing the private toolchain root; the
+   `dev` bundle no longer names a `conf` sibling.
+
+   The standard strict command completed successfully. This seed manifest
+   explicitly sets `stable_checksum: false`, so Nex performed one build
+   rather than a two-build checksum comparison. After removing `/etc`, its
+   build script compiled a program with the newly built cross compiler and
+   sysroot, then ran it through the newly built loader and `/usr/lib` library
+   path. Store scans of both `files` and `bundles/dev` returned no `etc/`
+   path. The separate `bootstrap/phase1/test` package then built twice with
+   checksum
+   `15f1fde50324be3d478cf7c0dca895c12a9912ae09142bceef97e1c25cdf4a23`.
+   A union checkout of that test and the phase-zero `dev` bundle had no
+   `/etc` directory and printed `Hello from bootstrap!` through the packaged
+   loader. No assembly selects this private bootstrap package. Commit:
+   `pkg/bootstrap: keep toolchain roots free of host policy`.
+
+7. `pkg/bootstrap/phase1/glibc.yaml`
+
+   The old `conf` output declared `/etc/nsswitch.conf` and `/etc/rpc`; its
+   `lib` output also declared `/etc/ld.so.cache`. The manifest itself created
+   the NSS file, Glibc installed the RPC database, and `ldconfig` generated
+   the cache. Outcome 3 applies to all three. The phase-one `dev` bundle never
+   selected `conf`, so no later bootstrap package consumed the NSS or RPC
+   files. All installed bootstrap libraries use the loader's normal
+   `/usr/lib` path, so the generated cache is unnecessary too.
+
+   The build now removes `ld.so.cache` and `rpc`, stops creating the NSS
+   policy, and removes the empty `/etc` directory before it tests the result.
+   Its two strict builds each compiled a program with the phase-zero compiler
+   and the new phase-one sysroot, then ran the program through the new
+   phase-one loader. They matched manifest checksum
+   `5dc0e877627c7bd922858d74b9a4d4f4c87a7fb18a140c2ba1f1cebc531264a9`.
+   Store scans of both `files` and `bundles/dev` returned no `etc/` path. No
+   assembly selects this private bootstrap package; the normal runtime Glibc
+   manifest still supplies layered NSS and RPC defaults for systems. Commit:
+   `pkg/bootstrap: keep toolchain roots free of host policy`.
 
 8. `pkg/cli/shells/bash-completion.yaml`
 

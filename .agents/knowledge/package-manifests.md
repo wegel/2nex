@@ -735,3 +735,14 @@ and the package checksum is
 - `net/wifi`: iwd.
 - `desktop/compositor`: vwl.
 - `desktop/wayland`: foot, fuzzel, mako.
+
+## Bootstrap roots
+
+Bootstrap sysroots should contain only inputs that a concrete next phase
+needs. Nex's phase-zero toolchain needs no `/etc/rpc`; phase-one Glibc needs no
+`/etc/nsswitch.conf`, `/etc/rpc`, or `/etc/ld.so.cache`. Both loaders find the
+bootstrap libraries below `/usr/lib`. Test each cleaned sysroot by compiling,
+linking, and running a program with its new compiler, sysroot, and loader, and
+build `pkg/bootstrap/phase1/test.yaml` as a separate phase-zero consumer.
+Phase zero sets `stable_checksum: false`, so it needs this downstream proof
+because `--check` performs only one build for that manifest.

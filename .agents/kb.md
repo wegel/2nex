@@ -1771,3 +1771,18 @@ files. Nex's generic patch also loads `/run/dbus-1/{system,session}.d` between
 the relative vendor drop-ins and `/etc` drop-ins. D-Bus loads every XML
 fragment, so it has neither same-basename shadowing nor empty-file masks. Test
 precedence and SIGHUP reloads with real policy rules and a `dbus-send` query.
+
+The private phase-zero and phase-one toolchain roots do not need host RPC or
+NSS policy, and their loader does not need an `/etc/ld.so.cache` when every
+bootstrap library lives below `/usr/lib`. Each toolchain manifest removes its
+generated `/etc` files before publishing outputs and compiles, links, and runs
+a program through the newly built loader. Also build
+`pkg/bootstrap/phase1/test.yaml` after changing phase zero; it provides a
+separate reproducible next-phase consumer. Phase zero declares
+`stable_checksum: false`, so its standard `--check` command performs one build
+instead of a checksum comparison.
+
+Create disposable Zub `union-checkout` destinations below `.nex/tmp` when the
+checkout must combine package refs. A destination under `/tmp` can cross a
+filesystem boundary during Zub's staged rename and fail with `Invalid
+cross-device link`.

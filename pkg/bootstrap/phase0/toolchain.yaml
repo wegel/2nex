@@ -45,7 +45,7 @@ dependencies: []
 
 build:
   environment: cec6d21097655bd45c7ecf30e556ec4a77d14646
-  profile: [419717:45362, 1668791:83842, 3752136:280352, 6255649:287479, 8341658:292290, 10425981:297368, 12511330:304998, 15634495:315855, 18760310:324062, 20842895:372567]
+  profile: [417295:36762, 1668651:68640, 3756117:215659, 6255526:220795, 8341479:224462, 10425976:228265, 12511256:233871, 15634421:242042, 18760236:248415, 20843030:289833]
 
   script: |
     unset CFLAGS CXXFLAGS LDFLAGS
@@ -226,12 +226,23 @@ build:
       rmdir ${OUT_DIR}/usr/sbin 2>/dev/null || true
     fi
 
+    rm "${OUT_DIR}/etc/rpc"
+    rmdir "${OUT_DIR}/etc"
+
+    printf '%s\n' 'int main(void) { return 0; }' |
+      "${TOOLS}/bin/${TARGET}-gcc" \
+        --sysroot="${OUT_DIR}" \
+        -x c - \
+        -o "${WORK_DIR}/bootstrap-smoke"
+    "${OUT_DIR}/usr/lib/ld-linux-x86-64.so.2" \
+      --library-path "${OUT_DIR}/usr/lib" \
+      "${WORK_DIR}/bootstrap-smoke"
+
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
 bundles:
   dev:
   - bin
-  - conf
   - dev
   - lib
   - static
@@ -311,10 +322,6 @@ outputs:
     - path: /usr/x86_64-nex-linux-gnu/bin/ranlib
     - path: /usr/x86_64-nex-linux-gnu/bin/readelf
     - path: /usr/x86_64-nex-linux-gnu/bin/strip
-
-  conf:
-    files:
-    - path: /etc/rpc
 
   dev:
     files:

@@ -6,7 +6,7 @@ package:
   version: "2.39"
   description: The GNU C Library project provides the core libraries for the GNU system
   homepage: https://www.gnu.org/software/libc/
-  checksum: c985003c5110631dfe3a68b2b473c41045c2af7417b040008c45cab45eeac2c4
+  checksum: 5dc0e877627c7bd922858d74b9a4d4f4c87a7fb18a140c2ba1f1cebc531264a9
   seed: true
 
 sources:
@@ -59,7 +59,7 @@ dependencies:
 
 build:
   environment: eeeb4cd406953b12ddf019ae34e4f0704a1b944a
-  profile: [236856:5709, 938295:7436, 2105836:12291, 3505182:16978, 4674392:20253, 5842738:23088, 7012284:30078, 8760730:36695, 10516447:42704, 11680854:56969]
+  profile: [236822:4720, 938211:6148, 2105752:9924, 3506545:13741, 4672402:16490, 5842339:18943, 7011885:24727, 8760331:29917, 10516048:35176, 11679936:47696]
 
   script: |
     # create symlinks so glibc build finds gcc
@@ -95,18 +95,19 @@ build:
     make install DESTDIR=${OUT_DIR}
     sed "/RTLDLIST=/s@/usr@@g" -i ${OUT_DIR}/usr/bin/ldd
 
-    cat > ${OUT_DIR}/etc/nsswitch.conf << "EOF"
-    passwd: files
-    group: files
-    shadow: files
-    hosts: files dns
-    networks: files
-    protocols: files
-    services: files
-    ethers: files
-    rpc: files
-    EOF
+    rm \
+      "${OUT_DIR}/etc/ld.so.cache" \
+      "${OUT_DIR}/etc/rpc"
+    rmdir "${OUT_DIR}/etc"
 
+    printf '%s\n' 'int main(void) { return 0; }' |
+      x86_64-nex-linux-gnu-gcc \
+        --sysroot="${OUT_DIR}" \
+        -x c - \
+        -o "${WORK_DIR}/phase1-glibc-smoke"
+    "${OUT_DIR}/usr/lib/ld-linux-x86-64.so.2" \
+      --library-path "${OUT_DIR}/usr/lib" \
+      "${WORK_DIR}/phase1-glibc-smoke"
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
@@ -146,11 +147,6 @@ outputs:
     - path: /usr/libexec/getconf/POSIX_V6_LP64_OFF64
     - path: /usr/libexec/getconf/POSIX_V7_LP64_OFF64
     - path: /usr/libexec/getconf/XBS5_LP64_OFF64
-
-  conf:
-    files:
-    - path: /etc/nsswitch.conf
-    - path: /etc/rpc
 
   dev:
     files:
@@ -634,7 +630,6 @@ outputs:
 
   lib:
     files:
-    - path: /etc/ld.so.cache
     - path: /usr/bin/ld.so
     - path: /usr/lib/Mcrt1.o
     - path: /usr/lib/Scrt1.o
