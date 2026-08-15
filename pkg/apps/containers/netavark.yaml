@@ -3,10 +3,10 @@ package:
   name: Netavark
   slug: netavark
   namespace: apps/containers
-  version: 1.14.0
+  version: 1.14.1
   description: A container network stack
   homepage: https://github.com/containers/netavark
-  checksum: 7614eabf3372f8049bd87819e90bd31e91a3e193c34552e93caa7edc857acd69
+  checksum: c648f6c25191dabf9ec46602309ef5ea112e2ecce44c3570241383915374c56c
 
 sources:
 - name: netavark
@@ -56,7 +56,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4096:13790, 8237:37333, 11718:70002]
+  profile: [4102:2647, 8237:14627, 11718:37754]
 
   script: |
     # Extract the netavark source code
@@ -96,6 +96,15 @@ build:
     # Build with specific target to avoid proc-macro issues
     cargo build --release --offline --target x86_64-unknown-linux-gnu
 
+    netavark_version=$(target/x86_64-unknown-linux-gnu/release/netavark --version)
+    case "${netavark_version}" in
+      *1.14.1*) ;;
+      *)
+        printf 'unexpected netavark version: %s\n' "${netavark_version}" >&2
+        exit 1
+        ;;
+    esac
+
     # Install
     mkdir -p ${OUT_DIR}/usr/bin
     install -D -m 755 target/x86_64-unknown-linux-gnu/release/netavark ${OUT_DIR}/usr/bin/netavark
@@ -103,10 +112,6 @@ build:
     # Create directory for podman
     mkdir -p ${OUT_DIR}/usr/libexec/podman
     ln -sf ../../bin/netavark ${OUT_DIR}/usr/libexec/podman/netavark
-
-    # Create containers configuration directory
-    mkdir -p ${OUT_DIR}/etc/containers/containers.conf.d
-    printf '[network]\nfirewall_driver = "nftables"\n' > ${OUT_DIR}/etc/containers/containers.conf.d/50-buildroot-nftables.conf
 
     # Set consistent timestamps for reproducible builds
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
@@ -119,7 +124,6 @@ bundles:
 
   full:
   - bin
-  - conf
 
 outputs:
   bin:
@@ -136,10 +140,6 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/libm.so.6
-
-  conf:
-    files:
-    - path: /etc/containers/containers.conf.d/50-buildroot-nftables.conf
 
 resolution:
   /usr/lib/libgcc_s.so.1: gcc

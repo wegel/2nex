@@ -1126,6 +1126,14 @@ parser wave has finished BlueZ, PulseAudio, OpenSSH, and Glibc. Keep
 account databases, machine identity, and other true host state out of reusable
 package defaults.
 
+Netavark 1.14.1 supplies the network helper, not a distribution firewall
+choice. The old manifest created
+`/etc/containers/containers.conf.d/50-buildroot-nftables.conf` entirely in its
+build script even though upstream supplied no such file. The generic package
+now ships only Netavark and lets Podman or an assembly choose a firewall
+driver. Both pinned inputs and `netavark --version` identify 1.14.1; keep the
+manifest version and assembly refs aligned with that source identity.
+
 - OpenSSH 9.9p1 now selects its client and server main files from `/etc/ssh`,
   `/run/ssh`, or `/usr/lib/ssh`. It preserves exact `-F` and `-f` paths, user
   client policy, arbitrary `Include` files, and fresh default-path selection

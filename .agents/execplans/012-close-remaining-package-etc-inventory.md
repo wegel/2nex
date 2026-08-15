@@ -30,6 +30,10 @@ named below.
 - [x] (2026-08-15 00:27Z) Audited the clean worktree, read the repository
   rules, listed `.agents/knowledge/`, and read the package, assembly,
   reproducibility, builder, and agent workflow notes that touch this plan.
+- [x] (2026-08-15 00:47Z) Removed Netavark's Buildroot-specific firewall
+  choice, corrected its package version to match both pinned 1.14.1 sources,
+  strictly rebuilt it and all five direct or inherited assemblies, and tested
+  the installed executable in flat and Nex-structured roots.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -61,6 +65,18 @@ named below.
   Evidence: `rtk find ... -printf` rejected `-printf` and compound predicates;
   `rtk proxy find ... -printf` returned the exact filenames.
 
+- Observation: Netavark's only `/etc` output came entirely from the Nex build
+  script and even carried another distribution's name.
+  Evidence: `pkg/apps/containers/netavark.yaml` wrote
+  `50-buildroot-nftables.conf` itself. Both pinned source inputs are version
+  1.14.1, while the old package metadata and assembly refs said 1.14.0.
+
+- Observation: A sparse root can run Netavark directly but cannot initialize
+  Podman's engine far enough for `podman info`.
+  Evidence: both flat and Nex-structured assembly roots printed `netavark
+  1.14.1`; the flat root's `podman info` stopped with `Error: no such file or
+  directory` even with a private VFS root, runroot, and mounted `/proc`.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -88,6 +104,13 @@ named below.
   roots, and third-party assemblies. A package patch may implement normal
   Linux `/etc`, `/run`, and `/usr` lookup, but it may not name Nex or encode a
   jukebox, desktop, installer, Yocto, or Buildroot choice.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Package Netavark without a default firewall driver.
+  Rationale: Netavark upstream does not install the removed fragment. The Nex
+  manifest created the whole `50-buildroot-nftables.conf` file and therefore
+  imported another distribution's product choice. Podman and each assembly
+  can choose a firewall driver when they need one.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -354,7 +377,37 @@ Add one numbered result for each inventory row here. Each result must name the
 paths, readers, chosen outcome, focused behavior test, strict build checksum,
 affected assemblies, and commit.
 
-Not started.
+1. `pkg/apps/containers/netavark.yaml`
+
+   The old `conf` output declared
+   `/etc/containers/containers.conf.d/50-buildroot-nftables.conf`. Podman reads
+   that fragment as administrator or distribution policy; Netavark itself
+   does not install or read it. Outcome 3 applies: the package no longer
+   creates the Buildroot-named choice, and an assembly can add a firewall
+   driver when its product policy needs one. Both pinned upstream inputs and
+   the installed executable identify version 1.14.1, so the manifest and its
+   two assembly refs now use 1.14.1.
+
+   The strict package command built twice with checksum
+   `c648f6c25191dabf9ec46602309ef5ea112e2ecce44c3570241383915374c56c`.
+   The package build script also asserts that its new binary reports 1.14.1.
+   `unshare --user --map-root-user --mount --pid --fork chroot ...
+   /usr/bin/netavark --version` printed `netavark 1.14.1` in both the
+   `flat-podman` and `desktop-dev` roots. Exact-file scans found no
+   `50-buildroot-nftables.conf` in either root. A YAML assertion found no
+   declared `/etc` output or `buildroot` text in the package manifest.
+
+   The affected assemblies reproduced with these checksums: `flat-podman`
+   `f8feefae4d82452da5dec9f6fe69e5d65c008a7e6a34273184838f0fe9bd31c9`,
+   `desktop-vwl`
+   `43515783ba6831b2f1bdbca64b32f85f13595e53b126c89a9d9506060c00cbc4`,
+   `desktop-vwl-nvidia-580`
+   `fc237af4027a16ad8cb4333803ac36eeac5f8635f80b6f60493c55c027fb4c76`,
+   `desktop-vwl-nvidia-current`
+   `63328e5de39d6649842c7b486398b03b5f5d94ace843c2edbbff1efb4ff62f4d`,
+   and `desktop-dev`
+   `3f45970d91af64016e788e93897e9ded96aa05d650764f7ded9e83bc664653ab`.
+   Commit: `pkg: package netavark without distribution policy`.
 
 ## Interfaces and Dependencies
 
