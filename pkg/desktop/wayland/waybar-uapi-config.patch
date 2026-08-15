@@ -1,0 +1,375 @@
+From: Package maintainers <packages@localhost>
+Subject: [PATCH] search layered system configuration before vendor defaults
+Source: https://github.com/Alexays/Waybar/archive/refs/tags/0.15.0.tar.gz
+Upstream: Not submitted; this is a generic UAPI configuration proposal.
+
+Install the required default configuration and stylesheet below /usr/share.
+Search the standard XDG user and administrator directories first, followed by
+/run/xdg and the packaged files. Keep Waybar's legacy $HOME/waybar lookup and
+source-tree fallback for compatibility.
+
+Add a standalone test for the complete directory order and for file selection
+across the writable layers.
+---
+ include/config.hpp    |  10 +++--
+ meson.build           |  24 +++++++++++-
+ src/config.cpp        |  76 +++++++++++++++++++++++++++++++-----
+ test/config-paths.cpp | 139 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 236 insertions(+), 13 deletions(-)
+ create mode 100644 test/config-paths.cpp
+
+diff --git a/include/config.hpp b/include/config.hpp
+index 1ef9ef5..a18c790 100644
+--- a/include/config.hpp
++++ b/include/config.hpp
+@@ -9,16 +9,20 @@
+ #define SYSCONFDIR "/etc"
+ #endif
+
++#ifndef WAYBAR_VENDOR_CONFIG_DIR
++#define WAYBAR_VENDOR_CONFIG_DIR "/usr/share/xdg/waybar"
++#endif
++
+ namespace waybar {
+
+ class Config {
+  public:
+-  static const std::vector<std::string> CONFIG_DIRS;
+   static const char* CONFIG_PATH_ENV;
+
++  static std::vector<std::string> getConfigDirs();
+   /* Try to find any of provided names in the supported set of config directories */
+   static std::optional<std::string> findConfigPath(
+-      const std::vector<std::string>& names, const std::vector<std::string>& dirs = CONFIG_DIRS);
++      const std::vector<std::string>& names, const std::vector<std::string>& dirs = {});
+
+   static std::vector<std::string> tryExpandPath(const std::string& base,
+                                                 const std::string& filename);
+@@ -36,7 +40,7 @@ class Config {
+   void resolveConfigIncludes(Json::Value& config, int depth);
+   void mergeConfig(Json::Value& a_config_, Json::Value& b_config_);
+   static std::vector<std::string> findIncludePath(
+-      const std::string& name, const std::vector<std::string>& dirs = CONFIG_DIRS);
++      const std::string& name, const std::vector<std::string>& dirs = {});
+
+   std::string config_file_;
+
+diff --git a/meson.build b/meson.build
+index db9407e..b041e4e 100644
+--- a/meson.build
++++ b/meson.build
+@@ -141,10 +141,21 @@ endif
+
+ prefix = get_option('prefix')
+ sysconfdir = get_option('sysconfdir')
++datadir = get_option('datadir')
++vendor_config_install_dir = datadir / 'xdg/waybar'
++if vendor_config_install_dir.startswith('/')
++    vendor_config_dir = vendor_config_install_dir
++else
++    vendor_config_dir = prefix / vendor_config_install_dir
++endif
+ conf_data = configuration_data()
+ conf_data.set('prefix', prefix)
+
+ add_project_arguments('-DSYSCONFDIR="@0@"'.format(prefix / sysconfdir), language : 'cpp')
++add_project_arguments(
++    '-DWAYBAR_VENDOR_CONFIG_DIR="@0@"'.format(vendor_config_dir),
++    language: 'cpp',
++)
+
+ if systemd.found()
+   user_units_dir = systemd.get_variable(pkgconfig: 'systemduserunitdir')
+@@ -572,7 +583,18 @@ executable(
+ install_data(
+     'resources/config.jsonc',
+     'resources/style.css',
+-    install_dir: sysconfdir / 'xdg/waybar'
++    install_dir: vendor_config_install_dir
++)
++
++config_paths_test = executable(
++    'config-paths-test',
++    files('test/config-paths.cpp', 'src/config.cpp'),
++    dependencies: [fmt, jsoncpp, spdlog],
++    include_directories: inc_dirs,
++)
++test(
++    'config path search order',
++    config_paths_test,
+ )
+
+ scdoc = dependency('scdoc', version: '>=1.9.2', native: true, required: get_option('man-pages'))
+diff --git a/src/config.cpp b/src/config.cpp
+index 266342a..09d6949 100644
+--- a/src/config.cpp
++++ b/src/config.cpp
+@@ -1,5 +1,6 @@
+ #include "config.hpp"
+
++#include <algorithm>
+ #include <spdlog/spdlog.h>
+ #include <unistd.h>
+ #ifndef __OpenBSD__
+@@ -10,21 +11,76 @@
+
+ #include <filesystem>
+ #include <fstream>
++#include <sstream>
+ #include <stdexcept>
+
+ #include "util/json.hpp"
+
+ namespace fs = std::filesystem;
+
++namespace {
++
++void addConfigDir(std::vector<std::string>& dirs, const fs::path& path) {
++  const auto value = path.lexically_normal().string();
++  if (std::find(dirs.begin(), dirs.end(), value) == dirs.end()) {
++    dirs.emplace_back(value);
++  }
++}
++
++bool addAbsoluteConfigDir(std::vector<std::string>& dirs, const char* base) {
++  if (base == nullptr || *base == '\0') {
++    return false;
++  }
++
++  const fs::path path(base);
++  if (!path.is_absolute()) {
++    return false;
++  }
++
++  addConfigDir(dirs, path / "waybar");
++  return true;
++}
++
++}  // namespace
++
+ namespace waybar {
+
+-const std::vector<std::string> Config::CONFIG_DIRS = {
+-    "$XDG_CONFIG_HOME/waybar/", "$HOME/.config/waybar/",   "$HOME/waybar/",
+-    "/etc/xdg/waybar/",         SYSCONFDIR "/xdg/waybar/", "./resources/",
+-};
+-
+ const char* Config::CONFIG_PATH_ENV = "WAYBAR_CONFIG_DIR";
+
++std::vector<std::string> Config::getConfigDirs() {
++  std::vector<std::string> dirs;
++
++  if (!addAbsoluteConfigDir(dirs, std::getenv("XDG_CONFIG_HOME"))) {
++    if (const char* home = std::getenv("HOME"); home != nullptr && *home != '\0') {
++      const fs::path home_path(home);
++      if (home_path.is_absolute()) {
++        addConfigDir(dirs, home_path / ".config/waybar");
++      }
++    }
++  }
++
++  if (const char* home = std::getenv("HOME"); home != nullptr && *home != '\0') {
++    const fs::path home_path(home);
++    if (home_path.is_absolute()) {
++      addConfigDir(dirs, home_path / "waybar");
++    }
++  }
++
++  const char* xdg_config_dirs = std::getenv("XDG_CONFIG_DIRS");
++  const std::string system_dirs =
++      xdg_config_dirs == nullptr || *xdg_config_dirs == '\0' ? "/etc/xdg" : xdg_config_dirs;
++  std::stringstream stream(system_dirs);
++  std::string system_dir;
++  while (std::getline(stream, system_dir, ':')) {
++    addAbsoluteConfigDir(dirs, system_dir.c_str());
++  }
++
++  addConfigDir(dirs, "/run/xdg/waybar");
++  addConfigDir(dirs, WAYBAR_VENDOR_CONFIG_DIR);
++  dirs.emplace_back("./resources/");
++  return dirs;
++}
++
+ std::vector<std::string> Config::tryExpandPath(const std::string& base,
+                                                const std::string& filename) {
+   fs::path path;
+@@ -67,7 +123,7 @@ std::vector<std::string> Config::tryExpandPath(const std::string& base,
+
+ std::optional<std::string> Config::findConfigPath(const std::vector<std::string>& names,
+                                                   const std::vector<std::string>& dirs) {
+-  if (const char* dir = std::getenv(Config::CONFIG_PATH_ENV)) {
++  if (const char* dir = std::getenv(Config::CONFIG_PATH_ENV); dir != nullptr && *dir != '\0') {
+     for (const auto& name : names) {
+       if (auto res = tryExpandPath(dir, name); !res.empty()) {
+         return res.front();
+@@ -75,7 +131,8 @@ std::optional<std::string> Config::findConfigPath(const std::vector<std::string>
+     }
+   }
+
+-  for (const auto& dir : dirs) {
++  const auto search_dirs = dirs.empty() ? getConfigDirs() : dirs;
++  for (const auto& dir : search_dirs) {
+     for (const auto& name : names) {
+       if (auto res = tryExpandPath(dir, name); !res.empty()) {
+         return res.front();
+@@ -112,12 +169,13 @@ std::vector<std::string> Config::findIncludePath(const std::string& name,
+   if (!match1.empty()) {
+     return match1;
+   }
+-  if (const char* dir = std::getenv(Config::CONFIG_PATH_ENV)) {
++  if (const char* dir = std::getenv(Config::CONFIG_PATH_ENV); dir != nullptr && *dir != '\0') {
+     if (auto res = tryExpandPath(dir, name); !res.empty()) {
+       return res;
+     }
+   }
+-  for (const auto& dir : dirs) {
++  const auto search_dirs = dirs.empty() ? getConfigDirs() : dirs;
++  for (const auto& dir : search_dirs) {
+     if (auto res = tryExpandPath(dir, name); !res.empty()) {
+       return res;
+     }
+diff --git a/test/config-paths.cpp b/test/config-paths.cpp
+new file mode 100644
+index 0000000..6aa6289
+--- /dev/null
++++ b/test/config-paths.cpp
+@@ -0,0 +1,139 @@
++#include "config.hpp"
++
++#include <unistd.h>
++
++#include <algorithm>
++#include <cstdlib>
++#include <filesystem>
++#include <fstream>
++#include <iostream>
++#include <string>
++#include <vector>
++
++namespace fs = std::filesystem;
++
++namespace {
++
++bool expectEqual(const std::string& label, const std::string& actual,
++                 const std::string& expected) {
++  if (actual == expected) {
++    return true;
++  }
++  std::cerr << label << ": expected " << expected << ", got " << actual << '\n';
++  return false;
++}
++
++void writeConfig(const fs::path& directory) {
++  fs::create_directories(directory);
++  std::ofstream(directory / "config.jsonc") << "{}\n";
++}
++
++}  // namespace
++
++int main() {
++  const fs::path base =
++      fs::temp_directory_path() / ("waybar-config-paths-" + std::to_string(getpid()));
++  fs::remove_all(base);
++
++  const fs::path home = base / "home";
++  const fs::path user = base / "user";
++  const fs::path system_a = base / "system-a";
++  const fs::path system_b = base / "system-b";
++  const fs::path custom = base / "custom";
++
++  setenv("HOME", home.c_str(), 1);
++  setenv("XDG_CONFIG_HOME", user.c_str(), 1);
++  const std::string system_dirs = system_a.string() + ":relative:" + system_b.string();
++  setenv("XDG_CONFIG_DIRS", system_dirs.c_str(), 1);
++  setenv("WAYBAR_CONFIG_DIR", custom.c_str(), 1);
++
++  const std::vector<std::string> expected_dirs = {
++      (user / "waybar").string(),
++      (home / "waybar").string(),
++      (system_a / "waybar").string(),
++      (system_b / "waybar").string(),
++      "/run/xdg/waybar",
++      WAYBAR_VENDOR_CONFIG_DIR,
++      "./resources/",
++  };
++  const auto dirs = waybar::Config::getConfigDirs();
++  if (dirs != expected_dirs) {
++    std::cerr << "unexpected configuration directory order\n";
++    fs::remove_all(base);
++    return 1;
++  }
++
++  const std::vector<fs::path> writable_layers = {
++      custom,
++      user / "waybar",
++      home / "waybar",
++      system_a / "waybar",
++      system_b / "waybar",
++  };
++  for (const auto& layer : writable_layers) {
++    writeConfig(layer);
++  }
++
++  for (const auto& expected : writable_layers) {
++    const auto selected = waybar::Config::findConfigPath({"config", "config.jsonc"});
++    if (!selected ||
++        !expectEqual("selected configuration", *selected, (expected / "config.jsonc").string())) {
++      fs::remove_all(base);
++      return 1;
++    }
++    fs::remove(expected / "config.jsonc");
++    if (expected == custom) {
++      unsetenv("WAYBAR_CONFIG_DIR");
++    }
++  }
++
++  const fs::path transient = base / "run";
++  const fs::path vendor = base / "vendor";
++  const std::vector<std::string> machine_dirs = {
++      (system_a / "waybar").string(),
++      transient.string(),
++      vendor.string(),
++  };
++
++  writeConfig(vendor);
++  auto selected = waybar::Config::findConfigPath({"config.jsonc"}, machine_dirs);
++  if (!selected ||
++      !expectEqual("vendor configuration", *selected, (vendor / "config.jsonc").string())) {
++    fs::remove_all(base);
++    return 1;
++  }
++
++  writeConfig(transient);
++  selected = waybar::Config::findConfigPath({"config.jsonc"}, machine_dirs);
++  if (!selected ||
++      !expectEqual("transient configuration", *selected,
++                   (transient / "config.jsonc").string())) {
++    fs::remove_all(base);
++    return 1;
++  }
++
++  writeConfig(system_a / "waybar");
++  const fs::path administrator_file = system_a / "waybar/config.jsonc";
++  std::ofstream(administrator_file, std::ios::trunc);
++  selected = waybar::Config::findConfigPath({"config.jsonc"}, machine_dirs);
++  if (!selected || !expectEqual("empty administrator mask", *selected,
++                                administrator_file.string())) {
++    fs::remove_all(base);
++    return 1;
++  }
++
++  setenv("XDG_CONFIG_HOME", "", 1);
++  setenv("XDG_CONFIG_DIRS", "", 1);
++  const auto fallback_dirs = waybar::Config::getConfigDirs();
++  if (fallback_dirs.empty() ||
++      !expectEqual("default user directory", fallback_dirs.front(),
++                   (home / ".config/waybar").string()) ||
++      std::find(fallback_dirs.begin(), fallback_dirs.end(), "/etc/xdg/waybar") ==
++          fallback_dirs.end()) {
++    fs::remove_all(base);
++    return 1;
++  }
++
++  fs::remove_all(base);
++  return 0;
++}

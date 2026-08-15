@@ -45,6 +45,10 @@ named below.
   `/usr/share/xdg/swaync`, added `/run/xdg` below the normal XDG system
   directories, fixed layered reloads, strictly rebuilt the package and four
   desktop images, and ran the new path-order test in both package builds.
+- [x] (2026-08-15 02:20Z) Moved Waybar's required defaults to
+  `/usr/share/xdg/waybar`, implemented the complete XDG, transient, and vendor
+  search order, selected its full bundle in the desktop assembly, and rebuilt
+  and inspected all four affected system commits.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -120,6 +124,20 @@ named below.
   started the phase-zero bootstrap chain. The same command with `--single`
   built only the image twice from its declared store refs.
 
+- Observation: Waybar declared its two required defaults in a split output,
+  but the desktop assembly selected only its binary output.
+  Evidence: `pkg/desktop/wayland/waybar.yaml` exposed the old `conf` output,
+  while `asm/desktop-vwl/desktop-vwl.yaml` named `outputs/bin`; none of the
+  finished images could receive the defaults until the assembly selected
+  `bundles/full`.
+
+- Observation: Strict assembly builds remove their temporary `target` trees
+  after they commit the finished system.
+  Evidence: path tests below `.nex/tmp/build_rootfs_*_system/target` failed
+  after successful builds, while `zub cat-file systems/<slug>/0.0.1:<path>`
+  found the finished Waybar links and their package targets in all four system
+  commits.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -186,6 +204,16 @@ named below.
   Rationale: SwayNC must rerun the layered search when the caller did not pass
   `--config`; otherwise a new user, administrator, or transient file cannot
   replace the fallback until the process restarts.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Install Waybar's required defaults below
+  `/usr/share/xdg/waybar` and search the caller override, user and legacy home
+  paths, ordered XDG system directories, `/run/xdg`, and the vendor directory
+  in that order.
+  Rationale: Waybar needs a configuration and style to provide a useful bar,
+  but package files must not occupy the administrator's `/etc` tree. Keeping
+  the standard XDG directories and Waybar's compatibility paths ahead of the
+  vendor files preserves existing user and machine choices.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -564,6 +592,42 @@ affected assemblies, and commit.
    Each retained root contains the three vendor files below `/usr/share/xdg`
    and no SwayNC file below `/etc/xdg`. Commit: `pkg: layer swaync system
    configuration`.
+
+13. `pkg/desktop/wayland/waybar.yaml`
+
+   The old `conf` output declared `/etc/xdg/waybar/config.jsonc` and
+   `/etc/xdg/waybar/style.css`. Waybar uses these files as working defaults,
+   not merely commented examples, so outcome 2 applies. A generic source
+   patch installs both files below `/usr/share/xdg/waybar` and searches
+   `WAYBAR_CONFIG_DIR`, the XDG user directory, the legacy `$HOME/waybar`
+   directory, each ordered absolute `XDG_CONFIG_DIRS` entry, `/run/xdg`, the
+   compiled vendor directory, and the source-tree fallback. Empty or relative
+   XDG entries cannot escape that contract.
+
+   The new Meson test checks the complete directory vector and selects a
+   distinct file from the explicit, user, legacy, two administrator,
+   transient, and vendor tiers. It also proves that an empty administrator
+   file masks the lower transient and vendor files. Both strict builds passed
+   that test and produced checksum
+   `a8858f0342b4945abdb26fbe7327b040abdcab8563cd781b94e7555c640df41f`.
+   The packaged executable contains `XDG_CONFIG_DIRS`, `/run/xdg/waybar`, and
+   `/usr/share/xdg/waybar`. The patch applies to the pinned source with
+   `git apply --check --cached` and has SHA-256
+   `d0633fbb8510c5c9b261adb24879d256d917ba3b87c2bdc93ceac45aa92b9024`.
+
+   The desktop assembly previously selected only `outputs/bin`, which omitted
+   both required files. It now selects `bundles/full`. All four affected
+   images built twice and matched: desktop-vwl
+   `1c3835d17c39324dc2654ecd651272c79795c4d0f1b04919d9b681addca91bc0`,
+   Nvidia 580
+   `e7d24eb30b488cfb8b24a22da03215bc73e5213310dd51107efa229fa658f18e`,
+   Nvidia current
+   `c20f396b338c1264040e5ae5a27391271a4ba23f847ccee400e0fe033a45ebd3`,
+   and desktop-dev
+   `5f88f6be624f270a7e0017e836c701ccfd7a82eef22c24cfc5e6aef49971c5d5`.
+   Direct `zub cat-file` checks found both public links and both package files
+   in every system commit and found no `/etc/xdg/waybar`. Commit: `pkg: layer
+   waybar system configuration`.
 
 21. `pkg/libs/graphics/nvidia-580.yaml`
 

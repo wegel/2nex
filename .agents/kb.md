@@ -1118,6 +1118,20 @@ Prefer an upstream vendor-directory option, keep the administrator directory
 as `/etc`, and test both paths. When upstream has no such option, patch the
 program's lookup order or leave the file in the assembly factory fallback.
 
+For required XDG application defaults, keep explicit and user paths first,
+preserve the ordered absolute entries in `XDG_CONFIG_DIRS`, then add a
+temporary `/run/xdg/<package>` path and a vendor
+`/usr/share/xdg/<package>` fallback. Waybar 0.15.0 follows this order while
+retaining its legacy `$HOME/waybar` path. Its test selects files from every
+tier and proves that an empty administrator file masks lower files. An
+assembly must select the output that contains these defaults; selecting only
+Waybar's binary omitted both files until `desktop-vwl` used `bundles/full`.
+
+After a strict assembly build commits a system, its temporary `target` tree
+may no longer exist. Use `zub cat-file systems/<slug>/<version>:<path>` to
+inspect a directory, symlink target, or regular file in the durable system
+commit without checking out the full root.
+
 The first high-value batch enabled Shadow's libeconf vendor directory, added
 Linux-PAM's transient service-policy directory, moved PAM services from
 Shadow, OpenSSH, Swaylock, and Polkit, added Fish's transient fragment

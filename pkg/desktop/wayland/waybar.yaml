@@ -6,12 +6,15 @@ package:
   version: 0.15.0
   description: Highly customizable Wayland status bar
   homepage: https://github.com/Alexays/Waybar
-  checksum: 4248b0451fdb88fdefc5015eae0dc10f63ef6bbcb5ce983b4a52e379e094a280
+  checksum: a8858f0342b4945abdb26fbe7327b040abdcab8563cd781b94e7555c640df41f
 
 sources:
 - name: waybar
   url: https://github.com/Alexays/Waybar/archive/refs/tags/0.15.0.tar.gz
   sha256: 21c2bbef88c40473c355003582f9331d2f9b8a01efdcce0935edfc5f6b023a3e
+- name: uapi_config_patch
+  file: pkg/desktop/wayland/waybar-uapi-config.patch
+  sha256: d0633fbb8510c5c9b261adb24879d256d917ba3b87c2bdc93ceac45aa92b9024
 
 dependencies:
 - name: bash
@@ -24,6 +27,8 @@ dependencies:
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: xz
   commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
 - name: glibc
@@ -141,13 +146,14 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4155:2193, 8303:7930, 12407:16046, 15077:38922]
+  profile: [4107:2457, 8240:6084, 12387:13573, 15727:35346]
 
   script: |
     set -eu
 
     tar --no-same-owner -xf "${SOURCE_waybar}" -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config_patch}"
 
     export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
 
@@ -181,6 +187,7 @@ build:
       -Dlogin-proxy=false
 
     ninja -C build
+    meson test -C build --print-errorlogs
     DESTDIR="${OUT_DIR}" ninja -C build install
 
     strip --strip-unneeded "${OUT_DIR}/usr/bin/waybar"
@@ -189,6 +196,7 @@ build:
 bundles:
   full:
   - bin
+  - misc
 
 outputs:
   bin:
@@ -223,10 +231,10 @@ outputs:
       - /usr/lib/libwayland-client.so.0
       - /usr/lib/libxkbregistry.so.0
 
-  conf:
+  misc:
     files:
-    - path: /etc/xdg/waybar/config.jsonc
-    - path: /etc/xdg/waybar/style.css
+    - path: /usr/share/xdg/waybar/config.jsonc
+    - path: /usr/share/xdg/waybar/style.css
 
 resolution:
   /usr/lib/libcairomm-1.0.so.1: cairomm1
