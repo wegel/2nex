@@ -100,6 +100,37 @@ files:
     "\e[3;5~": kill-word
 
 # systemd
+- path: /usr/lib/systemd/system/logrotate.service
+  mode: 420
+  content: |
+    [Unit]
+    Description=Rotate log files
+    RequiresMountsFor=/var/lib/logrotate.status
+
+    [Service]
+    Type=oneshot
+    ExecStart=/usr/bin/logrotate
+    Nice=19
+    IOSchedulingClass=best-effort
+    IOSchedulingPriority=7
+
+- path: /usr/lib/systemd/system/logrotate.timer
+  mode: 420
+  content: |
+    [Unit]
+    Description=Daily rotation of log files
+
+    [Timer]
+    OnCalendar=daily
+    AccuracySec=1h
+    Persistent=true
+
+    [Install]
+    WantedBy=timers.target
+
+- path: /etc/systemd/system/timers.target.wants/logrotate.timer
+  symlink: /usr/lib/systemd/system/logrotate.timer
+
 - path: /etc/systemd/network/80-dhcp.network
   mode: 420
   content: |

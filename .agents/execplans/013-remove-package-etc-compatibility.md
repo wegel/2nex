@@ -71,8 +71,17 @@ package groups.
   and `c4cfc4e2f63e73d1ba383cc68f48e114051ceb13795472c11a3bc3b54acb3499`.
   The remaining inventory has 16 paths across seven manifests. The desktop
   assembly work in the preceding checkpoint closes the XDG milestone.
-- [ ] Move Libvirt's Logrotate and OpenSSH fragments into vendor trees, add the
-  missing Nex-built Logrotate reader, and exercise both integrations.
+- [x] (2026-08-15 14:42Z) Added source-built Logrotate 3.22.0 with layered
+  main-file and fragment lookup, moved all five Libvirt integration fragments
+  below `/usr/lib`, and added the reader plus a daily timer to Desktop VWL.
+  Two strict Logrotate and Libvirt package commands reproduced checksums
+  `ac3b8e243fd2b635ec26ec32455a8d32a91dbae9509c3e6f91c2988745cc676e`
+  and `b79faa31ca1b2f43e7c474b0ee3ac8350358f39d1a90e94bbe856ea2e664627b`.
+  Two desktop commands reproduced checksum
+  `680b590eb09fb46ba302c4a4694b30110c568407112cb906226ee0ae860fd3be`;
+  its finished-root smoke proved OpenSSH and Logrotate vendor, transient,
+  administrator, same-name replacement, mask, service, and timer behavior.
+  The remaining inventory has 11 paths across six manifests.
 - [ ] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
   loader that reads all three configuration tiers, then move both Nvidia ICD
   files below `/usr`.
@@ -148,6 +157,25 @@ package groups.
   stopped at `grep: command not found`; adding the normal Grep development
   bundle let the exact `Type=` and `Exec=` assertions run in both builds.
 
+- Observation: Logrotate records configured compression commands as runtime
+  command dependencies, but Nex's automatic ELF scanner cannot infer them.
+  Evidence: the first desktop assembly check could not resolve
+  `/usr/bin/gzip` and `/usr/bin/gunzip` until the Logrotate manifest listed
+  both files in `needs` and mapped them to the Gzip package.
+
+- Observation: Desktop VWL packages its own Nex scripts as a development
+  input, so changing a finished-root test under `scripts/` changes the desktop
+  system checksum.
+  Evidence: a test-only fix changed the assembly checksum from the preceding
+  candidate; rebuilding the exact final source twice produced
+  `680b590eb09fb46ba302c4a4694b30110c568407112cb906226ee0ae860fd3be`.
+
+- Observation: Nex-structured assemblies move service enablement links from
+  `/etc` to `/usr/share/factory/etc` before storing the finished root.
+  Evidence: the desktop root contains the Logrotate timer link at
+  `/usr/share/factory/etc/systemd/system/timers.target.wants/logrotate.timer`,
+  where first boot will copy it only when the host has no choice at that path.
+
 ## Decision Log
 
 - Decision: Treat `/usr/etc` package output as part of this cleanup.
@@ -203,6 +231,12 @@ package groups.
   Rationale: Moving Libvirt fragments without a reader would preserve files but
   would not prove that the integration works. A complete Nex desktop should not
   depend on an outside Logrotate binary.
+  Date/Author: 2026-08-15 / Carlos
+
+- Decision: Keep Logrotate service policy in the desktop assembly.
+  Rationale: The reusable Logrotate package supplies the command and reader.
+  An assembly decides whether and when it rotates logs, so Desktop VWL owns
+  the daily timer and its enablement link.
   Date/Author: 2026-08-15 / Carlos
 
 - Decision: Build the Khronos OpenCL ICD Loader from source and stop publishing
@@ -562,6 +596,22 @@ with a broad exception.
   hook, preserved Elfutils' explicit `DEBUGINFOD_URLS`, registered Cargo's
   completion, and ran both Cargo and Rustc. The same strict command was then
   repeated against each generated final manifest before commit.
+- Logrotate 3.22.0 source:
+  `https://github.com/logrotate/logrotate/releases/download/3.22.0/logrotate-3.22.0.tar.xz`,
+  SHA-256
+  `42b4080ee99c9fb6a7d12d8e787637d057a635194e25971997eebbe8d5e57618`.
+  Its local UAPI patch has SHA-256
+  `ab2f23d8f11842133d9264b2727095c0a43e4f342be8bed663ec5e08f4f7ae89`.
+  The package checksum is
+  `ac3b8e243fd2b635ec26ec32455a8d32a91dbae9509c3e6f91c2988745cc676e`;
+  Libvirt's relocated package checksum is
+  `b79faa31ca1b2f43e7c474b0ee3ac8350358f39d1a90e94bbe856ea2e664627b`.
+  Desktop VWL selects both Logrotate outputs, Gzip's command output, and the
+  Libvirt fragments at checksum
+  `680b590eb09fb46ba302c4a4694b30110c568407112cb906226ee0ae860fd3be`.
+  `scripts/test-desktop-libvirt-integrations.sh` runs real `ssh -G`,
+  Logrotate rotations, `systemd-analyze verify`, and the factory-tree timer
+  link check inside that finished root.
 
 ## Interfaces and Dependencies
 
