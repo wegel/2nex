@@ -244,6 +244,13 @@ assert_writable_dir /nex/users
 assert_writable_dir /nex/manifests
 
 wait_for_systemd_ready
+if [ -x /usr/bin/update-ca-certificates ]; then
+    systemctl is-active --quiet update-ca-certificates.service ||
+        fail "update-ca-certificates.service is not active"
+    [ -s /etc/ssl/certs/ca-certificates.crt ] ||
+        fail "generated CA bundle is missing after boot"
+    echo "system-ca=ready"
+fi
 echo "ASSERT-BOOT-PASS"
 GUEST_ASSERT
 }
@@ -373,6 +380,14 @@ done < /etc/passwd
 
 IFS= read -r hosts_line < /etc/hosts || fail "/etc/hosts is missing"
 [ "$hosts_line" = "host-owned hosts" ] || fail "/etc/hosts was overwritten: $hosts_line"
+
+if [ -x /usr/bin/update-ca-certificates ]; then
+    systemctl is-active --quiet update-ca-certificates.service ||
+        fail "update-ca-certificates.service is not active"
+    [ -s /etc/ssl/certs/ca-certificates.crt ] ||
+        fail "generated CA bundle is missing after boot"
+    say "system-ca=ready"
+fi
 
 state=$(systemctl is-system-running --no-pager 2>/dev/null || true)
 say "systemd-state=$state"

@@ -5,7 +5,7 @@ system:
   version: 0.0.1
   description: Minimal nex rootfs with systemd, networking, and SSH
   nex_structure: true
-  checksum: 20375ce353f9bac9be3f107499fefa654f357f9d70944d2f661030353702d1b4
+  checksum: 2944c5b44ffb1ec6024373dfd5e147b3923affedbdd3b80969a83c633cd24fef
 
 overlays:
 - asm/nex-systemd-overlay.yaml
@@ -85,7 +85,9 @@ packages:
 - name: curl
   commit: x86_64/pkg/cli/net/curl/8.17.0/outputs/bin
 - name: ca-certificates
-  commit: x86_64/pkg/apps/misc/ca-certificates/20251104/outputs/certs
+  commit: x86_64/pkg/apps/misc/ca-certificates/20251104/bundles/full
+- name: p11-kit
+  commit: x86_64/pkg/libs/crypto/p11-kit/0.25.5/bundles/runtime
 - name: openssh
   commit: x86_64/pkg/cli/net/openssh/9.9p1/bundles/dev
 # nex package manager
@@ -123,5 +125,9 @@ build:
       relpath="${f#/target/}"
       ln -sf "../../$relpath" "/target/usr/libexec/$name"
     done
+
+    chroot /target /usr/bin/update-ca-certificates
+    test -s /target/etc/ssl/certs/ca-certificates.crt
+    test "$(find /target/etc/ssl/certs -type l | wc -l)" -gt 0
 
     echo "nex-systemd base configuration done."

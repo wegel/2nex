@@ -606,6 +606,35 @@ certificate into `/etc/pki/trust/blocklist`. Both strict builds passed with
 checksum
 `d8524f53a7e4fc14400f74404828eff6059072c1457baab610eac5dc5ba889a6`.
 
+CA Certificates installs Mozilla's anchors below
+`/usr/share/pki/trust/anchors`, not below `/etc`. Its generic
+`update-ca-certificates` command asks p11-kit to merge vendor,
+`/run/pki/trust`, and `/etc/pki/trust` inputs, then atomically writes an
+OpenSSL-compatible PEM bundle, individual files, and subject-hash links. The
+package pre-generates `/usr/lib/ssl/certs`; its systemd oneshot regenerates
+the writable `/etc/ssl/certs` database on boot. The strict package checksum is
+`b36aa5a04f0b4bf1e6fc67b6bd207c5ed1c5f344135ee0e16700478c53dd825e`.
+
+Shell-script output needs must name commands that ELF scanning cannot find.
+The CA updater names its shell, Coreutils commands, p11-kit `trust`
+executable, and `/usr/share/p11-kit/modules/p11-kit-trust.module`. That last
+file matters because p11-kit cannot discover a trust-policy module from the
+executable and shared library alone. Also name
+`/usr/lib/pkcs11/p11-kit-trust.so`, which the registration file loads by name
+rather than through an ELF dependency. P11-kit's `dev` and `runtime` bundles
+therefore include its `misc` output.
+
+A Nex structured assembly must select p11-kit's runtime bundle when the live
+root needs `/usr/bin/trust`. A dependency can copy the command into another
+package's capsule without making a public command link in the assembled root.
+Likewise, `systemctl --root` does not model a unit that Nex stages through its
+factory `/etc`; boot the system and inspect the live unit and artifact.
+
+`trust extract --format=pem-directory-hash` writes its target directory as
+mode `0555`. A package test must restore owner write permission or remove that
+disposable directory before Nex starts its second reproducibility build;
+otherwise the build runner cannot clean the retained work root.
+
 Treat system shell integration paths as a contract that spans the package
 hook and the system profile that sources it. Bash itself does not scan
 `profile.d`. Moving one hook below `/usr` breaks systems whose selected

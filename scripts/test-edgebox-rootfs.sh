@@ -136,6 +136,39 @@ getent rpc portmapper | grep -F '100000' >/dev/null ||
     fail "Glibc did not read the vendor RPC database"
 printf 'PASS: Glibc vendor databases and RPC lookup\n'
 
+[[ -f /usr/share/pki/trust/anchors/ca-certificates.crt ]] ||
+    fail "vendor CA anchors are missing"
+[[ -x /usr/bin/update-ca-certificates ]] || fail "CA updater is missing"
+[[ -x /usr/bin/trust ]] || fail "p11-kit trust command is missing"
+[[ -f /usr/lib/pkcs11/p11-kit-trust.so ]] || fail "p11-kit trust module is missing"
+[[ -s /etc/ssl/certs/ca-certificates.crt ]] ||
+    fail "assembled CA compatibility bundle is missing"
+[[ -L /usr/lib/systemd/system/sysinit.target.wants/update-ca-certificates.service ]] ||
+    fail "CA update service is not enabled"
+
+vendor_ca_count=$(grep -c 'BEGIN CERTIFICATE' \
+    /usr/share/pki/trust/anchors/ca-certificates.crt)
+[[ "$(grep -c 'BEGIN CERTIFICATE' /etc/ssl/certs/ca-certificates.crt)" -eq \
+    "$vendor_ca_count" ]] || fail "assembled CA bundle does not match vendor anchors"
+
+ca_test_dir=$(mktemp -d /tmp/ca-certificates-rootfs-test.XXXXXX)
+mkdir -p /etc/pki/trust/blocklist
+csplit -s -n 3 -f "$ca_test_dir/vendor-" \
+    /usr/share/pki/trust/anchors/ca-certificates.crt \
+    '/-----BEGIN CERTIFICATE-----/' '{*}'
+cp "$ca_test_dir/vendor-001" /etc/pki/trust/blocklist/vendor.pem
+update-ca-certificates
+[[ "$(grep -c 'BEGIN CERTIFICATE' /etc/ssl/certs/ca-certificates.crt)" -eq \
+    "$((vendor_ca_count - 1))" ]] || fail "administrator CA blocklist did not mask vendor anchor"
+rm -f /etc/pki/trust/blocklist/vendor.pem
+rmdir /etc/pki/trust/blocklist
+update-ca-certificates
+[[ "$(grep -c 'BEGIN CERTIFICATE' /etc/ssl/certs/ca-certificates.crt)" -eq \
+    "$vendor_ca_count" ]] || fail "CA bundle did not restore vendor anchors"
+rm -rf "$ca_test_dir"
+systemd-analyze verify /usr/lib/systemd/system/update-ca-certificates.service
+printf 'PASS: layered CA trust and generated compatibility store\n'
+
 [[ -f /usr/lib/nftables/osf/pf.os ]] ||
     fail "Nftables vendor OS fingerprint database is missing"
 [[ ! -e /etc/nftables/osf/pf.os ]] ||

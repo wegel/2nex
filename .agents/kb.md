@@ -1692,3 +1692,32 @@ trust store merge administrator, transient, and vendor anchors and
 blocklists. The installed extraction test covers all three tiers and an
 administrator blocklist; the strict package checksum is
 `d8524f53a7e4fc14400f74404828eff6059072c1457baab610eac5dc5ba889a6`.
+
+CA Certificates uses p11-kit as the source of truth. The package installs
+Mozilla anchors in `/usr/share/pki/trust/anchors`, provides an atomic
+`update-ca-certificates` command, pre-generates `/usr/lib/ssl/certs`, and
+enables a systemd oneshot that rebuilds `/etc/ssl/certs` from vendor,
+transient, and administrator inputs on boot. Its strict checksum is
+`b36aa5a04f0b4bf1e6fc67b6bd207c5ed1c5f344135ee0e16700478c53dd825e`.
+
+When a package publishes a shell script, manually list every external command
+under that output's `needs`; dependency scanning sees ELF imports but cannot
+see shell command names. The CA updater also names p11-kit's module
+registration file because `/usr/bin/trust` cannot load trust policy without
+it. The updater must also name `/usr/lib/pkcs11/p11-kit-trust.so`, which the
+registration file loads dynamically. P11-kit's public `dev` and `runtime`
+bundles include its `misc` output for the same reason. A structured assembly
+must select p11-kit's runtime bundle explicitly when the root needs a public
+`/usr/bin/trust`; flattening that command into another package's capsule does
+not create the public link.
+
+Do not use `systemctl --root` alone to judge a unit that Nex stages in factory
+`/etc`. The offline command cannot model Nex's live persistent `/etc`. Boot the
+system and check the unit plus its generated artifact. EP012's QEMU boot saw
+`update-ca-certificates.service` active, a nonempty live CA bundle,
+`system-ca=ready`, and `ASSERT-BOOT-PASS`.
+
+P11-kit's PEM-directory extractor creates a mode-`0555` directory. Remove
+disposable extracted stores after package assertions and make any retained
+output directory owner-writable before Nex starts its second build, or the
+runner cannot clean its work root.

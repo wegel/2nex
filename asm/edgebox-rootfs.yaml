@@ -5,7 +5,7 @@ system:
   version: 0.0.1
   description: Flat appliance rootfs assembled from reusable upstream packages
   extends: asm/flat-systemd.yaml
-  checksum: 8c29d7b5685704b5bbba57d3243fb6df5ac39413029e1613a8e6f229933e89f5
+  checksum: b9cc72998d7f224981c05b141103c5c95237bb4f0566dd795db4b68944ecbc5e
 
 overlays:
 - asm/edgebox-rootfs-overlay.yaml
@@ -166,5 +166,9 @@ build:
       /target/var/lib/docker \
       /target/var/lib/sshd
     chmod 700 /target/var/lib/sshd
+
+    chroot /target /usr/bin/update-ca-certificates
+    test -s /target/etc/ssl/certs/ca-certificates.crt
+    test "$(find /target/etc/ssl/certs -type l | wc -l)" -gt 0
 
     find /target -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;

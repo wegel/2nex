@@ -94,6 +94,11 @@ named below.
 - [x] (2026-08-15 07:33Z) Prepared the shared trust source by configuring
   p11-kit to merge administrator, transient, and vendor trust paths, then
   strictly rebuilt it with real extraction and blocklist tests.
+- [x] (2026-08-15 09:55Z) Reworked CA Certificates as immutable vendor trust
+  input plus a generic updater, strictly rebuilt it with real layered anchor
+  and blocklist tests, rebuilt all six affected assemblies twice, exercised
+  the merged trust policy in Nex and Edgebox roots, and booted nex-systemd in
+  QEMU with the CA refresh service active.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -285,6 +290,42 @@ named below.
   callers through one whole-file selector, so lookup by name and by number
   cannot disagree about the active tier.
 
+- Observation: P11-kit's `trust` executable needs module registration data
+  that no ELF dependency scanner can discover.
+  Evidence: the first CA build had the executable and shared library but
+  reported no module containing trust policy until p11-kit's `dev` bundle
+  also selected its `misc` output with
+  `/usr/share/p11-kit/modules/p11-kit-trust.module`.
+
+- Observation: P11-kit's registered trust module also loads a dynamically
+  named shared object that the CA updater's ELF and shell-command scans cannot
+  discover.
+  Evidence: the finished flat root found the module registration but could not
+  load trust policy until the CA updater named
+  `/usr/lib/pkcs11/p11-kit-trust.so` as a manual need. The final resolver
+  closure and both finished-root tests contain both files.
+
+- Observation: A command copied into a Nex structured root by another
+  package's dependency closure does not automatically get a public
+  `/usr/bin` link.
+  Evidence: CA Certificates contained p11-kit's `trust` command in its capsule,
+  but the nex-systemd root could only call it after the assembly selected
+  p11-kit's `runtime` bundle explicitly.
+
+- Observation: `systemctl --root` cannot prove that a unit enabled in Nex's
+  factory `/etc` will run from the live persistent `/etc` after boot.
+  Evidence: the offline query reported the CA updater disabled, while the QEMU
+  serial log showed the service start and finish followed by
+  `system-ca=ready` and `ASSERT-BOOT-PASS`.
+
+- Observation: `trust extract --format=pem-directory-hash` writes its target
+  directory without owner write permission.
+  Evidence: the CA package's first strict checks passed every trust assertion
+  but Nex could not remove the generated work directories before its second
+  build. The build now removes its disposable extracted stores and restores
+  owner write permission only on the immutable output copy before Nex stores
+  it.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -454,6 +495,16 @@ named below.
   formats for OpenSSL and other consumers. `/etc/pki/trust` holds lasting
   administrator choices, `/run/pki/trust` holds transient choices, and
   `/usr/share/pki/trust` holds package anchors.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Treat `/etc/ssl/certs` as a generated compatibility database, not
+  as the CA package's vendor input.
+  Rationale: the CA package installs Mozilla anchors below
+  `/usr/share/pki/trust/anchors`, ships a normal `update-ca-certificates`
+  command that extracts p11-kit's current merged policy, and supplies a
+  systemd oneshot that refreshes `/etc/ssl/certs` each boot. The package also
+  publishes a pre-generated immutable copy below `/usr/lib/ssl/certs` for
+  consumers that need trust before the first boot refresh.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -793,6 +844,58 @@ affected assemblies, and commit.
    printed `1x1 srgb(255,0,0)`. Commits: `pkg: layer imagemagick
    configuration` and `asm: refresh imagemagick desktop roots`.
 
+3. `pkg/apps/misc/ca-certificates.yaml`
+
+   The old `certs` output declared `/etc/ssl/certs/ca-certificates.crt` and
+   146 hash links below `/etc/ssl/certs`. Outcome 1 applies to the vendor
+   input: the package now installs the Mozilla bundle only as
+   `/usr/share/pki/trust/anchors/ca-certificates.crt`. P11-kit merges that
+   input with `/run/pki/trust` and `/etc/pki/trust` anchors and blocklists.
+   The package owns no `/etc` output.
+
+   The generic `/usr/bin/update-ca-certificates` command extracts the merged
+   `server-auth` anchors as a PEM bundle, individual PEM files, and subject
+   hash links. It writes a sibling staging directory and swaps the complete
+   target atomically. Its default target is the administrator-visible
+   generated database `/etc/ssl/certs`; `--output-dir` lets packages and
+   image builders generate another root. The package supplies a systemd
+   oneshot enabled from `sysinit.target` so each boot refreshes the writable
+   database from current vendor, transient, and administrator trust inputs.
+   It also pre-generates `/usr/lib/ssl/certs` as an immutable compatibility
+   copy for use before that refresh.
+
+   The strict package command built twice with checksum
+   `b36aa5a04f0b4bf1e6fc67b6bd207c5ed1c5f344135ee0e16700478c53dd825e`.
+   Each build extracted all 148 Mozilla anchors, added one synthetic
+   administrator and one transient anchor, verified both with the installed
+   OpenSSL, then used an administrator blocklist to suppress one vendor
+   certificate. `nex resolve ca-certificates --verbose` found the updater's
+   shell, Coreutils, p11-kit executable, module registration, dynamically
+   loaded trust module, and shared-library closure. A copy-mode checkout of
+   `bundles/full` contained 148 certificates, 296 hash links, the updater,
+   enabled unit, vendor input, and no `/etc` file.
+
+   Nex-systemd, all four desktop assemblies, and Edgebox each reproduced on
+   two strict builds. Their final checksums are nex-systemd
+   `2944c5b44ffb1ec6024373dfd5e147b3923affedbdd3b80969a83c633cd24fef`,
+   desktop-vwl
+   `f4b9d7b2eef370e75bba5d27e35f6d97fc3fe957f3a5b1029209f9eba8895641`,
+   Nvidia 580
+   `69653abab8c4ed7cd14a632850f712824f6f65114d8d8d2279a964dc5ad41f23`,
+   Nvidia current
+   `a08bef42a0bd8a4931a07071bb1db2238db218ebc0ee7d13b7b5437108051f43`,
+   desktop-dev
+   `19ba38dc5df1a4c7df9f5039f73d1835408f3e62baabfcb679f5c5ba9cb35131`,
+   and Edgebox
+   `b9cc72998d7f224981c05b141103c5c95237bb4f0566dd795db4b68944ecbc5e`.
+   A writable Nex root added an administrator anchor, regenerated 149
+   certificates, listed that anchor through the installed `trust`, and
+   verified it through the installed OpenSSL. The full Edgebox root smoke
+   proved administrator blocklisting and restoration. A nex-systemd QEMU boot
+   reported `system-ca=ready` and `ASSERT-BOOT-PASS`, which proves that the
+   enabled oneshot regenerated the live compatibility store. This row is
+   complete. Package commit: `pkg: separate system trust inputs`.
+
 4. `pkg/apps/security/gnome-keyring.yaml`
 
    The `conf` output declares
@@ -980,9 +1083,11 @@ affected assemblies, and commit.
    removed the same vendor certificate. They matched package checksum
    `d8524f53a7e4fc14400f74404828eff6059072c1457baab610eac5dc5ba889a6`.
    The generated package output contains the documentation file and declares
-   no `/etc` path. No assembly selects p11-kit's only public `dev` bundle, so
-   this package change alone affected no finished assembly. Commits: `pkg:
-   move configuration samples to docs` and `pkg: layer p11 trust sources`.
+   no `/etc` path. Its public `dev` bundle includes the module registration
+   file as well as the `trust` command and library, so a consumer can use the
+   installed trust policy. The CA package names the command and registration
+   file as runtime needs. Commits: `pkg: move configuration samples to docs`,
+   `pkg: layer p11 trust sources`, and `pkg: separate system trust inputs`.
 
 18. `pkg/libs/graphics/at-spi2-core.yaml`
 
