@@ -153,6 +153,15 @@ package groups.
   The finished Edgebox checkout passed every assertion in
   `scripts/test-edgebox-rootfs.sh`, including the layered profile, OpenSSH,
   certificate, Nftables, OSTree, service, kernel-module, and firmware checks.
+- [x] (2026-08-15 16:28Z) Rebuilt `nex-minimal`, `nex-systemd`, and the
+  installer with two exact strict commands each. Their checksums are
+  `6bf44276a0de73189bc0c9b9a5d7060b401749f7600a0ecd57eb895d66f3a6e7`,
+  `e4834b42b6be0c89737c948e00a90120666cf6a9f9b4b497bbd0b06b12470e80`,
+  and `499b0b54a68b50427488a1b001a719b2c449c8bb64f50b55b630c162a8ba0c50`.
+  A fresh minimal checkout ran Bash and found its account files plus Grep.
+  The Systemd QEMU test booted the stored system and printed
+  `system-ca-runtime=ready`, `system-ca=ready`, and `ASSERT-BOOT-PASS`.
+  The installer runtime test remains paired with the final desktop target.
 - [x] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
   loader that reads all three configuration tiers, then move both Nvidia ICD
   files below `/usr`.
