@@ -347,7 +347,7 @@ below `/etc/systemd` record explicit enablement choices; `mtab`,
 `resolv.conf`, and `localtime` links preserve well-known compatibility paths.
 
 EP012 scanned every declared `/etc` path in the four source overlays and
-found 98 entries: 26 in `nex-systemd`, 19 in Edgebox, 48 in desktop-vwl, and
+found 99 entries: 27 in `nex-systemd`, 19 in Edgebox, 48 in desktop-vwl, and
 five in the installer. The `nex-systemd`, desktop-vwl, and installer
 assemblies set `nex_structure: true`, so the builder moves these initial host
 files and links to `/usr/share/factory/etc`. The initramfs later copies only
@@ -358,10 +358,21 @@ inherit the audited desktop overlay and add no separate overlay.
 
 Do not mistake the declared overlay count for the complete built factory tree.
 Assembly scripts can create host state, and packages can supply native
-`/usr/share/factory/etc` entries. The final desktop factory tree contained 207
-regular files, 332 symlinks, and 34 directories. Its 539 leaf entries break
-down into 445 generated CA compatibility-store entries, 26 mutable Libvirt
-objects seeded by the desktop assembly, and 68 entries from overlays,
+`/usr/share/factory/etc` entries. The final desktop factory tree contained 58
+regular files, 37 symlinks, and 34 directories. Its 95 leaf entries break down
+into one `/etc/ssl/certs -> /run/ssl/certs` compatibility link, 26 mutable
+Libvirt objects seeded by the desktop assembly, and 68 entries from overlays,
 fixed-path package integrations, and Systemd's native factory files. The
-complete tree occupied 470058 apparent bytes. Count both the source overlays
+complete tree occupied 16966 apparent bytes. Count both the source overlays
 and the finished factory tree when auditing `/etc` behavior.
+
+Nex-structured assemblies keep OpenSSL's generated compatibility cache below
+`/run/ssl/certs`. Their factory tree contains one `/etc/ssl/certs` symlink to
+that path, and a vendor unit drop-in below `/usr` changes the generic CA
+updater's output directory. Before extraction, the unit links the run path to
+the immutable `/usr/lib/ssl/certs` fallback. The updater then atomically
+replaces that link with a real directory merged from `/etc/pki/trust`,
+`/run/pki/trust`, and `/usr/share/pki/trust`. EP012 proved this in QEMU and in
+a checked-out desktop root that generated 296 hash links below `/run`. A
+second refresh created no nested link, and a forced extractor failure kept the
+immutable fallback bundle readable.

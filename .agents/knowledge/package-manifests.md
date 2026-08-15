@@ -614,6 +614,10 @@ OpenSSL-compatible PEM bundle, individual files, and subject-hash links. The
 package pre-generates `/usr/lib/ssl/certs`; its systemd oneshot regenerates
 the writable `/etc/ssl/certs` database on boot. The strict package checksum is
 `b36aa5a04f0b4bf1e6fc67b6bd207c5ed1c5f344135ee0e16700478c53dd825e`.
+That `/etc` destination is the reusable package's conventional default. A
+read-only assembly may override only the unit and point the compatibility path
+at a cache below `/run`; it does not need to fork the package or move its trust
+inputs.
 
 Shell-script output needs must name commands that ELF scanning cannot find.
 The CA updater names its shell, Coreutils commands, p11-kit `trust`

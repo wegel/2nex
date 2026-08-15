@@ -1711,6 +1711,12 @@ Mozilla anchors in `/usr/share/pki/trust/anchors`, provides an atomic
 enables a systemd oneshot that rebuilds `/etc/ssl/certs` from vendor,
 transient, and administrator inputs on boot. Its strict checksum is
 `b36aa5a04f0b4bf1e6fc67b6bd207c5ed1c5f344135ee0e16700478c53dd825e`.
+This is the generic package default. Nex-structured assemblies override the
+unit from a vendor drop-in below `/usr`, generate the cache at
+`/run/ssl/certs`, and expose it through
+`/etc/ssl/certs -> /run/ssl/certs`. The unit installs
+`/usr/lib/ssl/certs` as a fallback link before extraction, so consumers retain
+vendor trust even if generation fails.
 
 When a package publishes a shell script, manually list every external command
 under that output's `needs`; dependency scanning sees ELF imports but cannot
@@ -1726,8 +1732,11 @@ not create the public link.
 Do not use `systemctl --root` alone to judge a unit that Nex stages in factory
 `/etc`. The offline command cannot model Nex's live persistent `/etc`. Boot the
 system and check the unit plus its generated artifact. EP012's QEMU boot saw
-`update-ca-certificates.service` active, a nonempty live CA bundle,
-`system-ca=ready`, and `ASSERT-BOOT-PASS`.
+`update-ca-certificates.service` active, a real `/run/ssl/certs` directory, a
+nonempty live CA bundle, `system-ca-runtime=ready`, `system-ca=ready`, and
+`ASSERT-BOOT-PASS`. Set
+`ZUB_BIN=/home/wegel/work/perso/zub/target/debug/zub` when the `zub` found on
+`PATH` is not the current checkout.
 
 P11-kit's PEM-directory extractor creates a mode-`0555` directory. Remove
 disposable extracted stores after package assertions and make any retained
@@ -1889,7 +1898,7 @@ The EP012 starting revision declared 289 paths in 31 manifests. CA
 Certificates accounted for 150 generated paths, so package-owned paths other
 than that generated store fell from 139 to 15.
 
-The four audited assembly overlays declare 98 `/etc` paths: 26 in
+The four audited assembly overlays declare 99 `/etc` paths: 27 in
 `nex-systemd`, 19 in Edgebox, 48 in desktop-vwl, and five in the installer.
 Accounts, machine identity, network and authentication choices, and product
 settings form initial host state. Links below `/etc/systemd` enable packaged
@@ -1900,22 +1909,27 @@ intentionally retains its final appliance policy below `/etc`. Nvidia and
 desktop-dev variants inherit the audited desktop overlay.
 
 The overlay count does not equal the finished factory-tree count. Assembly
-scripts add generated or mutable host state, and packages can provide native
-factory files. The final desktop factory `/etc` contains 207 regular files,
-332 symlinks, and 34 directories. Its 539 leaf entries include 445 generated
-CA compatibility-store entries, 26 mutable Libvirt objects seeded by the
-desktop assembly, and 68 overlay, fixed-path package, or native Systemd
-entries. The complete seed occupies 470058 apparent bytes. Audit both the
-source overlays and the finished `/usr/share/factory/etc` tree.
+scripts add mutable host state, and packages can provide native factory files.
+The final desktop factory `/etc` contains 58 regular files, 37 symlinks, and
+34 directories. Its 95 leaf entries include one
+`/etc/ssl/certs -> /run/ssl/certs` compatibility link, 26 mutable Libvirt
+objects seeded by the desktop assembly, and 68 overlay, fixed-path package, or
+native Systemd entries. The complete seed occupies 16966 apparent bytes. A
+direct final-root test regenerated a nonempty bundle and 296 hash links below
+`/run/ssl/certs`. A repeated refresh created no nested fallback link, and a
+forced extractor failure left `/run/ssl/certs` linked to the readable
+`/usr/lib/ssl/certs` fallback. Audit both the source overlays and the finished
+`/usr/share/factory/etc` tree.
 
 EP012's final finished-root checks used Edgebox checksum
 `2d19a11de3a6a1fea543e6bb7ec0f3ff1f07ed61666802860bc51b2a4834661b`
 and these desktop checksums:
 
-- desktop-vwl: `361a367520c3116dbb5215ba7ad71f263fbdc3ed16e399d5cdcf5a206e665b44`
-- desktop-vwl-nvidia-580: `65d74f0782e8afcfdc60c51ffdd5366c72f5861b5dc3a481817cbfd399aed72d`
-- desktop-vwl-nvidia-current: `2fd4a995c2cecde37a2e218386598677ba7d07b86f04abd680d4e842fd749016`
-- desktop-dev: `999cb4d9b24dd1f6ad1496b71ef6a38a158c037eaaace9aa90e752047d343430`
+- nex-systemd: `f39b310acfa1a158c95de28b7299b29bd019e9a4990f44bad7ea27d9a0a05bbf`
+- desktop-vwl: `1075d432529845c59760af20a484f5d8f85cb8bb97c4bb7b958055420f0eb7d9`
+- desktop-vwl-nvidia-580: `5f9166e5d0af3f809c022f23f81a8574ade92cf08dca2f4addf9c8851be4d42f`
+- desktop-vwl-nvidia-current: `a882f3488b668f3f7826ef1a872add90c2db917928504030b433ec997ffe70a6`
+- desktop-dev: `a7eee05082025b9710b989c73d9afbc5959036d997d675e149c6ff48901bf4e3`
 
 The Edgebox smoke passed. The final desktop root ran PipeWire, Waybar, Bmon,
 Virsh, Virtlogd, and Virt-manager, loaded GTK's multipress module, read the

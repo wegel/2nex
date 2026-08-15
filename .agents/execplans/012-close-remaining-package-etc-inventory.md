@@ -175,6 +175,11 @@ named below.
   review exposed the difference between declared overlays and paths created by
   assembly scripts or native package factory outputs; classified all 539 leaf
   entries by source and role.
+- [x] (2026-08-15) Replaced the 445-leaf factory certificate cache with one
+  `/etc/ssl/certs` compatibility link to `/run/ssl/certs`, reproduced
+  nex-systemd and all four desktop descendants, booted nex-systemd in QEMU,
+  regenerated 296 hash links in a checked-out desktop root, and remeasured the
+  final factory tree at 95 leaves.
 
 ## Surprises & Discoveries
 
@@ -517,17 +522,34 @@ named below.
 
 - Observation: assembly overlays contain host choices, not another queue of
   package defaults.
-  Evidence: the final overlay scan found 98 paths across four files. Accounts,
+  Evidence: the final overlay scan found 99 paths across four files. Accounts,
   machine and network policy, authentication, product settings, compatibility
   links, and explicit service-enable links account for every entry.
 
 - Observation: declared overlay paths do not account for every path in a
   finished factory tree.
-  Evidence: the final desktop tree contained 539 leaf entries, while its own
-  overlay declared 48 paths. The generated CA store supplied 445 leaves, the
-  assembly script seeded 26 mutable Libvirt objects, and overlays, fixed-path
-  package integrations, and native Systemd factory files supplied the other
-  68.
+  Evidence: the first finished desktop scan found 539 leaf entries, while its
+  own overlay declared 48 paths. The generated CA store supplied 445 leaves.
+  After Nex moved that cache to `/run`, the final factory tree contained 95
+  leaves: one certificate compatibility link, 26 mutable Libvirt objects, and
+  68 overlay, fixed-path package integration, or native Systemd entries.
+
+- Observation: a package can provide a conventional writable
+  `/etc/ssl/certs` service while a read-only Nex assembly keeps the generated
+  cache out of persistent host state.
+  Evidence: nex-systemd adds a vendor unit drop-in below `/usr` that first
+  links `/run/ssl/certs` to the immutable `/usr/lib/ssl/certs` fallback, then
+  atomically replaces it with p11-kit's merged extraction. QEMU printed
+  `system-ca-runtime=ready` and `ASSERT-BOOT-PASS`; the final desktop root
+  generated 296 hash links below `/run` while `/etc/ssl/certs` remained a
+  symlink.
+
+- Observation: the QEMU scripts resolve `ZUB_BIN=zub` from `PATH` unless the
+  caller sets it explicitly.
+  Evidence: `/home/wegel/.local/bin/zub` was older than the current checkout
+  and failed its checkout with `Operation not permitted`. Setting
+  `ZUB_BIN=/home/wegel/work/perso/zub/target/debug/zub` let the same QEMU test
+  boot and pass.
 
 ## Decision Log
 
@@ -714,9 +736,9 @@ named below.
   Rationale: the CA package installs Mozilla anchors below
   `/usr/share/pki/trust/anchors`, ships a normal `update-ca-certificates`
   command that extracts p11-kit's current merged policy, and supplies a
-  systemd oneshot that refreshes `/etc/ssl/certs` each boot. The package also
-  publishes a pre-generated immutable copy below `/usr/lib/ssl/certs` for
-  consumers that need trust before the first boot refresh.
+  systemd oneshot whose generic default refreshes `/etc/ssl/certs` each boot.
+  The package also publishes a pre-generated immutable copy below
+  `/usr/lib/ssl/certs` for consumers that need trust before the refresh.
   Date/Author: 2026-08-15 / Codex
 
 - Decision: Keep OpenSSL's certificate directory at `/etc/ssl`, but install
@@ -814,7 +836,7 @@ named below.
   its factory tree.
   Date/Author: 2026-08-15 / Codex
 
-- Decision: Treat all 98 assembly overlay entries as explicit initial host
+- Decision: Treat all 99 assembly overlay entries as explicit initial host
   state, compatibility links, or service enablement.
   Rationale: the overlays choose accounts, identity, machine policy, product
   policy, and enabled units. Nex-structured systems move those choices to the
@@ -822,12 +844,26 @@ named below.
   appliance `/etc`.
   Date/Author: 2026-08-15 / Codex
 
-- Decision: Count generated compatibility databases separately from package
-  configuration, but retain the generated CA store in factory state.
-  Rationale: `/etc/ssl/certs` must exist before normal network consumers start,
-  and the boot oneshot atomically regenerates it from current `/etc`, `/run`,
-  and `/usr` trust inputs. Its 445 leaf entries dominate a raw path count but
-  do not freeze package defaults or represent 445 administrator choices.
+- Decision: Superseded after the finished-tree audit. Count generated
+  compatibility databases separately from package configuration, but retain
+  the generated CA store in factory state.
+  Original rationale: `/etc/ssl/certs` must exist before normal network
+  consumers start, and the boot oneshot atomically regenerates it from current
+  `/etc`, `/run`, and `/usr` trust inputs. Nex has no existing deployed host
+  that can depend on this old factory cache, and the next decision replaces
+  this one.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Generate Nex's OpenSSL compatibility cache below `/run` and expose
+  it through `/etc/ssl/certs`.
+  Rationale: certificate hash links and the extracted bundle are boot-derived
+  data, not lasting administrator choices. The Nex assembly owns one
+  `/etc/ssl/certs -> /run/ssl/certs` factory link and a unit drop-in below
+  `/usr`. The unit installs `/usr/lib/ssl/certs` as an immediate failure-safe
+  fallback, then the generic updater atomically replaces the link with a real
+  directory generated from `/etc/pki/trust`, `/run/pki/trust`, and
+  `/usr/share/pki/trust`. Flat assemblies keep the package's conventional
+  writable `/etc` default.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -849,12 +885,13 @@ runtime overlay replaces a read-only destination safely. Each fix has focused
 CLI tests, and the final CLI suite passes 190 tests.
 
 All eleven affected systems reproduced. Edgebox passed its full rootfs smoke;
-nex-systemd booted in QEMU and printed `system-ca=ready` and
-`ASSERT-BOOT-PASS`; the installer passed its installed-consumer test; and the
-final desktop root ran its command, GTK module, GI, and Fontconfig consumers.
-  The four overlay files contain only initial host state, compatibility links,
-  and explicit service choices. Packages remain generic, while assemblies
-  state machine and product policy.
+nex-systemd booted in QEMU and printed `system-ca-runtime=ready`,
+`system-ca=ready`, and `ASSERT-BOOT-PASS`; the installer passed its
+installed-consumer test; and the final desktop root ran its command, GTK
+module, GI, Fontconfig, and runtime CA consumers. The four overlay files
+contain only initial host state, compatibility links, and explicit service
+choices. Packages remain generic, while assemblies state machine and product
+policy.
 
 The final desktop check did not launch a graphical session because this plan
 changed package configuration and public runtime files, not compositor or GPU
@@ -862,12 +899,13 @@ behavior. It exercised the affected loaders directly. The final GTK and
 Virt-manager-only edits did not affect nex-systemd, Edgebox, or the installer,
 so their earlier final checks remain the relevant proof.
 
-The final desktop factory tree contains 539 leaf entries and occupies 470058
-apparent bytes. The generated CA compatibility store accounts for 445 leaves,
-and mutable Libvirt objects account for 26. The remaining 68 leaves represent
-the overlay, external fixed-path integrations, and native Systemd factory
-files. Package policy shrank sharply even though generated runtime-compatible
-state still makes a raw `/etc` entry count look large.
+The final desktop factory tree contains 95 leaf entries and occupies 16966
+apparent bytes. One `/etc/ssl/certs` compatibility link replaces the old
+445-leaf generated cache, 26 mutable Libvirt objects remain under assembly
+control, and the other 68 leaves come from overlays, external fixed-path
+integrations, and native Systemd factory files. The full generated cache now
+lives below `/run`; a direct final-root test created 296 OpenSSL hash links
+there without adding mutable data to factory `/etc`.
 
 ## Context and Orientation
 
@@ -1053,7 +1091,7 @@ For a changed assembly, run:
 
 Check out a Nex-structured root with:
 
-    rtk /home/wegel/work/perso/zub/target/debug/zub --repo .nex/repo checkout --copy systems/<slug>/<version> <temporary-directory>
+    rtk proxy /home/wegel/work/perso/zub/target/debug/zub checkout systems/<slug>/<version> <temporary-directory>
 
 Enter it with `unshare --user --map-root-user --mount --pid --fork chroot` when
 absolute `/nex/pkg` links or root identity matter. Use the repository's
@@ -1130,21 +1168,24 @@ Assembly proof:
   - flat-minimal: `1dd7c09bc51ff7f23fb904ff786c12d6d0a95eb21570b69f6aac58bca2a50d69`
   - flat-systemd: `a69b1dbbb5cf138dc3b5fb8ecad29c64815a114f97e1845a04ddcd16f45462bb`
   - nex-minimal: `7d900b229e778c8ca141d8f31a633ded9002a129db052c731d5dd1526b00c9f6`
-  - nex-systemd: `b25e5ad96c14ae4d7d1f196aa752a30b533596340e6482c9add9fa132301d852`
+  - nex-systemd: `f39b310acfa1a158c95de28b7299b29bd019e9a4990f44bad7ea27d9a0a05bbf`
   - installer: `968fa77f837379bdf866108cee311a83b6af094818b059df7ef5008424546b8a`
   - flat-podman: `4d09d72f7a7fa592f9183d6b70adcb1b3ce70b189ee9b75366658187794b283a`
   - edgebox-rootfs: `2d19a11de3a6a1fea543e6bb7ec0f3ff1f07ed61666802860bc51b2a4834661b`
-  - desktop-vwl: `361a367520c3116dbb5215ba7ad71f263fbdc3ed16e399d5cdcf5a206e665b44`
-  - desktop-vwl-nvidia-580: `65d74f0782e8afcfdc60c51ffdd5366c72f5861b5dc3a481817cbfd399aed72d`
-  - desktop-vwl-nvidia-current: `2fd4a995c2cecde37a2e218386598677ba7d07b86f04abd680d4e842fd749016`
-  - desktop-dev: `999cb4d9b24dd1f6ad1496b71ef6a38a158c037eaaace9aa90e752047d343430`
+  - desktop-vwl: `1075d432529845c59760af20a484f5d8f85cb8bb97c4bb7b958055420f0eb7d9`
+  - desktop-vwl-nvidia-580: `5f9166e5d0af3f809c022f23f81a8574ade92cf08dca2f4addf9c8851be4d42f`
+  - desktop-vwl-nvidia-current: `a882f3488b668f3f7826ef1a872add90c2db917928504030b433ec997ffe70a6`
+  - desktop-dev: `a7eee05082025b9710b989c73d9afbc5959036d997d675e149c6ff48901bf4e3`
 
 - `rtk bash scripts/test-edgebox-rootfs.sh
   .nex/tmp/ep012-final-edgebox-root` ended with `PASS: Edgebox rootfs smoke
   test` after the final Edgebox checkout.
-- `rtk scripts/qemu-test-systemd.sh systems/nex-systemd/0.0.1 --timeout 120`
-  booted the changed Nex base after the package waves. The guest refreshed its
-  trust store, printed `system-ca=ready`, then printed `ASSERT-BOOT-PASS`.
+- `rtk proxy env ZUB_BIN=/home/wegel/work/perso/zub/target/debug/zub
+  scripts/qemu-test-systemd.sh systems/nex-systemd/0.0.1 --timeout 120`
+  booted the changed Nex base after the final certificate-cache change. The
+  guest generated a real `/run/ssl/certs` directory, kept
+  `/etc/ssl/certs -> /run/ssl/certs`, printed `system-ca-runtime=ready` and
+  `system-ca=ready`, then printed `ASSERT-BOOT-PASS`.
 - The Attr wave rebuilt the installer twice, seeded a disposable live `/etc`,
   and ran its installed Coreutils `cp --preserve=xattr`. The test copied
   `user.keep`, skipped vendor-matched `user.Beagle.*`, and honored an
@@ -1166,26 +1207,37 @@ Assembly proof:
 - `rtk proxy rg -n '^- path: /etc(?:/|$)'
   asm/nex-systemd-overlay.yaml asm/edgebox-rootfs-overlay.yaml
   asm/desktop-vwl/desktop-vwl-overlay.yaml
-  asm/installer/installer-overlay.yaml` returned 98 paths: 26, 19, 48, and 5
+  asm/installer/installer-overlay.yaml` returned 99 paths: 27, 19, 48, and 5
   respectively. The final audit below classifies every path group. The Nvidia
   and desktop-dev children add no overlay and inherit the desktop result.
 - GNU `find` on
-  `.nex/tmp/ep012-final-desktop-root/usr/share/factory/etc` counted 207 regular
-  files, 332 symlinks, and 34 directories. Grouping all 539 leaf paths by their
-  first component found 445 below `ssl` and 26 below `libvirt`; the remaining
-  68 come from the audited overlays, retained package integration paths, and
-  native Systemd factory files. `rtk proxy du -sb` measured 470058 apparent
-  bytes. This finished-tree check covers files created by assembly scripts and
-  package-native factory outputs that the overlay scan cannot see.
+  `.nex/tmp/ep012-final-desktop-runtime.RDTGaP/usr/share/factory/etc` counted
+  58 regular files, 37 symlinks, and 34 directories. Its 95 leaves comprise
+  one `/etc/ssl/certs -> /run/ssl/certs` link, 26 Libvirt objects, and 68
+  entries from audited overlays, retained package integration paths, or native
+  Systemd factory files. `rtk proxy du -sb` measured 16966 apparent bytes.
+  A user-namespace chroot then seeded live `/etc`, ran
+  `update-ca-certificates --output-dir /run/ssl/certs`, and found a nonempty
+  bundle plus 296 hash links below `/run`. A second generation created no
+  nested fallback link, and a forced extractor failure preserved the
+  `/usr/lib/ssl/certs` fallback and its readable bundle.
 
 Integrated proof:
 
 - `rtk cargo test --manifest-path src/cli/Cargo.toml` passed all 190 tests in
   three suites.
+- After the runtime-cache follow-up, `nex check` passed for nex-systemd and
+  all four desktop descendants; each of the five assembly build commands ran
+  two builds and reproduced the checksums listed above.
+- `rtk bash -n scripts/qemu-test-installer.sh scripts/qemu-test-systemd.sh`
+  passed before the QEMU boot exercised the new guest assertions.
+- The final exhaustive scan returned seven package manifests, 15 package
+  paths, and 99 assembly-overlay paths. `rtk git diff --check` passed after
+  the plan and durable notes were updated with the final artifacts.
 - The final `nex check` pass covered all 31 package manifests and all eleven
   assembly manifests. `rtk git diff --check` and
   `rtk git diff --cached --check` passed before every implementation commit.
-- The implementation commits through `a7c8914` are pushed on
+- The implementation commits through `ba1aa02` are pushed on
   `external-manifest-repositories`. Each commit passed its scoped package,
   system, and runtime checks before it landed.
 
@@ -2163,9 +2215,9 @@ other package output declares a file below `/etc`.
   `/etc/OpenCL/vendors/nvidia.icd`. The Khronos ICD extension fixes this Linux
   discovery directory, and the matching driver runtime bundle exposes it.
 
-The assembly scan found 98 paths. Each overlay group has one concrete role:
+The assembly scan found 99 paths. Each overlay group has one concrete role:
 
-- `asm/nex-systemd-overlay.yaml` declares 26 initial host paths. The overlay
+- `asm/nex-systemd-overlay.yaml` declares 27 initial host paths. The overlay
   initializes accounts and identity through `/etc/passwd`, `/etc/group`,
   `/etc/shadow`, `/etc/subuid`, `/etc/subgid`, `/etc/os-release`, and
   `/etc/machine-id`. It writes machine and login policy to `/etc/fstab`,
@@ -2174,8 +2226,10 @@ The assembly scan found 98 paths. Each overlay group has one concrete role:
   `/etc/ssh/sshd_config`, `/etc/tmpfiles.d/home-testuser.conf`,
   `/etc/pam.d/systemd-user`, and `/etc/pam.d/systemd-run0`.
   `/etc/systemd/system/nex-init-manifests.service` is an assembly-owned unit.
-  `/etc/mtab` and `/etc/resolv.conf` are compatibility links. The remaining
-  links are
+  `/etc/mtab`, `/etc/resolv.conf`, and
+  `/etc/ssl/certs -> /run/ssl/certs` are compatibility links. The last link
+  exposes the boot-generated OpenSSL cache without retaining that cache in
+  factory state. The remaining links are
   `/etc/systemd/system/multi-user.target.wants/systemd-networkd.service`,
   `/etc/systemd/system/multi-user.target.wants/systemd-resolved.service`,
   `/etc/systemd/system/getty.target.wants/getty@tty1.service`,
@@ -2184,7 +2238,7 @@ The assembly scan found 98 paths. Each overlay group has one concrete role:
   `/etc/systemd/system/multi-user.target.wants/nex-init-manifests.service`, and
   `/etc/systemd/system/sockets.target.wants/dbus.socket`. They enable packaged
   units. Because nex-systemd sets `nex_structure: true`, the builder stores all
-  26 entries in the factory tree and leaves live `/etc` host-owned.
+  27 entries in the factory tree and leaves live `/etc` host-owned.
 - `asm/edgebox-rootfs-overlay.yaml` declares 19 final appliance paths.
   `/etc/locale.conf`, `/etc/timezone`, `/etc/localtime`,
   `/etc/systemd/network/80-dhcp.network`, `/etc/resolv.conf`, and `/etc/mtab`
@@ -2253,13 +2307,13 @@ desktop-vwl's overlay and add no overlay of their own. The scan therefore
 covers every affected child as well as every source overlay.
 
 The finished desktop factory tree adds entries that no overlay declares. Its
-207 regular files and 332 symlinks form 539 leaf paths:
+58 regular files and 37 symlinks form 95 leaf paths:
 
-- `/usr/share/factory/etc/ssl` contains 445 generated certificate files and
-  hash links. Nex-systemd runs `update-ca-certificates` while building so the
-  first populated `/etc` has an immediately usable compatibility store. The
-  enabled boot oneshot regenerates the directory atomically from current
-  administrator, transient, and vendor trust inputs before normal networking.
+- `/usr/share/factory/etc/ssl/certs` is one link to `/run/ssl/certs`. The
+  nex-systemd unit drop-in first links that runtime path to the immutable
+  `/usr/lib/ssl/certs` fallback, then the enabled boot oneshot atomically
+  replaces it with a merged cache from current administrator, transient, and
+  vendor trust inputs before normal networking.
 - `/usr/share/factory/etc/libvirt` contains 26 objects: twenty-four upstream
   nwfilter XML files, the default virtual-network XML file, and its autostart
   link. The desktop assembly script deliberately seeds these mutable daemon
@@ -2269,7 +2323,7 @@ The finished desktop factory tree adds entries that no overlay declares. Its
   Systemd factory files such as `issue`, `locale.conf`, `nsswitch.conf`, and
   `vconsole.conf`. Overlay replacements collapse duplicate logical paths.
 
-The complete factory seed occupies 470058 apparent bytes. This built-tree
+The complete factory seed occupies 16966 apparent bytes. This built-tree
 scan, together with the overlay and package-output scans, accounts for every
 source that can populate the desktop's initial `/etc`.
 
