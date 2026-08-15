@@ -6,12 +6,15 @@ package:
   version: 1.1.1
   description: Netfilter tables userspace utilities
   homepage: https://www.netfilter.org/projects/nftables/
-  checksum: d82c8ef9a12067a13ea84db84a90c061820fcecf70c2a66251bb912c634d78ca
+  checksum: ed4cd32130e0dc86cc2aedc09d7a455d3646f312770e401f399c0f9153e701c0
 
 sources:
 - name: nftables
   url: https://www.netfilter.org/projects/nftables/files/nftables-1.1.1.tar.xz
   sha256: 6358830f3a64f31e39b0ad421d7dadcd240b72343ded48d8ef13b8faf204865a
+- name: uapi_osf
+  file: pkg/net/firewall/nftables-uapi-osf.patch
+  sha256: 1f77d1396bfe3b0bcfd1910d9e341cc42617480f4e04dba0f510f9615637a13f
 
 dependencies:
 - name: glibc
@@ -34,6 +37,8 @@ dependencies:
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
 - name: coreutils
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/full
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
 - name: sed
@@ -60,6 +65,8 @@ dependencies:
   commit: x86_64/pkg/libs/system/readline/8.2/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: flex
   commit: x86_64/pkg/core/toolchain/flex/2.6.4/bundles/dev
 - name: bison
@@ -71,11 +78,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4132:1206, 8252:7636, 9100:7705]
+  profile: [4111:852, 8281:4569, 9129:4731]
 
   script: |
-    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    tar --no-same-owner -xf ${SOURCE_nftables} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch -Np1 --batch --fuzz=0 < "/${SOURCE_uapi_osf}"
 
     ./configure \
       --prefix=/usr \
@@ -91,6 +100,51 @@ build:
     install -Dm644 doc/libnftables-json.5 "${OUT_DIR}/usr/share/man/man5/libnftables-json.5"
     install -Dm644 doc/libnftables.3 "${OUT_DIR}/usr/share/man/man3/libnftables.3"
     install -Dm644 doc/nft.8 "${OUT_DIR}/usr/share/man/man8/nft.8"
+
+    install -Dm644 "${OUT_DIR}/etc/nftables/osf/pf.os" \
+      "${OUT_DIR}/usr/lib/nftables/osf/pf.os"
+    rm "${OUT_DIR}/etc/nftables/osf/pf.os"
+    rmdir "${OUT_DIR}/etc/nftables/osf" "${OUT_DIR}/etc/nftables" "${OUT_DIR}/etc"
+
+    printf '%s\n' \
+      'table inet uapi_osf_test {' \
+      '  chain input {' \
+      '    type filter hook input priority filter;' \
+      '    osf name "Linux" accept' \
+      '  }' \
+      '}' > "${WORK_DIR}/uapi-osf-test.nft"
+
+    run_osf_test() {
+      expected_path=$1
+      expected_record=$2
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+        /usr/bin/unshare --net \
+        "${OUT_DIR}/usr/bin/nft" --debug mnl --check \
+        --file "${WORK_DIR}/uapi-osf-test.nft" \
+        > "${WORK_DIR}/uapi-osf-test.log" 2>&1
+      grep -Fq "Opening OS signature file '${expected_path}'" \
+        "${WORK_DIR}/uapi-osf-test.log"
+      if [ -n "${expected_record}" ]; then
+        grep -Fq "${expected_record}" "${WORK_DIR}/uapi-osf-test.log"
+      elif grep -Fq "Loading '" "${WORK_DIR}/uapi-osf-test.log"; then
+        exit 1
+      fi
+    }
+
+    mkdir -p /etc/nftables/osf /run/nftables/osf /usr/lib/nftables/osf
+    rm -f /etc/nftables/osf/pf.os /run/nftables/osf/pf.os
+    install -m644 files/osf/pf.os /usr/lib/nftables/osf/pf.os
+    run_osf_test /usr/lib/nftables/osf/pf.os '45046:64:0:44:M*:'
+    printf '45046:64:0:44:M*:\t\tUAPIRUN:1::Run tier\n' \
+      > /run/nftables/osf/pf.os
+    run_osf_test /run/nftables/osf/pf.os UAPIRUN
+    printf '45046:64:0:44:M*:\t\tUAPIETC:1::Administrator tier\n' \
+      > /etc/nftables/osf/pf.os
+    run_osf_test /etc/nftables/osf/pf.os UAPIETC
+    : > /etc/nftables/osf/pf.os
+    run_osf_test /etc/nftables/osf/pf.os ''
+    rm -f /etc/nftables/osf/pf.os /run/nftables/osf/pf.os
+    run_osf_test /usr/lib/nftables/osf/pf.os '45046:64:0:44:M*:'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.la' -delete
@@ -122,7 +176,7 @@ outputs:
 
   conf:
     files:
-    - path: /etc/nftables/osf/pf.os
+    - path: /usr/lib/nftables/osf/pf.os
 
   dev:
     files:

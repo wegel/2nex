@@ -76,6 +76,10 @@ named below.
   `/usr/lib/ethertypes`, added whole-file administrator and transient lookup,
   and strictly rebuilt the package with the installed `ebtables-translate`
   reader covering all tiers and an empty mask.
+- [x] (2026-08-15 05:46Z) Moved Nftables' OS fingerprint database to
+  `/usr/lib/nftables/osf/pf.os`, added whole-file administrator and transient
+  lookup, and strictly rebuilt the package with the installed `nft` reader
+  covering all tiers and an empty mask.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -1090,6 +1094,29 @@ affected assemblies, and commit.
    the full bundle; rebuild Docker once after the adjacent Nftables database
    change, then rebuild its Edgebox consumer. Commit: `pkg: layer iptables
    ethertype data`.
+
+31. `pkg/net/firewall/nftables.yaml`
+
+   The old `conf` output declared `/etc/nftables/osf/pf.os`, and the OS
+   fingerprint loader opened only that compiled path. Outcome 2 applies. The
+   generic patch with SHA-256
+   `1f77d1396bfe3b0bcfd1910d9e341cc42617480f4e04dba0f510f9615637a13f`
+   selects `/etc/nftables/osf/pf.os`, then `/run/nftables/osf/pf.os`, then
+   `/usr/lib/nftables/osf/pf.os` as whole files. A non-ENOENT open error stops
+   the search, and an empty selected file masks lower databases. The package
+   now installs the complete upstream database only below `/usr/lib`.
+
+   The strict package command built twice with checksum
+   `ed4cd32130e0dc86cc2aedc09d7a455d3646f312770e401f399c0f9153e701c0`.
+   Both builds ran the installed `nft --debug mnl --check` in a private
+   network namespace and proved vendor, transient, administrator, empty-mask,
+   and restored-vendor behavior. Store inspection returned the complete
+   upstream database with SHA-256
+   `2e49e6bd24a07b7691937c5683cfdb15dbb1b7ce7c5a37865ad28d71ea2b6ed5`
+   and no `/etc/nftables/osf/pf.os` output. Edgebox selects Nftables' full
+   bundle directly. Rebuild Docker for its adjacent Iptables dependency, then
+   rebuild Edgebox once for both database changes. Commit: `pkg: layer
+   nftables fingerprint data`.
 
 ## Interfaces and Dependencies
 

@@ -1658,3 +1658,12 @@ The unfinished P50 plan remains preserved under
 the active queue. The first active Ralph plan is
 `.agents/execplans/011-complete-first-uapi-parser-wave.md`, which covers BlueZ,
 PulseAudio, OpenSSH, and Glibc configuration lookup.
+
+Nftables 1.1.1 loads its optional passive OS fingerprint database only when a
+rule uses an `osf` expression. Test the real loader with `nft --debug mnl
+--check --file RULE` in a private network namespace; parsing the file without
+that namespace reaches the host's Netfilter API. The generic reader selects
+`/etc/nftables/osf/pf.os`, then `/run/nftables/osf/pf.os`, then
+`/usr/lib/nftables/osf/pf.os` as whole files, so an empty selected file masks
+lower data. The strict package checksum is
+`ed4cd32130e0dc86cc2aedc09d7a455d3646f312770e401f399c0f9153e701c0`.

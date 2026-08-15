@@ -645,6 +645,16 @@ The patch SHA-256 is
 and the package checksum is
 `f5382ebd5cd04f3e472ac57ee95124b1f672b4e84f90ced55c7d4171be882417`.
 
+Nftables 1.1.1 reads `pf.os` only when an `osf` rule triggers its fingerprint
+loader. Its generic reader selects `/etc/nftables/osf/pf.os`, then
+`/run/nftables/osf/pf.os`, then `/usr/lib/nftables/osf/pf.os` as whole files;
+an empty selected file masks lower data. Test the installed reader with an
+`osf name` rule and `nft --debug mnl --check` inside a private network
+namespace. The patch SHA-256 is
+`1f77d1396bfe3b0bcfd1910d9e341cc42617480f4e04dba0f510f9615637a13f`,
+and the package checksum is
+`ed4cd32130e0dc86cc2aedc09d7a455d3646f312770e401f399c0f9153e701c0`.
+
 ## Namespace Reference
 
 - `libs/system`: glibc, zlib, ncurses, acl, attr.
