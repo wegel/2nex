@@ -83,6 +83,10 @@ named below.
 - [x] (2026-08-15 06:14Z) Strictly rebuilt Docker and Edgebox after the two
   firewall database changes, then extended the Edgebox smoke to run its
   installed Nftables reader against the assembled vendor fingerprints.
+- [x] (2026-08-15 06:47Z) Moved ImageMagick's fourteen package XML files to
+  `/usr/share/ImageMagick-7`, added its transient `/run` source without
+  changing upstream merge rules, and strictly rebuilt it with the installed
+  policy reader covering every source tier.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -418,6 +422,16 @@ named below.
   behavior.
   Date/Author: 2026-08-15 / Codex
 
+- Decision: Preserve ImageMagick's multi-file merge semantics while adding
+  `/run/ImageMagick-7` between package and administrator data.
+  Rationale: ImageMagick deliberately loads every same-name XML file, and its
+  policy domains do not share one winner rule. Authorization uses the last
+  matching rule, while resource ceilings cannot be raised by a later file.
+  The package must provide every source in the documented order instead of
+  replacing that model with whole-file selection. An empty XML file adds no
+  rules; ImageMagick does not define it as a mask.
+  Date/Author: 2026-08-15 / Codex
+
 ## Outcomes & Retrospective
 
 Not started.
@@ -713,6 +727,35 @@ affected assemblies, and commit.
    and `desktop-dev`
    `3f45970d91af64016e788e93897e9ded96aa05d650764f7ded9e83bc664653ab`.
    Commit: `pkg: package netavark without distribution policy`.
+
+2. `pkg/apps/graphics/imagemagick.yaml`
+
+   The old `conf` output declared fourteen package XML files below
+   `/etc/ImageMagick-7`: `colors.xml`, `delegates.xml`, `log.xml`, `mime.xml`,
+   `policy.xml`, `quantization-table.xml`, `thresholds.xml`,
+   `type-apple.xml`, `type-dejavu.xml`, `type-ghostscript.xml`,
+   `type-urw-base35-type1.xml`, `type-urw-base35.xml`, `type-windows.xml`, and
+   `type.xml`. Outcome 2 applies. ImageMagick already searches its configured
+   package data before `/etc` and then user configuration, and it merges every
+   same-name XML file it finds. The package now installs all fourteen files
+   below `/usr/share/ImageMagick-7`.
+
+   The generic patch with SHA-256
+   `1ff57909d868eb927d4b10e556cbfcd50dd115d33ce2343fd116684f99a18198`
+   adds `/run/ImageMagick-7` between the installed package directories and
+   `/etc/ImageMagick-7`. It retains the documented `MAGICK_CONFIGURE_PATH`,
+   XDG user, home, and installed paths. It also retains ImageMagick's merge
+   rules: an empty XML file contributes no rules but does not mask lower
+   files.
+
+   The strict package command built twice with checksum
+   `93c38ea45acc7aefa96ca7635ad18c02813147ea872c98d4db5eb9666fe230fd`.
+   Both builds ran the installed `magick -list policy`, parsed synthetic
+   package, transient, administrator, empty, explicit-environment, and
+   restored-package files, and checked their load order. Store inspection
+   found all fourteen complete files below `/usr/share` and no `/etc` output.
+   Desktop-vwl selects the full bundle; rebuild it and its three child images
+   after this package commit. Commit: `pkg: layer imagemagick configuration`.
 
 4. `pkg/apps/security/gnome-keyring.yaml`
 

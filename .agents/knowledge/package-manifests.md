@@ -660,6 +660,18 @@ namespace. The patch SHA-256 is
 and the package checksum is
 `ed4cd32130e0dc86cc2aedc09d7a455d3646f312770e401f399c0f9153e701c0`.
 
+ImageMagick 7.1.2-26 deliberately merges every same-name XML file from its
+configuration search paths. Its package data belongs below
+`/usr/share/ImageMagick-7`; a generic patch adds `/run/ImageMagick-7` before
+the existing `/etc/ImageMagick-7` tier. Preserve `MAGICK_CONFIGURE_PATH` and
+the XDG user paths. Do not impose whole-file masking: an empty XML file adds no
+rules, authorization uses the last matching policy, and resource ceilings
+cannot be raised by a later file. The installed `magick -list policy` command
+proves both parsing and load order. The patch SHA-256 is
+`1ff57909d868eb927d4b10e556cbfcd50dd115d33ce2343fd116684f99a18198`,
+and the package checksum is
+`93c38ea45acc7aefa96ca7635ad18c02813147ea872c98d4db5eb9666fe230fd`.
+
 ## Namespace Reference
 
 - `libs/system`: glibc, zlib, ncurses, acl, attr.

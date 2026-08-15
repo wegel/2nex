@@ -1670,3 +1670,12 @@ lower data. The strict package checksum is
 Edgebox selects the full Nftables bundle, reproduced checksum
 `8c29d7b5685704b5bbba57d3243fb6df5ac39413029e1613a8e6f229933e89f5`,
 and passes the same installed-reader check from its finished root.
+
+ImageMagick 7.1.2-26 merges every same-name XML file from its search paths.
+The package installs its fourteen XML files below `/usr/share/ImageMagick-7`
+and adds `/run/ImageMagick-7` before the existing `/etc/ImageMagick-7` tier.
+Do not replace this with whole-file selection: authorization policies use the
+last match, while resource ceilings cannot be raised by later files. An empty
+XML file contributes no rules and is not a mask. Test the real reader with
+`magick -list policy`. The strict checksum is
+`93c38ea45acc7aefa96ca7635ad18c02813147ea872c98d4db5eb9666fe230fd`.

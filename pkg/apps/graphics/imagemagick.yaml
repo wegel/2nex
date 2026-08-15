@@ -6,12 +6,15 @@ package:
   version: 7.1.2-26
   description: Command-line image conversion and processing tools
   homepage: https://imagemagick.org/
-  checksum: d30918092572ca9899af851c82adf6ce5e3d29dec011c227fb74fb50584902d7
+  checksum: 93c38ea45acc7aefa96ca7635ad18c02813147ea872c98d4db5eb9666fe230fd
 
 sources:
 - name: imagemagick
   url: https://github.com/ImageMagick/ImageMagick/archive/refs/tags/7.1.2-26.tar.gz
   sha256: d63594e334e1c410f600fb9370d78d49e4dc6f315722ca4ba083e864e5c354cb
+- name: uapi_config
+  file: pkg/apps/graphics/imagemagick-uapi-config.patch
+  sha256: 1ff57909d868eb927d4b10e556cbfcd50dd115d33ce2343fd116684f99a18198
 
 dependencies:
 - name: glibc
@@ -44,6 +47,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: sed
   commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
 - name: grep
@@ -83,13 +88,15 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4149:7545, 8272:10886, 16504:16025, 28837:28423, 37148:30799, 45610:53093, 55820:53288, 68284:53691, 80730:54116, 86445:58772]
+  profile: [4118:1339, 8223:2541, 16458:9450, 28853:11510, 37164:12530, 45843:22375, 55998:22404, 68373:22473, 80827:22548, 86440:27645]
 
   script: |
     set -eu
 
     tar --no-same-owner -xzf /${SOURCE_imagemagick} -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
+
+    patch -Np1 --batch --fuzz=0 < "/${SOURCE_uapi_config}"
 
     export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
 
@@ -131,6 +138,104 @@ build:
 
     make
     make DESTDIR="${OUT_DIR}" install
+
+    for config in \
+      colors.xml \
+      delegates.xml \
+      log.xml \
+      mime.xml \
+      policy.xml \
+      quantization-table.xml \
+      thresholds.xml \
+      type-apple.xml \
+      type-dejavu.xml \
+      type-ghostscript.xml \
+      type-urw-base35-type1.xml \
+      type-urw-base35.xml \
+      type-windows.xml \
+      type.xml; do
+      mv "${OUT_DIR}/etc/ImageMagick-7/${config}" \
+        "${OUT_DIR}/usr/share/ImageMagick-7/${config}"
+    done
+    rmdir "${OUT_DIR}/etc/ImageMagick-7" "${OUT_DIR}/etc"
+
+    write_policy() {
+      path=$1
+      resource=$2
+      value=$3
+      mkdir -p "$(dirname "${path}")"
+      printf '%s\n' \
+        '<policymap>' \
+        "  <policy domain=\"resource\" name=\"${resource}\" value=\"${value}\"/>" \
+        '</policymap>' > "${path}"
+    }
+
+    list_policies() {
+      output=$1
+      shift
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+        "$@" "${OUT_DIR}/usr/bin/magick" -list policy > "${output}"
+    }
+
+    assert_policy() {
+      output=$1
+      path=$2
+      value=$3
+      grep -Fq "Path: ${path}" "${output}"
+      grep -Fq "value: ${value}" "${output}"
+    }
+
+    assert_before() {
+      output=$1
+      first=$2
+      second=$3
+      first_line=$(grep -Fn -m1 "Path: ${first}" "${output}")
+      second_line=$(grep -Fn -m1 "Path: ${second}" "${output}")
+      first_line=${first_line%%:*}
+      second_line=${second_line%%:*}
+      test "${first_line}" -lt "${second_line}"
+    }
+
+    mkdir -p /usr/share/ImageMagick-7 /run/ImageMagick-7 /etc/ImageMagick-7
+    rm -f /usr/share/ImageMagick-7/policy.xml \
+      /run/ImageMagick-7/policy.xml /etc/ImageMagick-7/policy.xml
+    write_policy /usr/share/ImageMagick-7/policy.xml memory 333MiB
+    list_policies "${WORK_DIR}/vendor-policy.log" env
+    assert_policy "${WORK_DIR}/vendor-policy.log" \
+      /usr/share/ImageMagick-7/policy.xml 333MiB
+    write_policy /run/ImageMagick-7/policy.xml memory 222MiB
+    list_policies "${WORK_DIR}/run-policy.log" env
+    assert_policy "${WORK_DIR}/run-policy.log" \
+      /usr/share/ImageMagick-7/policy.xml 333MiB
+    assert_policy "${WORK_DIR}/run-policy.log" \
+      /run/ImageMagick-7/policy.xml 222MiB
+    assert_before "${WORK_DIR}/run-policy.log" \
+      /usr/share/ImageMagick-7/policy.xml /run/ImageMagick-7/policy.xml
+    write_policy /etc/ImageMagick-7/policy.xml memory 111MiB
+    list_policies "${WORK_DIR}/etc-policy.log" env
+    assert_policy "${WORK_DIR}/etc-policy.log" \
+      /etc/ImageMagick-7/policy.xml 111MiB
+    assert_before "${WORK_DIR}/etc-policy.log" \
+      /run/ImageMagick-7/policy.xml /etc/ImageMagick-7/policy.xml
+    : > /etc/ImageMagick-7/policy.xml
+    list_policies "${WORK_DIR}/empty-policy.log" env
+    assert_policy "${WORK_DIR}/empty-policy.log" \
+      /run/ImageMagick-7/policy.xml 222MiB
+    if grep -Fq 'Path: /etc/ImageMagick-7/policy.xml' \
+      "${WORK_DIR}/empty-policy.log"; then
+      exit 1
+    fi
+    write_policy "${WORK_DIR}/explicit/policy.xml" map 444MiB
+    list_policies "${WORK_DIR}/explicit-policy.log" env \
+      MAGICK_CONFIGURE_PATH="${WORK_DIR}/explicit"
+    assert_policy "${WORK_DIR}/explicit-policy.log" \
+      "${WORK_DIR}/explicit/policy.xml" 444MiB
+    assert_before "${WORK_DIR}/explicit-policy.log" \
+      "${WORK_DIR}/explicit/policy.xml" /usr/share/ImageMagick-7/policy.xml
+    rm -f /etc/ImageMagick-7/policy.xml /run/ImageMagick-7/policy.xml
+    list_policies "${WORK_DIR}/restored-policy.log" env
+    assert_policy "${WORK_DIR}/restored-policy.log" \
+      /usr/share/ImageMagick-7/policy.xml 333MiB
 
     find "${OUT_DIR}" -name '*.la' -delete
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
@@ -238,20 +343,20 @@ outputs:
 
   conf:
     files:
-    - path: /etc/ImageMagick-7/colors.xml
-    - path: /etc/ImageMagick-7/delegates.xml
-    - path: /etc/ImageMagick-7/log.xml
-    - path: /etc/ImageMagick-7/mime.xml
-    - path: /etc/ImageMagick-7/policy.xml
-    - path: /etc/ImageMagick-7/quantization-table.xml
-    - path: /etc/ImageMagick-7/thresholds.xml
-    - path: /etc/ImageMagick-7/type-apple.xml
-    - path: /etc/ImageMagick-7/type-dejavu.xml
-    - path: /etc/ImageMagick-7/type-ghostscript.xml
-    - path: /etc/ImageMagick-7/type-urw-base35-type1.xml
-    - path: /etc/ImageMagick-7/type-urw-base35.xml
-    - path: /etc/ImageMagick-7/type-windows.xml
-    - path: /etc/ImageMagick-7/type.xml
+    - path: /usr/share/ImageMagick-7/colors.xml
+    - path: /usr/share/ImageMagick-7/delegates.xml
+    - path: /usr/share/ImageMagick-7/log.xml
+    - path: /usr/share/ImageMagick-7/mime.xml
+    - path: /usr/share/ImageMagick-7/policy.xml
+    - path: /usr/share/ImageMagick-7/quantization-table.xml
+    - path: /usr/share/ImageMagick-7/thresholds.xml
+    - path: /usr/share/ImageMagick-7/type-apple.xml
+    - path: /usr/share/ImageMagick-7/type-dejavu.xml
+    - path: /usr/share/ImageMagick-7/type-ghostscript.xml
+    - path: /usr/share/ImageMagick-7/type-urw-base35-type1.xml
+    - path: /usr/share/ImageMagick-7/type-urw-base35.xml
+    - path: /usr/share/ImageMagick-7/type-windows.xml
+    - path: /usr/share/ImageMagick-7/type.xml
 
   dev:
     files:
