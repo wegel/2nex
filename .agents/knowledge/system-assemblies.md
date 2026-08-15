@@ -38,6 +38,20 @@ checksums. A read-only installer build then changed from
 `75d6fdeefd99732cf626303636924e26056433050cf9c599aeffb1fb1ae9f934` to
 `ca2299734945b8e9e1a2b6b4415c30ff8a4040ee2863c15117c2fd85d0be7849`.
 
+## Build Dependencies And Finished Roots
+
+An assembly entry under `dependencies` populates the assembly build root but
+does not guarantee that the selected output appears in the finished system.
+Put an output under `packages` when the installed root must contain it. Base
+assemblies should select shared runtime data once so child assemblies inherit
+it.
+
+Evidence: `nex-systemd` and the installer already used Glibc's library output
+as a dependency, but the first EP011 Edgebox checkout lacked
+`/usr/lib/nsswitch.conf` and `/usr/lib/rpc`. Adding Glibc's `outputs/conf` to
+the `packages` list in `flat-minimal`, `flat-systemd`, `nex-minimal`,
+`nex-systemd`, and the installer put both databases in all checked roots.
+
 ## Artifact Inspection
 
 Use `zub --repo .nex/repo checkout --copy systems/<slug>/<version> <dir>` to
@@ -75,6 +89,17 @@ Evidence: host-side `test -e` failed for
 `.nex/tmp/desktop-vwl-002h-smoke/usr/include/linux/eventpoll.h`, while
 `unshare --root .nex/tmp/desktop-vwl-002h-smoke /usr/bin/test -e
 /usr/include/linux/eventpoll.h` passed.
+
+When `unshare --root` cannot provide the required identity, create a rootless
+user and mount namespace and enter the checkout with `chroot`:
+
+```bash
+unshare --user --map-root-user --mount --pid --fork \
+    chroot <root> /usr/bin/bash -c 'test -f /usr/lib/nsswitch.conf'
+```
+
+EP011 used this form to prove that absolute BlueZ and Glibc public symlinks
+resolved to real capsule files inside checked-out Nex-structured roots.
 
 Some desktop command smokes must run as the test desktop user because the
 program refuses root. Use `unshare --map-user=1000 --map-group=1000 --root
@@ -128,6 +153,36 @@ Evidence: `./src/cli/target/debug/nex check asm/nex-systemd-overlay.yaml`
 reported `needs formatting` and `missing field package`, while
 `./src/cli/target/debug/nex check asm/nex-systemd.yaml` passed because
 `asm/nex-systemd.yaml` consumes the overlay through `overlays:`.
+
+## First UAPI Parser Wave System Proof
+
+After BlueZ, PulseAudio, OpenSSH, and Glibc moved their vendor defaults below
+`/usr`, EP011 rebuilt all 11 affected assemblies twice. The final checksums
+were:
+
+- flat-minimal: `04d87da9a07545e09f4689eccfd57f2a97a588351e0d2c3ab74ae4301c2e348b`
+- flat-systemd: `4df96ca03dc9c74ac0ff3133ce8933c76350b11f2c01d3dff7fdca81f02a855e`
+- installer: `8eb597bfe72f7e71c7edaa1a03467f703bfcf9607e8b2a678b27d56bfea85b40`
+- nex-minimal: `fd375b373548d00250a8c1c0d3b76be0b4684849c3b99026bcd2f0711e60c35a`
+- nex-systemd: `2d6870c64c01da6cde65a214900ff6f174f9c63184cfbc9c029b331f2247e5e9`
+- edgebox-rootfs: `d8c158b77a3c864942af08520cdf8417d5c10703250cc3f05bb91acf4f1e1098`
+- flat-podman: `f8feefae4d82452da5dec9f6fe69e5d65c008a7e6a34273184838f0fe9bd31c9`
+- desktop-vwl: `2af27d9058ab5c6a54ab88cdab1acb9185a1028c58e2de2a7d87ef9d9c0d5e4e`
+- desktop-vwl-nvidia-current: `5385c15750bcdf85cd7f7168148ebad17720dcee519971aeeacbd1c03d741810`
+- desktop-vwl-nvidia-580: `0080b15a7cd317b8f1de3904f56b2f720eb4444a7771844ac21b9cc9afbb13ad`
+- desktop-dev: `75e4957348ef7c2e7f410ee9a16b52dad18405a315967477018e9492eaae24f5`
+
+The Edgebox smoke read the packaged RPC database through `getent`, found the
+OpenSSH and Glibc vendor files, and found no replaced package files below
+`/etc`. A desktop checkout contained all three BlueZ defaults and both Glibc
+databases without package-owned `/etc` copies. Flat-minimal, nex-minimal, and
+the installer also contained both Glibc databases. The direct nex-systemd
+QEMU test printed `ASSERT-BOOT-PASS`.
+
+A broad assembly build also checks every declared store ref. `desktop-dev`
+could not build until EP011 strictly rebuilt and exercised 19 stale or missing
+package refs. Treat such refs as package prerequisites: fix and commit each
+package as a working bisect point, then resume the assembly.
 
 ## Script Runtime Packages
 

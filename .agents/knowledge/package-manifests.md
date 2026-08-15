@@ -516,6 +516,44 @@ JavaScriptCore manifests.
 Evidence: `rg --files pkg` found GTK, libsoup3, and Chromium manifests, but no
 WebKitGTK, WPE, JavaScriptCore, or Vimb stack.
 
+## UAPI Configuration Parser Patches
+
+Before moving a package default from `/etc`, find every reader, reload path,
+file watch, explicit override, and drop-in parser in the pinned source. One
+manifest path can feed several independent readers. Keep command-line,
+environment, and per-user overrides ahead of the system tiers. Tests must call
+the built readers with distinct files under `/etc`, `/run`, and `/usr`; an
+install-path assertion cannot prove the lookup order.
+
+Evidence: BlueZ 5.85 reads `input.conf` in two places and reads `main.conf`
+and `network.conf` in separate code. PulseAudio 17.0 sends four main files
+through two helpers and merges only two structured drop-in families. OpenSSH
+9.9p1 reparses saved server text for `Match` blocks and preserves its argument
+vector on SIGHUP. Glibc 2.39 caches nsswitch metadata and registers that path
+with nscd. EP011 patched and exercised all of those paths.
+
+A local patch source does not add the `patch` command to a build root. List
+the repository's patch bundle under `dependencies`, hash the local patch, and
+apply it with `patch --batch --fuzz=0` so stale context fails loudly.
+
+OpenSSH uses first-obtained-value parsing. A standard drop-in selector must
+remove lower-tier basenames shadowed by higher tiers, then feed surviving
+files in descending lexical order so lexically later names keep priority.
+Keep arbitrary explicit `Include` paths unchanged. Pre-install tests must also
+provide a temporary account database, `/var/lib/sshd`, a throwaway host key,
+and the freshly built `sshd-session` path before starting `sshd`.
+
+Glibc treats empty and missing files as equivalent in its generic file-change
+cache. A live UAPI selector must store the chosen tier as well as file
+metadata, and nscd must watch all candidate paths. Test appearance, edits, and
+removal in one long-lived process inside a private chroot. Never change the
+workstation's `/etc` for a package test.
+
+PulseAudio's installed daemon uses `DT_RPATH` for `/usr/lib/pulseaudio`.
+`LD_LIBRARY_PATH` alone may load an older host library during a split-output
+smoke. Call the packaged dynamic loader with `--inhibit-rpath ''` and an
+explicit `--library-path`, or test from a merged package root.
+
 ## Namespace Reference
 
 - `libs/system`: glibc, zlib, ncurses, acl, attr.

@@ -57,11 +57,13 @@ database batches recorded in `tmp/UAPI_TODO.md`.
   rebuilt all 11 affected assemblies twice with matching checksums, checked
   the Edgebox and desktop roots, checked the three standalone base roots, and
   booted `nex-systemd` to `ASSERT-BOOT-PASS` in QEMU.
-- [ ] Re-run the exhaustive `/etc` output scan, update `.agents/kb.md` and the
-  local `tmp/UAPI_TODO.md` when it exists, and complete the generic-manifest
-  review.
-- [ ] Record the final diff and checks in `Completion Check`, then stop at the
-  Ralph human review gate.
+- [x] (2026-08-15 00:20Z) Re-ran the exhaustive `/etc` output scan, recorded
+  the exact 31 manifests, updated `.agents/kb.md`, both durable knowledge
+  themes, and the local `tmp/UAPI_TODO.md`, and found no product or build-
+  system policy in the four reusable package patches and manifests.
+- [x] (2026-08-15 00:20Z) Recorded the final commits, checksums, behavior
+  tests, system checks, inventory, and remaining caveats below, then stopped
+  at the Ralph human review gate.
 
 ## Surprises & Discoveries
 
@@ -311,8 +313,10 @@ behavior tests pass. All 11 affected assemblies also build reproducibly. The
 checked Edgebox root passes its complete smoke test, the desktop root contains
 the BlueZ and Glibc vendor files without package-owned `/etc` copies, the
 standalone base roots contain the Glibc vendor databases, and `nex-systemd`
-boots to `ASSERT-BOOT-PASS`. The durable knowledge update and final completion
-record remain in this ExecPlan.
+boots to `ASSERT-BOOT-PASS`. The package inventory now has exactly 31
+manifests with declared `/etc` outputs. The tracked runbook and both durable
+knowledge themes contain the verified lessons, and the ignored local tracker
+matches them.
 
 ## Context and Orientation
 
@@ -622,10 +626,131 @@ The human can accept this plan only when all of these facts hold:
 
 ### Completion Check
 
-Not started. Before the human review gate, replace this paragraph with the
-exact commit range, manifest checks, strict build checksums, behavior-test
-results, assembly checksums, QEMU result, `/etc` inventory, diff review, and
-remaining risks or skipped checks.
+Completed on 2026-08-15. The 25 implementation commits span
+`9ef7038fa^..fc97eab12`. They contain four isolated parser changes, one Check
+framework prerequisite, 19 isolated `desktop-dev` prerequisite refreshes, and
+one final assembly change. Each commit passed its matching integrated check
+and is a usable bisect point. The branch was pushed through `fc97eab12`.
+
+All four package manifests passed `nex format --check` and `nex check` after
+their strict builds. Each strict command built twice with matching output:
+
+- BlueZ: `f4b4a8aeac62ad3283a2f61ee7d895964372f09f92c3d72f42f5df2a9e0d7016`
+- PulseAudio: `ecd67b81b6a6dfde48df082245e94b837d53624306b65501b8124d2d02506a7d`
+- OpenSSH: `b9b50e17f25c18b3bb3e19f4e4bc4f2ae9e9de278b53daa2bd493b85f3f91558`
+- Glibc: `bf348eabcec257edace3e1e05458bf79ddad1a5164f25e706b7e50d93b25190d`
+
+The BlueZ selector test covered all three filenames, all three system tiers,
+an empty mask, and ordered `CONFIGURATION_DIRECTORY` values. PulseAudio's
+production-linked test covered its four main files, user and `PULSE_*`
+overrides, both structured drop-in families, basename shadowing, empty masks,
+and `/dev/null` masks; installed `--dump-conf` returned the asserted value.
+OpenSSH covered client and server priority, standard drop-ins, arbitrary
+Includes, `-F`, `-f`, `sshd -T`, relocated moduli, and a live SIGHUP with
+throwaway host keys. One long-lived Glibc process covered compiled NSS
+defaults, all tiers, an empty mask, file appearance, changes, removal, and all
+three RPC tiers in a private chroot.
+
+The 19 package prerequisites also passed strict two-build checks and a real
+installed command, library, upstream test, or parser action. Their commits
+and checksums are:
+
+- `5c1a80fa0` GN: `8426401058c56042e36872ab6e766ce0a598c4e5fe7fffc13338af4fda99eeaa`
+- `2e2c82c7e` Tk: `d26dc75115e81d566de0d5e3bb78500b224a4cafd16c994d4fd1f97fc8dfc09b`
+- `44c9ffee3` gopls: `166311a6aae3f44993b45e14987457c094ff0a17d0ab1e43b340c4e40d0c8f34`
+- `2e90f6ec2` AWS CLI: `33333267ded16cb6ba0c3d740614b60fa7e6ab97b7e0df0c059678b2065338cf`
+- `7b9f0af79` libxcrypt-compat: `d752801bf76bb5dcd0b9b1b06e9831359d8448b8709647edc1be78ea4588ca92`
+- `d359007c9` efivar: `d0c040dd7624adbb6ab7aabcbd853e90fb5522e6838aff5f01772888f63fe110`
+- `7d9f2ad9e` efibootmgr: `cde38545b11a4c6488ed78f5f15c98142abd280d3a4aed350af94f64d1fc6125`
+- `8e6b7463b` fakeroot: `2f08d29d9c340351801ddaf75f5a75ae0ceb04ff7dde7f27ee1aaddbcc4500a4`
+- `1dd37835f` GDB: `52a9ba4090dd1b8bb0e557f8a4034522b409de7a073850db642165ba0a012cb7`
+- `40a8db8b2` LLDB: `6a94a142c8809637f21d836e64a51ada2ce30128b210c5f00eca128ebf17ebd5`
+- `7939741de` Meld: `0b478f553947933d11d490617803ff3861a0ef14bb99185902bb54c039fd4bd8`
+- `f2203774e` SQLite Browser: `27bcc18ee5833ecb9fe0ed490ad81e0d20b21323c962330a84cb8d06c983a702`
+- `941dbbf7c` Archive::Cpio: `632cf46a88df4a0ba4c668d4392efe46b02fb46069633ab730d8b4ef81bc7f5c`
+- `223190f45` Archive::Zip: `6960b79d008700be53838b225798c7a896923c3cf3727f457a750befecf5fae8`
+- `ba67b08ac` strip-nondeterminism: `68251c9ab6ac557575fc0b17fcf0627c418f83a9e71b285fe5fc44b2923972a4`
+- `867b55f3f` ast-grep: `46f94fd87a6124da897fe03d2388aee5d1a7aeec9b5b5edf68f38dcdf2e7c6af`
+- `334f1be74` cloc: `3d9ed0d0a1d1e58120c2549010ca6d5a25e3fbeb23d6545cdd11d2c1e60de620`
+- `c6f8ecebd` Taplo: `4347fe12e16620c438f1b3d42264bd55331895af20601d55690289f872e84b71`
+- `fa00c12be` Tokei: `3edaa95fc7904d663cfe3bf5683eec62c387d843a21ce0d36d0923451c8f441e`
+
+All 11 assembly manifests passed `nex format --check` and `nex check`. Each
+strict assembly command built twice and matched:
+
+- flat-minimal: `04d87da9a07545e09f4689eccfd57f2a97a588351e0d2c3ab74ae4301c2e348b`
+- flat-systemd: `4df96ca03dc9c74ac0ff3133ce8933c76350b11f2c01d3dff7fdca81f02a855e`
+- installer: `8eb597bfe72f7e71c7edaa1a03467f703bfcf9607e8b2a678b27d56bfea85b40`
+- nex-minimal: `fd375b373548d00250a8c1c0d3b76be0b4684849c3b99026bcd2f0711e60c35a`
+- nex-systemd: `2d6870c64c01da6cde65a214900ff6f174f9c63184cfbc9c029b331f2247e5e9`
+- edgebox-rootfs: `d8c158b77a3c864942af08520cdf8417d5c10703250cc3f05bb91acf4f1e1098`
+- flat-podman: `f8feefae4d82452da5dec9f6fe69e5d65c008a7e6a34273184838f0fe9bd31c9`
+- desktop-vwl: `2af27d9058ab5c6a54ab88cdab1acb9185a1028c58e2de2a7d87ef9d9c0d5e4e`
+- desktop-vwl-nvidia-current: `5385c15750bcdf85cd7f7168148ebad17720dcee519971aeeacbd1c03d741810`
+- desktop-vwl-nvidia-580: `0080b15a7cd317b8f1de3904f56b2f720eb4444a7771844ac21b9cc9afbb13ad`
+- desktop-dev: `75e4957348ef7c2e7f410ee9a16b52dad18405a315967477018e9492eaae24f5`
+
+`scripts/test-edgebox-rootfs.sh` passed every check against the rebuilt
+Edgebox root, including OpenSSH vendor paths, both Glibc databases, and a real
+`getent rpc portmapper` lookup. A rootless desktop chroot found all three
+BlueZ files and both Glibc databases, and found none of the replaced
+package-owned `/etc` files. Flat-minimal, nex-minimal, and installer checkouts
+also contained both Glibc databases. The direct nex-systemd QEMU test booted
+Systemd and printed `ASSERT-BOOT-PASS`.
+
+The final exhaustive package scan returned these 31 manifests with declared
+`/etc` outputs:
+
+```text
+pkg/apps/containers/netavark.yaml
+pkg/apps/graphics/imagemagick.yaml
+pkg/apps/misc/ca-certificates.yaml
+pkg/apps/security/gnome-keyring.yaml
+pkg/apps/terminal/foot.yaml
+pkg/bootstrap/phase0/toolchain.yaml
+pkg/bootstrap/phase1/glibc.yaml
+pkg/cli/shells/bash-completion.yaml
+pkg/core/ipc/dbus.yaml
+pkg/core/userland/2nex-utilities.yaml
+pkg/desktop/wayland/fuzzel.yaml
+pkg/desktop/wayland/swaync.yaml
+pkg/desktop/wayland/waybar.yaml
+pkg/dev/libs/openssl3.yaml
+pkg/dev/virt/libvirt.yaml
+pkg/libs/audio/pipewire.yaml
+pkg/libs/crypto/p11-kit.yaml
+pkg/libs/graphics/at-spi2-core.yaml
+pkg/libs/graphics/fontconfig.yaml
+pkg/libs/graphics/gtk3.yaml
+pkg/libs/graphics/nvidia-580.yaml
+pkg/libs/graphics/nvidia-current.yaml
+pkg/libs/net/libnl.yaml
+pkg/libs/net/libtirpc.yaml
+pkg/libs/security/linux-pam.yaml
+pkg/libs/system/attr.yaml
+pkg/libs/system/fuse3.yaml
+pkg/libs/text/vte.yaml
+pkg/libs/tui/slang.yaml
+pkg/net/firewall/iptables.yaml
+pkg/net/firewall/nftables.yaml
+```
+
+The generic-policy search found no `yocto`, `soniq`, `edgebox`, `buildroot`,
+or `nex_uapi` text in the four manifests or patches. `git diff --check -- .
+':!*.patch'` passed before the assembly commit and again before this completion
+record.
+
+No acceptance check was skipped. Four prerequisite checks had bounded host or
+test-harness limits: GN's full unit runner could not find its fixture path in
+the private chroot although the files were present and readable; fakeroot's
+suite passed 12 tests and failed four UID-preservation cases because it ran as
+root in a user namespace; GDB printed `/proc` warnings before it successfully
+traced `/usr/bin/true`; and LLDB needed its packaged `lldb-server` path plus a
+no-PTY launch before `/usr/bin/true` exited zero. The Nex-minimal build also
+prints pre-existing `touch` warnings while following public absolute symlinks;
+the second build still matched, and a checked-out chroot resolved both new
+Glibc links. QEMU logged an EFI automount failure on its BIOS test disk, but
+the requested system unit ran and printed the explicit pass marker.
 
 ## Idempotence and Recovery
 

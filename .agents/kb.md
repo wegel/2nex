@@ -1215,23 +1215,34 @@ package defaults.
   transient `/run/pam.d` tier. PAM modules have their own secondary files, so
   audit those separately before moving every file below `/etc/security`.
 
-Patch priority should follow both benefit and risk. Smartmontools, Bash, and
-e2fsprogs now provide small proof cases. OpenSSH needs parser and security
-regression tests. BlueZ and PulseAudio need multi-reader patches. Glibc NSS
-should come last or stay on the factory fallback until an upstream-quality
-design can watch all candidate paths and combine drop-ins safely.
+Parser patches need tests that match their risk. Smartmontools, Bash, and
+e2fsprogs use small whole-file checks. OpenSSH tests both parsers, includes,
+and a live SIGHUP. BlueZ tests every reader through one selector. PulseAudio
+tests each main file and both structured drop-in families. Glibc tests live
+NSS changes and RPC lookup in one private chroot process.
 
-The Bash and e2fsprogs batch rebuilt `flat-minimal`, `flat-systemd`, the
-installer, `nex-minimal`, `nex-systemd`, Edgebox, `flat-podman`, desktop-vwl,
-and both Nvidia desktop children reproducibly. `desktop-dev` remained blocked
-because the disposable local zub store lacks its declared GN 0.2289 commit.
-The Edgebox rootfs smoke ran Bash as a login shell, created and inspected an
-ext4 filesystem, and found no package e2fsprogs policy in `/etc`. The direct
-`nex-systemd` QEMU boot printed `ASSERT-BOOT-PASS`. A strict build of
-`2nex-utilities` populated the store ref needed by `nex-minimal`, but its
-generated output update exposed its legacy `/etc/passwd` and `/etc/group`
-policy. Restore that incidental manifest edit and handle accounts in the
-separate assembly-owned account batch.
+EP011 completed the system proof for the first parser wave. The five
+standalone roots, `flat-minimal`, `flat-systemd`, `nex-minimal`, `nex-systemd`,
+and the installer, list Glibc's `outputs/conf` under `packages`. An assembly
+dependency populates the build root but does not put that output in the final
+Nex-structured system. Child assemblies inherit the selected output from
+their base.
+
+All 11 affected assemblies built twice with matching checksums, including
+`desktop-dev` after strict package builds populated 19 missing or stale store
+refs. The Edgebox smoke ran Bash as a login shell, created and inspected an
+ext4 filesystem, found the OpenSSH and Glibc vendor files, read the vendor RPC
+database through `getent`, and found no replaced package policy under `/etc`.
+A desktop checkout contained all three BlueZ files and both Glibc databases
+without package-owned copies at the replaced `/etc` paths. Checked
+flat-minimal, nex-minimal, and installer roots also contained both Glibc
+databases. The direct `nex-systemd` QEMU boot printed `ASSERT-BOOT-PASS`.
+
+A strict build of `2nex-utilities` populated the store ref needed by
+`nex-minimal` during the earlier Bash batch, but its generated output update
+exposed its legacy `/etc/passwd` and `/etc/group` policy. The final manifest
+keeps that unrelated change out of EP011; handle accounts in the separate
+assembly-owned account batch.
 
 ## Carried patch mechanics
 
@@ -1422,10 +1433,13 @@ package checksum
 The files below `/etc/security` remain a separate audit item because each PAM
 module has its own lookup and merge behavior.
 
-The first PAM consumer batch installs service files below `/usr/lib/pam.d`.
-OpenSSH 9.9p1 now enables PAM, keeps its editable SSH main files below
-`/etc/ssh`, and passed two strict builds with checksum
+The first PAM consumer batch installed service files below `/usr/lib/pam.d`.
+At that point OpenSSH 9.9p1 enabled PAM but kept its SSH main files below
+`/etc/ssh`; those two builds used checksum
 `240e0506c3d8b34a88eb7f6d64602386960f9fbc62a959ed983bdd0e44619f1b`.
+EP011 later moved the main files below `/usr/lib/ssh`, added the transient
+tier, and produced the current checksum
+`b9b50e17f25c18b3bb3e19f4e4bc4f2ae9e9de278b53daa2bd493b85f3f91558`.
 Swaylock 1.7.2 now enables PAM and passed with checksum
 `883fb2383f9c011646571b6651528802b0ce2d6105fa7cc6183ce89e47cf612a`.
 Polkit 124 sets Meson's `pam_prefix` to `/usr/lib/pam.d`, exposes a `runtime`
@@ -1457,14 +1471,14 @@ Meson's custom install step prints a harmless `touch` warning for
 `/usr/lib/environment.d/99-environment.conf`; the file exists in the final
 output and both strict builds reproduce the checksum.
 
-The UAPI assembly batch also rebuilt `flat-podman` after correcting its parent
-path to `asm/flat-systemd.yaml`; manifest `extends` paths resolve from the
-repository root. Its strict checksum is
-`7cef42214a799e23236f7cc39be10a5818893390cd6915b083849cf7ba744cf4`.
-The `desktop-dev` check could not start because the disposable local zub store
-lacks `x86_64/pkg/core/toolchain/gn/0.2289/bundles/full`. The GN manifest still
-declares that exact version, so this is a missing cached build rather than a
-stale assembly reference.
+Manifest `extends` paths resolve from the repository root, so `flat-podman`
+extends `asm/flat-systemd.yaml`. After EP011 added Glibc's vendor databases,
+its strict checksum is
+`f8feefae4d82452da5dec9f6fe69e5d65c008a7e6a34273184838f0fe9bd31c9`.
+EP011 resolved the earlier missing GN ref by strictly rebuilding GN 0.2289,
+then refreshed and exercised every other stale `desktop-dev` ref that the
+broad assembly exposed. The final desktop-dev assembly checksum is
+`75e4957348ef7c2e7f410ee9a16b52dad18405a315967477018e9492eaae24f5`.
 
 ## Ralph loop setup
 
