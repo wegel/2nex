@@ -1,0 +1,120 @@
+package:
+  schema: 1
+  name: OpenCL Headers
+  slug: opencl-headers
+  namespace: libs/graphics
+  version: 2026.05.29
+  description: C language headers for the OpenCL API
+  homepage: https://github.com/KhronosGroup/OpenCL-Headers
+  checksum: 95242517b4b7c0399d8ec921abad265639cb576946f00a7d9eaa1638a542965c
+
+sources:
+- name: opencl_headers
+  url: https://github.com/KhronosGroup/OpenCL-Headers/archive/refs/tags/v2026.05.29.tar.gz
+  sha256: d9e6c48357de5002da11ce45de600e0c3ffe6ab4f628a3b9fe2b38603161658a
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/full
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4116:599, 12377:849, 28940:1106, 45520:1655, 57897:2032, 74425:2283, 86863:2858, 111780:3072, 132474:3143, 143907:3225]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "/${SOURCE_opencl_headers}" \
+      -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    cmake -S . -B build \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_TESTING=ON \
+      -DOPENCL_HEADERS_BUILD_TESTING=ON \
+      -DOPENCL_HEADERS_BUILD_CXX_TESTS=ON
+    cmake --build build
+    ctest --test-dir build --output-on-failure
+    DESTDIR="${OUT_DIR}" cmake --install build
+
+    install -Dm644 LICENSE \
+      "${OUT_DIR}/usr/share/doc/opencl-headers/LICENSE"
+
+    cat > "${WORK_DIR}/installed-opencl-headers.c" <<'EOF'
+    #include <CL/opencl.h>
+
+    #ifndef CL_VERSION_3_0
+    #error OpenCL 3.0 declarations are missing
+    #endif
+
+    int main(void) {
+      cl_version version = CL_MAKE_VERSION(3, 0, 0);
+      return CL_VERSION_MAJOR(version) == 3 ? 0 : 1;
+    }
+    EOF
+    gcc -std=c11 -Wall -Wextra -Werror \
+      -I"${OUT_DIR}/usr/include" \
+      "${WORK_DIR}/installed-opencl-headers.c" \
+      -o "${WORK_DIR}/installed-opencl-headers"
+    "${WORK_DIR}/installed-opencl-headers"
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+
+  full:
+  - dev
+  - doc
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/CL/cl.h
+    - path: /usr/include/CL/cl_d3d10.h
+    - path: /usr/include/CL/cl_d3d11.h
+    - path: /usr/include/CL/cl_dx9_media_sharing.h
+    - path: /usr/include/CL/cl_dx9_media_sharing_intel.h
+    - path: /usr/include/CL/cl_egl.h
+    - path: /usr/include/CL/cl_ext.h
+    - path: /usr/include/CL/cl_ext_intel.h
+    - path: /usr/include/CL/cl_function_types.h
+    - path: /usr/include/CL/cl_gl.h
+    - path: /usr/include/CL/cl_gl_ext.h
+    - path: /usr/include/CL/cl_half.h
+    - path: /usr/include/CL/cl_icd.h
+    - path: /usr/include/CL/cl_layer.h
+    - path: /usr/include/CL/cl_platform.h
+    - path: /usr/include/CL/cl_va_api_media_sharing_intel.h
+    - path: /usr/include/CL/cl_version.h
+    - path: /usr/include/CL/opencl.h
+    - path: /usr/share/cmake/OpenCLHeaders/OpenCLHeadersConfig.cmake
+    - path: /usr/share/cmake/OpenCLHeaders/OpenCLHeadersConfigVersion.cmake
+    - path: /usr/share/cmake/OpenCLHeaders/OpenCLHeadersTargets.cmake
+    - path: /usr/share/pkgconfig/OpenCL-Headers.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/opencl-headers/LICENSE

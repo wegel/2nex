@@ -107,6 +107,11 @@ package groups.
   added the required subject, source, upstream status, and rationale where they
   were missing, and reran all five strict package checks. Tig, Wget, OSTree,
   Logrotate, and CUPS kept their previously recorded output checksums.
+- [x] (2026-08-15 15:38Z) Added the official Khronos OpenCL Headers at matched
+  tag `v2026.05.29`. The package ran all 350 upstream C and C++ tests plus an
+  installed-header compile and runtime smoke in each pass, and reproduced
+  checksum
+  `95242517b4b7c0399d8ec921abad265639cb576946f00a7d9eaa1638a542965c`.
 - [ ] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
   loader that reads all three configuration tiers, then move both Nvidia ICD
   files below `/usr`.
@@ -236,6 +241,12 @@ package groups.
   found exactly five added patch files. After correcting their headers, all
   five strict builds reproduced their prior output checksums, which proves the
   patch bodies and installed results did not change.
+
+- Observation: Khronos publishes the OpenCL Headers and ICD Loader from
+  separate repositories under matching date-based tags.
+  Evidence: the authoritative tag lists for both repositories contain
+  `v2026.05.29`; the headers archive has SHA-256
+  `d9e6c48357de5002da11ce45de600e0c3ffe6ab4f628a3b9fe2b38603161658a`.
 
 ## Decision Log
 
@@ -706,6 +717,13 @@ with a broad exception.
   default, both SNMP readers, and a live `cupsd` queried through the installed
   `lpstat` command. The package output contains no `/etc`, `/usr/etc`, `/run`,
   or `/var` state directory.
+- OpenCL Headers `v2026.05.29` source:
+  `https://github.com/KhronosGroup/OpenCL-Headers/archive/refs/tags/v2026.05.29.tar.gz`,
+  SHA-256
+  `d9e6c48357de5002da11ce45de600e0c3ffe6ab4f628a3b9fe2b38603161658a`.
+  Two strict builds ran 350 upstream tests and the installed-header smoke and
+  reproduced package checksum
+  `95242517b4b7c0399d8ec921abad265639cb576946f00a7d9eaa1638a542965c`.
 
 ## Interfaces and Dependencies
 
