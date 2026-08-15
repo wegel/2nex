@@ -139,6 +139,10 @@ package groups.
   Fresh checkouts ran `cllayerinfo`, named the Khronos capsule as the public
   loader, found each proprietary Nvidia ICD through its vendor file, and found
   no `/etc/OpenCL` or factory compatibility tree.
+- [x] (2026-08-15 16:17Z) Made the graphical QEMU script honor `ZUB_BIN` for
+  command discovery and every store operation. Its shell self-test substitutes
+  `printf` as the command and prints
+  `PASS: graphical QEMU honors ZUB_BIN`; Bash syntax checking also passes.
 - [x] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
   loader that reads all three configuration tiers, then move both Nvidia ICD
   files below `/usr`.
@@ -302,6 +306,13 @@ package groups.
   Running content checks through `chroot /target` follows the finished root;
   using `readlink` without dereferencing still identifies the selected package
   capsule. Both corrected Nvidia assemblies reproduced four times.
+
+- Observation: the graphical QEMU script was the only named final boot script
+  that hard-coded the `zub` command.
+  Evidence: `scripts/qemu-test-systemd.sh` and `scripts/qemu-test-installer.sh`
+  already accepted `ZUB_BIN`; replacing every graphical store invocation with
+  one wrapper left no bare `zub` command and its self-test proved that wrapper
+  executes the override.
 
 ## Decision Log
 

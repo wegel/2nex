@@ -4,6 +4,7 @@
 # usage:
 #   scripts/qemu-test-graphical.sh --target-ref systems/desktop-vwl/0.0.1 --app chromium --timeout 300
 #   scripts/qemu-test-graphical.sh --graphics-mode gtk-debug --app chromium
+#   scripts/qemu-test-graphical.sh --self-test-zub-override
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -11,6 +12,7 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 TMP_DIR="$ROOT_DIR/.nex/tmp"
 ZUB_REPO="$ROOT_DIR/.nex/repo"
 NEX_BIN="${NEX_BIN:-$ROOT_DIR/src/cli/target/debug/nex}"
+ZUB_BIN="${ZUB_BIN:-zub}"
 
 TARGET_REF="${TARGET_REF:-systems/desktop-vwl/0.0.1}"
 APP="${APP:-chromium}"
@@ -39,6 +41,7 @@ SELECTED_MODE=""
 DIRECT_KERNEL=""
 DIRECT_INITRAMFS=""
 DIRECT_DEPLOY=""
+SELF_TEST_ZUB_OVERRIDE=0
 
 die() {
     printf 'error: %s\n' "$*" >&2
@@ -46,7 +49,11 @@ die() {
 }
 
 usage() {
-    sed -n '2,8p' "$0" >&2
+    sed -n '2,9p' "$0" >&2
+}
+
+run_zub() {
+    "$ZUB_BIN" "$@"
 }
 
 while (($# > 0)); do
@@ -71,6 +78,10 @@ while (($# > 0)); do
             TIMEOUT_SECS="$2"
             shift 2
             ;;
+        --self-test-zub-override)
+            SELF_TEST_ZUB_OVERRIDE=1
+            shift
+            ;;
         --help|-h)
             usage
             exit 0
@@ -80,6 +91,13 @@ while (($# > 0)); do
             ;;
     esac
 done
+
+if ((SELF_TEST_ZUB_OVERRIDE)); then
+    result=$(ZUB_BIN=printf run_zub '%s\n' 'PASS: graphical QEMU honors ZUB_BIN')
+    [[ "$result" == 'PASS: graphical QEMU honors ZUB_BIN' ]] || exit 1
+    printf '%s\n' "$result"
+    exit 0
+fi
 
 if [[ "$APP" != "chromium" ]]; then
     die "unsupported app '$APP'; currently supported: chromium"
@@ -99,7 +117,7 @@ require_commands() {
     for command_name in \
         "$NEX_BIN" \
         qemu-system-x86_64 \
-        zub \
+        "$ZUB_BIN" \
         sfdisk \
         mke2fs \
         ssh \
@@ -502,18 +520,18 @@ build_direct_initramfs_disk() {
 
     ensure_assert_key
 
-    zub --repo "$ZUB_REPO" checkout --copy "$LINUX_BOOT_REF" "$DIRECT_ROOT/boot"
-    zub --repo "$ZUB_REPO" checkout --copy "$INITRAMFS_BOOT_REF" "$DIRECT_ROOT/initramfs"
+    run_zub --repo "$ZUB_REPO" checkout --copy "$LINUX_BOOT_REF" "$DIRECT_ROOT/boot"
+    run_zub --repo "$ZUB_REPO" checkout --copy "$INITRAMFS_BOOT_REF" "$DIRECT_ROOT/initramfs"
 
-    target_checksum=$(zub --repo "$ZUB_REPO" show "$TARGET_REF" 2>/dev/null | awk '/nex.system.checksum:/ {print $2; exit}')
+    target_checksum=$(run_zub --repo "$ZUB_REPO" show "$TARGET_REF" 2>/dev/null | awk '/nex.system.checksum:/ {print $2; exit}')
     if [[ -z "$target_checksum" ]]; then
-        target_checksum=$(zub --repo "$ZUB_REPO" rev-parse "$TARGET_REF" 2>/dev/null)
+        target_checksum=$(run_zub --repo "$ZUB_REPO" rev-parse "$TARGET_REF" 2>/dev/null)
     fi
     [[ -n "$target_checksum" ]] || die "could not get checksum for $TARGET_REF"
 
     deploy_dir="$DIRECT_ROOT/root-content/nex/deployments/${target_checksum}.0"
     mkdir -p "$deploy_dir"
-    zub --repo "$ZUB_REPO" checkout --copy "$TARGET_REF" "$deploy_dir"
+    run_zub --repo "$ZUB_REPO" checkout --copy "$TARGET_REF" "$deploy_dir"
 
     root_content="$DIRECT_ROOT/root-content"
     var_content="$DIRECT_ROOT/var-content"
