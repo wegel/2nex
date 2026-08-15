@@ -44,3 +44,27 @@ reported `dimensions=1280 800`, saw
 When the direct-initramfs target contains `/boot/amd-ucode.cpio` or
 `/boot/intel-ucode.cpio`, the script prepends those early microcode archives
 before the base initramfs and checks their byte offsets with `cmp -n`.
+
+Set `ZUB_BIN=/home/wegel/work/perso/zub/target/debug/zub` on this host when the
+installed `zub` command lags the sibling checkout. The script routes command
+discovery, metadata reads, and every checkout through this override. Its
+`--self-test-zub-override` check substitutes `printf` and proves that path.
+
+Size the root image from the checked-out target. Size the writable `/var`
+image for both the manifest seed and the Git object store that
+`nex-init-manifests` creates from it on first boot. EP013 counted the seed
+twice, added 25 percent plus 512 MiB, and selected 11,098 MiB instead of the
+old 2,048 MiB. Create large raw images with `truncate` and copy partitions
+with `dd conv=notrunc,sparse`; zero-filling tens of GiB only slows the test.
+
+Systemd marks `graphical-session.target` and
+`xdg-desktop-autostart.target` with `RefuseManualStart=yes`. A synthetic smoke
+session must create its own target and pull those targets in as dependencies.
+GNOME phase-tagged autostart entries are reserved for GNOME's session manager;
+the generic Systemd smoke can set `XDG_CURRENT_DESKTOP=Unity` when the same
+entries also declare Unity.
+
+Evidence: the final EP013 guest reported successful generated AT-SPI and Gnome
+Keyring units, a live AT-SPI D-Bus address, Chromium title
+`NEX_GRAPHICAL_SMOKE_READY`, dimensions `1280 800`, center pixel
+`srgb(240,0,255)`, and `ASSERT-GRAPHICS-PASS`.

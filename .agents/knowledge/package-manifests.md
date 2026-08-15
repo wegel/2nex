@@ -554,29 +554,35 @@ PulseAudio's installed daemon uses `DT_RPATH` for `/usr/lib/pulseaudio`.
 smoke. Call the packaged dynamic loader with `--inhibit-rpath ''` and an
 explicit `--library-path`, or test from a merged package root.
 
-The Freedesktop Autostart Specification makes `/etc/xdg/autostart` an
-externally governed package path, not an ordinary vendor-default directory.
-It tells desktop sessions to scan `autostart` below `XDG_CONFIG_HOME` and
-each `XDG_CONFIG_DIRS` entry; the Base Directory Specification defaults the
-system list to `/etc/xdg`. Keep upstream system autostart entries there so
-ordinary desktops find them, and let higher-priority XDG entries override or
-disable the same basename.
+The Freedesktop Autostart Specification searches `autostart` below
+`XDG_CONFIG_HOME` and every `XDG_CONFIG_DIRS` entry. A reusable Nex package can
+therefore install immutable entries below `/usr/share/xdg/autostart` when the
+assembly publishes
+`XDG_CONFIG_DIRS=/etc/xdg:/run/xdg:/usr/share/xdg`. The standard generator
+then gives administrator and transient entries priority over vendor entries;
+`Hidden=true` in a higher entry masks the same lower basename.
 
-Evidence: Gnome Keyring 50.0 installs its PKCS#11 and Secrets entries there,
-and AT-SPI2 Core 2.54.0 installs its bus launcher entry there. All three pass
-`desktop-file-validate` and name packaged executables. Their four desktop
-assembly variants retain the entries below the factory `/etc` tree.
+Evidence: Gnome Keyring 50.0 installs its PKCS#11 and Secrets entries below
+`/usr/share/xdg/autostart`, and AT-SPI2 Core 2.54.0 installs its bus launcher
+entry there. `scripts/test-desktop-xdg-autostart.sh` ran the installed Systemd
+environment and autostart generators against all three tiers, while the final
+graphical guest started both AT-SPI and Gnome Keyring.
 
 A public AT-SPI2 runtime must select its daemons and activation metadata, not
 only its development files and library. Dependency flattening supplies shared
 libraries to consumer capsules but does not publish the bus launcher,
 registry daemon, D-Bus service files, systemd user service, or autostart entry.
 
-Evidence: EP012 changed AT-SPI2 Core 2.54.0 `bundles/full` from `dev, lib` to
-`bin, conf, lib, misc`, added that bundle to `desktop-vwl`, and found every
-activation path in all four rebuilt system commits. The strict package
-checksum is
-`0f72c43c2ed8b776f7defda22ccd90dc539937900e6705591e2a37f41a482fd8`.
+AT-SPI2's Meson build searches absolute host paths before `PATH`. Pin
+`dbus_daemon=/usr/bin/dbus-daemon`,
+`dbus_broker=/usr/bin/dbus-broker-launch`, and `default_bus=dbus-broker`, then
+publish every launched helper in the runtime metadata. An installed-binary
+strings check should reject host-only paths such as `/usr/sbin/dbus-daemon`.
+
+Evidence: the graphical guest first failed to spawn an embedded host path.
+The corrected AT-SPI2 package reproduced checksum
+`f0095818e1a16ccac0a82439d22715662d6e21108cce23484cad434951d23bf9`,
+and the rebuilt graphical guest reported a live AT-SPI D-Bus address.
 
 An installed configuration file can be documentation even when upstream
 places it below `/etc`. Read both its contents and its consumer before moving
@@ -639,11 +645,11 @@ mode `0555`. A package test must restore owner write permission or remove that
 disposable directory before Nex starts its second reproducibility build;
 otherwise the build runner cannot clean the retained work root.
 
-Treat system shell integration paths as a contract that spans the package
-hook and the system profile that sources it. Bash itself does not scan
-`profile.d`. Moving one hook below `/usr` breaks systems whose selected
-profile scans only `/etc/profile.d`, even if the new location looks like a
-better vendor directory.
+Treat system shell integration paths as a contract that spans the package hook
+and the system profile that sources it. Bash itself does not scan
+`profile.d`. A system that installs hooks below `/usr/lib/profile.d` must ship
+a profile reader that selects same-name fragments from `/etc/profile.d`,
+`/run/profile.d`, and `/usr/lib/profile.d` in that order.
 
 Evidence: Bash Completion 2.17.0's README documents its
 `$sysconfdir/profile.d/bash_completion.sh` hook, and VTE 0.76.4's Meson build
@@ -652,10 +658,12 @@ loaded the Bash Completion hook and its legacy functions from a finished
 Edgebox root. Another packaged Bash loaded VTE's hook, created
 `__vte_osc7`, and added OSC 133 markers to its prompt.
 
-Bash Completion's compatibility files have their own loader contract. Its
-main script checks `/etc/bash_completion.d` first by default, and its
-configuration guide documents that path. Preserve the historical
-`/etc/bash_completion` link for user startup files that source it directly.
+Bash Completion's compatibility files have their own loader contract. The Nex
+package installs the main reader and command completions below
+`/usr/share/bash-completion` and its profile hook below `/usr/lib/profile.d`.
+It does not publish the historical `/etc/bash_completion` or
+`/etc/bash_completion.d` paths. An assembly that adds an unpatched outside
+startup file may add only the compatibility link that file needs.
 
 Attr's `xattr.conf` is whole-file policy for libattr consumers such as
 Coreutils `cp --preserve=xattr`. Attr 2.5.2 caches the parsed action list, so
@@ -773,9 +781,9 @@ link.
 The nwfilter and virtual-network XML files are different: Libvirt imports and
 mutates them as machine objects. Store the upstream copies as package
 templates below `/usr/share/libvirt/initial-state`, then let an assembly choose
-whether to seed them into writable host state. The package's four logrotate
-fragments and OpenSSH proxy fragment remain at their standard integration
-paths.
+whether to seed them into writable host state. Install Libvirt's four Logrotate
+fragments below `/usr/lib/logrotate.d` and its OpenSSH proxy fragment below
+`/usr/lib/ssh/ssh_config.d`; the Nex-built readers merge those vendor paths.
 
 ## Linux-PAM system policy
 
@@ -871,35 +879,40 @@ the smoke can create all three tiers without touching the build host. The
 strict checksum is
 `128736eb96e78f6680b80a86fba2cb339c62d43e4cd901faa50ccc7b2206e755`.
 
-## Remaining package `/etc` integration points
+## Package configuration output audit
 
-Count package-owned `/etc` files from declared output paths, not every literal
-path in a build script. Build scripts may create temporary policy files only
-to test a reader. On 2026-08-15, this command found 15 declared paths in seven
-manifests:
+Count package-owned configuration files from declared output paths, not every
+literal path in a build script. Build scripts may create temporary policy files
+only to test a reader. Check both `/etc` and `/usr/etc`:
 
-    rtk proxy rg --glob '*.yaml' '^\s*- path: /etc(?:/|$)' pkg
+    rtk bash scripts/check-package-config-paths.sh
 
-At EP012's starting revision, `855f476^`, the same declared-output scan found
-289 paths in 31 manifests. CA Certificates accounted for 150 generated paths,
-so the other package-owned paths fell from 139 to 15. This measures package
-policy, not the complete live `/etc`; assemblies and boot services still
-create host state and generated compatibility databases.
+At EP013's starting revision, `0873019`, the expanded scan found 28 paths in 13
+manifests: 15 below `/etc` and 13 below `/usr/etc`. EP013 moved vendor hooks,
+completions, integration fragments, defaults, and OpenCL registrations below
+`/usr`; it patched their Nex-built readers when standards or upstream code did
+not already expose a vendor tier. The checker and an exhaustive literal scan
+now find zero declared package output paths below either tree.
 
-Every remaining path serves an external integration contract:
+The less obvious readers use these rules:
 
-- Gnome Keyring and AT-SPI2 retain three files below
-  `/etc/xdg/autostart`; desktop sessions scan that path through the XDG Base
-  Directory and Autostart specifications.
-- Bash Completion retains `/etc/bash_completion`, its compatibility entry
-  below `/etc/bash_completion.d`, and its profile hook. VTE retains two
-  profile hooks. Existing shells and system profiles load these five paths.
-- Libvirt retains four files below `/etc/logrotate.d` and its OpenSSH proxy
-  fragment below `/etc/ssh/ssh_config.d`; the matching external tools scan
-  those directories.
-- Both Nvidia driver manifests retain `/etc/OpenCL/vendors/nvidia.icd`;
-  Khronos fixes that Linux ICD discovery directory.
+- Tig and Wget select one complete system file from `/etc`, `/run`, then
+  `/usr/lib`; an empty higher file masks lower data, and explicit overrides
+  keep their original meaning.
+- CUPS selects `cupsd.conf` and `cups-files.conf` independently and has two
+  separate SNMP readers. Patch and test every reader rather than only changing
+  its configured install directory.
+- The Khronos OpenCL ICD Loader scans registrations and layers below `/etc`,
+  `/run`, and `/usr/share` by basename. It preserves its secure environment
+  overrides and treats empty files or `/dev/null` links as masks. Nvidia
+  packages supply only their proprietary ICD and a registration below
+  `/usr/share/OpenCL/vendors`; the source-built Khronos package supplies the
+  public `libOpenCL` ABI.
+- Use libeconf only when a package's key/value or drop-in format matches it.
+  CUPS and the OpenCL loader already own structured native readers, so small
+  path selectors kept their behavior simpler and avoided a new dependency.
 
-These paths need an assembly factory fallback on an immutable host. Do not
-move them into a package-private vendor path unless the external loader adds
-and documents that path.
+This audit measures package policy, not the complete live `/etc`. Assemblies
+still define initial accounts, networking, enabled services, and other host
+state. An assembly that adds an unpatched outside program may also add the exact
+compatibility path that program needs.

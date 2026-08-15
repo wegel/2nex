@@ -127,3 +127,10 @@ changed `scripts/nex-install` to call `mkfs.ext4 -F -q`. The command
 `scripts/qemu-test-installer.sh --headless --rebuild --autoinstall --assert-boot`
 then installed `systems/desktop-vwl/0.0.1`, booted it, reported
 `systemd-state=running`, and printed `ASSERT-BOOT-PASS`.
+
+The direct-initramfs harness must measure its checked-out target rather than
+use a fixed root-image size. Round used KiB up to MiB, add 25 percent plus 512
+MiB, and retain the configured minimum for small roots. EP013's desktop no
+longer fit in 6,144 MiB; the measured formula selected 13,585 MiB and booted
+the exact stored deployment to `ASSERT-BOOT-PASS`. Use `truncate` and sparse
+`dd` copies so the raw test disk does not materialize every zero-filled block.

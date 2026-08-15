@@ -168,15 +168,41 @@ package groups.
   The old image failed while copying the 11 GiB desktop root; the corrected
   harness chose 13,584 MiB, built the filesystem, booted that exact desktop
   ref, reached both certificate assertions, and printed `ASSERT-BOOT-PASS`.
+- [x] (2026-08-15 19:18Z) Rebuilt the final Desktop VWL source twice through
+  two exact strict commands at checksum
+  `50ed467e695adcb994ce924ad3ed5123d0feeb92ced1b0db828c7673165d7809`.
+  Fresh-root tests passed for XDG autostart, Libvirt integration, and Tig and
+  Wget configuration. The graphical guest started generated AT-SPI and Gnome
+  Keyring units, exposed a live AT-SPI D-Bus address, rendered Chromium at
+  1280x800 with center pixel `srgb(240,0,255)`, and printed
+  `ASSERT-GRAPHICS-PASS`. The final installer guest chose 13,585 MiB, booted
+  the same stored desktop deployment, and printed `ASSERT-BOOT-PASS`.
+- [x] (2026-08-15 19:35Z) Rebuilt the three desktop descendants through two
+  exact strict commands each. Four builds matched Nvidia 580 checksum
+  `d5b5547967fa8d24cc799bd2d814079faca50eb1445dd0d180f843ba02260077`,
+  Nvidia current checksum
+  `4d29fe18f4067c1c1d8de6305ba6a665efc40cec988963a42c1a5985d8485413`,
+  and desktop-dev checksum
+  `00e27517697fa1c68fbec05963fb6be654de40d81c9b12b42279c79b873a5c96`.
+  Both Nvidia roots ran `cllayerinfo`, resolved the public Khronos loader and
+  proprietary ICD, and lacked both compatibility trees. The desktop-dev root
+  ran Rustc and Cargo 1.91.1, exposed all three Cargo completions below
+  `/usr/share`, and had no `/usr/etc`.
+- [x] (2026-08-15 19:43Z) Ran the final package checker and exhaustive literal
+  scan at zero paths, checked all 26 changed package and assembly manifests,
+  and compared the final desktop root with all 28 starting paths. None
+  survived. Classified all 88 remaining factory leaves, updated the local UAPI
+  checklist, and promoted verified scratch notes into package, assembly,
+  installer, and graphical-QEMU knowledge files.
 - [x] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
   loader that reads all three configuration tiers, then move both Nvidia ICD
   files below `/usr`.
 - [x] Replace the remaining `/usr/etc` outputs from Tig, Wget, OSTree, CUPS, and
   Rust with vendor data, patched readers, or explicit integration templates.
-- [ ] Rebuild every affected assembly twice and exercise shell, desktop,
+- [x] Rebuild every affected assembly twice and exercise shell, desktop,
   Libvirt, OpenCL, printing, network download, Edgebox, installer, and boot
   behavior in finished roots.
-- [ ] Run the final package and factory-tree scans, update knowledge and the UAPI
+- [x] Run the final package and factory-tree scans, update knowledge and the UAPI
   checklist, complete the human review gate, and stop for approval.
 
 ## Surprises & Discoveries
@@ -345,6 +371,57 @@ package groups.
   Windows import library. Sizing from `du -sk` plus 25 percent and 512 MiB
   selected a 13,584 MiB image and the complete QEMU assertion then passed.
 
+- Observation: the graphical QEMU test's old 2 GiB writable image could not
+  hold the desktop's first-boot self-hosting state.
+  Evidence: the guest failed while creating `/var/log/nex/graphical-smoke`
+  because `nex-init-manifests` had copied the 4,335,816 KiB manifest seed into
+  `/nex/manifests` and created its initial Git object store. Counting that seed
+  twice, adding 25 percent plus 512 MiB, and retaining a 2 GiB minimum selected
+  an 11,098 MiB image and let the guest reach its graphical assertions.
+
+- Observation: Systemd refuses direct manual starts of
+  `graphical-session.target` and `xdg-desktop-autostart.target`.
+  Evidence: both targets returned `RefuseManualStart`; a transient smoke
+  session target that requires the graphical targets and wants the XDG target
+  started the generated units. Systemd also excludes entries with
+  `X-GNOME-Autostart-Phase` from its generic GNOME path because GNOME's session
+  manager handles them, so the minimal Systemd-only smoke selects the entries'
+  shared `Unity` path.
+
+- Observation: AT-SPI2 Core's Meson autodetection embedded a host-only D-Bus
+  path in the target binary.
+  Evidence: the first graphical guest started the generated autostart unit but
+  failed with `Failed to spawn child process /usr/sbin/dbus-daemon`. Upstream
+  Meson searches absolute host locations before `PATH`; the package now pins
+  `/usr/bin/dbus-daemon` and `/usr/bin/dbus-broker-launch`, selects the broker,
+  publishes the launched helpers, and rejects the host path in its package
+  smoke. Two strict builds reproduced checksum
+  `f0095818e1a16ccac0a82439d22715662d6e21108cce23484cad434951d23bf9`.
+
+- Observation: Desktop VWL selected the Tig and Wget commands without their
+  separate vendor configuration outputs.
+  Evidence: a fresh checkout at desktop checksum `1092fb50...` contained both
+  commands but neither `/usr/lib/tigrc` nor `/usr/lib/wgetrc`; the new
+  `scripts/test-desktop-command-configs.sh` failed with
+  `desktop omitted Tig vendor configuration`. The assembly now selects each
+  complete development bundle, and the persistent test covers vendor-file
+  presence, transient and administrator priority, and empty-file masks.
+
+- Observation: Host-side content reads can misdiagnose absolute public links
+  in a checked-out Nex root.
+  Evidence: `find` showed both final `nvidia.icd` links, while a host-side
+  `cat` followed `/nex/pkg` against the host and reported the target missing.
+  `unshare --user --map-root-user --root <checkout>` resolved each link inside
+  the correct root; both files named `libnvidia-opencl.so.1`, and
+  `cllayerinfo` exited successfully.
+
+- Observation: Removing the 28 package paths reduced the final Desktop VWL
+  factory tree without removing host policy.
+  Evidence: the final tree has 88 leaves, 58 regular files and 30 links. Its
+  large groups are 26 Libvirt initial objects and 27 Systemd unit files,
+  enablement links, or masks. An exact comparison with the starting inventory
+  found none of the 28 removed paths, and the root contains no `/usr/etc`.
+
 ## Decision Log
 
 - Decision: Treat `/usr/etc` package output as part of this cleanup.
@@ -437,11 +514,62 @@ package groups.
   has authorized pushes from this repository.
   Date/Author: 2026-08-15 / Carlos
 
+- Decision: Pin AT-SPI2 Core's target D-Bus helpers instead of trusting Meson's
+  host-path autodetection.
+  Rationale: A reproducible package must launch paths supplied by its declared
+  runtime closure. The broker launcher owns bus setup; the broker daemon alone
+  does not implement that interface.
+  Date/Author: 2026-08-15 / Carlos
+
+- Decision: Select Tig and Wget's complete development bundles in Desktop VWL.
+  Rationale: Both packages publish their immutable defaults in a `conf` output
+  separate from the command. Installing a reader without its ordinary vendor
+  default leaves the assembled command incomplete.
+  Date/Author: 2026-08-15 / Carlos
+
 ## Outcomes & Retrospective
 
-Not started. At completion, record the final package-path count, each package
-and assembly checksum, the reader behavior proved in built roots, every adapter
-that remains, and every skipped hardware or graphical check.
+EP013 closed the complete 28-path inventory across 13 existing packages. The
+repository checker now rejects package outputs below `/etc` and `/usr/etc`, and
+both it and an independent literal scan report zero paths. The manifest guide
+keeps that rule specific to the Nex distribution, so outside repositories can
+still make a deliberate different choice.
+
+Nex now owns the readers needed by its current packages. Shell profiles, XDG
+autostart, Logrotate, Tig, Wget, CUPS, and OpenCL use immutable vendor files
+below `/usr`, transient files below `/run`, and administrator files below
+`/etc`. The package changes preserve explicit command-line and environment
+overrides. Rust completions and schema data moved below `/usr/share`, and
+OSTree keeps only its GRUB integration template below `/usr/lib`. New Khronos
+OpenCL packages provide the public source-built loader; Nvidia packages provide
+only their proprietary ICD and vendor registration.
+
+No current assembly needs a compatibility adapter for any removed path. The
+final Desktop VWL factory tree still has 88 intentional host-state leaves for
+accounts, network policy, authentication, Libvirt initial objects, service
+enablement and masks, and fixed compatibility links such as `mtab`,
+`resolv.conf`, and the generated trust cache. An exact comparison with the 28
+starting paths found none of them.
+
+All changed packages reproduced and ran focused reader or integration tests.
+Every affected assembly reproduced across two exact strict commands. Finished
+roots exercised shell hooks, XDG generators, OpenSSH, Logrotate, Tig, Wget,
+OpenCL, Rust, Cargo, Edgebox policy, and base commands. QEMU booted Systemd,
+the installer target, and the final graphical desktop. The graphical guest
+started AT-SPI and Gnome Keyring and rendered the expected Chromium pixels.
+
+Three narrow checks remain outside this host's capabilities. Nex has no C shell
+package, so the VTE and Elfutils `.csh` hooks received syntax-independent
+nonempty checks rather than execution. The host has no Nvidia GPU, so
+`cllayerinfo` proved loader startup and routing but no real OpenCL kernel. The
+host has no physical printer, so CUPS used its real scheduler and Unix socket
+without submitting a hardware print job. `shellcheck` is not installed; Bash
+syntax, script self-tests, and both complete QEMU paths supplied the executable
+shell proof instead.
+
+The implementation produced small checked commits and pushed every checkpoint
+to `external-manifest-repositories`. No Zub change was needed: the current
+sibling Zub binary built and inspected all final system refs correctly.
 
 ## Context and Orientation
 
@@ -714,10 +842,76 @@ The plan is complete only when all of the following statements are true:
 
 ### Completion Check
 
-Not complete. Before requesting human approval, compare every acceptance item
-with the final diff and commit list. Record the exact scan output, package and
-assembly checksums, focused test assertions, boot markers, graphical result,
-remaining factory paths, and every skipped hardware check here.
+Completed on 2026-08-15:
+
+- `rtk bash scripts/check-package-config-paths.sh` printed
+  `PASS: package manifests declare no outputs below /etc or /usr/etc`. The
+  independent `rtk rg` expression from this plan returned exit 1 with no
+  matches. The checker's self-test also passed when introduced.
+- `nex check` passed for all 26 changed package and system manifests. The one
+  changed `desktop-vwl-overlay.yaml` file is an overlay fragment, not a package
+  or system manifest, so `nex check` does not parse it.
+- Two exact strict commands per affected package reproduced these final
+  checksums: Bash Completion `b6771b9688f614b674fb9fb32d50d4254a7457043512df57f01760cab183695d`;
+  VTE `cb779385060af4815061ca5517c6614504d1c7b50d6c2ac75f8ba7d8c0448c40`;
+  Elfutils `8cc94c6a0b2ebf1a5ce0f444daec9f4f6a6ad764e9d9a10cfc721a8a08cda872`;
+  Rust `69ca52e02ece272a597586ca2a99e1b1e200b5056b528fd6a7e7e7b2ddc54302`;
+  Gnome Keyring `066579bd01075af3d1214709aca0d8d10055d9865faa279a91691a4e91fde9cd`;
+  AT-SPI2 `f0095818e1a16ccac0a82439d22715662d6e21108cce23484cad434951d23bf9`;
+  Libvirt `b79faa31ca1b2f43e7c474b0ee3ac8350358f39d1a90e94bbe856ea2e664627b`;
+  Tig `719e941eeb2fba518741a3e0aabae2a306c62679832ef0cedc5a298270f47bed`;
+  Wget `a876127cd537d03c83ff475d14e65b3373429f17d45dca29b47b3d9ffb53520f`;
+  OSTree `bed476afcea258b6e3c106192767dff807fde5a2f64d9c48c6fc0f0be06d26a9`;
+  CUPS `3bda80d32c30f056fc983fce370d64086d6ae6ca4eec9879bd622e1d34561b18`;
+  Nvidia 580 `cd4c6680cedbc4f1dc814d31929a84563a79187752ce22158032b694d5bed98f`;
+  and Nvidia current `7110b39ccca3e89916c44107d16ea1fdb30471765e1755921e46de3802a37057`.
+  The two new readers reproduced Logrotate
+  `ac3b8e243fd2b635ec26ec32455a8d32a91dbae9509c3e6f91c2988745cc676e`
+  and OpenCL ICD Loader
+  `cd728fed81942ff648d7cb0b276080e02f85fe6817b37d7fb7d02ea3afc6d154`;
+  OpenCL Headers reproduced
+  `95242517b4b7c0399d8ec921abad265639cb576946f00a7d9eaa1638a542965c`.
+- Embedded package smokes executed every changed reader. They covered complete
+  main-file priority, drop-in basename priority, empty and `/dev/null` masks,
+  explicit command and environment overrides, live reload where supported,
+  CUPS's two scheduler files and two SNMP readers, Logrotate on real temporary
+  logs, OpenCL stub ICDs and a real test layer, and all 350 OpenCL header tests.
+- Two exact strict commands per affected system produced four matching builds
+  at these final checksums: Flat Systemd `1212c60ff0f42d8f5910cae5644c08f8d23bbd7af9d2f1c2247932b253028ba8`;
+  Flat Podman `058256430aecd06c56ec2cf0362414463e7a3a46590f69345474d1796aab48b4`;
+  Edgebox `4fffdc9c8b871c1afefda29fd4bc86283087c52d00a4a54744b8fda22f47941e`;
+  Nex Minimal `6bf44276a0de73189bc0c9b9a5d7060b401749f7600a0ecd57eb895d66f3a6e7`;
+  Nex Systemd `e4834b42b6be0c89737c948e00a90120666cf6a9f9b4b497bbd0b06b12470e80`;
+  Installer `499b0b54a68b50427488a1b001a719b2c449c8bb64f50b55b630c162a8ba0c50`;
+  Desktop VWL `50ed467e695adcb994ce924ad3ed5123d0feeb92ced1b0db828c7673165d7809`;
+  Nvidia 580 `d5b5547967fa8d24cc799bd2d814079faca50eb1445dd0d180f843ba02260077`;
+  Nvidia current `4d29fe18f4067c1c1d8de6305ba6a665efc40cec988963a42c1a5985d8485413`;
+  and Desktop Dev `00e27517697fa1c68fbec05963fb6be654de40d81c9b12b42279c79b873a5c96`.
+- Finished-root scripts passed for Edgebox, layered shell profiles, XDG
+  autostart, Libvirt integrations, Tig, Wget, both Nvidia OpenCL variants, and
+  Desktop Dev's Rust and Cargo. The Systemd and installer guests reported both
+  certificate markers and `ASSERT-BOOT-PASS`. The graphical guest reported
+  successful AT-SPI and Gnome Keyring units, a live AT-SPI bus address,
+  Chromium title `NEX_GRAPHICAL_SMOKE_READY`, dimensions `1280 800`, center
+  pixel `srgb(240,0,255)`, and `ASSERT-GRAPHICS-PASS`.
+- The final Desktop VWL factory scan counted 88 leaves: 58 regular files and 30
+  symlinks. The top-level counts are `libvirt` 26, `systemd` 27, `pam.d` five,
+  `containers` three, `tmpfiles.d` three, `NetworkManager` two, and 22
+  singleton roots. Each belongs to mutable initial objects, explicit assembly
+  policy, service enablement or masks, or a fixed host compatibility link. A
+  scripted comparison against the exact 28 starting declarations at `0873019`
+  printed `PASS: all 28 starting package compatibility paths are absent from
+  the final Desktop VWL root`; `/usr/etc` is absent too.
+- `git diff --check` passed. Every checked implementation checkpoint through
+  `cbfade1` is pushed to `external-manifest-repositories`; the final knowledge
+  and plan checkpoint is pushed before the human gate. The tracked worktree is
+  clean at that gate.
+- Skipped checks: no packaged C shell exists to execute the VTE and Elfutils
+  `.csh` hooks; no Nvidia GPU exists to run a real OpenCL kernel; no physical
+  printer exists to submit a CUPS job; and `shellcheck` is not installed. The
+  package smokes checked both C shell hooks as nonempty, both Nvidia roots ran
+  `cllayerinfo`, CUPS started its real scheduler on a Unix socket, and Bash
+  syntax plus both QEMU paths checked the modified shell harnesses.
 
 ## Idempotence and Recovery
 

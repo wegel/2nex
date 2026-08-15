@@ -224,6 +224,14 @@ produced reproducible checksum
 checked-out system then ran version checks for CMake, Meson, Ninja, autotools,
 GN, Rust, Node, Python, Perl, GDB, LLDB, and related dev tools.
 
+The same rule applies when a command's compiled fallback names a vendor file
+in a sibling output. Desktop VWL once selected only Tig and Wget's `bin`
+outputs, so both commands existed but `/usr/lib/tigrc` and `/usr/lib/wgetrc`
+did not. Select a bundle that includes both `bin` and `conf`, then test the
+reader in the finished root. EP013's
+`scripts/test-desktop-command-configs.sh` caught the omission and passed after
+the assembly selected both development bundles.
+
 ## Firewall Data
 
 Edgebox selects Nftables' full bundle directly, so its finished root contains
@@ -358,13 +366,24 @@ inherit the audited desktop overlay and add no separate overlay.
 
 Do not mistake the declared overlay count for the complete built factory tree.
 Assembly scripts can create host state, and packages can supply native
-`/usr/share/factory/etc` entries. The final desktop factory tree contained 58
-regular files, 37 symlinks, and 34 directories. Its 95 leaf entries break down
-into one `/etc/ssl/certs -> /run/ssl/certs` compatibility link, 26 mutable
-Libvirt objects seeded by the desktop assembly, and 68 entries from overlays,
-fixed-path package integrations, and Systemd's native factory files. The
-complete tree occupied 16966 apparent bytes. Count both the source overlays
-and the finished factory tree when auditing `/etc` behavior.
+`/usr/share/factory/etc` entries. After EP013 removed every remaining package
+compatibility path, the final Desktop VWL factory tree contained 58 regular
+files, 30 symlinks, and 31 directories. Its 88 leaves break down by top-level
+name as follows:
+
+- `libvirt`: 26 mutable objects seeded by the desktop assembly;
+- `systemd`: 27 unit links, masks, and assembly-owned unit files;
+- `pam.d`: five initial authentication-policy files;
+- `containers`: three machine-policy files;
+- `tmpfiles.d`: three host-state rules;
+- `NetworkManager`: two machine-network files; and
+- 22 singleton roots for accounts, host identity, console, networking,
+  OpenSSH, trust-cache compatibility, and other explicit assembly policy.
+
+The exact comparison against all 28 package paths declared at EP013's starting
+commit `0873019` found none in this tree, and the finished root has no
+`/usr/etc`. Count both the source overlays and the finished factory tree when
+auditing `/etc` behavior.
 
 Nex-structured assemblies keep OpenSSL's generated compatibility cache below
 `/run/ssl/certs`. Their factory tree contains one `/etc/ssl/certs` symlink to
