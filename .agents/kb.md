@@ -1487,6 +1487,16 @@ Meson's custom install step prints a harmless `touch` warning for
 `/usr/lib/environment.d/99-environment.conf`; the file exists in the final
 output and both strict builds reproduce the checksum.
 
+Foot 1.25.0 and Fuzzel 1.13.1 follow the XDG Base Directory search contract:
+they check the user configuration first, then each `XDG_CONFIG_DIRS` entry in
+order, and default the system list to `/etc/xdg`. Their upstream `foot.ini`
+and `fuzzel.ini` installs contain no active values; they only document built-in
+defaults. The manifests therefore move these files to
+`/usr/share/doc/<package>/examples` without changing the programs' normal
+XDG lookup. Each program's `--check-config` command parses its packaged
+example. Keep real product choices in an assembly-owned user or host file; the
+desktop-vwl overlay does this for Foot.
+
 Manifest `extends` paths resolve from the repository root, so `flat-podman`
 extends `asm/flat-systemd.yaml`. After EP011 added Glibc's vendor databases,
 its strict checksum is

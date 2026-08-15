@@ -37,6 +37,10 @@ named below.
 - [x] (2026-08-15 01:00Z) Retained the OpenCL specification's fixed Nvidia
   ICD path, exposed it through both driver runtime bundles, strictly rebuilt
   both packages and images, and called the OpenCL loader in each image.
+- [x] (2026-08-15 01:13Z) Moved Foot's and Fuzzel's fully commented sample
+  files from `/etc/xdg` to their documentation trees, strictly rebuilt both
+  packages and all four desktop images, and parsed each installed example
+  with the matching program.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -87,6 +91,19 @@ named below.
   `config` but not `conf`. The two Nvidia assembly roots lacked the ICD until
   this audit added `conf` to both bundles.
 
+- Observation: Foot and Fuzzel use standard XDG search order, but the files
+  their build systems install below `/etc/xdg` contain only comments and empty
+  section headings.
+  Evidence: the pinned `config.c` files search the user directory before the
+  ordered `XDG_CONFIG_DIRS` list and default that list to `/etc/xdg`; both
+  shipped example files leave every built-in value unchanged.
+
+- Observation: The desktop assembly already owns Foot's actual product choice
+  as `/home/testuser/.config/foot/foot.ini` and selects only the Foot and
+  Fuzzel binary outputs.
+  Evidence: `asm/desktop-vwl/desktop-vwl.yaml` names both `outputs/bin` refs,
+  while `desktop-vwl-overlay.yaml` creates the user-specific Foot file.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -130,6 +147,14 @@ named below.
   Moving this file would make the package incompatible with conforming ICD
   loaders. A public runtime bundle must contain it so an installed loader can
   discover the packaged vendor library.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Install Foot's and Fuzzel's reference configurations below
+  `/usr/share/doc/<package>/examples`.
+  Rationale: Both upstream files only document built-in defaults. Installing
+  either one in `/etc/xdg` claims an administrator choice without changing
+  program behavior. The programs still honor the XDG Base Directory
+  specification, including its default `/etc/xdg` administrator path.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -427,6 +452,51 @@ affected assemblies, and commit.
    and `desktop-dev`
    `3f45970d91af64016e788e93897e9ded96aa05d650764f7ded9e83bc664653ab`.
    Commit: `pkg: package netavark without distribution policy`.
+
+5. `pkg/apps/terminal/foot.yaml`
+
+   The old `conf` output declared `/etc/xdg/foot/foot.ini`. Foot's pinned
+   `config.c` checks `XDG_CONFIG_HOME`, then the ordered `XDG_CONFIG_DIRS`
+   entries, and uses `/etc/xdg` when the system list is unset, as required by
+   `https://specifications.freedesktop.org/basedir/`. The installed file has
+   no active setting: it contains comments and empty section headings that
+   document built-in defaults. Outcome 4 applies. The package now installs it
+   as `/usr/share/doc/foot/examples/foot.ini`, and its `dev` bundle exposes
+   the new `doc` output instead of creating system policy.
+
+   The strict package command built twice with checksum
+   `2f5a687e9128eb8dc9ce410f14d2dfe5bffefb6b8674a0aa920725d9497fef8b`.
+   The packaged example passed Foot's own `--check-config` parser. Separate
+   XDG tests proved user configuration wins over system directories and that
+   earlier `XDG_CONFIG_DIRS` entries win over later entries. The rebuilt
+   desktop-dev root ran `foot --version`, kept its assembly-owned user file,
+   and contained no Foot file below `/etc/xdg` or the factory `/etc` tree.
+   Commit: `pkg: move XDG config samples to docs`.
+
+11. `pkg/desktop/wayland/fuzzel.yaml`
+
+   The old `conf` output declared `/etc/xdg/fuzzel/fuzzel.ini`. Fuzzel uses
+   the same XDG user-then-system search contract and defaults the system list
+   to `/etc/xdg`. Its installed file also contains only comments and empty
+   section headings, so outcome 4 applies. The package now installs it beside
+   its other documentation as
+   `/usr/share/doc/fuzzel/examples/fuzzel.ini`; it does not create a system
+   choice merely to ship the sample.
+
+   The strict package command built twice with checksum
+   `78d7ee3d18cc65f70a0908f2a81fa6823c704c3c3dba0e80cf74b3a81676ebab`.
+   Fuzzel's own `--check-config` parser accepted the packaged example. The
+   desktop-dev root ran `fuzzel --version` and contained no Fuzzel file below
+   `/etc/xdg` or the factory `/etc` tree. All four inherited desktop images
+   reproduced after both sample moves: desktop-vwl
+   `146092fe5c94c50a9441ad67811d7ffc105079f7343cb3ebe787a3d044029c95`,
+   Nvidia 580
+   `a62e10f7fd97b04d88039ca6468ee59447723c5e930b448ccef2cac664fd237d`,
+   Nvidia current
+   `7770f9719d3f698d501a9474913fc0475de74de2e3f4be9998856f290febc2b5`,
+   and desktop-dev
+   `5a1291abece4a8ff9a5b4ee5ca8b9c0b14b135578012a627ff2a6574384167ae`.
+   Commit: `pkg: move XDG config samples to docs`.
 
 21. `pkg/libs/graphics/nvidia-580.yaml`
 
