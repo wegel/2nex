@@ -772,3 +772,25 @@ templates below `/usr/share/libvirt/initial-state`, then let an assembly choose
 whether to seed them into writable host state. The package's four logrotate
 fragments and OpenSSH proxy fragment remain at their standard integration
 paths.
+
+## Linux-PAM system policy
+
+Linux-PAM 1.7.1 has separate readers for service policy and the access,
+faillock, group, limits, namespace, pwhistory, time, environment, and shells
+module files. Meson's vendor-directory option changes install paths but does
+not add every missing reader tier. Patch each reader before moving package
+files, keep explicit module arguments exact, and test the installed modules.
+
+The generic package patch selects whole files from `/etc`, `/run`, then
+`/usr/lib`, and merges supported drop-in directories by basename in the same
+priority. Empty higher files mask lower policy. The manifest installs ten
+package files below `/usr`, and its strict build checksum is
+`a1cd20aac485d045fd8412b8a568a102293ea8257892bc5b688aaf270bfd9a20`.
+
+PipeWire's `25-pw-rlimits.conf` is a package default for PAM's limits module,
+so install it below `/usr/lib/security/limits.d` after that reader supports the
+vendor tier. On a build host whose hard real-time priority and nice limits are
+zero, applying the real fragment returns a PAM denial even though PAM applies
+its 4 GiB memory-lock request. Assert both facts so the test proves the actual
+file was parsed. PipeWire's strict checksum is
+`39dcd9b0b389cba437384c51390d1367fe36af49834f9457181ebae588bf0af0`.

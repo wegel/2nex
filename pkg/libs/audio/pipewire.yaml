@@ -6,12 +6,15 @@ package:
   version: 1.4.9
   description: Low-latency audio/video router and processor
   homepage: https://pipewire.org/
-  checksum: baa92816bb6ff3bfc83389fd12129c30cd83ee48cb1ef6e487e80a866db70a8d
+  checksum: 39dcd9b0b389cba437384c51390d1367fe36af49834f9457181ebae588bf0af0
 
 sources:
 - name: pipewire
   url: https://gitlab.freedesktop.org/pipewire/pipewire/-/archive/1.4.9/pipewire-1.4.9.tar.gz
   sha256: 8066a7b220069e4c6e3b02bd2b6ea303bba66df255023c07c99323449ba8fe3c
+- name: limits_smoke
+  file: pkg/libs/audio/pipewire-limits-smoke.c
+  sha256: 734ed6215791fb75dc4204fbaf4410968c3a1ae39459289a8676daa4f0abc83d
 
 dependencies:
 - name: glibc
@@ -20,6 +23,8 @@ dependencies:
   commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
 - name: libcap
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: linux-pam
+  commit: x86_64/pkg/libs/security/linux-pam/1.7.1/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
@@ -63,9 +68,10 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4171:72366, 12425:150778, 28920:202582, 49829:226562, 62410:231047, 79073:238768, 95570:247375, 116230:253921, 141065:257967, 154266:262791]
+  profile: [4171:986, 12425:1469, 28938:2431, 49653:3434, 62115:3990, 78684:4856, 95185:5973, 115805:16757, 140603:16784, 154266:17142]
 
   script: |
+    set -eu
     tar --no-same-owner -xzf /${SOURCE_pipewire} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
@@ -103,6 +109,45 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    mkdir -p "${OUT_DIR}/usr/lib/security/limits.d"
+    mv \
+      "${OUT_DIR}/etc/security/limits.d/25-pw-rlimits.conf" \
+      "${OUT_DIR}/usr/lib/security/limits.d/25-pw-rlimits.conf"
+    rmdir \
+      "${OUT_DIR}/etc/security/limits.d" \
+      "${OUT_DIR}/etc/security" \
+      "${OUT_DIR}/etc"
+
+    limits_smoke="${WORK_DIR}/pipewire-limits-smoke"
+    gcc "/${SOURCE_limits_smoke}" -lpam -o "${limits_smoke}"
+    mkdir -p /usr/lib/pam.d /usr/lib/security/limits.d \
+      /run/security/limits.d /etc/security/limits.d
+    printf 'pipewire:x:990:990:PipeWire:/nonexistent:/usr/bin/nologin\n' > /etc/passwd
+    printf 'pipewire:x:990:pipewire\n' > /etc/group
+    printf 'session required /usr/lib/security/pam_limits.so\n' \
+      > /usr/lib/pam.d/pipewire-limits-smoke
+    cp \
+      "${OUT_DIR}/usr/lib/security/limits.d/25-pw-rlimits.conf" \
+      /usr/lib/security/limits.d/25-pw-rlimits.conf
+
+    : > /etc/security/limits.d/25-pw-rlimits.conf
+    LD_LIBRARY_PATH=/usr/lib "${limits_smoke}" success unchanged
+    rm /etc/security/limits.d/25-pw-rlimits.conf
+    printf '@pipewire - memlock 1024\n' \
+      > /run/security/limits.d/25-pw-rlimits.conf
+    LD_LIBRARY_PATH=/usr/lib "${limits_smoke}" success 1048576
+    rm /run/security/limits.d/25-pw-rlimits.conf
+    LD_LIBRARY_PATH=/usr/lib "${limits_smoke}" denied 4294967296
+
+    rm \
+      /usr/lib/pam.d/pipewire-limits-smoke \
+      /usr/lib/security/limits.d/25-pw-rlimits.conf \
+      /etc/passwd \
+      /etc/group
+    rmdir /usr/lib/security/limits.d \
+      /run/security/limits.d /run/security \
+      /etc/security/limits.d /etc/security || true
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -231,7 +276,7 @@ outputs:
 
   conf:
     files:
-    - path: /etc/security/limits.d/25-pw-rlimits.conf
+    - path: /usr/lib/security/limits.d/25-pw-rlimits.conf
     - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-aux.conf
     - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-dock-mic.conf
     - path: /usr/share/alsa-card-profile/mixer/paths/analog-input-fm.conf

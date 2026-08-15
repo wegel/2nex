@@ -125,6 +125,13 @@ named below.
   readers across `/etc`, `/run`, and `/usr/lib`, moved upstream virtual-network
   objects to package templates, seeded those objects as desktop host state,
   and rebuilt and exercised all four affected desktop roots.
+- [x] (2026-08-15 08:10Z) Replaced Linux-PAM's service-only patch with one
+  generic system-policy patch, moved its ten package files below `/usr`, and
+  strictly rebuilt it with upstream and installed-reader tests for whole files,
+  merged drop-ins, masks, environment data, and service policy.
+- [x] (2026-08-15 08:26Z) Moved PipeWire's resource-limits fragment below
+  `/usr`, strictly rebuilt it, and ran the installed PAM limits reader against
+  its package file, a transient override, and an administrator mask.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -637,6 +644,24 @@ named below.
   Rationale: `nex-utilities` provides a build helper, not a host identity.
   Nex-minimal already writes the root records it needs and moves them into its
   factory tree, so the package copies were both product policy and unused.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Give every Linux-PAM system-policy reader the same administrator,
+  transient, and vendor path model while keeping explicit module arguments
+  exact.
+  Rationale: PAM modules used separate hard-coded `/etc/security` readers, so
+  moving their files through Meson's vendor option alone would silently lose
+  policy. One generic patch now selects whole files and merges supported
+  drop-ins across `/etc`, `/run`, and `/usr`; each reusable package file lives
+  below `/usr`.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Install PipeWire's PAM limits fragment in Linux-PAM's vendor
+  limits directory.
+  Rationale: PipeWire supplies the default resource limits for its service
+  account. Linux-PAM now reads that fragment below `/usr`, lets an equal
+  basename in `/run` or `/etc` replace it, and treats an empty higher file as
+  a mask, so PipeWire no longer needs to write package policy below `/etc`.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -1401,6 +1426,28 @@ affected assemblies, and commit.
    its timeout, while both `virtlogd --version` and `virsh --version` reported
    11.0.0.
 
+16. `pkg/libs/audio/pipewire.yaml`
+
+   The old `conf` output declared
+   `/etc/security/limits.d/25-pw-rlimits.conf`. Outcome 1 applies after row 25
+   gave Linux-PAM a complete vendor reader. PipeWire now installs the unchanged
+   upstream fragment at
+   `/usr/lib/security/limits.d/25-pw-rlimits.conf`; no source patch is needed.
+
+   The strict package command built twice with checksum
+   `39dcd9b0b389cba437384c51390d1367fe36af49834f9457181ebae588bf0af0`.
+   Both builds linked a small client to the installed PAM stack and parsed the
+   installed PipeWire fragment. An empty administrator fragment with the same
+   basename masked it, a transient fragment set the memory-lock limit to one
+   MiB, and the vendor file set it to four GiB. The vendor case returned the
+   expected PAM denial after the host kernel refused its 95 real-time priority
+   and -19 nice requests, while the memory-lock assertion proved that PAM read
+   the actual packaged file first. Store inspection found the fragment only
+   below `/usr/lib`; the smoke source has SHA-256
+   `734ed6215791fb75dc4204fbaf4410968c3a1ae39459289a8676daa4f0abc83d`.
+   Affected assembly results will be recorded after the remaining package rows
+   finish. Commit: `pkg: move pipewire limits to vendor policy`.
+
 17. `pkg/libs/crypto/p11-kit.yaml`
 
    The old `conf` output declared
@@ -1484,6 +1531,33 @@ affected assemblies, and commit.
    and reproduced with checksum
    `43c20f709c15622e278ae0f1bf486be49f1ae578d377d6586d47498b91fc0a57`.
    Commit: `pkg: include nvidia OpenCL ICDs at runtime`.
+
+25. `pkg/libs/security/linux-pam.yaml`
+
+   The old outputs declared `/etc/environment` and nine package files below
+   `/etc/security`: `access.conf`, `faillock.conf`, `group.conf`,
+   `limits.conf`, `namespace.conf`, `namespace.init`, `pam_env.conf`,
+   `pwhistory.conf`, and `time.conf`. Outcome 2 applies. The generic patch
+   with SHA-256
+   `35fecf2a0f5411ae31f194f20a222189eda58f465fdbf0171847e15f7a883e38`
+   selects whole files from `/etc`, `/run`, then `/usr/lib`, and merges the
+   access, limits, and namespace drop-in directories by basename with the same
+   priority. Empty whole files and empty higher-priority drop-ins mask lower
+   package policy. Explicit module arguments remain exact. The patch also adds
+   `/run/pam.d` between the existing service-policy paths and passes `/run` to
+   libeconf-backed environment and shells readers.
+
+   The package sets Meson's vendor directory to `/usr/lib`, enables libeconf,
+   and publishes all ten files below `/usr`. Its upstream-style
+   `tst-pam_config` unit test covers path selection and drop-in merging. The
+   installed smoke covers service allow/deny priority, all three limits tiers,
+   an empty whole-file mask, three merged limits fragments, all three
+   environment tiers, and an empty environment mask. The strict command built
+   twice with checksum
+   `a1cd20aac485d045fd8412b8a568a102293ea8257892bc5b688aaf270bfd9a20`.
+   Store inspection found all ten vendor files and no `/etc` output. Affected
+   assembly results will be recorded after the remaining package rows finish.
+   Commit: `pkg: layer linux-pam system policy`.
 
 26. `pkg/libs/system/attr.yaml`
 

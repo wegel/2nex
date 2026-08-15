@@ -1333,12 +1333,12 @@ output explicitly. Before EP012 added it, Nvidia desktop images carried
   libeconf and `--enable-vendordir=DIR`, its `getdef.c` calls
   `econf_readDirs()` for vendor and host files. Nex enables that upstream
   feature and tests vendor and host precedence.
-- Linux-PAM 1.7.1 does not need a source patch for the service policy lookup.
-  Its Meson `vendordir` option adds a distribution policy directory, and
-  `pam_handlers.c` searches the administrator and distribution directories.
-  Nex enables the vendor directory and carries a small generic patch for the
-  transient `/run/pam.d` tier. PAM modules have their own secondary files, so
-  audit those separately before moving every file below `/etc/security`.
+- Linux-PAM 1.7.1 uses separate readers for service policy and the files used
+  by its access, faillock, group, limits, namespace, pwhistory, time,
+  environment, and shells modules. Its generic patch now gives all those
+  readers administrator, transient, and vendor paths, while exact module
+  arguments remain exact. Meson's `vendordir=/usr/lib` therefore moves all
+  package policy safely below `/usr`.
 
 Parser patches need tests that match their risk. Smartmontools, Bash, and
 e2fsprogs use small whole-file checks. OpenSSH tests both parsers, includes,
@@ -1546,17 +1546,25 @@ two-build check with package checksum
 Its PAM service files now live below `/usr/lib/pam.d`, and its `runtime` bundle
 contains both the programs and vendor policy.
 
-Linux-PAM 1.7.1 always searches `/usr/lib/pam.d` for service policy; its Meson
-`vendordir` option instead controls module files below paths such as
-`security/`. Nex therefore does not set `-Dvendordir` just to move service
-files. The Nex patch inserts `/run/pam.d` between `/etc/pam.d` and
-`/usr/lib/pam.d`. The package build links a small PAM client against the newly
-built library and proves allow, deny, and allow results from vendor, transient,
-and administrator service files. The strict two-build check passed with
-package checksum
-`76f9607c33b67a06942ce35292350df76062af36d867a4c5f76cad9ad71f0478`.
-The files below `/etc/security` remain a separate audit item because each PAM
-module has its own lookup and merge behavior.
+Linux-PAM 1.7.1 always searches `/usr/lib/pam.d` for service policy; Meson's
+`vendordir` controls the module files below paths such as `security/`. The
+generic patch inserts `/run/pam.d` between `/etc/pam.d` and `/usr/lib/pam.d`,
+then gives the access, faillock, group, limits, namespace, pwhistory, time,
+environment, and shells readers equivalent system tiers. Whole files select
+`/etc`, `/run`, then `/usr/lib`. Supported drop-in families merge by basename,
+and a higher empty file masks a lower file. Explicit module arguments keep
+their exact upstream meaning. The manifest sets `-Dvendordir=/usr/lib` and
+`-Deconf=enabled`, so its ten package policy files now live below `/usr`.
+The upstream-style helper test and installed PAM client cover selection,
+merging, masks, service results, limits, and environment values. The strict
+two-build checksum is
+`a1cd20aac485d045fd8412b8a568a102293ea8257892bc5b688aaf270bfd9a20`.
+
+PipeWire 1.4.9 installs its unchanged resource-limit fragment at
+`/usr/lib/security/limits.d/25-pw-rlimits.conf`. Its strict build runs the
+installed PAM limits reader against that file, a transient same-basename
+override, and an empty administrator mask. The package checksum is
+`39dcd9b0b389cba437384c51390d1367fe36af49834f9457181ebae588bf0af0`.
 
 The first PAM consumer batch installed service files below `/usr/lib/pam.d`.
 At that point OpenSSH 9.9p1 enabled PAM but kept its SSH main files below
