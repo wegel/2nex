@@ -6,7 +6,7 @@ package:
   version: 2.54.0
   description: Assistive Technology Service Provider Interface (core)
   homepage: https://wiki.gnome.org/Accessibility
-  checksum: 0f72c43c2ed8b776f7defda22ccd90dc539937900e6705591e2a37f41a482fd8
+  checksum: c4cfc4e2f63e73d1ba383cc68f48e114051ceb13795472c11a3bc3b54acb3499
 
 sources:
 - name: at-spi2-core
@@ -38,6 +38,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: meson
@@ -71,7 +73,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4134:1211, 8230:1557, 12387:1763, 16507:1954, 20610:4616, 24743:4616, 27018:4681]
+  profile: [4158:1140, 8327:1474, 12502:1679, 16608:1842, 20709:4446, 24852:4446, 27042:4518]
 
   script: |
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -79,6 +81,7 @@ build:
 
     meson setup build \
       --prefix=/usr \
+      --sysconfdir=/etc \
       --libdir=lib \
       --buildtype=release \
       -Dx11=disabled \
@@ -86,6 +89,16 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    install -d "${OUT_DIR}/usr/share/xdg/autostart"
+    mv "${OUT_DIR}/etc/xdg/autostart/at-spi-dbus-bus.desktop" \
+      "${OUT_DIR}/usr/share/xdg/autostart/"
+    rmdir "${OUT_DIR}/etc/xdg/autostart" "${OUT_DIR}/etc/xdg" "${OUT_DIR}/etc"
+
+    grep -qx 'Type=Application' \
+      "${OUT_DIR}/usr/share/xdg/autostart/at-spi-dbus-bus.desktop"
+    grep -qx 'Exec=/usr/libexec/at-spi-bus-launcher --launch-immediately' \
+      "${OUT_DIR}/usr/share/xdg/autostart/at-spi-dbus-bus.desktop"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -124,8 +137,8 @@ outputs:
 
   conf:
     files:
-    - path: /etc/xdg/autostart/at-spi-dbus-bus.desktop
     - path: /usr/share/defaults/at-spi2/accessibility.conf
+    - path: /usr/share/xdg/autostart/at-spi-dbus-bus.desktop
 
   dev:
     files:

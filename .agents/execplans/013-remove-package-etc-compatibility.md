@@ -58,6 +58,14 @@ package groups.
   `bef9bc7ebe717608fc48b5c261e802c973c8b6836f4be35c2f5a4f634bc78841`.
   The finished-root test also loaded the installed Bash Completion hook and
   preserved caller shell settings while ignoring a neighboring `.csh` hook.
+- [x] (2026-08-15 13:50Z) Moved the Gnome Keyring and AT-SPI2 autostart entries
+  from `/etc/xdg/autostart` to `/usr/share/xdg/autostart`. Their strict package
+  builds asserted the installed `Type=` and `Exec=` fields and reproduced
+  checksums `066579bd01075af3d1214709aca0d8d10055d9865faa279a91691a4e91fde9cd`
+  and `c4cfc4e2f63e73d1ba383cc68f48e114051ceb13795472c11a3bc3b54acb3499`.
+  The remaining inventory has 16 paths across seven manifests. The desktop
+  assembly still needs its XDG search path and finished-root reader test before
+  the XDG milestone closes.
 - [ ] Move Libvirt's Logrotate and OpenSSH fragments into vendor trees, add the
   missing Nex-built Logrotate reader, and exercise both integrations.
 - [ ] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
@@ -129,6 +137,11 @@ package groups.
   The final test sources `/usr/lib/profile` with explicit shell variables to
   prove it preserves them and separately proves a login shell preserves an
   explicit `TERM=xterm-256color`.
+
+- Observation: AT-SPI2's package smoke needed an explicit Grep build tool.
+  Evidence: its first strict build relocated the desktop file successfully but
+  stopped at `grep: command not found`; adding the normal Grep development
+  bundle let the exact `Type=` and `Exec=` assertions run in both builds.
 
 ## Decision Log
 
