@@ -1849,3 +1849,12 @@ copy the selected lower class map so package entries remain visible. Libnl
 3.11.0 also needs `tdestroy(id_root, free_nothing)`, not
 `tdestroy(&id_root, &free_nothing)`, for safe reloads. Its strict checksum is
 `8f4f682f99ed34326397ea95a798e672bc3b7b97ba1005850d86c8cf8926b7ec`.
+
+LibTirpc's `netconfig` and `bindresvport.blacklist` files are whole databases.
+The package installs both below `/usr/lib`; implicit library readers select
+`/etc`, `/run`, then `/usr/lib`, and an empty higher file masks lower data.
+Keep the public `NETCONFIG` macro at `/etc/netconfig` for callers that use the
+documented constant explicitly. The reserved-port reader caches its file once
+per process, so its installed smoke starts a new process and private network
+namespace for each tier. The strict checksum is
+`e43d62377e0b39ed40174b82fad1245fc8204b925d1e8a6e63d4541fc1e3fa24`.

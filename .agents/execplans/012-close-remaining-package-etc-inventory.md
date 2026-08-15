@@ -143,6 +143,10 @@ named below.
   broken reload cleanup, and strictly rebuilt it with the installed library
   proving every tier, an empty mask, its exact override, and copy-on-write
   class generation.
+- [x] (2026-08-15) Moved LibTirpc's network transport and reserved-port
+  databases below `/usr`, added whole-file administrator and transient
+  lookup, and strictly rebuilt it with the installed library proving both
+  readers, every tier, empty masks, and reserved-port selection.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -188,6 +192,12 @@ named below.
   Evidence: the first successful compile logged all three missing commands.
   Adding Diffutils and File made `configure` find `file`, use `dd` for binary
   pipes, and complete the compiler probes before producing the same raw files.
+
+- Observation: LibTirpc loads the reserved-port blacklist once per process.
+  Evidence: `bindresvport.c` stores the parsed blacklist in static state and
+  does not expose a reload operation. The installed-library smoke therefore
+  starts one private network namespace and process for each path tier and
+  mask case, while its netconfig tests cover both direct and session readers.
 
 - Observation: The RTK `find` wrapper omits GNU `find` features needed for the
   knowledge and ExecPlan listings.
@@ -707,6 +717,14 @@ named below.
   fragments. Administrator and transient files must replace lower maps, while
   `rtnl_classid_generate()` must write only below `/etc` without discarding
   the selected package or transient entries.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Treat LibTirpc's netconfig and reserved-port files as whole-file
+  databases.
+  Rationale: both readers parse one complete file, and the public
+  `NETCONFIG` constant must keep naming the administrator path. Implicit
+  library calls select `/etc`, `/run`, then `/usr/lib`, while an existing
+  empty file masks the lower databases.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -1626,6 +1644,29 @@ affected assemblies, and commit.
    inspection found `/usr/lib/libnl/{classid,pktloc}` and no package file
    below `/etc`. Affected assembly results will be recorded after the final
    package rows finish. Commit: `pkg: layer libnl databases`.
+
+24. `pkg/libs/net/libtirpc.yaml`
+
+   The old `conf` output declared `/etc/netconfig` and
+   `/etc/bindresvport.blacklist`. LibTirpc reads each as a complete database.
+   Outcome 2 applies. The generic patch with SHA-256
+   `5526e500da94426b70f0b87f3a96abcb0517c374b260899a1f8f806df232178d`
+   selects the first complete file from `/etc`, `/run`, and `/usr/lib`; an
+   existing empty higher file masks lower data. The public `NETCONFIG` macro
+   still names `/etc/netconfig`, so programs that use the documented constant
+   retain the administrator interface.
+
+   The package passes `--sysconfdir=/usr/lib` to the upstream install target,
+   so both unchanged upstream databases land below `/usr` without a manual
+   move. The strict command built twice with checksum
+   `e43d62377e0b39ed40174b82fad1245fc8204b925d1e8a6e63d4541fc1e3fa24`.
+   Its installed-library smoke proved vendor, transient, administrator,
+   empty-mask, and restored-vendor selection through both netconfig APIs. A
+   separate process and private network namespace for each case proved that
+   the matching reserved-port blacklist either skipped or allowed UDP port
+   700. Store inspection found both databases only below `/usr/lib` and no
+   package file below `/etc`. Affected assembly results will be recorded after
+   the final package row finishes. Commit: `pkg: layer libtirpc databases`.
 
 25. `pkg/libs/security/linux-pam.yaml`
 

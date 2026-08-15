@@ -826,3 +826,17 @@ instead or the first nonempty reload can abort with an invalid free. The
 installed-library smoke proves every tier, an empty mask, the exact override,
 equal-mtime path switches, and copy-on-first-write. The strict checksum is
 `8f4f682f99ed34326397ea95a798e672bc3b7b97ba1005850d86c8cf8926b7ec`.
+
+## LibTirpc databases
+
+LibTirpc 1.3.7 reads `netconfig` and `bindresvport.blacklist` as complete
+databases. Install the package copies below `/usr/lib` and select one whole
+file from `/etc`, `/run`, then `/usr/lib`. Keep the public `NETCONFIG` macro
+pointing at `/etc/netconfig`, because callers may use that constant as an
+explicit administrator path.
+
+The reserved-port reader caches its blacklist in static process state and has
+no reload API. Test path priority with a fresh process for every tier and mask
+case. A private network namespace makes a chosen reserved port predictable.
+The strict package checksum is
+`e43d62377e0b39ed40174b82fad1245fc8204b925d1e8a6e63d4541fc1e3fa24`.
