@@ -746,3 +746,11 @@ linking, and running a program with its new compiler, sysroot, and loader, and
 build `pkg/bootstrap/phase1/test.yaml` as a separate phase-zero consumer.
 Phase zero sets `stable_checksum: false`, so it needs this downstream proof
 because `--check` performs only one build for that manifest.
+
+## Host accounts
+
+A reusable package must not create `/etc/passwd` or `/etc/group` records.
+Assemblies choose initial users, groups, numeric IDs, home directories, and
+shells, then place those records in their factory tree for first-boot seeding.
+Test the finished root by seeding a disposable `/etc` and calling its packaged
+NSS consumer, such as `id`, rather than checking file text alone.

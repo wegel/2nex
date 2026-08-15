@@ -1786,3 +1786,15 @@ Create disposable Zub `union-checkout` destinations below `.nex/tmp` when the
 checkout must combine package refs. A destination under `/tmp` can cross a
 filesystem boundary during Zub's staged rename and fail with `Invalid
 cross-device link`.
+
+Build orchestration resolves semantic package refs from the package slug
+declared inside YAML. Do not assume the filename equals that slug:
+`pkg/core/userland/2nex-utilities.yaml` declares `nex-utilities`. The lookup
+checks direct and prefixed filenames, then reads declared slugs and rejects
+duplicates. Keep its focused tests beside
+`src/cli/src/build/orchestration/manifest_lookup.rs`.
+
+Reusable packages must not publish `passwd` or `group` records. The assembly
+chooses initial accounts and places them in its factory tree; a writable host
+seeds `/etc` from that tree. `nex-utilities` now publishes only its strip
+helper, while nex-minimal owns and tests its root UID and GID.

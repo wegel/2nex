@@ -117,6 +117,10 @@ named below.
   cache from the two private bootstrap roots, rebuilt both toolchains, built
   the next-phase test package twice, and ran its binary through the cleaned
   phase-zero loader in an `/etc`-free capsule.
+- [x] (2026-08-15) Removed root account policy from `nex-utilities`, fixed
+  semantic manifest lookup for filenames that differ from their slugs,
+  removed nex-minimal's unused helper dependency, and resolved root UID and
+  GID 0 from the assembly-owned factory database.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -386,6 +390,19 @@ named below.
   checksum. Phase-one Glibc and the separate phase-one test package retained
   normal two-build reproducibility checks.
 
+- Observation: Strict dependency refresh guessed a manifest filename from
+  the package slug and could not find `2nex-utilities.yaml` for the
+  `nex-utilities` semantic ref.
+  Evidence: both package builds reproduced, then `--compute-deps` failed with
+  `Could not find manifest for commit .../nex-utilities/.../outputs/bin`.
+  Looking up the declared YAML slug fixed the command, and duplicate-slug
+  tests now reject ambiguous files.
+
+- Observation: Nex-minimal declared `nex-utilities` only as a build
+  dependency but never called its sole `nex_strip_binaries` command.
+  Evidence: an exhaustive manifest search found no call, and removing the
+  dependency preserved the assembly checksum and its working root account.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -584,6 +601,13 @@ named below.
   a cache. Compile, link, and execution tests now prove those facts after the
   build removes `/etc`, while the normal runtime Glibc package continues to
   provide layered NSS and RPC defaults for real systems.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Let assemblies own initial account databases and keep reusable
+  package outputs free of users, groups, IDs, shells, and home directories.
+  Rationale: `nex-utilities` provides a build helper, not a host identity.
+  Nex-minimal already writes the root records it needs and moves them into its
+  factory tree, so the package copies were both product policy and unused.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -1121,6 +1145,31 @@ affected assemblies, and commit.
    assembly selects this sibling `conf` output; current systems use
    dbus-broker's service configuration and D-Bus's library closure, so no
    finished root changed. Commit: `pkg: layer dbus policy directories`.
+
+10. `pkg/core/userland/2nex-utilities.yaml`
+
+   The old `conf` output declared `/etc/passwd` and `/etc/group` with one root
+   account chosen by the package. Glibc's `files` NSS module reads those
+   databases, but a reusable build-helper package cannot choose a product's
+   users, numeric IDs, home directories, or login shells. Outcome 3 applies.
+   The package now publishes only `/usr/bin/nex_strip_binaries`, asserts that
+   its build created no `/etc`, and exposes no `conf` output.
+
+   The strict package command built twice with checksum
+   `092827be6ef30319af7c3ab52350ccb3bd4beb2782860e3738feb98c8b7dbd39`.
+   Store inspection found no `etc/` path. Its final dependency refresh first
+   exposed a CLI bug because the filename and declared slug differ; commit
+   `cli: find manifests by declared slug` adds metadata lookup, rejects
+   duplicate declarations, and passes all 189 CLI tests.
+
+   Nex-minimal was the only manifest that named the helper bundle, but its
+   build never invoked the command, so the assembly dropped that unused
+   dependency. Its two builds reproduced checksum
+   `7d900b229e778c8ca141d8f31a633ded9002a129db052c731d5dd1526b00c9f6`.
+   A fresh checkout contained the assembly's root records below
+   `/usr/share/factory/etc`; after seeding a writable `/etc` from that tree,
+   the packaged `id` resolved both root UID and GID as 0. Package and assembly
+   commit: `pkg: keep host accounts in assemblies`.
 
 11. `pkg/desktop/wayland/fuzzel.yaml`
 
