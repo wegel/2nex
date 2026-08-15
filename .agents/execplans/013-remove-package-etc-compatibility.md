@@ -34,11 +34,14 @@ package groups.
 - [x] (2026-08-15 12:55Z) Wrote and committed `CONFIGURATION.md` before
   implementation, linked it from `README.md`, and aligned `PHILOSOPHY.md` with
   the package and assembly rules in commit `6cc913d`.
-- [ ] Run the Ralph worktree pre-task, list `.agents/knowledge/`, and read every
+- [x] (2026-08-15 13:09Z) Ran the Ralph worktree pre-task against a clean
+  tracked tree, listed all ten durable knowledge files, and read every
   note that touches package configuration, assembly factory state, package
   testing, and reproducibility.
-- [ ] Freeze the 28-path starting inventory and add a repository check that
-  rejects package output declarations below `/etc` and `/usr/etc`.
+- [x] (2026-08-15 13:16Z) Froze 28 paths across 13 manifests, added a
+  self-tested repository checker for `/etc` and `/usr/etc` output declarations,
+  and documented the rule for manifest authors. The checker correctly reports
+  all 28 known violations until later milestones remove them.
 - [ ] Move XDG autostart files into a vendor tree and prove the Nex desktop
   session discovers them through the standard XDG environment interface.
 - [ ] Move Bash Completion, VTE, Elfutils, and Cargo shell integration into
@@ -88,6 +91,11 @@ package groups.
   script. This plan adds a source-built Logrotate reader because the desktop can
   exercise those fragments. It keeps the GRUB script as an immutable OSTree
   integration template because current Nex systems use the Nex boot path.
+
+- Observation: The tracked worktree was clean at the EP013 pre-task.
+  Evidence: `rtk git status --short --untracked-files=all` printed no paths at
+  commit `0873019`, so there were no human changes, local-only files, or checked
+  commit candidates to classify.
 
 ## Decision Log
 
@@ -471,6 +479,14 @@ with a broad exception.
   committed.
 - Candidate knowledge: `.agents/SCRATCH_KNOWLEDGE.md`, which is ignored until
   verified facts move into `.agents/knowledge/`.
+- Initial inventory command:
+  `rtk bash scripts/check-package-config-paths.sh`. It reports exactly 28 paths
+  in 13 manifests and exits with failure while the known work remains.
+- Checker proof: `rtk bash scripts/check-package-config-paths.sh --self-test`
+  prints `PASS: package configuration path checker self-test`; `rtk bash -n
+  scripts/check-package-config-paths.sh` also passes. This host does not have
+  `shellcheck`, so the first commit uses Bash syntax checking and the executable
+  self-test.
 - The UAPI Group specification permits implementations to choose the precise
   vendor path below `/usr`; Nex deliberately standardizes its own manifests on
   `/usr/lib` and `/usr/share` rather than `/usr/etc`.

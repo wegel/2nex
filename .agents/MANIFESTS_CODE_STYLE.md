@@ -11,6 +11,17 @@ Use upstream build switches and normal filesystem paths when the package
 supports them. If Nex needs to change upstream source, keep the change narrow
 and write it so another assembly can use the same package.
 
+Package manifests maintained by the Nex distribution must not install vendor
+defaults or integration fragments below `/etc`. Do not disguise them below
+`/usr/etc`. Install immutable files below `/usr/lib` or `/usr/share`, and patch
+or configure Nex-built readers to honor `/etc`, `/run`, and `/usr` in that
+priority. An assembly that adds an unpatched outside program owns any fixed
+`/etc` compatibility path that program needs.
+
+Run `scripts/check-package-config-paths.sh` after changing package outputs.
+Literal `/etc` paths remain valid in build-time reader tests; the check inspects
+only declared package output paths.
+
 ## Source inputs
 
 Each source entry must set exactly one primary field: `url`, `file`, `dev`,
