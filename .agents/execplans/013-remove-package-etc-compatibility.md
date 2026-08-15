@@ -82,6 +82,19 @@ package groups.
   its finished-root smoke proved OpenSSH and Logrotate vendor, transient,
   administrator, same-name replacement, mask, service, and timer behavior.
   The remaining inventory has 11 paths across six manifests.
+- [x] (2026-08-15 14:58Z) Moved Tig and Wget defaults to `/usr/lib`, patched
+  both readers to select `/etc`, `/run`, then `/usr/lib`, and preserved their
+  explicit overrides. Moved OSTree's GRUB integration script solely below
+  `/usr/lib/libostree`, removed its package-created compatibility link, and
+  kept OSTree's administrator root at `/etc`. Repeated strict builds reproduced
+  Tig checksum
+  `719e941eeb2fba518741a3e0aabae2a306c62679832ef0cedc5a298270f47bed`,
+  Wget checksum
+  `a876127cd537d03c83ff475d14e65b3373429f17d45dca29b47b3d9ffb53520f`,
+  and OSTree checksum
+  `bed476afcea258b6e3c106192767dff807fde5a2f64d9c48c6fc0f0be06d26a9`.
+  Their real readers passed tier, mask, override, and integration tests. The
+  remaining inventory has eight paths across three manifests.
 - [ ] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
   loader that reads all three configuration tiers, then move both Nvidia ICD
   files below `/usr`.
@@ -175,6 +188,14 @@ package groups.
   Evidence: the desktop root contains the Logrotate timer link at
   `/usr/share/factory/etc/systemd/system/timers.target.wants/logrotate.timer`,
   where first boot will copy it only when the host has no choice at that path.
+
+- Observation: OSTree 2026.1 creates an empty remotes directory as well as its
+  GRUB compatibility link under its configured `sysconfdir`.
+  Evidence: the first strict build found both
+  `/usr/etc/ostree/remotes.d` and `/usr/etc/grub.d/15_ostree`. Configuring
+  `--sysconfdir=/etc` keeps the administrator-facing reader root correct; the
+  package build then removes the empty directories and the GRUB link while
+  retaining `/usr/lib/libostree/grub2-15_ostree`.
 
 ## Decision Log
 
@@ -612,6 +633,21 @@ with a broad exception.
   `scripts/test-desktop-libvirt-integrations.sh` runs real `ssh -G`,
   Logrotate rotations, `systemd-analyze verify`, and the factory-tree timer
   link check inside that finished root.
+- Tig's local UAPI patch has SHA-256
+  `5a6244ee6b57e40fc31e2a5cf071fa048625cfa915938280260585ceef132f6e`
+  and its package checksum is
+  `719e941eeb2fba518741a3e0aabae2a306c62679832ef0cedc5a298270f47bed`.
+  Wget's local UAPI patch has SHA-256
+  `ad7318bc67f49d9fed1ec17ec1802545bad15bcfb11ce27833cc2a9a3e7c8b65`
+  and its package checksum is
+  `a876127cd537d03c83ff475d14e65b3373429f17d45dca29b47b3d9ffb53520f`.
+- OSTree's POSIX command-lookup patch has SHA-256
+  `b2ecddbd25144d0583fd4920b582c9d39faaa5133f8e221320d1e4f2c9af6970`.
+  Two strict builds reproduced package checksum
+  `bed476afcea258b6e3c106192767dff807fde5a2f64d9c48c6fc0f0be06d26a9`.
+  The embedded test ran the installed GRUB integration script with mocked GRUB
+  helpers and OSTree, checked its parent-process error, and checked its BLS
+  skip path.
 
 ## Interfaces and Dependencies
 
