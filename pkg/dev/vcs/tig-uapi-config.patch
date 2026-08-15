@@ -1,0 +1,37 @@
+--- a/src/options.c
++++ b/src/options.c
+@@ -1115,0 +1116,20 @@
++static enum status_code
++load_system_option_file(void)
++{
++	static const char *paths[] = {
++		"/etc/tigrc",
++		"/run/tigrc",
++		"/usr/lib/tigrc",
++	};
++	enum status_code status;
++	size_t i;
++
++	for (i = 0; i < ARRAY_SIZE(paths); i++) {
++		status = load_option_file(paths[i]);
++		if (status != ERROR_FILE_DOES_NOT_EXIST)
++			return status;
++	}
++
++	return ERROR_FILE_DOES_NOT_EXIST;
++}
++
+@@ -1125,0 +1146 @@
++	enum status_code system_status;
+@@ -1133,2 +1154,4 @@
+-	if (!custom_tigrc_system)
+-		tigrc_system = SYSCONFDIR "/tigrc";
++	if (custom_tigrc_system)
++		system_status = load_option_file(tigrc_system);
++	else
++		system_status = load_system_option_file();
+@@ -1136,2 +1159,2 @@
+-	if (!*tigrc_system ||
+-	    (load_option_file(tigrc_system) == ERROR_FILE_DOES_NOT_EXIST && !custom_tigrc_system)) {
++	if ((custom_tigrc_system && !*tigrc_system) ||
++	    (!custom_tigrc_system && system_status == ERROR_FILE_DOES_NOT_EXIST)) {

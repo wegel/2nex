@@ -6,12 +6,15 @@ package:
   version: 2.6.0
   description: Text-mode interface for git
   homepage: https://github.com/jonas/tig
-  checksum: 40f71a721592d3a2fab57d30013437b93726dcbfde246f10c22d5e625e952363
+  checksum: 719e941eeb2fba518741a3e0aabae2a306c62679832ef0cedc5a298270f47bed
 
 sources:
 - name: tig
   url: https://github.com/jonas/tig/releases/download/tig-2.6.0/tig-2.6.0.tar.gz
   sha256: 99d4a0fdd3d93547ebacfe511195cb92e4f75b91644c06293c067f401addeb3e
+- name: uapi_config
+  file: pkg/dev/vcs/tig-uapi-config.patch
+  sha256: 5a6244ee6b57e40fc31e2a5cf071fa048625cfa915938280260585ceef132f6e
 
 dependencies:
 - name: bash
@@ -30,6 +33,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: ncurses
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
 - name: acl
@@ -54,22 +59,97 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: git
+  commit: x86_64/pkg/dev/vcs/git/2.49.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4115:10696, 4115:10777]
+  profile: [3583:2368]
 
   script: |
-    tar --no-same-owner -xf ${SOURCE_tig} -C "${WORK_DIR}" --strip-components=1
-    cd ${WORK_DIR}
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_tig}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
-    ./configure --prefix=/usr
+    ./configure --prefix=/usr --sysconfdir=/usr/lib
 
     make
 
     make DESTDIR="${OUT_DIR}" install
 
-    strip --strip-unneeded ${OUT_DIR}/usr/bin/tig
+    test -s "${OUT_DIR}/usr/lib/tigrc"
+
+    test_root=/tmp/tig-uapi-test
+    rm -rf "${test_root}"
+    mkdir -p "${test_root}/home" /etc /run
+
+    check_selected_file() {
+      expected=$1
+      shift
+      output="$(printf '\n' | env \
+        HOME="${test_root}/home" \
+        TIGRC_USER= \
+        TIG_NO_DISPLAY=1 \
+        TERM=xterm \
+        "$@" 2>&1 || true)"
+      case "${output}" in
+        *"${expected}"*) ;;
+        *)
+          printf '%s\n' "${output}" >&2
+          printf 'tig did not read %s\n' "${expected}" >&2
+          exit 1
+          ;;
+      esac
+    }
+
+    check_not_mentioned() {
+      rejected=$1
+      case "${output}" in
+        *"${rejected}"*)
+          printf '%s\n' "${output}" >&2
+          printf 'tig also read %s\n' "${rejected}" >&2
+          exit 1
+          ;;
+      esac
+    }
+
+    printf '%s\n' 'nex-invalid-vendor-option' > /usr/lib/tigrc
+    check_selected_file /usr/lib/tigrc \
+      env -u TIGRC_SYSTEM "${OUT_DIR}/usr/bin/tig"
+
+    printf '%s\n' 'nex-invalid-transient-option' > /run/tigrc
+    check_selected_file /run/tigrc \
+      env -u TIGRC_SYSTEM "${OUT_DIR}/usr/bin/tig"
+    check_not_mentioned /usr/lib/tigrc
+
+    printf '%s\n' 'nex-invalid-administrator-option' > /etc/tigrc
+    check_selected_file /etc/tigrc \
+      env -u TIGRC_SYSTEM "${OUT_DIR}/usr/bin/tig"
+    check_not_mentioned /run/tigrc
+    check_not_mentioned /usr/lib/tigrc
+
+    : > /etc/tigrc
+    output="$(printf '\n' | env -u TIGRC_SYSTEM \
+      HOME="${test_root}/home" \
+      TIGRC_USER= \
+      TIG_NO_DISPLAY=1 \
+      TERM=xterm \
+      "${OUT_DIR}/usr/bin/tig" 2>&1 || true)"
+    check_not_mentioned /run/tigrc
+    check_not_mentioned /usr/lib/tigrc
+
+    printf '%s\n' 'nex-invalid-explicit-option' > "${test_root}/explicit-tigrc"
+    check_selected_file "${test_root}/explicit-tigrc" \
+      env TIGRC_SYSTEM="${test_root}/explicit-tigrc" "${OUT_DIR}/usr/bin/tig"
+    check_not_mentioned /etc/tigrc
+
+    rm -f /etc/tigrc /run/tigrc /usr/lib/tigrc
+    rm -rf "${test_root}"
+
+    strip --strip-unneeded "${OUT_DIR}/usr/bin/tig"
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
@@ -83,6 +163,7 @@ outputs:
     files:
     - path: /usr/bin/tig
       needs:
+      - /usr/bin/git
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libncursesw.so.6
@@ -90,9 +171,10 @@ outputs:
 
   conf:
     files:
-    - path: /usr/etc/tigrc
+    - path: /usr/lib/tigrc
 
 resolution:
+  /usr/bin/git: git
   /usr/lib/ld-linux-x86-64.so.2: glibc
   /usr/lib/libc.so.6: glibc
   /usr/lib/libncursesw.so.6: ncurses
