@@ -578,6 +578,21 @@ activation path in all four rebuilt system commits. The strict package
 checksum is
 `0f72c43c2ed8b776f7defda22ccd90dc539937900e6705591e2a37f41a482fd8`.
 
+An installed configuration file can be documentation even when upstream
+places it below `/etc`. Read both its contents and its consumer before moving
+it. Put a sample with no active choice below
+`/usr/share/doc/<package>/examples`, and keep the real administrator path in
+the program.
+
+Evidence: p11-kit 0.25.5 says its `pkcs11.conf.example` has no effect until an
+administrator copies it to `/etc/pkcs11/pkcs11.conf`; both strict builds
+passed its `test-conf` parser after the sample moved. FUSE 3.17.4's shipped
+`fuse.conf` contains only comments, while `fusermount3` still opens
+`/etc/fuse.conf` for active machine choices. Their strict checksums are
+`ab9167443ea2da82819d9545033c4db0d3a401ffcacdb47ca283c8129f878670`
+and
+`9829fa1b95f94bc0a3185e52c6b618b5b1d5e9eb6a26b51edbdd0b5536c79047`.
+
 ## Namespace Reference
 
 - `libs/system`: glibc, zlib, ncurses, acl, attr.

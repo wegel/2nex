@@ -52,6 +52,10 @@ named below.
 - [x] (2026-08-15 02:45Z) Retained the three specification-defined XDG
   autostart paths from Gnome Keyring and AT-SPI2, fixed AT-SPI2's incomplete
   runtime bundle, and rebuilt and exercised all four desktop systems.
+- [x] (2026-08-15 03:02Z) Moved p11-kit's explicit example and FUSE's fully
+  commented template into normal documentation paths, strictly rebuilt both
+  packages and all four affected desktop systems, and exercised p11-kit's
+  parser plus the installed FUSE helper.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -155,6 +159,20 @@ named below.
   The Base Directory Specification defaults `XDG_CONFIG_DIRS` to `/etc/xdg`,
   which makes `/etc/xdg/autostart` the standard system path.
 
+- Observation: p11-kit labels its installed `pkcs11.conf.example` as a file
+  that an administrator must copy before use.
+  Evidence: the pinned example says it has no effect until copied to
+  `/etc/pkcs11/pkcs11.conf`; the package's `test-conf` test passed after the
+  manifest moved only the example and left the real administrator reader
+  unchanged.
+
+- Observation: FUSE installs a fully commented `fuse.conf`, but
+  `fusermount3` still reads the administrator's fixed `/etc/fuse.conf` when a
+  machine enables `user_allow_other` or changes `mount_max`.
+  Evidence: the pinned `util/fusermount.c` opens `/etc/fuse.conf`, while the
+  installed template contains no active line. Moving the template does not
+  change the helper's administrator interface or its built-in behavior.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -249,6 +267,15 @@ named below.
   libraries, service, autostart entry, and default accessibility setting.
   Dependency flattening supplied libraries to consumers but could not supply
   the package-owned daemons and metadata as public files.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Install the p11-kit and FUSE reference files below
+  `/usr/share/doc/<package>/examples` while preserving their real `/etc`
+  readers.
+  Rationale: p11-kit calls its file an example, and FUSE's file contains only
+  comments for built-in defaults. Neither package should claim an
+  administrator choice merely to ship instructions. A machine can still
+  create `/etc/pkcs11/pkcs11.conf` or `/etc/fuse.conf` when it needs one.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -696,6 +723,24 @@ affected assemblies, and commit.
    in every system commit and found no `/etc/xdg/waybar`. Commit: `pkg: layer
    waybar system configuration`.
 
+17. `pkg/libs/crypto/p11-kit.yaml`
+
+   The old `conf` output declared
+   `/etc/pkcs11/pkcs11.conf.example`. The file itself says that p11-kit does
+   not use it until an administrator copies it to
+   `/etc/pkcs11/pkcs11.conf`, so outcome 4 applies. The package now installs
+   it as `/usr/share/doc/p11-kit/examples/pkcs11.conf` and exposes that path
+   through a `doc` output. The program's real administrator path remains
+   `/etc/pkcs11/pkcs11.conf`.
+
+   Both strict builds passed p11-kit's real `test-conf` parser test and
+   matched package checksum
+   `ab9167443ea2da82819d9545033c4db0d3a401ffcacdb47ca283c8129f878670`.
+   The generated package output contains the documentation file and declares
+   no `/etc` path. No assembly selects p11-kit's only public `dev` bundle, so
+   this package change affected no finished assembly. Commit: `pkg: move
+   configuration samples to docs`.
+
 18. `pkg/libs/graphics/at-spi2-core.yaml`
 
    The `conf` output declares
@@ -756,6 +801,33 @@ affected assemblies, and commit.
    and reproduced with checksum
    `43c20f709c15622e278ae0f1bf486be49f1ae578d377d6586d47498b91fc0a57`.
    Commit: `pkg: include nvidia OpenCL ICDs at runtime`.
+
+27. `pkg/libs/system/fuse3.yaml`
+
+   The old `conf` output declared `/etc/fuse.conf`. Its installed contents
+   are only comments that describe the `user_allow_other` and `mount_max`
+   choices and leave the helper's built-in behavior unchanged, so outcome 4
+   applies. The package now installs the template as
+   `/usr/share/doc/fuse3/examples/fuse.conf`; `fusermount3` continues to read
+   a real administrator file from `/etc/fuse.conf` when one exists.
+
+   The strict package command built twice with checksum
+   `9829fa1b95f94bc0a3185e52c6b618b5b1d5e9eb6a26b51edbdd0b5536c79047`.
+   A checked-out desktop root ran `fusermount3 --version` and printed
+   `3.17.4`; its help path also parsed successfully before returning its
+   documented nonzero status without a mount point. A content assertion found
+   no active line in the packaged template. Store inspection found the
+   public documentation link and no `/etc/fuse.conf` or factory copy.
+
+   All four affected images built twice and matched: desktop-vwl
+   `6c2310500fbcaca12a87de05243fa16104e47a141c523478afa1f567c3a61923`,
+   Nvidia 580
+   `a716f757a68c58a725df0b37c164ad0eb5c7ea5d1d262a0fb21c9a01c62b829a`,
+   Nvidia current
+   `cb5a222913bf7a429d67bf609a05baca69af6f7ada2d51cd1265d94fb313b2e8`,
+   and desktop-dev
+   `c53305429c0200a5392834fb52230800c5d02af2a9c1b298b7edb7f2543035c3`.
+   Commit: `pkg: move configuration samples to docs`.
 
 ## Interfaces and Dependencies
 

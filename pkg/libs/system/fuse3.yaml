@@ -6,7 +6,7 @@ package:
   version: 3.17.4
   description: Filesystem in Userspace library and helpers
   homepage: https://github.com/libfuse/libfuse
-  checksum: 534fb7b40327bd2dae4094043e8cce01c089f04b98d4658885ca5f60bd6cd1ed
+  checksum: 9829fa1b95f94bc0a3185e52c6b618b5b1d5e9eb6a26b51edbdd0b5536c79047
 
 sources:
 - name: fuse3
@@ -43,7 +43,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4106:12152, 5011:12964]
+  profile: [4106:2959, 5011:2992]
 
   script: |
     set -eu
@@ -66,6 +66,12 @@ build:
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
+    install -Dm644 \
+      "${OUT_DIR}/etc/fuse.conf" \
+      "${OUT_DIR}/usr/share/doc/fuse3/examples/fuse.conf"
+    rm "${OUT_DIR}/etc/fuse.conf"
+    rmdir "${OUT_DIR}/etc"
+
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
@@ -76,8 +82,8 @@ bundles:
 
   full:
   - bin
-  - conf
   - dev
+  - doc
   - lib
   - misc
 
@@ -94,10 +100,6 @@ outputs:
       - /usr/lib/libc.so.6
       - /usr/lib/libfuse3.so.4
 
-  conf:
-    files:
-    - path: /etc/fuse.conf
-
   dev:
     files:
     - path: /usr/include/fuse3/cuse_lowlevel.h
@@ -108,6 +110,10 @@ outputs:
     - path: /usr/include/fuse3/fuse_opt.h
     - path: /usr/include/fuse3/libfuse_config.h
     - path: /usr/lib/pkgconfig/fuse3.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/fuse3/examples/fuse.conf
 
   lib:
     files:

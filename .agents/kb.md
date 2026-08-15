@@ -1142,6 +1142,18 @@ flattening can make libraries available to another capsule, but it cannot
 publish the package's activation programs and metadata in the assembled
 root. `desktop-vwl` therefore selects AT-SPI2's corrected `bundles/full`.
 
+Move an upstream configuration sample below
+`/usr/share/doc/<package>/examples` when it contains no active package choice,
+but do not change the real administrator reader just to move that sample.
+p11-kit 0.25.5 explicitly calls its installed file an example and continues
+to read `/etc/pkcs11/pkcs11.conf`. FUSE 3.17.4 installs a fully commented
+template while `fusermount3` continues to read `/etc/fuse.conf` for
+administrator `user_allow_other` and `mount_max` choices. Their strict package
+checksums are
+`ab9167443ea2da82819d9545033c4db0d3a401ffcacdb47ca283c8129f878670`
+and
+`9829fa1b95f94bc0a3185e52c6b618b5b1d5e9eb6a26b51edbdd0b5536c79047`.
+
 After a strict assembly build commits a system, its temporary `target` tree
 may no longer exist. Use `zub cat-file systems/<slug>/<version>:<path>` to
 inspect a directory, symlink target, or regular file in the durable system
