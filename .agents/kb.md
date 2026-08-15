@@ -1667,3 +1667,6 @@ that namespace reaches the host's Netfilter API. The generic reader selects
 `/usr/lib/nftables/osf/pf.os` as whole files, so an empty selected file masks
 lower data. The strict package checksum is
 `ed4cd32130e0dc86cc2aedc09d7a455d3646f312770e401f399c0f9153e701c0`.
+Edgebox selects the full Nftables bundle, reproduced checksum
+`8c29d7b5685704b5bbba57d3243fb6df5ac39413029e1613a8e6f229933e89f5`,
+and passes the same installed-reader check from its finished root.

@@ -224,6 +224,20 @@ produced reproducible checksum
 checked-out system then ran version checks for CMake, Meson, Ninja, autotools,
 GN, Rust, Node, Python, Perl, GDB, LLDB, and related dev tools.
 
+## Firewall Data
+
+Edgebox selects Nftables' full bundle directly, so its finished root contains
+`/usr/lib/nftables/osf/pf.os`. Its smoke runs the installed `nft` against an
+`osf` rule inside a private network namespace and verifies that the reader
+opens and loads that vendor file. The strict assembly checksum after EP012 is
+`8c29d7b5685704b5bbba57d3243fb6df5ac39413029e1613a8e6f229933e89f5`.
+
+Docker's Iptables dependency does not make every Iptables output part of a
+finished system. Edgebox receives the Iptables binaries and libraries that
+Docker's output metadata names, but not the sibling `conf` output or
+`ebtables-translate`. An assembly that needs Ethernet protocol name lookup
+must select those Iptables outputs itself.
+
 ## App Capsule Runtime Files
 
 `nex_structure` systems expose public commands as symlinks into package

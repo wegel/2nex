@@ -644,6 +644,11 @@ The patch SHA-256 is
 `b5514bde8c6f49f3c377684f0628aca0344262177d20ac191e0e95cf4f22c187`,
 and the package checksum is
 `f5382ebd5cd04f3e472ac57ee95124b1f672b4e84f90ced55c7d4171be882417`.
+Docker declares Iptables' full bundle for its build root, but its published
+outputs carry only the Iptables binaries and libraries that Docker needs.
+They do not export the sibling `conf` output, and no current assembly selects
+that output or ships `ebtables-translate`. The installed package reader test
+therefore supplies the current concrete proof for `ethertypes`.
 
 Nftables 1.1.1 reads `pf.os` only when an `osf` rule triggers its fingerprint
 loader. Its generic reader selects `/etc/nftables/osf/pf.os`, then

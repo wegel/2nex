@@ -80,6 +80,9 @@ named below.
   `/usr/lib/nftables/osf/pf.os`, added whole-file administrator and transient
   lookup, and strictly rebuilt the package with the installed `nft` reader
   covering all tiers and an empty mask.
+- [x] (2026-08-15 06:14Z) Strictly rebuilt Docker and Edgebox after the two
+  firewall database changes, then extended the Edgebox smoke to run its
+  installed Nftables reader against the assembled vendor fingerprints.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -116,6 +119,13 @@ named below.
   Evidence: `pkg/apps/containers/netavark.yaml` wrote
   `50-buildroot-nftables.conf` itself. Both pinned source inputs are version
   1.14.1, while the old package metadata and assembly refs said 1.14.0.
+
+- Observation: A package build dependency does not publish that dependency's
+  sibling outputs through the built package's bundle.
+  Evidence: Docker declares Iptables `bundles/full`, and its strict build root
+  contained the new `/usr/lib/ethertypes`, but Docker's computed output needs
+  publish only the Iptables binaries and libraries that Docker uses. Edgebox
+  receives no `ethertypes` database or `ebtables-translate` through Docker.
 
 - Observation: A sparse root can run Netavark directly but cannot initialize
   Podman's engine far enough for `podman info`.
@@ -1090,10 +1100,15 @@ affected assemblies, and commit.
    empty-mask, and restored-vendor behavior. Store inspection returned the
    complete upstream database with SHA-256
    `ed38f9d644befc87eb41a8649c310073240d9a8cd75b2f9c115b5d9d7e5d033c`
-   and no `/etc/ethertypes` output. Docker is the only manifest that consumes
-   the full bundle; rebuild Docker once after the adjacent Nftables database
-   change, then rebuild its Edgebox consumer. Commit: `pkg: layer iptables
-   ethertype data`.
+   and no `/etc/ethertypes` output. Docker is the only manifest that declares
+   the full bundle, so its strict rebuild received the new vendor file and
+   reproduced checksum
+   `6f82e2a82020fb2a8701a3ca2818fc4a497ba5c619d3e26600926caa5e84ecdb`.
+   Docker's published outputs need only Iptables binaries and libraries, so
+   they do not export the sibling database to Edgebox. No current assembly
+   selects Iptables' `conf` output or ships `ebtables-translate`; the package
+   behavior test therefore remains the concrete consumer proof. Commit:
+   `pkg: layer iptables ethertype data`.
 
 31. `pkg/net/firewall/nftables.yaml`
 
@@ -1114,9 +1129,11 @@ affected assemblies, and commit.
    upstream database with SHA-256
    `2e49e6bd24a07b7691937c5683cfdb15dbb1b7ce7c5a37865ad28d71ea2b6ed5`
    and no `/etc/nftables/osf/pf.os` output. Edgebox selects Nftables' full
-   bundle directly. Rebuild Docker for its adjacent Iptables dependency, then
-   rebuild Edgebox once for both database changes. Commit: `pkg: layer
-   nftables fingerprint data`.
+   bundle directly. Its strict rebuild reproduced checksum
+   `8c29d7b5685704b5bbba57d3243fb6df5ac39413029e1613a8e6f229933e89f5`;
+   the finished-root smoke ran the installed `nft` against an `osf` rule in a
+   private network namespace and checked that it opened and loaded the vendor
+   file. Commit: `pkg: layer nftables fingerprint data`.
 
 ## Interfaces and Dependencies
 

@@ -136,6 +136,30 @@ getent rpc portmapper | grep -F '100000' >/dev/null ||
     fail "Glibc did not read the vendor RPC database"
 printf 'PASS: Glibc vendor databases and RPC lookup\n'
 
+[[ -f /usr/lib/nftables/osf/pf.os ]] ||
+    fail "Nftables vendor OS fingerprint database is missing"
+[[ ! -e /etc/nftables/osf/pf.os ]] ||
+    fail "Nftables installed its OS fingerprint database in /etc"
+nft_rule=$(mktemp /tmp/nftables-rootfs-test.XXXXXX)
+nft_log=$(mktemp /tmp/nftables-rootfs-log.XXXXXX)
+printf '%s\n' \
+    'table inet rootfs_osf_test {' \
+    '  chain input {' \
+    '    type filter hook input priority filter;' \
+    '    osf name "Linux" accept' \
+    '  }' \
+    '}' > "$nft_rule"
+unshare --net nft --debug mnl --check --file "$nft_rule" > "$nft_log" 2>&1 || {
+    cat "$nft_log" >&2
+    fail "nft did not check the OS fingerprint rule"
+}
+grep -F "Opening OS signature file '/usr/lib/nftables/osf/pf.os'" \
+    "$nft_log" >/dev/null || fail "nft did not select the vendor OS database"
+grep -F '45046:64:0:44:M*:' "$nft_log" >/dev/null ||
+    fail "nft did not load the vendor OS fingerprint records"
+rm -f "$nft_rule" "$nft_log"
+printf 'PASS: Nftables vendor database and installed reader\n'
+
 [[ "$(locale charmap)" == UTF-8 ]] || fail "locale charmap is not UTF-8"
 locale -a | grep -Fx en_GB.UTF-8 >/dev/null || fail "en_GB.UTF-8 is not generated"
 printf 'PASS: en_GB locale\n'
