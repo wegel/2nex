@@ -171,6 +171,10 @@ named below.
 - [x] Rerun exhaustive package and assembly scans, record every justified
   remaining `/etc` path, promote durable knowledge, and complete the human
   review gate.
+- [x] (2026-08-15) Measured the finished desktop factory tree after human
+  review exposed the difference between declared overlays and paths created by
+  assembly scripts or native package factory outputs; classified all 539 leaf
+  entries by source and role.
 
 ## Surprises & Discoveries
 
@@ -517,6 +521,14 @@ named below.
   machine and network policy, authentication, product settings, compatibility
   links, and explicit service-enable links account for every entry.
 
+- Observation: declared overlay paths do not account for every path in a
+  finished factory tree.
+  Evidence: the final desktop tree contained 539 leaf entries, while its own
+  overlay declared 48 paths. The generated CA store supplied 445 leaves, the
+  assembly script seeded 26 mutable Libvirt objects, and overlays, fixed-path
+  package integrations, and native Systemd factory files supplied the other
+  68.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -810,6 +822,14 @@ named below.
   appliance `/etc`.
   Date/Author: 2026-08-15 / Codex
 
+- Decision: Count generated compatibility databases separately from package
+  configuration, but retain the generated CA store in factory state.
+  Rationale: `/etc/ssl/certs` must exist before normal network consumers start,
+  and the boot oneshot atomically regenerates it from current `/etc`, `/run`,
+  and `/usr` trust inputs. Its 445 leaf entries dominate a raw path count but
+  do not freeze package defaults or represent 445 administrator choices.
+  Date/Author: 2026-08-15 / Codex
+
 ## Outcomes & Retrospective
 
 EP012 resolved all 31 package manifests that still declared `/etc` outputs at
@@ -818,7 +838,9 @@ normal vendor paths, patched readers for `/etc`, `/run`, and `/usr`, kept
 standards-defined integration paths, removed accounts from a reusable helper,
 and kept mutable Libvirt objects under assembly control. The package scan now
 finds 15 explained paths in seven manifests instead of unexplained files in 31
-manifests.
+manifests. The starting revision declared 289 paths, including 150 generated
+CA paths; the final revision declares 15. Excluding that old generated CA
+output, package-owned `/etc` paths fell from 139 to 15.
 
 The work also fixed three builder or package integration bugs that the broad
 checks exposed: writable build roots no longer hardlink store objects,
@@ -839,6 +861,13 @@ changed package configuration and public runtime files, not compositor or GPU
 behavior. It exercised the affected loaders directly. The final GTK and
 Virt-manager-only edits did not affect nex-systemd, Edgebox, or the installer,
 so their earlier final checks remain the relevant proof.
+
+The final desktop factory tree contains 539 leaf entries and occupies 470058
+apparent bytes. The generated CA compatibility store accounts for 445 leaves,
+and mutable Libvirt objects account for 26. The remaining 68 leaves represent
+the overlay, external fixed-path integrations, and native Systemd factory
+files. Package policy shrank sharply even though generated runtime-compatible
+state still makes a raw `/etc` entry count look large.
 
 ## Context and Orientation
 
@@ -1076,6 +1105,10 @@ Package proof:
   its manifest. Phase zero correctly performed one build because it declares
   `stable_checksum: false`; phase one and `pkg/bootstrap/phase1/test.yaml`
   supplied the downstream compile, link, and execution proof.
+- `rtk proxy git grep -E '^\s*- path: /etc(/|$)' 855f476^ --
+  'pkg/**/*.yaml'` found 289 declared paths in 31 manifests at the start of
+  EP012. CA Certificates accounted for 150 of those paths, leaving 139 other
+  package paths.
 - `rtk proxy rg -n --glob '*.yaml' '^\s*- path: /etc(?:/|$)' pkg` returned
   exactly 15 paths in seven manifests. The list contains three XDG autostart
   entries, five shell integration entries, four Libvirt logrotate fragments,
@@ -1136,6 +1169,14 @@ Assembly proof:
   asm/installer/installer-overlay.yaml` returned 98 paths: 26, 19, 48, and 5
   respectively. The final audit below classifies every path group. The Nvidia
   and desktop-dev children add no overlay and inherit the desktop result.
+- GNU `find` on
+  `.nex/tmp/ep012-final-desktop-root/usr/share/factory/etc` counted 207 regular
+  files, 332 symlinks, and 34 directories. Grouping all 539 leaf paths by their
+  first component found 445 below `ssl` and 26 below `libvirt`; the remaining
+  68 come from the audited overlays, retained package integration paths, and
+  native Systemd factory files. `rtk proxy du -sb` measured 470058 apparent
+  bytes. This finished-tree check covers files created by assembly scripts and
+  package-native factory outputs that the overlay scan cannot see.
 
 Integrated proof:
 
@@ -2210,6 +2251,27 @@ The assembly scan found 98 paths. Each overlay group has one concrete role:
 The Nvidia 580, Nvidia current, and desktop-dev manifests inherit
 desktop-vwl's overlay and add no overlay of their own. The scan therefore
 covers every affected child as well as every source overlay.
+
+The finished desktop factory tree adds entries that no overlay declares. Its
+207 regular files and 332 symlinks form 539 leaf paths:
+
+- `/usr/share/factory/etc/ssl` contains 445 generated certificate files and
+  hash links. Nex-systemd runs `update-ca-certificates` while building so the
+  first populated `/etc` has an immediately usable compatibility store. The
+  enabled boot oneshot regenerates the directory atomically from current
+  administrator, transient, and vendor trust inputs before normal networking.
+- `/usr/share/factory/etc/libvirt` contains 26 objects: twenty-four upstream
+  nwfilter XML files, the default virtual-network XML file, and its autostart
+  link. The desktop assembly script deliberately seeds these mutable daemon
+  objects from package templates.
+- The other 68 leaves come from the parent and desktop overlays, the 15
+  externally fixed package integration paths where selected, and native
+  Systemd factory files such as `issue`, `locale.conf`, `nsswitch.conf`, and
+  `vconsole.conf`. Overlay replacements collapse duplicate logical paths.
+
+The complete factory seed occupies 470058 apparent bytes. This built-tree
+scan, together with the overlay and package-output scans, accounts for every
+source that can populate the desktop's initial `/etc`.
 
 ## Interfaces and Dependencies
 

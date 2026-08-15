@@ -876,6 +876,12 @@ manifests:
 
     rtk proxy rg --glob '*.yaml' '^\s*- path: /etc(?:/|$)' pkg
 
+At EP012's starting revision, `855f476^`, the same declared-output scan found
+289 paths in 31 manifests. CA Certificates accounted for 150 generated paths,
+so the other package-owned paths fell from 139 to 15. This measures package
+policy, not the complete live `/etc`; assemblies and boot services still
+create host state and generated compatibility databases.
+
 Every remaining path serves an external integration contract:
 
 - Gnome Keyring and AT-SPI2 retain three files below

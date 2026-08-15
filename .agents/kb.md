@@ -1885,6 +1885,9 @@ Completion and VTE keep five shell integration files; Libvirt keeps four
 logrotate fragments and one OpenSSH fragment; both Nvidia manifests keep the
 Khronos-defined OpenCL ICD file. Each external loader fixes or documents these
 paths, so moving them to a private vendor path would break normal packages.
+The EP012 starting revision declared 289 paths in 31 manifests. CA
+Certificates accounted for 150 generated paths, so package-owned paths other
+than that generated store fell from 139 to 15.
 
 The four audited assembly overlays declare 98 `/etc` paths: 26 in
 `nex-systemd`, 19 in Edgebox, 48 in desktop-vwl, and five in the installer.
@@ -1895,6 +1898,15 @@ paths. Nex-systemd, desktop-vwl, and installer set `nex_structure: true`, so
 the builder moves their entries to `/usr/share/factory/etc`; flat Edgebox
 intentionally retains its final appliance policy below `/etc`. Nvidia and
 desktop-dev variants inherit the audited desktop overlay.
+
+The overlay count does not equal the finished factory-tree count. Assembly
+scripts add generated or mutable host state, and packages can provide native
+factory files. The final desktop factory `/etc` contains 207 regular files,
+332 symlinks, and 34 directories. Its 539 leaf entries include 445 generated
+CA compatibility-store entries, 26 mutable Libvirt objects seeded by the
+desktop assembly, and 68 overlay, fixed-path package, or native Systemd
+entries. The complete seed occupies 470058 apparent bytes. Audit both the
+source overlays and the finished `/usr/share/factory/etc` tree.
 
 EP012's final finished-root checks used Edgebox checksum
 `2d19a11de3a6a1fea543e6bb7ec0f3ff1f07ed61666802860bc51b2a4834661b`

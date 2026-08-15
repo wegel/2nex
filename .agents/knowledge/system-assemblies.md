@@ -355,3 +355,13 @@ missing paths into writable host `/etc`. Edgebox extends the flat Systemd
 root, so its overlay intentionally writes the appliance's final policy and
 service links directly below `/etc`. Nvidia desktop variants and desktop-dev
 inherit the audited desktop overlay and add no separate overlay.
+
+Do not mistake the declared overlay count for the complete built factory tree.
+Assembly scripts can create host state, and packages can supply native
+`/usr/share/factory/etc` entries. The final desktop factory tree contained 207
+regular files, 332 symlinks, and 34 directories. Its 539 leaf entries break
+down into 445 generated CA compatibility-store entries, 26 mutable Libvirt
+objects seeded by the desktop assembly, and 68 entries from overlays,
+fixed-path package integrations, and Systemd's native factory files. The
+complete tree occupied 470058 apparent bytes. Count both the source overlays
+and the finished factory tree when auditing `/etc` behavior.
