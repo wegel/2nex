@@ -754,3 +754,21 @@ Assemblies choose initial users, groups, numeric IDs, home directories, and
 shells, then place those records in their factory tree for first-boot seeding.
 Test the finished root by seeding a disposable `/etc` and calling its packaged
 NSS consumer, such as `id`, rather than checking file text alone.
+
+## Libvirt configuration and objects
+
+Libvirt 11.0.0 has fifteen privileged main-file readers across its clients,
+daemons, network and QEMU drivers, lock manager, authentication, and login
+shell. A shared private helper can select one complete file from
+`/etc/libvirt`, `/run/libvirt`, then `/usr/lib/libvirt`. Keep explicit daemon
+`--config` arguments and unprivileged XDG paths unchanged. Use literal
+`/run/libvirt` for the transient tier; Libvirt's configured `RUNSTATEDIR`
+expands to `/var/run`, and a minimal root need not provide that compatibility
+link.
+
+The nwfilter and virtual-network XML files are different: Libvirt imports and
+mutates them as machine objects. Store the upstream copies as package
+templates below `/usr/share/libvirt/initial-state`, then let an assembly choose
+whether to seed them into writable host state. The package's four logrotate
+fragments and OpenSSH proxy fragment remain at their standard integration
+paths.

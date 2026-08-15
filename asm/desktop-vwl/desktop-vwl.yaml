@@ -6,7 +6,7 @@ system:
   description: Desktop system with vwl compositor, wayland tools, and CLI utilities
   nex_structure: true
   extends: asm/nex-systemd.yaml
-  checksum: db2289b058f776e232fea1526cf1895dc384bd15854461ae712950102e1cfcea
+  checksum: d333826ab48b566ba72d08fb18ce905574847314e8f4f1b7db331285ccc84fec
 
 overlays:
 - asm/desktop-vwl/desktop-vwl-overlay.yaml
@@ -380,6 +380,34 @@ build:
     # desktop-specific directories
     mkdir -p /target/var/cache/fontconfig
     mkdir -p /target/run/{dbus,user/1000}
+
+    # seed upstream libvirt objects as mutable host state
+    mkdir -p \
+      /target/etc/libvirt/nwfilter \
+      /target/etc/libvirt/qemu/networks/autostart
+    copy_target_file() {
+      source=$1
+      destination=$2
+      if [ -L "${source}" ]; then
+        link=$(readlink "${source}")
+        case "${link}" in
+          /*) cp -a "/target${link}" "${destination}" ;;
+          *) cp -a "$(dirname "${source}")/${link}" "${destination}" ;;
+        esac
+      else
+        cp -a "${source}" "${destination}"
+      fi
+    }
+    for source in /target/usr/share/libvirt/initial-state/nwfilter/*.xml; do
+      copy_target_file \
+        "${source}" \
+        "/target/etc/libvirt/nwfilter/$(basename "${source}")"
+    done
+    copy_target_file \
+      /target/usr/share/libvirt/initial-state/qemu/networks/default.xml \
+      /target/etc/libvirt/qemu/networks/default.xml
+    ln -s ../default.xml \
+      /target/etc/libvirt/qemu/networks/autostart/default.xml
 
     # locale generation
     mkdir -p /target/usr/lib/locale

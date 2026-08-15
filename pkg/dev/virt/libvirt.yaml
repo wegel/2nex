@@ -6,12 +6,15 @@ package:
   version: 11.0.0
   description: Toolkit for virtualization management
   homepage: https://libvirt.org/
-  checksum: d2054e0a5674382b2859c4fd56c69a9881948d4546849c1b2b520f58b6878685
+  checksum: e6df5e656abb84c32f752902dc9b8bcededd5fbcf3d950d08aa5820f5a16c039
 
 sources:
 - name: libvirt
   url: https://download.libvirt.org/libvirt-11.0.0.tar.xz
   sha256: 01a176ff4042ad58cf83c09fe0925d6bc8eed0ecce1e0ee19b8ef4c1ffa3806e
+- name: uapi_config
+  file: pkg/dev/virt/libvirt-uapi-config.patch
+  sha256: 698e9f3b772cb9b4d6dbb4caa873daf1be8ae50208dac56cf6c3125cf85493ad
 
 dependencies:
 - name: bash
@@ -88,14 +91,17 @@ dependencies:
   commit: x86_64/pkg/libs/system/json-c/0.18/bundles/dev
 - name: libtirpc
   commit: x86_64/pkg/libs/net/libtirpc/1.3.7/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4106:90607, 12377:154843, 24691:194056, 37064:219376, 49444:228573, 61819:235079, 70042:238901, 90660:363306, 107202:366192, 115572:367179]
+  profile: [4122:1476, 12334:3215, 24681:3735, 37009:4421, 49503:5614, 61944:6934, 70220:8094, 90838:45905, 107397:45921, 116682:49484]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_libvirt} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch -Np1 --batch --fuzz=0 < /${SOURCE_uapi_config}
 
     mkdir build && cd build
     meson setup .. \
@@ -144,6 +150,70 @@ build:
     install -m 0644 docs-api/libvirt-admin-api.xml "${OUT_DIR}/usr/share/libvirt/api/libvirt-admin-api.xml"
     install -m 0644 docs-api/libvirt-lxc-api.xml "${OUT_DIR}/usr/share/libvirt/api/libvirt-lxc-api.xml"
     install -m 0644 docs-api/libvirt-qemu-api.xml "${OUT_DIR}/usr/share/libvirt/api/libvirt-qemu-api.xml"
+
+    mkdir -p \
+      "${OUT_DIR}/usr/lib/libvirt" \
+      "${OUT_DIR}/usr/share/libvirt/initial-state"
+    for config in "${OUT_DIR}"/etc/libvirt/*.conf; do
+      mv "${config}" "${OUT_DIR}/usr/lib/libvirt/"
+    done
+    mv \
+      "${OUT_DIR}/etc/libvirt/nwfilter" \
+      "${OUT_DIR}/usr/share/libvirt/initial-state/nwfilter"
+    mkdir -p "${OUT_DIR}/usr/share/libvirt/initial-state/qemu"
+    mv \
+      "${OUT_DIR}/etc/libvirt/qemu/networks" \
+      "${OUT_DIR}/usr/share/libvirt/initial-state/qemu/networks"
+    rmdir \
+      "${OUT_DIR}/etc/libvirt/qemu/autostart" \
+      "${OUT_DIR}/etc/libvirt/qemu" \
+      "${OUT_DIR}/etc/libvirt/secrets" \
+      "${OUT_DIR}/etc/libvirt/storage/autostart" \
+      "${OUT_DIR}/etc/libvirt/storage" \
+      "${OUT_DIR}/etc/libvirt"
+
+    mkdir -p /usr/lib/libvirt /run/libvirt /etc/libvirt
+    printf '%s\n' 'invalid vendor syntax' > /usr/lib/libvirt/virtlogd.conf
+    : > /run/libvirt/virtlogd.conf
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${OUT_DIR}/usr/bin/virtlogd" \
+        --timeout 1 \
+        --pid-file /tmp/libvirt-uapi.pid
+
+    printf '%s\n' 'invalid administrator syntax' > /etc/libvirt/virtlogd.conf
+    if LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${OUT_DIR}/usr/bin/virtlogd" \
+        --timeout 1 \
+        --pid-file /tmp/libvirt-uapi.pid; then
+      echo 'virtlogd ignored the administrator configuration' >&2
+      exit 1
+    fi
+
+    : > /etc/libvirt/virtlogd.conf
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${OUT_DIR}/usr/bin/virtlogd" \
+        --timeout 1 \
+        --pid-file /tmp/libvirt-uapi.pid
+
+    rm /etc/libvirt/virtlogd.conf /run/libvirt/virtlogd.conf
+    if LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${OUT_DIR}/usr/bin/virtlogd" \
+        --timeout 1 \
+        --pid-file /tmp/libvirt-uapi.pid; then
+      echo 'virtlogd accepted invalid vendor configuration' >&2
+      exit 1
+    fi
+
+    : > /tmp/libvirt-explicit.conf
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${OUT_DIR}/usr/bin/virtlogd" \
+        --config /tmp/libvirt-explicit.conf \
+        --timeout 1 \
+        --pid-file /tmp/libvirt-uapi.pid
+    rm \
+      /tmp/libvirt-explicit.conf \
+      /usr/lib/libvirt/virtlogd.conf
+    rmdir /usr/lib/libvirt /run/libvirt /etc/libvirt
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -260,52 +330,52 @@ outputs:
 
   conf:
     files:
-    - path: /etc/libvirt/libvirt-admin.conf
-    - path: /etc/libvirt/libvirt.conf
-    - path: /etc/libvirt/libvirtd.conf
-    - path: /etc/libvirt/network.conf
-    - path: /etc/libvirt/nwfilter/allow-arp.xml
-    - path: /etc/libvirt/nwfilter/allow-dhcp-server.xml
-    - path: /etc/libvirt/nwfilter/allow-dhcp.xml
-    - path: /etc/libvirt/nwfilter/allow-dhcpv6-server.xml
-    - path: /etc/libvirt/nwfilter/allow-dhcpv6.xml
-    - path: /etc/libvirt/nwfilter/allow-incoming-ipv4.xml
-    - path: /etc/libvirt/nwfilter/allow-incoming-ipv6.xml
-    - path: /etc/libvirt/nwfilter/allow-ipv4.xml
-    - path: /etc/libvirt/nwfilter/allow-ipv6.xml
-    - path: /etc/libvirt/nwfilter/clean-traffic-gateway.xml
-    - path: /etc/libvirt/nwfilter/clean-traffic.xml
-    - path: /etc/libvirt/nwfilter/no-arp-ip-spoofing.xml
-    - path: /etc/libvirt/nwfilter/no-arp-mac-spoofing.xml
-    - path: /etc/libvirt/nwfilter/no-arp-spoofing.xml
-    - path: /etc/libvirt/nwfilter/no-ip-multicast.xml
-    - path: /etc/libvirt/nwfilter/no-ip-spoofing.xml
-    - path: /etc/libvirt/nwfilter/no-ipv6-multicast.xml
-    - path: /etc/libvirt/nwfilter/no-ipv6-spoofing.xml
-    - path: /etc/libvirt/nwfilter/no-mac-broadcast.xml
-    - path: /etc/libvirt/nwfilter/no-mac-spoofing.xml
-    - path: /etc/libvirt/nwfilter/no-other-l2-traffic.xml
-    - path: /etc/libvirt/nwfilter/no-other-rarp-traffic.xml
-    - path: /etc/libvirt/nwfilter/qemu-announce-self-rarp.xml
-    - path: /etc/libvirt/nwfilter/qemu-announce-self.xml
-    - path: /etc/libvirt/qemu-lockd.conf
-    - path: /etc/libvirt/qemu.conf
-    - path: /etc/libvirt/qemu/networks/autostart/default.xml
-    - path: /etc/libvirt/qemu/networks/default.xml
-    - path: /etc/libvirt/virt-login-shell.conf
-    - path: /etc/libvirt/virtlockd.conf
-    - path: /etc/libvirt/virtlogd.conf
-    - path: /etc/libvirt/virtnetworkd.conf
-    - path: /etc/libvirt/virtnwfilterd.conf
-    - path: /etc/libvirt/virtproxyd.conf
-    - path: /etc/libvirt/virtqemud.conf
-    - path: /etc/libvirt/virtsecretd.conf
-    - path: /etc/libvirt/virtstoraged.conf
     - path: /etc/logrotate.d/libvirtd
     - path: /etc/logrotate.d/libvirtd.libxl
     - path: /etc/logrotate.d/libvirtd.lxc
     - path: /etc/logrotate.d/libvirtd.qemu
     - path: /etc/ssh/ssh_config.d/30-libvirt-ssh-proxy.conf
+    - path: /usr/lib/libvirt/libvirt-admin.conf
+    - path: /usr/lib/libvirt/libvirt.conf
+    - path: /usr/lib/libvirt/libvirtd.conf
+    - path: /usr/lib/libvirt/network.conf
+    - path: /usr/lib/libvirt/qemu-lockd.conf
+    - path: /usr/lib/libvirt/qemu.conf
+    - path: /usr/lib/libvirt/virt-login-shell.conf
+    - path: /usr/lib/libvirt/virtlockd.conf
+    - path: /usr/lib/libvirt/virtlogd.conf
+    - path: /usr/lib/libvirt/virtnetworkd.conf
+    - path: /usr/lib/libvirt/virtnwfilterd.conf
+    - path: /usr/lib/libvirt/virtproxyd.conf
+    - path: /usr/lib/libvirt/virtqemud.conf
+    - path: /usr/lib/libvirt/virtsecretd.conf
+    - path: /usr/lib/libvirt/virtstoraged.conf
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-arp.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-dhcp-server.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-dhcp.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-dhcpv6-server.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-dhcpv6.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-incoming-ipv4.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-incoming-ipv6.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-ipv4.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-ipv6.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/clean-traffic-gateway.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/clean-traffic.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-arp-ip-spoofing.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-arp-mac-spoofing.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-arp-spoofing.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-ip-multicast.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-ip-spoofing.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-ipv6-multicast.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-ipv6-spoofing.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-mac-broadcast.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-mac-spoofing.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-other-l2-traffic.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-other-rarp-traffic.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/qemu-announce-self-rarp.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/qemu-announce-self.xml
+    - path: /usr/share/libvirt/initial-state/qemu/networks/autostart/default.xml
+    - path: /usr/share/libvirt/initial-state/qemu/networks/default.xml
 
   dev:
     files:

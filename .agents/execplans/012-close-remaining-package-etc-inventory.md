@@ -121,12 +121,16 @@ named below.
   semantic manifest lookup for filenames that differ from their slugs,
   removed nex-minimal's unused helper dependency, and resolved root UID and
   GID 0 from the assembly-owned factory database.
+- [x] (2026-08-15 07:52Z) Layered all fifteen Libvirt main configuration
+  readers across `/etc`, `/run`, and `/usr/lib`, moved upstream virtual-network
+  objects to package templates, seeded those objects as desktop host state,
+  and rebuilt and exercised all four affected desktop roots.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
 - [ ] Resolve the vendor-data, XDG, example, compatibility-link, and database
   group, with one checked commit per package or inseparable package pair.
-- [ ] Give D-Bus, Slang, and Libvirt correct vendor-file lookup without
+- [x] Give D-Bus, Slang, and Libvirt correct vendor-file lookup without
   weakening their administrator paths or explicit overrides.
 - [ ] Resolve OpenSSL, CA certificates, Fontconfig, Linux-PAM secondary files,
   and the account databases with focused security and trust tests.
@@ -403,6 +407,22 @@ named below.
   Evidence: an exhaustive manifest search found no call, and removing the
   dependency preserved the assembly checksum and its working root account.
 
+- Observation: Libvirt's configured runtime directory expands to `/var/run`,
+  but the UAPI tier itself is `/run` and an isolated package root need not
+  contain the compatibility link between them.
+  Evidence: the first live reader test skipped its transient file at
+  `/run/libvirt/virtlogd.conf`; using that literal UAPI directory made the
+  installed daemon select the empty transient mask and ignore an invalid
+  vendor file.
+
+- Observation: assembly public paths are links into package capsules, so a
+  host-side `cp -L /target/usr/...` follows an absolute link outside
+  `/target`.
+  Evidence: the first desktop-vwl build found all twenty-four public nwfilter
+  links but could not dereference their `/nex/pkg/...` targets. Resolving an
+  absolute target as `/target${link}` copied regular XML files into the
+  factory tree and let both assembly builds reproduce.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -446,6 +466,15 @@ named below.
   fragment directory. One selected file preserves administrator control,
   supports transient machine data, provides packaged defaults, and lets an
   empty higher-priority file mask lower data.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Treat Libvirt main files and Libvirt object definitions as two
+  different file classes.
+  Rationale: daemons and clients read one main file, so they can select a
+  complete administrator, transient, or vendor file. Libvirt manages network
+  and filter XML as mutable machine objects, so the package supplies immutable
+  templates and the desktop assembly chooses the initial copies under its
+  factory `/etc` tree.
   Date/Author: 2026-08-15 / Codex
 
 - Decision: Package Netavark without a default firewall driver.
@@ -1325,6 +1354,52 @@ affected assemblies, and commit.
    the live CA database, printed `system-ca=ready` and `ASSERT-BOOT-PASS`, and
    powered off. Commits: `pkg: layer openssl configuration` and `asm: include
    openssl vendor configuration`.
+
+15. `pkg/dev/virt/libvirt.yaml`
+
+   The old `conf` output declared fifteen Libvirt client, daemon, network,
+   QEMU, lock, authentication, and login-shell main files below
+   `/etc/libvirt`. Outcome 2 applies. The generic patch adds one private
+   selector that chooses the first complete file at
+   `/etc/libvirt/<name>`, `/run/libvirt/<name>`, or
+   `/usr/lib/libvirt/<name>`. An existing empty file masks lower files.
+   Explicit daemon `--config` arguments and unprivileged XDG paths retain
+   their upstream behavior. The package installs all fifteen vendor files
+   below `/usr/lib/libvirt`.
+
+   The old output also declared twenty-four nwfilter XML files plus the
+   default virtual network and its autostart link. These are mutable Libvirt
+   objects rather than main configuration, so outcome 3 applies. The package
+   now stores their complete upstream forms below
+   `/usr/share/libvirt/initial-state`. The desktop assembly copies the
+   twenty-five XML files into its factory `/etc/libvirt` tree and creates the
+   relative autostart link there. The package still installs four logrotate
+   fragments and one OpenSSH fragment at their normal integration paths, so
+   outcome 5 applies to those five files.
+
+   The patch applies with `patch -Np1 --batch --fuzz=0` and has SHA-256
+   `698e9f3b772cb9b4d6dbb4caa873daf1be8ae50208dac56cf6c3125cf85493ad`.
+   The strict command built twice, reproduced checksum
+   `e6df5e656abb84c32f752902dc9b8bcededd5fbcf3d950d08aa5820f5a16c039`,
+   and ran the installed `virtlogd` through transient, administrator,
+   empty-mask, vendor-error, and explicit-file cases. Store inspection found
+   fifteen vendor files, all twenty-five XML templates, the relative network
+   autostart link, and only the five fixed integration files below `/etc`.
+
+   All four affected assemblies built twice and matched: desktop-vwl
+   `d333826ab48b566ba72d08fb18ce905574847314e8f4f1b7db331285ccc84fec`,
+   Nvidia 580
+   `b9e992eb75ce9bdd52b63cbd26ae71c4a034bc0b7b6c52ce129c2b99d89b680e`,
+   Nvidia current
+   `13b1dfdd41c6ddc61238a82a51ad42eab63babe3d98b799cc92cec3effc22c09`,
+   and desktop-dev
+   `8a6ee51686f190c74e73a113fdc1141536e08a7e47e70af77eafa4bd5016f6f5`.
+   The checked-out base root contained twenty-four regular nwfilter files,
+   one regular default-network file, the relative autostart link, and fifteen
+   vendor main-file links into the package capsule. It had no live `/etc`.
+   Its installed `virtlogd` read the vendor file and exited normally after
+   its timeout, while both `virtlogd --version` and `virsh --version` reported
+   11.0.0.
 
 17. `pkg/libs/crypto/p11-kit.yaml`
 

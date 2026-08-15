@@ -1798,3 +1798,28 @@ Reusable packages must not publish `passwd` or `group` records. The assembly
 chooses initial accounts and places them in its factory tree; a writable host
 seeds `/etc` from that tree. `nex-utilities` now publishes only its strip
 helper, while nex-minimal owns and tests its root UID and GID.
+
+Libvirt 11.0.0 uses fifteen privileged main configuration files across its
+clients, daemons, network driver, QEMU driver, lock manager, authentication,
+and login shell. Nex's generic patch routes implicit privileged lookup through
+one private helper that selects `/etc/libvirt/<name>`,
+`/run/libvirt/<name>`, then `/usr/lib/libvirt/<name>` as complete files. An
+empty selected file masks lower files. Explicit daemon `--config` arguments
+and unprivileged XDG paths keep their upstream behavior. Use literal `/run`,
+not Libvirt's configured `/var/run`, for the transient UAPI tier because a
+minimal root may omit the compatibility link.
+
+Libvirt network and nwfilter XML files are mutable daemon objects, not main
+configuration. Keep the upstream objects as package templates below
+`/usr/share/libvirt/initial-state`; let each assembly decide whether to copy
+them into its initial writable `/etc`. Desktop-vwl seeds twenty-four nwfilters,
+the default network, and its autostart link this way. The package retains the
+four logrotate fragments and the OpenSSH proxy fragment at their standard
+integration paths.
+
+When an assembly needs a regular copy of a public path, remember that Nex
+usually exposes that path as an absolute link into `/nex/pkg`. A host-side
+`cp -L /target/usr/...` follows `/nex` outside the target root. Read the link;
+for an absolute target, copy from `/target${link}`. Handle relative links from
+the public path's directory. The desktop Libvirt seed uses this pattern and
+produces regular factory XML files.

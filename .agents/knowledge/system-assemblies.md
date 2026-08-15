@@ -313,3 +313,18 @@ and inspect a one-pixel PNG. The reproducible checksums are:
 - desktop-vwl-nvidia-580: `358a03b813a2b7a1946638b0f9d5b189bb35537bbe4089ba77da5fde098c5aed`
 - desktop-vwl-nvidia-current: `46da14b8f6da8121ce207efe7980cb6f714edd1e1b3ef343eb6b9267673c08d6`
 - desktop-dev: `3808ccac10d339f557a918166f38c140f2c0004b9b748675e0f01f0305055339`
+
+## Copying package templates into factory state
+
+Public paths in a Nex-structured assembly usually point through absolute
+links into `/nex/pkg`. A build script that runs outside `/target` cannot use
+`cp -L /target/usr/...`, because the host resolves `/nex` outside the target
+root. Read the link first. Prefix an absolute target with `/target`; resolve a
+relative target from the public path's directory. Then copy the resolved
+regular file into `/target/etc` before the base assembly moves that tree to
+`/usr/share/factory/etc`.
+
+Desktop-vwl uses this pattern to seed Libvirt's twenty-four nwfilter objects,
+default virtual network, and relative autostart link. The checked-out system
+contains regular XML files in the factory tree, while the immutable upstream
+templates remain in the package capsule.
