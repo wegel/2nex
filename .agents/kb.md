@@ -324,13 +324,25 @@ Docker's build exposed two pre-existing bundle errors. Iptables 1.8.11 had no
 output, including `libnftables.pc` and the public header. Add the Iptables
 runtime bundle, add the missing Nftables development output, and give
 Nftables a normal runtime bundle. Both packages pass their strict two-build
-checks after those fixes. Iptables' raw checksum is
+checks after those fixes. Iptables' raw checksum before its UAPI database
+change was
 `171688dc4bb4cc546ab85bb41b7dc30c5cc83387a7fe0b962b9338f86f416d53`;
 Nftables' raw checksum is
 `d82c8ef9a12067a13ea84db84a90c061820fcecf70c2a66251bb912c634d78ca`.
 Do not copy Yocto's explicit libipq enablement. Iptables leaves that obsolete,
 upstream-disabled API out. The Docker smoke ran `iptables --version` from the
 new runtime bundle, got the nftables backend, and found no libipq library.
+
+Iptables 1.8.11 now installs its upstream Ethernet protocol database at
+`/usr/lib/ethertypes`. Its generic reader selects `/etc/ethertypes`, then
+`/run/ethertypes`, then `/usr/lib/ethertypes` as one whole file; an empty
+selected file masks lower data. The strict test runs the installed
+`ebtables-translate` for every tier. The patch SHA-256 is
+`b5514bde8c6f49f3c377684f0628aca0344262177d20ac191e0e95cf4f22c187`,
+and the package checksum is
+`f5382ebd5cd04f3e472ac57ee95124b1f672b4e84f90ced55c7d4171be882417`.
+Docker is the only manifest that consumes Iptables' full bundle. Rebuild it
+after both the Iptables and Nftables database changes, then rebuild Edgebox.
 
 Docker 29.3.0 uses Moby commit
 `1da6517e1a4381297e56862f6f373f265c28d102` and Docker CLI commit

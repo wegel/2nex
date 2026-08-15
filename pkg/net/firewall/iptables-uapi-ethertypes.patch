@@ -1,0 +1,60 @@
+From: Package maintainers
+Subject: [PATCH] libxtables: select ethertypes from UAPI paths
+Source: downstream
+Upstream: not submitted; needs agreement on Linux vendor and transient paths
+
+Keep /etc/ethertypes as the administrator database, add /run/ethertypes for
+temporary machine data, and use /usr/lib/ethertypes for the package database.
+Select one complete file so an empty higher-priority file masks lower data.
+
+diff --git a/libxtables/getethertype.c b/libxtables/getethertype.c
+--- a/libxtables/getethertype.c
++++ b/libxtables/getethertype.c
+@@ -33,6 +33,7 @@
+ ********************************************************************/
+ 
+ #include <ctype.h>
++#include <errno.h>
+ #include <features.h>
+ #include <sys/types.h>
+ #include <sys/socket.h>
+@@ -52,10 +53,28 @@
+ static char *ethertype_aliases[MAXALIASES];
+ static int ethertype_stayopen;
+ 
++static FILE *open_ethertypes(void)
++{
++	static const char *const paths[] = {
++		XT_PATH_ETHERTYPES,
++		"/run/ethertypes",
++		"/usr/lib/ethertypes",
++	};
++	FILE *file;
++	size_t i;
++
++	for (i = 0; i < sizeof(paths) / sizeof(paths[0]); i++) {
++		file = fopen(paths[i], "r");
++		if (file != NULL || errno != ENOENT)
++			return file;
++	}
++	return NULL;
++}
++
+ static void setethertypeent(int f)
+ {
+ 	if (etherf == NULL)
+-		etherf = fopen(XT_PATH_ETHERTYPES, "r");
++		etherf = open_ethertypes();
+ 	else
+ 		rewind(etherf);
+ 	ethertype_stayopen |= f;
+@@ -77,8 +96,7 @@
+ 	char *endptr;
+ 	register char *cp, **q;
+ 
+-	if (etherf == NULL
+-	    && (etherf = fopen(XT_PATH_ETHERTYPES, "r")) == NULL) {
++	if (etherf == NULL && (etherf = open_ethertypes()) == NULL) {
+ 		return (NULL);
+ 	}
+ 

@@ -635,6 +635,16 @@ for every tier, the mask, the explicit override, and the no-file case; its
 checksum is
 `9dbe12cf16e3dbdf85decc1ba685c5f27dfd8afa7924f02cd10e64947d5cc1be`.
 
+Iptables 1.8.11 treats `ethertypes` as a whole Ethernet protocol database.
+Its generic reader selects `/etc/ethertypes`, then `/run/ethertypes`, then
+`/usr/lib/ethertypes`; an empty selected file masks lower data. Both lookup
+entry points use the same selector. The strict test runs the installed
+`ebtables-translate` with packaged libraries and extensions for every tier.
+The patch SHA-256 is
+`b5514bde8c6f49f3c377684f0628aca0344262177d20ac191e0e95cf4f22c187`,
+and the package checksum is
+`f5382ebd5cd04f3e472ac57ee95124b1f672b4e84f90ced55c7d4171be882417`.
+
 ## Namespace Reference
 
 - `libs/system`: glibc, zlib, ncurses, acl, attr.

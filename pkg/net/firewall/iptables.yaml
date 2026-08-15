@@ -6,12 +6,15 @@ package:
   version: 1.8.11
   description: Linux packet filtering and NAT tool
   homepage: https://www.netfilter.org/projects/iptables/
-  checksum: 171688dc4bb4cc546ab85bb41b7dc30c5cc83387a7fe0b962b9338f86f416d53
+  checksum: f5382ebd5cd04f3e472ac57ee95124b1f672b4e84f90ced55c7d4171be882417
 
 sources:
 - name: iptables
   url: https://www.netfilter.org/projects/iptables/files/iptables-1.8.11.tar.xz
   sha256: d87303d55ef8c92bcad4dd3f978b26d272013642b029425775f5bad1009fe7b2
+- name: uapi_ethertypes
+  file: pkg/net/firewall/iptables-uapi-ethertypes.patch
+  sha256: b5514bde8c6f49f3c377684f0628aca0344262177d20ac191e0e95cf4f22c187
 
 dependencies:
 - name: glibc
@@ -58,6 +61,8 @@ dependencies:
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: autoconf
   commit: x86_64/pkg/core/toolchain/autoconf/2.72/bundles/dev
 - name: automake
@@ -73,11 +78,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4105:1101, 17315:2330, 35714:2804, 54044:2870, 72994:2932, 87269:2985, 104378:3116, 130200:3671, 156261:3820, 172385:4923]
+  profile: [4111:911, 17355:2162, 35754:2610, 54084:2657, 73034:2710, 87309:2755, 104346:2848, 130240:3320, 156370:3485, 172425:4452]
 
   script: |
-    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    tar --no-same-owner -xf ${SOURCE_iptables} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch -Np1 --batch --fuzz=0 < "/${SOURCE_uapi_ethertypes}"
 
     ./configure \
       --prefix=/usr \
@@ -93,6 +100,40 @@ build:
     for prog in iptables iptables-save iptables-restore ip6tables ip6tables-save ip6tables-restore; do
       ln -sfv xtables-nft-multi ${OUT_DIR}/usr/bin/${prog}
     done
+
+    install -Dm644 "${OUT_DIR}/etc/ethertypes" "${OUT_DIR}/usr/lib/ethertypes"
+    rm "${OUT_DIR}/etc/ethertypes"
+    rmdir "${OUT_DIR}/etc"
+
+    mkdir -p /etc /run /usr/lib
+    rm -f /etc/ethertypes /run/ethertypes
+    install -m644 "${WORK_DIR}/etc/ethertypes" /usr/lib/ethertypes
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      XTABLES_LIBDIR="${OUT_DIR}/usr/lib/xtables" \
+      "${OUT_DIR}/usr/bin/ebtables-translate" \
+      -A INPUT -p IPv4 -j ACCEPT | grep -q 'ether type 0x800'
+    printf 'UAPITEST 88b6\n' > /run/ethertypes
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      XTABLES_LIBDIR="${OUT_DIR}/usr/lib/xtables" \
+      "${OUT_DIR}/usr/bin/ebtables-translate" \
+      -A INPUT -p UAPITEST -j ACCEPT | grep -q 'ether type 0x88b6'
+    printf 'UAPITEST 88b7\n' > /etc/ethertypes
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      XTABLES_LIBDIR="${OUT_DIR}/usr/lib/xtables" \
+      "${OUT_DIR}/usr/bin/ebtables-translate" \
+      -A INPUT -p UAPITEST -j ACCEPT | grep -q 'ether type 0x88b7'
+    : > /etc/ethertypes
+    if LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      XTABLES_LIBDIR="${OUT_DIR}/usr/lib/xtables" \
+      "${OUT_DIR}/usr/bin/ebtables-translate" \
+      -A INPUT -p IPv4 -j ACCEPT >/dev/null 2>&1; then
+      exit 1
+    fi
+    rm -f /etc/ethertypes /run/ethertypes
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      XTABLES_LIBDIR="${OUT_DIR}/usr/lib/xtables" \
+      "${OUT_DIR}/usr/bin/ebtables-translate" \
+      -A INPUT -p IPv4 -j ACCEPT | grep -q 'ether type 0x800'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.la' -delete
@@ -122,7 +163,7 @@ outputs:
 
   conf:
     files:
-    - path: /etc/ethertypes
+    - path: /usr/lib/ethertypes
 
   dev:
     files:

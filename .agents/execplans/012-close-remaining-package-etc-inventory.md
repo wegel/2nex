@@ -72,6 +72,10 @@ named below.
   revision, kept hardlinks only for immutable deployments, passed all 185 CLI
   tests, and used a strict Iptables rebuild to repair and verify the damaged
   database blob.
+- [x] (2026-08-15 05:42Z) Moved Iptables' Ethernet protocol database to
+  `/usr/lib/ethertypes`, added whole-file administrator and transient lookup,
+  and strictly rebuilt the package with the installed `ebtables-translate`
+  reader covering all tiers and an empty mask.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -241,6 +245,13 @@ named below.
   upstream database with SHA-256
   `ed38f9d644befc87eb41a8649c310073240d9a8cd75b2f9c115b5d9d7e5d033c`.
 
+- Observation: Both Iptables Ethernet protocol lookups share the same
+  process-global database stream.
+  Evidence: pinned `libxtables/getethertype.c` opens `XT_PATH_ETHERTYPES` from
+  both `setethertypeent()` and `getethertypeent()`. The patch routes both
+  callers through one whole-file selector, so lookup by name and by number
+  cannot disagree about the active tier.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -276,6 +287,14 @@ named below.
   Rationale: a hardlink shares the store object's inode, so any build script
   that writes through it can silently corrupt the cache. Deployment roots are
   mounted read-only and retain the space-saving hardlink contract.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Give Iptables whole-file `/etc/ethertypes`, `/run/ethertypes`, and
+  `/usr/lib/ethertypes` lookup.
+  Rationale: the file is a replaceable Ethernet protocol database, not a
+  fragment directory. One selected file preserves administrator control,
+  supports transient machine data, provides packaged defaults, and lets an
+  empty higher-priority file mask lower data.
   Date/Author: 2026-08-15 / Codex
 
 - Decision: Package Netavark without a default firewall driver.
@@ -1048,6 +1067,29 @@ affected assemblies, and commit.
    `/usr/lib` and no old `/etc/slsh.rc` output. No assembly selects Slsh's
    `conf` or `bin` output; Newt and NetworkManager use only its library bundle,
    whose source was unchanged. Commit: `pkg: layer slsh startup files`.
+
+30. `pkg/net/firewall/iptables.yaml`
+
+   The old `conf` output declared `/etc/ethertypes`, and both name and number
+   readers opened only the compiled `XT_PATH_ETHERTYPES`. Outcome 2 applies.
+   The generic patch with SHA-256
+   `b5514bde8c6f49f3c377684f0628aca0344262177d20ac191e0e95cf4f22c187`
+   selects `/etc/ethertypes`, `/run/ethertypes`, then
+   `/usr/lib/ethertypes` as whole files. A non-ENOENT open error stops the
+   search, and an empty selected file masks lower databases. The package now
+   installs the complete upstream database only at `/usr/lib/ethertypes`.
+
+   The strict package command built twice with checksum
+   `f5382ebd5cd04f3e472ac57ee95124b1f672b4e84f90ced55c7d4171be882417`.
+   Both builds ran the installed `ebtables-translate` with its packaged
+   libraries and extensions, then proved vendor, transient, administrator,
+   empty-mask, and restored-vendor behavior. Store inspection returned the
+   complete upstream database with SHA-256
+   `ed38f9d644befc87eb41a8649c310073240d9a8cd75b2f9c115b5d9d7e5d033c`
+   and no `/etc/ethertypes` output. Docker is the only manifest that consumes
+   the full bundle; rebuild Docker once after the adjacent Nftables database
+   change, then rebuild its Edgebox consumer. Commit: `pkg: layer iptables
+   ethertype data`.
 
 ## Interfaces and Dependencies
 
