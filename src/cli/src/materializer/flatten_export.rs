@@ -154,7 +154,7 @@ fn export_single_file(
 
     let opts = zub::ops::ExportOptions {
         overwrite: true,
-        hardlink: true,
+        hardlink: false,
         preserve_sparse: false,
     };
 

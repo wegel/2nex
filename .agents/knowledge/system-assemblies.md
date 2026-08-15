@@ -54,7 +54,7 @@ the `packages` list in `flat-minimal`, `flat-systemd`, `nex-minimal`,
 
 ## Artifact Inspection
 
-Use `zub --repo .nex/repo checkout --copy systems/<slug>/<version> <dir>` to
+Use `zub --repo .nex/repo checkout systems/<slug>/<version> <dir>` to
 inspect a built system tree. Public `/usr` paths often use symlinks into
 `/nex/pkg`, so host-side `test -e` can report false negatives for absolute
 symlinks. Check `test -L` or inspect the symlink target under the checked-out
@@ -115,7 +115,8 @@ returned 255 after help.
 
 For large package runtime closures, `zub union-checkout` can fail on duplicate
 files. For smoke roots, write the full refs to a disposable file and overlay
-them with sequential `zub checkout --copy --force` calls.
+them with sequential `zub checkout --force` calls. Current Zub versions copy
+by default; do not add `--hardlink` to a smoke root that tests may modify.
 
 Evidence: Chromium's 55-ref runtime closure failed `zub union-checkout` on
 `/usr/include/at-spi2-atk/2.0/atk-bridge.h`. Sequential checkouts into the

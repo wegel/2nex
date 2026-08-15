@@ -67,6 +67,11 @@ named below.
 - [x] (2026-08-15 03:46Z) Moved Slsh's startup file to `/usr/lib/slsh.rc`,
   added whole-file system lookup without weakening its existing environment
   override, and strictly rebuilt the package with six reader cases.
+- [x] (2026-08-15 05:36Z) Fixed writable Zub checkouts after an Iptables
+  override test exposed store-object corruption, pinned the repaired Zub
+  revision, kept hardlinks only for immutable deployments, passed all 185 CLI
+  tests, and used a strict Iptables rebuild to repair and verify the damaged
+  database blob.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -221,6 +226,21 @@ named below.
   variables first and returns after the first system file loads. The package
   test proved that an empty selected system file also stops the search.
 
+- Observation: Zub's old default checkout shared writable file inodes with
+  its content-addressed blob store.
+  Evidence: an early Iptables test overwrote a checked-out `ethertypes` file;
+  later strict builds calculated the correct 1362-byte file hash, but
+  `zub cat-file` returned the corrupted 14-byte `UAPITEST` blob. Deleting refs
+  did not help because the corrupted object remained at the expected hash.
+
+- Observation: The corrected Zub writer can repair an object whose bytes no
+  longer match its hash inputs.
+  Evidence: Zub commit `0db2a06aa0b741eb537ef41e5864226586aced38`
+  passed 195 tests. Nex then passed 185 tests, rebuilt Iptables twice, and
+  `zub cat-file .../outputs/conf:usr/lib/ethertypes` returned the complete
+  upstream database with SHA-256
+  `ed38f9d644befc87eb41a8649c310073240d9a8cd75b2f9c115b5d9d7e5d033c`.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -248,6 +268,14 @@ named below.
   roots, and third-party assemblies. A package patch may implement normal
   Linux `/etc`, `/run`, and `/usr` lookup, but it may not name Nex or encode a
   jukebox, desktop, installer, Yocto, or Buildroot choice.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Materialize package and assembly build roots as independently
+  writable copies; reserve hardlinked checkouts for finalized immutable
+  deployments.
+  Rationale: a hardlink shares the store object's inode, so any build script
+  that writes through it can silently corrupt the cache. Deployment roots are
+  mounted read-only and retain the space-saving hardlink contract.
   Date/Author: 2026-08-15 / Codex
 
 - Decision: Package Netavark without a default firewall driver.

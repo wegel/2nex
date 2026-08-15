@@ -41,6 +41,37 @@ fn resolve_ref_pulls_from_configured_local_remote() -> io::Result<()> {
 }
 
 #[test]
+fn checkout_can_be_modified_without_changing_store_objects() -> io::Result<()> {
+    let temp_dir = TempDir::new()?;
+    let repo_path = temp_dir.path().join("repo");
+    let tree = temp_dir.path().join("tree");
+    let first_checkout = temp_dir.path().join("first-checkout");
+    let second_checkout = temp_dir.path().join("second-checkout");
+    let ref_name = "pkg/demo/1.0/files";
+
+    if !init_store(&repo_path)? {
+        return Ok(());
+    }
+
+    fs::create_dir_all(&tree)?;
+    fs::write(tree.join("database"), "stored data")?;
+    if !commit_test_tree(&repo_path, ref_name, &tree, &[])? {
+        return Ok(());
+    }
+
+    let store = Store::open(&repo_path)?;
+    store.checkout(ref_name, &first_checkout, false)?;
+    fs::write(first_checkout.join("database"), "local change")?;
+
+    store.checkout(ref_name, &second_checkout, false)?;
+    assert_eq!(
+        fs::read_to_string(second_checkout.join("database"))?,
+        "stored data"
+    );
+    Ok(())
+}
+
+#[test]
 fn remote_source_keeps_ssh_and_local_urls_distinct() {
     match remote_source("ssh://builder.example/var/zub") {
         RemoteSource::Ssh { remote, path } => {

@@ -156,19 +156,27 @@ command completed with `Build is reproducible. Checksums match.`:
 
 ## Standard Build Environment
 
-`env/standard.yaml` runs its preamble in a user namespace. Files checked out
-from the zub store can be hardlinked with host root ownership. Namespace root
-maps to the host user, so preamble commands cannot always unlink or replace
-those host-root-owned hardlinks.
+`env/standard.yaml` runs its preamble in a user namespace. Package and
+assembly build roots must contain independently writable copies of Zub blobs.
+Do not switch their materializer paths back to hardlinks: a write through a
+hardlink changes the content-addressed store object itself. Nex reserves
+hardlinks for finalized deployments that it mounts read-only.
+
+Zub commit `0db2a06aa0b741eb537ef41e5864226586aced38` makes copies
+the library and command defaults, adds an explicit `--hardlink` opt-in, and
+repairs an existing blob when a later write finds mismatching bytes or stored
+metadata at its hash path. Nex pins that revision and tests that changing a
+normal checkout leaves a second checkout unchanged.
 
 The standard preamble must not try to replace an existing
 `{build_dir}/etc/ld.so.cache`. If the cache already exists, leave it in place
 and continue. If the cache is absent, create `{build_dir}/etc` and run
 `ldconfig -r {build_dir}`.
 
-Evidence: v4l2loopback builds failed when the preamble tried to create or
-replace `/etc/ld.so.cache` from a glibc checkout. The final guarded behavior
-allowed the strict v4l2loopback build to pass reproducibly.
+Evidence: before writable-copy materialization, v4l2loopback builds failed
+when the preamble tried to create or replace `/etc/ld.so.cache` from a Glibc
+hardlink. The guarded preamble allowed the strict v4l2loopback build to pass;
+the later writable-copy fix removed the underlying store-sharing hazard.
 
 ## Nvidia Runfiles
 

@@ -255,9 +255,24 @@ impl Store {
     /// checkout a commit to target directory.
     /// tries primary repo first, then each fallback in order, then remotes.
     pub fn checkout(&self, commit: &str, target: &Path, union: bool) -> io::Result<()> {
+        self.checkout_with_mode(commit, target, union, false)
+    }
+
+    /// Checkout an immutable commit using hardlinks when the filesystem allows it.
+    pub fn checkout_immutable(&self, commit: &str, target: &Path, union: bool) -> io::Result<()> {
+        self.checkout_with_mode(commit, target, union, true)
+    }
+
+    fn checkout_with_mode(
+        &self,
+        commit: &str,
+        target: &Path,
+        union: bool,
+        hardlink: bool,
+    ) -> io::Result<()> {
         let mut opts = zub::ops::CheckoutOptions {
             force: union,
-            hardlink: true,
+            hardlink,
             preserve_sparse: false,
         };
 
@@ -266,8 +281,6 @@ impl Store {
             Ok(()) => return Ok(()),
             Err(zub::Error::RefNotFound(_)) => {}
             Err(e) if opts.hardlink && is_cross_device_hardlink_error(&e) => {
-                // cross-device hardlinks are not possible (e.g., fallback from /nex/repo to /var/*).
-                // retry with a full copy instead.
                 opts.hardlink = false;
                 retry_checkout_after_hardlink_failure(
                     &self.repo,
@@ -283,14 +296,18 @@ impl Store {
 
         // try each fallback in order
         for fallback in &self.fallback_chain {
-            let mut fb_opts = opts.clone();
-            match zub::ops::checkout(fallback, commit, target, fb_opts.clone()) {
+            let mut fallback_opts = opts.clone();
+            match zub::ops::checkout(fallback, commit, target, fallback_opts.clone()) {
                 Ok(()) => return Ok(()),
                 Err(zub::Error::RefNotFound(_)) => continue,
-                Err(e) if fb_opts.hardlink && is_cross_device_hardlink_error(&e) => {
-                    fb_opts.hardlink = false;
+                Err(e) if fallback_opts.hardlink && is_cross_device_hardlink_error(&e) => {
+                    fallback_opts.hardlink = false;
                     retry_checkout_after_hardlink_failure(
-                        fallback, commit, target, union, fb_opts,
+                        fallback,
+                        commit,
+                        target,
+                        union,
+                        fallback_opts,
                     )?;
                     return Ok(());
                 }
@@ -601,7 +618,7 @@ pub fn checkout_into_with_fallbacks(
                 &base_ref,
                 subpath,
                 &target_path,
-                true, // hardlink
+                false,
             );
         }
     }
@@ -840,21 +857,14 @@ pub fn checkout_artifact(
         None => return Ok(false),
     };
 
-    let mut opts = zub::ops::CheckoutOptions {
+    let opts = zub::ops::CheckoutOptions {
         force,
-        hardlink: true,
+        hardlink: false,
         preserve_sparse: false,
     };
 
-    match zub::ops::checkout_from_tree_hash(&repo, &tree_hash, target, opts.clone()) {
-        Ok(()) => {}
-        Err(e) if opts.hardlink && is_cross_device_hardlink_error(&e) => {
-            opts.hardlink = false;
-            zub::ops::checkout_from_tree_hash(&repo, &tree_hash, target, opts)
-                .map_err(|e| io::Error::other(e.to_string()))?;
-        }
-        Err(e) => return Err(io::Error::other(e.to_string())),
-    }
+    zub::ops::checkout_from_tree_hash(&repo, &tree_hash, target, opts)
+        .map_err(|e| io::Error::other(e.to_string()))?;
 
     Ok(true)
 }

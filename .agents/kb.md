@@ -509,6 +509,22 @@ integration smoke used the rebuilt zub command to check Bash out of Nex's real
 store as the host user and confirmed that the resulting `usr` directory had
 owner `1000:1000`.
 
+Zub commit `0db2a06aa0b741eb537ef41e5864226586aced38` makes
+independently writable copies the checkout and export default. Use
+`--hardlink` only when the caller guarantees that the checked-out tree stays
+immutable. Nex follows the same rule: package and assembly materialization
+uses copies, while `nex deploy` explicitly requests hardlinks for a finalized
+read-only deployment. Zub also compares existing blob bytes and stored
+metadata before deduplicating a write, so recommitting the correct source can
+repair a blob changed through an older hardlinked checkout.
+
+This rule protects the content-addressed invariant. Before the fix, an
+Iptables test changed a hardlinked `ethertypes` checkout and replaced the
+store object's bytes without changing its hash-shaped pathname. Ref deletion
+could not repair it. The Zub regression suite passed 195 tests; Nex passed all
+185 CLI tests, including a test that changes one checkout and reads unchanged
+data from a second checkout.
+
 The host's `/home/wegel/.local/bin/zub` can still be older than this fix. Until
 that command is reinstalled, put `/home/wegel/work/perso/zub/target/debug`
 first in `PATH` for Nex builds, assembly builds, and QEMU harnesses. An
@@ -1011,8 +1027,8 @@ The script runs packaged commands, verifies policy and unit links, checks the
 vendor Shadow and PAM files, asks `systemd-analyze` to parse the added audio
 units, inspects Linux 6.18.24 module and firmware metadata, and commits plus
 fscks an OSTree repository. Its final run printed `PASS: Edgebox rootfs smoke
-test`. A zub checkout below `/tmp` needs `--copy`: zub cannot create hard links
-across the filesystem boundary between the store and `/tmp`.
+test`. Current Zub versions copy checkouts by default, so a checkout below
+`/tmp` works across the filesystem boundary and remains safe to modify.
 
 `scripts/qemu-test-systemd.sh systems/edgebox-rootfs/0.0.1` booted Linux 6.18.24
 and Systemd 257.5, selected the requested store deployment, mounted root and

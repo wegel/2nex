@@ -190,7 +190,7 @@ fn checkout_and_publish(
     temp_path: &Path,
     deployment_path: &Path,
 ) -> io::Result<()> {
-    store.checkout(system_ref, temp_path, false)?;
+    store.checkout_immutable(system_ref, temp_path, false)?;
     sync_tree(temp_path)?;
     fs::rename(temp_path, deployment_path)?;
     if let Some(parent) = deployment_path.parent() {
