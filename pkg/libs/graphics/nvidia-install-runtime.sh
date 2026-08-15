@@ -68,7 +68,7 @@ for lib in "${src_dir}"/*.so*; do
   fi
 
   case "$(basename "${lib}")" in
-    libglxserver_nvidia.so.*|libvdpau_nvidia.so.*)
+    libOpenCL.so*|libglxserver_nvidia.so.*|libvdpau_nvidia.so.*)
       continue
       ;;
   esac
@@ -81,9 +81,6 @@ install_link libnvidia-ml.so.1 /usr/lib/libnvidia-ml.so
 install_link "libcuda.so.${version}" /usr/lib/libcuda.so.1
 install_link libcuda.so.1 /usr/lib/libcuda.so
 install_link "libnvidia-opencl.so.${version}" /usr/lib/libnvidia-opencl.so.1
-install_link "libOpenCL.so.1.0.0" /usr/lib/libOpenCL.so.1.0
-install_link libOpenCL.so.1.0 /usr/lib/libOpenCL.so.1
-install_link libOpenCL.so.1 /usr/lib/libOpenCL.so
 install_link "libnvidia-ptxjitcompiler.so.${version}" /usr/lib/libnvidia-ptxjitcompiler.so.1
 install_link libnvidia-ptxjitcompiler.so.1 /usr/lib/libnvidia-ptxjitcompiler.so
 install_link "libcudadebugger.so.${version}" /usr/lib/libcudadebugger.so.1
@@ -150,7 +147,7 @@ done
 install_file 0644 nvidia_icd.json /usr/share/vulkan/icd.d/nvidia_icd.json
 install_file 0644 nvidia_icd_vksc.json /usr/share/vulkan/icd.d/nvidia_icd_vksc.json
 install_file 0644 nvidia_layers.json /usr/share/vulkan/implicit_layer.d/nvidia_layers.json
-install_file 0644 nvidia.icd /etc/OpenCL/vendors/nvidia.icd
+install_file 0644 nvidia.icd /usr/share/OpenCL/vendors/nvidia.icd
 
 for profile in "${src_dir}"/nvidia-application-profiles-*; do
   if [ -e "${profile}" ]; then
@@ -188,5 +185,15 @@ if [ -d "${src_dir}/supported-gpus" ]; then
   mkdir -p "${out_dir}/usr/share/doc/nvidia-${version}/supported-gpus"
   cp -a "${src_dir}/supported-gpus/." "${out_dir}/usr/share/doc/nvidia-${version}/supported-gpus/"
 fi
+
+if find "${out_dir}/usr/lib" -maxdepth 1 -name 'libOpenCL.so*' -print -quit \
+    | grep -q .; then
+  printf '%s\n' 'Nvidia runtime must not publish the generic OpenCL loader' >&2
+  exit 1
+fi
+test -e "${out_dir}/usr/lib/libnvidia-opencl.so.1"
+test -s "${out_dir}/usr/share/OpenCL/vendors/nvidia.icd"
+grep -Fxq 'libnvidia-opencl.so.1' \
+  "${out_dir}/usr/share/OpenCL/vendors/nvidia.icd"
 
 find "${out_dir}" -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;

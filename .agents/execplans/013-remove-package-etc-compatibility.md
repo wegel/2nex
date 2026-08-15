@@ -121,6 +121,15 @@ package groups.
   `OCL_ICD_FILENAMES` stays additive while `OCL_ICD_VENDORS` replaces the
   default directories. All six successful builds reproduced checksum
   `cd728fed81942ff648d7cb0b276080e02f85fe6817b37d7fb7d02ea3afc6d154`.
+- [x] (2026-08-15 16:13Z) Removed Nvidia's unpatchable generic `libOpenCL`
+  from both driver branches, retained and checked each proprietary
+  `libnvidia-opencl.so.1`, and moved `nvidia.icd` to
+  `/usr/share/OpenCL/vendors`. Two exact strict commands per branch reproduced
+  Nvidia 580 checksum
+  `cd4c6680cedbc4f1dc814d31929a84563a79187752ce22158032b694d5bed98f`
+  and Nvidia current checksum
+  `7110b39ccca3e89916c44107d16ea1fdb30471765e1755921e46de3802a37057`.
+  The package checker now passes with zero `/etc` or `/usr/etc` output paths.
 - [ ] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
   loader that reads all three configuration tiers, then move both Nvidia ICD
   files below `/usr`.
@@ -269,6 +278,13 @@ package groups.
   Evidence: the first compile failed on that header; adding the existing
   `linux-headers` development bundle let the unchanged upstream source build
   and pass all four tests.
+
+- Observation: Nvidia's archive mixes the generic OpenCL loader and the
+  proprietary Nvidia ICD in the same top-level library directory.
+  Evidence: the shared runtime installer previously copied every `*.so*`, then
+  created four public `libOpenCL` names. Filtering `libOpenCL.so*` while keeping
+  `libnvidia-opencl.so.${version}` produced both driver packages without a
+  public loader; an installer assertion checks this boundary in every build.
 
 ## Decision Log
 
@@ -756,6 +772,16 @@ with a broad exception.
   override, layer, and real stub-ICD checks in all six successful builds;
   each produced package checksum
   `cd728fed81942ff648d7cb0b276080e02f85fe6817b37d7fb7d02ea3afc6d154`.
+- The shared Nvidia runtime installer has SHA-256
+  `9c5dd40a755c2c78d74b2e82ddd26940c3a6e067bfb33790c31b818776ec8d30`.
+  Nvidia 580 reproduced package checksum
+  `cd4c6680cedbc4f1dc814d31929a84563a79187752ce22158032b694d5bed98f`;
+  Nvidia current reproduced
+  `7110b39ccca3e89916c44107d16ea1fdb30471765e1755921e46de3802a37057`.
+  Both exact strict commands ran twice: four successful builds per branch.
+  Each build asserted that no `libOpenCL.so*` escaped the archive, that
+  `libnvidia-opencl.so.1` resolved to a real file, and that the vendor
+  registration below `/usr/share` named that proprietary ICD.
 
 ## Interfaces and Dependencies
 
