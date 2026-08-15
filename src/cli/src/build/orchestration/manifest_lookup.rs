@@ -49,7 +49,7 @@ pub fn find_manifest_for_commit(commit: &str, manifest_dirs: &[PathBuf]) -> io::
 
     let mut matches = BTreeSet::new();
     for base_dir in manifest_dirs {
-        if let Some(path) = find_manifest_in_base_dir(&pkg_ref, base_dir) {
+        for path in find_manifests_in_base_dir(&pkg_ref, base_dir) {
             matches.insert(path.canonicalize()?);
         }
     }
@@ -78,18 +78,23 @@ pub fn find_manifest_for_commit(commit: &str, manifest_dirs: &[PathBuf]) -> io::
     ))
 }
 
-fn find_manifest_in_base_dir(pkg_ref: &PackageRef, base_dir: &Path) -> Option<PathBuf> {
+fn find_manifests_in_base_dir(pkg_ref: &PackageRef, base_dir: &Path) -> Vec<PathBuf> {
+    let mut matches = BTreeSet::new();
     for namespace_path in namespace_search_paths(pkg_ref, base_dir) {
         let direct_path = namespace_path.join(format!("{}.yaml", pkg_ref.slug));
         if direct_path.exists() {
-            return Some(direct_path);
+            matches.insert(direct_path);
         }
 
-        if let Some(path) = find_suffix_manifest(&namespace_path, &pkg_ref.slug) {
-            return Some(path);
+        for path in manifest_paths(&namespace_path) {
+            if is_yaml_with_slug_suffix(&path, &pkg_ref.slug)
+                || declares_package_slug(&path, &pkg_ref.slug)
+            {
+                matches.insert(path);
+            }
         }
     }
-    None
+    matches.into_iter().collect()
 }
 
 fn namespace_search_paths(pkg_ref: &PackageRef, base_dir: &Path) -> Vec<PathBuf> {
@@ -103,25 +108,51 @@ fn namespace_search_paths(pkg_ref: &PackageRef, base_dir: &Path) -> Vec<PathBuf>
     paths
 }
 
-fn find_suffix_manifest(namespace_path: &Path, slug: &str) -> Option<PathBuf> {
+fn manifest_paths(namespace_path: &Path) -> Vec<PathBuf> {
     if !namespace_path.is_dir() {
-        return None;
+        return Vec::new();
     }
 
-    let entries = fs::read_dir(namespace_path).ok()?;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if is_yaml_with_slug_suffix(&path, slug) {
-            return Some(path);
-        }
-    }
-    None
+    let Ok(entries) = fs::read_dir(namespace_path) else {
+        return Vec::new();
+    };
+    let mut paths = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| is_yaml(path))
+        .collect::<Vec<_>>();
+    paths.sort();
+    paths
 }
 
 fn is_yaml_with_slug_suffix(path: &Path, slug: &str) -> bool {
-    path.extension().and_then(|s| s.to_str()) == Some("yaml")
-        && path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .is_some_and(|filename| filename.ends_with(&format!("-{}", slug)))
+    path.file_stem()
+        .and_then(|s| s.to_str())
+        .is_some_and(|filename| filename.ends_with(&format!("-{}", slug)))
 }
+
+fn is_yaml(path: &Path) -> bool {
+    matches!(
+        path.extension().and_then(|extension| extension.to_str()),
+        Some("yaml" | "yml")
+    )
+}
+
+fn declares_package_slug(path: &Path, slug: &str) -> bool {
+    let Ok(contents) = fs::read_to_string(path) else {
+        return false;
+    };
+    let Ok(document) = serde_yaml::from_str::<serde_yaml::Value>(&contents) else {
+        return false;
+    };
+
+    document
+        .get("package")
+        .and_then(|package| package.get("slug"))
+        .and_then(serde_yaml::Value::as_str)
+        == Some(slug)
+}
+
+#[cfg(test)]
+#[path = "manifest_lookup_tests.rs"]
+mod tests;
