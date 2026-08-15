@@ -6,7 +6,7 @@ package:
   version: "0.191"
   description: A collection of utilities and libraries for handling ELF (Executable and Linkable Format) files
   homepage: https://sourceware.org/elfutils/
-  checksum: 6b24cd2b06060f8f705a13c006555ca3fd2941dc53da3937f1a7b0cb2aae1359
+  checksum: 8cc94c6a0b2ebf1a5ce0f444daec9f4f6a6ad764e9d9a10cfc721a8a08cda872
 
 sources:
 - name: elfutils
@@ -63,19 +63,42 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4101:12545, 8303:18672, 12403:20126, 16509:22809, 24739:27840, 28862:29341, 32983:30791, 41223:36051, 49480:45799, 54253:46854]
+  profile: [4101:1821, 8303:3291, 12403:3480, 16509:4705, 24738:5345, 28862:5721, 32983:6132, 41206:8197, 49464:10148, 54237:10395]
 
   script: |
+    set -eu
+
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
-    cd ${WORK_DIR}
+    cd "${WORK_DIR}"
 
     ./configure --prefix=/usr                \
+                --sysconfdir=/etc            \
                 --disable-debuginfod         \
                 --enable-libdebuginfod=dummy \
                 --libdir=/usr/lib
 
     make
-    make DESTDIR=$OUT_DIR install
+    make DESTDIR="${OUT_DIR}" install
+
+    # Upstream couples the profile hook install directory to sysconfdir. Keep
+    # the hook immutable while retaining its administrator-owned /etc lookup.
+    mkdir -p "${OUT_DIR}/usr/lib/profile.d"
+    mv "${OUT_DIR}/etc/profile.d/debuginfod.csh" \
+       "${OUT_DIR}/usr/lib/profile.d/debuginfod.csh"
+    mv "${OUT_DIR}/etc/profile.d/debuginfod.sh" \
+       "${OUT_DIR}/usr/lib/profile.d/debuginfod.sh"
+    rmdir "${OUT_DIR}/etc/profile.d" \
+          "${OUT_DIR}/etc/debuginfod" \
+          "${OUT_DIR}/etc"
+
+    test -s "${OUT_DIR}/usr/lib/profile.d/debuginfod.csh"
+    bash -n "${OUT_DIR}/usr/lib/profile.d/debuginfod.sh"
+    bash --noprofile --norc -c '
+      DEBUGINFOD_URLS=https://debuginfod.example.invalid/
+      export DEBUGINFOD_URLS
+      source "$1"
+      test "${DEBUGINFOD_URLS}" = https://debuginfod.example.invalid/
+    ' elfutils-test "${OUT_DIR}/usr/lib/profile.d/debuginfod.sh"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -215,8 +238,8 @@ outputs:
 
   conf:
     files:
-    - path: /usr/etc/profile.d/debuginfod.csh
-    - path: /usr/etc/profile.d/debuginfod.sh
+    - path: /usr/lib/profile.d/debuginfod.csh
+    - path: /usr/lib/profile.d/debuginfod.sh
 
   dev:
     files:

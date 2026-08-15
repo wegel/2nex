@@ -42,6 +42,11 @@ package groups.
   self-tested repository checker for `/etc` and `/usr/etc` output declarations,
   and documented the rule for manifest authors. The checker correctly reports
   all 28 known violations until later milestones remove them.
+- [x] (2026-08-15 13:24Z) Moved Bash Completion, VTE, Elfutils, and Rust shell
+  files into `/usr/lib/profile.d` or `/usr/share`, removed their nine package
+  paths below `/etc` and `/usr/etc`, and ran their executable package smokes.
+  The remaining inventory has 19 paths across nine manifests. The system
+  profile still needs its layered fragment reader before this milestone closes.
 - [ ] Move XDG autostart files into a vendor tree and prove the Nex desktop
   session discovers them through the standard XDG environment interface.
 - [ ] Move Bash Completion, VTE, Elfutils, and Cargo shell integration into
@@ -96,6 +101,19 @@ package groups.
   Evidence: `rtk git status --short --untracked-files=all` printed no paths at
   commit `0873019`, so there were no human changes, local-only files, or checked
   commit candidates to classify.
+
+- Observation: Rust 1.91.1's bundled LLVM needs Zlib, but the old manifest did
+  not select Zlib or record `libz.so.1` in its generated dependency lists.
+  Evidence: the new `rustc --version` package smoke first failed while loading
+  `libz.so.1`; adding the normal Zlib development bundle made both `cargo
+  --version` and `rustc --version` pass, and dependency generation recorded
+  Zlib for all three affected LLVM consumers.
+
+- Observation: Nex has no C shell package that can execute the installed VTE
+  and Elfutils `.csh` hooks.
+  Evidence: the package manifest scan found no `csh` or `tcsh` slug. The package
+  smokes require each C shell hook to be nonempty and execute the sibling Bash
+  hook. The final report must retain this narrow skipped semantic check.
 
 ## Decision Log
 
@@ -493,6 +511,17 @@ with a broad exception.
 - The Khronos OpenCL ICD Loader source supports explicit
   `OCL_ICD_FILENAMES` and `OCL_ICD_VENDORS` overrides. The implementation must
   preserve those interfaces while adding the default layered directories.
+- Shell package checksums after relocation: Bash Completion
+  `b6771b9688f614b674fb9fb32d50d4254a7457043512df57f01760cab183695d`,
+  VTE `cb779385060af4815061ca5517c6614504d1c7b50d6c2ac75f8ba7d8c0448c40`,
+  Elfutils `8cc94c6a0b2ebf1a5ce0f444daec9f4f6a6ad764e9d9a10cfc721a8a08cda872`,
+  and Rust
+  `69ca52e02ece272a597586ca2a99e1b1e200b5056b528fd6a7e7e7b2ddc54302`.
+  Each strict build command performed two matching builds. The embedded smokes
+  loaded Bash Completion's default reader, activated VTE's interactive Bash
+  hook, preserved Elfutils' explicit `DEBUGINFOD_URLS`, registered Cargo's
+  completion, and ran both Cargo and Rustc. The same strict command was then
+  repeated against each generated final manifest before commit.
 
 ## Interfaces and Dependencies
 

@@ -6,7 +6,7 @@ package:
   version: 2.17.0
   description: Programmable completion functions for Bash
   homepage: https://github.com/scop/bash-completion
-  checksum: 9b5ee85942099ee315a1d32912c79e6fea6dcc9f1fbc6a4a7169b283ff483c39
+  checksum: b6771b9688f614b674fb9fb32d50d4254a7457043512df57f01760cab183695d
 
 sources:
 - name: bash_completion
@@ -35,19 +35,30 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4102:482, 8210:779, 12322:931, 16426:1055, 20536:1365, 24960:1502, 29059:1549, 37260:1906, 45476:2093, 46629:2534]
+  profile: [4102:442, 8210:731, 12322:863, 16431:975, 20552:1250, 24976:1368, 29075:1410, 37276:1735, 45492:1902, 46665:2312]
 
   script: |
     set -eu
     tar --no-same-owner -xf "${SOURCE_bash_completion}" -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
 
-    ./configure --prefix=/usr --sysconfdir=/etc
+    ./configure --prefix=/usr --sysconfdir=/usr/lib
     make
     make DESTDIR="${OUT_DIR}" install
 
-    mkdir -p "${OUT_DIR}/etc/bash_completion.d"
-    ln -s /usr/share/bash-completion/bash_completion "${OUT_DIR}/etc/bash_completion"
+    # Login shells can load the immutable hook from /usr/lib/profile.d.
+    # The deprecated bash_completion.d aliases serve only historical consumers.
+    rm -rf "${OUT_DIR}/usr/lib/bash_completion.d"
+
+    test -f "${OUT_DIR}/usr/lib/profile.d/bash_completion.sh"
+    test -f "${OUT_DIR}/usr/share/bash-completion/bash_completion"
+    bash --noprofile --norc -c '
+      source "$1"
+      declare -F _comp_complete_load >/dev/null
+      complete -p -D | grep -q _comp_complete_load
+    ' bash-completion-test "${OUT_DIR}/usr/share/bash-completion/bash_completion"
+    grep -q '/usr/share/bash-completion/bash_completion' \
+      "${OUT_DIR}/usr/lib/profile.d/bash_completion.sh"
     find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
 
 bundles:
@@ -58,9 +69,7 @@ bundles:
 outputs:
   conf:
     files:
-    - path: /etc/bash_completion
-    - path: /etc/bash_completion.d/000_bash_completion_compat.bash
-    - path: /etc/profile.d/bash_completion.sh
+    - path: /usr/lib/profile.d/bash_completion.sh
 
   dev:
     files:

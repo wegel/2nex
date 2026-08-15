@@ -6,7 +6,7 @@ package:
   version: 0.76.4
   description: GTK3 terminal emulator widget
   homepage: https://gitlab.gnome.org/GNOME/vte
-  checksum: 92157350d5c80cc7991d8166e6187e5e94f5219b4d971e7fc5345bc0ab7cbc27
+  checksum: cb779385060af4815061ca5517c6614504d1c7b50d6c2ac75f8ba7d8c0448c40
 
 sources:
 - name: vte
@@ -145,7 +145,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4144:1454, 8267:2290, 12379:2290, 16495:3241, 20618:5610, 24280:11799]
+  profile: [4144:1411, 8267:2188, 12379:2188, 16491:3147, 20652:6032, 24434:12986]
 
   script: |
     set -eu
@@ -158,6 +158,7 @@ build:
     meson setup build \
       --prefix=/usr \
       --libdir=lib \
+      --sysconfdir=/usr/lib \
       --buildtype=release \
       -Ddocs=false \
       -Dgir=true \
@@ -168,6 +169,17 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    test -s "${OUT_DIR}/usr/lib/profile.d/vte.csh"
+    bash -n "${OUT_DIR}/usr/lib/profile.d/vte.sh"
+    bash --noprofile --norc -ic '
+      VTE_VERSION=3405
+      TERM=xterm-256color
+      PS1="test$ "
+      source "$1"
+      declare -F __vte_prompt_command >/dev/null
+      [[ "${PS1}" == *"]133;"* ]]
+    ' vte-test "${OUT_DIR}/usr/lib/profile.d/vte.sh"
 
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -311,8 +323,8 @@ outputs:
 
   misc:
     files:
-    - path: /etc/profile.d/vte.csh
-    - path: /etc/profile.d/vte.sh
+    - path: /usr/lib/profile.d/vte.csh
+    - path: /usr/lib/profile.d/vte.sh
     - path: /usr/libexec/vte-urlencode-cwd
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
