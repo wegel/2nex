@@ -109,6 +109,10 @@ named below.
   rebuilt the package and all eight affected assemblies, exercised both
   readers in the finished Edgebox root, passed the full Edgebox smoke, and
   booted nex-systemd in QEMU.
+- [x] (2026-08-15 11:25Z) Removed D-Bus's obsolete empty `/etc` stubs, added
+  transient system and session drop-in directories between its existing
+  vendor and administrator directories, and strictly rebuilt it with a live
+  policy reload test across all three tiers.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -1010,6 +1014,36 @@ affected assemblies, and commit.
    root's `/etc/bash_completion` link resolves to
    `/usr/share/bash-completion/bash_completion`. No manifest or assembly
    content changed. Commit: `pkg: document system shell integration paths`.
+
+9. `pkg/core/ipc/dbus.yaml`
+
+   The old `conf` output declared `/etc/dbus-1/session.conf` and
+   `/etc/dbus-1/system.conf` alongside the real main files at
+   `/usr/share/dbus-1/session.conf` and `system.conf`. D-Bus 1.16 labels the
+   two installed `/etc` files obsolete, empty compatibility stubs and says
+   they may be removed. Outcome 3 applies to those stubs. The daemon already
+   starts from the `/usr/share` files and retains the administrator's legacy
+   main-file includes, `session.d`, `system.d`, and `*-local.conf` paths.
+
+   Outcome 2 applies to transient policy. The generic patch with SHA-256
+   `5236950595379b17b634f59a2d901df06114e8b1c836b563cc1d33d116a0cdd3`
+   adds `/run/dbus-1/session.d` and `/run/dbus-1/system.d` after the relative
+   vendor drop-in directories and before `/etc` drop-ins. D-Bus loads every
+   fragment and does not define same-basename shadowing or empty-file masks,
+   so those semantics do not apply to this XML format. An explicit
+   `--config-file` remains independent of the standard main files.
+
+   The strict command built twice with checksum
+   `43f55e0c3866202b868e500faf2c286becc77d4e98adf19bf4e50ef0791db9eb`.
+   Both builds started the installed `dbus-daemon`, queried it with the
+   installed `dbus-send`, and proved an administrator deny over a transient
+   allow over a vendor deny. Removing each higher file and sending SIGHUP
+   changed the live policy in the expected order. A separate explicit main
+   file started and answered the same query. The stored `conf` output now
+   contains only the two complete `/usr/share` files and no `/etc` file. No
+   assembly selects this sibling `conf` output; current systems use
+   dbus-broker's service configuration and D-Bus's library closure, so no
+   finished root changed. Commit: `pkg: layer dbus policy directories`.
 
 11. `pkg/desktop/wayland/fuzzel.yaml`
 

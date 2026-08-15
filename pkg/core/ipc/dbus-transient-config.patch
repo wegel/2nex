@@ -1,0 +1,30 @@
+From: Package maintainers <noreply@example.invalid>
+Subject: [PATCH] bus: load transient configuration before administrator policy
+Source: https://dbus.freedesktop.org/releases/dbus/dbus-1.16.2.tar.xz
+Upstream: Not submitted; this adds the conventional Linux /run policy tier.
+
+D-Bus already keeps its package defaults in /usr/share/dbus-1 and loads
+administrator policy from /etc/dbus-1. Add the corresponding /run/dbus-1
+drop-in directories between those two tiers. This gives image builders and
+early-boot tools a transient policy location without writing persistent host
+configuration.
+
+---
+ bus/session.conf.in | 2 ++
+ bus/system.conf.in  | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/bus/session.conf.in b/bus/session.conf.in
+index 04a3198b..d2644f0c 100644
+--- a/bus/session.conf.in
++++ b/bus/session.conf.in
+@@ -44,0 +45,2 @@
++  <includedir>/run/dbus-1/session.d</includedir>
++
+diff --git a/bus/system.conf.in b/bus/system.conf.in
+index fb6d364c..11bf2312 100644
+--- a/bus/system.conf.in
++++ b/bus/system.conf.in
+@@ -133,0 +134,2 @@
++  <includedir>/run/dbus-1/system.d</includedir>
++

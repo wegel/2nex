@@ -1761,3 +1761,13 @@ OpenSSL 3.3.1 ships a comment-only `ct_log_list.cnf` template with no
 vendor file. Test CT path precedence with a valid transient `enabled_logs =`
 file, then place invalid and empty administrator files above it to prove
 override and mask behavior.
+
+D-Bus 1.16.2 installs complete system and session main files below
+`/usr/share/dbus-1`; its two generated `/etc/dbus-1/*.conf` files are empty
+compatibility stubs whose comments say they may be removed. Removing the
+package stubs does not remove the administrator interface: the vendor main
+files still include the legacy `/etc` main files, `/etc` drop-ins, and local
+files. Nex's generic patch also loads `/run/dbus-1/{system,session}.d` between
+the relative vendor drop-ins and `/etc` drop-ins. D-Bus loads every XML
+fragment, so it has neither same-basename shadowing nor empty-file masks. Test
+precedence and SIGHUP reloads with real policy rules and a `dbus-send` query.

@@ -6,12 +6,15 @@ package:
   version: 1.16.2
   description: D-Bus message bus system
   homepage: https://dbus.freedesktop.org/
-  checksum: 258af05bb7f3790fe36259037c564ba5c8be5f2779a25d69109dc689919cf61a
+  checksum: 43f55e0c3866202b868e500faf2c286becc77d4e98adf19bf4e50ef0791db9eb
 
 sources:
 - name: dbus
   url: https://dbus.freedesktop.org/releases/dbus/dbus-1.16.2.tar.xz
   sha256: 0ba2a1a4b16afe7bceb2c07e9ce99a8c2c3508e5dec290dbb643384bd6beb7e2
+- name: transient_config
+  file: pkg/core/ipc/dbus-transient-config.patch
+  sha256: 5236950595379b17b634f59a2d901df06114e8b1c836b563cc1d33d116a0cdd3
 
 dependencies:
 - name: glibc
@@ -56,14 +59,20 @@ dependencies:
   commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
 - name: systemd
   commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4123:51827, 8262:63476, 12402:65799, 16531:71902, 20667:80344, 24822:83224, 28946:89073, 33097:95980, 36485:102429]
+  profile: [4103:1933, 8241:1933, 12363:2118, 16492:2192, 20658:2303, 24804:2421, 28944:2503, 33086:6512, 36552:8592]
 
   script: |
+    set -eu
+
     tar --no-same-owner -xf /${SOURCE_dbus} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_transient_config}"
 
     meson setup build \
       --prefix=/usr \
@@ -81,6 +90,127 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    rm \
+      "${OUT_DIR}/etc/dbus-1/session.conf" \
+      "${OUT_DIR}/etc/dbus-1/system.conf"
+    rmdir "${OUT_DIR}/etc/dbus-1" "${OUT_DIR}/etc"
+
+    daemon="${OUT_DIR}/usr/bin/dbus-daemon"
+    send="${OUT_DIR}/usr/bin/dbus-send"
+    lib="${OUT_DIR}/usr/lib"
+    vendor_dir="${OUT_DIR}/usr/share/dbus-1/session.d"
+    transient_dir=/run/dbus-1/session.d
+    administrator_dir=/etc/dbus-1/session.d
+    test_name=90-layer-order-test.conf
+    backup_dir="${WORK_DIR}/dbus-config-backup"
+    mkdir -p \
+      "${vendor_dir}" \
+      "${transient_dir}" \
+      "${administrator_dir}" \
+      "${backup_dir}"
+
+    config_index=0
+    for config_path in \
+      "${vendor_dir}/${test_name}" \
+      "${transient_dir}/${test_name}" \
+      "${administrator_dir}/${test_name}"; do
+      config_index=$((config_index + 1))
+      if [ -e "${config_path}" ] || [ -L "${config_path}" ]; then
+        mv "${config_path}" "${backup_dir}/${config_index}"
+      fi
+    done
+
+    write_policy() {
+      action=$1
+      destination=$2
+      printf '%s\n' \
+        '<busconfig>' \
+        '  <policy context="default">' \
+        "    <${action} send_destination=\"${destination}\"/>" \
+        '  </policy>' \
+        '</busconfig>' > "$3"
+    }
+    bus_call_works() {
+      LD_LIBRARY_PATH="${lib}" \
+        "${send}" \
+          --bus="${bus_address}" \
+          --print-reply \
+          --dest=org.freedesktop.DBus \
+          / \
+          org.freedesktop.DBus.GetId >/dev/null 2>&1
+    }
+
+    write_policy deny org.freedesktop.DBus "${vendor_dir}/${test_name}"
+    write_policy allow org.freedesktop.DBus "${transient_dir}/${test_name}"
+    write_policy deny org.freedesktop.DBus "${administrator_dir}/${test_name}"
+
+    daemon_output=$(LD_LIBRARY_PATH="${lib}" \
+      "${daemon}" \
+        --config-file="${OUT_DIR}/usr/share/dbus-1/session.conf" \
+        --print-address=1 \
+        --print-pid=1 \
+        --fork)
+    bus_address=$(printf '%s\n' "${daemon_output}" | head -n 1)
+    daemon_pid=$(printf '%s\n' "${daemon_output}" | tail -n 1)
+
+    if bus_call_works; then
+      echo 'administrator D-Bus policy did not override transient policy' >&2
+      exit 1
+    fi
+    rm "${administrator_dir}/${test_name}"
+    kill -HUP "${daemon_pid}"
+    sleep 1
+    bus_call_works
+    rm "${transient_dir}/${test_name}"
+    kill -HUP "${daemon_pid}"
+    sleep 1
+    if bus_call_works; then
+      echo 'vendor D-Bus policy was not restored after reload' >&2
+      exit 1
+    fi
+    kill "${daemon_pid}"
+    wait "${daemon_pid}" 2>/dev/null || true
+
+    explicit_config="${WORK_DIR}/explicit-session.conf"
+    printf '%s\n' \
+      '<busconfig>' \
+      '  <type>session</type>' \
+      '  <listen>unix:tmpdir=/tmp</listen>' \
+      '  <auth>EXTERNAL</auth>' \
+      '  <policy context="default">' \
+      '    <allow send_destination="*"/>' \
+      '    <allow receive_sender="*"/>' \
+      '    <allow own="*"/>' \
+      '  </policy>' \
+      '</busconfig>' > "${explicit_config}"
+    explicit_output=$(LD_LIBRARY_PATH="${lib}" \
+      "${daemon}" \
+        --config-file="${explicit_config}" \
+        --print-address=1 \
+        --print-pid=1 \
+        --fork)
+    bus_address=$(printf '%s\n' "${explicit_output}" | head -n 1)
+    daemon_pid=$(printf '%s\n' "${explicit_output}" | tail -n 1)
+    bus_call_works
+    kill "${daemon_pid}"
+    wait "${daemon_pid}" 2>/dev/null || true
+
+    rm -f \
+      "${vendor_dir}/${test_name}" \
+      "${transient_dir}/${test_name}" \
+      "${administrator_dir}/${test_name}"
+    config_index=0
+    for config_path in \
+      "${vendor_dir}/${test_name}" \
+      "${transient_dir}/${test_name}" \
+      "${administrator_dir}/${test_name}"; do
+      config_index=$((config_index + 1))
+      if [ -e "${backup_dir}/${config_index}" ] || \
+          [ -L "${backup_dir}/${config_index}" ]; then
+        mv "${backup_dir}/${config_index}" "${config_path}"
+      fi
+    done
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
@@ -149,8 +279,6 @@ outputs:
 
   conf:
     files:
-    - path: /etc/dbus-1/session.conf
-    - path: /etc/dbus-1/system.conf
     - path: /usr/share/dbus-1/session.conf
     - path: /usr/share/dbus-1/system.conf
 
