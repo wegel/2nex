@@ -103,6 +103,10 @@ named below.
   overlapping closure file replaces a read-only regular file or symlink
   instead of opening it in place, passed all 187 CLI tests, and resumed the
   OpenSSL strict build past the dependency checkout that exposed the bug.
+- [x] (2026-08-15 06:26Z) Moved OpenSSL's package-owned configuration and
+  helper scripts to `/usr/lib/ssl`, added administrator, transient, and vendor
+  whole-file lookup without changing its certificate directory, strictly
+  rebuilt it, and exercised the installed package in a copy-mode root.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -339,6 +343,19 @@ named below.
   commits and began compiling OpenSSL. Dedicated tests also prove that a
   regular file replaces a symlink without modifying the symlink target.
 
+- Observation: OpenSSL's install target creates empty `certs` and `private`
+  directories below `OPENSSLDIR`, even after the package moves every config
+  file and helper script away from that directory.
+  Evidence: the first relocation build left only those two directories below
+  `/nex/out/etc/ssl`. The manifest now removes each known empty directory with
+  `rmdir`, so an unexpected file still stops the build.
+
+- Observation: OpenSSL's configure script can continue after reporting that
+  `grep` is absent.
+  Evidence: the earlier isolated configure reached compilation without Grep,
+  but the package's focused provider tests could not run. Declaring phase-one
+  Grep gave the build and its tests the command as an explicit input.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -518,6 +535,16 @@ named below.
   systemd oneshot that refreshes `/etc/ssl/certs` each boot. The package also
   publishes a pre-generated immutable copy below `/usr/lib/ssl/certs` for
   consumers that need trust before the first boot refresh.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Keep OpenSSL's certificate directory at `/etc/ssl`, but install
+  package-owned configuration and helper scripts below `/usr/lib/ssl` and
+  select `/etc/ssl`, `/run/ssl`, then `/usr/lib/ssl` as whole files.
+  Rationale: the generated live certificate database remains at the interface
+  OpenSSL and administrators expect. `openssl.cnf` and `ct_log_list.cnf` are
+  package defaults, so lasting and transient machine files must replace them
+  without changing the read-only package tree. `OPENSSL_CONF` and
+  `CTLOG_FILE` retain exact explicit-file behavior.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -1078,6 +1105,37 @@ affected assemblies, and commit.
    Direct `zub cat-file` checks found both public links and both package files
    in every system commit and found no `/etc/xdg/waybar`. Commit: `pkg: layer
    waybar system configuration`.
+
+14. `pkg/dev/libs/openssl3.yaml`
+
+   The old `conf` output declared `openssl.cnf`, `ct_log_list.cnf`, their
+   distribution copies, and three helper scripts below `/etc/ssl`. Outcome 2
+   applies to the two active configuration files, and outcome 1 applies to
+   the remaining package files. The generic patch selects the first existing
+   `openssl.cnf` or `ct_log_list.cnf` from `/etc/ssl`, `/run/ssl`, and
+   `/usr/lib/ssl`. A non-ENOENT or non-ENOTDIR error selects that path instead
+   of silently falling through, and an empty selected file masks lower files.
+   Exact `OPENSSL_CONF` and `CTLOG_FILE` values still win. The package installs
+   every config file and helper only below `/usr/lib/ssl` while retaining
+   `--openssldir=/etc/ssl` for the generated certificate database.
+
+   The patch applies with `patch -Np1 --batch --fuzz=0` and has SHA-256
+   `21e1b7e249eb3463370843cf94e1a2ef76e692dbd81cdb8b3d9aeb59956808a3`.
+   The strict command built twice, passed its provider, config precedence,
+   empty-mask, explicit-file, and CT log API tests, and reproduced checksum
+   `57252e416e94f89427dadaa413079a456f8015783f0e2bfc317b6a6e91b7bb1d`.
+   A copy-mode root contained all seven package paths below `/usr/lib/ssl`, no
+   package `/etc`, and a working OpenSSL 3.3.1 executable. The installed
+   executable reported `OPENSSLDIR: "/etc/ssl"`, loaded the vendor default,
+   rejected an invalid transient file, accepted an empty administrator file
+   as the higher mask, and honored an explicit config that activated the
+   legacy provider. The installed CT API probe likewise selected vendor,
+   transient, administrator-mask, and explicit `CTLOG_FILE` cases.
+
+   The direct assembly consumers and their descendants still need their
+   explicit `conf` selections, reproducible rebuilds, and finished-root tests
+   before this row closes. Planned package commit: `pkg: layer openssl
+   configuration`.
 
 17. `pkg/libs/crypto/p11-kit.yaml`
 

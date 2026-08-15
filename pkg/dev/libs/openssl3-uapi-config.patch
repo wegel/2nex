@@ -1,0 +1,168 @@
+From: Package maintainers <packages@localhost>
+Subject: [PATCH] select OpenSSL configuration from UAPI paths
+Source: downstream
+Upstream: not submitted; needs agreement on Unix vendor and transient paths
+
+Keep OPENSSL_CONF and CTLOG_FILE as explicit overrides. Without an override,
+select each complete configuration file from the administrator path, the
+transient path, or the vendor path. An existing empty or unreadable
+higher-priority file remains selected and therefore masks lower files.
+
+diff --git a/crypto/conf/conf_mod.c b/crypto/conf/conf_mod.c
+--- a/crypto/conf/conf_mod.c
++++ b/crypto/conf/conf_mod.c
+@@ -13,2 +13,5 @@
+ #include "internal/cryptlib.h"
++#ifdef OPENSSL_SYS_UNIX
++# include <sys/stat.h>
++#endif
+ #include "internal/rcu.h"
+@@ -670,28 +673,64 @@ void CONF_module_set_usr_data(CONF_MODULE *pmod, void *usr_data)
+     pmod->usr_data = usr_data;
+ }
+ 
+-/* Return default config file name */
+-char *CONF_get1_default_config_file(void)
++char *ossl_config_file_select(const char *environment, const char *filename)
+ {
+-    const char *t;
+-    char *file, *sep = "";
++    char *file;
+     size_t size;
+ 
+-    if ((file = ossl_safe_getenv("OPENSSL_CONF")) != NULL)
++    if ((file = ossl_safe_getenv(environment)) != NULL)
+         return OPENSSL_strdup(file);
+ 
++#ifdef OPENSSL_SYS_UNIX
++    {
++        static const char *const dirs[] = {
++            OPENSSLDIR,
++            "/run/ssl",
++            "/usr/lib/ssl",
++        };
++        struct stat st;
++        size_t i;
++
++        for (i = 0; i < OSSL_NELEM(dirs); i++) {
++            size = strlen(dirs[i]) + 1 + strlen(filename) + 1;
++            file = OPENSSL_malloc(size);
++            if (file == NULL)
++                return NULL;
++            BIO_snprintf(file, size, "%s/%s", dirs[i], filename);
++
++            if (i == OSSL_NELEM(dirs) - 1
++                    || stat(file, &st) == 0
++                    || (errno != ENOENT && errno != ENOTDIR))
++                return file;
++
++            OPENSSL_free(file);
++        }
++
++        return NULL;
++    }
++#else
++    const char *t;
++    const char *sep = "";
++
+     t = X509_get_default_cert_area();
+ #ifndef OPENSSL_SYS_VMS
+     sep = "/";
+ #endif
+-    size = strlen(t) + strlen(sep) + strlen(OPENSSL_CONF) + 1;
++    size = strlen(t) + strlen(sep) + strlen(filename) + 1;
+     file = OPENSSL_malloc(size);
+ 
+     if (file == NULL)
+         return NULL;
+-    BIO_snprintf(file, size, "%s%s%s", t, sep, OPENSSL_CONF);
++    BIO_snprintf(file, size, "%s%s%s", t, sep, filename);
+ 
+     return file;
++#endif
++}
++
++/* Return default config file name */
++char *CONF_get1_default_config_file(void)
++{
++    return ossl_config_file_select("OPENSSL_CONF", OPENSSL_CONF);
+ }
+ 
+ /*
+diff --git a/crypto/ct/ct_log.c b/crypto/ct/ct_log.c
+--- a/crypto/ct/ct_log.c
++++ b/crypto/ct/ct_log.c
+@@ -17,6 +17,7 @@
+ #include <openssl/safestack.h>
+ 
+ #include "internal/cryptlib.h"
++#include "internal/conf.h"
+ 
+ /*
+  * Information about a CT log server.
+@@ -160,12 +161,16 @@ static int ctlog_new_from_conf(CTLOG_STORE *store, CTLOG **ct_log,
+ 
+ int CTLOG_STORE_load_default_file(CTLOG_STORE *store)
+ {
+-    const char *fpath = ossl_safe_getenv(CTLOG_FILE_EVP);
++    char *fpath = ossl_config_file_select(CTLOG_FILE_EVP,
++                                          "ct_log_list.cnf");
++    int ret;
+ 
+     if (fpath == NULL)
+-      fpath = CTLOG_FILE;
++        return 0;
+ 
+-    return CTLOG_STORE_load_file(store, fpath);
++    ret = CTLOG_STORE_load_file(store, fpath);
++    OPENSSL_free(fpath);
++    return ret;
+ }
+ 
+ /*
+diff --git a/doc/man3/CONF_modules_load_file.pod b/doc/man3/CONF_modules_load_file.pod
+--- a/doc/man3/CONF_modules_load_file.pod
++++ b/doc/man3/CONF_modules_load_file.pod
+@@ -23,8 +23,13 @@ The function CONF_get1_default_config_file() determines the default
+ The function CONF_get1_default_config_file() determines the default
+ configuration file pathname as follows.
+ If the B<OPENSSL_CONF> environment variable is set its value is returned.
+-Else the function returns the path obtained using
+-L<X509_get_default_cert_area(3)> with the filename C<"openssl.cnf"> appended.
++On Unix, the function otherwise returns the first C<openssl.cnf> path that
++exists in C<OPENSSLDIR>, F</run/ssl>, or F</usr/lib/ssl>, in that order. An
++error other than a missing path selects that path so an inaccessible
++higher-priority file cannot expose lower configuration. If no file exists,
++the function returns F</usr/lib/ssl/openssl.cnf>. On other systems, it returns
++the path obtained using L<X509_get_default_cert_area(3)> with the filename
++C<"openssl.cnf"> appended.
+ The caller is responsible for freeing any string returned.
+ 
+ The function CONF_modules_load_file_ex() configures OpenSSL using
+diff --git a/doc/man3/CTLOG_STORE_new.pod b/doc/man3/CTLOG_STORE_new.pod
+--- a/doc/man3/CTLOG_STORE_new.pod
++++ b/doc/man3/CTLOG_STORE_new.pod
+@@ -35,5 +35,8 @@
+-file, which is named F<ct_log_list.cnf> in OPENSSLDIR (see the output of
+-L<openssl-version(1)>). This can be overridden using an environment variable
+-named B<CTLOG_FILE>. CTLOG_STORE_load_file() loads from a caller-specified file
+-path instead. Both of these functions append any loaded CT logs to the
+-CTLOG_STORE.
++file. The B<CTLOG_FILE> environment variable overrides that file. On Unix,
++the default is the first F<ct_log_list.cnf> that exists in OPENSSLDIR (see the
++output of L<openssl-version(1)>), F</run/ssl>, or F</usr/lib/ssl>, in that
++order. An error other than a missing path selects that path, and the vendor
++path is returned when none exists. On other systems, the default remains
++F<ct_log_list.cnf> in OPENSSLDIR. CTLOG_STORE_load_file() loads from a
++caller-specified file path instead. Both functions append any loaded CT logs
++to the CTLOG_STORE.
+diff --git a/include/internal/conf.h b/include/internal/conf.h
+--- a/include/internal/conf.h
++++ b/include/internal/conf.h
+@@ -28,4 +28,6 @@ int ossl_config_int(const OPENSSL_INIT_SETTINGS *);
+ void ossl_no_config_int(void);
+ void ossl_config_modules_free(void);
+ 
++char *ossl_config_file_select(const char *environment, const char *filename);
++
+ #endif

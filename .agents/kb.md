@@ -1730,3 +1730,20 @@ keeps an existing path only when it is the same regular-file inode, otherwise
 it removes the path before `fs::copy`. The CLI tests cover read-only files and
 symlink targets; the OpenSSL strict build exercises the real overlapping Perl
 closure case that exposed this rule.
+
+OpenSSL can keep `--openssldir=/etc/ssl` for the live generated certificate
+database without storing package configuration there. The generic OpenSSL
+3.3.1 patch selects `openssl.cnf` and `ct_log_list.cnf` as whole files from
+`/etc/ssl`, `/run/ssl`, then `/usr/lib/ssl`; exact `OPENSSL_CONF` and
+`CTLOG_FILE` values still win. The package installs config copies and helper
+scripts below `/usr/lib/ssl`. Its strict two-pass build and copy-mode installed
+root smoke covered both readers, empty masks, explicit files, provider module
+loading, and retained `OPENSSLDIR: "/etc/ssl"`; the package checksum is
+`57252e416e94f89427dadaa413079a456f8015783f0e2bfc317b6a6e91b7bb1d`.
+
+OpenSSL's install target creates empty `certs` and `private` directories below
+`OPENSSLDIR`. Remove those known children with `rmdir` before removing their
+parents when relocating package files. Do not recursively remove the tree,
+because an unexpected package file must fail the build. The configure script
+can also continue after it reports a missing `grep`; declare Grep explicitly
+when package tests or configure probes need it.

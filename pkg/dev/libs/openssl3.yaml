@@ -6,13 +6,16 @@ package:
   version: 3.3.1
   description: Arobust, commercial-grade, full-featured toolkit for general-purpose cryptography and secure communication.
   homepage: https://www.openssl.org/
-  checksum: 7fe12a790f07efaa956350d525eefec9180523e03cb2c39be5c758fe458110bb
+  checksum: 57252e416e94f89427dadaa413079a456f8015783f0e2bfc317b6a6e91b7bb1d
   seed: true
 
 sources:
 - name: openssl
   url: https://www.openssl.org/source/openssl-3.3.1.tar.gz
   sha256: 777cd596284c883375a2a7a11bf5d2786fc5413255efab20c50d6ffe6d020b7e
+- name: uapi_config
+  file: pkg/dev/libs/openssl3-uapi-config.patch
+  sha256: 21e1b7e249eb3463370843cf94e1a2ef76e692dbd81cdb8b3d9aeb59956808a3
 
 dependencies:
 - name: linux-headers
@@ -33,6 +36,8 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
 - name: gzip
   commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
 - name: make
@@ -41,14 +46,20 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
 - name: tar
   commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+- name: patch
+  commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [70227:5649, 268471:6493, 601969:7742, 1001158:10773, 1333935:14297, 1667376:17113, 1999721:20980, 2497913:169516, 2994331:179845, 3327003:188001]
+  profile: [70392:4730, 268636:5365, 602134:6434, 1001323:8180, 1334100:9537, 1667541:10634, 1999886:12516, 2497570:155051, 2998247:166097, 3327237:173119]
 
   script: |
-    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
-    cd ${WORK_DIR}
+    set -eu
+
+    tar --no-same-owner -xf "${SOURCE_openssl}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    patch -Np1 --batch --fuzz=0 < "/${SOURCE_uapi_config}"
 
     ./config --prefix=/usr         \
          --openssldir=/etc/ssl \
@@ -61,6 +72,187 @@ build:
     make MANSUFFIX=ssl DESTDIR=$OUT_DIR install
     mv -v ${OUT_DIR}/usr/share/doc/openssl ${OUT_DIR}/usr/share/doc/openssl-3.3.1
     cp -vfr doc/* ${OUT_DIR}/usr/share/doc/openssl-3.3.1
+
+    mkdir -p "${OUT_DIR}/usr/lib/ssl"
+    mv \
+      "${OUT_DIR}/etc/ssl/ct_log_list.cnf" \
+      "${OUT_DIR}/etc/ssl/ct_log_list.cnf.dist" \
+      "${OUT_DIR}/etc/ssl/openssl.cnf" \
+      "${OUT_DIR}/etc/ssl/openssl.cnf.dist" \
+      "${OUT_DIR}/usr/lib/ssl"
+    mv "${OUT_DIR}/etc/ssl/misc" "${OUT_DIR}/usr/lib/ssl/misc"
+    rmdir \
+      "${OUT_DIR}/etc/ssl/certs" \
+      "${OUT_DIR}/etc/ssl/private" \
+      "${OUT_DIR}/etc/ssl" \
+      "${OUT_DIR}/etc"
+
+    openssl_bin="${OUT_DIR}/usr/bin/openssl"
+    openssl_lib="${OUT_DIR}/usr/lib"
+    openssl_modules="${OUT_DIR}/usr/lib/ossl-modules"
+
+    OPENSSL_CONF="${OUT_DIR}/usr/lib/ssl/openssl.cnf" \
+      OPENSSL_MODULES="${openssl_modules}" \
+      LD_LIBRARY_PATH="${openssl_lib}" \
+      "${openssl_bin}" list -providers | grep -F 'OpenSSL Default Provider'
+
+    cat > "${WORK_DIR}/legacy-provider.cnf" <<'EOF'
+    openssl_conf = openssl_init
+    config_diagnostics = 1
+
+    [openssl_init]
+    providers = providers
+
+    [providers]
+    default = default_provider
+    legacy = legacy_provider
+
+    [default_provider]
+    activate = 1
+
+    [legacy_provider]
+    activate = 1
+    EOF
+    OPENSSL_CONF="${WORK_DIR}/legacy-provider.cnf" \
+      OPENSSL_MODULES="${openssl_modules}" \
+      LD_LIBRARY_PATH="${openssl_lib}" \
+      "${openssl_bin}" list -providers | grep -F 'OpenSSL Legacy Provider'
+
+    config_backup="${WORK_DIR}/config-path-backup"
+    mkdir -p "${config_backup}" /etc/ssl /run/ssl /usr/lib/ssl
+    config_index=0
+    for config_path in \
+      /etc/ssl/openssl.cnf \
+      /run/ssl/openssl.cnf \
+      /usr/lib/ssl/openssl.cnf \
+      /etc/ssl/ct_log_list.cnf \
+      /run/ssl/ct_log_list.cnf \
+      /usr/lib/ssl/ct_log_list.cnf; do
+      config_index=$((config_index + 1))
+      if [ -e "${config_path}" ] || [ -L "${config_path}" ]; then
+        mv "${config_path}" "${config_backup}/${config_index}"
+      fi
+    done
+
+    openssl_config_works() {
+      OPENSSL_MODULES="${openssl_modules}" \
+        LD_LIBRARY_PATH="${openssl_lib}" \
+        "${openssl_bin}" list -providers >/dev/null 2>&1
+    }
+    write_bad_config() {
+      printf '%s\n' \
+        'config_diagnostics = 1' \
+        'openssl_conf = missing_section' > "$1"
+    }
+
+    unset OPENSSL_CONF
+    write_bad_config /usr/lib/ssl/openssl.cnf
+    if openssl_config_works; then
+      echo 'OpenSSL ignored invalid vendor configuration' >&2
+      exit 1
+    fi
+
+    : > /run/ssl/openssl.cnf
+    openssl_config_works
+
+    write_bad_config /etc/ssl/openssl.cnf
+    if openssl_config_works; then
+      echo 'OpenSSL ignored invalid administrator configuration' >&2
+      exit 1
+    fi
+
+    : > /etc/ssl/openssl.cnf
+    openssl_config_works
+
+    write_bad_config /etc/ssl/openssl.cnf
+    OPENSSL_CONF="${WORK_DIR}/legacy-provider.cnf"
+    export OPENSSL_CONF
+    openssl_config_works
+    unset OPENSSL_CONF
+
+    cat > "${WORK_DIR}/ct-path-test.c" <<'EOF'
+    #include <openssl/ct.h>
+
+    int main(void)
+    {
+        CTLOG_STORE *store = CTLOG_STORE_new();
+        int loaded;
+
+        if (store == NULL)
+            return 2;
+        loaded = CTLOG_STORE_load_default_file(store);
+        CTLOG_STORE_free(store);
+        return loaded == 1 ? 0 : 1;
+    }
+    EOF
+    gcc \
+      -I"${OUT_DIR}/usr/include" \
+      -L"${openssl_lib}" \
+      -Wl,-rpath,"${openssl_lib}" \
+      "${WORK_DIR}/ct-path-test.c" \
+      -lcrypto \
+      -o "${WORK_DIR}/ct-path-test"
+
+    ct_config_works() {
+      LD_LIBRARY_PATH="${openssl_lib}" \
+        "${WORK_DIR}/ct-path-test" >/dev/null 2>&1
+    }
+    write_good_ct_config() {
+      printf '%s\n' 'enabled_logs =' > "$1"
+    }
+    write_bad_ct_config() {
+      printf '%s\n' 'missing_enabled_logs = yes' > "$1"
+    }
+
+    unset CTLOG_FILE
+    write_bad_ct_config /usr/lib/ssl/ct_log_list.cnf
+    if ct_config_works; then
+      echo 'OpenSSL ignored invalid vendor CT log configuration' >&2
+      exit 1
+    fi
+
+    write_good_ct_config /run/ssl/ct_log_list.cnf
+    ct_config_works
+
+    write_bad_ct_config /etc/ssl/ct_log_list.cnf
+    if ct_config_works; then
+      echo 'OpenSSL ignored invalid administrator CT log configuration' >&2
+      exit 1
+    fi
+
+    : > /etc/ssl/ct_log_list.cnf
+    if ct_config_works; then
+      echo 'OpenSSL did not let an empty administrator CT file mask lower files' >&2
+      exit 1
+    fi
+
+    write_good_ct_config "${WORK_DIR}/explicit-ct-log.cnf"
+    CTLOG_FILE="${WORK_DIR}/explicit-ct-log.cnf"
+    export CTLOG_FILE
+    ct_config_works
+    unset CTLOG_FILE
+
+    rm -f \
+      /etc/ssl/openssl.cnf \
+      /run/ssl/openssl.cnf \
+      /usr/lib/ssl/openssl.cnf \
+      /etc/ssl/ct_log_list.cnf \
+      /run/ssl/ct_log_list.cnf \
+      /usr/lib/ssl/ct_log_list.cnf
+    config_index=0
+    for config_path in \
+      /etc/ssl/openssl.cnf \
+      /run/ssl/openssl.cnf \
+      /usr/lib/ssl/openssl.cnf \
+      /etc/ssl/ct_log_list.cnf \
+      /run/ssl/ct_log_list.cnf \
+      /usr/lib/ssl/ct_log_list.cnf; do
+      config_index=$((config_index + 1))
+      if [ -e "${config_backup}/${config_index}" ] || \
+          [ -L "${config_backup}/${config_index}" ]; then
+        mv "${config_backup}/${config_index}" "${config_path}"
+      fi
+    done
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -94,13 +286,13 @@ outputs:
 
   conf:
     files:
-    - path: /etc/ssl/ct_log_list.cnf
-    - path: /etc/ssl/ct_log_list.cnf.dist
-    - path: /etc/ssl/misc/CA.pl
-    - path: /etc/ssl/misc/tsget
-    - path: /etc/ssl/misc/tsget.pl
-    - path: /etc/ssl/openssl.cnf
-    - path: /etc/ssl/openssl.cnf.dist
+    - path: /usr/lib/ssl/ct_log_list.cnf
+    - path: /usr/lib/ssl/ct_log_list.cnf.dist
+    - path: /usr/lib/ssl/misc/CA.pl
+    - path: /usr/lib/ssl/misc/tsget
+    - path: /usr/lib/ssl/misc/tsget.pl
+    - path: /usr/lib/ssl/openssl.cnf
+    - path: /usr/lib/ssl/openssl.cnf.dist
 
   dev:
     files:
