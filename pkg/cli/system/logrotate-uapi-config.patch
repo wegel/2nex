@@ -1,0 +1,266 @@
+Description: add layered system configuration lookup
+Source: downstream
+Upstream: not submitted; needs agreement on Unix vendor and transient paths
+
+Keep caller-supplied configuration paths unchanged.  When no path is supplied,
+select the first main file from /etc, /run, or /usr/lib.  Treat the conventional
+"include /etc/logrotate.d" directive as a basename merge across administrator,
+transient, and vendor fragment directories.
+
+--- a/config.c
++++ b/config.c
+@@ -863,11 +863,106 @@ static int readConfigPath(const char *path, struct logInfo *defConfig)
+     return result;
+ }
+ 
+-int readAllConfigPaths(const char **paths)
++static int readConfigPathSet(const char * const *directories,
++                             struct logInfo *defConfig)
++{
++    char **names = NULL;
++    unsigned names_count = 0;
++    int result = 0;
++    const char * const *directory;
++
++    for (directory = directories; *directory; directory++) {
++        struct dirent *entry;
++        DIR *dir = opendir(*directory);
++
++        if (dir == NULL) {
++            if (errno != ENOENT) {
++                message(MESS_ERROR, "cannot open directory %s: %s\n",
++                        *directory, strerror(errno));
++                result = 1;
++            }
++            continue;
++        }
++
++        while ((entry = readdir(dir)) != NULL) {
++            unsigned i;
++            char **new_names;
++
++            if (!checkFile(entry->d_name))
++                continue;
++
++            for (i = 0; i < names_count; i++) {
++                if (strcmp(names[i], entry->d_name) == 0)
++                    break;
++            }
++            if (i != names_count)
++                continue;
++
++            new_names = reallocarray(names, names_count + 1, sizeof(*names));
++            if (new_names == NULL) {
++                message_OOM();
++                closedir(dir);
++                free_2d_array(names, names_count);
++                return 1;
++            }
++            names = new_names;
++            names[names_count] = strdup(entry->d_name);
++            if (names[names_count] == NULL) {
++                message_OOM();
++                closedir(dir);
++                free_2d_array(names, names_count);
++                return 1;
++            }
++            names_count++;
++        }
++        closedir(dir);
++    }
++
++    if (names_count > 0)
++        qsort(names, names_count, sizeof(*names), compar);
++
++    for (unsigned i = 0; i < names_count; i++) {
++        char *selected = NULL;
++
++        for (directory = directories; *directory; directory++) {
++            struct stat sb;
++            char *candidate = NULL;
++
++            if (asprintf(&candidate, "%s/%s", *directory, names[i]) < 0) {
++                message_OOM();
++                result = 1;
++                break;
++            }
++            if (lstat(candidate, &sb) == 0 || errno != ENOENT) {
++                selected = candidate;
++                break;
++            }
++            free(candidate);
++        }
++
++        if (selected != NULL) {
++            if (readConfigPath(selected, defConfig))
++                result = 1;
++            free(selected);
++        }
++    }
++
++    free_2d_array(names, names_count);
++    return result;
++}
++
++static const char * const systemFragmentDirs[] = {
++    "/etc/logrotate.d",
++    "/run/logrotate.d",
++    "/usr/lib/logrotate.d",
++    NULL
++};
++
++static int readConfigPaths(const char **paths, int use_system_paths)
+ {
+     int result = 0;
+     unsigned i;
+-    const char **file;
++    const char * const *file;
+     struct logInfo defConfig = {
+         .pattern = NULL,
+         .files = NULL,
+@@ -930,15 +1025,52 @@ int readAllConfigPaths(const char **paths)
+         tabooCount++;
+     }
+ 
+-    for (file = paths; *file; file++) {
+-        if (readConfigPath(*file, &defConfig))
++    if (use_system_paths) {
++        static const char * const main_paths[] = {
++            "/etc/logrotate.conf",
++            "/run/logrotate.conf",
++            "/usr/lib/logrotate.conf",
++            NULL
++        };
++        const char *main_path = NULL;
++
++        for (file = main_paths; *file; file++) {
++            struct stat sb;
++
++            if (lstat(*file, &sb) == 0 || errno != ENOENT) {
++                main_path = *file;
++                break;
++            }
++        }
++        if (main_path == NULL) {
++            message(MESS_ERROR, "no system logrotate.conf found\n");
+             result = 1;
++        }
++        else if (readConfigPath(main_path, &defConfig)) {
++            result = 1;
++        }
++    }
++    else {
++        for (file = paths; *file; file++) {
++            if (readConfigPath(*file, &defConfig))
++                result = 1;
++        }
+     }
+     free_2d_array(tabooPatterns, tabooCount);
+     freeLogInfo(&defConfig);
+     return result;
+ }
+ 
++int readAllConfigPaths(const char **paths)
++{
++    return readConfigPaths(paths, 0);
++}
++
++int readSystemConfig(void)
++{
++    return readConfigPaths(NULL, 1);
++}
++
+ static char* parseGlobString(const char *configFile, int lineNum,
+                              const char *buf, size_t length, char **ppos)
+ {
+@@ -1705,7 +1837,10 @@ static int readConfigFile(const char *configFile, struct logInfo *defConfig)
+                         }
+ 
+                         ++recursion_depth;
+-                        rv = readConfigPath(key, newlog);
++                        if (strcmp(key, "/etc/logrotate.d") == 0)
++                            rv = readConfigPathSet(systemFragmentDirs, newlog);
++                        else
++                            rv = readConfigPath(key, newlog);
+                         --recursion_depth;
+ 
+                         if (rv) {
+--- a/logrotate.c
++++ b/logrotate.c
+@@ -3189,7 +3189,7 @@ int main(int argc, const char **argv)
+ 
+     optCon = poptGetContext("logrotate", argc, argv, options, 0);
+     poptReadDefaultConfig(optCon, 1);
+-    poptSetOtherOptionHelp(optCon, "[OPTION...] <configfile>");
++    poptSetOtherOptionHelp(optCon, "[OPTION...] [configfile ...]");
+ 
+     while ((arg = poptGetNextOpt(optCon)) >= 0) {
+         switch (arg) {
+@@ -3250,16 +3250,6 @@ int main(int argc, const char **argv)
+     }
+ 
+     files = poptGetArgs(optCon);
+-    if (!files) {
+-        fprintf(stderr, "logrotate " VERSION
+-                " - Copyright (C) 1995-2001 Red Hat, Inc.\n");
+-        fprintf(stderr,
+-                "This may be freely redistributed under the terms of "
+-                "the GNU General Public License\n\n");
+-        poptPrintUsage(optCon, stderr, 0);
+-        poptFreeContext(optCon);
+-        exit(1);
+-    }
+ 
+     if (skip_state_lock && wait_for_state_lock) {
+         fprintf(stderr, "logrotate: options --skip-state-lock and"
+@@ -3275,7 +3265,7 @@ int main(int argc, const char **argv)
+ 
+     TAILQ_INIT(&logs);
+ 
+-    if (readAllConfigPaths(files))
++    if ((files ? readAllConfigPaths(files) : readSystemConfig()))
+         rc = 1;
+ 
+     poptFreeContext(optCon);
+--- a/logrotate.h
++++ b/logrotate.h
+@@ -98,6 +98,7 @@ struct logInfo {
+ int switch_user(uid_t user, gid_t group);
+ int switch_user_back(void);
+ int readAllConfigPaths(const char **paths);
++int readSystemConfig(void);
+ #if !defined(asprintf) && !defined(_FORTIFY_SOURCE)
+ int asprintf(char **string_ptr, const char *format, ...);
+ #endif
+--- a/logrotate.8.in
++++ b/logrotate.8.in
+@@ -26,8 +26,7 @@ logrotate \(hy rotates, compresses, and mails system logs
+ \fR[\fB\-\-verbose\fR]
+ \fR[\fB\-\-log\fR \fIfile\fR]
+ \fR[\fB\-\-mail\fR \fIcommand\fR]
+-\fIconfig_file\fR
+-\fR[\fIconfig_file2 ...\fR]
++\fR[\fIconfig_file ...\fR]
+ 
+ .SH DESCRIPTION
+ 
+@@ -50,10 +49,15 @@
+ is given on the command line, every file in that directory is used as
+ a config file.
+ .P
+-If no command line arguments are given, \fBlogrotate\fR will print
+-version and copyright information, along with a short usage summary.  If
+-any errors occur while rotating logs, \fBlogrotate\fR will exit with
+-non-zero status, although the state file will be updated.
++If no config file is given, \fBlogrotate\fR selects the first existing file
++from \fI/etc/logrotate.conf\fR, \fI/run/logrotate.conf\fR, and
++\fI/usr/lib/logrotate.conf\fR.  When that file includes
++\fI/etc/logrotate.d\fR, \fBlogrotate\fR merges files by basename from
++\fI/etc/logrotate.d\fR, \fI/run/logrotate.d\fR, and
++\fI/usr/lib/logrotate.d\fR in the same priority order.  A higher-priority
++empty file masks a lower file with the same basename.  If any errors occur
++while rotating logs, \fBlogrotate\fR will exit with non-zero status, although
++the state file will be updated.
+ 
+ .SH OPTIONS
+ 
