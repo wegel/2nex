@@ -1858,3 +1858,13 @@ documented constant explicitly. The reserved-port reader caches its file once
 per process, so its installed smoke starts a new process and private network
 namespace for each tier. The strict checksum is
 `e43d62377e0b39ed40174b82fad1245fc8204b925d1e8a6e63d4541fc1e3fa24`.
+
+Fontconfig's `fonts.conf` is a whole main file, while numbered `conf.d` files
+form one ordered drop-in map. The package stores its main file, enabled links,
+README, and templates below `/usr/share/fontconfig`. The reader selects a
+main file from `/etc/fonts`, `/run/fonts`, then `/usr/share/fontconfig`, and
+merges drop-ins by basename across those roots. Empty higher files mask lower
+main files or drop-ins. Record even missing search roots so
+`FcConfigUptoDate()` notices files that appear later. `FONTCONFIG_FILE` and
+`FONTCONFIG_PATH` remain explicit overrides. The strict checksum is
+`128736eb96e78f6680b80a86fba2cb339c62d43e4cd901faa50ccc7b2206e755`.

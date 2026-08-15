@@ -6,12 +6,18 @@ package:
   version: 2.17.1
   description: Font configuration and customization library
   homepage: https://www.freedesktop.org/wiki/Software/fontconfig/
-  checksum: 014ee34d5ce8955cc01607d0f6e524a2de19652b6d439b8ae75b78ce2720e8ca
+  checksum: 128736eb96e78f6680b80a86fba2cb339c62d43e4cd901faa50ccc7b2206e755
 
 sources:
 - name: fontconfig
   url: https://gitlab.freedesktop.org/api/v4/projects/890/packages/generic/fontconfig/2.17.1/fontconfig-2.17.1.tar.xz
   sha256: 9f5cae93f4fffc1fbc05ae99cdfc708cd60dfd6612ffc0512827025c026fa541
+- name: system_config
+  file: pkg/libs/graphics/fontconfig-uapi-config.patch
+  sha256: 825ff321323957fda09698f476f41d1fb0c023a3915615f8f061c371f9aca051
+- name: config_smoke
+  file: pkg/libs/graphics/fontconfig-config-smoke.c
+  sha256: 11c9edb999c470d8544ff1fd5971cfbe6e04c5b095c583b6d5419fa57c71ad2e
 
 dependencies:
 - name: glibc
@@ -60,26 +66,50 @@ dependencies:
   commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
 - name: gperf
   commit: x86_64/pkg/core/toolchain/gperf/3.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4109:21121, 8221:26156, 12337:31311, 16520:33922, 19159:35175]
+  profile: [4140:1933, 8242:2537, 12407:2696, 16526:5445, 19464:6562]
 
   script: |
-    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
-    cd ${WORK_DIR}
+    set -eu
+    tar --no-same-owner -xf "/${SOURCE_fontconfig}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_system_config}"
 
     meson setup build \
       --prefix=/usr \
       --buildtype=release \
       -Ddoc=disabled \
-      -Dtests=disabled
+      -Dtests=disabled \
+      -Dbaseconfig-dir=/usr/share/fontconfig \
+      -Dconfig-dir=/usr/share/fontconfig/conf.d
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
 
-    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
-    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    config_smoke="${WORK_DIR}/fontconfig-config-smoke"
+    gcc \
+      -Wall -Wextra -Werror \
+      -I"${OUT_DIR}/usr/include" \
+      -L"${OUT_DIR}/usr/lib" \
+      "/${SOURCE_config_smoke}" \
+      -lfontconfig \
+      -o "${config_smoke}"
+
+    smoke_root="${WORK_DIR}/fontconfig-smoke-root"
+    mkdir -p "${smoke_root}/usr/share"
+    cp -a "${OUT_DIR}/usr/share/fontconfig" \
+      "${smoke_root}/usr/share/fontconfig"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${config_smoke}" graph "${smoke_root}"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${config_smoke}" suite "${smoke_root}"
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
@@ -139,30 +169,6 @@ outputs:
 
   conf:
     files:
-    - path: /etc/fonts/conf.d/10-hinting-slight.conf
-    - path: /etc/fonts/conf.d/10-scale-bitmap-fonts.conf
-    - path: /etc/fonts/conf.d/10-sub-pixel-none.conf
-    - path: /etc/fonts/conf.d/10-yes-antialias.conf
-    - path: /etc/fonts/conf.d/11-lcdfilter-default.conf
-    - path: /etc/fonts/conf.d/20-unhint-small-vera.conf
-    - path: /etc/fonts/conf.d/30-metric-aliases.conf
-    - path: /etc/fonts/conf.d/40-nonlatin.conf
-    - path: /etc/fonts/conf.d/45-generic.conf
-    - path: /etc/fonts/conf.d/45-latin.conf
-    - path: /etc/fonts/conf.d/48-spacing.conf
-    - path: /etc/fonts/conf.d/49-sansserif.conf
-    - path: /etc/fonts/conf.d/50-user.conf
-    - path: /etc/fonts/conf.d/51-local.conf
-    - path: /etc/fonts/conf.d/60-generic.conf
-    - path: /etc/fonts/conf.d/60-latin.conf
-    - path: /etc/fonts/conf.d/65-fonts-persian.conf
-    - path: /etc/fonts/conf.d/65-nonlatin.conf
-    - path: /etc/fonts/conf.d/69-unifont.conf
-    - path: /etc/fonts/conf.d/70-no-bitmaps-except-emoji.conf
-    - path: /etc/fonts/conf.d/80-delicious.conf
-    - path: /etc/fonts/conf.d/90-synthetic.conf
-    - path: /etc/fonts/conf.d/README
-    - path: /etc/fonts/fonts.conf
     - path: /usr/share/fontconfig/conf.avail/05-reset-dirs-sample.conf
     - path: /usr/share/fontconfig/conf.avail/09-autohint-if-no-hinting.conf
     - path: /usr/share/fontconfig/conf.avail/10-autohint.conf
@@ -207,6 +213,29 @@ outputs:
     - path: /usr/share/fontconfig/conf.avail/70-yes-bitmaps.conf
     - path: /usr/share/fontconfig/conf.avail/80-delicious.conf
     - path: /usr/share/fontconfig/conf.avail/90-synthetic.conf
+    - path: /usr/share/fontconfig/conf.d/10-hinting-slight.conf
+    - path: /usr/share/fontconfig/conf.d/10-scale-bitmap-fonts.conf
+    - path: /usr/share/fontconfig/conf.d/10-sub-pixel-none.conf
+    - path: /usr/share/fontconfig/conf.d/10-yes-antialias.conf
+    - path: /usr/share/fontconfig/conf.d/11-lcdfilter-default.conf
+    - path: /usr/share/fontconfig/conf.d/20-unhint-small-vera.conf
+    - path: /usr/share/fontconfig/conf.d/30-metric-aliases.conf
+    - path: /usr/share/fontconfig/conf.d/40-nonlatin.conf
+    - path: /usr/share/fontconfig/conf.d/45-generic.conf
+    - path: /usr/share/fontconfig/conf.d/45-latin.conf
+    - path: /usr/share/fontconfig/conf.d/48-spacing.conf
+    - path: /usr/share/fontconfig/conf.d/49-sansserif.conf
+    - path: /usr/share/fontconfig/conf.d/50-user.conf
+    - path: /usr/share/fontconfig/conf.d/51-local.conf
+    - path: /usr/share/fontconfig/conf.d/60-generic.conf
+    - path: /usr/share/fontconfig/conf.d/60-latin.conf
+    - path: /usr/share/fontconfig/conf.d/65-fonts-persian.conf
+    - path: /usr/share/fontconfig/conf.d/65-nonlatin.conf
+    - path: /usr/share/fontconfig/conf.d/69-unifont.conf
+    - path: /usr/share/fontconfig/conf.d/70-no-bitmaps-except-emoji.conf
+    - path: /usr/share/fontconfig/conf.d/80-delicious.conf
+    - path: /usr/share/fontconfig/conf.d/90-synthetic.conf
+    - path: /usr/share/fontconfig/fonts.conf
 
   dev:
     files:
@@ -235,6 +264,7 @@ outputs:
 
   misc:
     files:
+    - path: /usr/share/fontconfig/conf.d/README
     - path: /usr/share/gettext/its/fontconfig.its
     - path: /usr/share/gettext/its/fontconfig.loc
     - path: /usr/share/xml/fontconfig/fonts.dtd

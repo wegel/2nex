@@ -840,3 +840,21 @@ no reload API. Test path priority with a fresh process for every tier and mask
 case. A private network namespace makes a chosen reserved port predictable.
 The strict package checksum is
 `e43d62377e0b39ed40174b82fad1245fc8204b925d1e8a6e63d4541fc1e3fa24`.
+
+## Fontconfig system policy
+
+Fontconfig 2.17.1 treats `fonts.conf` as one complete main file but treats the
+numbered files below `conf.d` as independent ordered rules. Install the package
+main file, README, enabled links, and available templates below
+`/usr/share/fontconfig`. Select one main file from `/etc/fonts`, `/run/fonts`,
+then `/usr/share/fontconfig`; merge relative drop-in directories by basename
+and sort the winning files by name. Empty higher files mask lower main files
+or drop-ins.
+
+Track every search root even when it does not exist. Otherwise
+`FcConfigUptoDate()` cannot notice a new administrator or transient main file.
+Keep `FONTCONFIG_FILE` as an explicit file and `FONTCONFIG_PATH` as the
+highest-priority path list. Test the installed library through a sysroot so
+the smoke can create all three tiers without touching the build host. The
+strict checksum is
+`128736eb96e78f6680b80a86fba2cb339c62d43e4cd901faa50ccc7b2206e755`.

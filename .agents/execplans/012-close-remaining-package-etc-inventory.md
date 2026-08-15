@@ -147,6 +147,10 @@ named below.
   databases below `/usr`, added whole-file administrator and transient
   lookup, and strictly rebuilt it with the installed library proving both
   readers, every tier, empty masks, and reserved-port selection.
+- [x] (2026-08-15) Moved Fontconfig's main file and enabled configuration
+  graph below `/usr`, added whole-file main-file selection and basename-merged
+  drop-ins across all three system tiers, and strictly rebuilt it with masks,
+  environment overrides, and reload detection.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -198,6 +202,20 @@ named below.
   does not expose a reload operation. The installed-library smoke therefore
   starts one private network namespace and process for each path tier and
   mask case, while its netconfig tests cover both direct and session readers.
+
+- Observation: Fontconfig's existing path list selected only one relative
+  `conf.d` directory rather than merging system drop-ins.
+  Evidence: `FcConfigGetFilename()` stopped at the first readable directory,
+  and `FcConfigParseAndLoadDir()` sorted files only inside that directory.
+  The installed-library smoke now proves one numerically sorted basename map
+  across `/etc/fonts/conf.d`, `/run/fonts/conf.d`, and the vendor directory,
+  including empty-file masks.
+
+- Observation: Fontconfig must track search roots that do not exist yet.
+  Evidence: a smoke loaded only the vendor main file, created
+  `/run/fonts/fonts.conf` one second later, and made `FcConfigUptoDate()`
+  return false. Tracking only files that existed during the first parse would
+  not detect that higher-priority file.
 
 - Observation: The RTK `find` wrapper omits GNU `find` features needed for the
   knowledge and ExecPlan listings.
@@ -725,6 +743,16 @@ named below.
   `NETCONFIG` constant must keep naming the administrator path. Implicit
   library calls select `/etc`, `/run`, then `/usr/lib`, while an existing
   empty file masks the lower databases.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Store Fontconfig's package graph below `/usr/share/fontconfig`,
+  select one main file, and merge relative drop-in directories by basename.
+  Rationale: `fonts.conf` is one complete policy file, while numbered
+  `conf.d` files are independent rules whose filenames define their order.
+  Lasting, transient, and vendor main files therefore use whole-file priority;
+  drop-ins form one sorted map where a higher basename wins and an empty file
+  masks lower copies. `FONTCONFIG_FILE` and `FONTCONFIG_PATH` keep their
+  explicit behavior.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -1560,6 +1588,37 @@ affected assemblies, and commit.
 
    The four system checksums and factory-tree assertions match row 4.
    Commit: `pkg: complete desktop autostart runtimes`.
+
+19. `pkg/libs/graphics/fontconfig.yaml`
+
+   The old `conf` output declared `/etc/fonts/fonts.conf`, its README, and
+   twenty-two enabled links below `/etc/fonts/conf.d`. Outcome 2 applies.
+   Fontconfig's main file is a complete policy file, while each numbered
+   drop-in is an independent ordered rule. The package now installs the main
+   file, README, and enabled links below `/usr/share/fontconfig`, beside the
+   existing `conf.avail` templates.
+
+   The generic patch with SHA-256
+   `825ff321323957fda09698f476f41d1fb0c023a3915615f8f061c371f9aca051`
+   selects one `fonts.conf` or relative single file from `/etc/fonts`,
+   `/run/fonts`, then `/usr/share/fontconfig`. It merges relative directories
+   by basename across the same path list, sorts the winning files by name,
+   and treats an empty higher file as a mask. Empty main files form valid
+   no-policy masks. The reader records every search root, including missing
+   roots, so `FcConfigUptoDate()` notices a higher file that appears later.
+   `FONTCONFIG_FILE` and `FONTCONFIG_PATH` retain their explicit behavior.
+
+   The strict command built twice with checksum
+   `128736eb96e78f6680b80a86fba2cb339c62d43e4cd901faa50ccc7b2206e755`.
+   Its installed-library smoke first loaded the real package graph, including
+   representative enabled links. It then proved vendor, transient, and
+   administrator main-file priority; unique drop-ins from all three tiers;
+   same-basename priority; empty main and drop-in masks; both environment
+   overrides; restored lower policy; and reload detection after creating a
+   transient main file. Store inspection found 68 files or links below
+   `/usr/share/fontconfig` and no package file below `/etc`. Affected assembly
+   results will be recorded after the package commit. Commit:
+   `pkg: layer fontconfig system policy`.
 
 20. `pkg/libs/graphics/gtk3.yaml`
 
