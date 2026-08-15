@@ -151,20 +151,24 @@ named below.
   graph below `/usr`, added whole-file main-file selection and basename-merged
   drop-ins across all three system tiers, and strictly rebuilt it with masks,
   environment overrides, and reload detection.
-- [ ] Freeze the exact 31-manifest inventory and record every installed
+- [x] (2026-08-15) Published GTK's complete non-development runtime in the
+  desktop, taught Virt-manager's prefix-relative wrapper to find private GI
+  typelibs, rebuilt all four desktop systems twice, and exercised their real
+  command, GTK module, and Fontconfig readers.
+- [x] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
-- [ ] Resolve the vendor-data, XDG, example, compatibility-link, and database
+- [x] Resolve the vendor-data, XDG, example, compatibility-link, and database
   group, with one checked commit per package or inseparable package pair.
 - [x] Give D-Bus, Slang, and Libvirt correct vendor-file lookup without
   weakening their administrator paths or explicit overrides.
-- [ ] Resolve OpenSSL, CA certificates, Fontconfig, Linux-PAM secondary files,
+- [x] Resolve OpenSSL, CA certificates, Fontconfig, Linux-PAM secondary files,
   and the account databases with focused security and trust tests.
 - [x] Audit both bootstrap manifests and keep only paths required to build the
   next phase in their private bootstrap roots.
-- [ ] Audit every affected assembly overlay, rebuild every affected root
+- [x] Audit every affected assembly overlay, rebuild every affected root
   twice, run focused root tests, and boot the affected Nex system in QEMU.
-- [ ] Rerun exhaustive package and assembly scans, record every justified
+- [x] Rerun exhaustive package and assembly scans, record every justified
   remaining `/etc` path, promote durable knowledge, and complete the human
   review gate.
 
@@ -487,6 +491,32 @@ named below.
   absolute target as `/target${link}` copied regular XML files into the
   factory tree and let both assembly builds reproduce.
 
+- Observation: a private application capsule can contain GTK typelibs without
+  publishing the GTK runtime at normal system paths.
+  Evidence: the first final desktop root failed `virt-manager --version` with
+  `Namespace Gdk not available`, although its capsule contained
+  `Gdk-3.0.typelib`. GTK's new non-development runtime bundle published the
+  GTK files, and direct bundle inspection found no `gtk.h`.
+
+- Observation: publishing GTK does not expose the other private typelibs that
+  a Python GI application receives through dependency flattening.
+  Evidence: Virt-manager advanced from missing Gdk to missing LibvirtGLib.
+  Prepending its installed capsule prefix to `GI_TYPELIB_PATH` let it find all
+  private typelibs and print version 5.1.0, while preserving a caller path.
+
+- Observation: the final package count does not need to reach zero when an
+  external loader fixes an integration path.
+  Evidence: the final declared-output scan found 15 paths in seven manifests.
+  All are XDG autostart, shell integration, logrotate, OpenSSH fragment, or
+  Khronos OpenCL ICD paths already justified in the corresponding inventory
+  rows.
+
+- Observation: assembly overlays contain host choices, not another queue of
+  package defaults.
+  Evidence: the final overlay scan found 98 paths across four files. Accounts,
+  machine and network policy, authentication, product settings, compatibility
+  links, and explicit service-enable links account for every entry.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -755,9 +785,60 @@ named below.
   explicit behavior.
   Date/Author: 2026-08-15 / Codex
 
+- Decision: Publish GTK's normal non-development runtime as one reusable
+  bundle, then let each application wrapper expose typelibs private to its own
+  capsule.
+  Rationale: assemblies need GTK's shared modules, schemas, typelibs, data, and
+  tools at their standard paths, but they do not need development headers.
+  Private dependency flattening still belongs to each app prefix, so a
+  prefix-relative `GI_TYPELIB_PATH` keeps that detail out of the assembly.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Keep all 15 remaining package `/etc` paths and close them as
+  justified external integration points.
+  Rationale: the XDG, shell, logrotate, OpenSSH, and OpenCL consumers define or
+  document these locations. Moving them to a package-private path would make a
+  reusable package less compatible, while a Nex assembly can seed them through
+  its factory tree.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Treat all 98 assembly overlay entries as explicit initial host
+  state, compatibility links, or service enablement.
+  Rationale: the overlays choose accounts, identity, machine policy, product
+  policy, and enabled units. Nex-structured systems move those choices to the
+  factory tree before first boot; flat Edgebox intentionally produces a final
+  appliance `/etc`.
+  Date/Author: 2026-08-15 / Codex
+
 ## Outcomes & Retrospective
 
-Not started.
+EP012 resolved all 31 package manifests that still declared `/etc` outputs at
+its start. It removed product policy, moved inert examples, gave package data
+normal vendor paths, patched readers for `/etc`, `/run`, and `/usr`, kept
+standards-defined integration paths, removed accounts from a reusable helper,
+and kept mutable Libvirt objects under assembly control. The package scan now
+finds 15 explained paths in seven manifests instead of unexplained files in 31
+manifests.
+
+The work also fixed three builder or package integration bugs that the broad
+checks exposed: writable build roots no longer hardlink store objects,
+semantic dependency lookup trusts declared package slugs, and a file-level
+runtime overlay replaces a read-only destination safely. Each fix has focused
+CLI tests, and the final CLI suite passes 190 tests.
+
+All eleven affected systems reproduced. Edgebox passed its full rootfs smoke;
+nex-systemd booted in QEMU and printed `system-ca=ready` and
+`ASSERT-BOOT-PASS`; the installer passed its installed-consumer test; and the
+final desktop root ran its command, GTK module, GI, and Fontconfig consumers.
+  The four overlay files contain only initial host state, compatibility links,
+  and explicit service choices. Packages remain generic, while assemblies
+  state machine and product policy.
+
+The final desktop check did not launch a graphical session because this plan
+changed package configuration and public runtime files, not compositor or GPU
+behavior. It exercised the affected loaders directly. The final GTK and
+Virt-manager-only edits did not affect nex-systemd, Edgebox, or the installer,
+so their earlier final checks remain the relevant proof.
 
 ## Context and Orientation
 
@@ -986,9 +1067,98 @@ This ExecPlan is complete only when all of these statements hold:
 
 ### Completion Check
 
-Not started. Before human review, compare every acceptance item above with the
-finished commits and record exact commands, checksums, assertions, skipped
-checks, and remaining risks here.
+Completed on 2026-08-15.
+
+Package proof:
+
+- Every numbered result below records the strict command, matching two-build
+  checksum, installed reader or consumer test, affected systems, and commit for
+  its manifest. Phase zero correctly performed one build because it declares
+  `stable_checksum: false`; phase one and `pkg/bootstrap/phase1/test.yaml`
+  supplied the downstream compile, link, and execution proof.
+- `rtk proxy rg -n --glob '*.yaml' '^\s*- path: /etc(?:/|$)' pkg` returned
+  exactly 15 paths in seven manifests. The list contains three XDG autostart
+  entries, five shell integration entries, four Libvirt logrotate fragments,
+  one Libvirt OpenSSH fragment, and two Khronos OpenCL ICD files. Each path has
+  an external-loader justification in its numbered result and in the final
+  inventory below.
+- `rtk git diff 855f476^..HEAD -- pkg | rtk proxy rg
+  '^\+.*(Edgebox|Soniq|Yocto|Buildroot|buildroot|\bNex\b)'` returned no
+  matches. The changed reusable package lines contain no product policy.
+- All 31 audited manifests passed
+  `rtk proxy env ZUB_BIN=/home/wegel/work/perso/zub/target/debug/zub
+  ./src/cli/target/debug/nex check <manifest>` after their final edits.
+
+Assembly proof:
+
+- All eleven affected assemblies passed `nex check` and two-build strict
+  assembly checks. Their final checksums are:
+
+  - flat-minimal: `1dd7c09bc51ff7f23fb904ff786c12d6d0a95eb21570b69f6aac58bca2a50d69`
+  - flat-systemd: `a69b1dbbb5cf138dc3b5fb8ecad29c64815a114f97e1845a04ddcd16f45462bb`
+  - nex-minimal: `7d900b229e778c8ca141d8f31a633ded9002a129db052c731d5dd1526b00c9f6`
+  - nex-systemd: `b25e5ad96c14ae4d7d1f196aa752a30b533596340e6482c9add9fa132301d852`
+  - installer: `968fa77f837379bdf866108cee311a83b6af094818b059df7ef5008424546b8a`
+  - flat-podman: `4d09d72f7a7fa592f9183d6b70adcb1b3ce70b189ee9b75366658187794b283a`
+  - edgebox-rootfs: `2d19a11de3a6a1fea543e6bb7ec0f3ff1f07ed61666802860bc51b2a4834661b`
+  - desktop-vwl: `361a367520c3116dbb5215ba7ad71f263fbdc3ed16e399d5cdcf5a206e665b44`
+  - desktop-vwl-nvidia-580: `65d74f0782e8afcfdc60c51ffdd5366c72f5861b5dc3a481817cbfd399aed72d`
+  - desktop-vwl-nvidia-current: `2fd4a995c2cecde37a2e218386598677ba7d07b86f04abd680d4e842fd749016`
+  - desktop-dev: `999cb4d9b24dd1f6ad1496b71ef6a38a158c037eaaace9aa90e752047d343430`
+
+- `rtk bash scripts/test-edgebox-rootfs.sh
+  .nex/tmp/ep012-final-edgebox-root` ended with `PASS: Edgebox rootfs smoke
+  test` after the final Edgebox checkout.
+- `rtk scripts/qemu-test-systemd.sh systems/nex-systemd/0.0.1 --timeout 120`
+  booted the changed Nex base after the package waves. The guest refreshed its
+  trust store, printed `system-ca=ready`, then printed `ASSERT-BOOT-PASS`.
+- The Attr wave rebuilt the installer twice, seeded a disposable live `/etc`,
+  and ran its installed Coreutils `cp --preserve=xattr`. The test copied
+  `user.keep`, skipped vendor-matched `user.Beagle.*`, and honored an
+  administrator replacement policy.
+- A fresh checkout at `.nex/tmp/ep012-final-desktop-root` ran the installed
+  `pipewire --version`, `waybar --version`, `bmon -v`, `virsh --version`,
+  `virtlogd --version`, and `virt-manager --version` through
+  `rtk unshare --user --map-root-user --mount --pid --fork chroot`; they
+  reported 1.4.9, 0.15.0, 4.0, 11.0.0, 11.0.0, and 5.1.0. Virt-manager also
+  passed with `GI_TYPELIB_PATH=/run/caller-typelibs`.
+- The same desktop root loaded `im-multipress.so` through GTK's module loader,
+  found the Gdk and Gtk typelibs and multipress map, and contained no public
+  GTK development header. `fc-conflist` read
+  `/usr/share/fontconfig/fonts.conf`, and `fc-match sans` returned a font.
+  After the test created `/run/fonts/fonts.conf`, `fc-conflist` selected that
+  main file and `fc-match 'EP012 Runtime'` returned FiraCode Nerd Font. The
+  test removed the transient file afterward. PipeWire's limits fragment
+  existed only below `/usr/lib/security/limits.d`.
+- `rtk proxy rg -n '^- path: /etc(?:/|$)'
+  asm/nex-systemd-overlay.yaml asm/edgebox-rootfs-overlay.yaml
+  asm/desktop-vwl/desktop-vwl-overlay.yaml
+  asm/installer/installer-overlay.yaml` returned 98 paths: 26, 19, 48, and 5
+  respectively. The final audit below classifies every path group. The Nvidia
+  and desktop-dev children add no overlay and inherit the desktop result.
+
+Integrated proof:
+
+- `rtk cargo test --manifest-path src/cli/Cargo.toml` passed all 190 tests in
+  three suites.
+- The final `nex check` pass covered all 31 package manifests and all eleven
+  assembly manifests. `rtk git diff --check` and
+  `rtk git diff --cached --check` passed before every implementation commit.
+- The implementation commits through `a7c8914` are pushed on
+  `external-manifest-repositories`. Each commit passed its scoped package,
+  system, and runtime checks before it landed.
+
+Skipped checks and remaining risks:
+
+- The final desktop check exercised the changed command, GI, GTK module, and
+  Fontconfig loaders without starting a graphical session. This plan did not
+  change compositor, display, or GPU behavior.
+- The final GTK bundle and Virt-manager wrapper affect only desktop systems,
+  so nex-systemd, Edgebox, and installer did not need another boot or runtime
+  pass after `a7c8914`. Their relevant checks ran after their own final edits.
+- The 15 retained package paths depend on external consumers that still name
+  `/etc`. Nex-structured systems must continue to seed these files through the
+  factory tree until those consumers support another standard vendor path.
 
 ## Idempotence and Recovery
 
@@ -1925,6 +2095,121 @@ affected assemblies, and commit.
    the finished-root smoke ran the installed `nft` against an `osf` rule in a
    private network namespace and checked that it opened and loaded the vendor
    file. Commit: `pkg: layer nftables fingerprint data`.
+
+### Final scans and assembly audit
+
+The final package scan found these 15 retained paths in seven manifests. No
+other package output declares a file below `/etc`.
+
+- Gnome Keyring retains
+  `/etc/xdg/autostart/gnome-keyring-pkcs11.desktop` and
+  `/etc/xdg/autostart/gnome-keyring-secrets.desktop`; AT-SPI2 retains
+  `/etc/xdg/autostart/at-spi-dbus-bus.desktop`. The XDG Base Directory and
+  Autostart specifications tell sessions to scan this system directory.
+- Bash Completion retains `/etc/bash_completion`,
+  `/etc/bash_completion.d/000_bash_completion_compat.bash`, and
+  `/etc/profile.d/bash_completion.sh`. VTE retains
+  `/etc/profile.d/vte.csh` and `/etc/profile.d/vte.sh`. Bash Completion's
+  reader and existing system profiles load these compatibility and login
+  hooks.
+- Libvirt retains `/etc/logrotate.d/libvirtd`,
+  `/etc/logrotate.d/libvirtd.libxl`, `/etc/logrotate.d/libvirtd.lxc`,
+  `/etc/logrotate.d/libvirtd.qemu`, and
+  `/etc/ssh/ssh_config.d/30-libvirt-ssh-proxy.conf`. Logrotate and OpenSSH own
+  these fragment interfaces; Libvirt's own main readers no longer store
+  package defaults below `/etc`.
+- Nvidia 580 and Nvidia current each retain
+  `/etc/OpenCL/vendors/nvidia.icd`. The Khronos ICD extension fixes this Linux
+  discovery directory, and the matching driver runtime bundle exposes it.
+
+The assembly scan found 98 paths. Each overlay group has one concrete role:
+
+- `asm/nex-systemd-overlay.yaml` declares 26 initial host paths. The overlay
+  initializes accounts and identity through `/etc/passwd`, `/etc/group`,
+  `/etc/shadow`, `/etc/subuid`, `/etc/subgid`, `/etc/os-release`, and
+  `/etc/machine-id`. It writes machine and login policy to `/etc/fstab`,
+  `/etc/sysctl.conf`, `/etc/inputrc`,
+  `/etc/security/namespace.conf`, `/etc/systemd/network/80-dhcp.network`,
+  `/etc/ssh/sshd_config`, `/etc/tmpfiles.d/home-testuser.conf`,
+  `/etc/pam.d/systemd-user`, and `/etc/pam.d/systemd-run0`.
+  `/etc/systemd/system/nex-init-manifests.service` is an assembly-owned unit.
+  `/etc/mtab` and `/etc/resolv.conf` are compatibility links. The remaining
+  links are
+  `/etc/systemd/system/multi-user.target.wants/systemd-networkd.service`,
+  `/etc/systemd/system/multi-user.target.wants/systemd-resolved.service`,
+  `/etc/systemd/system/getty.target.wants/getty@tty1.service`,
+  `/etc/systemd/system/multi-user.target.wants/sshd-keygen.service`,
+  `/etc/systemd/system/multi-user.target.wants/sshd.service`,
+  `/etc/systemd/system/multi-user.target.wants/nex-init-manifests.service`, and
+  `/etc/systemd/system/sockets.target.wants/dbus.socket`. They enable packaged
+  units. Because nex-systemd sets `nex_structure: true`, the builder stores all
+  26 entries in the factory tree and leaves live `/etc` host-owned.
+- `asm/edgebox-rootfs-overlay.yaml` declares 19 final appliance paths.
+  `/etc/locale.conf`, `/etc/timezone`, `/etc/localtime`,
+  `/etc/systemd/network/80-dhcp.network`, `/etc/resolv.conf`, and `/etc/mtab`
+  choose locale, time, networking, and compatibility behavior. The service
+  links are `/etc/systemd/system/sockets.target.wants/dbus.socket`,
+  `/etc/systemd/system/multi-user.target.wants/systemd-networkd.service`,
+  `/etc/systemd/system/multi-user.target.wants/systemd-resolved.service`,
+  `/etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service`,
+  `/etc/systemd/system/multi-user.target.wants/sshd-keygen.service`,
+  `/etc/systemd/system/multi-user.target.wants/sshd.service`,
+  `/etc/systemd/system/multi-user.target.wants/acpid.service`,
+  `/etc/systemd/system/multi-user.target.wants/containerd.service`,
+  `/etc/systemd/system/multi-user.target.wants/docker.service`,
+  `/etc/systemd/system/sockets.target.wants/docker.socket`,
+  `/etc/systemd/system/multi-user.target.wants/pipewire-system.service`,
+  `/etc/systemd/system/multi-user.target.wants/wireplumber-system.service`, and
+  `/etc/systemd/system/multi-user.target.wants/pipewire-pulse-system.service`.
+  Edgebox extends a flat root, so these are intentional final machine choices
+  rather than reusable package defaults.
+- `asm/desktop-vwl/desktop-vwl-overlay.yaml` declares 48 initial host paths.
+  The overlay initializes accounts and identity through `/etc/passwd`,
+  `/etc/group`, `/etc/shadow`, `/etc/subuid`, `/etc/subgid`,
+  `/etc/os-release`, and `/etc/machine-id`. It writes general host policy to
+  `/etc/fstab`, `/etc/sysctl.conf`,
+  `/etc/environment`, `/etc/inputrc`,
+  `/etc/systemd/network/80-dhcp.network`, `/etc/systemd/logind.conf`,
+  `/etc/systemd/system/systemd-logind.service.d/dbus-ordering.conf`,
+  `/etc/tmpfiles.d/home-testuser.conf`, `/etc/tmpfiles.d/xdg-runtime.conf`,
+  `/etc/tmpfiles.d/utmp.conf`, `/etc/udev/rules.d/70-seat.rules`,
+  `/etc/ssh/sshd_config`, and `/etc/pam.d/login`. The three direct networkd
+  links are `/etc/systemd/system/systemd-networkd.service`,
+  `/etc/systemd/system/systemd-networkd.socket`, and
+  `/etc/systemd/system/systemd-networkd-wait-online.service`.
+  `/etc/mtab` and `/etc/resolv.conf` are compatibility links. Desktop and
+  product files occupy `/etc/NetworkManager/conf.d/wifi-backend.conf`,
+  `/etc/iwd/main.conf`,
+  `/etc/systemd/journald.conf.d/00-persistent.conf`,
+  `/etc/systemd/system/nex-boot-dump.service`,
+  `/etc/NetworkManager/system-connections/wegelnet.nmconnection`,
+  `/etc/systemd/system/nm-autoconnect.service`,
+  `/etc/containers/containers.conf`, `/etc/containers/registries.conf`, and
+  `/etc/containers/policy.json`. The remaining service links are
+  `/etc/systemd/system/multi-user.target.wants/NetworkManager.service`,
+  `/etc/systemd/system/multi-user.target.wants/iwd.service`,
+  `/etc/systemd/system/multi-user.target.wants/bluetooth.service`,
+  `/etc/systemd/system/multi-user.target.wants/systemd-resolved.service`,
+  `/etc/systemd/system/multi-user.target.wants/nex-boot-dump.service`,
+  `/etc/systemd/system/multi-user.target.wants/nm-autoconnect.service`,
+  `/etc/systemd/system/getty.target.wants/getty@tty1.service`,
+  `/etc/systemd/system/multi-user.target.wants/sshd-keygen.service`,
+  `/etc/systemd/system/multi-user.target.wants/sshd.service`,
+  `/etc/systemd/system/sockets.target.wants/dbus.socket`,
+  `/etc/systemd/user/sockets.target.wants/dbus.socket`,
+  `/etc/systemd/user/default.target.wants/pipewire.socket`,
+  `/etc/systemd/user/default.target.wants/pipewire-pulse.socket`, and
+  `/etc/systemd/user/default.target.wants/wireplumber.service`. The
+  Nex-structured builder stores all 48 paths below the factory tree.
+- `asm/installer/installer-overlay.yaml` declares five paths:
+  `/etc/os-release`, `/etc/passwd`, `/etc/group`, `/etc/shadow`, and
+  `/etc/mtab`. The first four identify the installer and its initial root
+  account; the last is the standard procfs compatibility link. The installer
+  sets `nex_structure: true`, so these paths also become factory state.
+
+The Nvidia 580, Nvidia current, and desktop-dev manifests inherit
+desktop-vwl's overlay and add no overlay of their own. The scan therefore
+covers every affected child as well as every source overlay.
 
 ## Interfaces and Dependencies
 

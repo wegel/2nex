@@ -810,6 +810,14 @@ multipress module, send a keypad event, and inspect its preedit. The strict
 checksum is
 `c7cf0e30c274e863ed37a5c4dee01ef196b0ec0c94b66e459d82642d3d67bf3c`.
 
+GTK also publishes a `runtime` bundle with its `bin`, `conf`, `lib`, and
+`misc` outputs. A desktop that exposes GTK applications needs the normal
+commands, modules, typelibs, schemas, and data at public paths even when an
+application capsule already contains private GTK libraries. The bundle omits
+development headers. A direct checkout contained `gtk-query-immodules-3.0`,
+the Gdk and Gtk typelibs, `im-multipress.so`, its key map, and schemas, but no
+`gtk.h`.
+
 ## Libnl databases
 
 Libnl 3.11.0 reads `classid` and `pktloc` as complete databases. Install the
@@ -858,3 +866,30 @@ highest-priority path list. Test the installed library through a sysroot so
 the smoke can create all three tiers without touching the build host. The
 strict checksum is
 `128736eb96e78f6680b80a86fba2cb339c62d43e4cd901faa50ccc7b2206e755`.
+
+## Remaining package `/etc` integration points
+
+Count package-owned `/etc` files from declared output paths, not every literal
+path in a build script. Build scripts may create temporary policy files only
+to test a reader. On 2026-08-15, this command found 15 declared paths in seven
+manifests:
+
+    rtk proxy rg --glob '*.yaml' '^\s*- path: /etc(?:/|$)' pkg
+
+Every remaining path serves an external integration contract:
+
+- Gnome Keyring and AT-SPI2 retain three files below
+  `/etc/xdg/autostart`; desktop sessions scan that path through the XDG Base
+  Directory and Autostart specifications.
+- Bash Completion retains `/etc/bash_completion`, its compatibility entry
+  below `/etc/bash_completion.d`, and its profile hook. VTE retains two
+  profile hooks. Existing shells and system profiles load these five paths.
+- Libvirt retains four files below `/etc/logrotate.d` and its OpenSSH proxy
+  fragment below `/etc/ssh/ssh_config.d`; the matching external tools scan
+  those directories.
+- Both Nvidia driver manifests retain `/etc/OpenCL/vendors/nvidia.icd`;
+  Khronos fixes that Linux ICD discovery directory.
+
+These paths need an assembly factory fallback on an immutable host. Do not
+move them into a package-private vendor path unless the external loader adds
+and documents that path.

@@ -1127,17 +1127,13 @@ booted Systemd, and printed `ASSERT-BOOT-PASS`.
 
 The exact versions used by Edgebox have these verified capabilities and gaps:
 
-The first exhaustive 2026-08-14 scan found 41 manifests that declare at least
-one output below `/etc`. The first UAPI package batch reduced that count to 36
-by removing those outputs from Shadow, Fish, Systemd, Swaylock, and Polkit.
-The Bash and e2fsprogs batch reduced it to 35 because Bash did not declare the
-assembly-owned profile and e2fsprogs moved its two package defaults. BlueZ,
-PulseAudio, OpenSSH, and Glibc reduce the current count to 31. This is an audit
-queue, not 31 mechanical moves. It includes
-bootstrap copies, two Nvidia versions, generated certificate links,
-compatibility links, and files whose external specification still names
-`/etc`. Empty directories created for host configuration do not need a
-vendor-file conversion.
+The first exhaustive 2026-08-14 scan found 41 manifests that declared at least
+one output below `/etc`. The first UAPI package batch reduced that count to 36,
+the Bash and e2fsprogs batch reduced it to 35, and the first parser wave
+reduced it to 31. EP012 resolved all 31 starting rows. The final 2026-08-15
+scan found 15 paths in seven manifests, and every survivor serves a documented
+external integration point. Empty directories created for host configuration
+do not count as package defaults.
 
 Do not blanket-change `--sysconfdir=/etc` to a path below `/usr`. That option
 usually tells a program where the administrator writes local configuration;
@@ -1671,9 +1667,9 @@ Claude note that prohibited those tests was stale.
 
 The unfinished P50 plan remains preserved under
 `.agents/execplans/paused/010-p50-personalization-tools.md` and does not block
-the active queue. The first active Ralph plan is
-`.agents/execplans/011-complete-first-uapi-parser-wave.md`, which covers BlueZ,
-PulseAudio, OpenSSH, and Glibc configuration lookup.
+the active queue. Ralph always selects the lowest-numbered incomplete plan
+directly below `.agents/execplans/`; archived and paused plans do not enter
+that order.
 
 Nftables 1.1.1 loads its optional passive OS fingerprint database only when a
 rule uses an `osf` expression. Test the real loader with `nft --debug mnl
@@ -1868,3 +1864,48 @@ main files or drop-ins. Record even missing search roots so
 `FcConfigUptoDate()` notices files that appear later. `FONTCONFIG_FILE` and
 `FONTCONFIG_PATH` remain explicit overrides. The strict checksum is
 `128736eb96e78f6680b80a86fba2cb339c62d43e4cd901faa50ccc7b2206e755`.
+
+GTK 3 publishes a generic `runtime` bundle with `bin`, `conf`, `lib`, and
+`misc`, but no development headers. A Nex-structured desktop must select this
+bundle when it exposes GTK applications publicly; private app capsules do not
+publish GTK typelibs, modules, schemas, tools, or data at their standard paths.
+The strict GTK checksum is
+`c7cf0e30c274e863ed37a5c4dee01ef196b0ec0c94b66e459d82642d3d67bf3c`.
+
+A Python GI wrapper must also expose the typelibs flattened into its own app
+capsule. Derive the installed prefix from the wrapper path, prepend
+`<prefix>/lib/girepository-1.0` to `GI_TYPELIB_PATH`, and preserve a caller's
+existing value. Publishing GTK alone moved Virt-manager's failure from Gdk to
+LibvirtGLib; the prefix-relative path let the final desktop root print
+`virt-manager 5.1.0` with both an empty and a preset `GI_TYPELIB_PATH`.
+
+The final package-output scan for EP012 found exactly 15 `/etc` paths in seven
+manifests. Gnome Keyring and AT-SPI2 keep three XDG autostart entries; Bash
+Completion and VTE keep five shell integration files; Libvirt keeps four
+logrotate fragments and one OpenSSH fragment; both Nvidia manifests keep the
+Khronos-defined OpenCL ICD file. Each external loader fixes or documents these
+paths, so moving them to a private vendor path would break normal packages.
+
+The four audited assembly overlays declare 98 `/etc` paths: 26 in
+`nex-systemd`, 19 in Edgebox, 48 in desktop-vwl, and five in the installer.
+Accounts, machine identity, network and authentication choices, and product
+settings form initial host state. Links below `/etc/systemd` enable packaged
+services, while `mtab`, `resolv.conf`, and `localtime` preserve compatibility
+paths. Nex-systemd, desktop-vwl, and installer set `nex_structure: true`, so
+the builder moves their entries to `/usr/share/factory/etc`; flat Edgebox
+intentionally retains its final appliance policy below `/etc`. Nvidia and
+desktop-dev variants inherit the audited desktop overlay.
+
+EP012's final finished-root checks used Edgebox checksum
+`2d19a11de3a6a1fea543e6bb7ec0f3ff1f07ed61666802860bc51b2a4834661b`
+and these desktop checksums:
+
+- desktop-vwl: `361a367520c3116dbb5215ba7ad71f263fbdc3ed16e399d5cdcf5a206e665b44`
+- desktop-vwl-nvidia-580: `65d74f0782e8afcfdc60c51ffdd5366c72f5861b5dc3a481817cbfd399aed72d`
+- desktop-vwl-nvidia-current: `2fd4a995c2cecde37a2e218386598677ba7d07b86f04abd680d4e842fd749016`
+- desktop-dev: `999cb4d9b24dd1f6ad1496b71ef6a38a158c037eaaace9aa90e752047d343430`
+
+The Edgebox smoke passed. The final desktop root ran PipeWire, Waybar, Bmon,
+Virsh, Virtlogd, and Virt-manager, loaded GTK's multipress module, read the
+Fontconfig vendor graph, honored a transient Fontconfig main file, and kept
+PipeWire's limits file only below `/usr/lib`.

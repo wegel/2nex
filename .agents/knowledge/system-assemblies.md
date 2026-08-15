@@ -267,6 +267,15 @@ under `unshare --root`, and a Python smoke imported GTK, GTKSource, GTK-VNC,
 VTE, LibvirtGLib, Libosinfo, `libvirt`, `libxml2`, `requests`, `virtinst`, and
 `virtManager.virtmanager`.
 
+Python GI applications also need their capsule-local typelibs. A wrapper can
+derive its installed prefix from its own path, prepend
+`<prefix>/lib/girepository-1.0` to `GI_TYPELIB_PATH`, and keep the caller's
+existing value after it. Publishing GTK's public runtime fixed Gdk and Gtk
+discovery, but `virt-manager --version` then failed on private
+`LibvirtGLib`. The prefix-relative wrapper found the flattened private
+typelibs, preserved a caller-supplied path, and printed `5.1.0` in the final
+desktop root.
+
 GLVND, GBM, and Vulkan provider files are runtime inputs even though ELF
 `DT_NEEDED` metadata does not name them. A graphics app capsule can contain
 Mesa loader libraries such as `libEGL.so.1` and `libgbm.so.1` while missing
@@ -328,3 +337,21 @@ Desktop-vwl uses this pattern to seed Libvirt's twenty-four nwfilter objects,
 default virtual network, and relative autostart link. The checked-out system
 contains regular XML files in the factory tree, while the immutable upstream
 templates remain in the package capsule.
+
+## Assembly `/etc` overlays
+
+Audit assembly-owned `/etc` entries separately from reusable package files.
+An assembly may choose initial accounts, machine identity, network policy,
+authentication policy, product settings, and enabled services. Service links
+below `/etc/systemd` record explicit enablement choices; `mtab`,
+`resolv.conf`, and `localtime` links preserve well-known compatibility paths.
+
+EP012 scanned every declared `/etc` path in the four source overlays and
+found 98 entries: 26 in `nex-systemd`, 19 in Edgebox, 48 in desktop-vwl, and
+five in the installer. The `nex-systemd`, desktop-vwl, and installer
+assemblies set `nex_structure: true`, so the builder moves these initial host
+files and links to `/usr/share/factory/etc`. The initramfs later copies only
+missing paths into writable host `/etc`. Edgebox extends the flat Systemd
+root, so its overlay intentionally writes the appliance's final policy and
+service links directly below `/etc`. Nvidia desktop variants and desktop-dev
+inherit the audited desktop overlay and add no separate overlay.
