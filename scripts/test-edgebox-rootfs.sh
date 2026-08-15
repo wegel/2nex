@@ -120,6 +120,22 @@ dumpe2fs -h "$e2fs_image" 2>/dev/null |
 rm -f "$e2fs_image"
 printf 'PASS: e2fsprogs vendor policy and filesystem creation\n'
 
+[[ -f /usr/lib/ssh/ssh_config ]] || fail "OpenSSH vendor client policy is missing"
+[[ -f /usr/lib/ssh/sshd_config ]] || fail "OpenSSH vendor server policy is missing"
+[[ -f /usr/share/ssh/moduli ]] || fail "OpenSSH moduli database is missing"
+[[ ! -e /etc/ssh/ssh_config ]] || fail "OpenSSH installed client policy in /etc"
+[[ ! -e /etc/ssh/sshd_config ]] || fail "OpenSSH installed server policy in /etc"
+[[ ! -e /etc/ssh/moduli ]] || fail "OpenSSH installed moduli in /etc"
+printf 'PASS: OpenSSH vendor policy\n'
+
+[[ -f /usr/lib/nsswitch.conf ]] || fail "Glibc vendor NSS policy is missing"
+[[ -f /usr/lib/rpc ]] || fail "Glibc vendor RPC database is missing"
+[[ -f /etc/nsswitch.conf ]] || fail "assembly-owned NSS policy is missing"
+[[ ! -e /etc/rpc ]] || fail "Glibc installed its RPC database in /etc"
+getent rpc portmapper | grep -F '100000' >/dev/null ||
+    fail "Glibc did not read the vendor RPC database"
+printf 'PASS: Glibc vendor databases and RPC lookup\n'
+
 [[ "$(locale charmap)" == UTF-8 ]] || fail "locale charmap is not UTF-8"
 locale -a | grep -Fx en_GB.UTF-8 >/dev/null || fail "en_GB.UTF-8 is not generated"
 printf 'PASS: en_GB locale\n'

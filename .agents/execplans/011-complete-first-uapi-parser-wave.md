@@ -53,8 +53,10 @@ database batches recorded in `tmp/UAPI_TODO.md`.
 - [x] (2026-08-14 23:04Z) Patched Glibc 2.39, passed the NSS and RPC
   precedence and live-change matrix in both strict builds, and verified that
   its split output contains only the two vendor files below `/usr/lib`.
-- [ ] Rebuild and exercise every affected assembly, including `desktop-dev`
-  after populating its declared GN dependency when needed.
+- [x] (2026-08-15 00:11Z) Refreshed every missing `desktop-dev` package ref,
+  rebuilt all 11 affected assemblies twice with matching checksums, checked
+  the Edgebox and desktop roots, checked the three standalone base roots, and
+  booted `nex-systemd` to `ASSERT-BOOT-PASS` in QEMU.
 - [ ] Re-run the exhaustive `/etc` output scan, update `.agents/kb.md` and the
   local `tmp/UAPI_TODO.md` when it exists, and complete the generic-manifest
   review.
@@ -237,6 +239,20 @@ database batches recorded in `tmp/UAPI_TODO.md`.
   its stale checksum and profile in commit `492403f`, and a C smoke linked to
   the packaged `libcheck`. PulseAudio then found Check 0.15.2, ran the focused
   Meson test by name, and passed it twice.
+- Observation: An assembly dependency supplies files to the assembly build
+  root but does not put that output in the finished Nex-structured system.
+  Evidence: the first rebuilt Edgebox checkout lacked `/usr/lib/nsswitch.conf`
+  and `/usr/lib/rpc` even though `nex-systemd` and the installer named Glibc's
+  library output as a dependency. Adding `outputs/conf` to `packages` in the
+  five standalone base manifests made the files visible in every checked
+  root.
+- Observation: Building a broad assembly is also a strict check of every
+  package ref it names, even when the package source did not change in the
+  active plan.
+  Evidence: the `desktop-dev` build found 19 refs whose recorded manifests no
+  longer matched the disposable store. Each package was rebuilt and exercised
+  before its metadata commit; the final desktop assembly then built twice
+  with checksum `75e4957348ef7c2e7f410ee9a16b52dad18405a315967477018e9492eaae24f5`.
 
 ## Decision Log
 
@@ -280,13 +296,23 @@ database batches recorded in `tmp/UAPI_TODO.md`.
   comparing every tier makes creation and removal visible to long-lived
   processes and nscd.
   Date/Author: 2026-08-14 / Codex.
+- Decision: Add Glibc's `conf` output as a package in each standalone base
+  assembly, then let extended assemblies inherit it.
+  Rationale: a root filesystem must ship the vendor databases for Glibc's
+  `/etc`, `/run`, `/usr` lookup to work. Assembly dependencies alone do not
+  place files in a Nex-structured result.
+  Date/Author: 2026-08-15 / Codex.
 
 ## Outcomes & Retrospective
 
 BlueZ, PulseAudio, OpenSSH, and Glibc now use tested layered readers and put
 their package defaults below `/usr`. Their strict two-build checks and focused
-behavior tests pass. The affected assemblies and final inventory audit remain
-in this ExecPlan.
+behavior tests pass. All 11 affected assemblies also build reproducibly. The
+checked Edgebox root passes its complete smoke test, the desktop root contains
+the BlueZ and Glibc vendor files without package-owned `/etc` copies, the
+standalone base roots contain the Glibc vendor databases, and `nex-systemd`
+boots to `ASSERT-BOOT-PASS`. The durable knowledge update and final completion
+record remain in this ExecPlan.
 
 ## Context and Orientation
 
