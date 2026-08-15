@@ -46,8 +46,14 @@ package groups.
   files into `/usr/lib/profile.d` or `/usr/share`, removed their nine package
   paths below `/etc` and `/usr/etc`, and ran their executable package smokes.
   The remaining inventory has 19 paths across nine manifests.
-- [ ] Move XDG autostart files into a vendor tree and prove the Nex desktop
-  session discovers them through the standard XDG environment interface.
+- [x] (2026-08-15 13:57Z) Published
+  `XDG_CONFIG_DIRS=/etc/xdg:/run/xdg:/usr/share/xdg` from the desktop's
+  `/usr/lib/environment.d`, built the Desktop VWL assembly twice at checksum
+  `f3e6a13c0fc94b1f9dc4422bc85657e817610c39d0023bfd5311f00481ea2dad`,
+  and ran the installed Systemd environment and autostart generators in its
+  finished root. The reader found all three package entries, selected
+  administrator then transient then vendor files with the same basename, and
+  honored an administrator `Hidden=true` mask.
 - [x] (2026-08-15 13:39Z) Added the assembly-owned `/usr/lib/profile` reader,
   layered fragment basenames from `/usr/lib/profile.d`, `/run/profile.d`, and
   `/etc/profile.d`, and proved transient and administrator replacement plus
@@ -64,8 +70,7 @@ package groups.
   checksums `066579bd01075af3d1214709aca0d8d10055d9865faa279a91691a4e91fde9cd`
   and `c4cfc4e2f63e73d1ba383cc68f48e114051ceb13795472c11a3bc3b54acb3499`.
   The remaining inventory has 16 paths across seven manifests. The desktop
-  assembly still needs its XDG search path and finished-root reader test before
-  the XDG milestone closes.
+  assembly work in the preceding checkpoint closes the XDG milestone.
 - [ ] Move Libvirt's Logrotate and OpenSSH fragments into vendor trees, add the
   missing Nex-built Logrotate reader, and exercise both integrations.
 - [ ] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
