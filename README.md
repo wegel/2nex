@@ -87,6 +87,11 @@ Two modes for generating systems:
 
 Scales from tiny embedded (~5MB busybox system) to full desktop/server.
 
+Nex deployments keep `/usr` immutable while the machine retains a writable,
+persistent `/etc`. [Configuration and `/etc`](CONFIGURATION.md) explains where
+packages place defaults, how assemblies supply machine policy, and what happens
+during upgrades and rollbacks.
+
 ## EFI bootloader
 
 Custom UEFI bootloader (`src/bootloader/`).

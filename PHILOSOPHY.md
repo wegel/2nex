@@ -235,22 +235,26 @@ rollback selects the earlier `/usr` tree and keeps the same host-owned `/etc`.
 Tools may show the administrator how a local file differs from the vendor
 default, but they must not guess how to combine the two.
 
-Some programs still read only `/etc`. An immutable assembly may keep pristine
-copies for those programs under `/usr/share/factory/etc` and populate a missing
-host file from them. Software must not read that factory tree directly, and an
-upgrade must not replace a host file that already exists. A service may also
-pass an explicit config path as a narrow adapter. Nex should patch the program
-when native UAPI lookup gives users a clearer and safer result.
+Nex builds the programs in a complete Nex system. When one of those programs
+reads only `/etc`, Nex should patch its reader instead of preserving a
+historical package layout. Reusable package manifests must not install vendor
+defaults under `/etc` or disguise them under `/usr/etc`. They should enable an
+upstream vendor-directory option when one exists. A source patch must implement
+the standard `/usr`, `/run`, and `/etc` rules without a Nex path, product name,
+or assembly policy.
 
-Reusable package manifests must keep these changes useful outside Nex. They
-should enable an upstream vendor-directory option when one exists. A source
-patch must implement the standard `/usr`, `/run`, and `/etc` rules without a
-Nex path, product name, or assembly policy. A reusable package should otherwise
-install upstream's normal files; the immutable assembly, not the package,
-moves legacy defaults into the factory tree. Product repositories place their
-own vendor defaults and service choices in product packages or assemblies.
-Flat root filesystems must continue to work without the Nex deployment or boot
-tools.
+An immutable assembly may keep initial host files under
+`/usr/share/factory/etc` and populate a missing host path from them. Software
+must not read that factory tree directly, and an upgrade must not replace a
+host file that already exists. An assembly that includes an unpatched outside
+program may add an explicit compatibility link, wrapper, or generated runtime
+view for that program. The adapter belongs to the assembly, not to a reusable
+package that does not know whether an assembly needs it.
+
+Product repositories place their own vendor defaults and service choices in
+product packages or assemblies. Flat root filesystems must continue to work
+without the Nex deployment or boot tools. `CONFIGURATION.md` describes the
+concrete directory rules, compatibility adapters, and upgrade behavior.
 
 ## Nex Prefers Its Boot Path But Does Not Require It
 
