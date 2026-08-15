@@ -56,6 +56,9 @@ named below.
   commented template into normal documentation paths, strictly rebuilt both
   packages and all four affected desktop systems, and exercised p11-kit's
   parser plus the installed FUSE helper.
+- [x] (2026-08-15 03:12Z) Retained Bash Completion's documented compatibility
+  and login-hook paths plus VTE's upstream system login hooks, loaded both
+  Bash scripts with the packaged shell, and strictly rebuilt VTE twice.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -173,6 +176,22 @@ named below.
   installed template contains no active line. Moving the template does not
   change the helper's administrator interface or its built-in behavior.
 
+- Observation: Bash itself does not scan `profile.d`; the selected system
+  profile decides whether to source that conventional directory.
+  Evidence: Bash Completion's pinned README tells systems to use its
+  `$sysconfdir/profile.d/bash_completion.sh` hook or source it from another
+  startup file, while VTE's Meson build installs both shell hooks directly in
+  `vte_sysconfdir/profile.d`. Moving either package alone would silently stop
+  login-shell activation on systems whose profile reads only `/etc/profile.d`.
+
+- Observation: Bash Completion has two separate legacy interfaces below
+  `/etc`, and its program implements one of them directly.
+  Evidence: `doc/configuration.md` documents `/etc/bash_completion.d` as the
+  first default compatibility directory; the main `bash_completion` script
+  searches it before its prefix-relative fallback. The Nex-created
+  `/etc/bash_completion` link preserves the older source path named in user
+  startup files.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -276,6 +295,16 @@ named below.
   comments for built-in defaults. Neither package should claim an
   administrator choice merely to ship instructions. A machine can still
   create `/etc/pkcs11/pkcs11.conf` or `/etc/fuse.conf` when it needs one.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Retain Bash Completion's three and VTE's two system shell paths
+  below `/etc`.
+  Rationale: These files implement externally used shell integration points,
+  not package defaults that the programs can search below `/usr`. Bash
+  Completion reads its compatibility directory itself; existing startup files
+  source its compatibility link; and system profiles source both packages'
+  login hooks. An immutable assembly can place them in its factory tree and
+  populate them only when the host has no same-name administrator file.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -626,6 +655,27 @@ affected assemblies, and commit.
    and contained no Foot file below `/etc/xdg` or the factory `/etc` tree.
    Commit: `pkg: move XDG config samples to docs`.
 
+8. `pkg/cli/shells/bash-completion.yaml`
+
+   The `conf` output declares `/etc/bash_completion`,
+   `/etc/bash_completion.d/000_bash_completion_compat.bash`, and
+   `/etc/profile.d/bash_completion.sh`. Outcome 5 applies to all three. The
+   first path is a compatibility link for startup files that source the
+   historical entry point. Bash Completion 2.17.0 itself searches the second
+   path first when `BASH_COMPLETION_COMPAT_DIR` is unset, as documented by the
+   pinned `doc/configuration.md`. The pinned README names the third path as
+   the system login hook and explains how another startup file can source it.
+
+   The existing strict build produced checksum
+   `9b5ee85942099ee315a1d32912c79e6fea6dcc9f1fbc6a4a7169b283ff483c39`.
+   A fresh checkout of the finished Edgebox system started the packaged Bash,
+   sourced `/etc/profile.d/bash_completion.sh`, asserted version `2 17 0`,
+   found the current `_comp_compgen_filedir` function and legacy `_filedir`
+   wrapper, and printed the registered default completion loader. The same
+   root's `/etc/bash_completion` link resolves to
+   `/usr/share/bash-completion/bash_completion`. No manifest or assembly
+   content changed. Commit: `pkg: document system shell integration paths`.
+
 11. `pkg/desktop/wayland/fuzzel.yaml`
 
    The old `conf` output declared `/etc/xdg/fuzzel/fuzzel.ini`. Fuzzel uses
@@ -828,6 +878,25 @@ affected assemblies, and commit.
    and desktop-dev
    `c53305429c0200a5392834fb52230800c5d02af2a9c1b298b7edb7f2543035c3`.
    Commit: `pkg: move configuration samples to docs`.
+
+28. `pkg/libs/text/vte.yaml`
+
+   The `misc` output declares `/etc/profile.d/vte.csh` and
+   `/etc/profile.d/vte.sh`. Outcome 5 applies. VTE does not read these files;
+   the host's system profile sources them to add VTE terminal title, working
+   directory, and shell prompt integration. The pinned Meson build installs
+   both files to `vte_sysconfdir/profile.d`. Moving the package hooks alone
+   would make a conventional profile that scans only `/etc/profile.d` miss
+   them.
+
+   The strict command built VTE twice with unchanged checksum
+   `92157350d5c80cc7991d8166e6187e5e94f5219b4d971e7fc5345bc0ab7cbc27`.
+   The packaged interactive Bash sourced `vte.sh` with a supported terminal
+   and VTE version, created `__vte_osc7`, added OSC 133 markers to `PS1`, and
+   printed `vte-shell-hook-pass`. The packaged `vte-urlencode-cwd` helper also
+   encoded the current directory successfully. No assembly selects VTE
+   directly, so this audit changed no finished system. Commit: `pkg: document
+   system shell integration paths`.
 
 ## Interfaces and Dependencies
 

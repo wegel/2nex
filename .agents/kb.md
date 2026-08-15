@@ -1154,6 +1154,23 @@ checksums are
 and
 `9829fa1b95f94bc0a3185e52c6b618b5b1d5e9eb6a26b51edbdd0b5536c79047`.
 
+Do not move shell `profile.d` hooks one package at a time. Bash does not scan
+that directory itself; the selected system profile decides which fragment
+directories it sources. Bash Completion 2.17.0 documents
+`$sysconfdir/profile.d/bash_completion.sh`, and VTE 0.76.4 installs both of
+its hooks to `vte_sysconfdir/profile.d`. Keep `/etc/profile.d` until the shell
+profile contract adds a vendor directory for every participating package and
+assembly.
+
+Bash Completion also reads `/etc/bash_completion.d` itself when
+`BASH_COMPLETION_COMPAT_DIR` is unset. Its documentation calls that directory
+the first default compatibility path, and user startup files may still source
+the historical `/etc/bash_completion` entry point. Keep both paths as
+compatibility interfaces. The current package checksum is
+`9b5ee85942099ee315a1d32912c79e6fea6dcc9f1fbc6a4a7169b283ff483c39`;
+VTE reproduced with checksum
+`92157350d5c80cc7991d8166e6187e5e94f5219b4d971e7fc5345bc0ab7cbc27`.
+
 After a strict assembly build commits a system, its temporary `target` tree
 may no longer exist. Use `zub cat-file systems/<slug>/<version>:<path>` to
 inspect a directory, symlink target, or regular file in the durable system

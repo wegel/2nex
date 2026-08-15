@@ -593,6 +593,24 @@ passed its `test-conf` parser after the sample moved. FUSE 3.17.4's shipped
 and
 `9829fa1b95f94bc0a3185e52c6b618b5b1d5e9eb6a26b51edbdd0b5536c79047`.
 
+Treat system shell integration paths as a contract that spans the package
+hook and the system profile that sources it. Bash itself does not scan
+`profile.d`. Moving one hook below `/usr` breaks systems whose selected
+profile scans only `/etc/profile.d`, even if the new location looks like a
+better vendor directory.
+
+Evidence: Bash Completion 2.17.0's README documents its
+`$sysconfdir/profile.d/bash_completion.sh` hook, and VTE 0.76.4's Meson build
+installs both shell hooks into `vte_sysconfdir/profile.d`. A packaged Bash
+loaded the Bash Completion hook and its legacy functions from a finished
+Edgebox root. Another packaged Bash loaded VTE's hook, created
+`__vte_osc7`, and added OSC 133 markers to its prompt.
+
+Bash Completion's compatibility files have their own loader contract. Its
+main script checks `/etc/bash_completion.d` first by default, and its
+configuration guide documents that path. Preserve the historical
+`/etc/bash_completion` link for user startup files that source it directly.
+
 ## Namespace Reference
 
 - `libs/system`: glibc, zlib, ncurses, acl, attr.
