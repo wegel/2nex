@@ -143,6 +143,16 @@ package groups.
   command discovery and every store operation. Its shell self-test substitutes
   `printf` as the command and prints
   `PASS: graphical QEMU honors ZUB_BIN`; Bash syntax checking also passes.
+- [x] (2026-08-15 16:23Z) Rebuilt the flat assembly branch parent-first with
+  two exact strict commands per manifest. `flat-systemd` retained checksum
+  `1212c60ff0f42d8f5910cae5644c08f8d23bbd7af9d2f1c2247932b253028ba8`,
+  `flat-podman` produced
+  `058256430aecd06c56ec2cf0362414463e7a3a46590f69345474d1796aab48b4`,
+  and Edgebox produced
+  `4fffdc9c8b871c1afefda29fd4bc86283087c52d00a4a54744b8fda22f47941e`.
+  The finished Edgebox checkout passed every assertion in
+  `scripts/test-edgebox-rootfs.sh`, including the layered profile, OpenSSH,
+  certificate, Nftables, OSTree, service, kernel-module, and firmware checks.
 - [x] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
   loader that reads all three configuration tiers, then move both Nvidia ICD
   files below `/usr`.
