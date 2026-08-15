@@ -130,7 +130,16 @@ package groups.
   and Nvidia current checksum
   `7110b39ccca3e89916c44107d16ea1fdb30471765e1755921e46de3802a37057`.
   The package checker now passes with zero `/etc` or `/usr/etc` output paths.
-- [ ] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
+- [x] (2026-08-15 16:15Z) Added the Khronos loader runtime to both Nvidia
+  desktops. Two exact strict commands per assembly produced four matching
+  builds at Nvidia 580 checksum
+  `e96c1d90579086617c714a6eb479b2275377c2165aa69aa2dea33c4bfc6e9148`
+  and Nvidia current checksum
+  `5c143a961f4e9a8ea25c231a4191253243fa26f8630b83ec349913e0a1ff1677`.
+  Fresh checkouts ran `cllayerinfo`, named the Khronos capsule as the public
+  loader, found each proprietary Nvidia ICD through its vendor file, and found
+  no `/etc/OpenCL` or factory compatibility tree.
+- [x] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
   loader that reads all three configuration tiers, then move both Nvidia ICD
   files below `/usr`.
 - [x] Replace the remaining `/usr/etc` outputs from Tig, Wget, OSTree, CUPS, and
@@ -285,6 +294,14 @@ package groups.
   created four public `libOpenCL` names. Filtering `libOpenCL.so*` while keeping
   `libnvidia-opencl.so.${version}` produced both driver packages without a
   public loader; an installer assertion checks this boundary in every build.
+
+- Observation: a Nex-structured system's top-level runtime paths are absolute
+  links into that system's `/nex/pkg` capsule tree.
+  Evidence: a host-side `test -e /target/usr/lib/libnvidia-opencl.so.1` followed
+  `/nex/pkg` in the assembly builder rather than below `/target` and failed.
+  Running content checks through `chroot /target` follows the finished root;
+  using `readlink` without dereferencing still identifies the selected package
+  capsule. Both corrected Nvidia assemblies reproduced four times.
 
 ## Decision Log
 
@@ -782,6 +799,18 @@ with a broad exception.
   Each build asserted that no `libOpenCL.so*` escaped the archive, that
   `libnvidia-opencl.so.1` resolved to a real file, and that the vendor
   registration below `/usr/share` named that proprietary ICD.
+- The Nvidia desktop assemblies select
+  `x86_64/pkg/libs/graphics/opencl-icd-loader/2026.05.29/bundles/runtime`.
+  Desktop Nvidia 580 reproduced checksum
+  `e96c1d90579086617c714a6eb479b2275377c2165aa69aa2dea33c4bfc6e9148`;
+  desktop Nvidia current reproduced
+  `5c143a961f4e9a8ea25c231a4191253243fa26f8630b83ec349913e0a1ff1677`.
+  Each assembly passed four complete builds. Fresh checkouts resolved
+  `/usr/lib/libOpenCL.so.1` to the same Khronos capsule and file SHA-256
+  `02b4c9836d40381c2c6a756be4e0b86ee65cb6ddabd68b907c8df3bd35550793`,
+  ran `cllayerinfo`, validated `nvidia.icd`, and lacked both `/etc/OpenCL` and
+  `/usr/share/factory/etc/OpenCL`. No real Nvidia GPU was available, so the
+  checks did not load a kernel module or execute an OpenCL kernel.
 
 ## Interfaces and Dependencies
 

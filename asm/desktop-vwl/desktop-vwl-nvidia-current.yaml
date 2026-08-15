@@ -6,9 +6,12 @@ system:
   description: Desktop system with vwl compositor, current Nvidia, and capture tools
   nex_structure: true
   extends: asm/desktop-vwl/desktop-vwl.yaml
-  checksum: a882f3488b668f3f7826ef1a872add90c2db917928504030b433ec997ffe70a6
+  checksum: 5c143a961f4e9a8ea25c231a4191253243fa26f8630b83ec349913e0a1ff1677
 
 packages:
+# source-built public OpenCL loader
+- name: opencl-icd-loader
+  commit: x86_64/pkg/libs/graphics/opencl-icd-loader/2026.05.29/bundles/runtime
 # current Nvidia for Blackwell-class machines
 - name: nvidia-current
   commit: x86_64/pkg/libs/graphics/nvidia-current/595.84/bundles/runtime
@@ -79,5 +82,16 @@ build:
       || test -L "${vwl_root}/usr/lib/libEGL_nvidia.so.0"
     test -e "${vwl_root}/usr/lib/gbm/nvidia-drm_gbm.so" \
       || test -L "${vwl_root}/usr/lib/gbm/nvidia-drm_gbm.so"
+
+    case "$(readlink /target/usr/lib/libOpenCL.so.1)" in
+      /nex/pkg/libs/graphics/opencl-icd-loader/2026.05.29/*/usr/lib/libOpenCL.so.1) ;;
+      *) exit 1 ;;
+    esac
+    chroot /target /usr/bin/test -e /usr/lib/libnvidia-opencl.so.1
+    chroot /target /usr/bin/test -s /usr/share/OpenCL/vendors/nvidia.icd
+    chroot /target /usr/bin/grep -Fxq 'libnvidia-opencl.so.1' \
+      /usr/share/OpenCL/vendors/nvidia.icd
+    chroot /target /usr/bin/test ! -e /etc/OpenCL
+    chroot /target /usr/bin/cllayerinfo >/dev/null
 
     echo "Nvidia current module metadata generated."

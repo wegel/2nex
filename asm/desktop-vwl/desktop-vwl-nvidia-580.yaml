@@ -6,9 +6,12 @@ system:
   description: Desktop system with vwl compositor, Nvidia 580, and capture tools
   nex_structure: true
   extends: asm/desktop-vwl/desktop-vwl.yaml
-  checksum: 5f9166e5d0af3f809c022f23f81a8574ade92cf08dca2f4addf9c8851be4d42f
+  checksum: e96c1d90579086617c714a6eb479b2275377c2165aa69aa2dea33c4bfc6e9148
 
 packages:
+# source-built public OpenCL loader
+- name: opencl-icd-loader
+  commit: x86_64/pkg/libs/graphics/opencl-icd-loader/2026.05.29/bundles/runtime
 # Nvidia 580 for Pascal/Turing machines
 - name: nvidia-580
   commit: x86_64/pkg/libs/graphics/nvidia-580/580.159.04/bundles/runtime
@@ -79,5 +82,16 @@ build:
       || test -L "${vwl_root}/usr/lib/libEGL_nvidia.so.0"
     test -e "${vwl_root}/usr/lib/gbm/nvidia-drm_gbm.so" \
       || test -L "${vwl_root}/usr/lib/gbm/nvidia-drm_gbm.so"
+
+    case "$(readlink /target/usr/lib/libOpenCL.so.1)" in
+      /nex/pkg/libs/graphics/opencl-icd-loader/2026.05.29/*/usr/lib/libOpenCL.so.1) ;;
+      *) exit 1 ;;
+    esac
+    chroot /target /usr/bin/test -e /usr/lib/libnvidia-opencl.so.1
+    chroot /target /usr/bin/test -s /usr/share/OpenCL/vendors/nvidia.icd
+    chroot /target /usr/bin/grep -Fxq 'libnvidia-opencl.so.1' \
+      /usr/share/OpenCL/vendors/nvidia.icd
+    chroot /target /usr/bin/test ! -e /etc/OpenCL
+    chroot /target /usr/bin/cllayerinfo >/dev/null
 
     echo "Nvidia 580 module metadata generated."
