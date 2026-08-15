@@ -1134,6 +1134,14 @@ now ships only Netavark and lets Podman or an assembly choose a firewall
 driver. Both pinned inputs and `netavark --version` identify 1.14.1; keep the
 manifest version and assembly refs aligned with that source identity.
 
+The OpenCL ICD extension fixes the Linux vendor-file directory at
+`/etc/OpenCL/vendors`. Keep Nvidia's `nvidia.icd` there; moving it below
+`/usr` would break conforming loaders. Both Nvidia manifests generate a
+separate `conf` output, so their `full` and `runtime` bundles must list that
+output explicitly. Before EP012 added it, Nvidia desktop images carried
+`libOpenCL.so.1` but no discoverable Nvidia ICD. The Khronos contract is
+`https://registry.khronos.org/OpenCL/specs/unified/refpages/man/html/cl_khr_icd.html`.
+
 - OpenSSH 9.9p1 now selects its client and server main files from `/etc/ssh`,
   `/run/ssh`, or `/usr/lib/ssh`. It preserves exact `-F` and `-f` paths, user
   client policy, arbitrary `Include` files, and fresh default-path selection

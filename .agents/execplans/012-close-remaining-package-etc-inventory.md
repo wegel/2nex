@@ -34,6 +34,9 @@ named below.
   choice, corrected its package version to match both pinned 1.14.1 sources,
   strictly rebuilt it and all five direct or inherited assemblies, and tested
   the installed executable in flat and Nex-structured roots.
+- [x] (2026-08-15 01:00Z) Retained the OpenCL specification's fixed Nvidia
+  ICD path, exposed it through both driver runtime bundles, strictly rebuilt
+  both packages and images, and called the OpenCL loader in each image.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -77,6 +80,13 @@ named below.
   1.14.1`; the flat root's `podman info` stopped with `Error: no such file or
   directory` even with a private VFS root, runroot, and mounted `/proc`.
 
+- Observation: Both Nvidia packages generated their OpenCL ICD correctly but
+  omitted the `conf` output from both public bundles.
+  Evidence: the strict package roots contained `nvidia.icd` and
+  `libOpenCL.so.1`, while the old `full` and `runtime` bundle lists contained
+  `config` but not `conf`. The two Nvidia assembly roots lacked the ICD until
+  this audit added `conf` to both bundles.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -111,6 +121,15 @@ named below.
   manifest created the whole `50-buildroot-nftables.conf` file and therefore
   imported another distribution's product choice. Podman and each assembly
   can choose a firewall driver when they need one.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Retain Nvidia's `/etc/OpenCL/vendors/nvidia.icd` and expose it in
+  both public bundles.
+  Rationale: Khronos defines `/etc/OpenCL/vendors` as the Linux ICD directory
+  in `https://registry.khronos.org/OpenCL/specs/unified/refpages/man/html/cl_khr_icd.html`.
+  Moving this file would make the package incompatible with conforming ICD
+  loaders. A public runtime bundle must contain it so an installed loader can
+  discover the packaged vendor library.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -408,6 +427,40 @@ affected assemblies, and commit.
    and `desktop-dev`
    `3f45970d91af64016e788e93897e9ded96aa05d650764f7ded9e83bc664653ab`.
    Commit: `pkg: package netavark without distribution policy`.
+
+21. `pkg/libs/graphics/nvidia-580.yaml`
+
+   The `conf` output declares `/etc/OpenCL/vendors/nvidia.icd`, whose content
+   names `libnvidia-opencl.so.1`. Outcome 5 applies. The Khronos ICD extension
+   reference fixes this directory on Linux, so the manifest retains the path.
+   The package already generated the file but neither public bundle selected
+   `conf`; `full` and `runtime` now include it.
+
+   The strict package command built twice with checksum
+   `58b3a59dc14fcc68b8d755b4a153d7b5e489548e2b803f4a7f1cc85897d2885a`.
+   A C smoke program linked the packaged `libOpenCL.so.1`, called
+   `clGetPlatformIDs`, and returned the expected `-1001` without a GPU. In the
+   rebuilt image, the same call loaded the Nvidia ICD far enough to attempt
+   the Nvidia kernel module before returning `-1001`. The image placed the ICD
+   at `/usr/share/factory/etc/OpenCL/vendors/nvidia.icd` and reproduced with
+   checksum
+   `e833ab46831dfa9cc16b17c784f147c88b23567b4b98b9a03c7bf9f5b085ef88`.
+   Commit: `pkg: include nvidia OpenCL ICDs at runtime`.
+
+22. `pkg/libs/graphics/nvidia-current.yaml`
+
+   This branch declares the same `/etc/OpenCL/vendors/nvidia.icd` path and
+   names the same `libnvidia-opencl.so.1` soname. Outcome 5 and the Khronos
+   evidence above apply. Its `full` and `runtime` bundles now include `conf`.
+
+   The strict package command built twice with checksum
+   `1bf7490765156c555325cfd1efa3ff26466e3f20af023677085a88f057b97b06`.
+   The same installed-library test called `clGetPlatformIDs`; the assembly
+   call attempted to load the Nvidia module and returned the expected `-1001`
+   on this non-Nvidia test host. The image placed the ICD in its factory tree
+   and reproduced with checksum
+   `43c20f709c15622e278ae0f1bf486be49f1ae578d377d6586d47498b91fc0a57`.
+   Commit: `pkg: include nvidia OpenCL ICDs at runtime`.
 
 ## Interfaces and Dependencies
 
