@@ -1,0 +1,1178 @@
+From: Package maintainers <packages@localhost>
+Subject: [PATCH] read system policy from administrator, runtime, and vendor paths
+Source: downstream
+Upstream: not submitted; suitable for upstream review
+
+Read persistent administrator policy below /etc before temporary machine
+policy below /run and package defaults below /usr. Merge drop-in directories
+by filename, with the higher-priority copy shadowing the lower-priority copy.
+Keep explicit module arguments authoritative.
+
+diff --git a/libpam/pam_handlers.c b/libpam/pam_handlers.c
+index ce790d0..402d720 100644
+--- a/libpam/pam_handlers.c
++++ b/libpam/pam_handlers.c
+@@ -295,7 +295,8 @@ _pam_open_config_file(pam_handle_t *pamh
+ 			, char **path
+ 			, FILE **file)
+ {
+-    const char *const pamd_dirs[] = { PAM_CONFIG_DF, PAM_CONFIG_DIST_DF
++    const char *const pamd_dirs[] = { PAM_CONFIG_DF, PAM_CONFIG_RUN_DF,
++                                     PAM_CONFIG_DIST_DF
+ #ifdef VENDORDIR
+                                , PAM_CONFIG_DIST2_DF
+ #endif
+@@ -466,6 +467,8 @@ int _pam_init_handlers(pam_handle_t *pamh)
+ 	/* Is there a PAM_CONFIG_D directory? */
+ 	if (pamh->confdir != NULL ||
+ 	    (stat(PAM_CONFIG_D, &test_d) == 0 && S_ISDIR(test_d.st_mode)) ||
++	    (stat(PAM_CONFIG_RUN_D, &test_d) == 0
++		&& S_ISDIR(test_d.st_mode)) ||
+ 	    (stat(PAM_CONFIG_DIST_D, &test_d) == 0 && S_ISDIR(test_d.st_mode))
+ #ifdef PAM_CONFIG_DIST2_D
+ 	    || (stat(PAM_CONFIG_DIST2_D, &test_d) == 0
+diff --git a/libpam/pam_modutil_searchkey.c b/libpam/pam_modutil_searchkey.c
+index 1a497f8..9d29a87 100644
+--- a/libpam/pam_modutil_searchkey.c
++++ b/libpam/pam_modutil_searchkey.c
+@@ -29,7 +29,8 @@ econf_search_key (const char *name, const char *suffix, const char *key)
+ 	char *val;
+ 	econf_err error;
+ 
+-	error = pam_econf_readconfig (&key_file, VENDORDIR, SYSCONFDIR, name, suffix,
++	error = pam_econf_readconfig (&key_file, VENDORDIR, RUNTIMEDIR,
++				      SYSCONFDIR, name, suffix,
+ 				      " \t", "#", NULL, NULL);
+ 	if (error != ECONF_SUCCESS) {
+                 econf_free (key_file);
+diff --git a/libpam/pam_private.h b/libpam/pam_private.h
+index 77dc5a6..18ae7a9 100644
+--- a/libpam/pam_private.h
++++ b/libpam/pam_private.h
+@@ -28,6 +28,8 @@
+ #define PAM_CONFIG         "/etc/pam.conf"
+ #define PAM_CONFIG_D       "/etc/pam.d"
+ #define PAM_CONFIG_DF      "/etc/pam.d/%s"
++#define PAM_CONFIG_RUN_D   "/run/pam.d"
++#define PAM_CONFIG_RUN_DF  "/run/pam.d/%s"
+ #define PAM_CONFIG_DIST_D  "/usr/lib/pam.d"
+ #define PAM_CONFIG_DIST_DF "/usr/lib/pam.d/%s"
+ #ifdef VENDORDIR
+diff --git a/libpam_internal/include/pam_config.h b/libpam_internal/include/pam_config.h
+new file mode 100644
+index 0000000..aae1547
+--- /dev/null
++++ b/libpam_internal/include/pam_config.h
+@@ -0,0 +1,14 @@
++/* pam_config.h -- common system configuration path helpers */
++
++#ifndef PAM_CONFIG_H
++#define PAM_CONFIG_H
++
++const char *_pam_config_path(const char *admin_path,
++                             const char *runtime_path,
++                             const char *vendor_path);
++
++char **_pam_config_files(const char *admin_pattern,
++                         const char *runtime_pattern,
++                         const char *vendor_pattern);
++
++#endif /* PAM_CONFIG_H */
+diff --git a/libpam_internal/include/pam_econf.h b/libpam_internal/include/pam_econf.h
+index ebba659..51ed030 100644
+--- a/libpam_internal/include/pam_econf.h
++++ b/libpam_internal/include/pam_econf.h
+@@ -9,6 +9,7 @@
+ 
+ econf_err pam_econf_readconfig(econf_file **key_file,
+ 			       const char *usr_conf_dir,
++			       const char *run_conf_dir,
+ 			       const char *etc_conf_dir,
+ 			       const char *config_name,
+ 			       const char *config_suffix,
+diff --git a/libpam_internal/meson.build b/libpam_internal/meson.build
+index 5d03877..2e5a568 100644
+--- a/libpam_internal/meson.build
++++ b/libpam_internal/meson.build
+@@ -1,4 +1,5 @@
+ libpam_internal_src = [
++  'pam_config.c',
+   'pam_debug.c',
+   'pam_econf.c',
+   'pam_line.c',
+diff --git a/libpam_internal/pam_config.c b/libpam_internal/pam_config.c
+new file mode 100644
+index 0000000..58c455c
+--- /dev/null
++++ b/libpam_internal/pam_config.c
+@@ -0,0 +1,134 @@
++/* pam_config.c -- common system configuration path helpers */
++
++#include "config.h"
++
++#include <errno.h>
++#include <glob.h>
++#include <stdbool.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/stat.h>
++
++#include "pam_config.h"
++
++static const char *
++base_name(const char *path)
++{
++    const char *base = strrchr(path, '/');
++
++    return base != NULL ? base + 1 : path;
++}
++
++const char *
++_pam_config_path(const char *admin_path,
++                 const char *runtime_path,
++                 const char *vendor_path)
++{
++    struct stat buffer;
++
++    if (admin_path != NULL &&
++        (stat(admin_path, &buffer) == 0 || errno != ENOENT))
++        return admin_path;
++
++    if (runtime_path != NULL &&
++        (stat(runtime_path, &buffer) == 0 || errno != ENOENT))
++        return runtime_path;
++
++    return vendor_path != NULL ? vendor_path : admin_path;
++}
++
++static bool
++has_base_name(char *const *files, size_t count, const char *candidate)
++{
++    const char *candidate_base = base_name(candidate);
++
++    for (size_t i = 0; i < count; i++) {
++        if (strcmp(base_name(files[i]), candidate_base) == 0)
++            return true;
++    }
++
++    return false;
++}
++
++static int
++append_pattern(char ***files, size_t *count, const char *pattern)
++{
++    glob_t matches = { 0 };
++    int result;
++
++    if (pattern == NULL)
++        return 0;
++
++    result = glob(pattern, GLOB_ERR | GLOB_NOSORT, NULL, &matches);
++    if (result == GLOB_NOMATCH)
++        return 0;
++    if (result != 0) {
++        errno = result == GLOB_NOSPACE ? ENOMEM : EIO;
++        globfree(&matches);
++        return -1;
++    }
++
++    for (size_t i = 0; i < matches.gl_pathc; i++) {
++        char **new_files;
++
++        if (has_base_name(*files, *count, matches.gl_pathv[i]))
++            continue;
++
++        new_files = realloc(*files, (*count + 2) * sizeof(**files));
++        if (new_files == NULL) {
++            globfree(&matches);
++            return -1;
++        }
++        *files = new_files;
++        (*files)[*count] = strdup(matches.gl_pathv[i]);
++        if ((*files)[*count] == NULL) {
++            globfree(&matches);
++            return -1;
++        }
++        (*count)++;
++        (*files)[*count] = NULL;
++    }
++
++    globfree(&matches);
++    return 0;
++}
++
++static int
++compare_filename(const void *a, const void *b)
++{
++    const char *const *left = a;
++    const char *const *right = b;
++
++    return strcmp(base_name(*left), base_name(*right));
++}
++
++char **
++_pam_config_files(const char *admin_pattern,
++                  const char *runtime_pattern,
++                  const char *vendor_pattern)
++{
++    const char *patterns[] = {
++        admin_pattern,
++        runtime_pattern,
++        vendor_pattern,
++    };
++    char **files = calloc(1, sizeof(*files));
++    size_t count = 0;
++
++    if (files == NULL)
++        return NULL;
++
++    for (size_t i = 0; i < sizeof(patterns) / sizeof(patterns[0]); i++) {
++        if (append_pattern(&files, &count, patterns[i]) < 0)
++            goto error;
++    }
++
++    qsort(files, count, sizeof(*files), compare_filename);
++    return files;
++
++error:
++    for (size_t i = 0; i < count; i++)
++        free(files[i]);
++    free(files);
++    return NULL;
++}
+diff --git a/libpam_internal/pam_econf.c b/libpam_internal/pam_econf.c
+index bf7c235..14d246f 100644
+--- a/libpam_internal/pam_econf.c
++++ b/libpam_internal/pam_econf.c
+@@ -11,6 +11,7 @@
+ 
+ econf_err pam_econf_readconfig(econf_file **key_file,
+ 			       const char *usr_conf_dir,
++			       const char *run_conf_dir,
+ 			       const char *etc_conf_dir,
+ 			       const char *config_name,
+ 			       const char *config_suffix,
+@@ -20,12 +21,14 @@ econf_err pam_econf_readconfig(econf_file **key_file,
+ 			       const void *callback_data)
+ {
+     econf_err ret = ECONF_SUCCESS;
+-    D(("Read configuration from directory %s and %s", etc_conf_dir, usr_conf_dir));
++    D(("Read configuration from directories %s, %s and %s",
++       etc_conf_dir, run_conf_dir, usr_conf_dir));
+ 
+ #ifdef HAVE_ECONF_READCONFIG
+ 
+     char *parsing_dirs =
+-	pam_asprintf("PARSING_DIRS=%s:%s", usr_conf_dir, etc_conf_dir);
++	pam_asprintf("PARSING_DIRS=%s:%s:%s",
++	             usr_conf_dir, run_conf_dir, etc_conf_dir);
+     if (parsing_dirs == NULL) {
+         ret = ECONF_NOMEM;
+         parsing_dirs = NULL;
+@@ -45,6 +48,7 @@ econf_err pam_econf_readconfig(econf_file **key_file,
+ 
+ #else
+ 
++    (void) run_conf_dir;
+     ret = econf_readDirsWithCallback(key_file,
+ 				     usr_conf_dir,
+ 				     etc_conf_dir,
+diff --git a/meson.build b/meson.build
+index 0827a53..40a46e6 100644
+--- a/meson.build
++++ b/meson.build
+@@ -79,6 +79,8 @@ endif
+ cdata.set_quoted('SCONFIG_DIR', sconfigdir)
+ # used in configure_file() only, so not quoted
+ cdata.set('SCONFIGDIR', sconfigdir)
++cdata.set_quoted('RUNTIMEDIR', '/run')
++cdata.set_quoted('RUNTIME_SCONFIG_DIR', '/run/security')
+ 
+ vendordir = get_option('vendordir')
+ if get_option('vendordir') == ''
+diff --git a/modules/pam_access/pam_access.c b/modules/pam_access/pam_access.c
+index bebe2ad..c8a3588 100644
+--- a/modules/pam_access/pam_access.c
++++ b/modules/pam_access/pam_access.c
+@@ -54,10 +54,13 @@
+ #include <security/pam_modutil.h>
+ #include <security/pam_ext.h>
+ #include "pam_cc_compat.h"
++#include "pam_config.h"
+ #include "pam_inline.h"
+ 
+ #define PAM_ACCESS_CONFIG	(SCONFIG_DIR "/access.conf")
+ #define ACCESS_CONF_GLOB	(SCONFIG_DIR "/access.d/*.conf")
++#define RUNTIME_PAM_ACCESS_CONFIG (RUNTIME_SCONFIG_DIR "/access.conf")
++#define RUNTIME_ACCESS_CONF_GLOB  (RUNTIME_SCONFIG_DIR "/access.d/*.conf")
+ #ifdef VENDOR_SCONFIG_DIR
+ #define VENDOR_PAM_ACCESS_CONFIG (VENDOR_SCONFIG_DIR "/access.conf")
+ #define VENDOR_ACCESS_CONF_GLOB  (VENDOR_SCONFIG_DIR "/access.d/*.conf")
+@@ -165,93 +168,23 @@ parse_args(pam_handle_t *pamh, struct login_info *loginfo,
+     return 1;  /* OK */
+ }
+ 
+-/* --- evaluating all files in VENDORDIR/security/access.d and /etc/security/access.d --- */
+-static const char *base_name(const char *path)
+-{
+-    const char *base = strrchr(path, '/');
+-    return base ? base+1 : path;
+-}
+-
+-static int
+-compare_filename(const void *a, const void *b)
+-{
+-	return strcmp(base_name(* (const char * const *) a),
+-		        base_name(* (const char * const *) b));
+-}
+-
+-/* Evaluating a list of files which have to be parsed in the right order:
+- *
+- * - If etc/security/access.d/@filename@.conf exists, then
+- *   %vendordir%/security/access.d/@filename@.conf should not be used.
+- * - All files in both access.d directories are sorted by their @filename@.conf in
+- *   lexicographic order regardless of which of the directories they reside in. */
++/* Evaluate all access.d files in lexical order. Higher-priority directories
++ * shadow equal basenames from lower-priority directories. */
+ static char **read_access_dir(pam_handle_t *pamh)
+ {
+-	glob_t globbuf;
+-	size_t i=0;
+-	int glob_rv = glob(ACCESS_CONF_GLOB, GLOB_ERR | GLOB_NOSORT, NULL, &globbuf);
+-	char **file_list;
+-	size_t file_list_size = glob_rv == 0 ? globbuf.gl_pathc : 0;
+-
+ #ifdef VENDOR_ACCESS_CONF_GLOB
+-	glob_t globbuf_vendor;
+-	int glob_rv_vendor = glob(VENDOR_ACCESS_CONF_GLOB, GLOB_ERR | GLOB_NOSORT, NULL, &globbuf_vendor);
+-	if (glob_rv_vendor == 0)
+-	    file_list_size += globbuf_vendor.gl_pathc;
++    char **files = _pam_config_files(ACCESS_CONF_GLOB,
++                                     RUNTIME_ACCESS_CONF_GLOB,
++                                     VENDOR_ACCESS_CONF_GLOB);
++#else
++    char **files = _pam_config_files(ACCESS_CONF_GLOB,
++                                     RUNTIME_ACCESS_CONF_GLOB,
++                                     NULL);
+ #endif
+-	file_list = malloc((file_list_size + 1) * sizeof(char*));
+-	if (file_list == NULL) {
+-	    pam_syslog(pamh, LOG_ERR, "Cannot allocate memory for file list: %m");
+-#ifdef VENDOR_ACCESS_CONF_GLOB
+-            if (glob_rv_vendor == 0)
+-                globfree(&globbuf_vendor);
+-#endif
+-            if (glob_rv == 0)
+-                globfree(&globbuf);
+-	    return NULL;
+-	}
+ 
+-	if (glob_rv == 0) {
+-	    for (i = 0; i < globbuf.gl_pathc; i++) {
+-	        file_list[i] = strdup(globbuf.gl_pathv[i]);
+-		if (file_list[i] == NULL) {
+-		    pam_syslog(pamh, LOG_ERR, "strdup failed: %m");
+-		    break;
+-		}
+-	    }
+-	}
+-#ifdef VENDOR_ACCESS_CONF_GLOB
+-	if (glob_rv_vendor == 0) {
+-	    for (size_t j = 0; j < globbuf_vendor.gl_pathc; j++) {
+-		if (glob_rv == 0 && globbuf.gl_pathc > 0) {
+-		    int double_found = 0;
+-		    for (size_t k = 0; k < globbuf.gl_pathc; k++) {
+-		        if (strcmp(base_name(globbuf.gl_pathv[k]),
+-				   base_name(globbuf_vendor.gl_pathv[j])) == 0) {
+-				double_found = 1;
+-				break;
+-			}
+-		    }
+-		    if (double_found)
+-			continue;
+-		}
+-		file_list[i] = strdup(globbuf_vendor.gl_pathv[j]);
+-		if (file_list[i] == NULL) {
+-		    pam_syslog(pamh, LOG_ERR, "strdup failed: %m");
+-		    break;
+-		}
+-		i++;
+-	    }
+-	    globfree(&globbuf_vendor);
+-	}
+-#endif
+-	file_list[i] = NULL;
+-	qsort(file_list, i, sizeof(char *), compare_filename);
+-
+-	if (glob_rv == 0)
+-	    globfree(&globbuf);
+-
+-	return file_list;
++    if (files == NULL)
++        pam_syslog(pamh, LOG_ERR, "Cannot allocate configuration file list: %m");
++    return files;
+ }
+ 
+ /* --- static functions for checking whether the user should be let in --- */
+@@ -1159,17 +1092,16 @@ pam_access(pam_handle_t *pamh, int argc, const char **argv)
+ 	return PAM_ABORT;
+     }
+ 
+-#ifdef VENDOR_PAM_ACCESS_CONFIG
+     if (loginfo.config_file == default_config) {
+-      /* Check whether PAM_ACCESS_CONFIG file is available.
+-       * If it does not exist, fall back to VENDOR_PAM_ACCESS_CONFIG file. */
+-      struct stat buffer;
+-      if (stat(loginfo.config_file, &buffer) != 0 && errno == ENOENT) {
+-	default_config = VENDOR_PAM_ACCESS_CONFIG;
+-	loginfo.config_file = default_config;
+-      }
+-    }
++      default_config = _pam_config_path(PAM_ACCESS_CONFIG,
++                                        RUNTIME_PAM_ACCESS_CONFIG,
++#ifdef VENDOR_PAM_ACCESS_CONFIG
++                                        VENDOR_PAM_ACCESS_CONFIG);
++#else
++                                        NULL);
+ #endif
++      loginfo.config_file = default_config;
++    }
+ 
+     /* remote host name */
+ 
+diff --git a/modules/pam_env/pam_env.c b/modules/pam_env/pam_env.c
+index 496c894..7202c8d 100644
+--- a/modules/pam_env/pam_env.c
++++ b/modules/pam_env/pam_env.c
+@@ -214,7 +214,7 @@ econf_read_file(const pam_handle_t *pamh, const char *filename, const char *deli
+     }
+     if (filename == NULL || base_dir[0] != '\0') {
+       /* Read and merge all setting in e.g. /usr/etc and /etc */
+-      char *vendor_dir = NULL, *sysconf_dir;
++      char *vendor_dir = NULL, *runtime_dir = NULL, *sysconf_dir;
+       if (subpath != NULL && subpath[0] != '\0') {
+ #ifdef VENDORDIR
+ 	if ((vendor_dir = pam_asprintf("%s%s/%s/", base_dir, VENDORDIR, subpath)) == NULL) {
+@@ -222,9 +222,15 @@ econf_read_file(const pam_handle_t *pamh, const char *filename, const char *deli
+ 	  return PAM_BUF_ERR;
+ 	}
+ #endif
++	if ((runtime_dir = pam_asprintf("%s%s/%s/", base_dir, RUNTIMEDIR, subpath)) == NULL) {
++	  pam_syslog(pamh, LOG_ERR, "Cannot allocate memory.");
++	  free(vendor_dir);
++	  return PAM_BUF_ERR;
++	}
+ 	if ((sysconf_dir = pam_asprintf("%s%s/%s/", base_dir, SYSCONFDIR, subpath)) == NULL) {
+ 	  pam_syslog(pamh, LOG_ERR, "Cannot allocate memory.");
+ 	  free(vendor_dir);
++	  free(runtime_dir);
+ 	  return PAM_BUF_ERR;
+ 	}
+       } else {
+@@ -234,16 +240,24 @@ econf_read_file(const pam_handle_t *pamh, const char *filename, const char *deli
+ 	  return PAM_BUF_ERR;
+ 	}
+ #endif
+-	if ((sysconf_dir = pam_asprintf("%s%s/", base_dir, SYSCONFDIR)) == NULL) {
++	if ((runtime_dir = pam_asprintf("%s%s/", base_dir, RUNTIMEDIR)) == NULL) {
+ 	  pam_syslog(pamh, LOG_ERR, "Cannot allocate memory.");
+ 	  free(vendor_dir);
+ 	  return PAM_BUF_ERR;
+ 	}
++	if ((sysconf_dir = pam_asprintf("%s%s/", base_dir, SYSCONFDIR)) == NULL) {
++	  pam_syslog(pamh, LOG_ERR, "Cannot allocate memory.");
++	  free(vendor_dir);
++	  free(runtime_dir);
++	  return PAM_BUF_ERR;
++	}
+       }
+ 
+-      error = pam_econf_readconfig (&key_file, vendor_dir, sysconf_dir, name, suffix,
++      error = pam_econf_readconfig (&key_file, vendor_dir, runtime_dir,
++				    sysconf_dir, name, suffix,
+ 				    delim, "#", NULL, NULL);
+       free(vendor_dir);
++      free(runtime_dir);
+       free(sysconf_dir);
+       if (error != ECONF_SUCCESS) {
+         if (error == ECONF_NOFILE) {
+diff --git a/modules/pam_faillock/faillock_config.c b/modules/pam_faillock/faillock_config.c
+index d8e7e80..4d4d518 100644
+--- a/modules/pam_faillock/faillock_config.c
++++ b/modules/pam_faillock/faillock_config.c
+@@ -45,10 +45,12 @@
+ 
+ #include <security/pam_modules.h>
+ 
++#include "pam_config.h"
+ #include "faillock_config.h"
+ #include "faillock.h"
+ 
+ #define FAILLOCK_DEFAULT_CONF SCONFIG_DIR "/faillock.conf"
++#define RUNTIME_FAILLOCK_DEFAULT_CONF RUNTIME_SCONFIG_DIR "/faillock.conf"
+ #ifdef VENDOR_SCONFIG_DIR
+ #define VENDOR_FAILLOCK_DEFAULT_CONF VENDOR_SCONFIG_DIR "/faillock.conf"
+ #endif
+@@ -81,18 +83,15 @@ read_config_file(pam_handle_t *pamh, struct options *opts, const char *cfgfile)
+ {
+ 	char *linebuf = NULL;
+ 	size_t n = 0;
+-	const char *fname = (cfgfile != NULL) ? cfgfile : FAILLOCK_DEFAULT_CONF;
+-	FILE *f = fopen(fname, "r");
+-
++	const char *fname = cfgfile != NULL ? cfgfile :
++		_pam_config_path(FAILLOCK_DEFAULT_CONF,
++				 RUNTIME_FAILLOCK_DEFAULT_CONF,
+ #ifdef VENDOR_FAILLOCK_DEFAULT_CONF
+-	if (f == NULL && errno == ENOENT && cfgfile == NULL) {
+-		/*
+-		 * If the default configuration file in /etc does not exist,
+-		 * try the vendor configuration file as fallback.
+-		 */
+-		f = fopen(VENDOR_FAILLOCK_DEFAULT_CONF, "r");
+-	}
+-#endif /* VENDOR_FAILLOCK_DEFAULT_CONF */
++				 VENDOR_FAILLOCK_DEFAULT_CONF);
++#else
++				 NULL);
++#endif
++	FILE *f = fopen(fname, "r");
+ 
+ 	if (f == NULL) {
+ 		/* ignore non-existent default config file */
+diff --git a/modules/pam_group/pam_group.c b/modules/pam_group/pam_group.c
+index 21c04d7..d22ebaa 100644
+--- a/modules/pam_group/pam_group.c
++++ b/modules/pam_group/pam_group.c
+@@ -25,6 +25,7 @@
+ #include <netdb.h>
+ 
+ #define PAM_GROUP_CONF		SCONFIG_DIR "/group.conf"
++#define RUNTIME_PAM_GROUP_CONF	RUNTIME_SCONFIG_DIR "/group.conf"
+ #ifdef VENDOR_SCONFIG_DIR
+ # define VENDOR_PAM_GROUP_CONF	VENDOR_SCONFIG_DIR "/group.conf"
+ #endif
+@@ -44,6 +45,7 @@ typedef enum { AND, OR } operator;
+ #include <security/_pam_macros.h>
+ #include <security/pam_modutil.h>
+ #include <security/pam_ext.h>
++#include "pam_config.h"
+ #include "pam_inline.h"
+ 
+ /* --- static functions for checking whether the user should be let in --- */
+@@ -579,17 +581,12 @@ static int check_account(pam_handle_t *pamh, const char *service,
+     int retval=PAM_SUCCESS;
+     gid_t *grps;
+     int no_grps;
+-    const char *conf_filename = PAM_GROUP_CONF;
+-
++    const char *conf_filename = _pam_config_path(PAM_GROUP_CONF,
++                                                  RUNTIME_PAM_GROUP_CONF,
+ #ifdef VENDOR_PAM_GROUP_CONF
+-    /*
+-     * Check whether PAM_GROUP_CONF file is available.
+-     * If it does not exist, fall back to VENDOR_PAM_GROUP_CONF file.
+-     */
+-    struct stat stat_buffer;
+-    if (stat(conf_filename, &stat_buffer) != 0 && errno == ENOENT) {
+-	conf_filename = VENDOR_PAM_GROUP_CONF;
+-    }
++                                                  VENDOR_PAM_GROUP_CONF);
++#else
++                                                  NULL);
+ #endif
+ 
+     /*
+diff --git a/modules/pam_limits/pam_limits.c b/modules/pam_limits/pam_limits.c
+index ff0f424..7c91b5b 100644
+--- a/modules/pam_limits/pam_limits.c
++++ b/modules/pam_limits/pam_limits.c
+@@ -120,6 +120,7 @@ struct pam_limit_s {
+ #include <security/_pam_macros.h>
+ #include <security/pam_modutil.h>
+ #include <security/pam_ext.h>
++#include "pam_config.h"
+ #include "pam_inline.h"
+ #include "pam_i18n.h"
+ 
+@@ -132,8 +133,10 @@ struct pam_limit_s {
+ 
+ /* Limits from globbed files. */
+ #define LIMITS_CONF_GLOB	(LIMITS_FILE_DIR "/*.conf")
++#define RUNTIME_LIMITS_CONF_GLOB (RUNTIME_SCONFIG_DIR "/limits.d/*.conf")
+ 
+ #define LIMITS_FILE	(SCONFIG_DIR "/limits.conf")
++#define RUNTIME_LIMITS_FILE (RUNTIME_SCONFIG_DIR "/limits.conf")
+ 
+ #ifdef VENDOR_SCONFIG_DIR
+ #define VENDOR_LIMITS_FILE (VENDOR_SCONFIG_DIR "/limits.conf")
+@@ -1241,94 +1244,24 @@ static int setup_limits(pam_handle_t *pamh,
+     return retval;
+ }
+ 
+-/* --- evaluating all files in VENDORDIR/security/limits.d and /etc/security/limits.d --- */
+-static const char *
+-base_name(const char *path)
+-{
+-    const char *base = strrchr(path, '/');
+-    return base ? base+1 : path;
+-}
+-
+-static int
+-compare_filename(const void *a, const void *b)
+-{
+-	return strcmp(base_name(* (const char * const *) a),
+-		      base_name(* (const char * const *) b));
+-}
+-
+-/* Evaluating a list of files which have to be parsed in the right order:
+- *
+- * - If etc/security/limits.d/@filename@.conf exists, then
+- *   %vendordir%/security/limits.d/@filename@.conf should not be used.
+- * - All files in both limits.d directories are sorted by their @filename@.conf in
+- *   lexicographic order regardless of which of the directories they reside in. */
++/* Evaluate all limits.d files in lexical order. Higher-priority directories
++ * shadow equal basenames from lower-priority directories. */
+ static char **
+ read_limits_dir(pam_handle_t *pamh)
+ {
+-	glob_t globbuf;
+-	size_t i=0;
+-	int glob_rv = glob(LIMITS_CONF_GLOB, GLOB_ERR | GLOB_NOSORT, NULL, &globbuf);
+-	char **file_list;
+-	size_t file_list_size = glob_rv == 0 ? globbuf.gl_pathc : 0;
+-
+ #ifdef VENDOR_LIMITS_CONF_GLOB
+-	glob_t globbuf_vendor;
+-	int glob_rv_vendor = glob(VENDOR_LIMITS_CONF_GLOB, GLOB_ERR | GLOB_NOSORT, NULL, &globbuf_vendor);
+-	if (glob_rv_vendor == 0)
+-	    file_list_size += globbuf_vendor.gl_pathc;
++    char **files = _pam_config_files(LIMITS_CONF_GLOB,
++                                     RUNTIME_LIMITS_CONF_GLOB,
++                                     VENDOR_LIMITS_CONF_GLOB);
++#else
++    char **files = _pam_config_files(LIMITS_CONF_GLOB,
++                                     RUNTIME_LIMITS_CONF_GLOB,
++                                     NULL);
+ #endif
+-	file_list = malloc((file_list_size + 1) * sizeof(char*));
+-	if (file_list == NULL) {
+-	    pam_syslog(pamh, LOG_ERR, "Cannot allocate memory for file list: %m");
+-#ifdef VENDOR_ACCESS_CONF_GLOB
+-            if (glob_rv_vendor == 0)
+-                globfree(&globbuf_vendor);
+-#endif
+-            if (glob_rv == 0)
+-                globfree(&globbuf);
+-	    return NULL;
+-	}
+ 
+-	if (glob_rv == 0) {
+-	    for (i = 0; i < globbuf.gl_pathc; i++) {
+-	        file_list[i] = strdup(globbuf.gl_pathv[i]);
+-		if (file_list[i] == NULL) {
+-		    pam_syslog(pamh, LOG_ERR, "strdup failed: %m");
+-		    break;
+-		}
+-	    }
+-	}
+-#ifdef VENDOR_LIMITS_CONF_GLOB
+-	if (glob_rv_vendor == 0) {
+-	    for (size_t j = 0; j < globbuf_vendor.gl_pathc; j++) {
+-		if (glob_rv == 0 && globbuf.gl_pathc > 0) {
+-		    int double_found = 0;
+-		    for (size_t k = 0; k < globbuf.gl_pathc; k++) {
+-			if (strcmp(base_name(globbuf.gl_pathv[k]),
+-				   base_name(globbuf_vendor.gl_pathv[j])) == 0) {
+-				double_found = 1;
+-				break;
+-			}
+-		    }
+-		    if (double_found)
+-			continue;
+-		}
+-		file_list[i] = strdup(globbuf_vendor.gl_pathv[j]);
+-		if (file_list[i] == NULL) {
+-		    pam_syslog(pamh, LOG_ERR, "strdup failed: %m");
+-		    break;
+-		}
+-		i++;
+-	    }
+-	    globfree(&globbuf_vendor);
+-	}
+-#endif
+-	file_list[i] = NULL;
+-	qsort(file_list, i, sizeof(char *), compare_filename);
+-        if (glob_rv == 0)
+-	    globfree(&globbuf);
+-
+-	return file_list;
++    if (files == NULL)
++        pam_syslog(pamh, LOG_ERR, "Cannot allocate configuration file list: %m");
++    return files;
+ }
+ 
+ /* now the session stuff */
+@@ -1357,15 +1290,12 @@ pam_sm_open_session (pam_handle_t *pamh, int flags UNUSED,
+ 
+     int conf_file_set_by_user = (pl->conf_file != NULL);
+     if (pl->conf_file == NULL) {
+-        pl->conf_file = LIMITS_FILE;
++        pl->conf_file = _pam_config_path(LIMITS_FILE,
++                                         RUNTIME_LIMITS_FILE,
+ #ifdef VENDOR_LIMITS_FILE
+-        /*
+-         * Check whether LIMITS_FILE file is available.
+-         * If it does not exist, fall back to VENDOR_LIMITS_FILE file.
+-         */
+-        struct stat buffer;
+-        if (stat(pl->conf_file, &buffer) != 0 && errno == ENOENT)
+-            pl->conf_file = VENDOR_LIMITS_FILE;
++                                         VENDOR_LIMITS_FILE);
++#else
++                                         NULL);
+ #endif
+     }
+ 
+diff --git a/modules/pam_namespace/pam_namespace.c b/modules/pam_namespace/pam_namespace.c
+index e7ff5b3..9f24fd3 100644
+--- a/modules/pam_namespace/pam_namespace.c
++++ b/modules/pam_namespace/pam_namespace.c
+@@ -39,6 +39,7 @@
+ #include "pam_cc_compat.h"
+ #include "pam_inline.h"
+ #include "pam_namespace.h"
++#include "pam_config.h"
+ #include "argv_parse.h"
+ 
+ #define MAGIC_LNK_FD_SIZE 64
+@@ -50,13 +51,6 @@ static const char *base_name(const char *path)
+     return base ? base+1 : path;
+ }
+ 
+-static int
+-compare_filename(const void *a, const void *b)
+-{
+-	return strcmp(base_name(* (char * const *) a),
+-		      base_name(* (char * const *) b));
+-}
+-
+ static void close_fds_pre_exec(struct instance_data *idata)
+ {
+ 	if (pam_modutil_sanitize_helper_fds(idata->pamh, PAM_MODUTIL_IGNORE_FD,
+@@ -334,78 +328,23 @@ static void secure_try_rmdir(const char *path)
+ 	free(buf);
+ }
+ 
+-/* Evaluating a list of files which have to be parsed in the right order:
+- *
+- * - If etc/security/namespace.d/@filename@.conf exists, then
+- *   %vendordir%/security/namespace.d/@filename@.conf should not be used.
+- * - All files in both namespace.d directories are sorted by their @filename@.conf in
+- *   lexicographic order regardless of which of the directories they reside in. */
++/* Evaluate all namespace.d files in lexical order. Higher-priority directories
++ * shadow equal basenames from lower-priority directories. */
+ static char **read_namespace_dir(struct instance_data *idata)
+ {
+-	glob_t globbuf;
+-	size_t i=0;
+-	int glob_rv = glob(NAMESPACE_D_GLOB, GLOB_ERR | GLOB_NOSORT, NULL, &globbuf);
+-	char **file_list;
+-	size_t file_list_size = glob_rv == 0 ? globbuf.gl_pathc : 0;
+-
+ #ifdef VENDOR_NAMESPACE_D_GLOB
+-	glob_t globbuf_vendor;
+-	int glob_rv_vendor = glob(VENDOR_NAMESPACE_D_GLOB, GLOB_ERR | GLOB_NOSORT, NULL, &globbuf_vendor);
+-	if (glob_rv_vendor == 0)
+-	    file_list_size += globbuf_vendor.gl_pathc;
++    char **files = _pam_config_files(NAMESPACE_D_GLOB,
++                                     RUNTIME_NAMESPACE_D_GLOB,
++                                     VENDOR_NAMESPACE_D_GLOB);
++#else
++    char **files = _pam_config_files(NAMESPACE_D_GLOB,
++                                     RUNTIME_NAMESPACE_D_GLOB,
++                                     NULL);
+ #endif
+-	file_list = malloc((file_list_size + 1) * sizeof(char*));
+-	if (file_list == NULL) {
+-	    pam_syslog(idata->pamh, LOG_ERR, "Cannot allocate memory for file list: %m");
+-#ifdef VENDOR_NAMESPACE_D_GLOB
+-	    if (glob_rv_vendor == 0)
+-		globfree(&globbuf_vendor);
+-#endif
+-	    if (glob_rv == 0)
+-		globfree(&globbuf);
+-	    return NULL;
+-	}
+ 
+-	if (glob_rv == 0) {
+-	    for (i = 0; i < globbuf.gl_pathc; i++) {
+-		file_list[i] = strdup(globbuf.gl_pathv[i]);
+-		if (file_list[i] == NULL) {
+-		    pam_syslog(idata->pamh, LOG_ERR, "strdup failed: %m");
+-		    break;
+-		}
+-	    }
+-	}
+-#ifdef VENDOR_NAMESPACE_D_GLOB
+-	if (glob_rv_vendor == 0) {
+-	    for (size_t j = 0; j < globbuf_vendor.gl_pathc; j++) {
+-		if (glob_rv == 0 && globbuf.gl_pathc > 0) {
+-		    int double_found = 0;
+-		    for (size_t k = 0; k < globbuf.gl_pathc; k++) {
+-			if (strcmp(base_name(globbuf.gl_pathv[k]),
+-				   base_name(globbuf_vendor.gl_pathv[j])) == 0) {
+-				double_found = 1;
+-				break;
+-			}
+-		    }
+-		    if (double_found)
+-			continue;
+-		}
+-		file_list[i] = strdup(globbuf_vendor.gl_pathv[j]);
+-		if (file_list[i] == NULL) {
+-		    pam_syslog(idata->pamh, LOG_ERR, "strdup failed: %m");
+-		    break;
+-		}
+-		i++;
+-	    }
+-	    globfree(&globbuf_vendor);
+-	}
+-#endif
+-	file_list[i] = NULL;
+-	qsort(file_list, i, sizeof(char *), compare_filename);
+-	if (glob_rv == 0)
+-	    globfree(&globbuf);
+-
+-	return file_list;
++    if (files == NULL)
++        pam_syslog(idata->pamh, LOG_ERR, "Cannot allocate configuration file list: %m");
++    return files;
+ }
+ 
+ /*
+@@ -1011,14 +950,12 @@ static int parse_config_file(struct instance_data *idata)
+      * process_line to process each line.
+      */
+ 
+-    confname = PAM_NAMESPACE_CONFIG;
++    confname = _pam_config_path(PAM_NAMESPACE_CONFIG,
++                                RUNTIME_PAM_NAMESPACE_CONFIG,
+ #ifdef VENDOR_PAM_NAMESPACE_CONFIG
+-    /* Check whether PAM_NAMESPACE_CONFIG file is available.
+-     * If it does not exist, fall back to VENDOR_PAM_NAMESPACE_CONFIG file. */
+-    struct stat buffer;
+-    if (stat(confname, &buffer) != 0 && errno == ENOENT) {
+-	confname = VENDOR_PAM_NAMESPACE_CONFIG;
+-    }
++                                VENDOR_PAM_NAMESPACE_CONFIG);
++#else
++                                NULL);
+ #endif
+     char **filename_list = read_namespace_dir(idata);
+     n = 0;
+@@ -1549,15 +1486,12 @@ static int inst_init(const struct polydir_s *polyptr, const char *ipath,
+ {
+ 	pid_t rc, pid;
+ 	int status;
+-	const char *init_script = NAMESPACE_INIT_SCRIPT;
+-
++	const char *init_script = _pam_config_path(NAMESPACE_INIT_SCRIPT,
++						 RUNTIME_NAMESPACE_INIT_SCRIPT,
+ #ifdef VENDOR_NAMESPACE_INIT_SCRIPT
+-	/* Check whether NAMESPACE_INIT_SCRIPT file is available.
+-	 * If it does not exist, fall back to VENDOR_NAMESPACE_INIT_SCRIPT file. */
+-	struct stat buffer;
+-	if (stat(init_script, &buffer) != 0 && errno == ENOENT) {
+-		init_script = VENDOR_NAMESPACE_INIT_SCRIPT;
+-	}
++						 VENDOR_NAMESPACE_INIT_SCRIPT);
++#else
++						 NULL);
+ #endif
+ 
+ 	if ((polyptr->flags & POLYDIR_ISCRIPT) && polyptr->init_script)
+diff --git a/modules/pam_namespace/pam_namespace.h b/modules/pam_namespace/pam_namespace.h
+index 8a7a66b..139eb3b 100644
+--- a/modules/pam_namespace/pam_namespace.h
++++ b/modules/pam_namespace/pam_namespace.h
+@@ -90,6 +90,9 @@
+ #define NAMESPACE_INIT_SCRIPT (SCONFIG_DIR "/namespace.init")
+ #define NAMESPACE_D_DIR (SCONFIG_DIR "/namespace.d/")
+ #define NAMESPACE_D_GLOB (SCONFIG_DIR "/namespace.d/*.conf")
++#define RUNTIME_PAM_NAMESPACE_CONFIG (RUNTIME_SCONFIG_DIR "/namespace.conf")
++#define RUNTIME_NAMESPACE_INIT_SCRIPT (RUNTIME_SCONFIG_DIR "/namespace.init")
++#define RUNTIME_NAMESPACE_D_GLOB (RUNTIME_SCONFIG_DIR "/namespace.d/*.conf")
+ #ifdef VENDOR_SCONFIG_DIR
+ #define VENDOR_NAMESPACE_INIT_SCRIPT (VENDOR_SCONFIG_DIR "/namespace.init")
+ #define VENDOR_PAM_NAMESPACE_CONFIG (VENDOR_SCONFIG_DIR "/namespace.conf")
+diff --git a/modules/pam_pwhistory/pwhistory_config.c b/modules/pam_pwhistory/pwhistory_config.c
+index 2399bf2..604632e 100644
+--- a/modules/pam_pwhistory/pwhistory_config.c
++++ b/modules/pam_pwhistory/pwhistory_config.c
+@@ -43,10 +43,12 @@
+ 
+ #include <security/pam_modutil.h>
+ 
++#include "pam_config.h"
+ #include "pam_inline.h"
+ #include "pwhistory_config.h"
+ 
+ #define PWHISTORY_DEFAULT_CONF SCONFIG_DIR "/pwhistory.conf"
++#define RUNTIME_PWHISTORY_DEFAULT_CONF RUNTIME_SCONFIG_DIR "/pwhistory.conf"
+ 
+ #ifdef VENDOR_SCONFIG_DIR
+ #define VENDOR_PWHISTORY_DEFAULT_CONF (VENDOR_SCONFIG_DIR "/pwhistory.conf")
+@@ -69,17 +71,12 @@ parse_config_file(pam_handle_t *pamh, int argc, const char **argv,
+     }
+ 
+     if (fname == NULL) {
+-        fname = PWHISTORY_DEFAULT_CONF;
+-
++        fname = _pam_config_path(PWHISTORY_DEFAULT_CONF,
++                                 RUNTIME_PWHISTORY_DEFAULT_CONF,
+ #ifdef VENDOR_PWHISTORY_DEFAULT_CONF
+-        /*
+-         * Check whether PWHISTORY_DEFAULT_CONF file is available.
+-         * If it does not exist, fall back to VENDOR_PWHISTORY_DEFAULT_CONF file.
+-         */
+-        struct stat buffer;
+-        if (stat(fname, &buffer) != 0 && errno == ENOENT) {
+-            fname = VENDOR_PWHISTORY_DEFAULT_CONF;
+-        }
++                                 VENDOR_PWHISTORY_DEFAULT_CONF);
++#else
++                                 NULL);
+ #endif
+     }
+ 
+diff --git a/modules/pam_shells/pam_shells.c b/modules/pam_shells/pam_shells.c
+index bacf4f5..331217d 100644
+--- a/modules/pam_shells/pam_shells.c
++++ b/modules/pam_shells/pam_shells.c
+@@ -85,6 +85,7 @@ static int perform_check(pam_handle_t *pamh)
+ 
+     error = pam_econf_readconfig(&key_file,
+ 				 VENDORDIR,
++				 RUNTIMEDIR,
+ 				 ETCDIR,
+ 				 SHELLS,
+ 				 NULL,
+diff --git a/modules/pam_time/pam_time.c b/modules/pam_time/pam_time.c
+index 432446a..6b97707 100644
+--- a/modules/pam_time/pam_time.c
++++ b/modules/pam_time/pam_time.c
+@@ -27,6 +27,7 @@
+ #include <security/pam_modules.h>
+ #include <security/pam_ext.h>
+ #include <security/pam_modutil.h>
++#include "pam_config.h"
+ #include "pam_inline.h"
+ 
+ #ifdef HAVE_LIBAUDIT
+@@ -34,6 +35,7 @@
+ #endif
+ 
+ #define PAM_TIME_CONF	(SCONFIG_DIR "/time.conf")
++#define RUNTIME_PAM_TIME_CONF (RUNTIME_SCONFIG_DIR "/time.conf")
+ #ifdef VENDOR_SCONFIG_DIR
+ #define VENDOR_PAM_TIME_CONF (VENDOR_SCONFIG_DIR "/time.conf")
+ #endif
+@@ -83,16 +85,12 @@ _pam_parse (const pam_handle_t *pamh, int argc, const char **argv, const char **
+     }
+ 
+     if (*conffile == NULL) {
+-	*conffile = PAM_TIME_CONF;
++        *conffile = _pam_config_path(PAM_TIME_CONF,
++                                     RUNTIME_PAM_TIME_CONF,
+ #ifdef VENDOR_PAM_TIME_CONF
+-	/*
+-	 * Check whether PAM_TIME_CONF file is available.
+-	 * If it does not exist, fall back to VENDOR_PAM_TIME_CONF file.
+-	 */
+-	struct stat buffer;
+-	if (stat(*conffile, &buffer) != 0 && errno == ENOENT) {
+-	    *conffile = VENDOR_PAM_TIME_CONF;
+-	}
++                                     VENDOR_PAM_TIME_CONF);
++#else
++                                     NULL);
+ #endif
+     }
+ 
+diff --git a/tests/meson.build b/tests/meson.build
+index 21811b1..1ffe2e8 100644
+--- a/tests/meson.build
++++ b/tests/meson.build
+@@ -1,4 +1,5 @@
+ foreach name: ['dlopen',
++               'pam_config',
+                'pam_start',
+                'pam_end',
+                'pam_fail_delay',
+diff --git a/tests/tst-pam_config.c b/tests/tst-pam_config.c
+new file mode 100644
+index 0000000..c3e84d4
+--- /dev/null
++++ b/tests/tst-pam_config.c
+@@ -0,0 +1,159 @@
++/* Test administrator, runtime, and vendor configuration selection. */
++
++#include "config.h"
++
++#include <errno.h>
++#include <limits.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/stat.h>
++#include <unistd.h>
++
++#include "pam_config.h"
++
++static void
++fail(const char *message)
++{
++	perror(message);
++	exit(EXIT_FAILURE);
++}
++
++static void
++make_dir(const char *path)
++{
++	if (mkdir(path, 0700) != 0)
++		fail(path);
++}
++
++static void
++make_file(const char *path)
++{
++	FILE *file = fopen(path, "w");
++
++	if (file == NULL)
++		fail(path);
++	if (fclose(file) != 0)
++		fail(path);
++}
++
++static void
++format_path(char *path, size_t size, const char *root,
++	    const char *tier, const char *name)
++{
++	int length = snprintf(path, size, "%s/%s/%s", root, tier, name);
++
++	if (length < 0 || (size_t) length >= size) {
++		errno = ENAMETOOLONG;
++		fail("configuration test path");
++	}
++}
++
++static void
++expect_path(const char *actual, const char *expected)
++{
++	if (actual == NULL || strcmp(actual, expected) != 0) {
++		fprintf(stderr, "expected path %s, got %s\n", expected,
++			actual == NULL ? "(null)" : actual);
++		exit(EXIT_FAILURE);
++	}
++}
++
++static void
++expect_files(char **actual, char *const *expected, size_t count)
++{
++	if (actual == NULL) {
++		fprintf(stderr, "configuration file list is null\n");
++		exit(EXIT_FAILURE);
++	}
++
++	for (size_t i = 0; i < count; i++) {
++		expect_path(actual[i], expected[i]);
++		free(actual[i]);
++		free(expected[i]);
++	}
++	if (actual[count] != NULL) {
++		fprintf(stderr, "configuration file list has extra entries\n");
++		exit(EXIT_FAILURE);
++	}
++	free(actual);
++}
++
++int
++main(void)
++{
++	char root[] = "tst-pam-config-XXXXXX";
++	char admin[PATH_MAX];
++	char runtime[PATH_MAX];
++	char vendor[PATH_MAX];
++	char admin_pattern[PATH_MAX];
++	char runtime_pattern[PATH_MAX];
++	char vendor_pattern[PATH_MAX];
++	char admin_file[PATH_MAX];
++	char runtime_file[PATH_MAX];
++	char vendor_file[PATH_MAX];
++	char *expected[4];
++	char **files;
++
++	if (mkdtemp(root) == NULL)
++		fail("mkdtemp");
++	format_path(admin, sizeof(admin), root, "etc", "security");
++	format_path(runtime, sizeof(runtime), root, "run", "security");
++	format_path(vendor, sizeof(vendor), root, "usr", "security");
++
++	char path[PATH_MAX];
++	format_path(path, sizeof(path), root, "etc", "");
++	make_dir(path);
++	format_path(path, sizeof(path), root, "run", "");
++	make_dir(path);
++	format_path(path, sizeof(path), root, "usr", "");
++	make_dir(path);
++	make_dir(admin);
++	make_dir(runtime);
++	make_dir(vendor);
++
++	format_path(admin_file, sizeof(admin_file), root, "etc/security", "main.conf");
++	format_path(runtime_file, sizeof(runtime_file), root, "run/security", "main.conf");
++	format_path(vendor_file, sizeof(vendor_file), root, "usr/security", "main.conf");
++	make_file(vendor_file);
++	expect_path(_pam_config_path(admin_file, runtime_file, vendor_file), vendor_file);
++	make_file(runtime_file);
++	expect_path(_pam_config_path(admin_file, runtime_file, vendor_file), runtime_file);
++	make_file(admin_file);
++	expect_path(_pam_config_path(admin_file, runtime_file, vendor_file), admin_file);
++	if (unlink(admin_file) != 0 || unlink(runtime_file) != 0 ||
++	    unlink(vendor_file) != 0)
++		fail("unlink main configuration");
++
++	format_path(admin_pattern, sizeof(admin_pattern), root, "etc/security", "*.conf");
++	format_path(runtime_pattern, sizeof(runtime_pattern), root, "run/security", "*.conf");
++	format_path(vendor_pattern, sizeof(vendor_pattern), root, "usr/security", "*.conf");
++
++	format_path(vendor_file, sizeof(vendor_file), root, "usr/security", "10-vendor.conf");
++	make_file(vendor_file);
++	expected[0] = strdup(vendor_file);
++	format_path(vendor_file, sizeof(vendor_file), root, "usr/security", "20-shadowed.conf");
++	make_file(vendor_file);
++
++	format_path(runtime_file, sizeof(runtime_file), root, "run/security", "20-shadowed.conf");
++	make_file(runtime_file);
++	expected[1] = strdup(runtime_file);
++	format_path(runtime_file, sizeof(runtime_file), root, "run/security", "30-shadowed.conf");
++	make_file(runtime_file);
++
++	format_path(admin_file, sizeof(admin_file), root, "etc/security", "30-shadowed.conf");
++	make_file(admin_file);
++	expected[2] = strdup(admin_file);
++	format_path(admin_file, sizeof(admin_file), root, "etc/security", "40-admin.conf");
++	make_file(admin_file);
++	expected[3] = strdup(admin_file);
++	for (size_t i = 0; i < 4; i++) {
++		if (expected[i] == NULL)
++			fail("strdup");
++	}
++
++	files = _pam_config_files(admin_pattern, runtime_pattern, vendor_pattern);
++	expect_files(files, expected, 4);
++
++	return EXIT_SUCCESS;
++}
+
