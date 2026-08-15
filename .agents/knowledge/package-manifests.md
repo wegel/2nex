@@ -611,6 +611,21 @@ main script checks `/etc/bash_completion.d` first by default, and its
 configuration guide documents that path. Preserve the historical
 `/etc/bash_completion` link for user startup files that source it directly.
 
+Attr's `xattr.conf` is whole-file policy for libattr consumers such as
+Coreutils `cp --preserve=xattr`. Attr 2.5.2 caches the parsed action list, so
+test each priority or mask case in a fresh process. The generic package reader
+selects `/etc/xattr.conf`, then `/run/xattr.conf`, then
+`/usr/lib/xattr.conf`, and treats an empty selected file as a complete mask.
+The strict package checksum is
+`2fba331aba23c967ea505c421dafcf8292abd130d4b69a37077e2377599e7d1f`.
+
+A library dependency does not publish its sibling policy output. Coreutils
+receives libattr through its dependency closure, but each standalone system
+assembly must select Attr's `outputs/conf` ref to install the vendor copy
+policy. EP012 proved the assembled result with the packaged `cp`: a normal
+user attribute copied, `user.Beagle.*` followed the vendor skip rule, and a
+new `/etc/xattr.conf` replaced the vendor file.
+
 ## Namespace Reference
 
 - `libs/system`: glibc, zlib, ncurses, acl, attr.

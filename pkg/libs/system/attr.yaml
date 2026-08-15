@@ -6,13 +6,16 @@ package:
   version: 2.5.2
   description: Utilities for manipulating filesystem extended attributes
   homepage: https://savannah.nongnu.org/projects/attr
-  checksum: b0c489f64f69a828b3a121baa31bdb8b5052b82070e8f57267cd731b84ed70a6
+  checksum: 2fba331aba23c967ea505c421dafcf8292abd130d4b69a37077e2377599e7d1f
   seed: true
 
 sources:
 - name: attr
   url: https://download.savannah.nongnu.org/releases/attr/attr-2.5.2.tar.xz
   sha256: f2e97b0ab7ce293681ab701915766190d607a1dba7fae8a718138150b700a70b
+- name: uapi_config
+  file: pkg/libs/system/attr-uapi-config.patch
+  sha256: e3c468b1ba29ed573bdf8424c880884dce9c5db6b847c9094faa088db83ec1a6
 
 dependencies:
 - name: linux-headers
@@ -37,6 +40,8 @@ dependencies:
   commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
 - name: make
   commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
 - name: sed
   commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
 - name: tar
@@ -46,11 +51,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4117:958, 8374:1843, 11903:1943]
+  profile: [4099:907, 8415:1889, 11944:2041]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_attr} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch -Np1 --batch --fuzz=0 < "/${SOURCE_uapi_config}"
 
     ./configure --prefix=/usr     \
               --sysconfdir=/etc \
@@ -58,6 +65,44 @@ build:
 
     make
     make DESTDIR="${OUT_DIR}" install
+
+    install -Dm644 "${OUT_DIR}/etc/xattr.conf" "${OUT_DIR}/usr/lib/xattr.conf"
+    rm "${OUT_DIR}/etc/xattr.conf"
+    rmdir "${OUT_DIR}/etc"
+
+    cat > "${WORK_DIR}/attr-uapi-smoke.c" << 'EOF'
+    #include <attr/libattr.h>
+    #include <stdlib.h>
+
+    int main(int argc, char **argv)
+    {
+        int expected;
+
+        if (argc != 3)
+            return 2;
+        expected = atoi(argv[2]);
+        return attr_copy_action(argv[1], NULL) == expected ? 0 : 1;
+    }
+    EOF
+    gcc ${CFLAGS} ${LDFLAGS} \
+      -I"${OUT_DIR}/usr/include" \
+      -L"${OUT_DIR}/usr/lib" \
+      -Wl,-rpath,"${OUT_DIR}/usr/lib" \
+      -o "${WORK_DIR}/attr-uapi-smoke" \
+      "${WORK_DIR}/attr-uapi-smoke.c" -lattr
+
+    mkdir -p /etc /run
+    rm -f /etc/xattr.conf /run/xattr.conf /usr/lib/xattr.conf
+    printf 'user.uapi skip\n' > /usr/lib/xattr.conf
+    "${WORK_DIR}/attr-uapi-smoke" user.uapi 1
+    printf 'user.uapi permissions\n' > /run/xattr.conf
+    "${WORK_DIR}/attr-uapi-smoke" user.uapi 2
+    printf 'user.uapi skip\n' > /etc/xattr.conf
+    "${WORK_DIR}/attr-uapi-smoke" user.uapi 1
+    : > /etc/xattr.conf
+    "${WORK_DIR}/attr-uapi-smoke" user.uapi 0
+    rm -f /etc/xattr.conf /run/xattr.conf /usr/lib/xattr.conf
+    "${WORK_DIR}/attr-uapi-smoke" user.uapi 0
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -100,7 +145,7 @@ outputs:
 
   conf:
     files:
-    - path: /etc/xattr.conf
+    - path: /usr/lib/xattr.conf
 
   dev:
     files:

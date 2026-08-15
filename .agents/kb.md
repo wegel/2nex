@@ -1171,6 +1171,21 @@ compatibility interfaces. The current package checksum is
 VTE reproduced with checksum
 `92157350d5c80cc7991d8166e6187e5e94f5219b4d971e7fc5345bc0ab7cbc27`.
 
+Attr 2.5.2 caches its parsed `xattr.conf` action list for the life of a
+process. Test its UAPI tiers with a fresh production-linked process for each
+case. The generic reader uses whole-file priority
+`/etc/xattr.conf`, `/run/xattr.conf`, `/usr/lib/xattr.conf`; an empty higher
+file masks lower rules. The strict package checksum after this patch is
+`2fba331aba23c967ea505c421dafcf8292abd130d4b69a37077e2377599e7d1f`.
+
+Coreutils can link libattr through its package closure without publishing
+Attr's split `conf` output. Assemblies that supply file-copy tools must select
+`x86_64/pkg/libs/system/attr/2.5.2/outputs/conf` explicitly. A checked-out
+root can prove the real behavior by setting `user.keep` and
+`user.Beagle.*` attributes on a source file, running the packaged
+`cp --preserve=xattr` in a rootless chroot, and checking which attributes
+reach the destination.
+
 After a strict assembly build commits a system, its temporary `target` tree
 may no longer exist. Use `zub cat-file systems/<slug>/<version>:<path>` to
 inspect a directory, symlink target, or regular file in the durable system

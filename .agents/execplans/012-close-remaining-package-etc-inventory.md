@@ -59,6 +59,11 @@ named below.
 - [x] (2026-08-15 03:12Z) Retained Bash Completion's documented compatibility
   and login-hook paths plus VTE's upstream system login hooks, loaded both
   Bash scripts with the packaged shell, and strictly rebuilt VTE twice.
+- [x] (2026-08-15 03:38Z) Moved Attr's extended-attribute copy policy to
+  `/usr/lib/xattr.conf`, added whole-file `/etc`, `/run`, `/usr` selection,
+  rebuilt all eleven affected assemblies, exercised the policy through the
+  installed Coreutils `cp`, passed the Edgebox smoke, and booted nex-systemd
+  in QEMU.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -192,6 +197,20 @@ named below.
   `/etc/bash_completion` link preserves the older source path named in user
   startup files.
 
+- Observation: Attr reads `xattr.conf` once per process and caches the parsed
+  action list.
+  Evidence: the pinned `attr_parse_attr_conf()` returns immediately when its
+  static action list is nonempty. The package test therefore starts a fresh
+  production-linked consumer for each tier and mask case; short-lived callers
+  such as Coreutils `cp` naturally see the selected file on each invocation.
+
+- Observation: Coreutils receives libattr through its dependency closure but
+  does not receive Attr's separate `conf` output.
+  Evidence: assembled `cp --preserve=xattr` linked and ran before this change,
+  but no finished base root contained `xattr.conf`. Adding the `conf` output
+  to the five standalone base assemblies made the policy explicit and carried
+  it into all six descendants.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -305,6 +324,17 @@ named below.
   source its compatibility link; and system profiles source both packages'
   login hooks. An immutable assembly can place them in its factory tree and
   populate them only when the host has no same-name administrator file.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Give Attr whole-file `/etc/xattr.conf`, `/run/xattr.conf`, and
+  `/usr/lib/xattr.conf` lookup in that order, and select its vendor policy in
+  every standalone base assembly.
+  Rationale: `xattr.conf` controls which extended attributes file-copy tools
+  preserve. A lasting administrator file and a temporary machine file must
+  replace the packaged default without modifying a read-only deployment. An
+  empty higher-priority file intentionally masks every lower rule. Libraries
+  do not cause a split policy output to appear in a system, so each base that
+  supplies file-copy tools must choose that output explicitly.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -851,6 +881,58 @@ affected assemblies, and commit.
    and reproduced with checksum
    `43c20f709c15622e278ae0f1bf486be49f1ae578d377d6586d47498b91fc0a57`.
    Commit: `pkg: include nvidia OpenCL ICDs at runtime`.
+
+26. `pkg/libs/system/attr.yaml`
+
+   The old `conf` output declared `/etc/xattr.conf`. Libattr's
+   `attr_copy_action()` reads this policy when file-copy programs decide which
+   extended attributes to preserve. Outcome 2 applies. The generic patch with
+   SHA-256
+   `e3c468b1ba29ed573bdf8424c880884dce9c5db6b847c9094faa088db83ec1a6`
+   selects the first complete file from `/etc/xattr.conf`,
+   `/run/xattr.conf`, and `/usr/lib/xattr.conf`; an empty higher file masks
+   lower policy. The packaged default now lives only at the vendor path.
+
+   The strict package command built twice with checksum
+   `2fba331aba23c967ea505c421dafcf8292abd130d4b69a37077e2377599e7d1f`.
+   Its test linked against the installed libattr and proved the vendor file,
+   a transient override, a lasting administrator override, an empty
+   administrator mask, and the compiled no-file default. Because libattr
+   caches the parsed list, the test used a fresh consumer process for each
+   case.
+
+   The five standalone base assemblies now select Attr's `conf` output; all
+   descendants inherit it. All eleven affected systems built twice and
+   matched: flat-minimal
+   `1dd7c09bc51ff7f23fb904ff786c12d6d0a95eb21570b69f6aac58bca2a50d69`,
+   flat-systemd
+   `90fafdd1915f50aa96fdd994eff3cad62a336222757eca8be928913c4c8a5d87`,
+   nex-minimal
+   `b49d191e88a32fccac63373246acd7bac4efb271547e410fc562c041a0bcde5f`,
+   nex-systemd
+   `20375ce353f9bac9be3f107499fefa654f357f9d70944d2f661030353702d1b4`,
+   installer
+   `968fa77f837379bdf866108cee311a83b6af094818b059df7ef5008424546b8a`,
+   flat-podman
+   `88153a7977e75d17a9d7e944b14436be7b581f46a5e33623db6edfd639819a65`,
+   Edgebox
+   `4430d5b3ce4b91c1fc4ca71bb9a3b33d13dc72b89f5e9d67291dbaa4aacded83`,
+   desktop-vwl
+   `1eee5cb9d9ff7a2ba76a220702bd8ba320843af8b1ff88b10e72c5df358d09f4`,
+   Nvidia 580
+   `58e63fd12d7359b1e88466be454681e5fe26a02665838689ddd761403ed90372`,
+   Nvidia current
+   `b4adc76117103b37f1e8b40928eff8d35518dcbdc8e5ff1ea27631e067e4d017`,
+   and desktop-dev
+   `ebd5f9fc50220d3b0b31bedbb86c8940fc4cd5e3923441ca1a02b60107c4d937`.
+
+   In checked-out flat and Nex-structured roots, the packaged Coreutils
+   `cp --preserve=xattr` copied `user.keep`, skipped the vendor rule
+   `user.Beagle.*`, and obeyed a replacement `/etc/xattr.conf`. Desktop and
+   installer roots passed the same installed-consumer check. The Edgebox
+   rootfs smoke passed every assertion, and the direct nex-systemd QEMU test
+   printed `ASSERT-BOOT-PASS`. Commit: `pkg: layer extended-attribute copy
+   policy`.
 
 27. `pkg/libs/system/fuse3.yaml`
 
