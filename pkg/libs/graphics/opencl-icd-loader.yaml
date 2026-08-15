@@ -1,0 +1,307 @@
+package:
+  schema: 1
+  name: OpenCL ICD Loader
+  slug: opencl-icd-loader
+  namespace: libs/graphics
+  version: 2026.05.29
+  description: Khronos loader for OpenCL installable client drivers
+  homepage: https://github.com/KhronosGroup/OpenCL-ICD-Loader
+  checksum: cd728fed81942ff648d7cb0b276080e02f85fe6817b37d7fb7d02ea3afc6d154
+
+sources:
+- name: opencl_icd_loader
+  url: https://github.com/KhronosGroup/OpenCL-ICD-Loader/archive/refs/tags/v2026.05.29.tar.gz
+  sha256: 48fd0c5181db7cd046f4f731d5955694892e10998d49d09ee0d997e7e04fd939
+- name: uapi_config
+  file: pkg/libs/graphics/opencl-icd-loader-uapi-config.patch
+  sha256: 6b240f39545d9932d95a8508444a3b2dd66987ed579c39fa8c264340704d427b
+
+dependencies:
+- name: opencl-headers
+  commit: x86_64/pkg/libs/graphics/opencl-headers/2026.05.29/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/full
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+
+build:
+  environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
+  profile: [4127:1258, 7009:1491]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "/${SOURCE_opencl_icd_loader}" \
+      -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    cmake -S . -B build \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DOPENCL_ICD_LOADER_HEADERS_DIR=/usr/include \
+      -DOPENCL_ICD_LOADER_BUILD_SHARED_LIBS=ON \
+      -DENABLE_OPENCL_LAYERS=ON \
+      -DENABLE_OPENCL_LAYERINFO=ON \
+      -DBUILD_TESTING=ON \
+      -DOPENCL_ICD_LOADER_BUILD_TESTING=ON
+    cmake --build build
+    ctest --test-dir build --output-on-failure
+    DESTDIR="${OUT_DIR}" cmake --install build
+
+    install -Dm644 LICENSE \
+      "${OUT_DIR}/usr/share/doc/opencl-icd-loader/LICENSE"
+
+    cat > "${WORK_DIR}/opencl-platforms.c" <<'EOF'
+    #include <CL/opencl.h>
+    #include <stdio.h>
+    #include <stdlib.h>
+
+    int main(void) {
+      cl_platform_id *platforms;
+      cl_uint count = 0;
+      cl_uint i;
+      cl_int result = clGetPlatformIDs(0, NULL, &count);
+
+      if (result == CL_PLATFORM_NOT_FOUND_KHR) {
+        puts("0");
+        return 0;
+      }
+      if (result != CL_SUCCESS) {
+        return 1;
+      }
+
+      printf("%u\n", count);
+      platforms = calloc(count, sizeof(*platforms));
+      if (!platforms) {
+        return 1;
+      }
+      if (clGetPlatformIDs(count, platforms, NULL) != CL_SUCCESS) {
+        free(platforms);
+        return 1;
+      }
+
+      for (i = 0; i < count; i++) {
+        char name[128];
+        if (clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME,
+                              sizeof(name), name, NULL) != CL_SUCCESS) {
+          free(platforms);
+          return 1;
+        }
+        puts(name);
+      }
+
+      free(platforms);
+      return 0;
+    }
+    EOF
+    gcc -std=c11 -Wall -Wextra -Werror \
+      -I/usr/include \
+      "${WORK_DIR}/opencl-platforms.c" \
+      -L"${OUT_DIR}/usr/lib" \
+      -Wl,-rpath,"${OUT_DIR}/usr/lib" \
+      -lOpenCL \
+      -o "${WORK_DIR}/opencl-platforms"
+
+    opencl_query="${WORK_DIR}/opencl-platforms"
+    opencl_library_path="${OUT_DIR}/usr/lib"
+    vendor_stub="${WORK_DIR}/build/libOpenCLDriverStub.so"
+    transient_stub="${WORK_DIR}/build/libOpenCLDriverStubICD2.so"
+    administrator_stub="${WORK_DIR}/build/libOpenCLDriverAdmin.so"
+    print_layer="${WORK_DIR}/build/test/layer/libPrintLayer.so"
+    cp "${vendor_stub}" "${administrator_stub}"
+
+    cleanup_opencl_smoke() {
+      rm -f \
+        /etc/OpenCL/vendors/*.icd \
+        /run/OpenCL/vendors/*.icd \
+        /usr/share/OpenCL/vendors/*.icd \
+        /etc/OpenCL/layers/*.lay \
+        /run/OpenCL/layers/*.lay \
+        /usr/share/OpenCL/layers/*.lay
+      rmdir \
+        /etc/OpenCL/vendors /etc/OpenCL/layers /etc/OpenCL \
+        /run/OpenCL/vendors /run/OpenCL/layers /run/OpenCL \
+        /usr/share/OpenCL/vendors /usr/share/OpenCL/layers \
+        /usr/share/OpenCL 2>/dev/null || true
+    }
+    trap cleanup_opencl_smoke EXIT HUP INT TERM
+
+    test ! -e /etc/OpenCL
+    test ! -e /run/OpenCL
+    test ! -e /usr/share/OpenCL
+    mkdir -p \
+      /etc/OpenCL/vendors /etc/OpenCL/layers \
+      /run/OpenCL/vendors /run/OpenCL/layers \
+      /usr/share/OpenCL/vendors /usr/share/OpenCL/layers
+
+    query_platforms() {
+      LD_LIBRARY_PATH="${opencl_library_path}" "${opencl_query}"
+    }
+    check_output() {
+      expected_output="$1"
+      actual_output="$2"
+      if [ "${actual_output}" != "${expected_output}" ]; then
+        printf '%s\n' \
+          'unexpected OpenCL smoke output' \
+          "expected: ${expected_output}" \
+          "actual: ${actual_output}" >&2
+        return 1
+      fi
+    }
+
+    printf '%s\n' "${vendor_stub}" > /usr/share/OpenCL/vendors/shared.icd
+    check_output "$(printf '%s\n' 1 ICD_LOADER_TEST_OPENCL_STUB)" \
+      "$(query_platforms)"
+
+    : > /run/OpenCL/vendors/shared.icd
+    check_output 0 "$(query_platforms)"
+
+    printf '%s\n' "${transient_stub}" > /run/OpenCL/vendors/shared.icd
+    check_output "$(printf '%s\n' 1 ICD_LOADER_TEST_OPENCL_STUB_ICD2)" \
+      "$(query_platforms)"
+
+    ln -s /dev/null /etc/OpenCL/vendors/shared.icd
+    check_output 0 "$(query_platforms)"
+
+    rm /etc/OpenCL/vendors/shared.icd
+    printf '%s\n' "${administrator_stub}" > /etc/OpenCL/vendors/shared.icd
+    check_output "$(printf '%s\n' 1 ICD_LOADER_TEST_OPENCL_STUB)" \
+      "$(query_platforms)"
+
+    rm \
+      /etc/OpenCL/vendors/shared.icd \
+      /run/OpenCL/vendors/shared.icd \
+      /usr/share/OpenCL/vendors/shared.icd
+    printf '%s\n' "${vendor_stub}" > /usr/share/OpenCL/vendors/30-vendor.icd
+    printf '%s\n' "${transient_stub}" > /run/OpenCL/vendors/20-transient.icd
+    printf '%s\n' "${administrator_stub}" > /etc/OpenCL/vendors/10-administrator.icd
+    check_output "$(printf '%s\n' \
+      3 \
+      ICD_LOADER_TEST_OPENCL_STUB \
+      ICD_LOADER_TEST_OPENCL_STUB_ICD2 \
+      ICD_LOADER_TEST_OPENCL_STUB)" \
+      "$(query_platforms)"
+
+    explicit_vendors="${WORK_DIR}/explicit-vendors"
+    mkdir -p "${explicit_vendors}"
+    printf '%s\n' "${transient_stub}" > "${explicit_vendors}/chosen.icd"
+    check_output "$(printf '%s\n' 1 ICD_LOADER_TEST_OPENCL_STUB_ICD2)" \
+      "$(OCL_ICD_VENDORS="${explicit_vendors}" \
+        LD_LIBRARY_PATH="${opencl_library_path}" "${opencl_query}")"
+
+    rm \
+      /etc/OpenCL/vendors/10-administrator.icd \
+      /run/OpenCL/vendors/20-transient.icd
+    check_output "$(printf '%s\n' \
+      2 \
+      ICD_LOADER_TEST_OPENCL_STUB_ICD2 \
+      ICD_LOADER_TEST_OPENCL_STUB)" \
+      "$(OCL_ICD_FILENAMES="${transient_stub}" \
+        LD_LIBRARY_PATH="${opencl_library_path}" "${opencl_query}")"
+    rm /usr/share/OpenCL/vendors/30-vendor.icd
+
+    layerinfo="${OUT_DIR}/usr/bin/cllayerinfo"
+    printf '%s\n' "${print_layer}" > /usr/share/OpenCL/layers/shared.lay
+    output="$(LD_LIBRARY_PATH="${opencl_library_path}" "${layerinfo}")"
+    printf '%s\n' "${output}" | grep -Fq "${print_layer}:"
+
+    : > /run/OpenCL/layers/shared.lay
+    check_output '' \
+      "$(LD_LIBRARY_PATH="${opencl_library_path}" "${layerinfo}")"
+
+    rm /run/OpenCL/layers/shared.lay
+    ln -s /dev/null /etc/OpenCL/layers/shared.lay
+    check_output '' \
+      "$(LD_LIBRARY_PATH="${opencl_library_path}" "${layerinfo}")"
+
+    rm /etc/OpenCL/layers/shared.lay
+    explicit_layers="${WORK_DIR}/explicit-layers"
+    mkdir -p "${explicit_layers}"
+    printf '%s\n' "${print_layer}" > "${explicit_layers}/chosen.lay"
+    output="$(OPENCL_LAYER_PATH="${explicit_layers}" \
+      LD_LIBRARY_PATH="${opencl_library_path}" "${layerinfo}")"
+    printf '%s\n' "${output}" | grep -Fq "${print_layer}:"
+
+    cleanup_opencl_smoke
+    trap - EXIT HUP INT TERM
+
+    find "${OUT_DIR}" -type f -executable \
+      -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - doc
+  - lib
+
+  runtime:
+  - bin
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/cllayerinfo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  dev:
+    files:
+    - path: /usr/lib/pkgconfig/OpenCL.pc
+    - path: /usr/share/cmake/OpenCLICDLoader/OpenCLICDLoaderConfig.cmake
+    - path: /usr/share/cmake/OpenCLICDLoader/OpenCLICDLoaderConfigVersion.cmake
+    - path: /usr/share/cmake/OpenCLICDLoader/OpenCLICDLoaderTargets-release.cmake
+    - path: /usr/share/cmake/OpenCLICDLoader/OpenCLICDLoaderTargets.cmake
+
+  doc:
+    files:
+    - path: /usr/share/doc/opencl-icd-loader/LICENSE
+
+  lib:
+    files:
+    - path: /usr/lib/libOpenCL.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libOpenCL.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libOpenCL.so.1.0.0
+      needs:
+      - /usr/lib/libc.so.6
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

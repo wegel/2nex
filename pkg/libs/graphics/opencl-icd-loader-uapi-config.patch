@@ -1,0 +1,297 @@
+Subject: merge OpenCL configuration from UAPI directories
+Source: Nex downstream patch for OpenCL ICD Loader v2026.05.29
+Upstream: not submitted; needs agreement on Unix vendor and transient paths
+
+Merge ICD and layer registration files by basename from /etc, /run, and
+/usr/share. Higher directories replace lower files with the same name; empty
+files and links to /dev/null mask lower registrations. Keep the secure
+environment overrides as single-directory replacements.
+
+--- a/loader/linux/icd_linux.c
++++ b/loader/linux/icd_linux.c
+@@ -27,6 +27,7 @@
+ #include <dirent.h>
+ #include <pthread.h>
+ #include <limits.h>
++#include <stdint.h>
+ 
+ static pthread_once_t initialized = PTHREAD_ONCE_INIT;
+ 
+@@ -86,6 +87,15 @@
+         fseek(fin, 0, SEEK_END);
+         bufferSize = ftell(fin);
+ 
++        // An empty file masks a same-named file in a lower-priority directory.
++        if (bufferSize <= 0)
++        {
++            KHR_ICD_TRACE("Ignoring empty configuration file %s\n", fileName);
++            free(fileName);
++            fclose(fin);
++            return;
++        }
++
+         buffer = malloc(bufferSize+1);
+         if (!buffer)
+         {
+@@ -122,109 +132,186 @@
+ struct dirElem
+ {
+     char *d_name;
+-    unsigned char d_type;
++    char *path;
+ };
+ 
+ static int compareDirElem(const void *a, const void *b)
+ {
+-    // sort files the same way libc alpahnumerically sorts directory entries.
+-    return strcoll(((const struct dirElem *)a)->d_name, ((const struct dirElem *)b)->d_name);
++    return strcmp(((const struct dirElem *)a)->d_name,
++                  ((const struct dirElem *)b)->d_name);
+ }
+ 
+-static inline void khrIcdOsDirEnumerate(const char *path, const char *env,
+-                                        const char *extension,
+-                                        khrIcdFileAdd addFunc, int bSort)
++static int khrIcdOsDirElemExists(const struct dirElem *dirElems,
++                                 size_t elemCount, const char *name)
+ {
+-    DIR *dir = NULL;
+-    char* envPath = NULL;
++    size_t i;
+ 
+-    envPath = khrIcd_secure_getenv(env);
+-    if (NULL != envPath)
++    for (i = 0; i < elemCount; i++)
+     {
+-        path = envPath;
++        if (!strcmp(dirElems[i].d_name, name))
++        {
++            return 1;
++        }
+     }
+ 
+-    dir = opendir(path);
+-    if (NULL == dir) 
++    return 0;
++}
++
++static int khrIcdOsDirElemAdd(struct dirElem **dirElems, size_t *elemCount,
++                              const char *name, const char *path)
++{
++    struct dirElem *newDirElems;
++    struct dirElem *elem;
++    size_t nameSize = strlen(name) + 1;
++    size_t pathSize = strlen(path) + 1;
++
++    if (*elemCount == SIZE_MAX / sizeof(struct dirElem))
+     {
+-        KHR_ICD_TRACE("Failed to open path %s, continuing\n", path);
++        return 0;
+     }
+-    else
++
++    newDirElems = (struct dirElem *)realloc(
++        *dirElems, (*elemCount + 1) * sizeof(struct dirElem));
++    if (!newDirElems)
+     {
+-        struct dirent *dirEntry = NULL;
+-
+-        // attempt to load all files in the directory
+-        if (bSort) {
+-            // store the entries name and type in a buffer for sorting
+-            size_t sz = 0;
+-            size_t elemCount = 0;
+-            size_t elemAlloc = 0;
+-            struct dirElem *dirElems = NULL;
+-            struct dirElem *newDirElems = NULL;
+-            const size_t startupAlloc = 8;
+-
+-            // start with a small buffer
+-            dirElems = (struct dirElem *)malloc(startupAlloc*sizeof(struct dirElem));
+-            if (NULL != dirElems) {
+-                elemAlloc = startupAlloc;
+-                for (dirEntry = readdir(dir); dirEntry; dirEntry = readdir(dir) ) {
+-                    char *nameCopy = NULL;
+-
+-                    if (elemCount + 1 > elemAlloc) {
+-                        // double buffer size if necessary and possible
+-                        if (elemAlloc >= UINT_MAX/2)
+-                            break;
+-                        newDirElems = (struct dirElem *)realloc(dirElems, elemAlloc*2*sizeof(struct dirElem));
+-                        if (NULL == newDirElems)
+-                            break;
+-                        dirElems = newDirElems;
+-                        elemAlloc *= 2;
+-                    }
+-                    sz = strlen(dirEntry->d_name) + 1;
+-                    nameCopy = (char *)malloc(sz);
+-                    if (NULL == nameCopy)
+-                         break;
+-                    memcpy(nameCopy, dirEntry->d_name, sz);
+-                    dirElems[elemCount].d_name = nameCopy;
+-#if defined(__QNXNTO__)
+-                    dirElems[elemCount].d_type = _DEXTRA_FIRST(dirEntry)->d_type;
+-#else
+-                    dirElems[elemCount].d_type = dirEntry->d_type;
+-#endif
+-                    elemCount++;
+-                }
+-                qsort(dirElems, elemCount, sizeof(struct dirElem), compareDirElem);
+-                for (struct dirElem *elem = dirElems; elem < dirElems + elemCount; ++elem) {
+-                    khrIcdOsDirEntryValidateAndAdd(elem->d_name, path, extension, addFunc);
+-                    free(elem->d_name);
+-                }
+-                free(dirElems);
+-            }
+-        } else
+-            // use system provided ordering
+-            for (dirEntry = readdir(dir); dirEntry; dirEntry = readdir(dir) )
+-                khrIcdOsDirEntryValidateAndAdd(dirEntry->d_name, path, extension, addFunc);
+-
+-        closedir(dir);
++        return 0;
+     }
++    *dirElems = newDirElems;
+ 
+-    if (NULL != envPath)
++    elem = &newDirElems[*elemCount];
++    elem->d_name = (char *)malloc(nameSize);
++    elem->path = (char *)malloc(pathSize);
++    if (!elem->d_name || !elem->path)
+     {
+-        khrIcd_free_getenv(envPath);
++        free(elem->d_name);
++        free(elem->path);
++        return 0;
+     }
++
++    memcpy(elem->d_name, name, nameSize);
++    memcpy(elem->path, path, pathSize);
++    (*elemCount)++;
++    return 1;
++}
++
++static int khrIcdOsDirCollect(const char *path, const char *extension,
++                              struct dirElem **dirElems, size_t *elemCount)
++{
++    DIR *dir = opendir(path);
++    struct dirent *dirEntry;
++    size_t extensionSize = strlen(extension);
++
++    if (!dir)
++    {
++        KHR_ICD_TRACE("Failed to open path %s, continuing\n", path);
++        return 1;
++    }
++
++    while ((dirEntry = readdir(dir)) != NULL)
++    {
++        size_t nameSize = strlen(dirEntry->d_name);
++
++        if (extensionSize > nameSize ||
++            strcmp(dirEntry->d_name + nameSize - extensionSize, extension) ||
++            khrIcdOsDirElemExists(*dirElems, *elemCount, dirEntry->d_name))
++        {
++            continue;
++        }
++
++        if (!khrIcdOsDirElemAdd(dirElems, elemCount, dirEntry->d_name, path))
++        {
++            KHR_ICD_TRACE("Failed to collect configuration from %s\n", path);
++            closedir(dir);
++            return 0;
++        }
++    }
++
++    closedir(dir);
++    return 1;
++}
++
++static inline void khrIcdOsDirEnumerate(const char * const *paths,
++                                        size_t pathCount, const char *env,
++                                        const char *extension,
++                                        khrIcdFileAdd addFunc)
++{
++    struct dirElem *dirElems = NULL;
++    size_t elemCount = 0;
++    char *envPath = khrIcd_secure_getenv(env);
++    size_t i;
++
++    if (envPath)
++    {
++        khrIcdOsDirCollect(envPath, extension, &dirElems, &elemCount);
++    }
++    else
++    {
++        for (i = 0; i < pathCount; i++)
++        {
++            if (!khrIcdOsDirCollect(paths[i], extension, &dirElems, &elemCount))
++            {
++                break;
++            }
++        }
++    }
++
++    if (elemCount > 1)
++    {
++        qsort(dirElems, elemCount, sizeof(struct dirElem), compareDirElem);
++    }
++
++    for (i = 0; i < elemCount; i++)
++    {
++        khrIcdOsDirEntryValidateAndAdd(dirElems[i].d_name, dirElems[i].path,
++                                       extension, addFunc);
++        free(dirElems[i].d_name);
++        free(dirElems[i].path);
++    }
++    free(dirElems);
++
++    if (envPath)
++    {
++        khrIcd_free_getenv(envPath);
++    }
+ }
+ 
+-// go through the list of vendors in the two configuration files
++// go through the layered vendor and layer configuration directories
+ void khrIcdOsVendorsEnumerate(void)
+ {
++#if defined(__ANDROID__)
++    static const char * const vendorPaths[] = { ICD_VENDOR_PATH };
++#if defined(CL_ENABLE_LAYERS)
++    static const char * const layerPaths[] = { LAYER_PATH };
++#endif // defined(CL_ENABLE_LAYERS)
++#else
++    static const char * const vendorPaths[] =
++    {
++        ICD_VENDOR_PATH,
++        "/run/OpenCL/vendors",
++        "/usr/share/OpenCL/vendors"
++    };
++#if defined(CL_ENABLE_LAYERS)
++    static const char * const layerPaths[] =
++    {
++        LAYER_PATH,
++        "/run/OpenCL/layers",
++        "/usr/share/OpenCL/layers"
++    };
++#endif // defined(CL_ENABLE_LAYERS)
++#endif // defined(__ANDROID__)
++
+     khrIcdInitializeEnvOptions();
+     khrIcdVendorsEnumerateEnv();
+ 
+-    khrIcdOsDirEnumerate(ICD_VENDOR_PATH, "OCL_ICD_VENDORS", ".icd", khrIcdVendorAdd, 0);
++    khrIcdOsDirEnumerate(vendorPaths,
++                         sizeof(vendorPaths) / sizeof(vendorPaths[0]),
++                         "OCL_ICD_VENDORS", ".icd", khrIcdVendorAdd);
+ 
+ #if defined(CL_ENABLE_LAYERS)
+     // system layers should be closer to the driver
+-    khrIcdOsDirEnumerate(LAYER_PATH, "OPENCL_LAYER_PATH", ".lay", khrIcdLayerAdd, 1);
++    khrIcdOsDirEnumerate(layerPaths,
++                         sizeof(layerPaths) / sizeof(layerPaths[0]),
++                         "OPENCL_LAYER_PATH", ".lay", khrIcdLayerAdd);
+ 
+     khrIcdLayersEnumerateEnv();
+ #endif // defined(CL_ENABLE_LAYERS)

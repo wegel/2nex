@@ -112,6 +112,15 @@ package groups.
   installed-header compile and runtime smoke in each pass, and reproduced
   checksum
   `95242517b4b7c0399d8ec921abad265639cb576946f00a7d9eaa1638a542965c`.
+- [x] (2026-08-15 16:03Z) Added the official Khronos OpenCL ICD Loader at
+  matched tag `v2026.05.29` and patched its native Unix reader to merge vendor
+  and layer registrations from `/etc`, `/run`, and `/usr/share`. Two strict
+  commands each ran all four upstream tests and a focused executable smoke for
+  tier priority, deterministic basename order, empty and `/dev/null` masks,
+  and both secure environment overrides. A final review also proved that
+  `OCL_ICD_FILENAMES` stays additive while `OCL_ICD_VENDORS` replaces the
+  default directories. All six successful builds reproduced checksum
+  `cd728fed81942ff648d7cb0b276080e02f85fe6817b37d7fb7d02ea3afc6d154`.
 - [ ] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
   loader that reads all three configuration tiers, then move both Nvidia ICD
   files below `/usr`.
@@ -247,6 +256,19 @@ package groups.
   Evidence: the authoritative tag lists for both repositories contain
   `v2026.05.29`; the headers archive has SHA-256
   `d9e6c48357de5002da11ce45de600e0c3ffe6ab4f628a3b9fe2b38603161658a`.
+
+- Observation: Khronos places its `PrintLayer` test library under
+  `build/test/layer`, while its driver stubs use the build root.
+  Evidence: the first focused loader smoke reached the layer assertion but
+  named `/nex/work/build/libPrintLayer.so`; the built file was
+  `/nex/work/build/test/layer/libPrintLayer.so`. Correcting only that test path
+  made the complete smoke and both reproducibility passes succeed.
+
+- Observation: the loader source includes `linux/limits.h` and therefore needs
+  Linux UAPI headers in its build root.
+  Evidence: the first compile failed on that header; adding the existing
+  `linux-headers` development bundle let the unchanged upstream source build
+  and pass all four tests.
 
 ## Decision Log
 
@@ -724,6 +746,16 @@ with a broad exception.
   Two strict builds ran 350 upstream tests and the installed-header smoke and
   reproduced package checksum
   `95242517b4b7c0399d8ec921abad265639cb576946f00a7d9eaa1638a542965c`.
+- OpenCL ICD Loader `v2026.05.29` source:
+  `https://github.com/KhronosGroup/OpenCL-ICD-Loader/archive/refs/tags/v2026.05.29.tar.gz`,
+  SHA-256
+  `48fd0c5181db7cd046f4f731d5955694892e10998d49d09ee0d997e7e04fd939`.
+  Its local UAPI patch has SHA-256
+  `6b240f39545d9932d95a8508444a3b2dd66987ed579c39fa8c264340704d427b`.
+  Three strict commands ran the four upstream tests and the tier, order, mask,
+  override, layer, and real stub-ICD checks in all six successful builds;
+  each produced package checksum
+  `cd728fed81942ff648d7cb0b276080e02f85fe6817b37d7fb7d02ea3afc6d154`.
 
 ## Interfaces and Dependencies
 
