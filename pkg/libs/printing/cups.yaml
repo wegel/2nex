@@ -6,12 +6,15 @@ package:
   version: 2.4.7
   description: Common UNIX Printing System
   homepage: https://openprinting.github.io/cups/
-  checksum: a428bdc7a5b5de0257fee90234059589d317b2e811f52e8f8032612025066e31
+  checksum: 3bda80d32c30f056fc983fce370d64086d6ae6ca4eec9879bd622e1d34561b18
 
 sources:
 - name: cups
   url: https://github.com/OpenPrinting/cups/releases/download/v2.4.7/cups-2.4.7-source.tar.gz
   sha256: dd54228dd903526428ce7e37961afaed230ad310788141da75cebaa08362cf6c
+- name: uapi_config
+  file: pkg/libs/printing/cups-uapi-config.patch
+  sha256: 6e1ee3b80f9423bec4d656765f3f118702443538196c1b7f05d09e677e9bb65d
 
 dependencies:
 - name: glibc
@@ -60,31 +63,49 @@ dependencies:
   commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
 - name: libxcrypt
   commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4097:2209, 8203:3083, 12300:6482, 16407:9563, 20554:12049, 24674:12212, 28790:16453, 37021:16523, 45282:16785, 47595:17303]
+  profile: [4127:2231, 8239:3302, 12352:6738, 16467:10129, 20565:12729, 24683:12923, 28843:16867, 37065:16938, 45285:17185, 47494:17837]
 
   script: |
-    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
-    cd ${WORK_DIR}
+    set -eu
 
+    tar --no-same-owner -xf "/${SOURCE_cups}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    mkdir -p /etc
     if [ ! -f /etc/passwd ]; then
       cat > /etc/passwd <<'EOF'
+    root:x:0:0:root:/root:/bin/sh
     nobody:x:65534:65534:nobody:/:
     EOF
+    elif ! grep -q '^root:' /etc/passwd; then
+      printf '%s\n' 'root:x:0:0:root:/root:/bin/sh' >> /etc/passwd
     fi
 
     if [ ! -f /etc/group ]; then
       cat > /etc/group <<'EOF'
+    root:x:0:
     nobody:x:65534:
     EOF
+    elif ! grep -q '^root:' /etc/group; then
+      printf '%s\n' 'root:x:0:' >> /etc/group
     fi
 
     ./configure \
       --prefix=/usr \
+      --sysconfdir=/etc \
+      --localstatedir=/var \
+      --runstatedir=/run \
       --sbindir=/usr/bin \
       --libdir=/usr/lib \
+      --with-cachedir=/var/cache/cups \
+      --with-logdir=/var/log/cups \
+      --with-rundir=/run/cups \
       --disable-static \
       --disable-systemd \
       --without-rcdir \
@@ -92,6 +113,254 @@ build:
 
     make
     make DESTDIR="${OUT_DIR}" install
+
+    install -d "${OUT_DIR}/usr/lib/cups"
+    for config in cups-files.conf cupsd.conf snmp.conf; do
+      mv "${OUT_DIR}/etc/cups/${config}" \
+        "${OUT_DIR}/usr/lib/cups/${config}"
+      rm "${OUT_DIR}/etc/cups/${config}.default"
+    done
+    rmdir \
+      "${OUT_DIR}/etc/cups/ppd" \
+      "${OUT_DIR}/etc/cups/ssl" \
+      "${OUT_DIR}/etc/cups" \
+      "${OUT_DIR}/etc" \
+      "${OUT_DIR}/run/cups/certs" \
+      "${OUT_DIR}/run/cups" \
+      "${OUT_DIR}/run" \
+      "${OUT_DIR}/var/cache/cups/rss" \
+      "${OUT_DIR}/var/cache/cups" \
+      "${OUT_DIR}/var/cache" \
+      "${OUT_DIR}/var/log/cups" \
+      "${OUT_DIR}/var/log" \
+      "${OUT_DIR}/var/spool/cups/tmp" \
+      "${OUT_DIR}/var/spool/cups" \
+      "${OUT_DIR}/var/spool" \
+      "${OUT_DIR}/var"
+
+    cups_pid=
+    cleanup_cups_smoke() {
+      if [ -n "${cups_pid}" ]; then
+        kill "${cups_pid}" 2>/dev/null || true
+        wait "${cups_pid}" 2>/dev/null || true
+      fi
+      rm -f \
+        /etc/cups/cups-files.conf \
+        /etc/cups/cupsd.conf \
+        /etc/cups/snmp.conf \
+        /run/cups/cups-files.conf \
+        /run/cups/cupsd.conf \
+        /run/cups/snmp.conf \
+        /usr/lib/cups/cups-files.conf \
+        /usr/lib/cups/cupsd.conf \
+        /usr/lib/cups/snmp.conf
+      rmdir /etc/cups /run/cups /usr/lib/cups 2>/dev/null || true
+    }
+    trap cleanup_cups_smoke EXIT HUP INT TERM
+
+    test ! -e /etc/cups/cups-files.conf
+    test ! -e /etc/cups/cupsd.conf
+    test ! -e /etc/cups/snmp.conf
+    test ! -e /run/cups/cups-files.conf
+    test ! -e /run/cups/cupsd.conf
+    test ! -e /run/cups/snmp.conf
+    test ! -e /usr/lib/cups/cups-files.conf
+    test ! -e /usr/lib/cups/cupsd.conf
+    test ! -e /usr/lib/cups/snmp.conf
+    mkdir -p /etc/cups /run/cups /usr/lib/cups
+
+    cp "${OUT_DIR}/usr/lib/cups/cups-files.conf" /usr/lib/cups/cups-files.conf
+    cp "${OUT_DIR}/usr/lib/cups/cupsd.conf" /usr/lib/cups/cupsd.conf
+
+    cupsd_bin="${OUT_DIR}/usr/bin/cupsd"
+    cups_library_path="${OUT_DIR}/usr/lib"
+    check_cupsd_paths() {
+      expected_main="$1"
+      expected_files="$2"
+      set +e
+      output="$(LD_LIBRARY_PATH="${cups_library_path}" "${cupsd_bin}" -t 2>&1)"
+      status=$?
+      set -e
+      if [ "${status}" -ne 0 ] ||
+        ! printf '%s\n' "${output}" | grep -Fq "\"${expected_files}\" is OK." ||
+        ! printf '%s\n' "${output}" | grep -Fq "\"${expected_main}\" is OK."; then
+        printf '%s\n' \
+          "cupsd -t failed: status=${status}" \
+          "expected main: ${expected_main}" \
+          "expected files: ${expected_files}" >&2
+        printf '%s\n' "${output}" >&2
+        return 1
+      fi
+    }
+
+    check_cupsd_paths \
+      /usr/lib/cups/cupsd.conf \
+      /usr/lib/cups/cups-files.conf
+
+    cp /usr/lib/cups/cupsd.conf /run/cups/cupsd.conf
+    check_cupsd_paths \
+      /run/cups/cupsd.conf \
+      /usr/lib/cups/cups-files.conf
+
+    cp /usr/lib/cups/cups-files.conf /run/cups/cups-files.conf
+    check_cupsd_paths \
+      /run/cups/cupsd.conf \
+      /run/cups/cups-files.conf
+
+    cp /usr/lib/cups/cupsd.conf /etc/cups/cupsd.conf
+    check_cupsd_paths \
+      /etc/cups/cupsd.conf \
+      /run/cups/cups-files.conf
+
+    cp /usr/lib/cups/cups-files.conf /etc/cups/cups-files.conf
+    check_cupsd_paths \
+      /etc/cups/cupsd.conf \
+      /etc/cups/cups-files.conf
+
+    : > /etc/cups/cupsd.conf
+    check_cupsd_paths \
+      /etc/cups/cupsd.conf \
+      /etc/cups/cups-files.conf
+
+    cp /usr/lib/cups/cupsd.conf /etc/cups/cupsd.conf
+    : > /etc/cups/cups-files.conf
+    check_cupsd_paths \
+      /etc/cups/cupsd.conf \
+      /etc/cups/cups-files.conf
+
+    explicit_root="${WORK_DIR}/cups-explicit"
+    mkdir -p "${explicit_root}"
+    cp /usr/lib/cups/cupsd.conf "${explicit_root}/chosen-cupsd.conf"
+    cp /usr/lib/cups/cups-files.conf "${explicit_root}/chosen-cups-files.conf"
+    output="$(LD_LIBRARY_PATH="${cups_library_path}" \
+      "${cupsd_bin}" -t \
+      -c "${explicit_root}/chosen-cupsd.conf" \
+      -s "${explicit_root}/chosen-cups-files.conf" 2>&1)"
+    printf '%s\n' "${output}" | \
+      grep -Fq "\"${explicit_root}/chosen-cups-files.conf\" is OK."
+    printf '%s\n' "${output}" | \
+      grep -Fq "\"${explicit_root}/chosen-cupsd.conf\" is OK."
+
+    cat > "${WORK_DIR}/cups-snmp-smoke.c" <<'EOF'
+    #include <stdio.h>
+    extern const char *_cupsSNMPDefaultCommunity(void);
+    int main(void) {
+      puts(_cupsSNMPDefaultCommunity());
+      return 0;
+    }
+    EOF
+    gcc \
+      -L"${OUT_DIR}/usr/lib" \
+      -Wl,-rpath,"${OUT_DIR}/usr/lib" \
+      -o "${WORK_DIR}/cups-snmp-smoke" \
+      "${WORK_DIR}/cups-snmp-smoke.c" \
+      -lcups
+
+    snmp_smoke="${WORK_DIR}/cups-snmp-smoke"
+    snmp_backend="${OUT_DIR}/usr/lib/cups/backend/snmp"
+    check_snmp_tier() {
+      expected_path="$1"
+      expected_community="$2"
+      output="$(LD_LIBRARY_PATH="${cups_library_path}" "${snmp_backend}" 2>&1)"
+      printf '%s\n' "${output}" | grep -Fq "${expected_path}"
+      test "$(LD_LIBRARY_PATH="${cups_library_path}" "${snmp_smoke}")" = \
+        "${expected_community}"
+    }
+
+    printf '%s\n' 'Community vendor' > /usr/lib/cups/snmp.conf
+    check_snmp_tier /usr/lib/cups/snmp.conf vendor
+
+    printf '%s\n' 'Community transient' > /run/cups/snmp.conf
+    check_snmp_tier /run/cups/snmp.conf transient
+
+    printf '%s\n' 'Community administrator' > /etc/cups/snmp.conf
+    check_snmp_tier /etc/cups/snmp.conf administrator
+
+    : > /etc/cups/snmp.conf
+    check_snmp_tier /etc/cups/snmp.conf public
+
+    snmp_explicit="${WORK_DIR}/cups-snmp-explicit"
+    mkdir -p "${snmp_explicit}"
+    printf '%s\n' 'Community explicit' > "${snmp_explicit}/snmp.conf"
+    output="$(CUPS_SERVERROOT="${snmp_explicit}" \
+      LD_LIBRARY_PATH="${cups_library_path}" "${snmp_backend}" 2>&1)"
+    printf '%s\n' "${output}" | grep -Fq "${snmp_explicit}/snmp.conf"
+    test "$(CUPS_SERVERROOT="${snmp_explicit}" \
+      LD_LIBRARY_PATH="${cups_library_path}" "${snmp_smoke}")" = explicit
+
+    rm /etc/cups/snmp.conf
+    output="$(CUPS_SERVERROOT=/etc/cups \
+      LD_LIBRARY_PATH="${cups_library_path}" "${snmp_backend}" 2>&1)"
+    printf '%s\n' "${output}" | grep -Fq /etc/cups/snmp.conf
+    test "$(CUPS_SERVERROOT=/etc/cups \
+      LD_LIBRARY_PATH="${cups_library_path}" "${snmp_smoke}")" = public
+
+    daemon_root="${WORK_DIR}/cups-daemon-smoke"
+    daemon_socket="${daemon_root}/cups.sock"
+    mkdir -p \
+      "${daemon_root}/cache" \
+      "${daemon_root}/request" \
+      "${daemon_root}/server" \
+      "${daemon_root}/state" \
+      "${daemon_root}/tmp"
+    chmod 777 \
+      "${daemon_root}" \
+      "${daemon_root}/cache" \
+      "${daemon_root}/request" \
+      "${daemon_root}/server" \
+      "${daemon_root}/state" \
+      "${daemon_root}/tmp"
+
+    cat > "${daemon_root}/server/cupsd.conf" <<EOF
+    Listen ${daemon_socket}
+    Browsing Off
+    WebInterface No
+    <Location />
+      Order allow,deny
+      Allow all
+    </Location>
+    EOF
+    cat > "${daemon_root}/server/cups-files.conf" <<EOF
+    User nobody
+    Group nobody
+    SystemGroup root
+    AccessLog stderr
+    ErrorLog stderr
+    PageLog stderr
+    CacheDir ${daemon_root}/cache
+    DataDir ${OUT_DIR}/usr/share/cups
+    DocumentRoot ${OUT_DIR}/usr/share/doc/cups
+    RequestRoot ${daemon_root}/request
+    ServerBin ${OUT_DIR}/usr/lib/cups
+    StateDir ${daemon_root}/state
+    TempDir ${daemon_root}/tmp
+    EOF
+
+    LD_LIBRARY_PATH="${cups_library_path}" \
+      "${cupsd_bin}" -f \
+      -c "${daemon_root}/server/cupsd.conf" \
+      -s "${daemon_root}/server/cups-files.conf" \
+      > "${daemon_root}/cupsd.log" 2>&1 &
+    cups_pid=$!
+
+    attempts=0
+    while [ ! -S "${daemon_socket}" ]; do
+      kill -0 "${cups_pid}"
+      attempts=$((attempts + 1))
+      test "${attempts}" -lt 100
+      sleep 0.05
+    done
+
+    output="$(CUPS_SERVER="${daemon_socket}" \
+      LD_LIBRARY_PATH="${cups_library_path}" \
+      "${OUT_DIR}/usr/bin/lpstat" -r)"
+    test "${output}" = 'scheduler is running'
+    kill "${cups_pid}"
+    wait "${cups_pid}" || true
+    cups_pid=
+
+    cleanup_cups_smoke
+    trap - EXIT HUP INT TERM
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -197,15 +466,6 @@ outputs:
       - /usr/lib/libcups.so.2
       - /usr/lib/libgcc_s.so.1
       - /usr/lib/libstdc++.so.6
-
-  conf:
-    files:
-    - path: /usr/etc/cups/cups-files.conf
-    - path: /usr/etc/cups/cups-files.conf.default
-    - path: /usr/etc/cups/cupsd.conf
-    - path: /usr/etc/cups/cupsd.conf.default
-    - path: /usr/etc/cups/snmp.conf
-    - path: /usr/etc/cups/snmp.conf.default
 
   dev:
     files:
@@ -399,6 +659,8 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/cups-files.conf
+    - path: /usr/lib/cups/cupsd.conf
     - path: /usr/lib/cups/daemon/cups-deviced
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
@@ -475,6 +737,7 @@ outputs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
       - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/snmp.conf
     - path: /usr/lib/libcups.so
       needs:
       - /usr/lib/libc.so.6

@@ -95,10 +95,18 @@ package groups.
   `bed476afcea258b6e3c106192767dff807fde5a2f64d9c48c6fc0f0be06d26a9`.
   Their real readers passed tier, mask, override, and integration tests. The
   remaining inventory has eight paths across three manifests.
+- [x] (2026-08-15 15:19Z) Moved CUPS's three live defaults from `/usr/etc` to
+  `/usr/lib/cups`, removed its redundant `.default` copies, and patched the
+  scheduler plus both SNMP readers to select complete files from `/etc`,
+  `/run`, then `/usr`. The strict build ran tier, independent-main-file,
+  empty-mask, explicit-override, SNMP, and live Unix-socket scheduler tests in
+  both reproducibility passes and reproduced checksum
+  `3bda80d32c30f056fc983fce370d64086d6ae6ca4eec9879bd622e1d34561b18`.
+  The remaining inventory has two paths across the two Nvidia manifests.
 - [ ] Replace Nvidia's binary generic OpenCL loader with a source-built Khronos
   loader that reads all three configuration tiers, then move both Nvidia ICD
   files below `/usr`.
-- [ ] Replace the remaining `/usr/etc` outputs from Tig, Wget, OSTree, CUPS, and
+- [x] Replace the remaining `/usr/etc` outputs from Tig, Wget, OSTree, CUPS, and
   Rust with vendor data, patched readers, or explicit integration templates.
 - [ ] Rebuild every affected assembly twice and exercise shell, desktop,
   Libvirt, OpenCL, printing, network download, Edgebox, installer, and boot
@@ -197,6 +205,26 @@ package groups.
   package build then removes the empty directories and the GRUB link while
   retaining `/usr/lib/libostree/grub2-15_ostree`.
 
+- Observation: CUPS has two independently selected scheduler files and two
+  separate SNMP readers.
+  Evidence: `scheduler/main.c` chooses `cupsd.conf` and `cups-files.conf`, while
+  `backend/snmp.c` and `cups/snmp.c` each read `snmp.conf`. The strict package
+  smoke changed each path tier independently and exercised both SNMP readers in
+  fresh processes.
+
+- Observation: CUPS accepts an empty `cupsd.conf` as a valid configuration.
+  Evidence: the first empty-mask smoke wrongly expected `cupsd -t` to fail;
+  the command instead returned success and named `/etc/cups/cupsd.conf` as the
+  selected file. The final smoke asserts that selected path, which proves the
+  empty administrator file masks the lower default.
+
+- Observation: CUPS creates empty configuration and state directories that do
+  not appear as manifest output files.
+  Evidence: after `make install`, the package output contained `/etc/cups/ppd`,
+  `/etc/cups/ssl`, `/run/cups/certs`, and empty directories below `/var`. The
+  manifest now configures mutable state at `/var` and `/run` and removes those
+  empty package-output directories after installing the immutable files.
+
 ## Decision Log
 
 - Decision: Treat `/usr/etc` package output as part of this cleanup.
@@ -272,6 +300,15 @@ package groups.
   one.
   Rationale: The current package graph should use Nex-built readers. Future
   product assemblies can add narrow adapters when they add outside programs.
+  Date/Author: 2026-08-15 / Carlos
+
+- Decision: Choose a package's simplest correct native reader before adding a
+  generic configuration library.
+  Rationale: Libeconf fits key/value files and drop-in formats that it models
+  directly. CUPS already has parsers for structured `cupsd.conf`,
+  `cups-files.conf`, and `snmp.conf`, so a small path selector preserves their
+  syntax, validation, explicit overrides, and security behavior with less new
+  code and no new runtime dependency.
   Date/Author: 2026-08-15 / Carlos
 
 - Decision: Keep the commits suitable for a normal, unsquashed merge and push
@@ -648,6 +685,15 @@ with a broad exception.
   The embedded test ran the installed GRUB integration script with mocked GRUB
   helpers and OSTree, checked its parent-process error, and checked its BLS
   skip path.
+- CUPS's local UAPI patch has SHA-256
+  `6e1ee3b80f9423bec4d656765f3f118702443538196c1b7f05d09e677e9bb65d`.
+  Two strict reproducibility builds produced package checksum
+  `3bda80d32c30f056fc983fce370d64086d6ae6ca4eec9879bd622e1d34561b18`.
+  The embedded smoke validated separate main-file tiers, empty masks, explicit
+  `-c` and `-s` paths, an explicit `CUPS_SERVERROOT` equal to the compiled
+  default, both SNMP readers, and a live `cupsd` queried through the installed
+  `lpstat` command. The package output contains no `/etc`, `/usr/etc`, `/run`,
+  or `/var` state directory.
 
 ## Interfaces and Dependencies
 
