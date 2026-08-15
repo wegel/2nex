@@ -1127,6 +1127,21 @@ tier and proves that an empty administrator file masks lower files. An
 assembly must select the output that contains these defaults; selecting only
 Waybar's binary omitted both files until `desktop-vwl` used `bundles/full`.
 
+Do not treat `/etc/xdg/autostart` like a package's private XDG default
+directory. The Freedesktop Autostart Specification tells desktop sessions to
+scan `autostart` below the user and system XDG configuration directories, and
+the Base Directory Specification defaults the system list to `/etc/xdg`.
+Keep standards-defined system autostart entries at `/etc/xdg/autostart` unless
+the target desktop has an explicit alternative. Gnome Keyring 50.0 and
+AT-SPI2 Core 2.54.0 use that contract.
+
+An AT-SPI2 runtime needs more than `libatspi`. Its full bundle must include
+the bus launcher, registry daemon, D-Bus activation files, systemd user
+service, autostart entry, and default accessibility setting. Dependency
+flattening can make libraries available to another capsule, but it cannot
+publish the package's activation programs and metadata in the assembled
+root. `desktop-vwl` therefore selects AT-SPI2's corrected `bundles/full`.
+
 After a strict assembly build commits a system, its temporary `target` tree
 may no longer exist. Use `zub cat-file systems/<slug>/<version>:<path>` to
 inspect a directory, symlink target, or regular file in the durable system

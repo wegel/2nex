@@ -554,6 +554,30 @@ PulseAudio's installed daemon uses `DT_RPATH` for `/usr/lib/pulseaudio`.
 smoke. Call the packaged dynamic loader with `--inhibit-rpath ''` and an
 explicit `--library-path`, or test from a merged package root.
 
+The Freedesktop Autostart Specification makes `/etc/xdg/autostart` an
+externally governed package path, not an ordinary vendor-default directory.
+It tells desktop sessions to scan `autostart` below `XDG_CONFIG_HOME` and
+each `XDG_CONFIG_DIRS` entry; the Base Directory Specification defaults the
+system list to `/etc/xdg`. Keep upstream system autostart entries there so
+ordinary desktops find them, and let higher-priority XDG entries override or
+disable the same basename.
+
+Evidence: Gnome Keyring 50.0 installs its PKCS#11 and Secrets entries there,
+and AT-SPI2 Core 2.54.0 installs its bus launcher entry there. All three pass
+`desktop-file-validate` and name packaged executables. Their four desktop
+assembly variants retain the entries below the factory `/etc` tree.
+
+A public AT-SPI2 runtime must select its daemons and activation metadata, not
+only its development files and library. Dependency flattening supplies shared
+libraries to consumer capsules but does not publish the bus launcher,
+registry daemon, D-Bus service files, systemd user service, or autostart entry.
+
+Evidence: EP012 changed AT-SPI2 Core 2.54.0 `bundles/full` from `dev, lib` to
+`bin, conf, lib, misc`, added that bundle to `desktop-vwl`, and found every
+activation path in all four rebuilt system commits. The strict package
+checksum is
+`0f72c43c2ed8b776f7defda22ccd90dc539937900e6705591e2a37f41a482fd8`.
+
 ## Namespace Reference
 
 - `libs/system`: glibc, zlib, ncurses, acl, attr.

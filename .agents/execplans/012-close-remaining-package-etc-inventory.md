@@ -49,6 +49,9 @@ named below.
   `/usr/share/xdg/waybar`, implemented the complete XDG, transient, and vendor
   search order, selected its full bundle in the desktop assembly, and rebuilt
   and inspected all four affected system commits.
+- [x] (2026-08-15 02:45Z) Retained the three specification-defined XDG
+  autostart paths from Gnome Keyring and AT-SPI2, fixed AT-SPI2's incomplete
+  runtime bundle, and rebuilt and exercised all four desktop systems.
 - [ ] Freeze the exact 31-manifest inventory and record every installed
   `/etc` path, reader, override, reload path, upstream vendor-path feature,
   and governing external specification.
@@ -138,6 +141,20 @@ named below.
   found the finished Waybar links and their package targets in all four system
   commits.
 
+- Observation: AT-SPI2's old `full` bundle contained only its headers and
+  libraries, even though the manifest declared two runtime daemons, two D-Bus
+  activation files, a systemd user service, and an XDG autostart entry.
+  Evidence: the old bundle selected only `dev` and `lib`; a desktop assembly
+  received AT-SPI libraries through dependency flattening but omitted every
+  activation path.
+
+- Observation: XDG autostart entries differ from ordinary application
+  defaults below `/etc/xdg/<package>`.
+  Evidence: the Freedesktop Autostart Specification tells desktop sessions to
+  scan `autostart` below `XDG_CONFIG_HOME` and every `XDG_CONFIG_DIRS` entry.
+  The Base Directory Specification defaults `XDG_CONFIG_DIRS` to `/etc/xdg`,
+  which makes `/etc/xdg/autostart` the standard system path.
+
 ## Decision Log
 
 - Decision: Cover all 31 remaining manifests in this ExecPlan.
@@ -214,6 +231,24 @@ named below.
   but package files must not occupy the administrator's `/etc` tree. Keeping
   the standard XDG directories and Waybar's compatibility paths ahead of the
   vendor files preserves existing user and machine choices.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Retain Gnome Keyring's and AT-SPI2's autostart files below
+  `/etc/xdg/autostart`.
+  Rationale: Desktop sessions discover system autostart entries through
+  `XDG_CONFIG_DIRS/autostart`, whose specified default is
+  `/etc/xdg/autostart`. Moving these files to a private `/usr` directory would
+  make standards-compliant sessions miss them. An administrator can still
+  override or disable an entry by placing the same basename in a higher-priority
+  XDG directory.
+  Date/Author: 2026-08-15 / Codex
+
+- Decision: Make AT-SPI2's `full` bundle contain all runtime outputs and add
+  that bundle to the desktop package list.
+  Rationale: A full AT-SPI2 install needs its launchers, activation metadata,
+  libraries, service, autostart entry, and default accessibility setting.
+  Dependency flattening supplied libraries to consumers but could not supply
+  the package-owned daemons and metadata as public files.
   Date/Author: 2026-08-15 / Codex
 
 ## Outcomes & Retrospective
@@ -512,6 +547,38 @@ affected assemblies, and commit.
    `3f45970d91af64016e788e93897e9ded96aa05d650764f7ded9e83bc664653ab`.
    Commit: `pkg: package netavark without distribution policy`.
 
+4. `pkg/apps/security/gnome-keyring.yaml`
+
+   The `conf` output declares
+   `/etc/xdg/autostart/gnome-keyring-pkcs11.desktop` and
+   `/etc/xdg/autostart/gnome-keyring-secrets.desktop`. Outcome 5 applies.
+   The Freedesktop Autostart Specification defines system entries below each
+   `XDG_CONFIG_DIRS/autostart` directory, and the Base Directory
+   Specification defaults `XDG_CONFIG_DIRS` to `/etc/xdg`. Both files keep
+   their upstream paths so a normal desktop session can discover them. The
+   governing contracts are
+   `https://specifications.freedesktop.org/autostart-spec/latest/` and
+   `https://specifications.freedesktop.org/basedir/latest/`.
+
+   The strict package command built twice with checksum
+   `e1dc7ae0dc2d9f09a095078333ef19ec4237a292a4c524a55a21452168dc691c`.
+   `desktop-file-validate` accepted both installed entries, and their `Exec`
+   commands name `/usr/bin/gnome-keyring-daemon` with the expected `secrets`
+   and `pkcs11` components. In the checked-out desktop system,
+   `gnome-keyring-daemon --version` printed `50.0`; direct store inspection
+   also found its D-Bus service, systemd user service, and PAM module.
+
+   All four affected images built twice and matched: desktop-vwl
+   `3a62bb8d05a769f6a33a7671b52a1bded2cc049c74259684aa94b48478236d2d`,
+   Nvidia 580
+   `a9eeab8928ddc5fcec4c0b7f99c12ac0085f66ea7cc092105931ee7edbd6a2b3`,
+   Nvidia current
+   `1e5cfeff66808de2c2cfce8a7e9390e4c8262bbf2777fccce60f08cf8a22fb09`,
+   and desktop-dev
+   `25864e0b5fdb323397d674be022f29f6b480d5f32bf43beccfc098f03a417a7a`.
+   Each system commit contains both files in its factory `/etc` tree.
+   Commit: `pkg: complete desktop autostart runtimes`.
+
 5. `pkg/apps/terminal/foot.yaml`
 
    The old `conf` output declared `/etc/xdg/foot/foot.ini`. Foot's pinned
@@ -628,6 +695,33 @@ affected assemblies, and commit.
    Direct `zub cat-file` checks found both public links and both package files
    in every system commit and found no `/etc/xdg/waybar`. Commit: `pkg: layer
    waybar system configuration`.
+
+18. `pkg/libs/graphics/at-spi2-core.yaml`
+
+   The `conf` output declares
+   `/etc/xdg/autostart/at-spi-dbus-bus.desktop`. Outcome 5 and the same
+   Freedesktop specifications from row 4 apply. The entry runs
+   `/usr/libexec/at-spi-bus-launcher --launch-immediately`; moving it outside
+   `XDG_CONFIG_DIRS/autostart` would prevent a normal desktop session from
+   finding it. The same output also declares the vendor file
+   `/usr/share/defaults/at-spi2/accessibility.conf`, which already lives
+   outside `/etc` and needs no move.
+
+   The audit found that `bundles/full` selected only `dev` and `lib`. It now
+   includes `bin`, `conf`, `lib`, and `misc`, and the desktop assembly selects
+   that bundle explicitly. The strict package command built twice with
+   checksum
+   `0f72c43c2ed8b776f7defda22ccd90dc539937900e6705591e2a37f41a482fd8`.
+   `desktop-file-validate` accepted the installed entry. The assembled
+   `at-spi2-registryd --help` command exited successfully, and
+   `at-spi-bus-launcher --launch-immediately` reached its session-bus connect
+   before the isolated chroot, which has no session bus, rejected the
+   connection. Direct store inspection found both daemons, both D-Bus
+   activation files, the systemd user service, `libatspi.so.0`, and the
+   accessibility default in the finished desktop system.
+
+   The four system checksums and factory-tree assertions match row 4.
+   Commit: `pkg: complete desktop autostart runtimes`.
 
 21. `pkg/libs/graphics/nvidia-580.yaml`
 
