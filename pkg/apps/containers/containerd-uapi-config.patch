@@ -1,0 +1,132 @@
+From: Nex package maintainers
+Subject: [PATCH] defaults: select the containerd configuration from UAPI paths
+
+The --config flag defaulted to a single administrator path, so a package could
+not ship a containerd configuration and a boot-time tool had nowhere to put a
+temporary one. Select the first config.toml among /etc/containerd,
+/run/containerd, and /usr/lib/containerd; the first file found wins completely,
+so an empty administrator file masks the lower tiers. When none exists the
+administrator path is still returned, which keeps containerd starting from its
+compiled defaults. An explicit --config argument is unaffected, and the daemon
+still reports it as explicitly set.
+
+diff -urN a/cmd/containerd/command/main.go b/cmd/containerd/command/main.go
+--- a/cmd/containerd/command/main.go
++++ b/cmd/containerd/command/main.go
+@@ -91,7 +91,7 @@
+ 			Name:    "config",
+ 			Aliases: []string{"c"},
+ 			Usage:   "Path to the configuration file",
+-			Value:   filepath.Join(defaults.DefaultConfigDir, "config.toml"),
++			Value:   defaults.DefaultConfigPath(),
+ 		},
+ 		&cli.StringFlag{
+ 			Name:    "log-level",
+diff -urN a/defaults/nex_uapi_config.go b/defaults/nex_uapi_config.go
+--- a/defaults/nex_uapi_config.go
++++ b/defaults/nex_uapi_config.go
+@@ -0,0 +1,29 @@
++//go:build !windows
++
++package defaults
++
++import (
++	"os"
++	"path/filepath"
++)
++
++// configDirs lists the directories that may hold the containerd configuration
++// file, highest priority first: lasting administrator policy, then temporary
++// machine policy that one boot owns, then the package default.
++var configDirs = []string{DefaultConfigDir, "/run/containerd", "/usr/lib/containerd"}
++
++// DefaultConfigPath returns the configuration file the daemon uses when no
++// --config argument is given. The first file that exists wins completely, so an
++// empty administrator file masks the lower tiers. When none exists the
++// administrator path is returned, which keeps containerd's behaviour of
++// starting from compiled defaults.
++func DefaultConfigPath() string {
++	for _, dir := range configDirs {
++		path := filepath.Join(dir, "config.toml")
++		if _, err := os.Stat(path); err == nil {
++			return path
++		}
++	}
++
++	return filepath.Join(DefaultConfigDir, "config.toml")
++}
+diff -urN a/defaults/nex_uapi_config_test.go b/defaults/nex_uapi_config_test.go
+--- a/defaults/nex_uapi_config_test.go
++++ b/defaults/nex_uapi_config_test.go
+@@ -0,0 +1,56 @@
++//go:build !windows
++
++package defaults
++
++import (
++	"os"
++	"path/filepath"
++	"testing"
++)
++
++// TestNexDefaultConfigPathTiers checks that the implicit configuration file is
++// selected from the administrator, transient, and vendor directories in that
++// order, and that the administrator path is returned when none exists.
++func TestNexDefaultConfigPathTiers(t *testing.T) {
++	root := t.TempDir()
++	saved := configDirs
++	t.Cleanup(func() { configDirs = saved })
++
++	admin := filepath.Join(root, "etc")
++	runtime := filepath.Join(root, "run")
++	vendor := filepath.Join(root, "usr")
++	configDirs = []string{admin, runtime, vendor}
++
++	for _, dir := range configDirs {
++		if err := os.MkdirAll(dir, 0o755); err != nil {
++			t.Fatal(err)
++		}
++	}
++
++	write := func(dir string) string {
++		path := filepath.Join(dir, "config.toml")
++		if err := os.WriteFile(path, nil, 0o644); err != nil {
++			t.Fatal(err)
++		}
++		return path
++	}
++
++	if got, want := DefaultConfigPath(), filepath.Join(DefaultConfigDir, "config.toml"); got != want {
++		t.Fatalf("no file: got %q, want %q", got, want)
++	}
++
++	wantVendor := write(vendor)
++	if got := DefaultConfigPath(); got != wantVendor {
++		t.Fatalf("vendor tier: got %q, want %q", got, wantVendor)
++	}
++
++	wantRuntime := write(runtime)
++	if got := DefaultConfigPath(); got != wantRuntime {
++		t.Fatalf("runtime tier: got %q, want %q", got, wantRuntime)
++	}
++
++	wantAdmin := write(admin)
++	if got := DefaultConfigPath(); got != wantAdmin {
++		t.Fatalf("admin tier: got %q, want %q", got, wantAdmin)
++	}
++}
+diff -urN a/defaults/nex_uapi_config_windows.go b/defaults/nex_uapi_config_windows.go
+--- a/defaults/nex_uapi_config_windows.go
++++ b/defaults/nex_uapi_config_windows.go
+@@ -0,0 +1,11 @@
++//go:build windows
++
++package defaults
++
++import "path/filepath"
++
++// DefaultConfigPath returns the configuration file the daemon uses when no
++// --config argument is given.
++func DefaultConfigPath() string {
++	return filepath.Join(DefaultConfigDir, "config.toml")
++}
