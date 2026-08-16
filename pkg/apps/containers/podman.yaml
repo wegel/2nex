@@ -6,7 +6,7 @@ package:
   version: 5.4.1
   description: A tool for managing OCI containers and pods
   homepage: https://podman.io/
-  checksum: 2b40400b74f55d0471a645ce288c5d9a6945a1c64438e88042ab3ac14eb24189
+  checksum: 22c34447bf782c8d570870685682fb150ddd07c1c620793dab906b496bd9dc37
 
 sources:
 - name: podman
@@ -14,7 +14,7 @@ sources:
   sha256: 502117195c06678db612313aaf42505cabeea860f8668802a0608754eb0df9f6
 - name: uapi_config
   file: pkg/apps/containers/podman-uapi-config.patch
-  sha256: af8e9d650ba1bb54913e65992c657bb9ea795f46543a667cbd404667de6bf42f
+  sha256: b76a17accfda096793f6e8c02c07b7ce95766fc57b68140a8c26de26687786c9
 
 dependencies:
 - name: bash
@@ -84,7 +84,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4099:8316, 12153:40397, 16105:40663]
+  profile: [4207:9439, 12967:41887, 16919:42209]
 
   script: |
     tar --no-same-owner -xf /./${SOURCE_podman} -C "${WORK_DIR}" --strip-components=1
@@ -106,7 +106,11 @@ build:
     go test \
       github.com/containers/common/pkg/config \
       github.com/containers/image/v5/pkg/sysregistriesv2 \
-      github.com/containers/image/v5/signature
+      github.com/containers/image/v5/signature \
+      github.com/containers/image/v5/docker \
+      github.com/containers/storage/types
+
+    printf 'podman UAPI smoke: containers.conf, registries.conf, policy, storage.conf, and registries.d tests passed\n'
 
     # Create symlinks for compiler and linker to ensure build tools can find them
     mkdir -p /usr/local/bin
