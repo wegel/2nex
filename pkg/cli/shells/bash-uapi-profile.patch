@@ -1,5 +1,5 @@
 From: Nex package maintainers
-Subject: [PATCH] shell: select the system profile from UAPI paths
+Subject: [PATCH] shell: select the system profile and inputrc from UAPI paths
 Source: Nex
 Upstream: not submitted; needs upstream agreement on Linux UAPI paths
 
@@ -8,7 +8,59 @@ than combining files. Keep /etc/profile as the administrator path, add
 /run/profile for temporary machine policy, and use /usr/lib/profile for the
 vendor default. An existing empty file masks every lower-priority file.
 
-diff --git a/pathnames.h.in b/pathnames.h.in
+Bash bundles its own copy of Readline and this package links that copy rather
+than the packaged library, so the same inputrc file followed three tiers for
+every other Readline program and only /etc inside the shell. Apply the same
+selection to lib/readline: keep INPUTRC and ~/.inputrc ahead of system policy,
+then take the first complete system file from /etc, /run, and /usr/lib. An
+empty higher file succeeds and masks lower files.
+
+diff -urN a/lib/readline/bind.c b/lib/readline/bind.c
+--- a/lib/readline/bind.c
++++ b/lib/readline/bind.c
+@@ -1035,6 +1035,8 @@
+      2. the value of the shell variable `INPUTRC'
+      3. ~/.inputrc
+      4. /etc/inputrc
++     5. /run/inputrc
++     6. /usr/lib/inputrc
+    If the file existed and could be opened and read, 0 is returned,
+    otherwise errno is returned. */
+ int
+@@ -1048,10 +1050,14 @@
+   if (filename == 0 || *filename == 0)
+     {
+       filename = DEFAULT_INPUTRC;
+-      /* Try to read DEFAULT_INPUTRC; fall back to SYS_INPUTRC on failure */
++      /* Try the user file, then select the first complete system file. */
+       if (_rl_read_init_file (filename, 0) == 0)
+ 	return 0;
+-      filename = SYS_INPUTRC;
++      if (_rl_read_init_file (SYS_INPUTRC, 0) == 0)
++	return 0;
++      if (_rl_read_init_file (RUN_INPUTRC, 0) == 0)
++	return 0;
++      filename = VENDOR_INPUTRC;
+     }
+ 
+ #if defined (__MSDOS__)
+diff -urN a/lib/readline/rlconf.h b/lib/readline/rlconf.h
+--- a/lib/readline/rlconf.h
++++ b/lib/readline/rlconf.h
+@@ -45,6 +45,12 @@
+ /* The ultimate last-ditch filename for an init file -- system-wide. */
+ #define SYS_INPUTRC "/etc/inputrc"
+ 
++/* A temporary system-wide override for one boot. */
++#define RUN_INPUTRC "/run/inputrc"
++
++/* The vendor-supplied system-wide fallback. */
++#define VENDOR_INPUTRC "/usr/lib/inputrc"
++
+ /* If defined, expand tabs to spaces. */
+ #define DISPLAY_TABS
+ 
+diff -urN a/pathnames.h.in b/pathnames.h.in
 --- a/pathnames.h.in
 +++ b/pathnames.h.in
 @@ -26,6 +26,8 @@
@@ -20,13 +72,13 @@ diff --git a/pathnames.h.in b/pathnames.h.in
  
  /* The default location of the bash debugger initialization/startup file. */
  #define DEBUGGER_START_FILE	"@DEBUGGER_START_FILE@"
-diff --git a/shell.c b/shell.c
+diff -urN a/shell.c b/shell.c
 --- a/shell.c
 +++ b/shell.c
 @@ -1121,6 +1121,14 @@
  }
  
-+static void
+ static void
 +execute_system_profile ()
 +{
 +  if (maybe_execute_file (SYS_PROFILE, 1) == 0 &&
@@ -34,7 +86,7 @@ diff --git a/shell.c b/shell.c
 +    maybe_execute_file (VENDOR_PROFILE, 1);
 +}
 +
- static void
++static void
  run_startup_files ()
  {
  #if defined (JOB_CONTROL)

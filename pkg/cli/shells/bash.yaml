@@ -6,7 +6,7 @@ package:
   version: 5.2.21
   description: The GNU Bourne Again shell
   homepage: https://www.gnu.org/software/bash/
-  checksum: 51ec6b5cc61775ebee815e5c81ea492105bd4fb632f05162c71894ee3e60c7bb
+  checksum: c915999d79d69cd1513c8445e3aae06df56fb80811fa8c3c77b6a71a70c64458
   seed: true
 
 sources:
@@ -18,7 +18,7 @@ sources:
   sha256: 461ef75965a7fc75e2de86816dde160d8440e721595ed20513b1d8ede7c89bdc
 - name: uapi-profile
   file: pkg/cli/shells/bash-uapi-profile.patch
-  sha256: ab62f7b709f5d2bf375db40f3f9b8d8a7599a5317561f4dff40a10d6ac0dc5d9
+  sha256: da179def354a99a6c9ed49b343f511a3fc0c0fc7bded1599b1ccaa6898984a2a
 
 dependencies:
 - name: linux-headers
@@ -56,7 +56,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4173:1831, 12389:10020, 25069:16950, 42300:17111, 55378:17280, 68309:17338, 85132:17481, 106180:22328, 123264:22602, 136617:23133]
+  profile: [4124:1478, 12353:8360, 25642:14739, 43460:14870, 56703:15008, 69663:15039, 82109:15129, 103838:18446, 124970:19993, 136743:20398]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_bash} -C "${WORK_DIR}" --strip-components=1
@@ -125,6 +125,47 @@ build:
     HOME=/root "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
       /usr/bin/bash --login -c \
       'test -z "${uapi_test_tier+x}"'
+
+    # Bash links its bundled Readline, so the system inputrc must follow the
+    # same three tiers here as it does for the packaged Readline library.
+    # `bind -v` prints the resulting variable, which names the tier that won.
+    rm -f "${smoke_root}/etc/profile" "${smoke_root}/run/profile" \
+      "${smoke_root}/usr/lib/profile"
+
+    assert_inputrc_tier() {
+      expected="$1"
+      actual=$(HOME=/root "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+        /usr/bin/bash -i -c 'bind -v' 2>/dev/null \
+        | sed -n 's/^set completion-prefix-display-length //p')
+      if [ "${actual}" != "${expected}" ]; then
+        printf 'bash inputrc smoke: expected %s, got %s\n' \
+          "${expected}" "${actual}" >&2
+        exit 1
+      fi
+    }
+
+    printf 'set completion-prefix-display-length 31\n' \
+      > "${smoke_root}/usr/lib/inputrc"
+    assert_inputrc_tier 31
+
+    printf 'set completion-prefix-display-length 32\n' \
+      > "${smoke_root}/run/inputrc"
+    assert_inputrc_tier 32
+
+    printf 'set completion-prefix-display-length 33\n' \
+      > "${smoke_root}/etc/inputrc"
+    assert_inputrc_tier 33
+
+    # An empty administrator file is read successfully and masks both lower
+    # files, leaving the compiled default of 0.
+    : > "${smoke_root}/etc/inputrc"
+    assert_inputrc_tier 0
+
+    rm -f "${smoke_root}/etc/inputrc" "${smoke_root}/run/inputrc" \
+      "${smoke_root}/usr/lib/inputrc"
+    assert_inputrc_tier 0
+
+    printf 'bash UAPI smoke: profile and inputrc honoured all tiers\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
