@@ -100,6 +100,24 @@ and environment variables has no file-based system configuration. Report that
 as a finding with the evidence that established it, not as an absence of work.
 A file that only affects the build is a `build-only input`.
 
+Three distinctions decide many of these calls. Get them right before you write
+`gap`.
+
+- A package installing a vendor default below `/etc` is a gap. A program
+  writing generated data into `/etc` at runtime is not: the machine owns that
+  directory, and derived data belongs to the class
+  `database, cache, or generated index`. Say what the source of truth is and
+  what regenerates the data.
+- `CONFIGURATION.md` describes arrangements that an assembly builds, not
+  requirements on every package. Its worked examples name specific Nex
+  assemblies. Before calling a package default wrong because an example shows a
+  different path, search `asm/` for the file or the command and check whether an
+  assembly already supplies that arrangement. A reusable package keeps the
+  conventional default and offers an argument or environment override; the
+  assembly chooses the Nex layout.
+- A reader that does not implement the three tiers is a gap only when the file
+  family carries distribution policy. Check the owner first.
+
 ## Report format
 
 End your reply with one block per assigned manifest, in the order assigned, and

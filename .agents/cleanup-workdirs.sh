@@ -53,6 +53,7 @@ paths=(
   .nex/tmp/direct-initramfs-root
   .nex/tmp/duktape-smoke
   .nex/tmp/ep014-*-root
+  .nex/tmp/ep016-src
   .nex/tmp/freerdp-inspect
   .nex/tmp/freerdp-smoke
   .nex/tmp/freerdp-store-check
