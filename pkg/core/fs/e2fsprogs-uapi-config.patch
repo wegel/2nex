@@ -1,5 +1,5 @@
 From: Nex package maintainers
-Subject: [PATCH] config: select mke2fs and e2scrub policy from UAPI paths
+Subject: [PATCH] config: select mke2fs, e2fsck, and e2scrub policy from UAPI paths
 Source: Nex
 Upstream: not submitted; needs upstream agreement on Linux UAPI paths
 
@@ -8,7 +8,57 @@ Both tools read one main configuration file. Keep the administrator file in
 default. Select the first existing file so an empty higher-priority file masks
 lower policy. Keep MKE2FS_CONFIG as the explicit mke2fs override.
 
-diff --git a/misc/mke2fs.c b/misc/mke2fs.c
+Apply the same selection to e2fsck. Its config_fn list held one hard-coded
+administrator path, so a vendor or transient e2fsck.conf was unreachable while
+mke2fs already honoured all three tiers. E2FSCK_CONFIG still names an exact
+file and skips the search.
+
+diff -urN a/e2fsck/unix.c b/e2fsck/unix.c
+--- a/e2fsck/unix.c
++++ b/e2fsck/unix.c
+@@ -804,8 +804,32 @@
+ 	exit(FSCK_ERROR);
+ }
+ 
++#define VENDOR_E2FSCK_CONFIG "/usr/lib/e2fsck.conf"
++
+ static const char *config_fn[] = { ROOT_SYSCONFDIR "/e2fsck.conf", 0 };
+ 
++/*
++ * Select one complete configuration file. Persistent administrator policy
++ * below /etc wins, then temporary machine policy below /run, and the vendor
++ * default below /usr/lib is the fallback. The first file that exists is used
++ * whole, so an empty higher-priority file masks the lower ones.
++ */
++static const char *get_default_config_file(void)
++{
++	static const char *const config_paths[] = {
++		ROOT_SYSCONFDIR "/e2fsck.conf",
++		"/run/e2fsck.conf",
++		VENDOR_E2FSCK_CONFIG,
++	};
++	unsigned int i;
++
++	for (i = 0; i < sizeof(config_paths) / sizeof(config_paths[0]); i++)
++		if (access(config_paths[i], F_OK) == 0)
++			return config_paths[i];
++
++	return VENDOR_E2FSCK_CONFIG;
++}
++
+ static errcode_t PRS(int argc, char *argv[], e2fsck_t *ret_ctx)
+ {
+ 	int		flush = 0;
+@@ -1047,6 +1071,8 @@
+ 
+ 	if ((cp = getenv("E2FSCK_CONFIG")) != NULL)
+ 		config_fn[0] = cp;
++	else
++		config_fn[0] = get_default_config_file();
+ 	profile_set_syntax_err_cb(syntax_err_report);
+ 	profile_init(config_fn, &ctx->profile);
+ 
+diff -urN a/misc/mke2fs.c b/misc/mke2fs.c
 --- a/misc/mke2fs.c
 +++ b/misc/mke2fs.c
 @@ -1218,7 +1218,26 @@
@@ -48,30 +98,7 @@ diff --git a/misc/mke2fs.c b/misc/mke2fs.c
  	profile_set_syntax_err_cb(syntax_err_report);
  	retval = profile_init(config_fn, &profile);
  	if (retval == ENOENT) {
-diff --git a/scrub/e2scrub.in b/scrub/e2scrub.in
---- a/scrub/e2scrub.in
-+++ b/scrub/e2scrub.in
-@@ -34,9 +34,16 @@
- fstrim=0
- reap=0
- e2fsck_opts=""
--conffile="@root_sysconfdir@/e2scrub.conf"
--
--test -f "${conffile}" && . "${conffile}"
-+for conffile in \
-+    "@root_sysconfdir@/e2scrub.conf" \
-+    "/run/e2scrub.conf" \
-+    "/usr/lib/e2scrub.conf"; do
-+    if test -e "${conffile}"; then
-+        . "${conffile}"
-+        break
-+    fi
-+done
-+unset conffile
- 
- print_help() {
- 	echo "Usage: $0 [OPTIONS] mountpoint | device"
-diff --git a/scrub/e2scrub_all.in b/scrub/e2scrub_all.in
+diff -urN a/scrub/e2scrub_all.in b/scrub/e2scrub_all.in
 --- a/scrub/e2scrub_all.in
 +++ b/scrub/e2scrub_all.in
 @@ -29,9 +29,16 @@
@@ -94,7 +121,7 @@ diff --git a/scrub/e2scrub_all.in b/scrub/e2scrub_all.in
  
  scrub_args=""
  
-diff --git a/scrub/e2scrub_fail.in b/scrub/e2scrub_fail.in
+diff -urN a/scrub/e2scrub_fail.in b/scrub/e2scrub_fail.in
 --- a/scrub/e2scrub_fail.in
 +++ b/scrub/e2scrub_fail.in
 @@ -10,9 +10,16 @@
@@ -117,3 +144,26 @@ diff --git a/scrub/e2scrub_fail.in b/scrub/e2scrub_fail.in
  
  hostname="$(hostname -f 2>/dev/null)"
  test -z "${hostname}" && hostname="${HOSTNAME}"
+diff -urN a/scrub/e2scrub.in b/scrub/e2scrub.in
+--- a/scrub/e2scrub.in
++++ b/scrub/e2scrub.in
+@@ -34,9 +34,16 @@
+ fstrim=0
+ reap=0
+ e2fsck_opts=""
+-conffile="@root_sysconfdir@/e2scrub.conf"
+-
+-test -f "${conffile}" && . "${conffile}"
++for conffile in \
++    "@root_sysconfdir@/e2scrub.conf" \
++    "/run/e2scrub.conf" \
++    "/usr/lib/e2scrub.conf"; do
++    if test -e "${conffile}"; then
++        . "${conffile}"
++        break
++    fi
++done
++unset conffile
+ 
+ print_help() {
+ 	echo "Usage: $0 [OPTIONS] mountpoint | device"

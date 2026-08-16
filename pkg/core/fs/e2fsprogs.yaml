@@ -6,7 +6,7 @@ package:
   version: 1.47.0
   description: Utilities for managing ext2, ext3, and ext4 filesystems
   homepage: http://e2fsprogs.sourceforge.net/
-  checksum: e58f06a4b3b9438bc06f79a5bc969b58bbfd51a13943d92c351e82a7f4f5475e
+  checksum: 007b868371fb25e9739d79e797f3834325de8e7715eda2ea2fc03028e9140e9d
 
 sources:
 - name: e2fsprogs
@@ -14,7 +14,7 @@ sources:
   sha256: 6667afde56eef0c6af26684974400e4d2288ea49e9441bf5e6229195d51a3578
 - name: uapi-config
   file: pkg/core/fs/e2fsprogs-uapi-config.patch
-  sha256: 6aeb0a991b6c0b3671c483c8ae9952d63c5e2b45fa2fe9c5a7f0d39c41e1217e
+  sha256: 8c5ccc6d4a78c62d791bc84ab5d6abb4d0bfeef1accff49d50b8387a74cdf215
 
 dependencies:
 - name: glibc
@@ -64,7 +64,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4109:1024, 8219:3628, 12350:6462, 16453:7339, 20572:9007, 24673:11389, 28785:13365, 32900:13502, 37017:13615, 39208:13982]
+  profile: [4137:938, 8247:3368, 12378:5658, 16509:6439, 20643:7941, 24741:9781, 28874:11215, 33017:11324, 37131:11389, 40633:11740]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
@@ -109,6 +109,7 @@ build:
     ln -s usr/lib "${smoke_root}/lib64"
     cp \
       "${OUT_DIR}/usr/bin/dumpe2fs" \
+      "${OUT_DIR}/usr/bin/e2fsck" \
       "${OUT_DIR}/usr/bin/e2scrub" \
       "${OUT_DIR}/usr/bin/e2scrub_all" \
       "${OUT_DIR}/usr/bin/mke2fs" \
@@ -199,6 +200,53 @@ build:
       /usr/bin/bash /usr/bin/e2scrub -V | grep -q '^e2scrub '
     "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
       /usr/bin/bash /usr/bin/e2scrub_all -V | grep -q '^e2scrub_all '
+
+    # e2fsck reads its own configuration file and must follow the same tiers
+    # that mke2fs does. `report_time` makes it print a "Memory used:" summary,
+    # so the presence of that line names whether the selected file was read.
+    rm -f "${smoke_root}/etc/mke2fs.conf" "${smoke_root}/run/mke2fs.conf"
+    rm -f "${smoke_root}/etc/e2scrub.conf" "${smoke_root}/run/e2scrub.conf"
+    rm -f "${smoke_root}/tmp/image"
+    truncate -s 32M "${smoke_root}/tmp/image"
+    "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+      /usr/bin/mke2fs -q -F -t ext4 /tmp/image
+
+    assert_fsck_reports_time() {
+      "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+        /usr/bin/e2fsck -f -n /tmp/image > "${smoke_report}" 2>&1 || true
+      if ! grep -q 'Memory used:' "${smoke_report}"; then
+        printf 'e2fsck smoke: %s was not read\n' "$1" >&2
+        exit 1
+      fi
+    }
+
+    assert_fsck_silent() {
+      "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+        /usr/bin/e2fsck -f -n /tmp/image > "${smoke_report}" 2>&1 || true
+      if grep -q 'Memory used:' "${smoke_report}"; then
+        printf 'e2fsck smoke: %s should not have applied\n' "$1" >&2
+        exit 1
+      fi
+    }
+
+    assert_fsck_silent 'no configuration file'
+    printf '[options]\n\treport_time = true\n' \
+      > "${smoke_root}/usr/lib/e2fsck.conf"
+    assert_fsck_reports_time /usr/lib/e2fsck.conf
+    rm "${smoke_root}/usr/lib/e2fsck.conf"
+    printf '[options]\n\treport_time = true\n' \
+      > "${smoke_root}/run/e2fsck.conf"
+    assert_fsck_reports_time /run/e2fsck.conf
+    printf '[options]\n\treport_time = true\n' \
+      > "${smoke_root}/etc/e2fsck.conf"
+    assert_fsck_reports_time /etc/e2fsck.conf
+
+    # An empty administrator file is selected and masks the lower tiers.
+    : > "${smoke_root}/etc/e2fsck.conf"
+    assert_fsck_silent 'the /run file under an empty /etc file'
+    rm -f "${smoke_root}/etc/e2fsck.conf" "${smoke_root}/run/e2fsck.conf"
+
+    printf 'e2fsprogs UAPI smoke: mke2fs, e2fsck, and e2scrub honoured all tiers\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
