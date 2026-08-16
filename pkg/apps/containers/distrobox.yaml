@@ -6,14 +6,19 @@ package:
   version: 1.8.2.5
   description: Use OCI containers as integrated development environments
   homepage: https://distrobox.it/
-  checksum: a10b75163d702ac6ec5a809c05b0e841ad0b3ead800902d8330df244ce690ed1
+  checksum: e65397dc75f37f8690b558657ef940257a6fe2e57524d2c4517b0dc62e88f668
 
 sources:
 - name: distrobox
   url: https://github.com/89luca89/distrobox/archive/refs/tags/1.8.2.5.tar.gz
   sha256: 0c3bc4785ee3be3b89f93abb7cc0a9f60e56989e81319af140a4b60403b18f80
+- name: uapi_config
+  file: pkg/apps/containers/distrobox-uapi-config.patch
+  sha256: f6b1f5a1e1f8edf570293ad1ec2ca83bd0699cab7873e102dbaf4cb21b15c170
 
 dependencies:
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: coreutils
@@ -37,7 +42,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [289:125]
+  profile: [638:148]
 
   script: |
     set -eu
@@ -45,10 +50,62 @@ build:
     tar --no-same-owner -xf "/./${SOURCE_distrobox}" -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
 
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
     find . -maxdepth 1 -type f -name 'distrobox*' -exec sed -i '1s|^#!/bin/sh$|#!/usr/bin/sh|' {} \;
     sed -i '1s|^#!/bin/sh$|#!/usr/bin/sh|' install uninstall
 
     sh ./install --prefix "${OUT_DIR}/usr" --no-color
+
+    # The configuration chain must reach /run and must not read /usr/etc.
+    # Every command sources the same list, so check each installed script.
+    for script in "${OUT_DIR}"/usr/bin/distrobox-*; do
+      grep -q 'config_files=' "${script}" || continue
+      if ! grep -Fq '/run/distrobox/distrobox.conf' "${script}"; then
+        printf '%s does not read the transient tier\n' "${script}" >&2
+        exit 1
+      fi
+      if grep -Fq '/usr/etc/distrobox/distrobox.conf' "${script}"; then
+        printf '%s still reads /usr/etc\n' "${script}" >&2
+        exit 1
+      fi
+    done
+
+    # Prove the order the shell actually applies: a later file in the list wins,
+    # so /etc must override /run, which must override the package default.
+    smoke_root="${WORK_DIR}/uapi-smoke"
+    mkdir -p \
+      "${smoke_root}/usr/share/distrobox" \
+      "${smoke_root}/run/distrobox" \
+      "${smoke_root}/etc/distrobox"
+    smoke_script="${WORK_DIR}/distrobox-config-smoke"
+    sed -n '/^config_files="/,/^"$/p' "${OUT_DIR}/usr/bin/distrobox-create" \
+      | sed "s|\t/|\t${smoke_root}/|g" > "${smoke_script}"
+    printf '%s\n' \
+      'for config_file in ${config_files}; do' \
+      '  [ -e "${config_file}" ] && . "${config_file}"' \
+      'done' \
+      'printf "%s\\n" "${container_manager}"' >> "${smoke_script}"
+
+    assert_manager() {
+      actual=$(sh "${smoke_script}")
+      if [ "${actual}" != "$1" ]; then
+        printf 'distrobox config: expected %s, got %s\n' "$1" "${actual}" >&2
+        exit 1
+      fi
+    }
+
+    printf 'container_manager="uapi-vendor"\n' \
+      > "${smoke_root}/usr/share/distrobox/distrobox.conf"
+    assert_manager uapi-vendor
+    printf 'container_manager="uapi-runtime"\n' \
+      > "${smoke_root}/run/distrobox/distrobox.conf"
+    assert_manager uapi-runtime
+    printf 'container_manager="uapi-admin"\n' \
+      > "${smoke_root}/etc/distrobox/distrobox.conf"
+    assert_manager uapi-admin
+
+    printf 'distrobox UAPI smoke: the configuration chain honoured all tiers\n'
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
