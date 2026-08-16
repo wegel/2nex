@@ -214,6 +214,13 @@ required machine state.
   three masks, and three adapters. Twenty-six machine-state leaves belong to
   Libvirt's initial mutable objects.
 
+- Observation: two assembly builds that package the same development source
+  cannot safely run at the same time.
+  Evidence: parallel Nvidia child builds both rewrote
+  `inputs_cache/nex_scripts.tar`; Nvidia Current then read a partial tarball and
+  failed with `Unexpected EOF in archive`. Sequential reruns passed. Build
+  assemblies with shared `dev:` sources one at a time.
+
 ## Decision Log
 
 - Decision: Keep the accepted factory path list in
@@ -684,6 +691,24 @@ to `.nex/tmp/ep015-desktop-vwl-factory.tsv`. Full strict logs are
 `.nex/tmp/ep015-desktop-vwl-build2.log`. Desktop VWL packages `scripts/` as a
 source, so the final checksum must be rebuilt after this plan finishes editing
 test scripts.
+
+The two Nvidia child assembly checkpoints passed:
+
+    rtk ./src/cli/target/debug/nex check asm/desktop-vwl/desktop-vwl-nvidia-580.yaml
+    rtk ./src/cli/target/debug/nex check asm/desktop-vwl/desktop-vwl-nvidia-current.yaml
+    rtk ./nex build asm/desktop-vwl/desktop-vwl-nvidia-580.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk ./nex build asm/desktop-vwl/desktop-vwl-nvidia-580.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk ./nex build asm/desktop-vwl/desktop-vwl-nvidia-current.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk ./nex build asm/desktop-vwl/desktop-vwl-nvidia-current.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+
+The Nvidia 580 commands produced
+`870a5943bf8b49585cf5553ea0f7cc861bba05913dbf9bf23a14bf5df5c470fd`;
+the Nvidia Current commands produced
+`27c8fb901d93288608c7deab89b9c67f63c2ea1c5f0983de72dd82e1fd707c48`.
+Both finished factory inventories exactly match Desktop VWL's 51 accepted
+leaves because their modprobe and module-load policy now lives below
+`/usr/lib`. Full logs are `.nex/tmp/ep015-nvidia-580-build{1,2}.log` and
+`.nex/tmp/ep015-nvidia-current-build{1,2}.log`.
 
 The EP013 baseline Desktop VWL factory tree contains 88 leaves: 58 regular
 files and 30 links, with 31 directories. Its apparent leaf size is 16,350

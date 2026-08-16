@@ -6,7 +6,7 @@ system:
   description: Desktop system with vwl compositor, current Nvidia, and capture tools
   nex_structure: true
   extends: asm/desktop-vwl/desktop-vwl.yaml
-  checksum: 8a49f779dd79e913f86fa1b3c4d928efe229a140ee4a4e2516fb6cf7b0fe1762
+  checksum: 27c8fb901d93288608c7deab89b9c67f63c2ea1c5f0983de72dd82e1fd707c48
 
 packages:
 # source-built public OpenCL loader
@@ -39,21 +39,21 @@ build:
   script: |
     set -eu
 
-    mkdir -p /target/etc/modprobe.d
+    mkdir -p /target/usr/lib/modprobe.d
     {
       printf '%s\n' 'blacklist nouveau'
       printf '%s\n' 'blacklist nvidiafb'
       printf '%s\n' 'options nouveau modeset=0'
       printf '%s\n' 'options nvidia-drm modeset=1'
-    } > /target/etc/modprobe.d/nvidia.conf
+    } > /target/usr/lib/modprobe.d/nvidia.conf
 
-    mkdir -p /target/etc/modules-load.d
+    mkdir -p /target/usr/lib/modules-load.d
     {
       printf '%s\n' 'nvidia'
       printf '%s\n' 'nvidia-modeset'
       printf '%s\n' 'nvidia-uvm'
       printf '%s\n' 'nvidia-drm'
-    } > /target/etc/modules-load.d/nvidia.conf
+    } > /target/usr/lib/modules-load.d/nvidia.conf
 
     modules_dir=/target/usr/lib/modules/6.18.24
     for metadata in "${modules_dir}"/modules.*; do
