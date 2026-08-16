@@ -11,6 +11,9 @@ CONFIG_DRM_AMD_DC=y
 # keep exported symbols available for out-of-tree modules
 # CONFIG_TRIM_UNUSED_KSYMS is not set
 
+# emit the version records that CONFIG_MODVERSIONS requires
+CONFIG_BASIC_MODVERSIONS=y
+
 # cap maximum CPUs to reduce static kernel memory usage
 CONFIG_NR_CPUS=128
 
