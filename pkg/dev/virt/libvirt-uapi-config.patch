@@ -8,6 +8,11 @@ unchanged. For implicit privileged configuration, select the first complete
 file from /etc/libvirt, /run/libvirt, or /usr/lib/libvirt. An existing empty
 file remains selected and masks lower files.
 
+Cover libvirt-guests.sh too. Every compiled reader in this package now selects
+one file from the administrator, transient, and vendor trees, but the shipped
+script sourced a single administrator settings file, so no package or
+boot-time tool could supply its ON_BOOT or ON_SHUTDOWN defaults.
+
 --- a/src/libvirt_private.syms
 +++ b/src/libvirt_private.syms
 @@ -2215,6 +2215,7 @@
@@ -229,3 +234,23 @@ file remains selected and masks lower files.
          goto cleanup;
  
      if (virLoginShellGetShellArgv(conf, &shargv, &shargvlen) < 0)
+--- a/tools/libvirt-guests.sh.in
++++ b/tools/libvirt-guests.sh.in
+@@ -40,8 +40,15 @@
+ SYNC_TIME=0
+ PERSISTENT_ONLY="default"
+ 
+-test -f "$initconfdir"/libvirt-guests &&
+-    . "$initconfdir"/libvirt-guests
++# Select one complete settings file: persistent administrator policy, then
++# temporary machine policy, then the package default. The first file found
++# wins, so an empty higher file masks the lower ones.
++for uapi_dir in "$initconfdir" /run/sysconfig /usr/lib/sysconfig; do
++    if test -f "$uapi_dir"/libvirt-guests; then
++        . "$uapi_dir"/libvirt-guests
++        break
++    fi
++done
+ 
+ LISTFILE="$localstatedir"/lib/libvirt/libvirt-guests
+ VAR_SUBSYS_LIBVIRT_GUESTS="$localstatedir"/lock/subsys/libvirt-guests

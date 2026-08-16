@@ -6,7 +6,7 @@ package:
   version: 11.0.0
   description: Toolkit for virtualization management
   homepage: https://libvirt.org/
-  checksum: b79faa31ca1b2f43e7c474b0ee3ac8350358f39d1a90e94bbe856ea2e664627b
+  checksum: 475324bc09440ee26d158468fb9e5b234e2846c4da9ca670664d73544ea8bd40
 
 sources:
 - name: libvirt
@@ -14,7 +14,7 @@ sources:
   sha256: 01a176ff4042ad58cf83c09fe0925d6bc8eed0ecce1e0ee19b8ef4c1ffa3806e
 - name: uapi_config
   file: pkg/dev/virt/libvirt-uapi-config.patch
-  sha256: 698e9f3b772cb9b4d6dbb4caa873daf1be8ae50208dac56cf6c3125cf85493ad
+  sha256: 4e01a34b3c0f3014cca310ce56c788e0e4fd722f455c4d0274ffae21c116df0d
 
 dependencies:
 - name: bash
@@ -96,7 +96,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4122:1585, 12334:3474, 24681:3995, 37010:4665, 49402:5826, 61767:7049, 74113:8544, 90663:47391, 107248:47406, 116798:50996]
+  profile: [4106:1555, 12336:3437, 24664:3950, 36979:4566, 49448:5648, 61916:6886, 70235:7996, 90793:46830, 107351:46845, 116906:50461]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_libvirt} -C "${WORK_DIR}" --strip-components=1
@@ -238,6 +238,50 @@ build:
       /tmp/libvirt-explicit.conf \
       /usr/lib/libvirt/virtlogd.conf
     rmdir /usr/lib/libvirt /run/libvirt /etc/libvirt
+
+    # libvirt-guests.sh must select its settings file from the same three trees
+    # the compiled readers use. The script echoes each value it applies through
+    # a shell trace, so run it with an unknown command and read back ON_BOOT.
+    guests_script="${OUT_DIR}/usr/libexec/libvirt-guests.sh"
+    # The script sources /usr/bin/gettext.sh before it reads its settings, and
+    # this build root has no gettext tools, so provide a stub that defines the
+    # two helpers the script uses.
+    if [ ! -r /usr/bin/gettext.sh ]; then
+      printf '%s\n' \
+        'eval_gettext() { eval "echo \"$1\""; }' \
+        'eval_ngettext() { eval "echo \"$1\""; }' \
+        > /usr/bin/gettext.sh
+    fi
+    mkdir -p /etc/sysconfig /run/sysconfig /usr/lib/sysconfig
+    rm -f /etc/sysconfig/libvirt-guests /run/sysconfig/libvirt-guests \
+      /usr/lib/sysconfig/libvirt-guests
+
+    guests_on_boot() {
+      sh -x "${guests_script}" uapi-no-such-command 2>&1 \
+        | sed -n "s/^+* *ON_BOOT=//p" | tail -1
+    }
+
+    assert_on_boot() {
+      actual=$(guests_on_boot)
+      if [ "${actual}" != "$1" ]; then
+        printf 'libvirt-guests read ON_BOOT=%s, expected %s\n' \
+          "${actual}" "$1" >&2
+        exit 1
+      fi
+    }
+
+    assert_on_boot start
+    printf 'ON_BOOT=uapi-vendor\n' > /usr/lib/sysconfig/libvirt-guests
+    assert_on_boot uapi-vendor
+    printf 'ON_BOOT=uapi-runtime\n' > /run/sysconfig/libvirt-guests
+    assert_on_boot uapi-runtime
+    printf 'ON_BOOT=uapi-admin\n' > /etc/sysconfig/libvirt-guests
+    assert_on_boot uapi-admin
+    rm /etc/sysconfig/libvirt-guests /run/sysconfig/libvirt-guests \
+      /usr/lib/sysconfig/libvirt-guests
+    rmdir /etc/sysconfig /run/sysconfig /usr/lib/sysconfig 2>/dev/null || true
+
+    printf 'libvirt UAPI smoke: virtlogd and libvirt-guests honoured all tiers\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
