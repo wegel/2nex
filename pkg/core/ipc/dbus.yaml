@@ -6,7 +6,7 @@ package:
   version: 1.16.2
   description: D-Bus message bus system
   homepage: https://dbus.freedesktop.org/
-  checksum: 43f55e0c3866202b868e500faf2c286becc77d4e98adf19bf4e50ef0791db9eb
+  checksum: 89726eaaed2fdd092f92282de81f3d8f4d0ecd273a804d6b2055c22ab18d8c79
 
 sources:
 - name: dbus
@@ -14,7 +14,7 @@ sources:
   sha256: 0ba2a1a4b16afe7bceb2c07e9ce99a8c2c3508e5dec290dbb643384bd6beb7e2
 - name: transient_config
   file: pkg/core/ipc/dbus-transient-config.patch
-  sha256: 5236950595379b17b634f59a2d901df06114e8b1c836b563cc1d33d116a0cdd3
+  sha256: 3ea1ff30a3f185bc4bbd4897b0a31b6205f77e100bc4625567f505b34ca3347f
 
 dependencies:
 - name: glibc
@@ -64,7 +64,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4103:1933, 8241:1933, 12363:2118, 16492:2192, 20658:2303, 24804:2421, 28944:2503, 33086:6512, 36552:8592]
+  profile: [4097:1928, 8205:1928, 12396:2114, 16499:2188, 20670:2293, 24849:2400, 29007:2479, 33175:6540, 37266:8637]
 
   script: |
     set -eu
@@ -171,6 +171,50 @@ build:
     fi
     kill "${daemon_pid}"
     wait "${daemon_pid}" 2>/dev/null || true
+
+    # A same-named file in a higher tree must replace the lower one outright,
+    # and a link to /dev/null must mask it. Both cases put a deny in the vendor
+    # file, because the base session policy already permits the call: the deny
+    # must disappear for the call to work. The additive scan this replaced kept
+    # the vendor deny in force in both cases.
+    start_test_bus() {
+      bus_output=$(LD_LIBRARY_PATH="${lib}" \
+        "${daemon}" \
+          --config-file="${OUT_DIR}/usr/share/dbus-1/session.conf" \
+          --print-address=1 \
+          --print-pid=1 \
+          --fork)
+      bus_address=$(printf '%s\n' "${bus_output}" | head -n 1)
+      daemon_pid=$(printf '%s\n' "${bus_output}" | tail -n 1)
+    }
+    stop_test_bus() {
+      kill "${daemon_pid}" 2>/dev/null || true
+      wait "${daemon_pid}" 2>/dev/null || true
+    }
+
+    write_policy deny org.freedesktop.DBus "${vendor_dir}/${test_name}"
+    write_policy allow org.example.NexUapiUnused \
+      "${administrator_dir}/${test_name}"
+    start_test_bus
+    if ! bus_call_works; then
+      echo 'administrator drop-in did not replace the same-named vendor file' >&2
+      stop_test_bus
+      exit 1
+    fi
+    stop_test_bus
+
+    rm "${administrator_dir}/${test_name}"
+    ln -s /dev/null "${administrator_dir}/${test_name}"
+    start_test_bus
+    if ! bus_call_works; then
+      echo 'a /dev/null drop-in did not mask the same-named vendor file' >&2
+      stop_test_bus
+      exit 1
+    fi
+    stop_test_bus
+    rm "${administrator_dir}/${test_name}" "${vendor_dir}/${test_name}"
+
+    printf 'dbus UAPI smoke: drop-in tiers, basename shadowing, and masking behaved\n'
 
     explicit_config="${WORK_DIR}/explicit-session.conf"
     printf '%s\n' \
