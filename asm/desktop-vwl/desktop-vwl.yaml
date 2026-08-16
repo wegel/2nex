@@ -6,7 +6,7 @@ system:
   description: Desktop system with vwl compositor, wayland tools, and CLI utilities
   nex_structure: true
   extends: asm/nex-systemd.yaml
-  checksum: 8a00e2f4d65dc989478f667fba9139d47153bb920a7b6399ba218764a20f15a4
+  checksum: fc9df3e68a32a7016735b6d6d61c0af891b56061d10a1ea97d006308e0edfeb8
 
 overlays:
 - asm/desktop-vwl/desktop-vwl-overlay.yaml
@@ -546,7 +546,7 @@ build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
 
   script: |
-    set -eu
+    set -eux
 
     # desktop-specific directories
     mkdir -p /target/var/cache/fontconfig
@@ -579,6 +579,10 @@ build:
       /target/etc/libvirt/qemu/networks/default.xml
     ln -s ../default.xml \
       /target/etc/libvirt/qemu/networks/autostart/default.xml
+
+    # The desktop masks networkd and must not inherit the base enablement link.
+    rm -f \
+      /target/etc/systemd/system/multi-user.target.wants/systemd-networkd.service
 
     # locale generation
     mkdir -p /target/usr/lib/locale
@@ -626,5 +630,42 @@ build:
 
     # keep deterministic timestamps for the shipped snapshot
     find /target/usr/share/nex/manifests -exec touch -d "2024-01-01T00:00:00+00:00" {} \; || true
+
+    test -f /target/usr/lib/os-release
+    grep -Fq 'PRETTY_NAME="nex Desktop"' /target/usr/lib/os-release
+    test -f /target/usr/lib/inputrc
+    test -f /target/usr/lib/environment.d/10-desktop.conf
+    test -f /target/usr/lib/NetworkManager/conf.d/wifi-backend.conf
+    test -f /target/usr/lib/iwd/main.conf
+    test -f /target/usr/lib/systemd/logind.conf.d/10-desktop.conf
+    test -f /target/usr/lib/systemd/journald.conf.d/00-persistent.conf
+    test -f /target/usr/lib/systemd/system/systemd-logind.service.d/dbus-ordering.conf
+    test -f /target/usr/lib/tmpfiles.d/xdg-runtime.conf
+    test -f /target/usr/lib/tmpfiles.d/utmp.conf
+    test -f /target/usr/lib/udev/rules.d/70-seat.rules
+    test -f /target/usr/share/containers/containers.conf
+    test -f /target/usr/share/containers/registries.conf
+    test -f /target/usr/share/containers/policy.json
+    test -f /target/etc/pam.d/system-auth
+    test -f /target/etc/pam.d/login
+    test -f /target/etc/pam.d/other
+    test ! -e /target/etc/os-release
+    test ! -e /target/etc/fstab
+    test ! -e /target/etc/sysctl.conf
+    test ! -e /target/etc/environment
+    test ! -e /target/etc/inputrc
+    test ! -e /target/etc/systemd/network/80-dhcp.network
+    test ! -e /target/etc/systemd/logind.conf
+    test ! -e /target/etc/systemd/system/systemd-logind.service.d/dbus-ordering.conf
+    test ! -e /target/etc/systemd/system/multi-user.target.wants/systemd-networkd.service
+    test ! -e /target/etc/tmpfiles.d/xdg-runtime.conf
+    test ! -e /target/etc/tmpfiles.d/utmp.conf
+    test ! -e /target/etc/udev/rules.d/70-seat.rules
+    test ! -e /target/etc/NetworkManager/conf.d/wifi-backend.conf
+    test ! -e /target/etc/iwd/main.conf
+    test ! -e /target/etc/systemd/journald.conf.d/00-persistent.conf
+    test ! -e /target/etc/containers/containers.conf
+    test ! -e /target/etc/containers/registries.conf
+    test ! -e /target/etc/containers/policy.json
 
     echo "Desktop assembly configuration done."

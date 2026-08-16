@@ -206,6 +206,14 @@ required machine state.
   parsers with administrator, runtime, vendor, mask, and registry drop-in
   fixtures.
 
+- Observation: moving Desktop VWL's immutable files cut its factory tree from
+  77 leaves and 14,568 bytes to 51 leaves and 12,418 bytes.
+  Evidence: the finished root at checksum
+  `fc9df3e68a32a7016735b6d6d61c0af891b56061d10a1ea97d006308e0edfeb8`
+  passed the policy checker with 33 machine-state leaves, 12 unit choices,
+  three masks, and three adapters. Twenty-six machine-state leaves belong to
+  Libvirt's initial mutable objects.
+
 ## Decision Log
 
 - Decision: Keep the accepted factory path list in
@@ -660,6 +668,22 @@ Every build ran the `containers.conf`, `registries.conf`, registry drop-in,
 and `policy.json` tests through the vendored production parsers. Full logs are
 `.nex/tmp/ep015-podman-build1.log` and
 `.nex/tmp/ep015-podman-build2.log`.
+
+The Desktop VWL assembly checkpoint passed:
+
+    rtk ./src/cli/target/debug/nex check asm/desktop-vwl/desktop-vwl.yaml
+    rtk ./nex build asm/desktop-vwl/desktop-vwl.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk ./nex build asm/desktop-vwl/desktop-vwl.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk scripts/check-factory-etc-policy.sh .nex/tmp/ep015-desktop-final.4p7hz0
+
+Both strict commands built the assembly twice. All four builds produced
+`fc9df3e68a32a7016735b6d6d61c0af891b56061d10a1ea97d006308e0edfeb8`.
+The finished-root checker accepted all 51 leaves and wrote their TSV inventory
+to `.nex/tmp/ep015-desktop-vwl-factory.tsv`. Full strict logs are
+`.nex/tmp/ep015-desktop-vwl-build1.log` and
+`.nex/tmp/ep015-desktop-vwl-build2.log`. Desktop VWL packages `scripts/` as a
+source, so the final checksum must be rebuilt after this plan finishes editing
+test scripts.
 
 The EP013 baseline Desktop VWL factory tree contains 88 leaves: 58 regular
 files and 30 links, with 31 directories. Its apparent leaf size is 16,350

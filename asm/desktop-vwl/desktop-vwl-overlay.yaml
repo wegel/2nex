@@ -35,25 +35,20 @@ files:
     systemd-timesync:!*:19735::::::
     sshd:!*:19735::::::
 
-# system config
-- path: /etc/os-release
+# distribution defaults
+- path: /usr/lib/os-release
   mode: 420
   content: |
     NAME="nex"
     PRETTY_NAME="nex Desktop"
     ID=nex
     VERSION_ID=0.0.1
-
-- path: /etc/fstab
-  mode: 420
-
-- path: /etc/sysctl.conf
-  mode: 420
+  replace: true
 
 - path: /etc/machine-id
   mode: 420
 
-- path: /etc/environment
+- path: /usr/lib/environment.d/10-desktop.conf
   mode: 420
   content: |
     LANG=en_US.UTF-8
@@ -68,7 +63,7 @@ files:
   content: |
     XDG_CONFIG_DIRS=/etc/xdg:/run/xdg:/usr/share/xdg
 
-- path: /etc/inputrc
+- path: /usr/lib/inputrc
   mode: 420
   content: |
     # readline config for bash/zsh
@@ -86,6 +81,7 @@ files:
 
     # ctrl+delete to delete word forward
     "\e[3;5~": kill-word
+  replace: true
 
 # systemd
 - path: /usr/lib/systemd/system/logrotate.service
@@ -119,16 +115,6 @@ files:
 - path: /etc/systemd/system/timers.target.wants/logrotate.timer
   symlink: /usr/lib/systemd/system/logrotate.timer
 
-- path: /etc/systemd/network/80-dhcp.network
-  mode: 420
-  content: |
-    [Match]
-    Name=nex-networkd-disabled
-
-    [Network]
-    DHCP=no
-  replace: true
-
 - path: /etc/systemd/system/systemd-networkd.service
   symlink: /dev/null
   replace: true
@@ -141,7 +127,7 @@ files:
   symlink: /dev/null
   replace: true
 
-- path: /etc/systemd/logind.conf
+- path: /usr/lib/systemd/logind.conf.d/10-desktop.conf
   mode: 420
   content: |
     [Login]
@@ -150,19 +136,19 @@ files:
     NAutoVTs=6
     ReserveVT=6
 
-- path: /etc/systemd/system/systemd-logind.service.d/dbus-ordering.conf
+- path: /usr/lib/systemd/system/systemd-logind.service.d/dbus-ordering.conf
   mode: 420
   content: |
     [Unit]
     After=dbus-broker.service
     Wants=dbus-broker.service
 
-- path: /etc/tmpfiles.d/xdg-runtime.conf
+- path: /usr/lib/tmpfiles.d/xdg-runtime.conf
   mode: 420
   content: |
     d /run/user/0 0700 root root -
 
-- path: /etc/tmpfiles.d/utmp.conf
+- path: /usr/lib/tmpfiles.d/utmp.conf
   mode: 420
   content: |
     f /run/utmp 0664 root utmp -
@@ -170,7 +156,7 @@ files:
     f /var/log/btmp 0660 root utmp -
 
 # udev
-- path: /etc/udev/rules.d/70-seat.rules
+- path: /usr/lib/udev/rules.d/70-seat.rules
   mode: 420
   content: |
     # allow seat group access to input devices
@@ -182,10 +168,10 @@ files:
     KERNEL=="renderD*", SUBSYSTEM=="drm", GROUP="render", MODE="0660"
 
 # PAM
-- path: /usr/share/factory/etc/pam.d/system-auth
+- path: /etc/pam.d/system-auth
   mode: 420
   content: |
-    auth      sufficient pam_unix.so nullok
+    auth      sufficient pam_unix.so
     auth      required   pam_deny.so
 
     account   required   pam_nologin.so
@@ -208,7 +194,7 @@ files:
     password   include   system-auth
     session    include   system-auth
 
-- path: /usr/share/factory/etc/pam.d/other
+- path: /etc/pam.d/other
   mode: 420
   content: |
     auth      required pam_deny.so
@@ -238,9 +224,6 @@ files:
 - path: /etc/mtab
   symlink: /proc/self/mounts
 
-- path: /usr/lib/os-release
-  symlink: ../../etc/os-release
-
 - path: /etc/resolv.conf
   symlink: /run/systemd/resolve/stub-resolv.conf
 
@@ -253,14 +236,14 @@ files:
   replace: true
 
 # NetworkManager + iwd configuration
-- path: /etc/NetworkManager/conf.d/wifi-backend.conf
+- path: /usr/lib/NetworkManager/conf.d/wifi-backend.conf
   mode: 420
   content: |
     [device]
     wifi.backend=iwd
 
-# iwd configuration directory
-- path: /etc/iwd/main.conf
+# iwd configuration
+- path: /usr/lib/iwd/main.conf
   mode: 420
   content: |
     [General]
@@ -269,7 +252,7 @@ files:
     [Network]
     NameResolvingService=systemd
 
-- path: /etc/systemd/journald.conf.d/00-persistent.conf
+- path: /usr/lib/systemd/journald.conf.d/00-persistent.conf
   mode: 420
   content: |
     [Journal]
@@ -308,7 +291,7 @@ files:
   symlink: /usr/lib/systemd/user/wireplumber.service
 
 # container config
-- path: /etc/containers/containers.conf
+- path: /usr/share/containers/containers.conf
   mode: 420
   content: |
     [engine]
@@ -317,12 +300,12 @@ files:
     [network]
     firewall_driver = "nftables"
 
-- path: /etc/containers/registries.conf
+- path: /usr/share/containers/registries.conf
   mode: 420
   content: |
     unqualified-search-registries = ["docker.io"]
 
-- path: /etc/containers/policy.json
+- path: /usr/share/containers/policy.json
   mode: 420
   content: |
     {
