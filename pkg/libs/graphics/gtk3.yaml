@@ -6,7 +6,7 @@ package:
   version: 3.24.43
   description: GTK3 toolkit for creating graphical user interfaces
   homepage: https://www.gtk.org/
-  checksum: c7cf0e30c274e863ed37a5c4dee01ef196b0ec0c94b66e459d82642d3d67bf3c
+  checksum: e79bf09ba5b4e5ccb8765198a8ad7626a53d79a18fd62090adc61d8cfa97155d
 
 sources:
 - name: gtk3
@@ -14,10 +14,13 @@ sources:
   sha256: 7e04f0648515034b806b74ae5d774d87cffb1a2a96c468cb5be476d51bf2f3c7
 - name: multipress_config
   file: pkg/libs/graphics/gtk3-uapi-multipress.patch
-  sha256: 195b6ce1640ebd6f47001bef242dc9511adf07f24ec38084503b3250ceb43774
+  sha256: 820c78903f69b6ae2a1819f70e7b303642d1936b0735bd2c3b50fde8a1094b47
 - name: multipress_smoke
   file: pkg/libs/graphics/gtk3-multipress-smoke.c
   sha256: c55c3c0cce41a30f0a0a2fb364feb87d29a06ff8b30dd837e7508cf0eaa77a2b
+- name: settings_smoke
+  file: pkg/libs/graphics/gtk3-settings-smoke.c
+  sha256: ca95cc44e6b6f56627d03da6db9eb968c6da9098727aad1586e6134f1324fd42
 
 dependencies:
 - name: glibc
@@ -141,7 +144,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4147:3346, 12415:3476, 28953:4505, 49624:7431, 62032:8909, 78530:10733, 95128:12615, 119983:18211, 140622:18232, 154947:18717]
+  profile: [4117:3038, 16441:3166, 28843:4153, 49553:6919, 66078:8330, 78459:10157, 95002:12059, 119916:17777, 140575:17798, 155613:18482]
 
   script: |
     set -eu
@@ -218,6 +221,48 @@ build:
       /run/gtk-3.0/im-multipress.conf \
       /usr/share/gtk-3.0/im-multipress.conf
     rmdir /etc/gtk-3.0 /run/gtk-3.0 /usr/share/gtk-3.0
+
+    # settings.ini is an overlay family: every file is loaded with the same
+    # source, so the last file read wins. XDG_CONFIG_DIRS names its
+    # highest-priority directory first, so the administrator entry must still
+    # beat the transient and vendor entries that follow it in that list.
+    settings_smoke="${WORK_DIR}/gtk3-settings-smoke"
+    PKG_CONFIG_PATH="${OUT_DIR}/usr/lib/pkgconfig:/usr/lib/pkgconfig" \
+      gcc "/${SOURCE_settings_smoke}" \
+      -I"${OUT_DIR}/usr/include/gtk-3.0" \
+      -I"${OUT_DIR}/usr/lib/gtk-3.0/include" \
+      -L"${OUT_DIR}/usr/lib" \
+      $(PKG_CONFIG_PATH="${OUT_DIR}/usr/lib/pkgconfig:/usr/lib/pkgconfig" \
+        pkg-config --cflags --libs gtk+-3.0) \
+      -o "${settings_smoke}"
+
+    mkdir -p /etc/xdg/gtk-3.0 /run/xdg/gtk-3.0 /usr/share/xdg/gtk-3.0
+
+    assert_setting() {
+      XDG_CONFIG_DIRS=/etc/xdg:/run/xdg:/usr/share/xdg \
+        XDG_CONFIG_HOME="${WORK_DIR}/empty-user-config" \
+        LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+        "${settings_smoke}" gtk-theme-name "$1"
+    }
+
+    printf '[Settings]\ngtk-theme-name = uapi-vendor\n' \
+      > /usr/share/xdg/gtk-3.0/settings.ini
+    assert_setting uapi-vendor
+    printf '[Settings]\ngtk-theme-name = uapi-runtime\n' \
+      > /run/xdg/gtk-3.0/settings.ini
+    assert_setting uapi-runtime
+    printf '[Settings]\ngtk-theme-name = uapi-admin\n' \
+      > /etc/xdg/gtk-3.0/settings.ini
+    assert_setting uapi-admin
+
+    rm /etc/xdg/gtk-3.0/settings.ini
+    assert_setting uapi-runtime
+    rm /run/xdg/gtk-3.0/settings.ini
+    assert_setting uapi-vendor
+    rm /usr/share/xdg/gtk-3.0/settings.ini
+    rmdir /etc/xdg/gtk-3.0 /run/xdg/gtk-3.0 /usr/share/xdg/gtk-3.0
+
+    printf 'gtk3 UAPI smoke: multipress and settings.ini honoured all tiers\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
