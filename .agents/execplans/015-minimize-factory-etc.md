@@ -40,27 +40,31 @@ required machine state.
   assembly, installer, QEMU, package-testing, and reproducibility notes. The
   worktree was clean, so it had no pre-task commit candidates or local-only
   files to classify.
-- [ ] Build or check out fresh roots for every Nex-structured assembly and
-  record every factory `/etc` leaf by owner, type, source, and intended
-  lifetime. Audit flat assemblies separately.
+- [x] (2026-08-16 03:12Z) Checked out fresh roots for every Nex-structured
+  assembly, recorded the 88-leaf Desktop VWL starting point, and audited the
+  four flat assemblies separately.
 - [x] (2026-08-16 02:52Z) Added a self-tested finished-root checker and a
   machine-readable policy table. The checker emits one TSV row per accepted
   leaf and rejects unclassified files, wrong file types, wrong adapter
   targets, dangling immutable targets, and checksum-pinned `/nex/pkg` links.
-- [ ] Move each immutable default to a standard vendor path below `/usr`, patch
-  its reader when needed, and leave only true machine choices, Systemd
-  enablement or masks, and unavoidable stable adapters in factory `/etc`.
-- [ ] Remove stale release metadata and exact `/nex/pkg/.../<checksum>` targets
-  from factory `/etc`; put custom unit definitions below
-  `/usr/lib/systemd/system`.
-- [ ] Define and test how a provisioner supplies hostname, local host entries,
-  timezone, locale, console layout, filesystems, accounts, and network data
-  without baking arbitrary choices into a reusable assembly.
-- [ ] Add a two-version first-boot, upgrade, rollback, and fresh-install test
-  that exercises real readers and persistent `/etc` state.
-- [ ] Rebuild the full affected assembly graph twice, run finished-root and
-  QEMU checks, publish the final factory inventory, promote durable knowledge,
-  and stop for human review.
+- [x] (2026-08-16 06:47Z) Moved immutable defaults below `/usr`, taught
+  Readline, IWD, and Podman's real readers to honor the documented path order,
+  and retained only machine state, initial unit choices, and three stable
+  adapters in structured factory trees.
+- [x] (2026-08-16 07:18Z) Removed copied release data and package-checksum
+  links, moved custom units and desktop Networkd masks below `/usr`, and added
+  exact migration rules for untouched EP014-era seeds.
+- [x] (2026-08-16 08:02Z) Added a preflighted installer provisioner for the
+  standard hostname, hosts, timezone, locale, console, filesystem, account,
+  NetworkManager, and Systemd network files. Its test uses the final Glibc
+  reader to resolve `localhost` and the provisioned hostname.
+- [x] (2026-08-16 09:02Z) Extended the real QEMU live-upgrade test to boot
+  version 1, upgrade to Desktop version 2, roll back, and boot a fresh version
+  2 while checking OS identity, reader precedence, machine state, adapters,
+  network services, and old-seed absence.
+- [x] (2026-08-16 09:35Z) Rebuilt every affected package and assembly twice,
+  ran all finished-root and QEMU checks, published the final inventories,
+  promoted durable notes, and prepared the plan for human review.
 
 ## Surprises & Discoveries
 
@@ -229,6 +233,70 @@ required machine state.
   preserving changed administrator files and installing the new regular PAM
   machine policy.
 
+- Observation: a timestamp-normalization pass can create machine files when it
+  follows a dangling package symlink.
+  Evidence: Flat Podman's `find /target -exec touch ...` followed
+  `/usr/lib/environment.d/99-environment.conf` to `/etc/environment` after the
+  script had proved that path absent. Passing `touch -h` left the link itself
+  timestamped and kept the administrator file absent in the finished root.
+
+- Observation: Edgebox's D-Bus enablement link was dangling because Flat
+  Systemd included only D-Bus Broker's binary and configuration outputs.
+  Evidence: `/etc/systemd/system/sockets.target.wants/dbus.socket` targeted
+  `/usr/lib/systemd/system/dbus.socket`, which belongs to the omitted
+  `outputs/lib`. Adding that output to Flat Systemd repaired the link in all
+  child roots.
+
+- Observation: Edgebox's generated certificate cache accounted for 445 of its
+  470 baseline `/etc` leaves.
+  Evidence: the final assembly keeps the vendor fallback under
+  `/usr/lib/ssl/certs`, regenerates the cache under `/run/ssl/certs`, and keeps
+  one stable `/etc/ssl/certs` adapter. The final policy scan accepted 24
+  Edgebox leaves and its isolated root test proved vendor trust, an
+  administrator blocklist, and cache restoration through the installed
+  updater.
+
+- Observation: an installer provisioner must reject the complete input tree
+  before it copies the first file.
+  Evidence: `scripts/test-nex-install-provision.sh` supplies forbidden paths,
+  empty directories, directory links, special files, and an escaping timezone
+  link. Every case leaves the destination unchanged. The accepted case then
+  proves the installed Glibc `getent` resolves both `localhost` and the chosen
+  hostname from the copied standard files.
+
+- Observation: the Glibc `getent` executable uses the canonical dynamic loader
+  name even though Nex stores the loader below `/lib64`.
+  Evidence: the first provision test failed with a missing
+  `/usr/lib/ld-linux-x86-64.so.2`. A relative compatibility link below
+  `/usr/lib` lets the final-root executable run without copying a loader.
+
+- Observation: a bootable kernel bundle must include a module's complete
+  dependency closure, not only the named driver.
+  Evidence: the live-upgrade guest could not load `virtio_net` because its VM
+  bundle omitted `dimlib`, `net_failover`, and `failover`. Adding the kernel's
+  `lib` output supplied that closure, and all later Systemd and Desktop boots
+  acquired network links.
+
+- Observation: desktop-owned Networkd masks cannot live in persistent
+  factory `/etc` if a rollback must reactivate Networkd.
+  Evidence: the first version-two boot copied three masks into `/var/etc`, so
+  the rolled-back Systemd deployment retained them and lost networking. Moving
+  the vendor masks to `/usr/lib/systemd/system` made them follow the selected
+  deployment while preserving any administrator mask in writable `/etc`.
+
+- Observation: Zub records `/etc/mtab` as the relocatable link
+  `../proc/self/mounts` in a deployment checkout.
+  Evidence: the live test originally required the equivalent absolute target
+  `/proc/self/mounts`. Accepting both spellings preserves the same resolved
+  kernel path and lets the checkout remain relocatable.
+
+- Observation: the final Desktop family uses 48 factory leaves and 12,391
+  apparent bytes, down from 88 leaves and 16,350 bytes in the EP013 baseline.
+  Evidence: the final policy inventories count 33 machine-state leaves, 12
+  initial unit choices, and three adapters in Desktop VWL, both Nvidia
+  children, and Desktop Dev. Nex Systemd has 14 leaves, the installer has four,
+  and Nex Minimal has two.
+
 ## Decision Log
 
 - Decision: Keep the accepted factory path list in
@@ -280,6 +348,15 @@ required machine state.
   every unknown link alone, then applies the ordinary copy-missing rule.
   Date/Author: 2026-08-16 / Ralph
 
+- Decision: Apply the same ownership rule to flat roots without adding a
+  factory-copy boundary.
+  Rationale: account databases, site choices, unit enablement, and stable
+  adapters remain ordinary `/etc` paths in a flat image. Release identity,
+  NSS defaults, Podman policy, and generated certificate caches still belong
+  below `/usr` or `/run`. A separate scope-aware table makes those deliberate
+  differences explicit.
+  Date/Author: 2026-08-16 / Ralph
+
 - Decision: Treat factory files as one-time seeds, never as a fourth reader
   tier.
   Rationale: after first boot the machine owner owns the copied path. Programs
@@ -317,10 +394,11 @@ required machine state.
   stable adapter or patch.
   Date: 2026-08-15.
 
-- Decision: Move unit definitions below `/usr/lib/systemd/system` and leave
-  enablement links and deliberate masks in writable `/etc`.
-  Rationale: the selected deployment owns unit code, while the machine owner
-  decides whether a service starts and may mask it.
+- Decision: Move unit definitions and assembly-owned masks below
+  `/usr/lib/systemd/system`. Leave initial enablement links and only
+  administrator-owned overrides or masks in writable `/etc`.
+  Rationale: the selected deployment owns unit code and its vendor policy,
+  while the machine owner decides whether to override or mask that policy.
   Date: 2026-08-15.
 
 - Decision: Prove upgrades with two distinct system versions and one persistent
@@ -337,12 +415,133 @@ required machine state.
   install has no such inherited state.
   Date: 2026-08-15.
 
+- Decision: Provision a closed list of standard files and validate the whole
+  source tree before writing the target.
+  Rationale: hostname, name service, timezone, locale, console, filesystems,
+  accounts, and network tools already consume standard paths. A closed list
+  gives the installer useful inputs without making it an arbitrary root-tree
+  copier, and complete preflight avoids a half-provisioned machine.
+  Date/Author: 2026-08-16 / Ralph
+
+- Decision: Include the kernel `lib` output in the VM bundle instead of naming
+  the three dependencies of `virtio_net` individually.
+  Rationale: the kernel build owns the dependency graph. Including its library
+  module class keeps the bundle complete if a driver's internal dependencies
+  change later.
+  Date/Author: 2026-08-16 / Ralph
+
+- Decision: Accept absolute and relocatable spellings of the stable `mtab`
+  adapter when both resolve to `/proc/self/mounts`.
+  Rationale: Zub rewrites the link for checkout portability, but fixed-path
+  consumers observe the same kernel mount table after boot.
+  Date/Author: 2026-08-16 / Ralph
+
 ## Outcomes & Retrospective
 
-Not started. At completion, report the starting and final factory inventories,
-name every remaining leaf and its owner, list each patched or reconfigured
-reader, describe the two-version test, record exact checksums and QEMU results,
-and state every adapter, skipped runtime check, or unresolved upstream limit.
+The plan now enforces the public ownership rule in finished systems. Desktop
+VWL fell from the 88-leaf, 16,350-byte EP013 factory baseline to 48 leaves and
+12,391 bytes. Each Desktop variant contains 33 machine-state leaves, 12
+initial unit choices, and three adapters. Nex Systemd contains six
+machine-state leaves, five unit choices, and three adapters. The installer
+contains three account files and the `mtab` adapter. Nex Minimal contains its
+two local account files. `scripts/factory-etc-policy.tsv` names every accepted
+path, its owner, its real consumer, its source, and its reason.
+
+The remaining machine state consists of local account databases, `machine-id`,
+PAM policy, and Libvirt's initial mutable objects. The unit choices are named
+Systemd enablement links for console login, D-Bus, networking, DNS, manifest
+seeding, log rotation, Bluetooth, and desktop audio. The three stable adapters
+are `mtab` to the kernel mount table, `resolv.conf` to Systemd's runtime DNS
+stub, and `ssl/certs` to the runtime certificate cache. No factory leaf holds
+release data, a custom unit definition, an immutable application default, or
+an exact package checksum.
+
+Systemd no longer ships six factory samples. Readline selects complete files
+in `/etc`, `/run`, then `/usr`; IWD uses the same directory order through its
+existing multi-directory reader; and Podman's installed TOML, registry, and
+JSON readers now honor vendor, runtime, and administrator data according to
+their format rules. The plan rejected `libeconf` for all three because their
+existing parsers already implement the required complete-file, TOML merge, or
+strict JSON behavior. The initramfs removes only exact untouched legacy seeds
+and preserves administrator edits.
+
+`nex-install --provision` now accepts a closed standard-file tree for hostname,
+hosts, timezone, locale, console layout, filesystems, accounts, and supported
+network profiles. It validates the complete tree before copying, applies root
+ownership and secure modes, and rejects unknown paths and unsafe objects. Its
+test runs the final Glibc `getent` against the copied files.
+
+The QEMU live test boots a seeded Nex Systemd version 1, creates an
+administrator Logind override, upgrades the same disk to Desktop VWL version
+2, rolls back to version 1, and boots version 2 on a fresh disk. Real
+`hostnamectl`, D-Bus, Systemd services, Nex, and stable links prove release
+identity, administrator precedence, persistent machine state, vendor network
+policy, rollback networking, adapter validity, hardlink reuse, and the absence
+of version-one-only files on the fresh machine.
+
+The flat audit remains separate because flat images use `/etc` directly and
+never copy a factory tree. Flat Minimal has two leaves and 42 bytes, Flat
+Systemd four and 481, Flat Podman six and 517, and Edgebox 24 and 1,456. The
+retained paths are machine account state, initial unit choices, and stable
+adapters. Edgebox now keeps vendor certificates below `/usr`, rebuilds its
+cache below `/run`, and honors an administrator blocklist.
+
+The work exposed three integration defects that static scans did not catch:
+the VM kernel bundle lacked the `virtio_net` dependency closure, persistent
+desktop Networkd masks broke rollback, and the final Glibc reader needed its
+canonical loader link. The final boot tests cover all three fixes.
+
+### Completion Check
+
+The final shell and focused checks passed:
+
+    rtk bash -n scripts/check-factory-etc-policy.sh scripts/check-flat-etc-policy.sh scripts/nex-install scripts/qemu-test-live-upgrade.sh scripts/test-nex-install-provision.sh scripts/test-nex-install-remotes.sh scripts/test-edgebox-rootfs.sh
+    rtk sh -n pkg/core/kernel/initramfs-populate-etc.sh pkg/core/kernel/tests/initramfs-populate-etc.sh
+    rtk scripts/check-factory-etc-policy.sh --self-test
+    rtk scripts/check-flat-etc-policy.sh --self-test
+    rtk sh pkg/core/kernel/tests/initramfs-populate-etc.sh
+    rtk scripts/test-nex-install-remotes.sh
+    rtk scripts/check-package-config-paths.sh
+    rtk scripts/test-nex-install-provision.sh .nex/tmp/ep015-systemd-provision-final.5XGpkl/root
+
+`nex check` passed for all 16 changed package and assembly manifests. The full
+log is `.nex/tmp/ep015-final-nex-check.log`.
+
+Two final strict commands per affected assembly reproduced these checksums;
+each strict command also reproduced its result internally:
+
+- Linux: `9745a4573612836a5e5a60d294d66300a772fd1ec332fcdba950ed9baff09a91`
+- Nex Minimal: `2f3221ddfb3851498969b97708882e5d30652c72697a6bffae9316642140bccc`
+- Nex Systemd: `b6b8dc0bc5000d9bd9cffdb707e8d4c1e3e89c71c4abd136c96fbf3700bbcab9`
+- Desktop VWL: `ee269e4caf31fda906b2e03f64c30c4194bfba7d190e7ac31c9b0a5398d59fa2`
+- Nvidia 580: `72897a6dddb7a034a0d0a71d6137f029a26717c788cb72e9e7159d280c06a5bf`
+- Nvidia Current: `29c57eb88dc3d99be6c2c77fdf7f7ade14b520d4acce228f9ab941264a38a8d7`
+- Desktop Dev: `7f4677739133f86059b706dc0acdf0e87b2e1330eede670ddd0415c6104b3f4b`
+- Installer: `adf0be5320e0f008774dd9b2c568b97dc10e63f7aa85b087d469d2ca20f5d879`
+- Flat Systemd: `5c16b64c8d38aaab3a2ba0f6095640e418349ef075f78de39e889bd541c36321`
+- Flat Podman: `c26cf41b3a92027592bc2818ca6698aa405b4473024bc7111d7ba63267c34609`
+- Edgebox: `3b80339fb68bf150dafff1a8b465512a8978cc6b35b568030a5a0f8901e9eace`
+
+The final structured checkout is
+`.nex/tmp/ep015-structured-final.Ku63Go`. Its per-assembly TSV reports are
+`.nex/tmp/ep015-*-final-factory.tsv`, with the combined report at
+`.nex/tmp/ep015-structured-final-factory.tsv`.
+
+The final QEMU checks passed against Nex Systemd
+`b6b8dc0bc5000d9bd9cffdb707e8d4c1e3e89c71c4abd136c96fbf3700bbcab9`
+and Desktop VWL
+`ee269e4caf31fda906b2e03f64c30c4194bfba7d190e7ac31c9b0a5398d59fa2`:
+
+- `.nex/tmp/ep015-qemu-systemd.log`: `ASSERT-BOOT-PASS`
+- `.nex/tmp/ep015-qemu-graphical.log`: `ASSERT-GRAPHICS-PASS`
+- `.nex/tmp/ep015-qemu-installer.log`: `ASSERT-BOOT-PASS`
+- `.nex/tmp/ep015-qemu-live-upgrade.log`: `LIVE-UPGRADE-PASS`
+
+No required runtime path was skipped. `shellcheck` was unavailable on this
+host, so Bash and POSIX shell syntax checks plus the executable self-tests
+covered the changed scripts. QEMU printed its known unchecked-MSR firmware
+warning during direct-initramfs boots; every guest assertion still passed.
+The final integrated behavior commit is `a4f43da`.
 
 ## Context and Orientation
 
@@ -739,6 +938,37 @@ Each strict command built twice; all four builds produced
 `d24c1e3e9f31222a42595230d51c81e3bfbe7d63fd54fd182031b0d9e521180c`.
 Full logs are `.nex/tmp/ep015-initramfs-build1.log` and
 `.nex/tmp/ep015-initramfs-build2.log`.
+
+The flat-assembly checkpoint passed:
+
+    rtk bash -n scripts/check-flat-etc-policy.sh scripts/test-edgebox-rootfs.sh
+    rtk scripts/check-flat-etc-policy.sh --self-test
+    rtk ./src/cli/target/debug/nex check asm/flat-systemd.yaml
+    rtk ./src/cli/target/debug/nex check asm/flat-podman.yaml
+    rtk ./src/cli/target/debug/nex check asm/edgebox-rootfs.yaml
+    rtk ./nex build asm/flat-systemd.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk ./nex build asm/flat-podman.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk ./nex build asm/edgebox-rootfs.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk scripts/check-flat-etc-policy.sh flat-minimal <root> flat-systemd <root> flat-podman <root> edgebox-rootfs <root>
+    rtk scripts/test-edgebox-rootfs.sh <edgebox-root>
+
+Each strict command ran twice and reproduced its checksum internally. The two
+Flat Systemd commands produced
+`5c16b64c8d38aaab3a2ba0f6095640e418349ef075f78de39e889bd541c36321`;
+Flat Podman produced
+`c26cf41b3a92027592bc2818ca6698aa405b4473024bc7111d7ba63267c34609`;
+Edgebox produced
+`3b80339fb68bf150dafff1a8b465512a8978cc6b35b568030a5a0f8901e9eace`.
+The final inventory at `.nex/tmp/ep015-flat-final.tsv` records two leaves for
+Flat Minimal, four for Flat Systemd, six for Flat Podman, and 24 for Edgebox.
+The isolated Edgebox test log is `.nex/tmp/ep015-edgebox-root-test.log`.
+Full build logs are `.nex/tmp/ep015-flat-systemd-build{1,2}.log`,
+`.nex/tmp/ep015-flat-podman-build{1,2}.log`, and
+`.nex/tmp/ep015-edgebox-build{1,2}.log`.
+
+The final assembly checkpoint supersedes the historical checksums above.
+Final build and runtime proof appears in `Outcomes & Retrospective` under
+`Completion Check`; the earlier checkpoint values record intermediate work.
 
 The EP013 baseline Desktop VWL factory tree contains 88 leaves: 58 regular
 files and 30 links, with 31 directories. Its apparent leaf size is 16,350

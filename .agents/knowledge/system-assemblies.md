@@ -417,3 +417,29 @@ links from the two overlays. Final Systemd, Desktop, both Nvidia variants, and
 desktop-dev roots passed the finished-root test. The direct QEMU guest also
 proved that a fresh system has no human UID, keeps sshd inactive and port 22
 closed, and rejects a blank root password.
+
+## Factory policy and deployment-owned masks
+
+Scan finished factory trees rather than only overlay YAML. Native package
+outputs and assembly scripts can add leaves that no overlay declaration names.
+`scripts/check-factory-etc-policy.sh` joins each built leaf to a tracked table
+with its owner, consumer, class, source, target, reason, and byte count, and
+rejects undocumented leaves, bad link types, dangling stable targets, and
+checksum-pinned `/nex/pkg` links.
+
+Keep a vendor-owned Systemd mask below `/usr/lib/systemd/system`. Do not copy
+it from factory state into writable `/etc`. A Desktop Networkd mask in `/etc`
+survived rollback and disabled networking in the smaller Systemd deployment.
+With the masks below `/usr`, Desktop selects NetworkManager and blocks
+Networkd, while rollback selects the real Systemd Networkd unit and reuses the
+machine's unchanged enablement link.
+
+Zub may rewrite a root-internal absolute link to an equivalent relocatable
+relative link during checkout. The mtab adapter declared as
+`/proc/self/mounts` appears as `../proc/self/mounts` in final structured roots.
+Runtime tests should accept both spellings and require the link to resolve.
+
+EP015's final policy scan found 2 leaves and 42 bytes in Nex Minimal, 14 and
+1,360 in Nex Systemd, 48 and 12,391 in Desktop plus each of its three children,
+and 4 and 86 in Installer. Desktop's 48 leaves consist of 33 machine-state
+leaves, 12 unit choices, and three stable adapters.

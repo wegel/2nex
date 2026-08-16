@@ -150,3 +150,22 @@ Probe `usr/share/factory/etc/os-release`, the regular immutable file. Do not
 probe absent `etc/os-release` or the `usr/lib/os-release` compatibility
 symlink. Multi-command SSH probes should start with `set -eu` so a failed file
 check cannot be hidden by a later successful `printf`.
+
+## Provisioning standard machine files
+
+`nex-install --provision ETC_TREE` accepts a closed set of standard machine
+files: hostname, hosts, localtime, locale.conf, vconsole.conf, fstab, passwd,
+group, shadow, NetworkManager `.nmconnection` files, and Systemd `.network`,
+`.netdev`, and `.link` files. Validate the complete source tree before writing
+the target so one rejected path cannot leave a partially provisioned machine.
+
+Only `localtime` may be a symlink. Require its canonical target below
+`/usr/share/zoneinfo` and reject traversal, repeated separators, directory
+links, and special files. Install root-owned files with 0600 for shadow and
+NetworkManager connection secrets and 0644 for other regular files.
+
+Evidence: `scripts/test-nex-install-provision.sh` exercises every accepted
+class, rejects arbitrary files, empty directories, unsafe links, traversal,
+and a FIFO, and proves the preflight prevents partial writes. Against a copied
+final Nex Systemd root, the installed Glibc `getent` resolves both `localhost`
+and the provisioned hostname from the provisioned hosts file.

@@ -313,3 +313,17 @@ and `pkcs8_key_parser` with `Exec format error`, and `virtio_net.ko` had no
 `__versions` section. The rebuilt `outputs/drv-net-virtio` module contains
 that section, and the Systemd, graphical, installer, and live-upgrade guests
 loaded the rebuilt kernel successfully.
+
+## Kernel bundle module dependencies
+
+A kernel bundle must include the outputs that own every loadable module named
+by `modinfo -F depends`, not only the requested device driver. Linux 6.18.24
+`virtio_net.ko` needs `dimlib` and `net_failover`; `net_failover.ko` needs
+`failover`. The `vm` bundle already carried the network outputs for both
+failover modules but omitted the `lib` output that owns `dimlib.ko`.
+
+Adding `lib` made the `vm` bundle self-contained. Two strict Linux commands,
+each with its own reproducibility pass, produced package checksum
+`9745a4573612836a5e5a60d294d66300a772fd1ec332fcdba950ed9baff09a91`.
+Final Systemd and live-upgrade QEMU guests then loaded virtio networking and
+reached SSH.
