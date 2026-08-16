@@ -1,0 +1,117 @@
+From: Nex package maintainers
+Subject: [PATCH] winpr: select system configuration files from UAPI paths
+Source: no upstream commit; written for Nex against FreeRDP 3.27.1
+Upstream: not submitted. FreeRDP resolves every system configuration file
+ through one compiled sysconfdir, so a distribution cannot ship a default that
+ a boot or an administrator may replace. The change below is generic and names
+ no Nex path, so any Linux system that follows the UAPI configuration files
+ specification can use it.
+
+winpr_GetConfigFilePathVA() built one path below the compiled system
+configuration directory, which is /etc on a normal Linux prefix. Every system
+file that WinPR resolves through it therefore had a single location: HKLM.reg,
+the registry hive that libfreerdp reads while building each settings object to
+pick up machine-wide client and server policy such as the enabled security
+protocols, the desktop geometry, the keyboard layout, and the cache sizes; and
+SAM, the NTLM credential file. A package could not ship a default hive below
+/usr, and a boot-time tool had nowhere to put a temporary one.
+
+Look for a system configuration file below the administrator directory, then
+/run, then <prefix>/lib, and use the first file that exists. The first file
+found wins completely, so an empty administrator file masks the lower ones.
+When no file exists anywhere the administrator path is still returned, so a
+caller that creates the file keeps writing to the machine's own tree and a
+caller that only reads keeps its old missing-file behaviour. The per-user
+lookup is unchanged, and Windows and iOS keep their single platform directory.
+
+--- a/winpr/libwinpr/path/path.c
++++ b/winpr/libwinpr/path/path.c
+@@ -1212,17 +1212,19 @@
+ 	return rc;
+ }
+ 
+-char* winpr_GetConfigFilePathVA(BOOL system, WINPR_FORMAT_ARG const char* filename, va_list ap)
++#if !defined(WIN32) && !defined(__IOS__)
++/* The system configuration roots below the administrator one, highest priority
++ * first: temporary policy that one boot owns, then the immutable package
++ * default. The administrator root itself comes from GetKnownPath, because it
++ * differs per platform. */
++static const char* s_lower_system_config_roots[] = { "/run", WINPR_INSTALL_PREFIX "/lib" };
++#endif
++
++static char* config_file_path_from_root(const char* root, const char* vendor, const char* product,
++                                        SSIZE_T version, WINPR_FORMAT_ARG const char* filename,
++                                        va_list ap)
+ {
+-	eKnownPathTypes id = system ? KNOWN_PATH_SYSTEM_CONFIG_HOME : KNOWN_PATH_XDG_CONFIG_HOME;
+-	const char* vendor = winpr_getApplicationDetailsVendor();
+-	const char* product = winpr_getApplicationDetailsProduct();
+-	const SSIZE_T version = winpr_getApplicationDetailsVersion();
+-
+-	if (!vendor || !product)
+-		return nullptr;
+-
+-	char* config = GetKnownSubPathV(id, "%s", vendor);
++	char* config = GetCombinedPathV(root, "%s", vendor);
+ 	if (!config)
+ 		return nullptr;
+ 
+@@ -1241,6 +1243,58 @@
+ 	return path;
+ }
+ 
++char* winpr_GetConfigFilePathVA(BOOL system, WINPR_FORMAT_ARG const char* filename, va_list ap)
++{
++	eKnownPathTypes id = system ? KNOWN_PATH_SYSTEM_CONFIG_HOME : KNOWN_PATH_XDG_CONFIG_HOME;
++	const char* vendor = winpr_getApplicationDetailsVendor();
++	const char* product = winpr_getApplicationDetailsProduct();
++	const SSIZE_T version = winpr_getApplicationDetailsVersion();
++
++	if (!vendor || !product)
++		return nullptr;
++
++	char* root = GetKnownPath(id);
++	if (!root)
++		return nullptr;
++
++	va_list copy = WINPR_C_ARRAY_INIT;
++	va_copy(copy, ap);
++	char* first = config_file_path_from_root(root, vendor, product, version, filename, copy);
++	va_end(copy);
++	free(root);
++
++	if (!system || !first)
++		return first;
++
++#if !defined(WIN32) && !defined(__IOS__)
++	if (winpr_PathFileExists(first))
++		return first;
++
++	for (size_t x = 0; x < ARRAYSIZE(s_lower_system_config_roots); x++)
++	{
++		va_copy(copy, ap);
++		char* path = config_file_path_from_root(s_lower_system_config_roots[x], vendor, product,
++		                                        version, filename, copy);
++		va_end(copy);
++
++		if (!path)
++			continue;
++
++		if (winpr_PathFileExists(path))
++		{
++			free(first);
++			return path;
++		}
++
++		free(path);
++	}
++#endif
++
++	/* Nothing exists yet, so name the administrator file. A caller that
++	 * creates it then writes machine state to the machine's own tree. */
++	return first;
++}
++
+ char* winpr_GetConfigFilePath(BOOL system, const char* filename)
+ {
+ 	if (!filename)

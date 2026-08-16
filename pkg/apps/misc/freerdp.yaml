@@ -6,14 +6,19 @@ package:
   version: 3.27.1
   description: Remote Desktop Protocol client tools
   homepage: https://www.freerdp.com/
-  checksum: 47a3ce54853011e8713fe01f358e6c21b75e21a6a3b860a88b53ee667d2445ca
+  checksum: a82ea8ae449baea5d345e91d6e7a8fafc68fe9512f76e5ad6e7bcbe37631c303
 
 sources:
 - name: freerdp
   url: https://github.com/FreeRDP/FreeRDP/archive/refs/tags/3.27.1.tar.gz
   sha256: 929ac6a5a8651fcf524e0f061aa7e0186e25eae5af2096525f99f6f7a376fc86
+- name: uapi_config
+  file: pkg/apps/misc/freerdp-uapi-config.patch
+  sha256: 8df2dee5a62252003bf82a9a9c5357ae801eeda22051dbae70df412e65e4b359
 
 dependencies:
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gmp
@@ -71,7 +76,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [12308:165900, 41414:219813, 90968:259743, 152967:274760, 202604:279251, 252286:281791, 305949:286705, 380374:295530, 454986:304680, 504274:468949]
+  profile: [12349:1929, 41297:2555, 90890:2884, 153112:3140, 202791:3335, 252227:3500, 305983:3674, 380541:3959, 455334:4250, 504376:35830]
 
   script: |
     set -eu
@@ -80,8 +85,10 @@ build:
     CXXFLAGS=${CXXFLAGS/-flto=auto/}
     LDFLAGS=${LDFLAGS/-flto=auto/}
 
-    tar --no-same-owner -xzf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    tar --no-same-owner -xzf /${SOURCE_freerdp} -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
@@ -134,6 +141,92 @@ build:
 
     cmake --build build
     DESTDIR="${OUT_DIR}" cmake --install build
+
+    # HKLM.reg holds machine-wide client policy, so libfreerdp must read it
+    # from /etc, then /run, then /usr/lib. Each tier names a different
+    # DesktopWidth, and the probe prints the width that a real settings object
+    # ended up with.
+    hive_admin=/etc/FreeRDP/FreeRDP/HKLM.reg
+    hive_runtime=/run/FreeRDP/FreeRDP/HKLM.reg
+    hive_vendor=/usr/lib/FreeRDP/FreeRDP/HKLM.reg
+
+    mkdir -p "$(dirname "${hive_admin}")" "$(dirname "${hive_runtime}")" \
+        "$(dirname "${hive_vendor}")"
+    rm -f "${hive_admin}" "${hive_runtime}" "${hive_vendor}"
+
+    cat > "${WORK_DIR}/freerdp-uapi-probe.c" <<'PROBE'
+    #include <freerdp/settings.h>
+    #include <stdio.h>
+
+    int main(void) {
+      rdpSettings *settings = freerdp_settings_new(0);
+
+      if (!settings) {
+        return 2;
+      }
+
+      printf("%u\n", freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth));
+      freerdp_settings_free(settings);
+      return 0;
+    }
+    PROBE
+
+    gcc ${CFLAGS} ${LDFLAGS} -o "${WORK_DIR}/freerdp-uapi-probe" \
+        "${WORK_DIR}/freerdp-uapi-probe.c" \
+        -I"${OUT_DIR}/usr/include/freerdp3" \
+        -I"${OUT_DIR}/usr/include/winpr3" \
+        -L"${OUT_DIR}/usr/lib" -lfreerdp3 -lwinpr3
+
+    write_hive() {
+        mkdir -p "$(dirname "$1")"
+        printf '[HKEY_LOCAL_MACHINE\\Software\\FreeRDP\\FreeRDP\\Client]\n' > "$1"
+        printf '"DesktopWidth"=dword:%s\n' "$2" >> "$1"
+    }
+
+    probe_width() {
+        LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" HOME="${WORK_DIR}" \
+            "${WORK_DIR}/freerdp-uapi-probe"
+    }
+
+    expect_width() {
+        actual=$(probe_width)
+        if [ "${actual}" != "$1" ]; then
+            printf 'freerdp UAPI smoke: expected width %s, got %s\n' \
+                "$1" "${actual}" >&2
+            exit 1
+        fi
+    }
+
+    # With no hive anywhere the compiled default stands. Every tier value below
+    # differs from it, so a tier that is silently ignored cannot pass.
+    default_width=$(probe_width)
+    if [ "${default_width}" = 1201 ] || [ "${default_width}" = 1202 ] \
+        || [ "${default_width}" = 1203 ]; then
+        printf 'freerdp UAPI smoke: default width %s collides with a tier value\n' \
+            "${default_width}" >&2
+        exit 1
+    fi
+
+    write_hive "${hive_vendor}" 1201
+    expect_width 1201
+
+    write_hive "${hive_runtime}" 1202
+    expect_width 1202
+
+    write_hive "${hive_admin}" 1203
+    expect_width 1203
+
+    # An empty administrator hive wins completely, so it masks both lower
+    # tiers and the client falls back to its compiled default.
+    : > "${hive_admin}"
+    expect_width "${default_width}"
+
+    rm -f "${hive_admin}" "${hive_runtime}" "${hive_vendor}"
+    expect_width "${default_width}"
+
+    rm -f "${WORK_DIR}/freerdp-uapi-probe" "${WORK_DIR}/freerdp-uapi-probe.c"
+
+    printf 'freerdp UAPI smoke: all three hive tiers and the mask behaved\n'
 
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
