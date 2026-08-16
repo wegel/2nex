@@ -6,12 +6,15 @@ package:
   version: "2.22"
   description: Internet Wireless Daemon - modern WiFi daemon from Intel
   homepage: https://git.kernel.org/pub/scm/network/wireless/iwd.git
-  checksum: ee00589913c74378b12535d3af8c307056e301cd6f76952cf0603e060217b684
+  checksum: 855d3981ef2cc3b9d22835967b7def71b3b706c41ef8a883899344f6d79a0990
 
 sources:
 - name: iwd
   url: https://mirrors.edge.kernel.org/pub/linux/network/wireless/iwd-2.22.tar.xz
   sha256: 2c41c5da9924b90f8383b293b0c0b3d0bfb34fdc8822d8d0d37ec100707f263e
+- name: uapi_config
+  file: pkg/net/wifi/iwd-uapi-config.patch
+  sha256: 9e0d2f71cc3f86bde72aab122258d54bde1f6133c18783e0e992f7aec7b5fdd5
 
 dependencies:
 - name: bash
@@ -64,15 +67,18 @@ dependencies:
   commit: x86_64/pkg/libs/system/readline/8.2/bundles/dev
 - name: systemd
   commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4113:78370, 8222:161557, 11148:179774]
+  profile: [4114:998, 8220:2273, 12383:3935, 13992:3981]
 
   script: |
     set -eux
     tar --no-same-owner -xf /${SOURCE_iwd} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE_uapi_config}
 
     ./configure --prefix=/usr \
       --sysconfdir=/etc \
@@ -87,9 +93,45 @@ build:
     make
     make DESTDIR="${OUT_DIR}" install
 
-    # create default config directory
-    mkdir -p ${OUT_DIR}/etc/iwd
-    mkdir -p ${OUT_DIR}/var/lib/iwd
+    strings "${OUT_DIR}/usr/lib/iwd/iwd" \
+      | grep -Fx '/etc/iwd:/run/iwd:/usr/lib/iwd'
+    ! grep -Fq 'ConfigurationDirectory=' \
+      "${OUT_DIR}/usr/lib/systemd/system/iwd.service"
+
+    smoke_root="${WORK_DIR}/uapi-smoke"
+    mkdir -p \
+      "${smoke_root}/etc/iwd" \
+      "${smoke_root}/run/iwd" \
+      "${smoke_root}/usr/lib/iwd" \
+      "${smoke_root}/state"
+
+    assert_config() {
+      expected=$1
+      rm -f "${smoke_root}/iwd.log"
+      set +e
+      CONFIGURATION_DIRECTORY="${smoke_root}/etc/iwd:${smoke_root}/run/iwd:${smoke_root}/usr/lib/iwd" \
+        STATE_DIRECTORY="${smoke_root}/state" \
+        timeout 2 "${OUT_DIR}/usr/lib/iwd/iwd" \
+        > "${smoke_root}/iwd.log" 2>&1
+      status=$?
+      set -e
+      test "${status}" -eq 0 || test "${status}" -eq 1 \
+        || test "${status}" -eq 124
+      grep -F "Loaded configuration from ${expected}/main.conf" \
+        "${smoke_root}/iwd.log"
+    }
+
+    printf '%s\n' '[General]' 'EnableNetworkConfiguration=true' \
+      > "${smoke_root}/usr/lib/iwd/main.conf"
+    assert_config "${smoke_root}/usr/lib/iwd"
+    printf '%s\n' '[General]' 'EnableNetworkConfiguration=false' \
+      > "${smoke_root}/run/iwd/main.conf"
+    assert_config "${smoke_root}/run/iwd"
+    printf '%s\n' '[General]' 'EnableNetworkConfiguration=true' \
+      > "${smoke_root}/etc/iwd/main.conf"
+    assert_config "${smoke_root}/etc/iwd"
+    : > "${smoke_root}/etc/iwd/main.conf"
+    assert_config "${smoke_root}/etc/iwd"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;

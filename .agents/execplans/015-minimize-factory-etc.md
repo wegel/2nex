@@ -175,6 +175,15 @@ required machine state.
   ownership rule, but it must not pretend that a flat assembly performs the
   Nex-structured first-boot protocol.
 
+- Observation: IWD 2.22 already parses a colon-separated configuration
+  directory list, but its service unit replaces the compiled path with one
+  Systemd-created `/etc/iwd` directory.
+  Evidence: `src/main.c` splits `CONFIGURATION_DIRECTORY` and loads the first
+  `main.conf`; `src/iwd.service.in` supplied `ConfigurationDirectory=iwd`.
+  The patched package removed that unit setting and four strict builds loaded
+  vendor, runtime, administrator, and empty administrator fixtures from the
+  intended tier.
+
 ## Decision Log
 
 - Decision: Keep the accepted factory path list in
@@ -201,6 +210,14 @@ required machine state.
   one explicit or user file, then one complete system file. Three direct read
   attempts preserve that model and make empty-file masking unambiguous without
   another runtime library.
+  Date/Author: 2026-08-16 / Ralph
+
+- Decision: Use IWD's existing colon-separated directory reader with the
+  compiled order `/etc/iwd:/run/iwd:/usr/lib/iwd`.
+  Rationale: IWD selects one complete `main.conf`, so its current reader
+  already provides correct precedence and empty-file masking. Removing
+  `ConfigurationDirectory=iwd` lets the service use the compiled list and
+  leaves `StateDirectory=iwd` responsible only for mutable Wi-Fi state.
   Date/Author: 2026-08-16 / Ralph
 
 - Decision: Treat factory files as one-time seeds, never as a fourth reader
