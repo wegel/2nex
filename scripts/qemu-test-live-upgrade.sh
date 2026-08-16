@@ -6,15 +6,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 NEX_BIN="${NEX_BIN:-$ROOT_DIR/src/cli/target/debug/nex}"
 TEST_IDENTITY_HELPER="$SCRIPT_DIR/prepare-qemu-test-identity.sh"
+ZUB_BIN="${ZUB_BIN:-zub}"
 ZUB_REPO="${ZUB_REPO:-$ROOT_DIR/.nex/repo}"
-FROM_REF="${FROM_REF:-systems/desktop-vwl/0.0.1}"
-TO_REF="${TO_REF:-systems/desktop-vwl-nvidia-580/0.0.1}"
+FROM_REF="${FROM_REF:-systems/nex-systemd/0.0.1}"
+TO_REF="${TO_REF:-systems/desktop-vwl/0.0.1}"
 SSH_PORT="${SSH_PORT:-10024}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-240}"
 MEMORY="${MEMORY:-4096}"
 SMP="${SMP:-2}"
 KEEP_WORK="${KEEP_LIVE_UPGRADE_WORK:-0}"
-HARDLINK_PROBE_PATH="${HARDLINK_PROBE_PATH:-usr/share/factory/etc/os-release}"
+HARDLINK_PROBE_PATH="${HARDLINK_PROBE_PATH:-usr/lib/os-release}"
 
 WORK_DIR="${WORK_DIR:-$ROOT_DIR/.nex/tmp/live-upgrade}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$ROOT_DIR/.nex/tmp/live-upgrade-artifacts}"
@@ -70,7 +71,7 @@ require_tools() {
     need_tool ssh-keygen
     need_tool truncate
     need_tool "$TEST_IDENTITY_HELPER"
-    need_tool zub
+    need_tool "$ZUB_BIN"
 }
 
 find_ovmf_code() {
@@ -90,7 +91,7 @@ find_ovmf_code() {
 metadata_value() {
     local ref=$1
     local key=$2
-    zub --repo "$ZUB_REPO" show "$ref" 2>/dev/null |
+    "$ZUB_BIN" --repo "$ZUB_REPO" show "$ref" 2>/dev/null |
         awk -v key="${key}:" '$1 == key { print $2; exit }'
 }
 
@@ -102,7 +103,7 @@ checksum_for_ref() {
         checksum=$(metadata_value "$ref" "nex.build.checksum")
     fi
     if [[ -z "$checksum" ]]; then
-        checksum=$(zub --repo "$ZUB_REPO" rev-parse "$ref" 2>/dev/null || true)
+        checksum=$("$ZUB_BIN" --repo "$ZUB_REPO" rev-parse "$ref" 2>/dev/null || true)
     fi
     [[ -n "$checksum" ]] || die "could not get checksum for $ref"
     printf '%s\n' "$checksum"
@@ -110,7 +111,7 @@ checksum_for_ref() {
 
 ensure_ref() {
     local ref=$1
-    zub --repo "$ZUB_REPO" rev-parse "$ref" >/dev/null 2>&1 ||
+    "$ZUB_BIN" --repo "$ZUB_REPO" rev-parse "$ref" >/dev/null 2>&1 ||
         die "$ref not found in $ZUB_REPO"
 }
 
@@ -177,18 +178,19 @@ build_guest_repo() {
     local dest_repo=$1
     local remote_repo=$2
 
-    zub init "$dest_repo" >/dev/null
+    "$ZUB_BIN" init "$dest_repo" >/dev/null
     write_zub_config "$dest_repo" "/var/nex/upgrade-source"
 
-    zub init "$remote_repo" >/dev/null
-    zub --repo "$remote_repo" pull "$ZUB_REPO" "$TO_REF" >/dev/null
+    "$ZUB_BIN" init "$remote_repo" >/dev/null
+    "$ZUB_BIN" --repo "$remote_repo" pull "$ZUB_REPO" "$TO_REF" >/dev/null
 }
 
 prepare_qemu_network() {
     local var_content=$1
     local connection_dir="$var_content/etc/NetworkManager/system-connections"
+    local networkd_dir="$var_content/etc/systemd/network"
 
-    mkdir -p "$var_content/etc/modules-load.d" "$connection_dir"
+    mkdir -p "$var_content/etc/modules-load.d" "$connection_dir" "$networkd_dir"
     printf '%s\n' virtio_net > "$var_content/etc/modules-load.d/00-nex-qemu-network.conf"
     cat > "$connection_dir/nex-qemu-test.nmconnection" <<'EOF'
 [connection]
@@ -205,17 +207,26 @@ method=auto
 method=disabled
 EOF
     chmod 0600 "$connection_dir/nex-qemu-test.nmconnection"
+
+    cat > "$networkd_dir/20-nex-qemu-test.network" <<'EOF'
+[Match]
+Name=en*
+
+[Network]
+DHCP=yes
+EOF
 }
 
 stage_root_and_var() {
-    local from_checksum=$1
-    local root_content=$2
-    local var_content=$3
-    local deploy_dir="$root_content/nex/deployments/${from_checksum}.0"
+    local source_ref=$1
+    local source_checksum=$2
+    local root_content=$3
+    local var_content=$4
+    local deploy_dir="$root_content/nex/deployments/${source_checksum}.0"
     local factory_etc
 
     mkdir -p "$deploy_dir"
-    zub --repo "$ZUB_REPO" checkout --copy "$FROM_REF" "$deploy_dir"
+    "$ZUB_BIN" --repo "$ZUB_REPO" checkout --copy "$source_ref" "$deploy_dir"
 
     mkdir -p \
         "$root_content/nex/staging" \
@@ -224,7 +235,7 @@ stage_root_and_var() {
         "$root_content/dev" \
         "$root_content/run" \
         "$root_content/tmp"
-    ln -sfn "deployments/${from_checksum}.0" "$root_content/nex/current"
+    ln -sfn "deployments/${source_checksum}.0" "$root_content/nex/current"
     ln -sfn "current/nex/pkg" "$root_content/nex/pkg"
     ln -sfn "current/nex/db" "$root_content/nex/db"
 
@@ -247,9 +258,9 @@ stage_root_and_var() {
         "$deploy_dir/nex/users" \
         "$deploy_dir/nex/manifests"
 
-    ln -sf "nex/deployments/${from_checksum}.0/usr" "$root_content/usr"
+    ln -sf "nex/deployments/${source_checksum}.0/usr" "$root_content/usr"
     ln -sf /usr/lib "$root_content/lib"
-    ln -sf "nex/deployments/${from_checksum}.0/lib64" "$root_content/lib64"
+    ln -sf "nex/deployments/${source_checksum}.0/lib64" "$root_content/lib64"
     ln -sf /usr/bin "$root_content/bin"
     ln -sf /usr/bin "$root_content/sbin"
     ln -sf /var/etc "$root_content/etc"
@@ -281,6 +292,13 @@ stage_root_and_var() {
     if [[ ! -d "$factory_etc" ]]; then
         factory_etc="$deploy_dir/etc"
     fi
+    if [[ "$source_ref" == "$FROM_REF" ]]; then
+        printf '%s\n' 'version-one machine seed' \
+            > "$factory_etc/nex-upgrade-retired-seed"
+        ln -s \
+            /nex/pkg/core/init/systemd/257.5/legacy123/usr/share/factory/etc/issue \
+            "$var_content/etc/issue"
+    fi
     "$TEST_IDENTITY_HELPER" "$factory_etc" "$var_content" "$ASSERT_KEY.pub" root
     prepare_qemu_network "$var_content"
 
@@ -300,7 +318,9 @@ create_esp() {
 }
 
 build_disk() {
-    local from_checksum=$1
+    local source_ref=$1
+    local source_checksum=$2
+    local reset_artifacts=${3:-1}
     local root_content="$WORK_DIR/root-content"
     local var_content="$WORK_DIR/var-content"
     local esp_img="$WORK_DIR/esp.img"
@@ -317,19 +337,24 @@ build_disk() {
     local var_sectors
     local disk_size_mb
 
-    rm -rf "$WORK_DIR" "$ARTIFACT_DIR"
+    rm -rf "$WORK_DIR"
+    if [[ "$reset_artifacts" == 1 ]]; then
+        rm -rf "$ARTIFACT_DIR"
+    fi
     mkdir -p "$root_content" "$var_content" "$ARTIFACT_DIR"
-    : > "$SERIAL_LOG"
-    : > "$PROBE_LOG"
-    : > "$QEMU_LOG"
+    if [[ "$reset_artifacts" == 1 ]]; then
+        : > "$SERIAL_LOG"
+        : > "$PROBE_LOG"
+        : > "$QEMU_LOG"
+    fi
 
     ensure_assert_key
     log "building bootloader"
     (cd "$BOOTLOADER_SRC" && cargo build) >/dev/null
     [[ -f "$BOOTLOADER_EFI" ]] || die "bootloader was not created"
 
-    log "staging installed system from $FROM_REF"
-    stage_root_and_var "$from_checksum" "$root_content" "$var_content"
+    log "staging installed system from $source_ref"
+    stage_root_and_var "$source_ref" "$source_checksum" "$root_content" "$var_content"
     create_esp "$esp_img"
 
     remote_repo_mb=$(du -sm "$var_content/nex/upgrade-source" | awk '{ print $1 }')
@@ -460,6 +485,67 @@ run_guest_cmd() {
     ssh_probe "$@" 2>&1 | tee -a "$PROBE_LOG"
 }
 
+assert_vendor_release() {
+    local expected=$1
+
+    run_guest_cmd "hostnamectl status | grep -Fq 'Operating System: ${expected}'"
+}
+
+assert_systemd_network_policy() {
+    run_guest_cmd "
+        set -eu
+        systemctl is-active --quiet systemd-networkd.service
+        test -e /usr/lib/systemd/system/systemd-networkd.service
+        if test -L /usr/lib/systemd/system/systemd-networkd.service; then
+            test \"\$(readlink /usr/lib/systemd/system/systemd-networkd.service)\" != /dev/null
+        fi
+    "
+}
+
+assert_desktop_network_policy() {
+    run_guest_cmd "
+        set -eu
+        systemctl is-active --quiet NetworkManager.service
+        ! systemctl is-active --quiet systemd-networkd.service
+        test \"\$(readlink /usr/lib/systemd/system/systemd-networkd.service)\" = /dev/null
+    "
+}
+
+assert_administrator_state() {
+    run_guest_cmd "
+        set -eu
+        test \"\$(cat /etc/nex-admin-choice)\" = administrator
+        systemd-analyze cat-config systemd/logind.conf \
+            | grep -Fq 'HandlePowerKey=ignore'
+        systemctl restart systemd-logind.service
+        test \"\$(busctl get-property \
+            org.freedesktop.login1 \
+            /org/freedesktop/login1 \
+            org.freedesktop.login1.Manager \
+            HandlePowerKey)\" = 's \"ignore\"'
+    "
+}
+
+assert_adapters() {
+    run_guest_cmd "
+        set -eu
+        printf 'mtab=%s\n' \"\$(readlink /etc/mtab)\"
+        printf 'resolv.conf=%s\n' \"\$(readlink /etc/resolv.conf)\"
+        printf 'ssl/certs=%s\n' \"\$(readlink /etc/ssl/certs)\"
+        mtab_target=\$(readlink /etc/mtab)
+        test \"\$mtab_target\" = /proc/self/mounts ||
+            test \"\$mtab_target\" = ../proc/self/mounts
+        test \"\$(readlink /etc/resolv.conf)\" = /run/systemd/resolve/stub-resolv.conf
+        test \"\$(readlink /etc/ssl/certs)\" = /run/ssl/certs
+        test -e /etc/mtab
+        printf '%s\n' 'mtab resolves'
+        test -e /etc/resolv.conf
+        printf '%s\n' 'resolv.conf resolves'
+        test -e /etc/ssl/certs
+        printf '%s\n' 'ssl/certs resolves'
+    "
+}
+
 assert_deployment_file_materialized() {
     local deployment=$1
 
@@ -506,6 +592,20 @@ run_upgrade_flow() {
     qemu_pid=$QEMU_PID
     assert_current_deployment "${from_checksum}.0"
 
+    assert_vendor_release "nex Linux"
+    assert_systemd_network_policy
+    run_guest_cmd "test \"\$(cat /etc/nex-upgrade-retired-seed)\" = 'version-one machine seed'"
+    run_guest_cmd "test ! -e /etc/issue && test ! -L /etc/issue"
+    run_guest_cmd "
+        set -eu
+        mkdir -p /etc/systemd/logind.conf.d
+        printf '%s\n' '[Login]' 'HandlePowerKey=ignore' \
+            > /etc/systemd/logind.conf.d/99-nex-upgrade-test.conf
+        printf '%s\n' administrator > /etc/nex-admin-choice
+    "
+    assert_administrator_state
+    assert_adapters
+
     run_guest_cmd "! zub --repo /nex/repo rev-parse '$TO_REF' >/tmp/to-ref-before 2>&1"
     run_guest_cmd "nex upgrade '$TO_REF' --sysroot /sysroot --repo /nex/repo"
     run_guest_cmd "test -d '/sysroot/nex/deployments/${to_checksum}.1'"
@@ -517,6 +617,12 @@ run_upgrade_flow() {
     boot_and_wait "$ovmf_code" "$((SSH_PORT + 1))"
     qemu_pid=$QEMU_PID
     assert_current_deployment "${to_checksum}.1"
+    assert_vendor_release "nex Desktop"
+    assert_desktop_network_policy
+    run_guest_cmd "test \"\$(cat /etc/nex-upgrade-retired-seed)\" = 'version-one machine seed'"
+    assert_administrator_state
+    assert_adapters
+    run_guest_cmd "test -z \"\$(find /etc -type l -lname '/nex/pkg/*' -print -quit)\""
     run_guest_cmd "nex rollback --yes --sysroot /sysroot"
     run_guest_cmd "test -d '/sysroot/nex/deployments/${from_checksum}.2'"
     assert_rollback_hardlinked "${from_checksum}.0" "${from_checksum}.2"
@@ -526,7 +632,25 @@ run_upgrade_flow() {
     boot_and_wait "$ovmf_code" "$((SSH_PORT + 2))"
     qemu_pid=$QEMU_PID
     assert_current_deployment "${from_checksum}.2"
+    assert_vendor_release "nex Linux"
+    assert_systemd_network_policy
+    run_guest_cmd "test \"\$(cat /etc/nex-upgrade-retired-seed)\" = 'version-one machine seed'"
+    assert_administrator_state
+    assert_adapters
     run_guest_cmd "nex deployments --path /sysroot/nex/deployments"
+    stop_guest "$qemu_pid"
+
+    log "building and booting a fresh version 2 machine"
+    build_disk "$TO_REF" "$to_checksum" 0
+    boot_and_wait "$ovmf_code" "$((SSH_PORT + 3))"
+    qemu_pid=$QEMU_PID
+    assert_current_deployment "${to_checksum}.0"
+    assert_vendor_release "nex Desktop"
+    assert_desktop_network_policy
+    run_guest_cmd "test ! -e /etc/nex-upgrade-retired-seed"
+    run_guest_cmd "test ! -e /etc/nex-admin-choice"
+    run_guest_cmd "test ! -e /etc/systemd/logind.conf.d/99-nex-upgrade-test.conf"
+    assert_adapters
     stop_guest "$qemu_pid"
 
     printf 'LIVE-UPGRADE-PASS\n' | tee -a "$PROBE_LOG"
@@ -554,7 +678,7 @@ main() {
     log "from checksum: $from_checksum"
     log "to checksum:   $to_checksum"
 
-    build_disk "$from_checksum"
+    build_disk "$FROM_REF" "$from_checksum"
     run_upgrade_flow "$ovmf_code" "$from_checksum" "$to_checksum"
     print_logs
 }

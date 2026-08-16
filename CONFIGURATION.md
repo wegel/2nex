@@ -69,6 +69,31 @@ replace them.
 Factory files are seeds, not another vendor-default search tree. Programs do
 not read `/usr/share/factory/etc` directly.
 
+## Provisioners Supply Machine Choices
+
+`nex-install --provision ETC_TREE` copies an explicit set of ordinary `/etc`
+files after it copies the selected deployment's factory seeds. The tree uses
+paths relative to `/etc`. A provisioner can supply:
+
+- `hostname`, `hosts`, `localtime`, `locale.conf`, `vconsole.conf`, and
+  `fstab`;
+- `passwd`, `group`, and `shadow` for the administrator account and other
+  local accounts;
+- NetworkManager connections below `NetworkManager/system-connections/`;
+- Systemd network files below `systemd/network/`.
+
+The installer rejects every other path and every special file. It accepts a
+symlink only for `localtime`, and that link must point below
+`/usr/share/zoneinfo`. The installer forces mode `0600` on `shadow` and
+NetworkManager connection files, sets other regular files to mode `0644`, and
+makes root own every installed file and link. Files in this tree replace
+same-named factory seeds before the machine first boots.
+
+A reusable assembly may omit any choice that has a safe program fallback. For
+example, Systemd can boot without `locale.conf` or `vconsole.conf`. A site that
+needs a specific language or console layout supplies those standard files in
+its provision tree.
+
 ## Outside Programs Get Explicit Adapters
 
 Some users will add a program that Nex does not build or patch. Such a program

@@ -5,7 +5,7 @@ system:
   version: 0.0.1
   description: Minimal bootable installer for nex systems
   nex_structure: true
-  checksum: 499b0b54a68b50427488a1b001a719b2c449c8bb64f50b55b630c162a8ba0c50
+  checksum: adf0be5320e0f008774dd9b2c568b97dc10e63f7aa85b087d469d2ca20f5d879
 
 overlays:
 - asm/installer/installer-overlay.yaml
@@ -71,3 +71,12 @@ build:
     # directories for runtime
     mkdir -p /target/{proc,sys,dev,run,tmp,mnt}
     mkdir -p /target/run/installer
+
+    test -f /target/usr/lib/os-release
+    grep -Fq 'PRETTY_NAME="nex Installer"' /target/usr/lib/os-release
+    test ! -e /target/etc/os-release
+    test -f /target/etc/passwd
+    test -f /target/etc/group
+    test -f /target/etc/shadow
+    grep -Fq 'seed_factory_etc' /target/usr/bin/nex-install
+    grep -Fq -- '--provision ETC_TREE' /target/usr/bin/nex-install

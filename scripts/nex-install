@@ -11,6 +11,7 @@ ESP_SIZE="512M"
 ROOT_SIZE=""
 ASSUME_YES=0
 ROOT_MARGIN_GIB=4
+PROVISION_DIR=""
 
 die() {
     printf "error: %s\n" "$*" >&2
@@ -353,6 +354,115 @@ url = "$url"
 EOF
 }
 
+provision_path_allowed() {
+    relative=$1
+    case "$relative" in
+        hostname|hosts|localtime|locale.conf|vconsole.conf|fstab|passwd|group|shadow)
+            return 0
+            ;;
+        NetworkManager/system-connections/*.nmconnection)
+            name=${relative#NetworkManager/system-connections/}
+            case "$name" in
+                ""|*/*|.nmconnection) return 1 ;;
+                *) return 0 ;;
+            esac
+            ;;
+        systemd/network/*.network|systemd/network/*.netdev|systemd/network/*.link)
+            name=${relative#systemd/network/}
+            case "$name" in
+                ""|*/*|.network|.netdev|.link) return 1 ;;
+                *) return 0 ;;
+            esac
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+provision_directory_allowed() {
+    case "$1" in
+        NetworkManager|NetworkManager/system-connections|systemd|systemd/network)
+            return 0
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+validate_provision_file() {
+    source=$1
+    relative=$2
+
+    provision_path_allowed "$relative" || \
+        die "provision path is not allowed: $relative"
+
+    if [ -L "$source" ]; then
+        [ "$relative" = localtime ] || \
+            die "only localtime may be a provisioned symlink: $relative"
+        link=$(readlink "$source")
+        case "$link" in
+            /usr/share/zoneinfo/|*/../*|*/./*|*//*)
+                die "localtime must use a canonical path below /usr/share/zoneinfo: $link"
+                ;;
+            /usr/share/zoneinfo/*) ;;
+            *) die "localtime must point below /usr/share/zoneinfo: $link" ;;
+        esac
+    fi
+}
+
+seed_factory_etc() {
+    deployment=$1
+    target_etc=$2
+    factory="$deployment/usr/share/factory/etc"
+    if [ ! -d "$factory" ]; then
+        factory="$deployment/etc"
+    fi
+    [ -d "$factory" ] || return 0
+    cp -a "$factory/." "$target_etc/"
+}
+
+copy_provision_tree() {
+    provision_dir=$1
+    target_etc=$2
+
+    [ -d "$provision_dir" ] || die "provision directory not found: $provision_dir"
+    # Check the complete tree before changing the target so a bad entry cannot
+    # leave a partially applied machine configuration.
+    while IFS= read -r -d '' source; do
+        relative=${source#"$provision_dir"/}
+        if [ -L "$source" ]; then
+            validate_provision_file "$source" "$relative"
+        elif [ -d "$source" ]; then
+            provision_directory_allowed "$relative" || \
+                die "provision directory is not allowed: $relative"
+        elif [ -f "$source" ]; then
+            validate_provision_file "$source" "$relative"
+        else
+            die "provision tree contains an unsupported file: $relative"
+        fi
+    done < <(find "$provision_dir" -mindepth 1 -print0)
+
+    while IFS= read -r -d '' source; do
+        relative=${source#"$provision_dir"/}
+        destination="$target_etc/$relative"
+        [ ! -d "$destination" ] || \
+            die "provision file would replace a directory: $relative"
+        mkdir -p "$(dirname "$destination")"
+        rm -f "$destination"
+        cp -a "$source" "$destination"
+
+        if [ -L "$destination" ]; then
+            chown -h 0:0 "$destination"
+        else
+            chown 0:0 "$destination"
+            case "$relative" in
+                shadow|NetworkManager/system-connections/*)
+                    chmod 600 "$destination"
+                    ;;
+                *) chmod 644 "$destination" ;;
+            esac
+        fi
+    done < <(find "$provision_dir" -mindepth 1 \( -type f -o -type l \) -print0)
+}
+
 toml_escape() {
     printf "%s" "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
 }
@@ -401,7 +511,11 @@ copy_system() {
     fi
     seed_installer_remotes /run/sysroot
 
-    cp -a "/run/sysroot${deploy_dir}/etc/." /run/sysroot/var/etc/
+    seed_factory_etc "/run/sysroot${deploy_dir}" /run/sysroot/var/etc
+    if [ -n "$PROVISION_DIR" ]; then
+        step "Applying machine provision files"
+        copy_provision_tree "$PROVISION_DIR" /run/sysroot/var/etc
+    fi
     touch /run/sysroot/var/etc/.initialized
 
     step "Creating deployment links"
@@ -459,8 +573,13 @@ main() {
                 ROOT_SIZE=$2
                 shift 2
                 ;;
+            --provision)
+                [ $# -ge 2 ] || die "--provision requires a directory"
+                PROVISION_DIR=$2
+                shift 2
+                ;;
             --help|-h)
-                printf "usage: nex-install [--yes] [--root-size SIZE] [disk]\n"
+                printf "usage: nex-install [--yes] [--root-size SIZE] [--provision ETC_TREE] [disk]\n"
                 exit 0
                 ;;
             --*) die "unknown option: $1" ;;
