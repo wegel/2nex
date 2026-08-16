@@ -6,14 +6,19 @@ package:
   version: "643"
   description: A text file viewer
   homepage: https://www.greenwoodsoftware.com/less/
-  checksum: fb5486f427ebac6d9cdc0a6a8e911577b76531e5a280709fe3d3724b81921d2e
+  checksum: 714605869d75eb6bb8024d6cc51cebc4a144b10dd492655db5e56f5d606e03e3
 
 sources:
 - name: less
   url: https://www.greenwoodsoftware.com/less/less-643.tar.gz
   sha256: 2911b5432c836fa084c8a2e68f6cd6312372c026a58faaa98862731c8b6052e8
+- name: uapi_config
+  file: pkg/cli/text/less-uapi-config.patch
+  sha256: c82a30830c5b3c963201b768c3e683a79e88b3d8f2f1f45bc061d149ec2b722f
 
 dependencies:
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gmp
@@ -55,15 +60,77 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4175:17708, 8281:17776, 12392:17810, 16510:29343, 16851:29458]
+  profile: [4225:2203, 8331:2205, 12442:2211, 16560:3137, 16956:3161]
 
   script: |
-    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    tar --no-same-owner -xf ${SOURCE_less} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     ./configure --prefix=/usr --sysconfdir=/etc
     make
     make DESTDIR=$OUT_DIR install
+
+    # The system lesskey file must come from /etc, then /run, then /usr/lib.
+    # Each tier sets LESSOPEN to a different input preprocessor, and the
+    # preprocessor output names the tier that the pager actually selected.
+    mkdir -p /etc /run /usr/lib
+    rm -f /etc/syslesskey /run/syslesskey /usr/lib/syslesskey
+    printf 'plain\n' > "${WORK_DIR}/less-uapi-input"
+
+    write_key() {
+        printf '#env\nLESSOPEN = |echo TIER_%s %%s\n' "$2" > "$1"
+    }
+
+    expect_tier() {
+        expected=$1
+        actual=$(env -u LESSOPEN -u LESSKEYIN_SYSTEM -u LESSKEY_SYSTEM \
+            "${OUT_DIR}/usr/bin/less" "${WORK_DIR}/less-uapi-input" | head -1)
+        case "${actual}" in
+            "${expected}"*) ;;
+            *)
+                printf 'less UAPI smoke: expected %s, got %s\n' \
+                    "${expected}" "${actual}" >&2
+                exit 1
+                ;;
+        esac
+    }
+
+    write_key /usr/lib/syslesskey vendor
+    expect_tier 'TIER_vendor'
+
+    write_key /run/syslesskey runtime
+    expect_tier 'TIER_runtime'
+
+    write_key /etc/syslesskey admin
+    expect_tier 'TIER_admin'
+
+    # An empty administrator file masks both lower tiers, so no preprocessor
+    # runs and the pager shows the input file itself.
+    : > /etc/syslesskey
+    expect_tier 'plain'
+
+    rm -f /etc/syslesskey /run/syslesskey /usr/lib/syslesskey
+    expect_tier 'plain'
+
+    # An explicit override outranks all three tiers.
+    write_key /usr/lib/syslesskey vendor
+    write_key "${WORK_DIR}/explicit-syslesskey" explicit
+    actual=$(env -u LESSOPEN \
+        LESSKEYIN_SYSTEM="${WORK_DIR}/explicit-syslesskey" \
+        "${OUT_DIR}/usr/bin/less" "${WORK_DIR}/less-uapi-input" | head -1)
+    case "${actual}" in
+        TIER_explicit*) ;;
+        *)
+            printf 'less UAPI smoke: LESSKEYIN_SYSTEM ignored, got %s\n' \
+                "${actual}" >&2
+            exit 1
+            ;;
+    esac
+    rm -f /usr/lib/syslesskey
+
+    printf 'less UAPI smoke: all tiers, mask, and override behaved\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true

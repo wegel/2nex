@@ -1,0 +1,91 @@
+From: Nex package maintainers
+Subject: [PATCH] decode: search the system lesskey file in UAPI order
+Source: downstream
+Upstream: not submitted; needs agreement on Linux vendor and transient paths
+
+Less reads one system-wide lesskey file from the configured system
+configuration directory. A distribution that wants to ship a default key map
+therefore has to write into the administrator's directory, and a boot-time tool
+has no place to put a temporary map at all.
+
+Look for the system lesskey file in the administrator directory, then in
+`/run`, then in `/usr/lib`, and use the first file that opens. The first file
+found wins completely, so an empty higher file masks a lower one for the
+source format. `LESSKEYIN_SYSTEM` and `LESSKEY_SYSTEM` keep their meaning as
+explicit overrides, and the per-user files still overlay whatever the system
+file provided.
+
+--- a/defines.h.in
++++ b/defines.h.in
+@@ -110,9 +110,11 @@
+  * (in the HOME directory).
+  */
+ #define	LESSKEYFILE		".less"
+-#define	LESSKEYFILE_SYS		SYSDIR "/sysless"
+ #define	DEF_LESSKEYINFILE	".lesskey"
+-#define	LESSKEYINFILE_SYS	SYSDIR "/syslesskey"
++#define	LESSKEYFILE_SYS_NAME	"sysless"
++#define	LESSKEYINFILE_SYS_NAME	"syslesskey"
++#define	LESSKEYFILE_SYS		SYSDIR "/" LESSKEYFILE_SYS_NAME
++#define	LESSKEYINFILE_SYS	SYSDIR "/" LESSKEYINFILE_SYS_NAME
+ #define LESSHISTFILE		".lesshst"
+ 
+ 
+--- a/decode.c
++++ b/decode.c
+@@ -322,6 +322,39 @@
+ }
+ 
+ 
++#if USERFILE
++/*
++ * Add a system-wide lesskey file.
++ *
++ * Administrator files live in the configured system configuration directory,
++ * temporary files live in /run, and the vendor default lives in /usr/lib.
++ * Use the first file that opens, so an empty higher file masks lower ones.
++ * An explicit environment variable still overrides all three.
++ */
++static int add_systable(int (*call_lesskey)(char *, int), char *envname, char *basename)
++{
++	static char *const sysdirs[] = { SYSDIR, "/run", "/usr/lib" };
++	char *filename;
++	unsigned int i;
++	int r;
++
++	if (envname != NULL && lgetenv(envname) != NULL)
++		return (add_hometable(call_lesskey, envname, NULL, 1));
++
++	for (i = 0;  i < sizeof(sysdirs) / sizeof(sysdirs[0]);  i++)
++	{
++		filename = dirfile(sysdirs[i], basename, 1);
++		if (filename == NULL)
++			continue;
++		r = (*call_lesskey)(filename, 1);
++		free(filename);
++		return (r);
++	}
++	return (-1);
++}
++#endif
++
++
+ /*
+  * Initialize the command lists.
+  */
+@@ -348,13 +381,13 @@
+ 	 * Try to add tables in system lesskey src file.
+ 	 */
+ #if HAVE_LESSKEYSRC 
+-	if (add_hometable(lesskey_src, "LESSKEYIN_SYSTEM", LESSKEYINFILE_SYS, 1) != 0)
++	if (add_systable(lesskey_src, "LESSKEYIN_SYSTEM", LESSKEYINFILE_SYS_NAME) != 0)
+ #endif
+ 	{
+ 		/*
+ 		 * Try to add the tables in the system lesskey binary file.
+ 		 */
+-		add_hometable(lesskey, "LESSKEY_SYSTEM", LESSKEYFILE_SYS, 1);
++		add_systable(lesskey, "LESSKEY_SYSTEM", LESSKEYFILE_SYS_NAME);
+ 	}
+ 	/*
+ 	 * Try to add tables in the lesskey src file "$HOME/.lesskey".
