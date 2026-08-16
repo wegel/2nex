@@ -221,6 +221,14 @@ required machine state.
   failed with `Unexpected EOF in archive`. Sequential reruns passed. Build
   assemblies with shared `dev:` sources one at a time.
 
+- Observation: old initialized machines retain every former factory path
+  unless early boot migrates that exact old default.
+  Evidence: `nex-populate-etc` previously copied only missing files. The new
+  test starts with legacy release data, an empty `fstab`, package-pinned links,
+  and a redundant PAM adapter, then proves that the helper removes them while
+  preserving changed administrator files and installing the new regular PAM
+  machine policy.
+
 ## Decision Log
 
 - Decision: Keep the accepted factory path list in
@@ -262,6 +270,14 @@ required machine state.
   files and strict JSON signature policy. Adding path order around those
   parsers preserves their format checks, user paths, explicit overrides, and
   registry drop-in merge behavior without a second parser library.
+  Date/Author: 2026-08-16 / Ralph
+
+- Decision: Migrate former vendor defaults only when their path, file type,
+  and content identify a known EP014-era factory artifact.
+  Rationale: a SHA-256 match distinguishes unchanged regular defaults from
+  administrator edits. Exact link-target rules identify stale Systemd package
+  links and redundant PAM adapters. The helper leaves every changed file and
+  every unknown link alone, then applies the ordinary copy-missing rule.
   Date/Author: 2026-08-16 / Ralph
 
 - Decision: Treat factory files as one-time seeds, never as a fourth reader
@@ -709,6 +725,20 @@ Both finished factory inventories exactly match Desktop VWL's 51 accepted
 leaves because their modprobe and module-load policy now lives below
 `/usr/lib`. Full logs are `.nex/tmp/ep015-nvidia-580-build{1,2}.log` and
 `.nex/tmp/ep015-nvidia-current-build{1,2}.log`.
+
+The initramfs migration checkpoint passed:
+
+    rtk sh -n pkg/core/kernel/initramfs-populate-etc.sh pkg/core/kernel/tests/initramfs-populate-etc.sh
+    rtk sh pkg/core/kernel/tests/initramfs-populate-etc.sh
+    rtk ./src/cli/target/debug/nex check pkg/core/kernel/initramfs.yaml
+    rtk ./nex build pkg/core/kernel/initramfs.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk ./nex build pkg/core/kernel/initramfs.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+
+The helper test removed known old defaults and preserved administrator changes.
+Each strict command built twice; all four builds produced
+`d24c1e3e9f31222a42595230d51c81e3bfbe7d63fd54fd182031b0d9e521180c`.
+Full logs are `.nex/tmp/ep015-initramfs-build1.log` and
+`.nex/tmp/ep015-initramfs-build2.log`.
 
 The EP013 baseline Desktop VWL factory tree contains 88 leaves: 58 regular
 files and 30 links, with 31 directories. Its apparent leaf size is 16,350
