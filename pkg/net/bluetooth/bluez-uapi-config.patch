@@ -3,29 +3,25 @@ Subject: [PATCH] bluetoothd: search layered system configuration paths
 Source: https://www.kernel.org/pub/linux/bluetooth/bluez-5.85.tar.xz
 Upstream: Not submitted; this is a generic UAPI configuration proposal.
 
-Keep an explicit --configfile path exact. When systemd supplies
-CONFIGURATION_DIRECTORY, search every directory in its declared order and do
-not fall back outside that explicit list. Otherwise select the first existing
-configuration from the administrator, transient, and vendor trees.
+Keep an explicit --configfile path exact. When a service manager supplies
+CONFIGURATION_DIRECTORY, search every directory in its declared order first,
+then continue through the administrator, transient, and vendor trees. Select
+the first existing configuration file.
 
 Use the same selector for main.conf, both input.conf readers, and
 network.conf. An existing empty file therefore masks lower policy.
----
- Makefile.am                |   2 +-
- Makefile.in                |   6 ++-
- profiles/input/hog.c       |   7 ++-
- profiles/input/manager.c   |   5 ++-
- profiles/network/manager.c |   5 ++-
- src/config-path.h          |  85 +++++++++++++++++++++++++++++++++++
- src/main.c                 |  22 ++--------
- unit/test-config-path.c    | 107 +++++++++++++++++++++++++++++++++++++++++++++
- 8 files changed, 214 insertions(+), 25 deletions(-)
 
-diff --git a/Makefile.am b/Makefile.am
-index 9f06d60..9ca8219 100644
+Fall back past CONFIGURATION_DIRECTORY. The installed bluetooth.service sets
+ConfigurationDirectory=bluetooth, so a service manager exports that variable
+as the administrator directory alone. Searching only that list made the
+package default under /usr/lib/bluetooth unreachable on every normal service
+start. Search the exported directories first, then continue through the
+administrator, transient, and vendor trees.
+
+diff -urN a/Makefile.am b/Makefile.am
 --- a/Makefile.am
 +++ b/Makefile.am
-@@ -304,7 +304,7 @@ pkglibexec_PROGRAMS += src/bluetoothd
+@@ -304,7 +304,7 @@
  
  src_bluetoothd_SOURCES = $(builtin_sources) \
  			$(attrib_sources) $(btio_sources) \
@@ -34,11 +30,10 @@ index 9f06d60..9ca8219 100644
  			src/backtrace.h src/backtrace.c \
  			src/rfkill.c src/btd.h src/sdpd.h \
  			src/sdpd-server.c src/sdpd-request.c \
-diff --git a/Makefile.in b/Makefile.in
-index 1b34250..f8a9cf5 100644
+diff -urN a/Makefile.in b/Makefile.in
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -1032,7 +1032,8 @@ am__src_bluetoothd_SOURCES_DIST = plugins/hostname.c \
+@@ -1032,7 +1032,8 @@
  	profiles/audio/csip.c profiles/audio/asha.h \
  	profiles/audio/asha.c attrib/att.h attrib/att-database.h \
  	attrib/att.c attrib/gatt.h attrib/gatt.c attrib/gattrib.h \
@@ -48,7 +43,7 @@ index 1b34250..f8a9cf5 100644
  	src/log.c src/backtrace.h src/backtrace.c src/rfkill.c \
  	src/btd.h src/sdpd.h src/sdpd-server.c src/sdpd-request.c \
  	src/sdpd-service.c src/sdpd-database.c src/gatt-database.h \
-@@ -3337,7 +3338,8 @@ builtin_sources = plugins/hostname.c plugins/autopair.c \
+@@ -3337,7 +3338,8 @@
  builtin_cppflags = $(am__append_27)
  builtin_ldadd = $(am__append_28) $(am__append_31)
  src_bluetoothd_SOURCES = $(builtin_sources) $(attrib_sources) \
@@ -58,8 +53,7 @@ index 1b34250..f8a9cf5 100644
  	src/backtrace.c src/rfkill.c src/btd.h src/sdpd.h \
  	src/sdpd-server.c src/sdpd-request.c src/sdpd-service.c \
  	src/sdpd-database.c src/gatt-database.h src/gatt-database.c \
-diff --git a/profiles/input/hog.c b/profiles/input/hog.c
-index 1f5b82b..02ddd03 100644
+diff -urN a/profiles/input/hog.c b/profiles/input/hog.c
 --- a/profiles/input/hog.c
 +++ b/profiles/input/hog.c
 @@ -29,6 +29,7 @@
@@ -70,7 +64,7 @@ index 1f5b82b..02ddd03 100644
  #include "src/adapter.h"
  #include "src/device.h"
  #include "src/profile.h"
-@@ -225,7 +226,7 @@ static struct btd_profile hog_profile = {
+@@ -225,7 +226,7 @@
  
  static void hog_read_config(void)
  {
@@ -79,7 +73,7 @@ index 1f5b82b..02ddd03 100644
  	GKeyFile *config;
  	GError *err = NULL;
  	bool config_auto_sec;
-@@ -236,6 +237,10 @@ static void hog_read_config(void)
+@@ -236,6 +237,10 @@
  		error("Failed to allocate memory for config");
  		return;
  	}
@@ -90,8 +84,7 @@ index 1f5b82b..02ddd03 100644
  
  	if (!g_key_file_load_from_file(config, filename, 0, &err)) {
  		if (!g_error_matches(err, G_FILE_ERROR, G_FILE_ERROR_NOENT))
-diff --git a/profiles/input/manager.c b/profiles/input/manager.c
-index b0e415f..1ae89da 100644
+diff -urN a/profiles/input/manager.c b/profiles/input/manager.c
 --- a/profiles/input/manager.c
 +++ b/profiles/input/manager.c
 @@ -22,6 +22,7 @@
@@ -102,7 +95,7 @@ index b0e415f..1ae89da 100644
  #include "src/plugin.h"
  #include "src/adapter.h"
  #include "src/device.h"
-@@ -79,10 +80,12 @@ static GKeyFile *load_config_file(const char *file)
+@@ -79,10 +80,12 @@
  
  static int input_init(void)
  {
@@ -116,8 +109,7 @@ index b0e415f..1ae89da 100644
  	if (config) {
  		int idle_timeout;
  		gboolean classic_bonded_only;
-diff --git a/profiles/network/manager.c b/profiles/network/manager.c
-index 51f3825..ca66f40 100644
+diff -urN a/profiles/network/manager.c b/profiles/network/manager.c
 --- a/profiles/network/manager.c
 +++ b/profiles/network/manager.c
 @@ -23,6 +23,7 @@
@@ -128,7 +120,7 @@ index 51f3825..ca66f40 100644
  #include "src/plugin.h"
  #include "src/adapter.h"
  #include "src/device.h"
-@@ -156,9 +157,11 @@ static struct btd_profile nap_profile = {
+@@ -156,9 +157,11 @@
  
  static int network_init(void)
  {
@@ -141,12 +133,10 @@ index 51f3825..ca66f40 100644
  
  	err = bnep_init();
  	if (err) {
-diff --git a/src/config-path.h b/src/config-path.h
-new file mode 100644
-index 0000000..fff8640
---- /dev/null
+diff -urN a/src/config-path.h b/src/config-path.h
+--- a/src/config-path.h
 +++ b/src/config-path.h
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,87 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +#ifndef BLUEZ_CONFIG_PATH_H
 +#define BLUEZ_CONFIG_PATH_H
@@ -223,8 +213,10 @@ index 0000000..fff8640
 +		"/usr/lib/bluetooth",
 +	};
 +
-+	if (service_directories)
-+		return btd_config_path_from_list(path, name, service_directories);
++	if (service_directories &&
++			btd_config_path_from_list(path, name,
++						service_directories))
++		return true;
 +
 +	return btd_config_path_from_dirs(path, name, system_directories,
 +					sizeof(system_directories) /
@@ -232,8 +224,7 @@ index 0000000..fff8640
 +}
 +
 +#endif
-diff --git a/src/main.c b/src/main.c
-index 1c7390e..5d6d685 100644
+diff -urN a/src/main.c b/src/main.c
 --- a/src/main.c
 +++ b/src/main.c
 @@ -39,6 +39,7 @@
@@ -244,7 +235,7 @@ index 1c7390e..5d6d685 100644
  
  #include "shared/att-types.h"
  #include "shared/mainloop.h"
-@@ -248,28 +249,11 @@ static GKeyFile *load_config(const char *name)
+@@ -248,28 +249,11 @@
  {
  	GError *err = NULL;
  	GKeyFile *keyfile;
@@ -275,17 +266,17 @@ index 1c7390e..5d6d685 100644
  
  	keyfile = g_key_file_new();
  
-diff --git a/unit/test-config-path.c b/unit/test-config-path.c
-new file mode 100644
-index 0000000..2434a76
---- /dev/null
+diff -urN a/unit/test-config-path.c b/unit/test-config-path.c
+--- a/unit/test-config-path.c
 +++ b/unit/test-config-path.c
-@@ -0,0 +1,107 @@
+@@ -0,0 +1,124 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +#define _GNU_SOURCE
 +#define CONFIGDIR "/etc/bluetooth"
++#define VENDORDIR "/usr/lib/bluetooth"
 +
 +#include <assert.h>
++#include <errno.h>
 +#include <fcntl.h>
 +#include <limits.h>
 +#include <stdbool.h>
@@ -355,8 +346,7 @@ index 0000000..2434a76
 +	expect_path(path, vendor, name);
 +
 +	assert(setenv("CONFIGURATION_DIRECTORY", admin, 1) == 0);
-+	assert(!btd_config_path(path, name));
-+	assert(path[0] == '\0');
++	assert(!btd_config_path_from_list(path, name, admin));
 +	assert(unsetenv("CONFIGURATION_DIRECTORY") == 0);
 +	assert(unlink(vendor_file) == 0);
 +}
@@ -379,6 +369,22 @@ index 0000000..2434a76
 +	for (i = 0; i < sizeof(names) / sizeof(names[0]); i++)
 +		test_name(root, names[i]);
 +
++	/*
++	 * A service manager that exports CONFIGURATION_DIRECTORY must not hide
++	 * the vendor tier. The installed unit sets that variable to the
++	 * administrator directory, so a package default under /usr/lib must
++	 * still be reachable when the administrator has supplied no file.
++	 */
++	assert(mkdir("/usr", 0755) == 0 || errno == EEXIST);
++	assert(mkdir("/usr/lib", 0755) == 0 || errno == EEXIST);
++	assert(mkdir(VENDORDIR, 0755) == 0 || errno == EEXIST);
++	make_file(VENDORDIR "/main.conf");
++	assert(setenv("CONFIGURATION_DIRECTORY", CONFIGDIR, 1) == 0);
++	assert(btd_config_path(path, "main.conf"));
++	expect_path(path, VENDORDIR, "main.conf");
++	assert(unsetenv("CONFIGURATION_DIRECTORY") == 0);
++	assert(unlink(VENDORDIR "/main.conf") == 0);
++
 +	assert(snprintf(path, sizeof(path), "%s/admin", root) > 0);
 +	assert(rmdir(path) == 0);
 +	assert(snprintf(path, sizeof(path), "%s/run", root) > 0);
@@ -388,5 +394,3 @@ index 0000000..2434a76
 +	assert(rmdir(root) == 0);
 +	return 0;
 +}
--- 
-2.50.1
