@@ -35,15 +35,18 @@ required machine state.
 
 ## Progress
 
-- [ ] Confirm that EP014 is archived, run the Ralph worktree pre-task, list
-  `.agents/knowledge/`, and read configuration, assembly, installer, QEMU,
-  package-testing, and reproducibility notes.
+- [x] (2026-08-16 02:31Z) Confirmed that EP014 is archived, ran the Ralph
+  worktree pre-task, listed `.agents/knowledge/`, and read the configuration,
+  assembly, installer, QEMU, package-testing, and reproducibility notes. The
+  worktree was clean, so it had no pre-task commit candidates or local-only
+  files to classify.
 - [ ] Build or check out fresh roots for every Nex-structured assembly and
   record every factory `/etc` leaf by owner, type, source, and intended
   lifetime. Audit flat assemblies separately.
-- [ ] Add a self-tested repository checker that rejects checksum-pinned factory
-  links and immutable vendor policy in factory `/etc`, with a narrow allowlist
-  for proven machine state and compatibility adapters.
+- [x] (2026-08-16 02:52Z) Added a self-tested finished-root checker and a
+  machine-readable policy table. The checker emits one TSV row per accepted
+  leaf and rejects unclassified files, wrong file types, wrong adapter
+  targets, dangling immutable targets, and checksum-pinned `/nex/pkg` links.
 - [ ] Move each immutable default to a standard vendor path below `/usr`, patch
   its reader when needed, and leave only true machine choices, Systemd
   enablement or masks, and unavoidable stable adapters in factory `/etc`.
@@ -61,6 +64,12 @@ required machine state.
 
 ## Surprises & Discoveries
 
+- Observation: `rtk test -f <path>` invokes the Bash test builtin without the
+  file argument on this host and exits 2 after printing Bash help.
+  Evidence: the prescribed EP014 dependency check failed that way, while
+  `rtk stat .agents/execplans/done/014-make-desktop-vwl-generic.md` found the
+  archived regular file. Use `rtk stat` for this repository file check.
+
 - Observation: The current Desktop VWL deployment itself contains no active
   `/etc` files or links, but its factory tree still contains 88 leaves.
   Evidence: checkout of Desktop VWL checksum
@@ -68,6 +77,44 @@ required machine state.
   found 58 regular files, 30 links, and 31 directories below
   `/usr/share/factory/etc`. The stored deployment's `/etc` had only empty
   directories.
+
+- Observation: EP014 reduced the Desktop VWL baseline from 88 factory leaves
+  to 77, but it did not change the configuration ownership problem.
+  Evidence: fresh checkouts under
+  `.nex/tmp/ep015-baseline.ko361R` contain 27 leaves in Nex Systemd, 77 in
+  Desktop VWL and Desktop Dev, 79 in each Nvidia child, five in the installer,
+  and two in Nex Minimal. Desktop VWL has 51 regular files, 26 links, and
+  14,568 apparent leaf bytes.
+
+- Observation: Systemd's package output supplies six factory files, and the
+  assembly's public tree turns them into package-checksum links.
+  Evidence: `pkg/core/init/systemd.yaml` declares `issue`, `locale.conf`,
+  `nsswitch.conf`, `pam.d/other`, `pam.d/system-auth`, and `vconsole.conf`
+  below `/usr/share/factory/etc`. The new checker rejected the corresponding
+  links in every Systemd-based fresh root.
+
+- Observation: the current first-boot path already preserves machine-owned
+  files during every deployment switch.
+  Evidence: `pkg/core/kernel/initramfs-init.sh` calls
+  `/bin/nex-populate-etc` before it binds `/var/etc` over the selected
+  deployment. `pkg/core/kernel/initramfs-populate-etc.sh` recursively copies a
+  source only when the matching target is absent and never replaces a file,
+  link, or directory that the host already owns.
+
+- Observation: the existing live-upgrade harness uses the real bootloader and
+  Nex CLI for three boots, but it does not test vendor configuration or a
+  fresh version 2 machine.
+  Evidence: `scripts/qemu-test-live-upgrade.sh` boots the old ref, runs
+  `nex upgrade`, boots the new deployment, runs `nex rollback`, and boots the
+  rollback. Its assertions cover deployment names and hardlinks, not reader
+  priority, factory seeds, or a separate fresh-install disk.
+
+- Observation: the four flat roots have a different `/etc` boundary.
+  Evidence: fresh checkouts contain two leaves in Flat Minimal, six in Flat
+  Systemd, 12 in Flat Podman, and 470 in Edgebox. Edgebox's 470 leaves include
+  445 generated certificate-cache entries, 14 service links, and 11 other
+  paths. Raw sorted inventories live under
+  `.nex/tmp/ep015-baseline.ko361R/logs/*-etc.tsv`.
 
 - Observation: Most of the 88 leaves fall into a few concrete groups rather
   than representing 88 independent machine choices.
@@ -108,6 +155,15 @@ required machine state.
   Nex-structured first-boot protocol.
 
 ## Decision Log
+
+- Decision: Keep the accepted factory path list in
+  `scripts/factory-etc-policy.tsv` and make the checker join each built leaf
+  to that table.
+  Rationale: the table gives every accepted path a concrete owner, consumer,
+  source, class, target, and reason. A finished-root scan also catches native
+  package factory outputs and build-script additions that a YAML-only scan
+  would miss.
+  Date/Author: 2026-08-16 / Ralph
 
 - Decision: Treat factory files as one-time seeds, never as a fourth reader
   tier.
@@ -438,6 +494,19 @@ that repository before resuming Nex. Do not replace a real deployment switch
 with a mock merely to avoid fixing the tool.
 
 ## Artifacts and Notes
+
+The initial policy checker passed these focused checks:
+
+    rtk bash -n scripts/check-factory-etc-policy.sh
+    rtk scripts/check-factory-etc-policy.sh --self-test
+
+The self-test accepts machine account state and a documented unit enablement,
+then proves that a copied `os-release`, an undocumented adapter, and an exact
+package-checksum link each fail. `shellcheck` is not installed on this host;
+`rtk shellcheck scripts/check-factory-etc-policy.sh` exited 127. The seven
+fresh-root scans passed only Nex Minimal and rejected the known stale paths in
+all other roots. Their TSV output and concise error files live under
+`.nex/tmp/ep015-baseline.ko361R/logs/`.
 
 The EP013 baseline Desktop VWL factory tree contains 88 leaves: 58 regular
 files and 30 links, with 31 directories. Its apparent leaf size is 16,350
