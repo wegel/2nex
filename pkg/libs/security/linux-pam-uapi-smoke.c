@@ -26,6 +26,7 @@ main(int argc, char **argv)
 	int result = PAM_SUCCESS;
 	int expected = PAM_SUCCESS;
 	int exit_status = EXIT_SUCCESS;
+	const char *tty;
 
 	if (argc < 4) {
 		fprintf(stderr,
@@ -40,6 +41,17 @@ main(int argc, char **argv)
 	result = pam_start(argv[1], "root", &conv, &handle);
 	if (result != PAM_SUCCESS)
 		goto done;
+
+	/*
+	 * pam_securetty decides from the terminal name, so let the caller name
+	 * one. Modules that ignore PAM_TTY are unaffected.
+	 */
+	tty = getenv("PAM_UAPI_TTY");
+	if (tty != NULL) {
+		result = pam_set_item(handle, PAM_TTY, tty);
+		if (result != PAM_SUCCESS)
+			goto done;
+	}
 
 	if (strcmp(argv[2], "auth") == 0 && argc == 4) {
 		if (strcmp(argv[3], "allow") == 0)
