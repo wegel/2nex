@@ -138,6 +138,18 @@ Fix the failure first, or record the hard blocker if the failure needs human
 input. A documentation-only commit does not need a compile check, but its paths,
 commands, and claims must match the repository.
 
+## Command Output
+
+Commands that may print long build, assembly, or test output must write their
+full output to a file. Ralph inspects the command's exit status and searches the
+log for the small set of facts needed for the active plan, such as checksums,
+pass markers, or error lines. Ralph reads larger excerpts only when a command
+fails and the extra context helps diagnose the failure.
+
+Choose a log path under `.nex/tmp/` or another ignored work directory. Do not
+add command logs to Git. Keep short commands and intentionally concise test
+summaries visible when their output helps the human follow the work.
+
 ## Git Rules
 
 Work on the current branch unless the human asks for a different branch.
