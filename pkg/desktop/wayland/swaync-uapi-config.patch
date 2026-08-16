@@ -11,26 +11,28 @@ instead of treating the file selected at startup as an explicit override.
 Add a focused test for the full priority order. This keeps the behavior useful
 on any normal Linux system and makes an empty higher-priority file mask lower
 defaults.
----
- meson.build                       |  8 +++++--
- data/meson.build                  |  2 +-
- src/configModel/configModel.vala |  7 +++---
- src/configPaths.vala             | 46 ++++++++++++++++++++++++++++++++++++++++
- src/constants.vala.in            |  1 +
- src/functions.vala               | 74 ++++++++++++++++------------------------
- src/meson.build                  | 12 ++++++++----
- tests/config-paths-test.vala     | 52 +++++++++++++++++++++++++++++++++++++++++++++
- tests/meson.build                |  8 +++++++
- 9 files changed, 150 insertions(+), 59 deletions(-)
- create mode 100644 src/configPaths.vala
- create mode 100644 tests/config-paths-test.vala
- create mode 100644 tests/meson.build
 
-diff --git a/meson.build b/meson.build
-index 5bb7643..72fba2b 100644
+Point the vendor entry at the XDG base directory. The search list appends the
+application-relative swaync/<file> to every base, so setting VENDOR_CONFIG_DIR
+to the directory that holds the installed files made the vendor candidate
+/usr/share/xdg/swaync/swaync/config.json and the package default unreachable.
+
+diff -urN a/data/meson.build b/data/meson.build
+--- a/data/meson.build
++++ b/data/meson.build
+@@ -23,7 +23,7 @@
+   input : 'style/style.scss',
+   output : 'style.css',
+   install: true,
+-  install_dir: config_path,
++  install_dir: vendor_config_install_dir,
+   command : [
+     sassc,
+     '-t',
+diff -urN a/meson.build b/meson.build
 --- a/meson.build
 +++ b/meson.build
-@@ -13,10 +13,16 @@ gnome = import('gnome')
+@@ -13,10 +13,22 @@
  
  app_resources = []
  
@@ -41,6 +43,12 @@ index 5bb7643..72fba2b 100644
 +else
 +  vendor_config_dir = join_paths(get_option('prefix'), vendor_config_install_dir)
 +endif
++
++# The search list appends the application-relative 'swaync/<file>' to every
++# base, so the vendor entry must be the XDG base directory that contains the
++# installed files rather than the directory holding them.
++vendor_config_search_dir = run_command(
++  'dirname', vendor_config_dir, check : true).stdout().strip()
  
  subdir('data')
  subdir('src')
@@ -48,24 +56,10 @@ index 5bb7643..72fba2b 100644
  
  datadir = get_option('datadir')
  libdir = get_option('libdir')
-diff --git a/data/meson.build b/data/meson.build
-index 48bc63a..9046841 100644
---- a/data/meson.build
-+++ b/data/meson.build
-@@ -23,7 +23,7 @@ style_css = custom_target(
-   input : 'style/style.scss',
-   output : 'style.css',
-   install: true,
--  install_dir: config_path,
-+  install_dir: vendor_config_install_dir,
-   command : [
-     sassc,
-     '-t',
-diff --git a/src/configModel/configModel.vala b/src/configModel/configModel.vala
-index 56f6547..eee4f47 100644
+diff -urN a/src/configModel/configModel.vala b/src/configModel/configModel.vala
 --- a/src/configModel/configModel.vala
 +++ b/src/configModel/configModel.vala
-@@ -262,6 +262,7 @@ namespace SwayNotificationCenter {
+@@ -262,6 +262,7 @@
  
          private static ConfigModel _instance;
          private static string _path = "";
@@ -73,7 +67,7 @@ index 56f6547..eee4f47 100644
  
          /** Get the static singleton */
          public static unowned ConfigModel instance {
-@@ -274,7 +275,7 @@ namespace SwayNotificationCenter {
+@@ -274,7 +275,7 @@
  
          /** Get the static singleton and reload the config */
          public static unowned ConfigModel init (string ? path) {
@@ -82,7 +76,7 @@ index 56f6547..eee4f47 100644
              reload_config ();
              return _instance;
          }
-@@ -283,8 +284,8 @@ namespace SwayNotificationCenter {
+@@ -283,8 +284,8 @@
  
          /** Reloads the config and calls `ModifyNode` before deserializing */
          public static void reload_config (ModifyNode modify_cb = () => {}) {
@@ -93,10 +87,8 @@ index 56f6547..eee4f47 100644
              path = File.new_for_path (path).get_path () ?? path;
              message ("Loading Config: \"%s\"", path);
  
-diff --git a/src/configPaths.vala b/src/configPaths.vala
-new file mode 100644
-index 0000000..16e26e4
---- /dev/null
+diff -urN a/src/configPaths.vala b/src/configPaths.vala
+--- a/src/configPaths.vala
 +++ b/src/configPaths.vala
 @@ -0,0 +1,46 @@
 +namespace SwayNotificationCenter {
@@ -145,8 +137,7 @@ index 0000000..16e26e4
 +        }
 +    }
 +}
-diff --git a/src/constants.vala.in b/src/constants.vala.in
-index 31779bc..9d5672a 100644
+diff -urN a/src/constants.vala.in b/src/constants.vala.in
 --- a/src/constants.vala.in
 +++ b/src/constants.vala.in
 @@ -1,5 +1,6 @@
@@ -156,11 +147,10 @@ index 31779bc..9d5672a 100644
 +    public const string VENDOR_CONFIG_DIR = @VENDOR_CONFIG_DIR@;
      public const uint ANIMATION_DURATION = 400;
  }
-diff --git a/src/functions.vala b/src/functions.vala
-index 7429830..c7b1800 100644
+diff -urN a/src/functions.vala b/src/functions.vala
 --- a/src/functions.vala
 +++ b/src/functions.vala
-@@ -114,38 +114,20 @@ namespace SwayNotificationCenter {
+@@ -114,38 +114,20 @@
  
          public static string get_style_path (owned string ? custom_path,
                                               bool only_system = false) {
@@ -209,7 +199,7 @@ index 7429830..c7b1800 100644
                  stderr.printf (
                      "COULD NOT FIND CSS FILE! REINSTALL THE PACKAGE!\n");
                  Process.exit (1);
-@@ -154,40 +136,20 @@ namespace SwayNotificationCenter {
+@@ -154,40 +136,20 @@
          }
  
          public static string get_config_path (owned string ? custom_path) {
@@ -260,20 +250,19 @@ index 7429830..c7b1800 100644
                  stderr.printf (
                      "COULD NOT FIND CONFIG FILE! REINSTALL THE PACKAGE!\n");
                  Process.exit (1);
-diff --git a/src/meson.build b/src/meson.build
-index 2c26e4c..7e80373 100644
+diff -urN a/src/meson.build b/src/meson.build
 --- a/src/meson.build
 +++ b/src/meson.build
-@@ -16,6 +16,8 @@ version = 'swaync @0@'.format(version)
+@@ -16,6 +16,8 @@
  const_config_data = configuration_data()
  const_config_data.set_quoted('VERSION', version)
  const_config_data.set_quoted('VERSION_NUM', meson.project_version())
-+const_config_data.set_quoted('VENDOR_CONFIG_DIR', vendor_config_dir)
++const_config_data.set_quoted('VENDOR_CONFIG_DIR', vendor_config_search_dir)
 +config_paths_source = files('configPaths.vala')
  constants = configure_file(
    input : 'constants.vala.in',
    output : 'constants.vala',
-@@ -64,6 +66,7 @@ app_sources = [
+@@ -64,6 +66,7 @@
    widget_sources,
    'blankWindow/blankWindow.vala',
    'functions.vala',
@@ -281,7 +270,7 @@ index 2c26e4c..7e80373 100644
    constants,
  ]
  
-@@ -132,12 +135,12 @@ executable('swaync-client',
+@@ -132,12 +135,12 @@
  )
  
  config_data = configuration_data()
@@ -297,13 +286,8 @@ index 2c26e4c..7e80373 100644
 -install_data('configSchema.json', install_dir : config_path)
 +install_data(config_json, install_dir : vendor_config_install_dir)
 +install_data('configSchema.json', install_dir : vendor_config_install_dir)
- install_data('org.erikreider.swaync.gschema.xml',
-   install_dir: join_paths(get_option('datadir'), 'glib-2.0/schemas')
- )
-diff --git a/tests/config-paths-test.vala b/tests/config-paths-test.vala
-new file mode 100644
-index 0000000..87776ee
---- /dev/null
+diff -urN a/tests/config-paths-test.vala b/tests/config-paths-test.vala
+--- a/tests/config-paths-test.vala
 +++ b/tests/config-paths-test.vala
 @@ -0,0 +1,52 @@
 +using SwayNotificationCenter;
@@ -358,10 +342,8 @@ index 0000000..87776ee
 +    Test.add_func ("/config-paths/priority", test_priority);
 +    return Test.run ();
 +}
-diff --git a/tests/meson.build b/tests/meson.build
-new file mode 100644
-index 0000000..7ba0a0b
---- /dev/null
+diff -urN a/tests/meson.build b/tests/meson.build
+--- a/tests/meson.build
 +++ b/tests/meson.build
 @@ -0,0 +1,8 @@
 +config_paths_test = executable(
@@ -372,5 +354,3 @@ index 0000000..7ba0a0b
 +)
 +
 +test('Config path search order', config_paths_test)
--- 
-2.51.0

@@ -6,7 +6,7 @@ package:
   version: 0.10.1
   description: GTK3 notification daemon and control center for Wayland
   homepage: https://github.com/ErikReider/SwayNotificationCenter
-  checksum: 7bff7d16653b7f33fe8774d4fd2a743d78046dd97a68e092792df9d4c7e6e5b1
+  checksum: 6f044cfb9a801ccf967ea4154e336bd9ade7b995b0a807684f737c66588c9332
 
 sources:
 - name: swaync
@@ -14,7 +14,7 @@ sources:
   sha256: 5586d8a679dde5e530cb8b6f0c86abdd0d5e41362fc1c4e56e2211edea0f7a13
 - name: uapi_config_patch
   file: pkg/desktop/wayland/swaync-uapi-config.patch
-  sha256: acac11a8bf35456f3cc01a5c290a04f19cc4429ba1ed7378d1755a01e5aff973
+  sha256: edfe35804b1a0706b41e6928c83bceef7cbd85091f6feb54198af540d733f8db
 
 dependencies:
 - name: bash
@@ -148,7 +148,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [8346:798, 29052:1162, 62652:1544, 104133:1651, 141476:1680, 174686:1714, 207956:1745, 262258:1766, 312156:1805, 344515:4954]
+  profile: [8346:747, 29052:1079, 62693:1465, 104059:1617, 141257:1618, 174436:1636, 208002:1644, 262527:1693, 312156:1699, 344583:4816]
 
   script: |
     set -eu
@@ -185,6 +185,33 @@ build:
     meson test -C build --print-errorlogs
     DESTDIR="${OUT_DIR}" ninja -C build install
     glib-compile-schemas "${OUT_DIR}/usr/share/glib-2.0/schemas"
+
+    # The reader appends the application-relative swaync/<file> to every search
+    # base, so the compiled vendor base must combine with that relative path to
+    # name the files this package actually installs. Read the generated
+    # constants rather than the binary, because that is the value the Vala
+    # sources compile against.
+    constants_file=$(find build -name constants.vala -print -quit)
+    if [ -z "${constants_file}" ]; then
+      printf 'swaync: no generated constants.vala found\n' >&2
+      exit 1
+    fi
+    vendor_base=$(sed -n 's/.*VENDOR_CONFIG_DIR = "\([^"]*\)".*/\1/p' \
+      "${constants_file}" | head -1)
+    if [ "${vendor_base}" != /usr/share/xdg ]; then
+      printf 'swaync: compiled vendor base is "%s", expected /usr/share/xdg\n' \
+        "${vendor_base}" >&2
+      exit 1
+    fi
+    for vendor_file in config.json style.css; do
+      if [ ! -f "${OUT_DIR}${vendor_base}/swaync/${vendor_file}" ]; then
+        printf 'swaync: vendor search path %s/swaync/%s names no installed file\n' \
+          "${vendor_base}" "${vendor_file}" >&2
+        exit 1
+      fi
+    done
+
+    printf 'swaync UAPI smoke: the vendor search base names the installed files\n'
 
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
