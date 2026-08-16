@@ -7,11 +7,19 @@ Select system configuration from admin, runtime, and vendor directories.
 Merge drop-ins by basename, and keep explicit command-line paths exact.
 Install package defaults below /usr and keep host-owned configuration in /etc.
 
+Apply the same selection in ssh-keysign. It checks EnableSSHKeysign before it
+signs with a host key, so reading only the administrator file made that option
+invisible when it came from a drop-in or from the runtime or vendor directory,
+and host-based authentication then failed even though ssh itself had accepted
+the option.
+
 diff --git a/Makefile.in b/Makefile.in
 index 4243006..3c31f9d 100644
+
+diff -urN a/Makefile.in b/Makefile.in
 --- a/Makefile.in
 +++ b/Makefile.in
-@@ -9,6 +9,9 @@ sbindir=@sbindir@
+@@ -9,6 +9,9 @@
  libexecdir=@libexecdir@
  datadir=@datadir@
  datarootdir=@datarootdir@
@@ -21,7 +29,7 @@ index 4243006..3c31f9d 100644
  mandir=@mandir@
  mansubdir=@mansubdir@
  sysconfdir=@sysconfdir@
-@@ -34,6 +37,9 @@ TEST_SHELL=@TEST_SHELL@
+@@ -34,6 +37,9 @@
  BUILDDIR=@abs_top_builddir@
  
  PATHS= -DSSHDIR=\"$(sysconfdir)\" \
@@ -31,7 +39,7 @@ index 4243006..3c31f9d 100644
  	-D_PATH_SSH_PROGRAM=\"$(SSH_PROGRAM)\" \
  	-D_PATH_SSH_ASKPASS_DEFAULT=\"$(ASKPASS_PROGRAM)\" \
  	-D_PATH_SFTP_SERVER=\"$(SFTP_SERVER)\" \
-@@ -117,10 +123,10 @@ LIBSSH_OBJS=${LIBOPENSSH_OBJS} \
+@@ -117,10 +123,10 @@
  
  SKOBJS=	ssh-sk-client.o
  
@@ -44,7 +52,16 @@ index 4243006..3c31f9d 100644
  	platform-listen.o \
  	servconf.o sshpty.o srclimit.o groupaccess.o auth2-methods.o \
  	dns.o fatal.o compat.o utf8.o authfd.o canohost.o \
-@@ -171,9 +177,9 @@ CONFIGFILES=sshd_config.out ssh_config.out moduli.out
+@@ -151,7 +157,7 @@
+ 
+ SSHKEYGEN_OBJS=	ssh-keygen.o sshsig.o $(SKOBJS)
+ 
+-SSHKEYSIGN_OBJS=ssh-keysign.o readconf.o uidswap.o $(SKOBJS)
++SSHKEYSIGN_OBJS=ssh-keysign.o readconf.o system-config.o uidswap.o $(SKOBJS)
+ 
+ P11HELPER_OBJS=	ssh-pkcs11-helper.o ssh-pkcs11.o $(SKOBJS)
+ 
+@@ -171,9 +177,9 @@
  CONFIGFILES_IN=sshd_config ssh_config moduli
  
  PATHSUBS	= \
@@ -56,7 +73,7 @@ index 4243006..3c31f9d 100644
  	-e 's|/usr/libexec|$(libexecdir)|g' \
  	-e 's|/etc/shosts.equiv|$(sysconfdir)/shosts.equiv|g' \
  	-e 's|/etc/ssh/ssh_host_key|$(sysconfdir)/ssh_host_key|g' \
-@@ -182,8 +188,8 @@ PATHSUBS	= \
+@@ -182,8 +188,8 @@
  	-e 's|/etc/ssh/ssh_host_rsa_key|$(sysconfdir)/ssh_host_rsa_key|g' \
  	-e 's|/etc/ssh/ssh_host_ed25519_key|$(sysconfdir)/ssh_host_ed25519_key|g' \
  	-e 's|/var/run/sshd.pid|$(piddir)/sshd.pid|g' \
@@ -67,7 +84,7 @@ index 4243006..3c31f9d 100644
  	-e 's|/etc/ssh/sshrc|$(sysconfdir)/sshrc|g' \
  	-e 's|/usr/X11R6/bin/xauth|$(XAUTH_PATH)|g' \
  	-e 's|/var/empty|$(PRIVSEP_PATH)|g' \
-@@ -217,6 +223,11 @@ ssh$(EXEEXT): $(LIBCOMPAT) libssh.a $(SSHOBJS)
+@@ -217,6 +223,11 @@
  sshd$(EXEEXT): libssh.a	$(LIBCOMPAT) $(SSHDOBJS)
  	$(LD) -o $@ $(SSHDOBJS) $(LDFLAGS) -lssh -lopenbsd-compat $(SSHDLIBS) $(LIBS) $(CHANNELLIBS)
  
@@ -79,7 +96,7 @@ index 4243006..3c31f9d 100644
  sshd-session$(EXEEXT): libssh.a	$(LIBCOMPAT) $(SSHD_SESSION_OBJS)
  	$(LD) -o $@ $(SSHD_SESSION_OBJS) $(LDFLAGS) -lssh -lopenbsd-compat $(SSHDLIBS) $(LIBS) $(GSSLIBS) $(K5LIBS) $(CHANNELLIBS)
  
-@@ -278,6 +289,7 @@ moduli:
+@@ -278,6 +289,7 @@
  clean:	regressclean
  	rm -f *.o *.lo *.a $(TARGETS) logintest config.cache config.log
  	rm -f *.out core survey
@@ -87,7 +104,7 @@ index 4243006..3c31f9d 100644
  	rm -f regress/check-perm$(EXEEXT)
  	rm -f regress/mkdtemp$(EXEEXT)
  	rm -f regress/unittests/test_helper/*.a
-@@ -388,12 +400,12 @@ distprep: catman-do depend-check
+@@ -388,12 +400,12 @@
  	$(AUTORECONF)
  	-rm -rf autom4te.cache .depend.bak
  
@@ -103,7 +120,7 @@ index 4243006..3c31f9d 100644
  
  install-files:
  	$(MKDIR_P) $(DESTDIR)$(bindir)
-@@ -432,28 +444,12 @@ install-files:
+@@ -432,28 +444,12 @@
  	$(INSTALL) -m 644 ssh-pkcs11-helper.8.out $(DESTDIR)$(mandir)/$(mansubdir)8/ssh-pkcs11-helper.8
  	$(INSTALL) -m 644 ssh-sk-helper.8.out $(DESTDIR)$(mandir)/$(mansubdir)8/ssh-sk-helper.8
  
@@ -138,7 +155,7 @@ index 4243006..3c31f9d 100644
  
  host-key: ssh-keygen$(EXEEXT)
  	@if [ -z "$(DESTDIR)" ] ; then \
-@@ -469,9 +465,11 @@ host-key-force: ssh-keygen$(EXEEXT) ssh$(EXEEXT)
+@@ -469,9 +465,11 @@
  	fi
  
  uninstallall:	uninstall
@@ -153,8 +170,7 @@ index 4243006..3c31f9d 100644
  	-rmdir $(DESTDIR)$(bindir)
  	-rmdir $(DESTDIR)$(sbindir)
  	-rmdir $(DESTDIR)$(mandir)/$(mansubdir)1
-diff --git a/pathnames.h b/pathnames.h
-index 61c5f84..d6f15f4 100644
+diff -urN a/pathnames.h b/pathnames.h
 --- a/pathnames.h
 +++ b/pathnames.h
 @@ -18,6 +18,10 @@
@@ -177,10 +193,8 @@ index 61c5f84..d6f15f4 100644
  
  #ifndef _PATH_SSH_PROGRAM
  #define _PATH_SSH_PROGRAM		"/usr/bin/ssh"
-diff --git a/openssh-patch/regress/system-config-test.c b/regress/system-config-test.c
-new file mode 100644
-index 0000000..1f129a1
---- /dev/null
+diff -urN a/regress/system-config-test.c b/regress/system-config-test.c
+--- a/regress/system-config-test.c
 +++ b/regress/system-config-test.c
 @@ -0,0 +1,133 @@
 +/* Test UAPI system configuration file selection. */
@@ -316,8 +330,7 @@ index 0000000..1f129a1
 +	puts("system config selection tests passed");
 +	return 0;
 +}
-diff --git a/ssh.c b/ssh.c
-index 0019281..7e856a7 100644
+diff -urN a/ssh.c b/ssh.c
 --- a/ssh.c
 +++ b/ssh.c
 @@ -93,6 +93,7 @@
@@ -328,7 +341,7 @@ index 0019281..7e856a7 100644
  #include "dispatch.h"
  #include "clientloop.h"
  #include "log.h"
-@@ -561,7 +562,8 @@ static void
+@@ -561,7 +562,8 @@
  process_config_files(const char *host_name, struct passwd *pw, int final_pass,
      int *want_final_pass)
  {
@@ -338,7 +351,7 @@ index 0019281..7e856a7 100644
  	int r;
  
  	if (config != NULL) {
-@@ -579,10 +581,29 @@ process_config_files(const char *host_name, struct passwd *pw, int final_pass,
+@@ -579,10 +581,29 @@
  			    &options, SSHCONF_CHECKPERM | SSHCONF_USERCONF |
  			    (final_pass ? SSHCONF_FINAL : 0), want_final_pass);
  
@@ -372,8 +385,7 @@ index 0019281..7e856a7 100644
  	}
  }
  
-diff --git a/sshd.c b/sshd.c
-index df76dc7..0148b16 100644
+diff -urN a/sshd.c b/sshd.c
 --- a/sshd.c
 +++ b/sshd.c
 @@ -81,6 +81,7 @@
@@ -384,7 +396,7 @@ index df76dc7..0148b16 100644
  #include "canohost.h"
  #include "hostfile.h"
  #include "auth.h"
-@@ -1179,6 +1180,25 @@ print_config(struct connection_info *connection_info)
+@@ -1179,6 +1180,25 @@
  	exit(0);
  }
  
@@ -410,7 +422,7 @@ index df76dc7..0148b16 100644
  /*
   * Main program for the daemon.
   */
-@@ -1189,11 +1209,14 @@ main(int ac, char **av)
+@@ -1189,11 +1209,14 @@
  	extern int optind;
  	int log_stderr = 0, inetd_flag = 0, test_flag = 0, no_daemon_flag = 0;
  	char *config_file_name = _PATH_SERVER_CONFIG_FILE;
@@ -425,7 +437,7 @@ index df76dc7..0148b16 100644
  	struct stat sb;
  	u_int i, j;
  	mode_t new_umask;
-@@ -1246,6 +1269,7 @@ main(int ac, char **av)
+@@ -1246,6 +1269,7 @@
  			break;
  		case 'f':
  			config_file_name = optarg;
@@ -433,7 +445,7 @@ index df76dc7..0148b16 100644
  			break;
  		case 'c':
  			servconf_add_hostcert("[command-line]", 0,
-@@ -1407,8 +1431,31 @@ main(int ac, char **av)
+@@ -1407,8 +1431,31 @@
  	/* Fetch our configuration */
  	if ((cfg = sshbuf_new()) == NULL)
  		fatal("sshbuf_new config failed");
@@ -467,10 +479,57 @@ index df76dc7..0148b16 100644
  
  	parse_server_config(&options, config_file_name, cfg,
  	    &includes, NULL, 0);
-diff --git a/openssh-patch/system-config.c b/system-config.c
-new file mode 100644
-index 0000000..60fdd1b
---- /dev/null
+diff -urN a/ssh-keysign.c b/ssh-keysign.c
+--- a/ssh-keysign.c
++++ b/ssh-keysign.c
+@@ -55,6 +55,7 @@
+ #include "msg.h"
+ #include "canohost.h"
+ #include "pathnames.h"
++#include "system-config.h"
+ #include "readconf.h"
+ #include "uidswap.h"
+ #include "ssherr.h"
+@@ -182,8 +183,8 @@
+ 	struct passwd *pw;
+ 	int r, key_fd[NUM_KEYTYPES], i, found, version = 2, fd;
+ 	u_char *signature, *data, rver;
+-	char *host, *fp, *pkalg;
+-	size_t slen, dlen;
++	char *host, *fp, *pkalg, *system_config = NULL, **dropins = NULL;
++	size_t slen, dlen, di, ndropins = 0;
+ 
+ 	if (pledge("stdio rpath getpw dns id", NULL) != 0)
+ 		fatal("%s: pledge: %s", __progname, strerror(errno));
+@@ -222,12 +223,24 @@
+ 
+ 	/* verify that ssh-keysign is enabled by the admin */
+ 	initialize_options(&options);
+-	(void)read_config_file(_PATH_HOST_CONFIG_FILE, pw, "", "",
+-	    &options, 0, NULL);
++	if (system_config_dropins("ssh_config", &dropins, &ndropins) != 0)
++		fatal("Can't select system configuration drop-ins: %s",
++		    strerror(errno));
++	for (di = 0; di < ndropins; di++)
++		(void)read_config_file(dropins[di], pw, "", "", &options, 0,
++		    NULL);
++	system_config_free(dropins, ndropins);
++	if (system_config_file("ssh_config", &system_config) == -1)
++		fatal("Can't select system config file: %s", strerror(errno));
++	if (system_config != NULL)
++		(void)read_config_file(system_config, pw, "", "", &options, 0,
++		    NULL);
+ 	(void)fill_default_options(&options);
+ 	if (options.enable_ssh_keysign != 1)
+ 		fatal("ssh-keysign not enabled in %s",
++		    system_config != NULL ? system_config :
+ 		    _PATH_HOST_CONFIG_FILE);
++	free(system_config);
+ 
+ 	if (pledge("stdio dns", NULL) != 0)
+ 		fatal("%s: pledge: %s", __progname, strerror(errno));
+diff -urN a/system-config.c b/system-config.c
+--- a/system-config.c
 +++ b/system-config.c
 @@ -0,0 +1,253 @@
 +/*
@@ -726,10 +785,8 @@ index 0000000..60fdd1b
 +	free(paths);
 +	return -1;
 +}
-diff --git a/openssh-patch/system-config.h b/system-config.h
-new file mode 100644
-index 0000000..7b26d12
---- /dev/null
+diff -urN a/system-config.h b/system-config.h
+--- a/system-config.h
 +++ b/system-config.h
 @@ -0,0 +1,15 @@
 +/*

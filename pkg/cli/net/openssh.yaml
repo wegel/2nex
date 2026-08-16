@@ -6,7 +6,7 @@ package:
   version: 9.9p1
   description: OpenSSH SSH client and server
   homepage: https://www.openssh.com/
-  checksum: b9b50e17f25c18b3bb3e19f4e4bc4f2ae9e9de278b53daa2bd493b85f3f91558
+  checksum: 8ccb2ff65c7bcacbe548934891cdfe1de88b9d6799ef5a36107c3cfeaf43a803
 
 sources:
 - name: openssh
@@ -14,7 +14,7 @@ sources:
   sha256: b343fbcdbff87f15b1986e6e15d6d4fc9a7d36066be6b7fb507087ba8f966c02
 - name: uapi_config_patch
   file: pkg/cli/net/openssh-uapi-config.patch
-  sha256: 82960c13c7cfdf3ecf14722f22cec2872052ffc6558a4d69778a6d1dfed34963
+  sha256: 9bd0c1bf54bd42a4ffdfb8e9928ed9605b39bfacbca62e585dd1af2dd7469184
 
 dependencies:
 - name: glibc
@@ -64,7 +64,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [8238:4171, 32904:20222, 70791:20226, 115691:20294, 153607:20426, 189066:20530, 227111:20636, 280500:20785, 336605:20991, 372109:23563]
+  profile: [8266:3983, 32932:18832, 71371:18836, 113520:18898, 149817:19001, 187180:19112, 229855:19234, 286016:19388, 337996:19597, 374184:22241]
 
   script: |
     set -eux
@@ -150,6 +150,41 @@ build:
     rm /etc/ssh/ssh_config.d/90-late.conf
     ln -s /dev/null /etc/ssh/ssh_config.d/90-late.conf
     assert_client_value 'serveraliveinterval 10'
+
+    # ssh-keysign refuses to sign unless EnableSSHKeysign is set, and it must
+    # read that option from the same tiers and drop-ins the client uses.
+    # Without any host key it always exits nonzero, so the two cases differ by
+    # which failure it reports.
+    rm -f /etc/ssh/ssh_config /run/ssh/ssh_config /usr/lib/ssh/ssh_config
+    rm -f /etc/ssh/ssh_config.d/*.conf /run/ssh/ssh_config.d/*.conf \
+      /usr/lib/ssh/ssh_config.d/*.conf
+
+    keysign_failure() {
+      if ./ssh-keysign < /dev/null > /dev/null 2>"${WORK_DIR}/keysign.log"; then
+        printf 'ssh-keysign unexpectedly succeeded\n' >&2
+        exit 1
+      fi
+      cat "${WORK_DIR}/keysign.log"
+    }
+
+    assert_keysign_sees_option() {
+      if keysign_failure | grep -q 'ssh-keysign not enabled'; then
+        printf 'ssh-keysign missed EnableSSHKeysign from %s\n' "$1" >&2
+        exit 1
+      fi
+    }
+
+    keysign_failure | grep -q 'ssh-keysign not enabled'
+    printf 'EnableSSHKeysign yes\n' > /usr/lib/ssh/ssh_config
+    assert_keysign_sees_option /usr/lib/ssh/ssh_config
+    rm /usr/lib/ssh/ssh_config
+    printf 'EnableSSHKeysign yes\n' > /run/ssh/ssh_config
+    assert_keysign_sees_option /run/ssh/ssh_config
+    rm /run/ssh/ssh_config
+    printf 'EnableSSHKeysign yes\n' > /usr/lib/ssh/ssh_config.d/10-keysign.conf
+    assert_keysign_sees_option /usr/lib/ssh/ssh_config.d/10-keysign.conf
+    rm /usr/lib/ssh/ssh_config.d/10-keysign.conf
+    keysign_failure | grep -q 'ssh-keysign not enabled'
 
     ./ssh-keygen -q -t ed25519 -N '' -f "${WORK_DIR}/test-host-key"
     install -d -m700 /var/lib/sshd
