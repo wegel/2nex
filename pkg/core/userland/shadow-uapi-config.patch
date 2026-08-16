@@ -12,11 +12,15 @@ locations and implements main-file replacement, drop-ins, and masks. Preserve
 the --prefix behavior by passing the prefix through libeconf's ROOT_PREFIX
 option instead of constructing only the vendor and administrator paths.
 
-diff --git a/lib/getdef.c b/lib/getdef.c
-index cb62869..268a30c 100644
+Apply the same change to chsh. Its shell_is_listed() also used econf_readDirs,
+so the list of valid login shells came only from the vendor and administrator
+directories and a boot-time /run/shells could never register a shell, even
+though login.defs in the same package already honoured that tier.
+
+diff -urN a/lib/getdef.c b/lib/getdef.c
 --- a/lib/getdef.c
 +++ b/lib/getdef.c
-@@ -151,12 +151,12 @@ static struct itemdef knowndef_table[] = {
+@@ -160,12 +160,12 @@
  };
  
  #ifdef USE_ECONF
@@ -30,7 +34,7 @@ index cb62869..268a30c 100644
  #else
  #ifndef LOGINDEFS
  #define LOGINDEFS "/etc/login.defs"
-@@ -427,14 +427,7 @@ static /*@observer@*/ /*@null@*/struct itemdef *def_find (const char *name, cons
+@@ -448,14 +448,7 @@
  void setdef_config_file (const char* file)
  {
  #ifdef USE_ECONF
@@ -46,7 +50,7 @@ index cb62869..268a30c 100644
  #else
  	def_fname = file;
  #endif
-@@ -451,6 +443,7 @@ static void def_load (void)
+@@ -474,6 +467,7 @@
  	econf_err error;
  	char **keys;
  	size_t key_number;
@@ -54,7 +58,7 @@ index cb62869..268a30c 100644
  
  	/*
  	 * Set the initialized flag.
-@@ -459,7 +452,24 @@ static void def_load (void)
+@@ -481,7 +475,24 @@
  	 */
  	def_loaded = true;
  
@@ -80,3 +84,27 @@ index cb62869..268a30c 100644
  	if (error) {
  		if (error == ECONF_NOFILE)
  			return;
+diff -urN a/src/chsh.c b/src/chsh.c
+--- a/src/chsh.c
++++ b/src/chsh.c
+@@ -152,13 +152,13 @@
+ 	char **keys;
+ 	econf_file *key_file;
+ 
+-	error = econf_readDirs(&key_file,
+-			       VENDORDIR,
+-			       ETCDIR,
+-			       SHELLS,
+-			       NULL,
+-			       "", /* key only */
+-			       "#" /* comment */);
++	error = econf_readConfig(&key_file,
++			         NULL,
++			         VENDORDIR,
++			         SHELLS,
++			         NULL,
++			         "", /* key only */
++			         "#" /* comment */);
+ 	if (error) {
+ 		fprintf (stderr,
+ 			 _("Cannot parse shell files: %s"),

@@ -6,7 +6,7 @@ package:
   version: 4.15.1
   description: Shadow password file utilities
   homepage: https://github.com/shadow-maint/shadow
-  checksum: 90a26bb7253e052daf3e545cb709724afe5395b06d91bc92ff8702e570503a2b
+  checksum: 6f3e519979057cb91f8b2d688944cfd2a1b12b8a878d52be41fdcc31226ec678
 
 sources:
 - name: shadow
@@ -23,7 +23,7 @@ sources:
   sha256: 11549cd64a218332dfa712853bb4618c58f8c1c09d7fbc90e2323e0c7bae3bf2
 - name: uapi_config
   file: pkg/core/userland/shadow-uapi-config.patch
-  sha256: 46db293eb886fae5db4f7b15f70e702fab16d007b1d2a34a3ab792f5a68f977c
+  sha256: 20162f51721adef6946c1c38dbb4e454cbee8c0e8b59aaf891c3afd0945335c8
 
 dependencies:
 - name: glibc
@@ -75,7 +75,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4104:945, 8256:3601, 12372:5327, 16468:6005, 24692:6921, 28800:8191, 32938:8302, 41416:8382, 49802:8458, 52453:8865]
+  profile: [4153:995, 8281:3163, 12392:4633, 16581:5082, 24891:6822, 29033:6905, 33175:6979, 41584:7048, 49811:7102, 51968:7501]
 
   script: |
     set -eu
@@ -195,6 +195,66 @@ build:
     write_smoke_login_defs "${dropin_smoke}/usr/lib/login.defs" 2100
     write_smoke_login_defs "${dropin_smoke}/etc/login.defs.d/90-local.defs" 2400
     assert_smoke_uid "${dropin_smoke}" dropin-user 2400
+
+    # chsh reads the list of valid login shells through the same libeconf
+    # hierarchy, so a shell registered only below /run must count. Even for
+    # root chsh warns when the requested shell is not listed, so the presence
+    # of that warning names whether the selected file was read. Keep a shells
+    # file present throughout: with no file in any tier chsh reports a parse
+    # failure instead, which is a different code path.
+    mkdir -p /etc /run /usr/lib
+    rm -f /usr/lib/shells /run/shells /etc/shells
+    uapi_shell="${WORK_DIR}/uapi-login-shell"
+    printf '#!/bin/sh\nexit 0\n' > "${uapi_shell}"
+    chmod 0755 "${uapi_shell}"
+    printf 'root:x:0:0:root:/root:/usr/bin/bash\n' > /etc/passwd
+    printf 'root:x:0:\n' > /etc/group
+
+    # chsh always initialises PAM, so give it a permissive service file from
+    # the linux-pam build dependency; without one it aborts before it ever
+    # consults the shells list.
+    mkdir -p /etc/pam.d
+    for phase in auth account password session; do
+      printf '%s required /usr/lib/security/pam_permit.so\n' "${phase}"
+    done > /etc/pam.d/chsh
+
+    chsh_warns() {
+      "${OUT_DIR}/usr/bin/chsh" -s "${uapi_shell}" root \
+        > "${WORK_DIR}/chsh.log" 2>&1 || true
+      grep -q 'is an invalid shell' "${WORK_DIR}/chsh.log"
+    }
+
+    assert_shell_rejected() {
+      if ! chsh_warns; then
+        printf 'chsh accepted an unlisted shell with %s in place: %s\n' \
+          "$1" "$(cat "${WORK_DIR}/chsh.log")" >&2
+        exit 1
+      fi
+    }
+
+    assert_shell_listed() {
+      if chsh_warns; then
+        printf 'chsh did not read the shells list from %s: %s\n' \
+          "$1" "$(cat "${WORK_DIR}/chsh.log")" >&2
+        exit 1
+      fi
+    }
+
+    printf '/bin/false\n' > /usr/lib/shells
+    assert_shell_rejected /usr/lib/shells
+    printf '%s\n' "${uapi_shell}" > /usr/lib/shells
+    assert_shell_listed /usr/lib/shells
+
+    printf '/bin/false\n' > /usr/lib/shells
+    printf '%s\n' "${uapi_shell}" > /run/shells
+    assert_shell_listed /run/shells
+
+    rm /run/shells
+    printf '%s\n' "${uapi_shell}" > /etc/shells
+    assert_shell_listed /etc/shells
+    rm -f /etc/shells /usr/lib/shells /etc/passwd /etc/group /etc/pam.d/chsh
+
+    printf 'shadow UAPI smoke: login.defs and the chsh shells list honoured all tiers\n'
 
     rm ${OUT_DIR}/usr/sbin
 
