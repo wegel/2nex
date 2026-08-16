@@ -1,0 +1,310 @@
+From: Nex Distribution <nex@example.invalid>
+Subject: podman: search administrator, runtime, and vendor configuration
+Source: https://github.com/containers/podman/archive/refs/tags/v5.4.1.tar.gz
+Upstream: Not submitted; this implements the UAPI configuration directory order.
+
+Keep containers.conf merge behavior and add the runtime tier between vendor
+and administrator files. Select one registries.conf and policy.json with
+administrator, runtime, then vendor priority. Merge registries.conf.d files in
+the reverse read order so higher tiers replace lower values. Preserve user and
+explicit path behavior. Exercise the vendored libraries with their real
+parsers.
+
+--- a/vendor/github.com/containers/common/pkg/config/config_linux.go
++++ b/vendor/github.com/containers/common/pkg/config/config_linux.go
+@@ -13,0 +14,3 @@
++	// RuntimeContainersConfig holds the per-boot containers config path.
++	RuntimeContainersConfig = "/run/" + _configPath
++
+--- a/vendor/github.com/containers/common/pkg/config/new.go
++++ b/vendor/github.com/containers/common/pkg/config/new.go
+@@ -162,0 +163 @@
++	configs = append(configs, RuntimeContainersConfig)
+--- /dev/null
++++ b/vendor/github.com/containers/common/pkg/config/nex_uapi_test.go
+@@ -0,0 +1,32 @@
++package config
++
++import (
++	"os"
++	"testing"
++)
++
++func TestNexSystemConfigOrder(t *testing.T) {
++	t.Setenv("HOME", t.TempDir())
++	t.Setenv("XDG_CONFIG_HOME", "")
++	if err := os.Unsetenv(containersConfEnv); err != nil {
++		t.Fatal(err)
++	}
++
++	configs, err := systemConfigs()
++	if err != nil {
++		t.Fatal(err)
++	}
++	want := []string{
++		"/usr/share/containers/containers.conf",
++		"/run/containers/containers.conf",
++		"/etc/containers/containers.conf",
++	}
++	if len(configs) < len(want) {
++		t.Fatalf("configuration list is too short: %v", configs)
++	}
++	for i := range want {
++		if configs[i] != want[i] {
++			t.Fatalf("configuration %d is %q, want %q", i, configs[i], want[i])
++		}
++	}
++}
+--- a/vendor/github.com/containers/image/v5/pkg/sysregistriesv2/paths_common.go
++++ b/vendor/github.com/containers/image/v5/pkg/sysregistriesv2/paths_common.go
+@@ -9,0 +10,4 @@
++const runtimeRegistriesConfPath = "/run/containers/registries.conf"
++
++const vendorRegistriesConfPath = "/usr/share/containers/registries.conf"
++
+@@ -12,0 +17,4 @@
++
++const runtimeRegistriesConfDirPath = "/run/containers/registries.conf.d"
++
++const vendorRegistriesConfDirPath = "/usr/share/containers/registries.conf.d"
+--- a/vendor/github.com/containers/image/v5/pkg/sysregistriesv2/system_registries_v2.go
++++ b/vendor/github.com/containers/image/v5/pkg/sysregistriesv2/system_registries_v2.go
+@@ -545 +545,6 @@
+-	return configWrapper.configDirPath
++	for i := len(configWrapper.configDirPaths) - 1; i >= 0; i-- {
++		if configWrapper.configDirPaths[i] != "" {
++			return configWrapper.configDirPaths[i]
++		}
++	}
++	return ""
+@@ -553,2 +558,2 @@
+-	// path to system-wide registries.conf.d directory, or "" if not used
+-	configDirPath string
++	// paths to system-wide registries.conf.d directories, in merge order
++	configDirPaths [3]string
+@@ -579 +584 @@
+-			wrapper.configDirPath = ctx.SystemRegistriesConfDirPath
++			wrapper.configDirPaths[0] = ctx.SystemRegistriesConfDirPath
+@@ -585,2 +589,0 @@
+-	} else if ctx != nil && ctx.RootForImplicitAbsolutePaths != "" {
+-		wrapper.configPath = filepath.Join(ctx.RootForImplicitAbsolutePaths, systemRegistriesConfPath)
+@@ -588 +591,19 @@
+-		wrapper.configPath = systemRegistriesConfPath
++		root := ""
++		if ctx != nil {
++			root = ctx.RootForImplicitAbsolutePaths
++		}
++		paths := []string{
++			systemRegistriesConfPath,
++			runtimeRegistriesConfPath,
++			vendorRegistriesConfPath,
++		}
++		for _, path := range paths {
++			candidate := filepath.Join(root, path)
++			if err := fileutils.Exists(candidate); err == nil {
++				wrapper.configPath = candidate
++				break
++			}
++		}
++		if wrapper.configPath == "" {
++			wrapper.configPath = filepath.Join(root, systemRegistriesConfPath)
++		}
+@@ -594,4 +615 @@
+-		wrapper.configDirPath = ctx.SystemRegistriesConfDirPath
+-	} else if ctx != nil && ctx.RootForImplicitAbsolutePaths != "" {
+-		wrapper.configDirPath = filepath.Join(ctx.RootForImplicitAbsolutePaths, systemRegistriesConfDirPath)
+-		wrapper.userConfigDirPath = userRegistriesDirPath
++		wrapper.configDirPaths[0] = ctx.SystemRegistriesConfDirPath
+@@ -599 +617,9 @@
+-		wrapper.configDirPath = systemRegistriesConfDirPath
++		root := ""
++		if ctx != nil {
++			root = ctx.RootForImplicitAbsolutePaths
++		}
++		wrapper.configDirPaths = [3]string{
++			filepath.Join(root, vendorRegistriesConfDirPath),
++			filepath.Join(root, runtimeRegistriesConfDirPath),
++			filepath.Join(root, systemRegistriesConfDirPath),
++		}
+@@ -610,2 +636,4 @@
+-	if wrapper.configDirPath != "" {
+-		configSources = append(configSources, wrapper.configDirPath)
++	for _, path := range wrapper.configDirPaths {
++		if path != "" {
++			configSources = append(configSources, path)
++		}
+@@ -656,2 +684,4 @@
+-	if wrapper.configDirPath != "" {
+-		dirPaths = append(dirPaths, wrapper.configDirPath)
++	for _, path := range wrapper.configDirPaths {
++		if path != "" {
++			dirPaths = append(dirPaths, path)
++		}
+--- /dev/null
++++ b/vendor/github.com/containers/image/v5/pkg/sysregistriesv2/nex_uapi_test.go
+@@ -0,0 +1,72 @@
++package sysregistriesv2
++
++import (
++	"os"
++	"path/filepath"
++	"reflect"
++	"testing"
++
++	"github.com/containers/image/v5/types"
++)
++
++func writeRegistryConfig(t *testing.T, root, path, registry string) {
++	t.Helper()
++	fullPath := filepath.Join(root, path)
++	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
++		t.Fatal(err)
++	}
++	content := []byte("unqualified-search-registries = [\"" + registry + "\"]\n")
++	if err := os.WriteFile(fullPath, content, 0o644); err != nil {
++		t.Fatal(err)
++	}
++}
++
++func checkRegistryTier(t *testing.T, ctx *types.SystemContext, want string) {
++	t.Helper()
++	InvalidateCache()
++	got, err := UnqualifiedSearchRegistries(ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !reflect.DeepEqual(got, []string{want}) {
++		t.Fatalf("registries are %v, want [%s]", got, want)
++	}
++}
++
++func TestNexMainConfigOrder(t *testing.T) {
++	root := t.TempDir()
++	home := t.TempDir()
++	t.Setenv("HOME", home)
++	ctx := &types.SystemContext{RootForImplicitAbsolutePaths: root}
++
++	writeRegistryConfig(t, root, vendorRegistriesConfPath, "vendor.example")
++	checkRegistryTier(t, ctx, "vendor.example")
++	writeRegistryConfig(t, root, runtimeRegistriesConfPath, "runtime.example")
++	checkRegistryTier(t, ctx, "runtime.example")
++	writeRegistryConfig(t, root, systemRegistriesConfPath, "admin.example")
++	checkRegistryTier(t, ctx, "admin.example")
++
++	if err := os.WriteFile(filepath.Join(root, systemRegistriesConfPath), nil, 0o644); err != nil {
++		t.Fatal(err)
++	}
++	InvalidateCache()
++	got, err := UnqualifiedSearchRegistries(ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(got) != 0 {
++		t.Fatalf("empty administrator file did not mask lower files: %v", got)
++	}
++}
++
++func TestNexDropInOrder(t *testing.T) {
++	root := t.TempDir()
++	home := t.TempDir()
++	t.Setenv("HOME", home)
++	ctx := &types.SystemContext{RootForImplicitAbsolutePaths: root}
++
++	writeRegistryConfig(t, root, filepath.Join(vendorRegistriesConfDirPath, "10-tier.conf"), "vendor.example")
++	writeRegistryConfig(t, root, filepath.Join(runtimeRegistriesConfDirPath, "10-tier.conf"), "runtime.example")
++	writeRegistryConfig(t, root, filepath.Join(systemRegistriesConfDirPath, "10-tier.conf"), "admin.example")
++	checkRegistryTier(t, ctx, "admin.example")
++}
+--- a/vendor/github.com/containers/image/v5/signature/policy_config.go
++++ b/vendor/github.com/containers/image/v5/signature/policy_config.go
+@@ -80,2 +80,3 @@
+-	if sys != nil && sys.RootForImplicitAbsolutePaths != "" {
+-		return filepath.Join(sys.RootForImplicitAbsolutePaths, systemPolicyPath), nil
++	root := ""
++	if sys != nil {
++		root = sys.RootForImplicitAbsolutePaths
+@@ -83,2 +84,5 @@
+-	if err := fileutils.Exists(systemPolicyPath); err == nil {
+-		return systemPolicyPath, nil
++	paths := []string{systemPolicyPath}
++	if systemPolicyPath == builtinDefaultPolicyPath {
++		paths = append(paths,
++			"/run/containers/policy.json",
++			"/usr/share/containers/policy.json")
+@@ -86 +90,7 @@
+-	return "", fmt.Errorf("no policy.json file found at any of the following: %q, %q", userPolicyFilePath, systemPolicyPath)
++	for _, path := range paths {
++		candidate := filepath.Join(root, path)
++		if err := fileutils.Exists(candidate); err == nil {
++			return candidate, nil
++		}
++	}
++	return "", fmt.Errorf("no policy.json file found at any of the following: %q, %q", userPolicyFilePath, paths)
+--- /dev/null
++++ b/vendor/github.com/containers/image/v5/signature/nex_uapi_test.go
+@@ -0,0 +1,65 @@
++package signature
++
++import (
++	"os"
++	"path/filepath"
++	"testing"
++
++	"github.com/containers/image/v5/types"
++)
++
++func writePolicy(t *testing.T, root, path, policyType string) {
++	t.Helper()
++	fullPath := filepath.Join(root, path)
++	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
++		t.Fatal(err)
++	}
++	content := []byte("{\"default\":[{\"type\":\"" + policyType + "\"}]}\n")
++	if err := os.WriteFile(fullPath, content, 0o644); err != nil {
++		t.Fatal(err)
++	}
++}
++
++func checkPolicyType(t *testing.T, ctx *types.SystemContext, want string) {
++	t.Helper()
++	policy, err := DefaultPolicy(ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(policy.Default) != 1 {
++		t.Fatalf("default policy has %d requirements", len(policy.Default))
++	}
++	switch policy.Default[0].(type) {
++	case *prReject:
++		if want != "reject" {
++			t.Fatalf("selected reject policy, want %s", want)
++		}
++	case *prInsecureAcceptAnything:
++		if want != "insecureAcceptAnything" {
++			t.Fatalf("selected insecure policy, want %s", want)
++		}
++	default:
++		t.Fatalf("unexpected policy type %T", policy.Default[0])
++	}
++}
++
++func TestNexPolicyOrder(t *testing.T) {
++	root := t.TempDir()
++	home := t.TempDir()
++	t.Setenv("HOME", home)
++	ctx := &types.SystemContext{RootForImplicitAbsolutePaths: root}
++
++	writePolicy(t, root, "/usr/share/containers/policy.json", "reject")
++	checkPolicyType(t, ctx, "reject")
++	writePolicy(t, root, "/run/containers/policy.json", "insecureAcceptAnything")
++	checkPolicyType(t, ctx, "insecureAcceptAnything")
++	writePolicy(t, root, "/etc/containers/policy.json", "reject")
++	checkPolicyType(t, ctx, "reject")
++
++	if err := os.WriteFile(filepath.Join(root, "/etc/containers/policy.json"), nil, 0o644); err != nil {
++		t.Fatal(err)
++	}
++	if _, err := DefaultPolicy(ctx); err == nil {
++		t.Fatal("empty administrator policy did not mask lower files")
++	}
++}

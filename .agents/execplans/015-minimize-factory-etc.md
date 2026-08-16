@@ -197,6 +197,15 @@ required machine state.
   It contains six regular machine files, three stable adapters, and five unit
   enablement links.
 
+- Observation: Podman 5.4.1 combines three readers with different default
+  behavior.
+  Evidence: its vendored `containers/common` reader merged
+  `/usr/share/containers/containers.conf` before `/etc`; its vendored
+  `containers/image` readers used only `/etc/containers/registries.conf` and
+  `/etc/containers/policy.json`. Focused Go tests now exercise all three real
+  parsers with administrator, runtime, vendor, mask, and registry drop-in
+  fixtures.
+
 ## Decision Log
 
 - Decision: Keep the accepted factory path list in
@@ -231,6 +240,13 @@ required machine state.
   already provides correct precedence and empty-file masking. Removing
   `ConfigurationDirectory=iwd` lets the service use the compiled list and
   leaves `StateDirectory=iwd` responsible only for mutable Wi-Fi state.
+  Date/Author: 2026-08-16 / Ralph
+
+- Decision: Patch Podman's vendored readers directly and do not add libeconf.
+  Rationale: Podman's Go libraries already parse TOML registry and engine
+  files and strict JSON signature policy. Adding path order around those
+  parsers preserves their format checks, user paths, explicit overrides, and
+  registry drop-in merge behavior without a second parser library.
   Date/Author: 2026-08-16 / Ralph
 
 - Decision: Treat factory files as one-time seeds, never as a fourth reader
@@ -630,6 +646,20 @@ The finished-root checker accepted all 14 factory leaves and wrote their TSV
 inventory to `.nex/tmp/ep015-nex-systemd-factory.tsv`. Full strict logs are
 `.nex/tmp/ep015-nex-systemd-build1.log` and
 `.nex/tmp/ep015-nex-systemd-build2.log`.
+
+The Podman package checkpoint passed:
+
+    rtk ./src/cli/target/debug/nex check pkg/apps/containers/podman.yaml
+    rtk scripts/check-package-config-paths.sh pkg/apps/containers
+    rtk ./nex build pkg/apps/containers/podman.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk ./nex build pkg/apps/containers/podman.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+
+Each strict command built Podman twice. All four builds produced
+`2b40400b74f55d0471a645ce288c5d9a6945a1c64438e88042ab3ac14eb24189`.
+Every build ran the `containers.conf`, `registries.conf`, registry drop-in,
+and `policy.json` tests through the vendored production parsers. Full logs are
+`.nex/tmp/ep015-podman-build1.log` and
+`.nex/tmp/ep015-podman-build2.log`.
 
 The EP013 baseline Desktop VWL factory tree contains 88 leaves: 58 regular
 files and 30 links, with 31 directories. Its apparent leaf size is 16,350
