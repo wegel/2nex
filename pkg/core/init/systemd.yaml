@@ -6,7 +6,7 @@ package:
   version: "257.5"
   description: System and Service Manager
   homepage: https://www.freedesktop.org/wiki/Software/systemd/
-  checksum: c9ca9f12fa799ce8632962dbb302578e239f1c04c7c1e3471d242af95dedb7ce
+  checksum: 0b01357e5cb84af8c29e4da21b1075c0a576159cf4dbf0846984b0ffe233d165
 
 sources:
 - name: systemd
@@ -83,7 +83,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [8222:3085, 20600:6730, 41226:8749, 70146:10774, 90932:12764, 115805:15301, 136469:51976, 173727:69583, 206898:69619, 226505:70369]
+  profile: [8222:2956, 20600:6061, 41216:7644, 70185:9078, 90766:10435, 115564:12230, 136220:42037, 173415:57156, 206464:57189, 226505:57781]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_systemd} -C "${WORK_DIR}" --strip-components=1
@@ -142,6 +142,14 @@ build:
     rm "${OUT_DIR}/etc/xdg/systemd/user"
     find "${OUT_DIR}/etc" -depth -type d -empty -delete
     test ! -e "${OUT_DIR}/etc"
+
+    # These upstream files are sample host policy, not package defaults.
+    # Assemblies provide authentication policy as initial machine state. The
+    # other readers use vendor files below /usr or safe compiled fallbacks.
+    rm -rf "${OUT_DIR}/usr/share/factory/etc"
+    test ! -e "${OUT_DIR}/usr/share/factory/etc"
+    test -s "${OUT_DIR}/usr/lib/pam.d/systemd-user"
+    test -s "${OUT_DIR}/usr/lib/pam.d/systemd-run0"
 
     # Prove main-file replacement and same-name drop-in masking across the
     # native systemd configuration hierarchy.
@@ -581,12 +589,6 @@ outputs:
     - path: /usr/share/dbus-1/system.d/org.freedesktop.systemd1.conf
     - path: /usr/share/dbus-1/system.d/org.freedesktop.timedate1.conf
     - path: /usr/share/dbus-1/system.d/org.freedesktop.timesync1.conf
-    - path: /usr/share/factory/etc/issue
-    - path: /usr/share/factory/etc/locale.conf
-    - path: /usr/share/factory/etc/nsswitch.conf
-    - path: /usr/share/factory/etc/pam.d/other
-    - path: /usr/share/factory/etc/pam.d/system-auth
-    - path: /usr/share/factory/etc/vconsole.conf
 
   dev:
     files:

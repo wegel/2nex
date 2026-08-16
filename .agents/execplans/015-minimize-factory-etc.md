@@ -93,6 +93,14 @@ required machine state.
   below `/usr/share/factory/etc`. The new checker rejected the corresponding
   links in every Systemd-based fresh root.
 
+- Observation: Systemd 257.5 already installs its service-specific PAM files
+  below `/usr/lib/pam.d`, while its six factory files are samples or host
+  policy rather than required runtime files.
+  Evidence: the finished package contains `systemd-user` and `systemd-run0`
+  below `/usr/lib/pam.d`. Removing `/usr/share/factory/etc` left both installed
+  service files intact, and four strict builds reproduced checksum
+  `0b01357e5cb84af8c29e4da21b1075c0a576159cf4dbf0846984b0ffe233d165`.
+
 - Observation: the current first-boot path already preserves machine-owned
   files during every deployment switch.
   Evidence: `pkg/core/kernel/initramfs-init.sh` calls
@@ -163,6 +171,15 @@ required machine state.
   source, class, target, and reason. A finished-root scan also catches native
   package factory outputs and build-script additions that a YAML-only scan
   would miss.
+  Date/Author: 2026-08-16 / Ralph
+
+- Decision: Remove Systemd's six upstream factory samples from its reusable
+  package instead of copying or linking them into every machine.
+  Rationale: Glibc already supplies `/usr/lib/nsswitch.conf`; Systemd has safe
+  compiled locale and console fallbacks; a login banner is optional; and each
+  assembly must choose its own PAM authentication policy. The package keeps
+  `systemd-user` and `systemd-run0` in `/usr/lib/pam.d`, where the patched PAM
+  reader finds them without `/etc` links.
   Date/Author: 2026-08-16 / Ralph
 
 - Decision: Treat factory files as one-time seeds, never as a fourth reader
@@ -507,6 +524,20 @@ package-checksum link each fail. `shellcheck` is not installed on this host;
 fresh-root scans passed only Nex Minimal and rejected the known stale paths in
 all other roots. Their TSV output and concise error files live under
 `.nex/tmp/ep015-baseline.ko361R/logs/`.
+
+The Systemd package checkpoint passed:
+
+    rtk ./src/cli/target/debug/nex check pkg/core/init/systemd.yaml
+    rtk scripts/check-package-config-paths.sh
+    rtk ./nex build pkg/core/init/systemd.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk ./nex build pkg/core/init/systemd.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+
+Each strict command built the package twice. All four builds produced
+`0b01357e5cb84af8c29e4da21b1075c0a576159cf4dbf0846984b0ffe233d165`.
+The embedded install checks found `systemd-user` and `systemd-run0` below
+`/usr/lib/pam.d` and found no package factory tree. Full logs are
+`.nex/tmp/ep015-systemd-build1.log` and
+`.nex/tmp/ep015-systemd-build2.log`.
 
 The EP013 baseline Desktop VWL factory tree contains 88 leaves: 58 regular
 files and 30 links, with 31 directories. Its apparent leaf size is 16,350
