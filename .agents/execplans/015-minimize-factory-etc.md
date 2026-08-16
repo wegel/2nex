@@ -184,6 +184,19 @@ required machine state.
   vendor, runtime, administrator, and empty administrator fixtures from the
   intended tier.
 
+- Observation: Nex turns assembly overlay paths below `/etc` into factory
+  paths only after the assembly build script exits.
+  Evidence: the first Nex Systemd build had the intended files below
+  `/target/etc` while its script ran and no `/target/usr/share/factory/etc`.
+  The finished checkout moved those 14 leaves into the factory tree.
+
+- Observation: the final Nex Systemd factory tree fell from 27 leaves to 14.
+  Evidence: `scripts/check-factory-etc-policy.sh` accepted the finished
+  `systems/nex-systemd/0.0.1` checkout at checksum
+  `1372f413a125aafb12e2f1c394ce7d7301ce1ae73d8c8f328348e29d220070a8`.
+  It contains six regular machine files, three stable adapters, and five unit
+  enablement links.
+
 ## Decision Log
 
 - Decision: Keep the accepted factory path list in
@@ -590,6 +603,33 @@ The chrooted executable proved vendor, runtime, administrator, empty
 administrator mask, user, and explicit `INPUTRC` behavior through the newly
 built shared library. Full logs are `.nex/tmp/ep015-readline-build1.log` and
 `.nex/tmp/ep015-readline-build2.log`.
+
+The IWD package checkpoint passed:
+
+    rtk ./src/cli/target/debug/nex check pkg/net/wifi/iwd.yaml
+    rtk scripts/check-package-config-paths.sh pkg/net/wifi
+    rtk ./nex build pkg/net/wifi/iwd.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk ./nex build pkg/net/wifi/iwd.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+
+Each strict command built IWD twice. All four builds produced
+`855d3981ef2cc3b9d22835967b7def71b3b706c41ef8a883899344f6d79a0990`.
+The daemon loaded vendor, runtime, administrator, and empty administrator
+fixtures through its real installed reader. Full logs are
+`.nex/tmp/ep015-iwd-build1.log` and `.nex/tmp/ep015-iwd-build2.log`.
+
+The Nex Systemd assembly checkpoint passed:
+
+    rtk ./src/cli/target/debug/nex check asm/nex-systemd.yaml
+    rtk ./nex build asm/nex-systemd.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk ./nex build asm/nex-systemd.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk scripts/check-factory-etc-policy.sh .nex/tmp/ep015-systemd-final.QJSC9n
+
+Both strict commands built the assembly twice. All four builds produced
+`1372f413a125aafb12e2f1c394ce7d7301ce1ae73d8c8f328348e29d220070a8`.
+The finished-root checker accepted all 14 factory leaves and wrote their TSV
+inventory to `.nex/tmp/ep015-nex-systemd-factory.tsv`. Full strict logs are
+`.nex/tmp/ep015-nex-systemd-build1.log` and
+`.nex/tmp/ep015-nex-systemd-build2.log`.
 
 The EP013 baseline Desktop VWL factory tree contains 88 leaves: 58 regular
 files and 30 links, with 31 directories. Its apparent leaf size is 16,350

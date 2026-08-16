@@ -5,7 +5,7 @@ system:
   version: 0.0.1
   description: Minimal nex rootfs with systemd, networking, and SSH
   nex_structure: true
-  checksum: d9ec2179769be8eab52f3fd02b9d0a648f9b243819fa2d54d00048ee6a2c44da
+  checksum: 1372f413a125aafb12e2f1c394ce7d7301ce1ae73d8c8f328348e29d220070a8
 
 overlays:
 - asm/nex-systemd-overlay.yaml
@@ -50,6 +50,8 @@ packages:
   commit: x86_64/pkg/libs/system/attr/2.5.2/outputs/conf
 - name: openssl-conf
   commit: x86_64/pkg/dev/libs/openssl3/3.3.1/outputs/conf
+- name: linux-pam-conf
+  commit: x86_64/pkg/libs/security/linux-pam/1.7.1/outputs/conf
 # init and ipc
 - name: systemd
   commit: x86_64/pkg/core/init/systemd/257.5/bundles/minimal
@@ -104,7 +106,7 @@ build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
 
   script: |
-    set -eu
+    set -eux
 
     # directories for runtime
     mkdir -p /target/{proc,sys,dev,run,tmp,root}
@@ -135,6 +137,24 @@ build:
     chroot /target /usr/bin/bash -c '
       test -s /usr/lib/ssl/certs/ca-certificates.crt
       test "$(find /usr/lib/ssl/certs -type l | wc -l)" -gt 0
+      test -f /usr/lib/security/namespace.conf
     '
+
+    test -f /target/usr/lib/os-release
+    test ! -e /target/etc/os-release
+    test -f /target/usr/lib/inputrc
+    test -f /target/usr/lib/systemd/network/80-dhcp.network
+    test -f /target/usr/lib/systemd/system/nex-init-manifests.service
+    test -f /target/etc/pam.d/system-auth
+    test -f /target/etc/pam.d/other
+    test ! -e /target/etc/fstab
+    test ! -e /target/etc/sysctl.conf
+    test ! -e /target/etc/inputrc
+    test ! -e /target/etc/os-release
+    test ! -e /target/etc/security/namespace.conf
+    test ! -e /target/etc/systemd/network/80-dhcp.network
+    test ! -e /target/etc/systemd/system/nex-init-manifests.service
+    test ! -e /target/etc/pam.d/systemd-user
+    test ! -e /target/etc/pam.d/systemd-run0
 
     echo "nex-systemd base configuration done."

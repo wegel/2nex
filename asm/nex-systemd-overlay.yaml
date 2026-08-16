@@ -29,8 +29,8 @@ files:
     systemd-timesync:!*:19735::::::
     sshd:!*:19735::::::
 
-# system config
-- path: /etc/os-release
+# distribution defaults
+- path: /usr/lib/os-release
   mode: 420
   content: |
     NAME="nex"
@@ -38,16 +38,10 @@ files:
     ID=nex
     VERSION_ID=0.0.1
 
-- path: /etc/fstab
-  mode: 420
-
-- path: /etc/sysctl.conf
-  mode: 420
-
 - path: /etc/machine-id
   mode: 420
 
-- path: /etc/inputrc
+- path: /usr/lib/inputrc
   mode: 420
   content: |
     set editing-mode emacs
@@ -56,13 +50,35 @@ files:
     "\e[1;5D": backward-word
     "\C-h": backward-kill-word
 
-- path: /etc/security/namespace.conf
+# Initial machine authentication policy. A provisioner may replace these
+# files before the first boot, and the machine owner may change them later.
+- path: /etc/pam.d/system-auth
   mode: 420
   content: |
-    # Empty config to satisfy pam_namespace.
+    auth      sufficient pam_unix.so
+    auth      required   pam_deny.so
+
+    account   required   pam_nologin.so
+    account   sufficient pam_unix.so
+    account   required   pam_permit.so
+
+    password  sufficient pam_unix.so sha512 shadow try_first_pass
+    password  required   pam_deny.so
+
+    -session  optional   pam_loginuid.so
+    session   required   pam_systemd.so
+    session   required   pam_unix.so
+
+- path: /etc/pam.d/other
+  mode: 420
+  content: |
+    auth      required pam_deny.so
+    account   required pam_deny.so
+    password  required pam_deny.so
+    session   required pam_deny.so
 
 # systemd networking
-- path: /etc/systemd/network/80-dhcp.network
+- path: /usr/lib/systemd/network/80-dhcp.network
   mode: 420
   content: |
     [Match]
@@ -105,7 +121,7 @@ files:
     git add -A >/dev/null 2>&1 || true
     git commit -q -m "nex manifests snapshot" --allow-empty || true
 
-- path: /etc/systemd/system/nex-init-manifests.service
+- path: /usr/lib/systemd/system/nex-init-manifests.service
   mode: 420
   content: |
     [Unit]
@@ -153,9 +169,6 @@ files:
 - path: /etc/mtab
   symlink: /proc/self/mounts
 
-- path: /usr/lib/os-release
-  symlink: ../../etc/os-release
-
 - path: /etc/resolv.conf
   symlink: /run/systemd/resolve/stub-resolv.conf
 
@@ -200,15 +213,6 @@ files:
   symlink: systemd-timedated.service
   replace: true
 
-# PAM configs used by systemd-user
-- path: /etc/pam.d/systemd-user
-  symlink: /usr/lib/pam.d/systemd-user
-  replace: true
-
-- path: /etc/pam.d/systemd-run0
-  symlink: /usr/lib/pam.d/systemd-run0
-  replace: true
-
 # dbus.service alias
 - path: /usr/lib/systemd/system/dbus.service
   symlink: dbus-broker.service
@@ -225,7 +229,7 @@ files:
   symlink: /usr/lib/systemd/system/getty@.service
 
 - path: /etc/systemd/system/multi-user.target.wants/nex-init-manifests.service
-  symlink: /etc/systemd/system/nex-init-manifests.service
+  symlink: /usr/lib/systemd/system/nex-init-manifests.service
 
 - path: /etc/systemd/system/sockets.target.wants/dbus.socket
   symlink: /usr/lib/systemd/system/dbus.socket
