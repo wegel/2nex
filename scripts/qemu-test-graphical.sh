@@ -14,6 +14,7 @@ TMP_DIR="$ROOT_DIR/.nex/tmp"
 ZUB_REPO="$ROOT_DIR/.nex/repo"
 NEX_BIN="${NEX_BIN:-$ROOT_DIR/src/cli/target/debug/nex}"
 ZUB_BIN="${ZUB_BIN:-zub}"
+TEST_IDENTITY_HELPER="$SCRIPT_DIR/prepare-qemu-test-identity.sh"
 
 TARGET_REF="${TARGET_REF:-systems/desktop-vwl/0.0.1}"
 APP="${APP:-chromium}"
@@ -32,6 +33,7 @@ SERIAL_LOG="$WORK_DIR/qemu.serial.log"
 QEMU_LOG="$WORK_DIR/qemu.log"
 ARTIFACT_DIR="$WORK_DIR/artifacts"
 ASSERT_KEY="$WORK_DIR/qemu-assert-ed25519"
+ASSERT_USER=nex-test
 
 ROOT_SIZE_MB="${ROOT_SIZE_MB:-}"
 VAR_SIZE_MB="${VAR_SIZE_MB:-}"
@@ -152,6 +154,7 @@ require_commands() {
     local missing=0
     for command_name in \
         "$NEX_BIN" \
+        "$TEST_IDENTITY_HELPER" \
         qemu-system-x86_64 \
         "$ZUB_BIN" \
         sfdisk \
@@ -224,7 +227,7 @@ ssh_probe() {
         -o ConnectTimeout=5 \
         -o StrictHostKeyChecking=no \
         -o UserKnownHostsFile=/dev/null \
-        root@127.0.0.1 "$@"
+        "$ASSERT_USER@127.0.0.1" "$@"
 }
 
 wait_for_ssh() {
@@ -316,8 +319,8 @@ fail() {
     exit 1
 }
 
-mkdir -p "$LOG_DIR" /run/user/1000 /home/testuser
-chown 1000:1000 "$LOG_DIR" /run/user/1000 /home/testuser
+mkdir -p "$LOG_DIR" /run/user/1000 /home/nex-test
+chown 1000:1000 "$LOG_DIR" /run/user/1000 /home/nex-test
 chmod 700 /run/user/1000
 
 systemctl stop getty@tty1.service >/dev/null 2>&1 || true
@@ -620,12 +623,12 @@ build_direct_initramfs_disk() {
     local disk_size_mb
     local var_content
     local root_content
-    local public_key
     local base_initramfs
     local root_content_kib
     local var_content_kib
     local manifest_seed_kib
     local expected_var_kib
+    local factory_etc
 
     "$NEX_BIN" check "$ROOT_DIR/asm/desktop-vwl/desktop-vwl.yaml"
 
@@ -695,8 +698,8 @@ build_direct_initramfs_disk() {
 
     mkdir -p \
         "$var_content/etc/systemd/system/multi-user.target.wants" \
-        "$var_content/home/testuser" \
-        "$var_content/root/.ssh" \
+        "$var_content/home" \
+        "$var_content/root" \
         "$var_content/log/journal" \
         "$var_content/lib/sshd" \
         "$var_content/lib/systemd/random-seed" \
@@ -709,16 +712,16 @@ build_direct_initramfs_disk() {
         "$var_content/nex/users" \
         "$var_content/nex/manifests"
     chmod 1777 "$var_content/tmp"
-    chmod 700 "$var_content/lib/sshd" "$var_content/root/.ssh"
+    chmod 700 "$var_content/lib/sshd"
     cp -a "$deploy_dir/etc/." "$var_content/etc/"
-    if [[ -d "$deploy_dir/home/testuser" ]]; then
-        cp -a "$deploy_dir/home/testuser/." "$var_content/home/testuser/"
-    fi
     touch "$var_content/etc/.initialized"
 
-    public_key=$(cat "$ASSERT_KEY.pub")
-    printf '%s\n' "$public_key" > "$var_content/root/.ssh/authorized_keys"
-    chmod 600 "$var_content/root/.ssh/authorized_keys"
+    factory_etc="$deploy_dir/usr/share/factory/etc"
+    if [[ ! -d "$factory_etc" ]]; then
+        factory_etc="$deploy_dir/etc"
+    fi
+    "$TEST_IDENTITY_HELPER" \
+        "$factory_etc" "$var_content" "$ASSERT_KEY.pub" "$ASSERT_USER"
 
     write_guest_assertions \
         "$var_content/etc/nex-assert-graphics.sh" \
@@ -752,8 +755,8 @@ After=systemd-logind.service systemd-user-sessions.service
 
 [Service]
 Type=oneshot
-User=testuser
-Group=testuser
+User=nex-test
+Group=nex-test
 SupplementaryGroups=video render input seat audio
 PAMName=login
 TTYPath=/dev/tty1
@@ -763,7 +766,7 @@ TTYVTDisallocate=yes
 StandardInput=tty-force
 StandardOutput=journal+console
 StandardError=journal+console
-Environment=HOME=/home/testuser
+Environment=HOME=/home/nex-test
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=XDG_SESSION_TYPE=wayland
 Environment=WLR_LIBINPUT_NO_DEVICES=1
@@ -795,7 +798,7 @@ SERVICE
     printf 'creating graphical images: root=%sMiB var=%sMiB\n' \
         "$ROOT_SIZE_MB" "$VAR_SIZE_MB"
     if command -v fakeroot >/dev/null 2>&1; then
-        fakeroot -- bash -c "chown -R 0:0 '$root_content' '$var_content' && mke2fs -q -t ext4 -L nex-root -d '$root_content' '$root_img' ${ROOT_SIZE_MB}M && mke2fs -q -t ext4 -L nex-var -d '$var_content' '$var_img' ${VAR_SIZE_MB}M"
+        fakeroot -- bash -c "chown -R 0:0 '$root_content' '$var_content' && '$TEST_IDENTITY_HELPER' --set-ownership '$var_content' && mke2fs -q -t ext4 -L nex-root -d '$root_content' '$root_img' ${ROOT_SIZE_MB}M && mke2fs -q -t ext4 -L nex-var -d '$var_content' '$var_img' ${VAR_SIZE_MB}M"
     else
         mke2fs -q -t ext4 -L nex-root -d "$root_content" "$root_img" "${ROOT_SIZE_MB}M"
         mke2fs -q -t ext4 -L nex-var -d "$var_content" "$var_img" "${VAR_SIZE_MB}M"
@@ -871,7 +874,7 @@ collect_artifacts() {
                 -o ConnectTimeout=5 \
                 -o StrictHostKeyChecking=no \
                 -o UserKnownHostsFile=/dev/null \
-                "root@127.0.0.1:/var/log/nex/graphical-smoke/$artifact_name" \
+                "$ASSERT_USER@127.0.0.1:/var/log/nex/graphical-smoke/$artifact_name" \
                 "$ARTIFACT_DIR/" \
                 >> "$QEMU_LOG" 2>&1 || true
         done

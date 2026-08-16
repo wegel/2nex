@@ -52,6 +52,7 @@ paths=(
   .nex/tmp/dbus-glib-smoke
   .nex/tmp/direct-initramfs-root
   .nex/tmp/duktape-smoke
+  .nex/tmp/ep014-*-root
   .nex/tmp/freerdp-inspect
   .nex/tmp/freerdp-smoke
   .nex/tmp/freerdp-store-check

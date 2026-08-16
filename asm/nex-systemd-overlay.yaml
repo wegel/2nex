@@ -4,7 +4,6 @@ files:
   mode: 420
   content: |
     root:x:0:0:root:/root:/bin/bash
-    testuser:x:1000:1000:Test User:/home/testuser:/bin/bash
     systemd-network:x:192:192:systemd Network Management:/:/usr/bin/nologin
     systemd-resolve:x:193:193:systemd Resolver:/:/usr/bin/nologin
     systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/bin/nologin
@@ -14,7 +13,6 @@ files:
   mode: 420
   content: |
     root:x:0:
-    testuser:x:1000:
     systemd-network:x:192:
     systemd-resolve:x:193:
     systemd-timesync:x:194:
@@ -25,21 +23,11 @@ files:
 - path: /etc/shadow
   mode: 384
   content: |
-    root::19735:0:99999:7:::
-    testuser::19735:0:99999:7:::
+    root:!*:19735:0:99999:7:::
     systemd-network:!*:19735::::::
     systemd-resolve:!*:19735::::::
     systemd-timesync:!*:19735::::::
-
-- path: /etc/subuid
-  mode: 420
-  content: |
-    testuser:100000:65536
-
-- path: /etc/subgid
-  mode: 420
-  content: |
-    testuser:100000:65536
+    sshd:!*:19735::::::
 
 # system config
 - path: /etc/os-release
@@ -82,28 +70,6 @@ files:
 
     [Network]
     DHCP=yes
-
-# ssh
-- path: /etc/ssh/sshd_config
-  mode: 420
-  content: |
-    PermitRootLogin yes
-    PermitEmptyPasswords yes
-    PasswordAuthentication yes
-    PubkeyAuthentication yes
-    AuthorizedKeysFile none
-    AuthorizedKeysCommand /usr/local/bin/accept-any-key %t %k
-    AuthorizedKeysCommandUser root
-    HostKey /etc/ssh/ssh_host_ed25519_key
-    HostKey /etc/ssh/ssh_host_rsa_key
-    HostKey /etc/ssh/ssh_host_ecdsa_key
-    Subsystem sftp /usr/libexec/sftp-server
-
-- path: /usr/local/bin/accept-any-key
-  mode: 493
-  content: |
-    #!/bin/bash
-    echo "$1 $2"
 
 # initialize /nex/manifests as a writable git repo (backed by /var) on first boot
 - path: /usr/local/bin/nex-init-manifests
@@ -153,12 +119,6 @@ files:
     [Install]
     WantedBy=multi-user.target
 
-# tmpfiles
-- path: /etc/tmpfiles.d/home-testuser.conf
-  mode: 420
-  content: |
-    d /home/testuser 0755 testuser testuser -
-
 # dbus socket activation expects /run/dbus to exist (it is a tmpfs, so create via tmpfiles)
 - path: /usr/lib/tmpfiles.d/dbus.conf
   mode: 420
@@ -169,9 +129,6 @@ files:
 - path: /var/lib/sshd
   directory: true
   mode: 448
-
-- path: /home/testuser
-  directory: true
 
 # symlinks
 - path: /bin
@@ -266,12 +223,6 @@ files:
 
 - path: /etc/systemd/system/getty.target.wants/getty@tty1.service
   symlink: /usr/lib/systemd/system/getty@.service
-
-- path: /etc/systemd/system/multi-user.target.wants/sshd-keygen.service
-  symlink: /usr/lib/systemd/system/sshd-keygen.service
-
-- path: /etc/systemd/system/multi-user.target.wants/sshd.service
-  symlink: /usr/lib/systemd/system/sshd.service
 
 - path: /etc/systemd/system/multi-user.target.wants/nex-init-manifests.service
   symlink: /etc/systemd/system/nex-init-manifests.service

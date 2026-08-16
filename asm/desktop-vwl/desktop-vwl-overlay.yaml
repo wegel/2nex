@@ -4,7 +4,6 @@ files:
   mode: 420
   content: |
     root:x:0:0:root:/root:/bin/bash
-    testuser:x:1000:1000:Test User:/home/testuser:/bin/zsh
     systemd-network:x:192:192:systemd Network Management:/:/usr/bin/nologin
     systemd-resolve:x:193:193:systemd Resolver:/:/usr/bin/nologin
     systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/bin/nologin
@@ -14,38 +13,27 @@ files:
   mode: 420
   content: |
     root:x:0:
-    testuser:x:1000:
     systemd-network:x:192:
     systemd-resolve:x:193:
     systemd-timesync:x:194:
     systemd-journal:x:190:
     sshd:x:74:
-    audio:x:29:testuser
-    video:x:39:testuser
-    input:x:97:testuser
-    render:x:998:testuser
-    seat:x:999:testuser
+    audio:x:29:
+    video:x:39:
+    input:x:97:
+    render:x:998:
+    seat:x:999:
     utmp:x:22:
-    lp:x:7:testuser
+    lp:x:7:
 
 - path: /etc/shadow
   mode: 384
   content: |
-    root::19735:0:99999:7:::
-    testuser::19735:0:99999:7:::
+    root:!*:19735:0:99999:7:::
     systemd-network:!*:19735::::::
     systemd-resolve:!*:19735::::::
     systemd-timesync:!*:19735::::::
-
-- path: /etc/subuid
-  mode: 420
-  content: |
-    testuser:100000:65536
-
-- path: /etc/subgid
-  mode: 420
-  content: |
-    testuser:100000:65536
+    sshd:!*:19735::::::
 
 # system config
 - path: /etc/os-release
@@ -169,18 +157,9 @@ files:
     After=dbus-broker.service
     Wants=dbus-broker.service
 
-# tmpfiles
-- path: /etc/tmpfiles.d/home-testuser.conf
-  mode: 420
-  content: |
-    d /home/testuser 0755 testuser testuser -
-    C /home/testuser/.zshrc 0644 testuser testuser - /nex/current/home/testuser/.zshrc
-    C /home/testuser/.config 0755 testuser testuser - /nex/current/home/testuser/.config
-
 - path: /etc/tmpfiles.d/xdg-runtime.conf
   mode: 420
   content: |
-    d /run/user/1000 0700 testuser testuser -
     d /run/user/0 0700 root root -
 
 - path: /etc/tmpfiles.d/utmp.conf
@@ -201,28 +180,6 @@ files:
     # allow seat group access to graphics
     KERNEL=="card[0-9]*", SUBSYSTEM=="drm", GROUP="video", MODE="0660"
     KERNEL=="renderD*", SUBSYSTEM=="drm", GROUP="render", MODE="0660"
-
-# ssh
-- path: /etc/ssh/sshd_config
-  mode: 420
-  content: |
-    PermitRootLogin yes
-    PermitEmptyPasswords yes
-    PasswordAuthentication yes
-    PubkeyAuthentication yes
-    AuthorizedKeysFile none
-    AuthorizedKeysCommand /usr/local/bin/accept-any-key %t %k
-    AuthorizedKeysCommandUser root
-    HostKey /etc/ssh/ssh_host_ed25519_key
-    HostKey /etc/ssh/ssh_host_rsa_key
-    HostKey /etc/ssh/ssh_host_ecdsa_key
-    Subsystem sftp /usr/libexec/sftp-server
-
-- path: /usr/local/bin/accept-any-key
-  mode: 493
-  content: |
-    #!/bin/bash
-    echo "$1 $2"
 
 # PAM
 - path: /usr/share/factory/etc/pam.d/system-auth
@@ -259,87 +216,6 @@ files:
     password  required pam_deny.so
     session   required pam_deny.so
   replace: true
-
-# user dotfiles
-- path: /home/testuser/.zshrc
-  mode: 420
-  content: |
-    # Lines configured by zsh-newuser-install
-    HISTFILE=~/.zsh_history
-    HISTSIZE=10000
-    SAVEHIST=10000
-    setopt appendhistory sharehistory
-    # End of lines configured by zsh-newuser-install
-
-    # keybindings - emacs mode with arrow keys
-    bindkey -e
-    bindkey '^[[A' up-line-or-history      # up
-    bindkey '^[[B' down-line-or-history    # down
-    bindkey '^[[C' forward-char            # right
-    bindkey '^[[D' backward-char           # left
-    bindkey '^[[1;5C' forward-word         # ctrl+right
-    bindkey '^[[1;5D' backward-word        # ctrl+left
-    bindkey '^H' backward-kill-word        # ctrl+backspace
-    bindkey '^[[3;5~' kill-word            # ctrl+delete
-    bindkey '^[[3~' delete-char            # delete
-    bindkey '^[[H' beginning-of-line       # home
-    bindkey '^[[F' end-of-line             # end
-
-    # modern tool aliases
-    alias ls='eza --icons'
-    alias ll='eza -la --icons'
-    alias cat='bat --paging=never'
-    alias find='fd'
-    alias grep='rg'
-    alias top='btm'
-    alias du='dust'
-    alias df='duf'
-
-    # fzf integration
-    export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git'
-
-    # zoxide
-    eval "$(zoxide init zsh)"
-
-    # starship prompt
-    eval "$(starship init zsh)"
-
-    # locale
-    export LANG=en_US.UTF-8
-
-    # xdg runtime dir (needed before wayland starts)
-    export XDG_RUNTIME_DIR=/run/user/1000
-
-    # auto-start vwl on tty1 (before any wayland env is set)
-    if ! grep -q "nex.safe=1" /proc/cmdline && ! grep -q "nex.novwl=1" /proc/cmdline; then
-        if [ -z "$DISPLAY" ] && [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
-            exec vwl
-        fi
-    fi
-
-    # wayland environment (only set when inside wayland session)
-    if [ -n "$WAYLAND_DISPLAY" ]; then
-        export XDG_SESSION_TYPE=wayland
-    fi
-
-- path: /home/testuser/.config/starship.toml
-  mode: 420
-  content: |
-    [character]
-    success_symbol = "[>](bold green)"
-    error_symbol = "[>](bold red)"
-
-- path: /home/testuser/.config/foot/foot.ini
-  mode: 420
-  content: |
-    [main]
-    font=JetBrainsMono Nerd Font:size=11
-    [colors]
-    background=1a1b26
-    foreground=c0caf5
-
-- path: /home/testuser/.config/vwl
-  directory: true
 
 - path: /root/.bashrc
   mode: 420
@@ -400,149 +276,6 @@ files:
     Storage=persistent
     SystemMaxUse=50M
 
-- path: /usr/local/bin/nex-boot-dump
-  mode: 493
-  content: |
-    #!/bin/sh
-    set -eu
-    OUT_DIR=/var/log/nex
-    OUT_FILE="${OUT_DIR}/boot-dump.txt"
-    mkdir -p "$OUT_DIR"
-    {
-        echo "=== nex boot dump ==="
-        date -u
-        echo ""
-        echo "cmdline:"
-        cat /proc/cmdline
-        echo ""
-        echo "uname:"
-        uname -a
-        echo ""
-        echo "systemctl --failed:"
-        systemctl --failed --no-pager || true
-        echo ""
-        echo "kernel log:"
-        dmesg || true
-        echo ""
-        echo "modules:"
-        lsmod || true
-        echo ""
-        echo "network devices:"
-        ip link || true
-        echo ""
-        echo "nm connections:"
-        nmcli -f NAME,UUID,TYPE,AUTOCONNECT,AUTOCONNECT-PRIORITY connection show || true
-        echo ""
-        echo "nm devices:"
-        nmcli -f DEVICE,TYPE,STATE dev || true
-        echo ""
-        echo "pci devices:"
-        if [ -d /sys/bus/pci/devices ]; then
-            for d in /sys/bus/pci/devices/*; do
-                [ -d "$d" ] || continue
-                echo "- $(basename "$d")"
-                cat "$d/vendor" "$d/device" 2>/dev/null | paste -sd ' ' - || true
-                [ -f "$d/class" ] && echo "class=$(cat "$d/class")" || true
-                [ -f "$d/driver/module" ] && echo "driver=$(basename "$(readlink -f "$d/driver/module")")" || true
-            done
-        fi
-        echo ""
-        echo "usb devices:"
-        if [ -d /sys/bus/usb/devices ]; then
-            for d in /sys/bus/usb/devices/*; do
-                [ -d "$d" ] || continue
-                [ -f "$d/idVendor" ] || continue
-                echo "- $(basename "$d") vendor=$(cat "$d/idVendor") product=$(cat "$d/idProduct")"
-                [ -f "$d/product" ] && echo "  product=$(cat "$d/product")" || true
-                [ -f "$d/manufacturer" ] && echo "  manufacturer=$(cat "$d/manufacturer")" || true
-            done
-        fi
-    } >"$OUT_FILE" 2>&1
-
-- path: /etc/systemd/system/nex-boot-dump.service
-  mode: 420
-  content: |
-    [Unit]
-    Description=Dump boot diagnostics to /var/log/nex/boot-dump.txt
-    After=network.target NetworkManager.service
-    Wants=NetworkManager.service
-
-    [Service]
-    Type=oneshot
-    ExecStart=/usr/local/bin/nex-boot-dump
-
-    [Install]
-    WantedBy=multi-user.target
-
-- path: /etc/NetworkManager/system-connections/wegelnet.nmconnection
-  mode: 384
-  content: |
-    [connection]
-    id=wegelnet
-    type=wifi
-    autoconnect=true
-    autoconnect-priority=100
-
-    [wifi]
-    ssid=wegelnet
-    mode=infrastructure
-
-    [wifi-security]
-    key-mgmt=wpa-psk
-    psk=BackToYouF00cker5
-
-    [ipv4]
-    method=manual
-    address1=192.168.3.110/24,192.168.3.2
-    dns=192.168.3.2;
-
-    [ipv6]
-    method=ignore
-
-- path: /usr/local/bin/nm-autoconnect
-  mode: 493
-  content: |
-    #!/bin/sh
-    set -eu
-    ensure_conn() {
-        if nmcli -g NAME connection show 2>/dev/null | grep -qx wegelnet; then
-            return 0
-        fi
-        nmcli connection add type wifi ifname "*" con-name wegelnet ssid wegelnet \
-            wifi-sec.key-mgmt wpa-psk wifi-sec.psk BackToYouF00cker5 \
-            ipv4.method manual ipv4.addresses 192.168.3.110/24 ipv4.gateway 192.168.3.2 ipv4.dns 192.168.3.2 \
-            ipv6.method ignore || true
-    }
-    wifi_connected() {
-        nmcli -t -f TYPE,STATE dev 2>/dev/null | awk -F: '$1=="wifi" && $2=="connected"{found=1} END{exit !found}'
-    }
-    for _i in 1 2 3 4 5 6 7 8 9 10; do
-        ensure_conn || true
-        wifi_connected && exit 0 || true
-        nmcli --wait 10 connection up id wegelnet && exit 0 || true
-        sleep 2
-    done
-    exit 1
-
-- path: /etc/systemd/system/nm-autoconnect.service
-  mode: 420
-  content: |
-    [Unit]
-    Description=Force NetworkManager autoconnect for wegelnet
-    After=NetworkManager.service
-    Wants=NetworkManager.service iwd.service
-
-    [Service]
-    Type=oneshot
-    ExecStartPre=/bin/sleep 5
-    ExecStart=/usr/local/bin/nm-autoconnect
-    Restart=on-failure
-    RestartSec=10
-    StartLimitIntervalSec=0
-
-    [Install]
-    WantedBy=multi-user.target
-
 # systemd service enablement
 - path: /etc/systemd/system/multi-user.target.wants/NetworkManager.service
   symlink: /usr/lib/systemd/system/NetworkManager.service
@@ -556,20 +289,8 @@ files:
 - path: /etc/systemd/system/multi-user.target.wants/systemd-resolved.service
   symlink: /usr/lib/systemd/system/systemd-resolved.service
 
-- path: /etc/systemd/system/multi-user.target.wants/nex-boot-dump.service
-  symlink: /etc/systemd/system/nex-boot-dump.service
-
-- path: /etc/systemd/system/multi-user.target.wants/nm-autoconnect.service
-  symlink: /etc/systemd/system/nm-autoconnect.service
-
 - path: /etc/systemd/system/getty.target.wants/getty@tty1.service
   symlink: /usr/lib/systemd/system/getty@.service
-
-- path: /etc/systemd/system/multi-user.target.wants/sshd-keygen.service
-  symlink: /usr/lib/systemd/system/sshd-keygen.service
-
-- path: /etc/systemd/system/multi-user.target.wants/sshd.service
-  symlink: /usr/lib/systemd/system/sshd.service
 
 - path: /etc/systemd/system/sockets.target.wants/dbus.socket
   symlink: /usr/lib/systemd/system/dbus.socket

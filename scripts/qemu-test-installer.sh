@@ -415,6 +415,32 @@ while IFS=: read -r user_name _; do
 done < /etc/passwd
 [ "$root_user_found" = true ] || fail "/etc/passwd has no root user"
 
+grep -q '^root:!\*:' /etc/shadow || fail "root account is not locked"
+while IFS=: read -r user_name _ user_id _; do
+    case "$user_id" in
+        ''|*[!0-9]*) continue ;;
+    esac
+    if [ "$user_id" -ge 1000 ] && [ "$user_id" -lt 65534 ]; then
+        fail "generic system contains interactive account $user_name with UID $user_id"
+    fi
+done < /etc/passwd
+
+if systemctl is-enabled --quiet sshd.service 2>/dev/null; then
+    fail "sshd.service is enabled before provisioning"
+fi
+if systemctl is-active --quiet sshd.service 2>/dev/null; then
+    fail "sshd.service is active before provisioning"
+fi
+if /usr/bin/timeout 1 /usr/bin/bash -c \
+    'exec 3<>/dev/tcp/127.0.0.1/22' >/dev/null 2>&1; then
+    fail "TCP port 22 accepts connections before provisioning"
+fi
+if printf '\n' | /usr/bin/setpriv --reuid=65534 --regid=65534 --clear-groups \
+    /usr/bin/su root -c /usr/bin/true >/dev/null 2>&1; then
+    fail "root accepts a blank password"
+fi
+say "generic-access-policy=ready"
+
 IFS= read -r hosts_line < /etc/hosts || fail "/etc/hosts is missing"
 [ "$hosts_line" = "host-owned hosts" ] || fail "/etc/hosts was overwritten: $hosts_line"
 

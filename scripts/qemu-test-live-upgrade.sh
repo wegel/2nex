@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 NEX_BIN="${NEX_BIN:-$ROOT_DIR/src/cli/target/debug/nex}"
+TEST_IDENTITY_HELPER="$SCRIPT_DIR/prepare-qemu-test-identity.sh"
 ZUB_REPO="${ZUB_REPO:-$ROOT_DIR/.nex/repo}"
 FROM_REF="${FROM_REF:-systems/desktop-vwl/0.0.1}"
 TO_REF="${TO_REF:-systems/desktop-vwl-nvidia-580/0.0.1}"
@@ -13,7 +14,7 @@ TIMEOUT_SECS="${TIMEOUT_SECS:-240}"
 MEMORY="${MEMORY:-4096}"
 SMP="${SMP:-2}"
 KEEP_WORK="${KEEP_LIVE_UPGRADE_WORK:-0}"
-HARDLINK_PROBE_PATH="${HARDLINK_PROBE_PATH:-etc/os-release}"
+HARDLINK_PROBE_PATH="${HARDLINK_PROBE_PATH:-usr/share/factory/etc/os-release}"
 
 WORK_DIR="${WORK_DIR:-$ROOT_DIR/.nex/tmp/live-upgrade}"
 ARTIFACT_DIR="${ARTIFACT_DIR:-$ROOT_DIR/.nex/tmp/live-upgrade-artifacts}"
@@ -67,6 +68,8 @@ require_tools() {
     need_tool sfdisk
     need_tool ssh
     need_tool ssh-keygen
+    need_tool truncate
+    need_tool "$TEST_IDENTITY_HELPER"
     need_tool zub
 }
 
@@ -181,12 +184,35 @@ build_guest_repo() {
     zub --repo "$remote_repo" pull "$ZUB_REPO" "$TO_REF" >/dev/null
 }
 
+prepare_qemu_network() {
+    local var_content=$1
+    local connection_dir="$var_content/etc/NetworkManager/system-connections"
+
+    mkdir -p "$var_content/etc/modules-load.d" "$connection_dir"
+    printf '%s\n' virtio_net > "$var_content/etc/modules-load.d/00-nex-qemu-network.conf"
+    cat > "$connection_dir/nex-qemu-test.nmconnection" <<'EOF'
+[connection]
+id=nex-qemu-test
+type=ethernet
+autoconnect=true
+
+[ethernet]
+
+[ipv4]
+method=auto
+
+[ipv6]
+method=disabled
+EOF
+    chmod 0600 "$connection_dir/nex-qemu-test.nmconnection"
+}
+
 stage_root_and_var() {
     local from_checksum=$1
     local root_content=$2
     local var_content=$3
     local deploy_dir="$root_content/nex/deployments/${from_checksum}.0"
-    local public_key
+    local factory_etc
 
     mkdir -p "$deploy_dir"
     zub --repo "$ZUB_REPO" checkout --copy "$FROM_REF" "$deploy_dir"
@@ -234,7 +260,7 @@ stage_root_and_var() {
     mkdir -p \
         "$var_content/etc/systemd/system/multi-user.target.wants" \
         "$var_content/home" \
-        "$var_content/root/.ssh" \
+        "$var_content/root" \
         "$var_content/log/journal" \
         "$var_content/lib/sshd" \
         "$var_content/lib/systemd/random-seed" \
@@ -247,15 +273,16 @@ stage_root_and_var() {
         "$var_content/nex/manifests" \
         "$var_content/nex/upgrade-source"
     chmod 1777 "$var_content/tmp"
-    chmod 700 "$var_content/lib/sshd" "$var_content/root/.ssh"
+    chmod 700 "$var_content/lib/sshd"
     cp -a "$deploy_dir/etc/." "$var_content/etc/"
     touch "$var_content/etc/.initialized"
 
-    public_key=$(cat "$ASSERT_KEY.pub")
-    printf '%s\n' "$public_key" > "$var_content/root/.ssh/authorized_keys"
-    chmod 600 "$var_content/root/.ssh/authorized_keys"
-    ln -sfn /usr/lib/systemd/system/sshd.service \
-        "$var_content/etc/systemd/system/multi-user.target.wants/sshd.service"
+    factory_etc="$deploy_dir/usr/share/factory/etc"
+    if [[ ! -d "$factory_etc" ]]; then
+        factory_etc="$deploy_dir/etc"
+    fi
+    "$TEST_IDENTITY_HELPER" "$factory_etc" "$var_content" "$ASSERT_KEY.pub" root
+    prepare_qemu_network "$var_content"
 
     build_guest_repo "$var_content/nex/repo" "$var_content/nex/upgrade-source"
 }
@@ -282,6 +309,7 @@ build_disk() {
     local root_size_mb
     local root_payload_mb
     local remote_repo_mb
+    local var_payload_mb
     local var_size_mb
     local root_start
     local root_sectors
@@ -306,13 +334,17 @@ build_disk() {
 
     remote_repo_mb=$(du -sm "$var_content/nex/upgrade-source" | awk '{ print $1 }')
     root_payload_mb=$(du -sm "$root_content" | awk '{ print $1 }')
+    var_payload_mb=$(du -sm "$var_content" | awk '{ print $1 }')
     root_size_mb=$((root_payload_mb * 2 + remote_repo_mb + ROOT_MARGIN_MB))
-    var_size_mb=$(($(du -sm "$var_content" | awk '{ print $1 }') + remote_repo_mb + VAR_PULL_MARGIN_MB))
+    # The fixture keeps one complete source repo in /var, then pulls that repo
+    # into the writable system repo. Leave another repo-sized working area for
+    # temporary object files and filesystem overhead during the pull.
+    var_size_mb=$((var_payload_mb + remote_repo_mb * 2 + VAR_PULL_MARGIN_MB))
 
     log "creating root filesystem (${root_size_mb}MiB)"
     log "creating var filesystem (${var_size_mb}MiB)"
     if command -v fakeroot >/dev/null 2>&1; then
-        fakeroot -- bash -c "chown -R 0:0 '$root_content' '$var_content' && mke2fs -q -t ext4 -L nex -d '$root_content' '$root_img' ${root_size_mb}M && mke2fs -q -t ext4 -L nex-var -d '$var_content' '$var_img' ${var_size_mb}M"
+        fakeroot -- bash -c "chown -R 0:0 '$root_content' '$var_content' && '$TEST_IDENTITY_HELPER' --set-ownership '$var_content' && mke2fs -q -t ext4 -L nex -d '$root_content' '$root_img' ${root_size_mb}M && mke2fs -q -t ext4 -L nex-var -d '$var_content' '$var_img' ${var_size_mb}M"
     else
         mke2fs -q -t ext4 -L nex -d "$root_content" "$root_img" "${root_size_mb}M"
         mke2fs -q -t ext4 -L nex-var -d "$var_content" "$var_img" "${var_size_mb}M"
@@ -325,7 +357,7 @@ build_disk() {
     disk_size_mb=$((ESP_SIZE_MB + root_size_mb + var_size_mb + 64))
 
     log "creating target image (${disk_size_mb}MiB)"
-    dd if=/dev/zero of="$TARGET_IMG" bs=1M count="$disk_size_mb" status=none
+    truncate -s "${disk_size_mb}M" "$TARGET_IMG"
     sfdisk "$TARGET_IMG" >/dev/null <<EOF
 label: gpt
 unit: sectors
@@ -334,9 +366,11 @@ start=2048, size=$((ESP_SIZE_MB * 2048)), type=uefi, name="EFI"
 start=${root_start}, size=${root_sectors}, type=linux, name="nex"
 start=${var_start}, size=${var_sectors}, type=linux, name="nex-var"
 EOF
-    dd if="$esp_img" of="$TARGET_IMG" bs=512 seek=2048 conv=notrunc status=none
-    dd if="$root_img" of="$TARGET_IMG" bs=512 seek="$root_start" conv=notrunc status=none
-    dd if="$var_img" of="$TARGET_IMG" bs=512 seek="$var_start" conv=notrunc status=none
+    dd if="$esp_img" of="$TARGET_IMG" bs=1M seek=1 conv=notrunc,sparse status=none
+    dd if="$root_img" of="$TARGET_IMG" bs=1M seek="$((root_start / 2048))" \
+        conv=notrunc,sparse status=none
+    dd if="$var_img" of="$TARGET_IMG" bs=1M seek="$((var_start / 2048))" \
+        conv=notrunc,sparse status=none
 }
 
 qemu_args() {
@@ -430,6 +464,7 @@ assert_deployment_file_materialized() {
     local deployment=$1
 
     run_guest_cmd "
+        set -eu
         deployment_root='/sysroot/nex/deployments/${deployment}'
         repo_blobs='/nex/repo/objects/blobs'
         file=\"\$deployment_root/${HARDLINK_PROBE_PATH}\"
