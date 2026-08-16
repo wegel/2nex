@@ -71,9 +71,11 @@ objects.
 
 Evidence: EP009's direct-initramfs QEMU assertion verified `/nex/repo` and
 `/nex/staging` come from the root source and are writable, while `/nex/users`
-and `/nex/manifests` come from the var source. The full live-upgrade proof
-then showed the upgraded deployment's `etc/os-release` shares an inode with a
-blob under `/nex/repo/objects/blobs`.
+and `/nex/manifests` come from the var source. The focused
+`scripts/test-live-upgrade-hardlinks.sh` test proves that a same-filesystem
+upgrade shares deployment files with repository blobs. The full QEMU fixture
+can use a var-backed repository and report `repo-copy`; it separately proves
+that rollback reuses the original deployment inode on the root filesystem.
 
 `pkg/libs/tui/newt.yaml` provides `/usr/bin/whiptail` in `outputs/bin`, so the
 installer can show a TUI without adding a large graphical stack. Keep a plain
@@ -134,3 +136,17 @@ MiB, and retain the configured minimum for small roots. EP013's desktop no
 longer fit in 6,144 MiB; the measured formula selected 13,585 MiB and booted
 the exact stored deployment to `ASSERT-BOOT-PASS`. Use `truncate` and sparse
 `dd` copies so the raw test disk does not materialize every zero-filled block.
+
+The full live-upgrade QEMU fixture keeps a complete local source repository in
+`/var`, then pulls it into the guest's writable repository. Size `/var` from
+the staged payload plus two additional source-repository sizes plus 2,048 MiB.
+One additional size covers the final pulled repo; the second leaves working
+space and filesystem overhead while Zub writes objects.
+
+Evidence: a 9,711 MiB source repo exhausted a 21,470 MiB `/var` image during
+pull. A 31,181 MiB image pulled 9,617,341,112 bytes across 164,463 objects and
+completed source boot, upgrade, upgraded boot, rollback, and rollback boot.
+Probe `usr/share/factory/etc/os-release`, the regular immutable file. Do not
+probe absent `etc/os-release` or the `usr/lib/os-release` compatibility
+symlink. Multi-command SSH probes should start with `set -eu` so a failed file
+check cannot be hidden by a later successful `printf`.

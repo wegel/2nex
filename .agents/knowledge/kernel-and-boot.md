@@ -298,3 +298,18 @@ The direct initramfs image has no ESP partition, so the serial log can show
 proof still passes. Treat that failure as expected for this direct path when
 the assertion service verifies readonly `/sysroot`, writable `/var` backed
 paths, deployment-root boot, and systemd startup.
+
+## Linux 6.18 module version records
+
+When `CONFIG_MODVERSIONS=y`, Linux 6.18 also needs one record format enabled.
+Nex explicitly sets `CONFIG_BASIC_MODVERSIONS=y` in the override fragment and
+requires it in the kernel manifest's final config check. The generated
+allmod fragment starts from `allnoconfig`; without the explicit override it
+can preserve the default-y basic switch as disabled when `olddefconfig` runs.
+
+Evidence: the bad 6.18.24 kernel config enabled `CONFIG_MODVERSIONS` but
+enabled neither basic nor extended records. QEMU then rejected `virtio_net`
+and `pkcs8_key_parser` with `Exec format error`, and `virtio_net.ko` had no
+`__versions` section. The rebuilt `outputs/drv-net-virtio` module contains
+that section, and the Systemd, graphical, installer, and live-upgrade guests
+loaded the rebuilt kernel successfully.

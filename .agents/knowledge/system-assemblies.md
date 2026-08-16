@@ -395,3 +395,25 @@ replaces that link with a real directory merged from `/etc/pki/trust`,
 a checked-out desktop root that generated 296 hash links below `/run`. A
 second refresh created no nested link, and a forced extractor failure kept the
 immutable fallback bundle readable.
+
+## Generic reusable system policy
+
+Reusable `nex-systemd` and Desktop VWL assemblies ship no interactive human
+account, personal home directory, product Wi-Fi connection, site address, SSH
+credential bypass, or debug-only boot service. Root has `!*` in the factory
+shadow file, and sshd remains disabled until a machine provisioner installs an
+authentication method and enables it.
+
+Keep test access in disposable test images. The policy checker
+`scripts/check-generic-assembly-policy.sh` rejects the known product and test
+artifacts in both reusable overlays. `scripts/test-generic-system-root.sh`
+checks the finished factory and immutable trees, then asks the packaged sshd
+for its effective root-login, empty-password, and authorized-key-command
+policy.
+
+Evidence: EP014 removed `testuser`, `wegelnet`, `accept-any-key`,
+`nm-autoconnect`, `nex-boot-dump`, permissive sshd settings, and SSH enablement
+links from the two overlays. Final Systemd, Desktop, both Nvidia variants, and
+desktop-dev roots passed the finished-root test. The direct QEMU guest also
+proved that a fresh system has no human UID, keeps sshd inactive and port 22
+closed, and rejects a blank root password.

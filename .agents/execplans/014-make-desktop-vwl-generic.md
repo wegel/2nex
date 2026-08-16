@@ -34,25 +34,36 @@ files should enter `/etc` on first boot.
 
 ## Progress
 
-- [ ] Run the Ralph worktree pre-task, list `.agents/knowledge/`, and read the
-  notes about assemblies, QEMU, installers, configuration, and reproducible
-  builds.
-- [ ] Freeze a checked inventory of every account, credential, home file,
-  network setting, SSH exception, test helper, and debug service supplied by
-  the reusable Systemd and Desktop VWL assemblies.
-- [ ] Define the generic installed-system contract and add a repository check
-  that rejects the known classes of product-specific data from reusable
-  assembly manifests.
-- [ ] Remove the built-in interactive user, personal home tree, site network,
+- [x] (2026-08-15 21:23Z) Ran the Ralph worktree pre-task against a clean
+  worktree, selected EP014 as the lowest active plan, listed all ten durable
+  knowledge files, and read the assembly, graphical QEMU, installer,
+  reproducibility, and agent-workflow notes.
+- [x] (2026-08-15 21:36Z) Froze the manifest inventory with the new policy
+  checker. The old Systemd overlay had eight test-identity or home matches,
+  five SSH-bypass matches, three permissive SSH settings, two SSH enablement
+  links, and an empty root password. The old desktop overlay added 20 identity
+  or home matches, eleven site-network matches, three bypass matches, three
+  permissive settings, two SSH links, fourteen debug-helper matches, and an
+  empty root password.
+- [x] (2026-08-15 21:36Z) Added self-tested reusable-assembly and disposable
+  QEMU-identity helpers. The policy checker rejects every known unsafe class,
+  accepts a locked generic fixture, fails against the old inventory, and now
+  passes against both cleaned overlays.
+- [x] (2026-08-15 22:18Z) Removed the built-in interactive user, personal home tree, site network,
   permissive SSH policy, test key helper, and debug-only services. Leave root
   locked and leave remote access disabled until a provisioner configures it.
-- [ ] Change QEMU and finished-root tests so each test injects the temporary
+- [x] (2026-08-15 22:41Z) Changed QEMU and finished-root tests so each test injects the temporary
   identity, credentials, and network state that it needs into a disposable
   test image.
-- [ ] Check and build the affected assembly family from parent to child, then
-  exercise the Systemd, graphical desktop, and installer boot paths.
-- [ ] Scan the finished roots for prohibited product data, promote durable
-  knowledge, record the final checks, and stop for human review.
+- [x] (2026-08-15) Fixed Linux 6.18 basic module-version records, rebuilt the
+  kernel, then built Systemd, Desktop, both Nvidia children, and desktop-dev
+  from parent to child. Every strict command built twice and reproduced.
+- [x] (2026-08-15) Booted the final Systemd and Desktop refs, rendered Chromium,
+  exercised the installer assertion, and completed upgrade plus rollback from
+  the final Desktop ref to the final Nvidia-580 ref.
+- [x] (2026-08-15) Scanned all five final roots, ran focused desktop and tool
+  checks, promoted verified notes into four durable knowledge files, recorded
+  the final checks below, and stopped for human review.
 
 ## Surprises & Discoveries
 
@@ -79,6 +90,62 @@ files should enter `/etc` on first boot.
   `50ed467e695adcb994ce924ad3ed5123d0feeb92ced1b0db828c7673165d7809`
   has no files or links in the stored deployment's `/etc`; its factory tree
   contains 88 leaves that first boot can seed into writable state.
+
+- Observation: The EP014 pre-task found no tracked, untracked, ignored, or
+  half-finished changes to classify.
+  Evidence: `rtk git status --short --untracked-files=all` printed no paths at
+  commit `5dd6708`, so the plan started from the pushed plan-only checkpoint.
+
+- Observation: The graphical and live-upgrade QEMU scripts already assemble
+  writable `/etc`, `/home`, and `/root` trees before making their ext4 images.
+  Evidence: `scripts/qemu-test-graphical.sh` and
+  `scripts/qemu-test-live-upgrade.sh` create `var-content` trees and use
+  `mke2fs -d`. `scripts/prepare-qemu-test-identity.sh` can therefore copy the
+  production service accounts, add `nex-test` only to that tree, install an
+  ephemeral public key, and enable SSH without modifying a system ref.
+
+- Observation: The direct Systemd QEMU path does not need SSH.
+  Evidence: `scripts/qemu-test-systemd.sh` delegates to the direct-initramfs
+  serial assertion in `scripts/qemu-test-installer.sh`. The assertion can test
+  a locked root, absence of human accounts, disabled SSH, closed TCP port 22,
+  and rejection of a blank root password before printing `ASSERT-BOOT-PASS`.
+
+- Observation: The finished-root regression test fails against the EP013
+  desktop before reaching later checks.
+  Evidence: after checking out `systems/desktop-vwl/0.0.1` to
+  `.nex/tmp/ep014-baseline-root`, `scripts/test-generic-system-root.sh` printed
+  `FAIL: root is not locked`.
+
+- Observation: the installer image-sizing self-test uses
+  `--self-test-image-sizing`, not the initially attempted
+  `--self-test-direct-sizing` spelling.
+  Evidence: the first command returned `unknown option`; the documented option
+  then printed `PASS: installer direct image sizing`.
+
+- Observation: the Linux 6.18.24 package enables `CONFIG_MODVERSIONS` but
+  disables both version-record formats, so every loadable module lacks the
+  records that the running kernel requires and fails with `Exec format error`.
+  Evidence: the live-upgrade guest journal records failures for `virtio_net`
+  and `pkcs8_key_parser`; the installed config has `CONFIG_MODVERSIONS=y` but
+  neither `CONFIG_BASIC_MODVERSIONS` nor `CONFIG_EXTENDED_MODVERSIONS`; and
+  `readelf -S virtio_net.ko` shows no `__versions` section. Linux 6.18's
+`kernel/module/Kconfig` defaults `BASIC_MODVERSIONS` to yes when module
+  versions are enabled.
+
+- Observation: the live-upgrade fixture's old `/var` sizing formula left too
+  little room for a complete pull of the current desktop repository.
+  Evidence: a 9,711 MiB staged source repo filled a 21,470 MiB filesystem while
+  Zub wrote `/nex/repo/objects/blobs`. A 31,181 MiB image, sized from the
+  staged payload plus two additional repo sizes and 2,048 MiB, pulled
+  9,617,341,112 bytes across 164,463 objects and completed the full flow.
+
+- Observation: a multi-command SSH probe can hide an early failed `test` when
+  a later `printf` succeeds.
+  Evidence: the first upgraded-file probe looked for absent `etc/os-release`,
+  logged a failed `stat`, and still returned success. The final probe starts
+  with `set -eu` and checks the regular immutable file at
+  `usr/share/factory/etc/os-release` instead of the `/usr/lib` compatibility
+  symlink.
 
 ## Decision Log
 
@@ -114,12 +181,75 @@ files should enter `/etc` on first boot.
   required machine state.
   Date: 2026-08-15.
 
+- Decision: Rebuild `nex-systemd`, then Desktop VWL, then the two Nvidia
+  siblings, then `desktop-dev`; build the siblings sequentially.
+  Rationale: Desktop VWL extends the changed Systemd base and snapshots `asm/`
+  plus `scripts/`. Each desktop child extends that result. `nex-minimal` and
+  the installer assembly do not extend either changed assembly, while the
+  direct installer QEMU harness can test the final Desktop VWL ref without
+  rebuilding the installer image.
+  Date: 2026-08-15.
+
+- Decision: Fix the kernel's missing basic module-version records in this
+  plan and make the kernel build require that setting.
+  Rationale: the required live-upgrade boot found a system-wide kernel defect,
+  not a test-only network choice. Avoiding the module in QEMU would leave every
+  real device unable to load its modular hardware drivers.
+  Date: 2026-08-15.
+
+- Decision: Size the live-upgrade writable image from measured repository
+  content and make its deployment-file probe fail fast.
+  Rationale: a full desktop repository can exceed a fixed safety margin, and
+  a successful final shell command must not mask a missing immutable file.
+  Date: 2026-08-15.
+
+- Decision: Send noisy build and test output to ignored logs and inspect only
+  exit status, checksums, pass markers, and focused failure excerpts.
+  Rationale: full assembly transcripts contain thousands of routine lines and
+  do not help the human or agent when the command succeeds.
+  Date: 2026-08-15.
+
 ## Outcomes & Retrospective
 
-Not started. At completion, summarize the generic system contract, list each
-removed product assumption, identify how tests now provision disposable state,
-record exact output checksums and boot results, and state every skipped check
-or remaining product-specific value.
+The reusable Systemd and Desktop family now ships as an unprovisioned generic
+system. Root is locked, no human account or home ships, sshd stays disabled,
+and the overlays contain no product Wi-Fi, site address, permissive SSH rule,
+key bypass, or debug-only boot helper. An installer or product provisioner must
+create the administrator, network state, and remote-access policy.
+
+QEMU no longer depends on production test access. A shared helper copies the
+factory service accounts into the disposable writable tree, then adds either a
+temporary `nex-test` desktop identity or root-only upgrade access, an ephemeral
+key, and test-only sshd enablement. The direct serial boot path adds no identity
+and proves the locked fresh-system policy itself.
+
+The final assembly checksums are Systemd
+`d9ec2179769be8eab52f3fd02b9d0a648f9b243819fa2d54d00048ee6a2c44da`,
+Desktop `8a00e2f4d65dc989478f667fba9139d47153bb920a7b6399ba218764a20f15a4`,
+Nvidia 580 `785b6956d655a05566f7f28e2b05514c24fc0c4c76af803ce89de1077e44ffdc`,
+Nvidia current
+`8a49f779dd79e913f86fa1b3c4d928efe229a140ee4a4e2516fb6cf7b0fe1762`,
+and desktop-dev
+`4e219893cb11830f121c8092119c00b14e69eb9342940c34b794d612a458a0e8`.
+Each strict check produced the same checksum in both builds.
+
+The required QEMU paths passed against the final refs. Systemd and installer
+printed `generic-access-policy=ready` and `ASSERT-BOOT-PASS`. Chromium reported
+the expected page title, `1280 800`, `srgb(240,0,255)`, and
+`ASSERT-GRAPHICS-PASS`. The live-upgrade proof booted Desktop `8a00e2f4...`,
+upgraded and booted Nvidia 580 `785b6956...`, reused the original deployment
+inode during rollback, booted rollback serial 2, and printed
+`LIVE-UPGRADE-PASS`.
+
+The plan did not boot real Nvidia hardware or build a full USB installer. Both
+Nvidia finished roots ran their packaged `nvidia-smi --help`, the rebuilt
+`virtio_net.ko` contains module version records, and the direct installer path
+booted the final Desktop ref. A hardware GPU load and full-media install remain
+useful downstream checks, but neither is needed to prove removal of reusable
+product policy. ShellCheck was not installed; Bash and POSIX syntax checks,
+script self-tests, finished-root tests, and the live QEMU paths all passed.
+EP015 still owns the classification and upgrade behavior of the remaining
+factory `/etc` entries.
 
 ## Context and Orientation
 
@@ -222,7 +352,11 @@ required by the local agent setup.
    `asm/nex-minimal.yaml`, `asm/nex-systemd.yaml`,
    `asm/desktop-vwl/desktop-vwl.yaml`, both Nvidia children,
    `asm/desktop-dev.yaml`, and the installer manifests. Update this plan with
-   the exact rebuild order before changing checksums.
+   the exact rebuild order before changing checksums. The mapped order is
+   `asm/nex-systemd.yaml`, `asm/desktop-vwl/desktop-vwl.yaml`,
+   `asm/desktop-vwl/desktop-vwl-nvidia-580.yaml`,
+   `asm/desktop-vwl/desktop-vwl-nvidia-current.yaml`, then
+   `asm/desktop-dev.yaml`. The two Nvidia siblings must run sequentially.
 
 3. Add the focused reusable-assembly policy check and executable self-test.
    Record its command here after selecting its final path. Run the self-test
@@ -283,6 +417,48 @@ The plan is complete only when all of the following statements are true:
   runtime path that could not be exercised rather than treating a file check as
   runtime proof.
 
+### Completion Check
+
+The following final commands passed on 2026-08-15. Commands with large output
+wrote their full transcript to the named ignored file under `.nex/tmp/`.
+
+- `./nex build pkg/core/kernel/linux.yaml --verbose --single --check
+  --update-checksum --force --compute-deps --record-profile
+  --generate-outputs` reproduced kernel build checksum
+  `18b77203f0569f6f1730c36092581bbc1f4179f35b5ad03e29be56b94bc089ab`.
+  `readelf -S` on final `outputs/drv-net-virtio` found `__versions` in
+  `virtio_net.ko`.
+- The same strict command built each affected assembly from parent to child.
+  Logs `ep014-build-{nex-systemd,desktop-vwl,desktop-vwl-nvidia-580,
+  desktop-vwl-nvidia-current,desktop-dev}.log` contain matching first and
+  second checksums listed in `Outcomes & Retrospective`.
+- `./nex check` passed for the kernel manifest and all five assembly manifests.
+  `scripts/check-generic-assembly-policy.sh --self-test`, the real policy scan,
+  `scripts/prepare-qemu-test-identity.sh --self-test`, both graphical
+  self-tests, the installer image-sizing self-test, all changed shell syntax
+  checks, executable-bit checks, and `git diff --check` passed in
+  `ep014-final-checks.log`.
+- `ZUB_BIN=/home/wegel/work/perso/zub/target/debug/zub
+  scripts/qemu-test-systemd.sh systems/nex-systemd/0.0.1 --timeout 120` passed
+  in `ep014-qemu-systemd.log`.
+- `ZUB_BIN=/home/wegel/work/perso/zub/target/debug/zub
+  scripts/qemu-test-graphical.sh --target-ref systems/desktop-vwl/0.0.1
+  --app chromium --timeout 300` passed in `ep014-qemu-graphical.log`.
+- `ZUB_BIN=/home/wegel/work/perso/zub/target/debug/zub
+  TARGET_REF=systems/desktop-vwl/0.0.1 scripts/qemu-test-installer.sh
+  --direct-initramfs --assert-boot --headless --timeout 180` passed in
+  `ep014-qemu-installer.log`.
+- `PATH=/home/wegel/work/perso/zub/target/debug:$PATH
+  RUSTUP_TOOLCHAIN=stable scripts/qemu-test-live-upgrade.sh` passed against the
+  final Desktop and Nvidia-580 refs in
+  `ep014-qemu-live-upgrade-final-refs.log`.
+- `scripts/test-generic-system-root.sh` passed on final checkouts of Systemd,
+  Desktop, both Nvidia variants, and desktop-dev. The Desktop checkout also
+  passed `scripts/test-desktop-command-configs.sh`,
+  `scripts/test-desktop-xdg-autostart.sh`, and
+  `scripts/test-desktop-libvirt-integrations.sh`. Both Nvidia roots ran
+  `nvidia-smi --help`; desktop-dev reported Rust and Cargo 1.91.1.
+
 ## Idempotence and Recovery
 
 Strict builds may update manifest checksums and generated dependency metadata.
@@ -312,6 +488,19 @@ The EP013 baseline assembly checksums are:
 
 These values identify the starting refs. New values are expected when the
 assembly contents change.
+
+The initial executable checks passed:
+
+- `rtk scripts/check-generic-assembly-policy.sh --self-test`
+- `rtk scripts/prepare-qemu-test-identity.sh --self-test`
+- `rtk scripts/check-generic-assembly-policy.sh` after cleaning the overlays
+- Bash or POSIX shell syntax checks for all five changed scripts
+- both graphical script self-tests
+- `rtk scripts/qemu-test-installer.sh --self-test-image-sizing`
+
+The policy check deliberately failed before the overlay cleanup and reported
+every inventory class listed in `Progress`. The finished-root test deliberately
+failed against the stored EP013 desktop because root had an empty password.
 
 ## Interfaces and Dependencies
 

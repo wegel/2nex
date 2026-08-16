@@ -68,3 +68,15 @@ Evidence: the final EP013 guest reported successful generated AT-SPI and Gnome
 Keyring units, a live AT-SPI D-Bus address, Chromium title
 `NEX_GRAPHICAL_SMOKE_READY`, dimensions `1280 800`, center pixel
 `srgb(240,0,255)`, and `ASSERT-GRAPHICS-PASS`.
+
+Reusable desktop refs do not contain a test login. Before building the
+writable var image, the graphical harness calls
+`scripts/prepare-qemu-test-identity.sh` to copy factory service accounts, add
+the `nex-test` account and home, install an ephemeral public key, and enable
+sshd only in that disposable tree. The helper's root-only mode serves the
+live-upgrade harness without creating `nex-test`.
+
+Evidence: EP014's helper self-test covered both modes. The final Chromium QEMU
+run logged in as `nex-test`, rendered the expected page, and passed while the
+stored Desktop root contained no human account, authorized key, SSH enablement
+link, or test home.
