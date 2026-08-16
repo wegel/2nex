@@ -6,17 +6,22 @@ package:
   version: 29.3.0+git1da6517e1a
   description: Docker container engine and command-line client built from Moby
   homepage: https://www.docker.com/
-  checksum: 6f82e2a82020fb2a8701a3ca2818fc4a497ba5c619d3e26600926caa5e84ecdb
+  checksum: 4660e54e63cf2a0aade2db21bb7c05fbab090e529044065bfd5d5f44c419caa7
 
 sources:
 - name: moby
   url: https://github.com/moby/moby/archive/1da6517e1a4381297e56862f6f373f265c28d102.tar.gz
   sha256: 22170504140840d37bb3cbc14a0807c1803d71934f4e6f74793448cff7fcf30f
+- name: uapi_config
+  file: pkg/apps/containers/docker-uapi-config.patch
+  sha256: d5482d36ad1471bda5e7622665b56612775bc203b16366459d50ee21a29d1487
 - name: docker_cli
   url: https://github.com/docker/cli/archive/df016a3a9538efb6d7d6e7c3baf291dbbe28eee0.tar.gz
   sha256: 537f4ad7fad672dc3e084a2638711f08630715163d875f3fc4fbf2afc47b3c14
 
 dependencies:
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: coreutils
@@ -64,13 +69,15 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4137:45464, 8288:45465, 12387:45466, 16550:45466, 20717:45467, 24855:45479, 28967:45496, 32683:45996]
+  profile: [4144:54687, 8248:60179, 12358:60180, 16470:60180, 20626:60180, 24744:60186, 28886:60205, 33035:60571, 33202:60647]
 
   script: |
     set -eux
     mkdir -p "${WORK_DIR}/moby" "${WORK_DIR}/cli"
     tar --no-same-owner -xf /${SOURCE_moby} -C "${WORK_DIR}/moby" --strip-components=1
     tar --no-same-owner -xf /${SOURCE_docker_cli} -C "${WORK_DIR}/cli" --strip-components=1
+
+    patch --batch --fuzz=0 -Np1 -d "${WORK_DIR}/moby" -i "/${SOURCE_uapi_config}"
 
     export GOROOT=/usr/lib/go
     export GOPATH="${WORK_DIR}/moby/.gopath:${WORK_DIR}/moby/vendor"
@@ -88,6 +95,11 @@ build:
     ln -s ../../../../.. .gopath/src/github.com/moby/moby/v2
     mkdir -p .gopath/src/github.com/docker
     ln -s "${WORK_DIR}/cli" .gopath/src/github.com/docker/cli
+
+    # The implicit daemon.json must come from /etc, then /run, then /usr/lib,
+    # so a package can ship a default and a boot can override it.
+    go test github.com/moby/moby/v2/daemon/command -run TestNexDaemonConfigTiers -v
+    printf 'docker UAPI smoke: daemon.json honoured all tiers\n'
 
     export BUILDFLAGS="-trimpath -buildvcs=false"
     export DOCKER_LDFLAGS="-buildid="
