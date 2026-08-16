@@ -5,7 +5,7 @@ system:
   version: 0.0.1
   description: Flat appliance rootfs assembled from reusable upstream packages
   extends: asm/flat-systemd.yaml
-  checksum: 4fffdc9c8b871c1afefda29fd4bc86283087c52d00a4a54744b8fda22f47941e
+  checksum: 3b80339fb68bf150dafff1a8b465512a8978cc6b35b568030a5a0f8901e9eace
 
 overlays:
 - asm/edgebox-rootfs-overlay.yaml
@@ -151,7 +151,7 @@ build:
     EOF
     chmod 600 /target/etc/shadow
 
-    cat > /target/etc/os-release << 'EOF'
+    cat > /target/usr/lib/os-release << 'EOF'
     NAME="nex"
     PRETTY_NAME="Nex Edgebox Rootfs"
     ID=nex
@@ -167,8 +167,11 @@ build:
       /target/var/lib/sshd
     chmod 700 /target/var/lib/sshd
 
-    chroot /target /usr/bin/update-ca-certificates
-    test -s /target/etc/ssl/certs/ca-certificates.crt
-    test "$(find /target/etc/ssl/certs -type l | wc -l)" -gt 0
+    test -s /target/usr/lib/ssl/certs/ca-certificates.crt
+    test "$(readlink /target/etc/ssl/certs)" = /run/ssl/certs
+    test ! -e /target/etc/os-release
+    grep -Fq \
+      'ExecStart=/usr/bin/update-ca-certificates --output-dir /run/ssl/certs' \
+      /target/usr/lib/systemd/system/update-ca-certificates.service.d/runtime-store.conf
 
     find /target -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;

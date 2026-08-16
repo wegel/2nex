@@ -180,21 +180,35 @@ printf 'PASS: OpenSSH vendor policy\n'
 
 [[ -f /usr/lib/nsswitch.conf ]] || fail "Glibc vendor NSS policy is missing"
 [[ -f /usr/lib/rpc ]] || fail "Glibc vendor RPC database is missing"
-[[ -f /etc/nsswitch.conf ]] || fail "assembly-owned NSS policy is missing"
+[[ ! -e /etc/nsswitch.conf ]] || fail "the flat assembly copied vendor NSS policy into /etc"
 [[ ! -e /etc/rpc ]] || fail "Glibc installed its RPC database in /etc"
 getent rpc portmapper | grep -F '100000' >/dev/null ||
     fail "Glibc did not read the vendor RPC database"
 printf 'PASS: Glibc vendor databases and RPC lookup\n'
+
+[[ -f /usr/lib/os-release ]] || fail "immutable release identity is missing"
+[[ ! -e /etc/os-release ]] || fail "release identity is stored in /etc"
+grep -Fq 'PRETTY_NAME="Nex Edgebox Rootfs"' /usr/lib/os-release ||
+    fail "immutable release identity has the wrong name"
+printf 'PASS: immutable release identity\n'
 
 [[ -f /usr/share/pki/trust/anchors/ca-certificates.crt ]] ||
     fail "vendor CA anchors are missing"
 [[ -x /usr/bin/update-ca-certificates ]] || fail "CA updater is missing"
 [[ -x /usr/bin/trust ]] || fail "p11-kit trust command is missing"
 [[ -f /usr/lib/pkcs11/p11-kit-trust.so ]] || fail "p11-kit trust module is missing"
-[[ -s /etc/ssl/certs/ca-certificates.crt ]] ||
-    fail "assembled CA compatibility bundle is missing"
+[[ -L /etc/ssl/certs ]] || fail "CA compatibility path is not a link"
+[[ "$(readlink /etc/ssl/certs)" == /run/ssl/certs ]] ||
+    fail "CA compatibility path does not target the runtime cache"
+[[ ! -e /run/ssl/certs ]] || fail "the flat root contains a generated CA cache"
 [[ -L /usr/lib/systemd/system/sysinit.target.wants/update-ca-certificates.service ]] ||
     fail "CA update service is not enabled"
+
+mkdir -p /run/ssl
+ln -sT /usr/lib/ssl/certs /run/ssl/certs
+update-ca-certificates --output-dir /run/ssl/certs
+[[ -s /etc/ssl/certs/ca-certificates.crt ]] ||
+    fail "runtime CA compatibility bundle is missing"
 
 vendor_ca_count=$(grep -c 'BEGIN CERTIFICATE' \
     /usr/share/pki/trust/anchors/ca-certificates.crt)
@@ -207,12 +221,12 @@ csplit -s -n 3 -f "$ca_test_dir/vendor-" \
     /usr/share/pki/trust/anchors/ca-certificates.crt \
     '/-----BEGIN CERTIFICATE-----/' '{*}'
 cp "$ca_test_dir/vendor-001" /etc/pki/trust/blocklist/vendor.pem
-update-ca-certificates
+update-ca-certificates --output-dir /run/ssl/certs
 [[ "$(grep -c 'BEGIN CERTIFICATE' /etc/ssl/certs/ca-certificates.crt)" -eq \
     "$((vendor_ca_count - 1))" ]] || fail "administrator CA blocklist did not mask vendor anchor"
 rm -f /etc/pki/trust/blocklist/vendor.pem
 rmdir /etc/pki/trust/blocklist
-update-ca-certificates
+update-ca-certificates --output-dir /run/ssl/certs
 [[ "$(grep -c 'BEGIN CERTIFICATE' /etc/ssl/certs/ca-certificates.crt)" -eq \
     "$vendor_ca_count" ]] || fail "CA bundle did not restore vendor anchors"
 rm -rf "$ca_test_dir"

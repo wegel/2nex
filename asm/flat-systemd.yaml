@@ -4,7 +4,7 @@ system:
   slug: flat-systemd
   version: 0.0.1
   description: Minimal flat rootfs with systemd init
-  checksum: 1212c60ff0f42d8f5910cae5644c08f8d23bbd7af9d2f1c2247932b253028ba8
+  checksum: 5c16b64c8d38aaab3a2ba0f6095640e418349ef075f78de39e889bd541c36321
 
 dependencies:
 - name: findutils
@@ -39,6 +39,8 @@ packages:
   commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/bin
 - name: dbus-broker-conf
   commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/conf
+- name: dbus-broker-lib
+  commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/lib
 - name: kmod-bin
   commit: x86_64/pkg/core/kernel/kmod/32/outputs/bin
 
@@ -71,21 +73,16 @@ build:
     EOF
     chmod 600 /target/etc/shadow
 
-    cat > /target/etc/nsswitch.conf << 'EOF'
-    passwd:     files
-    group:      files
-    shadow:     files
-    hosts:      files dns
-    networks:   files
-    protocols:  files
-    services:   files
-    EOF
-
-    cat > /target/etc/os-release << 'EOF'
+    cat > /target/usr/lib/os-release << 'EOF'
     NAME="nex"
+    PRETTY_NAME="nex Linux"
     ID=nex
     VERSION="0.0.1"
     EOF
+
+    test -f /target/usr/lib/nsswitch.conf
+    test ! -e /target/etc/nsswitch.conf
+    test ! -e /target/etc/os-release
 
     echo "uninitialized" > /target/etc/machine-id
 
