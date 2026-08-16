@@ -6,7 +6,7 @@ package:
   version: 2.4.7
   description: Common UNIX Printing System
   homepage: https://openprinting.github.io/cups/
-  checksum: 3bda80d32c30f056fc983fce370d64086d6ae6ca4eec9879bd622e1d34561b18
+  checksum: 3f00592a85fd282a29de9aacceb10467524b1009a9b010c5ed395696e1e431cd
 
 sources:
 - name: cups
@@ -14,7 +14,7 @@ sources:
   sha256: dd54228dd903526428ce7e37961afaed230ad310788141da75cebaa08362cf6c
 - name: uapi_config
   file: pkg/libs/printing/cups-uapi-config.patch
-  sha256: 54c67a2bf048f9340ac097de89bbb928a5eaa0807b39996326026d75a2c3422b
+  sha256: 0bfc586816b66a4949e3dbf57390d5272e40682a29192c3038840e438ce5c954
 
 dependencies:
 - name: glibc
@@ -68,7 +68,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4127:2285, 8239:3324, 12352:6776, 16467:10203, 20565:12790, 24683:12983, 28843:16907, 37065:16981, 45285:17231, 47494:17881]
+  profile: [4133:2100, 8240:3247, 12352:6648, 16469:9987, 20578:12549, 24675:12712, 28774:16942, 37002:17012, 45234:17274, 47688:17975]
 
   script: |
     set -eu
@@ -147,12 +147,15 @@ build:
       rm -f \
         /etc/cups/cups-files.conf \
         /etc/cups/cupsd.conf \
+        /etc/cups/client.conf \
         /etc/cups/snmp.conf \
         /run/cups/cups-files.conf \
         /run/cups/cupsd.conf \
+        /run/cups/client.conf \
         /run/cups/snmp.conf \
         /usr/lib/cups/cups-files.conf \
         /usr/lib/cups/cupsd.conf \
+        /usr/lib/cups/client.conf \
         /usr/lib/cups/snmp.conf
       rmdir /etc/cups /run/cups /usr/lib/cups 2>/dev/null || true
     }
@@ -294,6 +297,45 @@ build:
     printf '%s\n' "${output}" | grep -Fq /etc/cups/snmp.conf
     test "$(CUPS_SERVERROOT=/etc/cups \
       LD_LIBRARY_PATH="${cups_library_path}" "${snmp_smoke}")" = public
+
+    # client.conf, cupsfilter, cupsctl, and the mailto notifier now share the
+    # libcups selector, so each must see a vendor or transient file that only
+    # the scheduler used to see.
+    cat > "${WORK_DIR}/cups-client-smoke.c" <<'EOF'
+    #include <stdio.h>
+    #include <cups/cups.h>
+    int main(void) {
+      puts(cupsServer());
+      return 0;
+    }
+    EOF
+    gcc \
+      -I"${OUT_DIR}/usr/include" \
+      -L"${OUT_DIR}/usr/lib" \
+      -Wl,-rpath,"${OUT_DIR}/usr/lib" \
+      -o "${WORK_DIR}/cups-client-smoke" \
+      "${WORK_DIR}/cups-client-smoke.c" \
+      -lcups
+
+    client_smoke="${WORK_DIR}/cups-client-smoke"
+    check_client_tier() {
+      actual="$(LD_LIBRARY_PATH="${cups_library_path}" "${client_smoke}")"
+      if [ "${actual}" != "$1" ]; then
+        printf 'client.conf: expected ServerName %s, got %s\n' "$1" "${actual}" >&2
+        exit 1
+      fi
+    }
+
+    rm -f /etc/cups/client.conf /run/cups/client.conf /usr/lib/cups/client.conf
+    printf 'ServerName uapi-vendor\n' > /usr/lib/cups/client.conf
+    check_client_tier uapi-vendor
+    printf 'ServerName uapi-transient\n' > /run/cups/client.conf
+    check_client_tier uapi-transient
+    printf 'ServerName uapi-admin\n' > /etc/cups/client.conf
+    check_client_tier uapi-admin
+    rm /etc/cups/client.conf /run/cups/client.conf /usr/lib/cups/client.conf
+
+    printf 'cups UAPI smoke: cupsd, snmp, and client.conf honoured all tiers\n'
 
     daemon_root="${WORK_DIR}/cups-daemon-smoke"
     daemon_socket="${daemon_root}/cups.sock"

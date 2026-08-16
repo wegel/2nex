@@ -7,99 +7,47 @@ from /etc, /run, or /usr/lib. Preserve explicit command-line and environment
 paths, including CUPS's privilege checks. Empty higher files deliberately mask
 lower defaults.
 
---- a/scheduler/main.c
-+++ b/scheduler/main.c
-@@ -71,0 +72 @@
-+static void		select_system_file(char **file, const char *name);
-@@ -171,0 +173,3 @@
-+	      if (*opt == 'c')
-+	        ConfigurationFileExplicit = 1;
-+
-@@ -222,0 +227,4 @@
-+          case 'E' : /* Preserve an explicit config across the child exec */
-+	      ConfigurationFileExplicit = 1;
-+	      break;
-+
-@@ -327 +335,6 @@
--    cupsdSetString(&ConfigurationFile, CUPS_SERVERROOT "/cupsd.conf");
-+  {
-+    select_system_file(&ConfigurationFile, "cupsd.conf");
-+
-+    if (!CupsFilesFile)
-+      select_system_file(&CupsFilesFile, "cups-files.conf");
-+  }
-@@ -493 +506,4 @@
--    execlp(argv[0], argv[0], "-C", ConfigurationFile, "-s", CupsFilesFile, (char *)0);
-+    if (ConfigurationFileExplicit)
-+      execlp(argv[0], argv[0], "-C", ConfigurationFile, "-s", CupsFilesFile, "-E", (char *)0);
-+    else
-+      execlp(argv[0], argv[0], "-C", ConfigurationFile, "-s", CupsFilesFile, (char *)0);
-@@ -1206,0 +1223,27 @@
-+}
-+
-+
-+/*
-+ * 'select_system_file()' - Select an administrator, transient, or vendor file.
-+ */
-+
-+static void
-+select_system_file(char       **file,
-+                   const char *name)
-+{
-+  static const char * const directories[] =
-+  {
-+    "/etc/cups",
-+    "/run/cups",
-+    "/usr/lib/cups"
-+  };
-+  size_t i;
-+
-+
-+  for (i = 0; i < sizeof(directories) / sizeof(directories[0]); i ++)
-+  {
-+    cupsdSetStringf(file, "%s/%s", directories[i], name);
-+
-+    if (!access(*file, F_OK))
-+      return;
-+  }
---- a/scheduler/conf.c
-+++ b/scheduler/conf.c
-@@ -598,3 +598,5 @@
--  strlcpy(temp, ConfigurationFile, sizeof(temp));
--  if ((slash = strrchr(temp, '/')) != NULL)
--    *slash = '\0';
-+  if (ConfigurationFileExplicit)
-+  {
-+    strlcpy(temp, ConfigurationFile, sizeof(temp));
-+    if ((slash = strrchr(temp, '/')) != NULL)
-+      *slash = '\0';
-@@ -602 +604,4 @@
--  cupsdSetString(&ServerRoot, temp);
-+    cupsdSetString(&ServerRoot, temp);
-+  }
-+  else
-+    cupsdSetString(&ServerRoot, CUPS_SERVERROOT);
---- a/scheduler/conf.h
-+++ b/scheduler/conf.h
-@@ -116,0 +117,2 @@
-+VAR int			ConfigurationFileExplicit VALUE(0);
-+					/* Was cupsd.conf selected with -c? */
+Share one selector across every reader. cupsd and the two SNMP readers already
+followed the tiers, but cupsfilter, the client.conf reader, the cupsd.conf
+reader behind cupsctl and the admin CGI, and the mailto notifier each rebuilt
+the path from the compiled CUPS_SERVERROOT, so a vendor or transient file was
+visible to the scheduler and invisible to them. Add _cupsSystemConfigFile() to
+libcups, move the SNMP reader onto it, and use it from all four.
+diff -urN a/backend/snmp.c b/backend/snmp.c
 --- a/backend/snmp.c
 +++ b/backend/snmp.c
-@@ -135,0 +136 @@
+@@ -133,6 +133,7 @@
+ static const char	*password_cb(const char *prompt);
+ static void		probe_device(snmp_cache_t *device);
+ static void		read_snmp_conf(const char *address);
 +static void		select_snmp_file(char *filename, size_t filenamesize);
-@@ -784 +784,0 @@
+ static void		read_snmp_response(int fd);
+ static double		run_time(void);
+ static void		scan_devices(int ipv4, int ipv6);
+@@ -781,7 +782,6 @@
+ 		line[1024],		/* Line from file */
+ 		*value;			/* Value on line */
+   int		linenum;		/* Line number */
 -  const char	*cups_serverroot;	/* CUPS_SERVERROOT env var */
-@@ -809,4 +809 @@
+   const char	*debug;			/* CUPS_DEBUG_LEVEL env var */
+   const char	*runtime;		/* CUPS_MAX_RUN_TIME env var */
+ 
+@@ -806,10 +806,7 @@
+   * Find the snmp.conf file...
+   */
+ 
 -  if ((cups_serverroot = getenv("CUPS_SERVERROOT")) == NULL)
 -    cups_serverroot = CUPS_SERVERROOT;
 -
 -  snprintf(filename, sizeof(filename), "%s/snmp.conf", cups_serverroot);
 +  select_snmp_file(filename, sizeof(filename));
-@@ -879,0 +877,34 @@
-+  }
-+}
-+
+ 
+   if ((fp = cupsFileOpen(filename, "r")) != NULL)
+   {
+@@ -880,6 +877,40 @@
+   }
+ }
+ 
 +
 +/*
 + * 'select_snmp_file()' - Select the SNMP configuration file.
@@ -131,26 +79,291 @@ lower defaults.
 +
 +    if (!access(filename, F_OK))
 +      return;
---- a/cups/snmp.c
-+++ b/cups/snmp.c
-@@ -63,0 +64,2 @@
-+static void		select_snmp_file(_cups_globals_t *cg, char *filename,
-+			                 size_t filenamesize);
-@@ -128 +130 @@
--    snprintf(line, sizeof(line), "%s/snmp.conf", cg->cups_serverroot);
-+    select_snmp_file(cg, line, sizeof(line));
-@@ -150,0 +153,34 @@
++  }
 +}
 +
+ 
+ /*
+  * 'read_snmp_response()' - Read and parse a SNMP response...
+diff -urN a/cups/adminutil.c b/cups/adminutil.c
+--- a/cups/adminutil.c
++++ b/cups/adminutil.c
+@@ -1377,7 +1377,7 @@
+   if (_cups_strcasecmp(cg->cupsd_hostname, host))
+     invalidate_cupsd_cache(cg);
+ 
+-  snprintf(name, namesize, "%s/cupsd.conf", cg->cups_serverroot);
++  _cupsSystemConfigFile(cg, "cupsd.conf", name, namesize);
+   *remote = 0;
+ 
+ #ifndef _WIN32
+diff -urN a/cups/cups-private.h b/cups/cups-private.h
+--- a/cups/cups-private.h
++++ b/cups/cups-private.h
+@@ -85,6 +85,8 @@
+ 			*cups_statedir,	/* CUPS_STATEDIR environment var */
+ 			*home,		/* HOME environment var */
+ 			*localedir;	/* LOCALDIR environment var */
++  int			cups_serverroot_explicit;
++					/* CUPS_SERVERROOT came from the environment */
+ 
+   /* adminutil.c */
+   time_t		cupsd_update;	/* Last time we got or set cupsd.conf */
+@@ -283,6 +285,9 @@
+ #  endif /* HAVE_GSSAPI */
+ extern int		_cupsNextDelay(int current, int *previous) _CUPS_PRIVATE;
+ extern void		_cupsSetDefaults(void) _CUPS_INTERNAL;
++extern void		_cupsSystemConfigFile(_cups_globals_t *cg,
++			                      const char *name, char *buffer,
++			                      size_t bufsize) _CUPS_PRIVATE;
+ extern void		_cupsSetError(ipp_status_t status, const char *message, int localize) _CUPS_PRIVATE;
+ extern void		_cupsSetHTTPError(http_status_t status) _CUPS_INTERNAL;
+ #  ifdef HAVE_GSSAPI
+diff -urN a/cups/globals.c b/cups/globals.c
+--- a/cups/globals.c
++++ b/cups/globals.c
+@@ -268,6 +268,8 @@
+ 
+   if ((cg->cups_serverroot = getenv("CUPS_SERVERROOT")) == NULL)
+     cg->cups_serverroot = confdir;
++  else
++    cg->cups_serverroot_explicit = 1;
+ 
+   if ((cg->cups_statedir = getenv("CUPS_STATEDIR")) == NULL)
+     cg->cups_statedir = confdir;
+@@ -331,6 +333,8 @@
+ 
+     if ((cg->cups_serverroot = getenv("CUPS_SERVERROOT")) == NULL)
+       cg->cups_serverroot = CUPS_SERVERROOT;
++    else
++      cg->cups_serverroot_explicit = 1;
+ 
+     if ((cg->cups_statedir = getenv("CUPS_STATEDIR")) == NULL)
+       cg->cups_statedir = CUPS_STATEDIR;
+diff -urN a/cups/snmp.c b/cups/snmp.c
+--- a/cups/snmp.c
++++ b/cups/snmp.c
+@@ -125,7 +125,7 @@
+   {
+     strlcpy(cg->snmp_community, "public", sizeof(cg->snmp_community));
+ 
+-    snprintf(line, sizeof(line), "%s/snmp.conf", cg->cups_serverroot);
++    _cupsSystemConfigFile(cg, "snmp.conf", line, sizeof(line));
+     if ((fp = cupsFileOpen(line, "r")) != NULL)
+     {
+       linenum = 0;
+@@ -151,6 +151,7 @@
+ }
+ 
+ 
++
+ /*
+  * '_cupsSNMPIsOID()' - Test whether a SNMP response contains the specified OID.
+  *
+diff -urN a/cups/usersys.c b/cups/usersys.c
+--- a/cups/usersys.c
++++ b/cups/usersys.c
+@@ -1017,6 +1017,48 @@
+ #endif /* HAVE_GSSAPI */
+ 
+ 
 +
 +/*
-+ * 'select_snmp_file()' - Select the SNMP configuration file.
++ * '_cupsSystemConfigFile()' - Select an administrator, transient, or vendor file.
++ *
++ * An explicit CUPS_SERVERROOT keeps its exact meaning. Otherwise the first
++ * existing file among /etc/cups, /run/cups, and /usr/lib/cups wins outright,
++ * so an empty administrator file masks the lower tiers.
++ */
++
++void
++_cupsSystemConfigFile(
++    _cups_globals_t *cg,		/* I - Global data */
++    const char      *name,		/* I - Configuration file name */
++    char            *buffer,		/* I - Filename buffer */
++    size_t          bufsize)		/* I - Size of filename buffer */
++{
++  static const char * const directories[] =
++  {
++    "/etc/cups",
++    "/run/cups",
++    "/usr/lib/cups"
++  };
++  size_t i;				/* Looping var */
++
++
++  if (cg->cups_serverroot_explicit)
++  {
++    snprintf(buffer, bufsize, "%s/%s", cg->cups_serverroot, name);
++    return;
++  }
++
++  for (i = 0; i < sizeof(directories) / sizeof(directories[0]); i ++)
++  {
++    snprintf(buffer, bufsize, "%s/%s", directories[i], name);
++
++    if (!access(buffer, F_OK))
++      return;
++  }
++
++  snprintf(buffer, bufsize, "%s/%s", cg->cups_serverroot, name);
++}
++
+ /*
+  * '_cupsSetDefaults()' - Set the default server, port, and encryption.
+  */
+@@ -1043,7 +1085,7 @@
+   * present.
+   */
+ 
+-  snprintf(filename, sizeof(filename), "%s/client.conf", cg->cups_serverroot);
++  _cupsSystemConfigFile(cg, "client.conf", filename, sizeof(filename));
+   if ((fp = cupsFileOpen(filename, "r")) != NULL)
+   {
+     cups_read_client_conf(fp, &cc);
+diff -urN a/notifier/mailto.c b/notifier/mailto.c
+--- a/notifier/mailto.c
++++ b/notifier/mailto.c
+@@ -387,8 +387,7 @@
+ load_configuration(void)
+ {
+   cups_file_t	*fp;			/* mailto.conf file */
+-  const char	*server_root,		/* CUPS_SERVERROOT environment variable */
+-		*server_admin;		/* SERVER_ADMIN environment variable */
++  const char	*server_admin;		/* SERVER_ADMIN environment variable */
+   char		line[1024],		/* Line from file */
+ 		*value;			/* Value for directive */
+   int		linenum;		/* Line number in file */
+@@ -416,10 +415,7 @@
+   * Try loading the config file...
+   */
+ 
+-  if ((server_root = getenv("CUPS_SERVERROOT")) == NULL)
+-    server_root = CUPS_SERVERROOT;
+-
+-  snprintf(line, sizeof(line), "%s/mailto.conf", server_root);
++  _cupsSystemConfigFile(_cupsGlobals(), "mailto.conf", line, sizeof(line));
+ 
+   if ((fp = cupsFileOpen(line, "r")) == NULL)
+   {
+diff -urN a/scheduler/conf.c b/scheduler/conf.c
+--- a/scheduler/conf.c
++++ b/scheduler/conf.c
+@@ -595,11 +595,16 @@
+   else
+     PrintcapFormat = PRINTCAP_BSD;
+ 
+-  strlcpy(temp, ConfigurationFile, sizeof(temp));
+-  if ((slash = strrchr(temp, '/')) != NULL)
+-    *slash = '\0';
++  if (ConfigurationFileExplicit)
++  {
++    strlcpy(temp, ConfigurationFile, sizeof(temp));
++    if ((slash = strrchr(temp, '/')) != NULL)
++      *slash = '\0';
+ 
+-  cupsdSetString(&ServerRoot, temp);
++    cupsdSetString(&ServerRoot, temp);
++  }
++  else
++    cupsdSetString(&ServerRoot, CUPS_SERVERROOT);
+ 
+   cupsdClearString(&Classification);
+   ClassifyOverride  = 0;
+diff -urN a/scheduler/conf.h b/scheduler/conf.h
+--- a/scheduler/conf.h
++++ b/scheduler/conf.h
+@@ -114,6 +114,8 @@
+ 					/* Alias names for server */
+ VAR int			ServerNameIsIP		VALUE(0);
+ 					/* Is the ServerName an IP address? */
++VAR int			ConfigurationFileExplicit VALUE(0);
++					/* Was cupsd.conf selected with -c? */
+ VAR int			NumSystemGroups		VALUE(0);
+ 					/* Number of system group names */
+ VAR char		*SystemGroups[MAX_SYSTEM_GROUPS]
+diff -urN a/scheduler/cupsfilter.c b/scheduler/cupsfilter.c
+--- a/scheduler/cupsfilter.c
++++ b/scheduler/cupsfilter.c
+@@ -147,7 +147,8 @@
+   if ((server_root = getenv("CUPS_SERVERROOT")) == NULL)
+     server_root = CUPS_SERVERROOT;
+ 
+-  snprintf(cupsfilesconf, sizeof(cupsfilesconf), "%s/cups-files.conf", server_root);
++  _cupsSystemConfigFile(_cupsGlobals(), "cups-files.conf", cupsfilesconf,
++                        sizeof(cupsfilesconf));
+ 
+  /*
+   * Process command-line arguments...
+diff -urN a/scheduler/main.c b/scheduler/main.c
+--- a/scheduler/main.c
++++ b/scheduler/main.c
+@@ -69,6 +69,7 @@
+ static void		sighup_handler(int sig);
+ static void		sigterm_handler(int sig);
+ static long		select_timeout(int fds);
++static void		select_system_file(char **file, const char *name);
+ static void		service_checkin(void);
+ static void		service_checkout(int shutdown);
+ static void		usage(int status) _CUPS_NORETURN;
+@@ -169,6 +170,9 @@
+ 	      close_all    = 0;
+ 
+ 	  case 'c' : /* Configuration file */
++	      if (*opt == 'c')
++	        ConfigurationFileExplicit = 1;
++
+ 	      i ++;
+ 	      if (i >= argc)
+ 	      {
+@@ -220,6 +224,10 @@
+               }
+ 	      break;
+ 
++          case 'E' : /* Preserve an explicit config across the child exec */
++	      ConfigurationFileExplicit = 1;
++	      break;
++
+           case 'f' : /* Run in foreground... */
+ 	      fg         = 1;
+ 	      disconnect = 0;
+@@ -324,7 +332,12 @@
+   }
+ 
+   if (!ConfigurationFile)
+-    cupsdSetString(&ConfigurationFile, CUPS_SERVERROOT "/cupsd.conf");
++  {
++    select_system_file(&ConfigurationFile, "cupsd.conf");
++
++    if (!CupsFilesFile)
++      select_system_file(&CupsFilesFile, "cups-files.conf");
++  }
+ 
+   if (!CupsFilesFile)
+   {
+@@ -490,7 +503,10 @@
+     * way to get the real pathname...
+     */
+ 
+-    execlp(argv[0], argv[0], "-C", ConfigurationFile, "-s", CupsFilesFile, (char *)0);
++    if (ConfigurationFileExplicit)
++      execlp(argv[0], argv[0], "-C", ConfigurationFile, "-s", CupsFilesFile, "-E", (char *)0);
++    else
++      execlp(argv[0], argv[0], "-C", ConfigurationFile, "-s", CupsFilesFile, (char *)0);
+     exit(errno);
+   }
+ 
+@@ -1207,6 +1223,33 @@
+ }
+ 
+ 
++/*
++ * 'select_system_file()' - Select an administrator, transient, or vendor file.
 + */
 +
 +static void
-+select_snmp_file(_cups_globals_t *cg,
-+                 char            *filename,
-+                 size_t          filenamesize)
++select_system_file(char       **file,
++                   const char *name)
 +{
 +  static const char * const directories[] =
 +  {
@@ -161,29 +374,16 @@ lower defaults.
 +  size_t i;
 +
 +
-+  if (cg->cups_serverroot_explicit)
-+  {
-+    snprintf(filename, filenamesize, "%s/snmp.conf", cg->cups_serverroot);
-+    return;
-+  }
-+
 +  for (i = 0; i < sizeof(directories) / sizeof(directories[0]); i ++)
 +  {
-+    snprintf(filename, filenamesize, "%s/snmp.conf", directories[i]);
++    cupsdSetStringf(file, "%s/%s", directories[i], name);
 +
-+    if (!access(filename, F_OK))
++    if (!access(*file, F_OK))
 +      return;
 +  }
---- a/cups/cups-private.h
-+++ b/cups/cups-private.h
-@@ -87,0 +88,2 @@
-+  int			cups_serverroot_explicit;
-+					/* CUPS_SERVERROOT came from the environment */
---- a/cups/globals.c
-+++ b/cups/globals.c
-@@ -270,0 +271,2 @@
-+  else
-+    cg->cups_serverroot_explicit = 1;
-@@ -333,0 +336,2 @@
-+    else
-+      cg->cups_serverroot_explicit = 1;
++}
++
++
+ /*
+  * 'cupsdAddString()' - Copy and add a string to an array.
+  */
