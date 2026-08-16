@@ -6,14 +6,19 @@ package:
   version: 1.2.4
   description: CLI tool for spawning and running containers according to the OCI specification
   homepage: https://github.com/opencontainers/runc
-  checksum: 0c6b13c9947897b97619ab53c9cc8bb967ce31aea4ba51dfda47e9b28c5c7d40
+  checksum: 504b6c166a852f5752c21b919e918c00b2668048f163070d9dae6ab6dda4565c
 
 sources:
 - name: runc
   url: https://github.com/opencontainers/runc/archive/refs/tags/v1.2.4.tar.gz
   sha256: 9785c144c97974b52b6091b7a79168b73681ff574bc8438b44f3f5f8c112f171
+- name: uapi_criu_config
+  file: pkg/apps/containers/runc-uapi-criu-config.patch
+  sha256: c86743bd4c5e8ab6a79bd1ca301f240a82f81da22e354907869dc88bc94aaa08
 
 dependencies:
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: coreutils
@@ -57,7 +62,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [270:15619]
+  profile: [554:7953]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_runc} -C "${WORK_DIR}" --strip-components=1
@@ -68,6 +73,13 @@ build:
     export GOROOT="/usr/lib/go"
     export PATH="/usr/bin:/usr/lib/go/bin:${PATH}"
     export GOFLAGS="-ldflags=-compressdwarf=false"
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_criu_config}"
+
+    # The CRIU configuration file must come from /etc, then /run, then
+    # /usr/lib, so a package can ship a default and a boot can override it.
+    go test ./libcontainer/ -run TestNexCriuConfigTiers -v
+    printf 'runc UAPI smoke: the CRIU configuration honoured all tiers\n'
 
     # Build with seccomp support
     make BUILDTAGS="seccomp cgo static_build" EXTRA_LDFLAGS="-X main.version=1.2.4"

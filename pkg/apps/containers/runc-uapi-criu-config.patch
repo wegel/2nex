@@ -1,0 +1,106 @@
+From: Nex package maintainers
+Subject: [PATCH] libcontainer: select the runc CRIU configuration from UAPI paths
+
+runc named a single administrator CRIU configuration file, so a package could
+not ship a default and a boot-time tool had nowhere to put a temporary one.
+Look for runc.conf in the administrator directory, then /run, then /usr/lib,
+and use the first file that exists; the first file found wins completely, so an
+empty administrator file masks the lower ones. When no file exists the
+administrator path is still named, which keeps CRIU's own behaviour of ignoring
+a missing file. The org.criu.config annotation still overrides everything.
+
+diff -urN a/libcontainer/criu_linux.go b/libcontainer/criu_linux.go
+--- a/libcontainer/criu_linux.go
++++ b/libcontainer/criu_linux.go
+@@ -160,10 +160,30 @@
+ 	} else {
+ 		// If the mentioned annotation has not been found, specify
+ 		// a default CRIU configuration file.
+-		rpcOpts.ConfigFile = proto.String("/etc/criu/runc.conf")
++		rpcOpts.ConfigFile = proto.String(defaultCriuConfigFile())
+ 	}
+ }
+ 
++// criuConfigDirs lists the directories that may hold the runc CRIU
++// configuration file, highest priority first: lasting administrator policy,
++// then temporary machine policy that one boot owns, then the package default.
++var criuConfigDirs = []string{"/etc/criu", "/run/criu", "/usr/lib/criu"}
++
++// defaultCriuConfigFile returns the first runc.conf that exists. The first file
++// found wins completely, so an empty administrator file masks the lower ones.
++// When none exists the administrator path is returned unchanged, which keeps
++// CRIU's own "ignore a missing file" behaviour.
++func defaultCriuConfigFile() string {
++	for _, dir := range criuConfigDirs {
++		path := filepath.Join(dir, "runc.conf")
++		if _, err := os.Stat(path); err == nil {
++			return path
++		}
++	}
++
++	return filepath.Join(criuConfigDirs[0], "runc.conf")
++}
++
+ func (c *Container) criuSupportsExtNS(t configs.NamespaceType) bool {
+ 	var minVersion int
+ 	switch t {
+diff -urN a/libcontainer/nex_uapi_criu_test.go b/libcontainer/nex_uapi_criu_test.go
+--- a/libcontainer/nex_uapi_criu_test.go
++++ b/libcontainer/nex_uapi_criu_test.go
+@@ -0,0 +1,56 @@
++package libcontainer
++
++import (
++	"os"
++	"path/filepath"
++	"testing"
++)
++
++// TestNexCriuConfigTiers checks that the runc CRIU configuration file is
++// selected from the administrator, transient, and vendor directories in that
++// order, and that the administrator path is returned when none exists.
++func TestNexCriuConfigTiers(t *testing.T) {
++	root := t.TempDir()
++	saved := criuConfigDirs
++	t.Cleanup(func() { criuConfigDirs = saved })
++
++	admin := filepath.Join(root, "etc")
++	runtime := filepath.Join(root, "run")
++	vendor := filepath.Join(root, "usr")
++	criuConfigDirs = []string{admin, runtime, vendor}
++
++	for _, dir := range criuConfigDirs {
++		if err := os.MkdirAll(dir, 0o755); err != nil {
++			t.Fatal(err)
++		}
++	}
++
++	write := func(dir string) string {
++		path := filepath.Join(dir, "runc.conf")
++		if err := os.WriteFile(path, nil, 0o644); err != nil {
++			t.Fatal(err)
++		}
++		return path
++	}
++
++	// With no file anywhere the administrator path is still named, so CRIU
++	// keeps its own behaviour of ignoring a file that does not exist.
++	if got, want := defaultCriuConfigFile(), filepath.Join(admin, "runc.conf"); got != want {
++		t.Fatalf("no file: got %q, want %q", got, want)
++	}
++
++	wantVendor := write(vendor)
++	if got := defaultCriuConfigFile(); got != wantVendor {
++		t.Fatalf("vendor tier: got %q, want %q", got, wantVendor)
++	}
++
++	wantRuntime := write(runtime)
++	if got := defaultCriuConfigFile(); got != wantRuntime {
++		t.Fatalf("runtime tier: got %q, want %q", got, wantRuntime)
++	}
++
++	wantAdmin := write(admin)
++	if got := defaultCriuConfigFile(); got != wantAdmin {
++		t.Fatalf("admin tier: got %q, want %q", got, wantAdmin)
++	}
++}
