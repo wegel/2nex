@@ -6,7 +6,7 @@ package:
   version: "8.2"
   description: The GNU Readline library
   homepage: https://tiswww.case.edu/php/chet/readline/rltop.html
-  checksum: 746c87a8d4968723d28de6db824ef8dc3802aeb573f17dea63fd9cd86740041d
+  checksum: 6c7351f248a8d763d445600cfa6ed6a1a992e609d4bc052cd721543dde03a36a
 
 sources:
 - name: readline
@@ -15,6 +15,12 @@ sources:
 - name: patch
   url: https://www.linuxfromscratch.org/patches/downloads/readline/readline-8.2-upstream_fixes-3.patch
   sha256: 8a108b34c5bdf9d6a9d6c0bd4cf2da756ae5232c5de2ae55c5468e953bb8de62
+- name: uapi_config
+  file: pkg/libs/system/readline-uapi-config.patch
+  sha256: e6cdf49760cf2a308478f1e08c593d55152242c720481b8b35cc17754d637bdc
+- name: uapi_smoke
+  file: pkg/libs/system/readline-uapi-smoke.c
+  sha256: 6a50ceecc57b4e258a42f9b8213c795607a3e7924a9bd8f0b49a10dc9a906930
 
 dependencies:
 - name: linux-headers
@@ -60,7 +66,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4134:2775, 8516:4416, 12724:4422, 16923:4445, 21218:4511, 25349:4530, 29726:4570, 33835:5565, 37974:5596, 38449:5652]
+  profile: [4106:2405, 8260:3682, 12436:3686, 16668:3694, 20904:3734, 25044:3745, 29260:3769, 33764:3868, 37910:4646, 38457:4732]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_readline} -C "${WORK_DIR}" --strip-components=1
@@ -69,10 +75,67 @@ build:
     sed -i "/MV.*old/d" Makefile.in
     sed -i "/{OLDSUFF}/c:" support/shlib-install
     patch --batch --fuzz=0 -Np1 -i /${SOURCE1}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE_uapi_config}
     ./configure --prefix=/usr    \
               --docdir=/usr/share/doc/readline-8.2
     make SHLIB_LIBS="-lncurses"
     make SHLIB_LIBS="-lncurses" DESTDIR="${OUT_DIR}" install
+
+    smoke_root="${WORK_DIR}/uapi-smoke-root"
+    mkdir -p \
+      "${smoke_root}/etc" \
+      "${smoke_root}/run" \
+      "${smoke_root}/usr/lib" \
+      "${smoke_root}/lib64" \
+      "${smoke_root}/home/test"
+    gcc "/${SOURCE_uapi_smoke}" \
+      -I"${OUT_DIR}/usr/include" \
+      -L"${OUT_DIR}/usr/lib" \
+      -Wl,-rpath,/usr/lib \
+      -lreadline \
+      -lncursesw \
+      -o "${smoke_root}/readline-uapi-smoke"
+    cp -L "${OUT_DIR}/usr/lib/libreadline.so.8" \
+      "${smoke_root}/usr/lib/libreadline.so.8"
+    cp -L /usr/lib/libncursesw.so.6 \
+      "${smoke_root}/usr/lib/libncursesw.so.6"
+    cp -L /usr/lib/libc.so.6 "${smoke_root}/usr/lib/libc.so.6"
+    cp -L /usr/lib/ld-linux-x86-64.so.2 \
+      "${smoke_root}/usr/lib/ld-linux-x86-64.so.2"
+    cp -L /usr/lib/ld-linux-x86-64.so.2 \
+      "${smoke_root}/lib64/ld-linux-x86-64.so.2"
+
+    assert_setting() {
+      expected=$1
+      shift
+      actual=$(HOME=/home/test chroot "${smoke_root}" \
+        /readline-uapi-smoke "$@")
+      test "${actual}" = "${expected}"
+    }
+
+    printf '%s\n' 'set completion-ignore-case on' \
+      > "${smoke_root}/usr/lib/inputrc"
+    assert_setting on
+    printf '%s\n' 'set completion-ignore-case off' \
+      > "${smoke_root}/run/inputrc"
+    assert_setting off
+    printf '%s\n' 'set completion-ignore-case on' \
+      > "${smoke_root}/etc/inputrc"
+    assert_setting on
+
+    rm "${smoke_root}/run/inputrc"
+    : > "${smoke_root}/etc/inputrc"
+    assert_setting off
+
+    rm "${smoke_root}/etc/inputrc"
+    printf '%s\n' 'set completion-ignore-case off' \
+      > "${smoke_root}/usr/lib/inputrc"
+    printf '%s\n' 'set completion-ignore-case on' \
+      > "${smoke_root}/home/test/.inputrc"
+    assert_setting on
+    printf '%s\n' 'set completion-ignore-case off' \
+      > "${smoke_root}/explicit-inputrc"
+    assert_setting off /explicit-inputrc
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true

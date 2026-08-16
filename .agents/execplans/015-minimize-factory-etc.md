@@ -124,6 +124,19 @@ required machine state.
   paths. Raw sorted inventories live under
   `.nex/tmp/ep015-baseline.ko361R/logs/*-etc.tsv`.
 
+- Observation: Readline 8.2's example install list names a source file that
+  the pinned release archive does not contain.
+  Evidence: the first strict build failed when `make install` tried to copy
+  `examples/rltest2.c`. The archive contains `rltest.c` but not `rltest2.c`.
+  Removing that stale list entry let all later installs finish.
+
+- Observation: a package smoke must not use the build host's fixed
+  configuration paths as its fixture.
+  Evidence: this host has a real `/etc/inputrc`, so the first Readline smoke
+  stopped before it could create the tier files. The final smoke links a small
+  executable to the newly installed library and runs it in a minimal chroot
+  containing only its own `/etc`, `/run`, `/usr`, and home files.
+
 - Observation: Most of the 88 leaves fall into a few concrete groups rather
   than representing 88 independent machine choices.
   Evidence: the initial inventory counted 26 Libvirt objects, 27 Systemd unit
@@ -180,6 +193,14 @@ required machine state.
   assembly must choose its own PAM authentication policy. The package keeps
   `systemd-user` and `systemd-run0` in `/usr/lib/pam.d`, where the patched PAM
   reader finds them without `/etc` links.
+  Date/Author: 2026-08-16 / Ralph
+
+- Decision: Patch Readline's small complete-file selector directly and do not
+  add libeconf.
+  Rationale: Readline does not parse mergeable key/value drop-ins. It selects
+  one explicit or user file, then one complete system file. Three direct read
+  attempts preserve that model and make empty-file masking unambiguous without
+  another runtime library.
   Date/Author: 2026-08-16 / Ralph
 
 - Decision: Treat factory files as one-time seeds, never as a fourth reader
@@ -538,6 +559,20 @@ The embedded install checks found `systemd-user` and `systemd-run0` below
 `/usr/lib/pam.d` and found no package factory tree. Full logs are
 `.nex/tmp/ep015-systemd-build1.log` and
 `.nex/tmp/ep015-systemd-build2.log`.
+
+The Readline package checkpoint passed:
+
+    rtk ./src/cli/target/debug/nex check pkg/libs/system/readline.yaml
+    rtk scripts/check-package-config-paths.sh
+    rtk ./nex build pkg/libs/system/readline.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+    rtk ./nex build pkg/libs/system/readline.yaml --verbose --single --check --update-checksum --force --compute-deps --record-profile --generate-outputs
+
+Each strict command built Readline twice. All four builds produced
+`6c7351f248a8d763d445600cfa6ed6a1a992e609d4bc052cd721543dde03a36a`.
+The chrooted executable proved vendor, runtime, administrator, empty
+administrator mask, user, and explicit `INPUTRC` behavior through the newly
+built shared library. Full logs are `.nex/tmp/ep015-readline-build1.log` and
+`.nex/tmp/ep015-readline-build2.log`.
 
 The EP013 baseline Desktop VWL factory tree contains 88 leaves: 58 regular
 files and 30 links, with 31 directories. Its apparent leaf size is 16,350
