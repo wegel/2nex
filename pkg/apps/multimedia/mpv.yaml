@@ -6,14 +6,19 @@ package:
   version: 0.40.0+20251205
   description: Command line media player
   homepage: https://mpv.io/
-  checksum: 9a265dd5f85f35630babcac6dcb15e8f8b573279749d6a4f56ec2a407a5604b2
+  checksum: f985c9d3f58f80a24478223ee31e7f0a1ef6410a3aa239df1e8773671d61762b
 
 sources:
 - name: mpv
   url: https://github.com/mpv-player/mpv/archive/dbd7a905b6ed47dd8f0acd09a1f4cc9a08e854a6.tar.gz
   sha256: 2ca8f002293c48999c6392d96b805c80d7c7ddce1afd4308f73c59fbb084569c
+- name: uapi_config
+  file: pkg/apps/multimedia/mpv-uapi-config.patch
+  sha256: 7fd95855715de1c606d7a8f6241470940af9e31e3ab72a85e426d1df8eeb5f6b
 
 dependencies:
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: coreutils
@@ -97,11 +102,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4144:5553, 8276:5952, 12394:6176, 16544:6529, 20688:7097, 24792:7313, 28891:7526, 33026:52548, 34743:52626]
+  profile: [4125:1208, 8271:1208, 12379:1451, 16552:1495, 20657:1788, 24761:1996, 28878:2240, 33000:17718, 34920:17834]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_mpv} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     meson setup build \
       --prefix=/usr \
@@ -119,6 +126,101 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # mpv.conf carries distribution policy, so the player must read
+    # /usr/lib/mpv, then /run/mpv, then /etc/mpv, with a later tier overriding
+    # an earlier one. Each tier sets a different volume, and a Lua probe prints
+    # the volume that the loaded files actually produced.
+    admin_dir=/etc/mpv
+    runtime_dir=/run/mpv
+    vendor_dir=/usr/lib/mpv
+
+    mkdir -p "${admin_dir}" "${runtime_dir}" "${vendor_dir}"
+    rm -f "${admin_dir}/mpv.conf" "${runtime_dir}/mpv.conf" "${vendor_dir}/mpv.conf"
+
+    probe_home="${WORK_DIR}/mpv-uapi-home"
+    mkdir -p "${probe_home}"
+    printf 'mp.msg.info("NEX_VOLUME " .. mp.get_property("volume"))\n' \
+        > "${WORK_DIR}/mpv-uapi-probe.lua"
+    printf 'mp.commandv("quit")\n' >> "${WORK_DIR}/mpv-uapi-probe.lua"
+
+    write_conf() {
+        printf 'volume=%s\n' "$2" > "$1/mpv.conf"
+    }
+
+    probe_out="${WORK_DIR}/mpv-uapi-probe.out"
+
+    # The build environment has no sed or grep, so parse the probe output with
+    # shell built-ins only.
+    probe_volume() {
+        HOME="${probe_home}" XDG_CONFIG_HOME="${probe_home}/config" \
+            LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+            "${OUT_DIR}/usr/bin/mpv" --idle=yes \
+            --vo=null --ao=null --msg-level=all=info \
+            --script="${WORK_DIR}/mpv-uapi-probe.lua" \
+            > "${probe_out}" 2>&1 || true
+
+        while read -r line; do
+            case "${line}" in
+            *NEX_VOLUME*)
+                line=${line#*NEX_VOLUME }
+                printf '%s\n' "${line%%.*}"
+                return 0
+                ;;
+            esac
+        done < "${probe_out}"
+    }
+
+    expect_volume() {
+        actual=$(probe_volume)
+        if [ "${actual}" != "$1" ]; then
+            printf 'mpv UAPI smoke: expected volume %s, got %s\n' \
+                "$1" "${actual}" >&2
+            tail -30 "${probe_out}" >&2
+            exit 1
+        fi
+    }
+
+    # With no system mpv.conf the compiled default stands. Every tier value
+    # below differs from it, so a tier that is silently ignored cannot pass.
+    default_volume=$(probe_volume)
+    if [ -z "${default_volume}" ]; then
+        printf 'mpv UAPI smoke: probe printed no volume\n' >&2
+        tail -30 "${probe_out}" >&2
+        exit 1
+    fi
+    for taken in 61 62 63; do
+        if [ "${default_volume}" = "${taken}" ]; then
+            printf 'mpv UAPI smoke: default volume %s collides with a tier value\n' \
+                "${default_volume}" >&2
+            exit 1
+        fi
+    done
+
+    write_conf "${vendor_dir}" 61
+    expect_volume 61
+
+    write_conf "${runtime_dir}" 62
+    expect_volume 62
+
+    write_conf "${admin_dir}" 63
+    expect_volume 63
+
+    # Removing the administrator file uncovers the transient one, and removing
+    # that uncovers the package default, which proves the lower tiers were
+    # still being read rather than shadowed once and forgotten.
+    rm -f "${admin_dir}/mpv.conf"
+    expect_volume 62
+
+    rm -f "${runtime_dir}/mpv.conf"
+    expect_volume 61
+
+    rm -f "${vendor_dir}/mpv.conf"
+    expect_volume "${default_volume}"
+
+    rm -rf "${probe_home}" "${WORK_DIR}/mpv-uapi-probe.lua" "${probe_out}"
+
+    printf 'mpv UAPI smoke: all three config tiers and their order behaved\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -145,6 +247,7 @@ outputs:
       - /usr/lib/libavutil.so.60
       - /usr/lib/libc.so.6
       - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libluajit-5.1.so.2
       - /usr/lib/libm.so.6
       - /usr/lib/libpipewire-0.3.so.0
       - /usr/lib/libplacebo.so.351
