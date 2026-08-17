@@ -6,12 +6,15 @@ package:
   version: 1.14.6
   description: Format and search UNIX manual pages
   homepage: https://mandoc.bsd.lv/
-  checksum: 4d14ee71d2dcc7dee33fcb26bb27b46d0ccdb600898b29e9ad441ba444795083
+  checksum: 0ed8dbecb6982d6f962e33bbd820c08debca22be66dbc2c30b05a1f2a2f20d88
 
 sources:
 - name: mandoc
   url: https://mandoc.bsd.lv/snapshots/mandoc-1.14.6.tar.gz
   sha256: 8bf0d570f01e70a6e124884088870cbed7537f36328d512909eb10cd53179d9c
+- name: uapi_config
+  file: pkg/cli/text/mandoc-uapi-config.patch
+  sha256: ea92c053f4ea410e4910e97509deef4640b93613bb53e7a40d1dfbee1d6fe2c7
 
 dependencies:
 - name: bash
@@ -36,6 +39,8 @@ dependencies:
   commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: zlib
@@ -43,11 +48,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4291:1659, 8535:1663, 12831:1706, 17040:1735, 21253:1859, 22696:2722]
+  profile: [4315:1951, 8559:1960, 12855:2024, 17109:2061, 21277:2243, 22787:3536]
 
   script: |
     tar --no-same-owner -xf /./${SOURCE_mandoc} -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     printf '%s\n' \
       'CC=gcc' \
@@ -65,6 +72,73 @@ build:
 
     make ${MAKEFLAGS}
     make DESTDIR="${OUT_DIR}" install
+
+    mkdir -p /etc /run /usr/lib
+    admin_conf=/etc/man.conf
+    runtime_conf=/run/man.conf
+    vendor_conf=/usr/lib/man.conf
+    rm -f "${admin_conf}" "${runtime_conf}" "${vendor_conf}"
+
+    smoke_root="${WORK_DIR}/mandoc-smoke"
+    vendor_tree="${smoke_root}/vendor/man"
+    runtime_tree="${smoke_root}/runtime/man"
+    admin_tree="${smoke_root}/admin/man"
+    only_tree="${smoke_root}/only/man"
+
+    for tree in "${vendor_tree}" "${runtime_tree}" "${admin_tree}" "${only_tree}"; do
+      mkdir -p "${tree}/man1"
+      printf '%s\n' \
+        '.Dd August 17, 2026' \
+        '.Dt SMOKE 1' \
+        '.Sh NAME' \
+        '.Nm smoke' \
+        '.Nd mandoc UAPI tier smoke page' \
+        > "${tree}/man1/smoke.1"
+    done
+
+    unset MANPATH
+
+    run_and_expect() {
+      desc="$1"
+      expect="$2"
+      err="${smoke_root}/last-stderr"
+      if ! out=$("${OUT_DIR}/usr/bin/man" -w smoke 2>"${err}"); then
+        printf 'mandoc UAPI smoke: expected a clean run for %s\n' "${desc}" >&2
+        cat "${err}" >&2
+        exit 1
+      fi
+      case "${out}" in
+        "${expect}"/*) ;;
+        *)
+          printf 'mandoc UAPI smoke: expected %s for %s, got [%s]\n' \
+            "${expect}" "${desc}" "${out}" >&2
+          exit 1
+          ;;
+      esac
+    }
+
+    printf 'manpath %s\n' "${vendor_tree}" > "${vendor_conf}"
+    run_and_expect "vendor alone" "${vendor_tree}"
+
+    printf 'manpath %s\n' "${runtime_tree}" > "${runtime_conf}"
+    run_and_expect "vendor and runtime present" "${runtime_tree}"
+
+    printf 'manpath %s\n' "${admin_tree}" > "${admin_conf}"
+    run_and_expect "vendor, runtime and admin present" "${admin_tree}"
+
+    rm -f "${admin_conf}"
+    run_and_expect "admin removed uncovers runtime" "${runtime_tree}"
+
+    rm -f "${runtime_conf}"
+    run_and_expect "runtime removed uncovers vendor" "${vendor_tree}"
+
+    export MANPATH="${only_tree}"
+    run_and_expect "MANPATH ignores every tier" "${only_tree}"
+    unset MANPATH
+
+    rm -f "${admin_conf}" "${runtime_conf}" "${vendor_conf}"
+    rm -rf "${smoke_root}"
+    printf 'mandoc UAPI smoke: the config loader read all three tiers in order\n'
 
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true

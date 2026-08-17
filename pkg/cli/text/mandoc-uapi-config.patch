@@ -1,0 +1,69 @@
+From: Nex package maintainers
+Subject: [PATCH] manpath: read man.conf from all three UAPI tiers
+Source: no upstream commit; written for Nex against mandoc 1.14.6
+Upstream: not submitted. manconf_parse() reads a single compiled-in path
+ (MAN_CONF_FILE, /etc/man.conf) and otherwise falls back straight to the
+ compiled MANPATH_DEFAULT, so a distribution cannot ship a default
+ man.conf below /usr and a running system cannot install a temporary
+ override below /run: only a persistent /etc file works.
+
+When the caller has not passed an explicit -C path, try /etc/man.conf,
+then /run/man.conf, then /usr/lib/man.conf, and use the first one that
+exists; an administrator file still wins over a runtime file, which
+still wins over the vendor default. -C keeps overriding all three
+tiers, and MANPATH and -M keep taking priority ahead of every tier as
+before.
+
+diff -urN a/manpath.c b/manpath.c
+--- a/manpath.c
++++ b/manpath.c
+@@ -20,6 +20,7 @@
+ #include <sys/types.h>
+ #include <sys/stat.h>
+
++#include <unistd.h>
+ #include <ctype.h>
+ #include <errno.h>
+ #include <limits.h>
+@@ -31,6 +32,7 @@
+ #include "mandoc.h"
+ #include "manconf.h"
+
++static	const char *manconf_default_file(void);
+ static	void	 manconf_file(struct manconf *, const char *);
+ static	void	 manpath_add(struct manpaths *, const char *, char);
+ static	void	 manpath_parseline(struct manpaths *, char *, char);
+@@ -54,7 +56,7 @@
+ 	/* MANPATH and man.conf(5) cooperate. */
+ 	defp = getenv("MANPATH");
+ 	if (NULL == file)
+-		file = MAN_CONF_FILE;
++		file = manconf_default_file();
+ 
+ 	/* No MANPATH; use man.conf(5) only. */
+ 	if (NULL == defp || '\0' == defp[0]) {
+@@ -90,6 +92,24 @@
+ 	manpath_parseline(&conf->manpath, defp, '\0');
+ }
+ 
++/*
++ * Nex ships an immutable default below /usr/lib and lets a running
++ * system drop a temporary override below /run; /etc keeps the final
++ * word for an administrator.  Use the first tier that exists.
++ */
++static const char *
++manconf_default_file(void)
++{
++	static const char *const tiers[] = {
++	    MAN_CONF_FILE, "/run/man.conf", "/usr/lib/man.conf" };
++	size_t	 i;
++
++	for (i = 0; i < sizeof(tiers)/sizeof(tiers[0]); i++)
++		if (access(tiers[i], F_OK) == 0)
++			return tiers[i];
++	return MAN_CONF_FILE;
++}
++
+ void
+ manpath_base(struct manpaths *dirs)
+ {
