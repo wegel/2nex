@@ -6,12 +6,15 @@ package:
   version: "0.191"
   description: A collection of utilities and libraries for handling ELF (Executable and Linkable Format) files
   homepage: https://sourceware.org/elfutils/
-  checksum: 8cc94c6a0b2ebf1a5ce0f444daec9f4f6a6ad764e9d9a10cfc721a8a08cda872
+  checksum: 9e99673ba4c77f4fcdc543075acfe1f0d845bb00f9a6fddf7cd470f7cfe67bfb
 
 sources:
 - name: elfutils
   url: https://sourceware.org/ftp/elfutils/0.191/elfutils-0.191.tar.bz2
   sha256: df76db71366d1d708365fc7a6c60ca48398f14367eb2b8954efc8897147ad871
+- name: uapi_config
+  file: pkg/dev/util/elfutils-uapi-config.patch
+  sha256: af1c2e1f351200a490443b8346f711919264d89596bed2fd250b3e32a7e38e48
 
 dependencies:
 - name: glibc
@@ -60,16 +63,20 @@ dependencies:
   commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4101:1821, 8303:3291, 12403:3480, 16509:4705, 24738:5345, 28862:5721, 32983:6132, 41206:8197, 49464:10148, 54237:10395]
+  profile: [4113:2123, 8374:3842, 12474:4088, 16580:5593, 24809:6421, 28933:6919, 33054:7462, 41277:9953, 49535:12273, 54376:12576]
 
   script: |
     set -eu
 
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     ./configure --prefix=/usr                \
                 --sysconfdir=/etc            \
@@ -99,6 +106,49 @@ build:
       source "$1"
       test "${DEBUGINFOD_URLS}" = https://debuginfod.example.invalid/
     ' elfutils-test "${OUT_DIR}/usr/lib/profile.d/debuginfod.sh"
+
+    smoke_root="$(mktemp -d)"
+    mkdir -p "${smoke_root}/etc/debuginfod" \
+             "${smoke_root}/run/debuginfod" \
+             "${smoke_root}/usr/lib/debuginfod"
+    sed -e "s|\"/etc/debuginfod\"|\"${smoke_root}/etc/debuginfod\"|" \
+        -e "s|/run/debuginfod|${smoke_root}/run/debuginfod|" \
+        -e "s|prefix=\"/usr\"|prefix=\"${smoke_root}/usr\"|" \
+        "${OUT_DIR}/usr/lib/profile.d/debuginfod.sh" > "${smoke_root}/debuginfod.sh"
+
+    printf 'https://vendor.example/\n' > "${smoke_root}/usr/lib/debuginfod/vendor.urls"
+    bash --noprofile --norc -c '
+      unset DEBUGINFOD_URLS
+      source "$1"
+      case " ${DEBUGINFOD_URLS} " in
+        *" https://vendor.example/ "*) ;;
+        *) echo "vendor tier missing: ${DEBUGINFOD_URLS}" >&2; exit 1 ;;
+      esac
+    ' elfutils-test "${smoke_root}/debuginfod.sh"
+
+    printf 'https://run.example/\n' > "${smoke_root}/run/debuginfod/run.urls"
+    bash --noprofile --norc -c '
+      unset DEBUGINFOD_URLS
+      source "$1"
+      case "${DEBUGINFOD_URLS}" in
+        *"https://run.example/ https://vendor.example/"*) ;;
+        *) echo "run tier not ahead of vendor tier: ${DEBUGINFOD_URLS}" >&2; exit 1 ;;
+      esac
+    ' elfutils-test "${smoke_root}/debuginfod.sh"
+
+    printf 'https://admin.example/\n' > "${smoke_root}/etc/debuginfod/admin.urls"
+    bash --noprofile --norc -c '
+      unset DEBUGINFOD_URLS
+      source "$1"
+      case "${DEBUGINFOD_URLS}" in
+        *"https://admin.example/ https://run.example/ https://vendor.example/"*) ;;
+        *) echo "administrator tier not first: ${DEBUGINFOD_URLS}" >&2; exit 1 ;;
+      esac
+    ' elfutils-test "${smoke_root}/debuginfod.sh"
+
+    rm -rf "${smoke_root}"
+
+    echo "elfutils UAPI smoke: debuginfod.sh concatenated all three url tiers"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true

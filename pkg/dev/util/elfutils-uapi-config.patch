@@ -1,0 +1,41 @@
+From: Nex package maintainers
+Subject: [PATCH] profile: merge debuginfod URL lists from all three UAPI tiers
+Source: no upstream commit; written for Nex against elfutils 0.191
+Upstream: not submitted. The stock hook globs only sysconfdir, so a
+ distribution cannot ship a default *.urls file below /usr and a boot-time
+ tool has nowhere to put a transient one.
+
+The debuginfod.sh and debuginfod.csh profile hooks built DEBUGINFOD_URLS by
+globbing a single "@sysconfdir@/debuginfod"/*.urls directory. Add the
+generic /run tier and a prefix-relative /usr/lib tier, and glob the
+administrator directory first so an administrator-supplied server is tried
+before a transient or vendor one. The early return when DEBUGINFOD_URLS is
+already set in the environment is unchanged.
+
+diff -urN a/config/profile.csh.in b/config/profile.csh.in
+--- a/config/profile.csh.in
++++ b/config/profile.csh.in
+@@ -6,7 +6,7 @@
+
+ if (! $?DEBUGINFOD_URLS) then
+     set prefix="@prefix@"
+-    set DEBUGINFOD_URLS=`sh -c 'cat /dev/null "$0"/*.urls 2>/dev/null; :' "@sysconfdir@/debuginfod" | tr '\n' ' '`
++    set DEBUGINFOD_URLS=`sh -c 'cat /dev/null "$0"/*.urls "$1"/*.urls "$2"/*.urls 2>/dev/null; :' "@sysconfdir@/debuginfod" /run/debuginfod "${prefix}/lib/debuginfod" | tr '\n' ' '`
+     if ( "$DEBUGINFOD_URLS" != "" ) then
+         setenv DEBUGINFOD_URLS "$DEBUGINFOD_URLS"
+     else
+diff -urN a/config/profile.sh.in b/config/profile.sh.in
+--- a/config/profile.sh.in
++++ b/config/profile.sh.in
+@@ -6,7 +6,10 @@
+
+ if [ -z "$DEBUGINFOD_URLS" ]; then
+     prefix="@prefix@"
+-    DEBUGINFOD_URLS=$(cat /dev/null "@sysconfdir@/debuginfod"/*.urls 2>/dev/null | tr '\n' ' ')
++    DEBUGINFOD_URLS=$(cat /dev/null \
++        "@sysconfdir@/debuginfod"/*.urls \
++        /run/debuginfod/*.urls \
++        "${prefix}/lib/debuginfod"/*.urls 2>/dev/null | tr '\n' ' ')
+     [ -n "$DEBUGINFOD_URLS" ] && export DEBUGINFOD_URLS || unset DEBUGINFOD_URLS
+     unset prefix
+ fi
