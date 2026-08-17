@@ -6,14 +6,19 @@ package:
   version: "5.9"
   description: A very advanced and programmable command interpreter (shell) for UNIX
   homepage: https://www.zsh.org/
-  checksum: 91eb57aeff3033df8ea499d14030e586a9dcfccaedadceaba2876589053da6db
+  checksum: 314848d5f5efe69116afdb4e37a493fbf2213a32118db42c76537e3d14ece68c
 
 sources:
 - name: zsh
   url: https://www.zsh.org/pub/old/zsh-5.9.tar.xz
   sha256: 9b8d1ecedd5b5e81fbf1918e876752a7dd948e05c1a0dba10ab863842d45acd5
+- name: uapi_config
+  file: pkg/cli/shells/zsh-uapi-config.patch
+  sha256: c322d216a5efaa14a0953bc6da9ac7993040be10aaacf0b4c623f483467938b0
 
 dependencies:
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gmp
@@ -55,14 +60,16 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4102:12575, 12336:117506, 20579:138104, 32956:148071, 45298:150059, 53550:151656, 66059:172657, 82804:235418, 95394:301765, 105058:327990]
+  profile: [4111:3315, 12352:16080, 20587:18709, 33009:19699, 45351:20002, 53603:20190, 66112:22540, 82857:28062, 95447:35218, 105175:39581]
 
   script: |
     tar --no-same-owner -xJf /${SOURCE_zsh} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     ./configure \
       --prefix=/usr \
+      --enable-etcdir=/etc \
       --enable-pcre \
       --enable-cap \
       --enable-multibyte \
@@ -75,6 +82,59 @@ build:
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+    # The global startup files carry machine policy, so the shell must read
+    # /usr/lib/zsh/zshenv, then /run/zsh/zshenv, then /etc/zshenv, with a
+    # later file overriding the value an earlier one set. Each tier plants a
+    # different NEXUAPI and the probe prints what a plain "zsh -c" run saw.
+    # zshenv is sourced on every zsh invocation, so no -i or -l is needed.
+    mkdir -p /etc /run/zsh /usr/lib/zsh
+    vendor_zshenv=/usr/lib/zsh/zshenv
+    runtime_zshenv=/run/zsh/zshenv
+    admin_zshenv=/etc/zshenv
+
+    rm -f "${vendor_zshenv}" "${runtime_zshenv}" "${admin_zshenv}"
+
+    probe_home="${WORK_DIR}/zsh-uapi-home"
+    mkdir -p "${probe_home}"
+
+    probe_nexuapi() {
+        HOME="${probe_home}" "${OUT_DIR}/usr/bin/zsh" -c 'print -r -- $NEXUAPI'
+    }
+
+    expect_nexuapi() {
+        actual=$(probe_nexuapi)
+        if [ "${actual}" != "$1" ]; then
+            printf 'zsh UAPI smoke: expected NEXUAPI %s, got %s\n' \
+                "$1" "${actual}" >&2
+            exit 1
+        fi
+    }
+
+    default_nexuapi=$(probe_nexuapi)
+    if [ -n "${default_nexuapi}" ]; then
+        printf 'zsh UAPI smoke: expected empty NEXUAPI with no tiers, got %s\n' \
+            "${default_nexuapi}" >&2
+        exit 1
+    fi
+
+    printf 'NEXUAPI=vendor\n' > "${vendor_zshenv}"
+    expect_nexuapi vendor
+
+    printf 'NEXUAPI=runtime\n' > "${runtime_zshenv}"
+    expect_nexuapi runtime
+
+    printf 'NEXUAPI=admin\n' > "${admin_zshenv}"
+    expect_nexuapi admin
+
+    # Removing a tier uncovers the one below it, which proves every file is
+    # sourced on each run rather than resolved once.
+    rm -f "${admin_zshenv}"
+    expect_nexuapi runtime
+
+    rm -f "${vendor_zshenv}" "${runtime_zshenv}"
+
+    printf 'zsh UAPI smoke: the config loader read all three tiers in order\n'
 
 bundles:
   dev:

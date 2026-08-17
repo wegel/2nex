@@ -1,0 +1,148 @@
+From: Nex package maintainers
+Subject: [PATCH] main: read the global startup files from all three UAPI tiers
+Source: no upstream commit; written for Nex against zsh 5.9
+Upstream: not submitted. zsh ships exactly one global copy of each startup
+ file (zshenv, zprofile, zshrc, zlogin, zlogout), and on a system whose /usr
+ is immutable that leaves an administrator with nowhere to put a machine-wide
+ setting without editing the package's own file.
+
+configure.ac defines GLOBAL_ZSHENV and friends as the single path
+"$etcdir/<name>", defaulting to /etc/<name>, and Src/init.c and
+Src/builtin.c each source exactly that one path. Nothing in feature.h or
+os_unix.h stands between a packager and /etc the way vim's SYS_VIMRC_FILE
+does, so this patch adds the vendor and runtime tiers directly at the call
+sites instead of introducing new configure switches.
+
+Source three files per startup event, lowest priority first: the package's
+own copy under /usr/lib/zsh, then a copy under /run/zsh for settings a single
+boot owns, then the existing GLOBAL_* path under /etc for the administrator's.
+source() already ignores a file that does not exist, so a system that uses
+neither new tier behaves exactly as before, and a setting made by a later
+file replaces the same setting from an earlier one, which is the normal
+behaviour for sourced scripts. --enable-etcdir keeps choosing the /etc member
+of the tier; it is not touched by this patch.
+
+GLOBAL_ZSHENV is sourced unconditionally before the RCS/GLOBALRCS checks that
+guard the other four files, so the new zshenv tier is added at that same
+unconditional call site. GLOBAL_ZLOGOUT is sourced from builtin.c rather than
+init.c, so it gets its own small static helper instead of sharing the one in
+init.c.
+
+diff -urN a/Src/init.c b/Src/init.c
+--- a/Src/init.c
++++ b/Src/init.c
+@@ -1288,6 +1288,28 @@
+     }
+ }
+
++/*
++ * Source the vendor and runtime tiers that rank below the administrator's
++ * GLOBAL_* file: /usr/lib/zsh/<name> for the package's own copy, then
++ * /run/zsh/<name> for settings a single boot owns. source() ignores a file
++ * that does not exist, so a system that uses neither tier behaves exactly
++ * as before, and a setting made by a later file replaces the same setting
++ * from an earlier one, which is the normal behaviour for sourced scripts.
++ */
++
++/**/
++static void
++source_uapi_tiers(char *name)
++{
++    char *vendor = tricat("/usr/lib/zsh/", name, "");
++    char *runtime = tricat("/run/zsh/", name, "");
++
++    source(vendor);
++    zsfree(vendor);
++    source(runtime);
++    zsfree(runtime);
++}
++
+ /* Source the init scripts.  If called as "ksh" or "sh"  *
+  * then we source the standard sh/ksh scripts instead of *
+  * the standard zsh scripts                              */
+@@ -1322,6 +1344,7 @@
+ 	    source("/etc/suid_profile");
+     } else {
+ #ifdef GLOBAL_ZSHENV
++	source_uapi_tiers("zshenv");
+ 	source(GLOBAL_ZSHENV);
+ #endif
+
+@@ -1342,24 +1365,30 @@
+ 	}
+ 	if (islogin) {
+ #ifdef GLOBAL_ZPROFILE
+-	    if (isset(RCS) && isset(GLOBALRCS))
++	    if (isset(RCS) && isset(GLOBALRCS)) {
++		    source_uapi_tiers("zprofile");
+ 		    source(GLOBAL_ZPROFILE);
++	    }
+ #endif
+ 	    if (isset(RCS) && unset(PRIVILEGED))
+ 		sourcehome(".zprofile");
+ 	}
+ 	if (interact) {
+ #ifdef GLOBAL_ZSHRC
+-	    if (isset(RCS) && isset(GLOBALRCS))
++	    if (isset(RCS) && isset(GLOBALRCS)) {
++		source_uapi_tiers("zshrc");
+ 		source(GLOBAL_ZSHRC);
++	    }
+ #endif
+ 	    if (isset(RCS) && unset(PRIVILEGED))
+ 		sourcehome(".zshrc");
+ 	}
+ 	if (islogin) {
+ #ifdef GLOBAL_ZLOGIN
+-	    if (isset(RCS) && isset(GLOBALRCS))
++	    if (isset(RCS) && isset(GLOBALRCS)) {
++		source_uapi_tiers("zlogin");
+ 		source(GLOBAL_ZLOGIN);
++	    }
+ #endif
+ 	    if (isset(RCS) && unset(PRIVILEGED))
+ 		sourcehome(".zlogin");
+diff -urN a/Src/builtin.c b/Src/builtin.c
+--- a/Src/builtin.c
++++ b/Src/builtin.c
+@@ -5798,6 +5798,27 @@
+     exit((shell_exiting || exit_pending) ? exit_val : lastval);
+ }
+
++/*
++ * Source the vendor and runtime tiers that rank below the administrator's
++ * GLOBAL_ZLOGOUT file: /usr/lib/zsh/zlogout for the package's own copy,
++ * then /run/zsh/zlogout for settings a single boot owns. source() ignores
++ * a file that does not exist, so a system that uses neither tier behaves
++ * exactly as before.
++ */
++
++/**/
++static void
++source_uapi_zlogout_tiers(void)
++{
++    char *vendor = tricat("/usr/lib/zsh/", "zlogout", "");
++    char *runtime = tricat("/run/zsh/", "zlogout", "");
++
++    source(vendor);
++    zsfree(vendor);
++    source(runtime);
++    zsfree(runtime);
++}
++
+ /* As realexit(), but call _exit instead */
+
+ /**/
+@@ -5872,8 +5893,10 @@
+ 	if (islogin && !subsh) {
+ 	    sourcehome(".zlogout");
+ #ifdef GLOBAL_ZLOGOUT
+-	    if (isset(RCS) && isset(GLOBALRCS))
++	    if (isset(RCS) && isset(GLOBALRCS)) {
++		source_uapi_zlogout_tiers();
+ 		source(GLOBAL_ZLOGOUT);
++	    }
+ #endif
+ 	}
+     }
+</content>
