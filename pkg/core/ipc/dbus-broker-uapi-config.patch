@@ -1,0 +1,250 @@
+From: Nex package maintainers
+Subject: [PATCH] launch: shadow and mask <includedir> drop-ins across UAPI tiers
+Source: Nex
+Upstream: not submitted; needs upstream agreement on Linux UAPI paths
+
+dbus-broker's own reader is separate from the reference dbus-daemon reader
+that pkg/core/ipc/dbus-transient-config.patch already fixed, so it needs its
+own change. src/launch/config.c walked each <includedir> directory with
+opendir()/readdir() and turned every matching *.conf into an <include> node
+unconditionally. Three <includedir> entries naming the vendor
+(/usr/share/dbus-1), transient (/run/dbus-1), and administrator
+(/etc/dbus-1) drop-in directories for the same basename therefore all applied
+their rules together instead of the higher tier replacing the lower one, and
+a symlink to /dev/null was read as an ordinary (empty) file rather than as a
+mask.
+
+Track the basenames seen across every <includedir> processed while parsing
+one top-level configuration file. A basename seen again in a later directory
+drops the previously queued <include> node outright and takes its place, so
+/run overrides /usr/share and /etc overrides /run. A directory entry that
+stat() resolves to a non-regular file -- a symlink to /dev/null being the
+conventional case -- is recorded as a mask: it replaces the lower tier's
+node without adding an include of its own. The tracking table is cleared
+once config_parser_include() finishes the file, since it only needs to span
+the <includedir> elements of that one document.
+
+Also extend test-config's file-argument mode to print the path of each
+resulting <include> node, not just its element name, so the basename
+shadowing and masking behavior can be inspected directly instead of only
+through a running bus.
+
+diff -urN a/src/launch/config.h b/src/launch/config.h
+--- a/src/launch/config.h	2026-08-17 12:26:51.579755657 -0400
++++ b/src/launch/config.h	2026-08-17 12:26:58.222185889 -0400
+@@ -232,6 +232,19 @@
+                 size_t n_depth;
+                 size_t n_failed;
+                 int error;
++
++                /*
++                 * Tracks the basenames seen across every <includedir> processed
++                 * while parsing the current top-level configuration file, so a
++                 * later directory (e.g. /run or /etc) can shadow or mask a
++                 * same-named file from an earlier one (e.g. /usr/share). Cleared
++                 * by config_parser_include() once that file is fully parsed.
++                 */
++                struct {
++                        char *name;
++                        ConfigNode *node;
++                } *includedir_dedup;
++                size_t n_includedir_dedup;
+         } state;
+ };
+
+diff -urN a/src/launch/config.c b/src/launch/config.c
+--- a/src/launch/config.c	2026-08-17 12:26:51.579595156 -0400
++++ b/src/launch/config.c	2026-08-17 12:27:24.336426780 -0400
+@@ -7,6 +7,7 @@
+ #include <expat.h>
+ #include <stdlib.h>
+ #include <sys/auxv.h>
++#include <sys/stat.h>
+ #include "dbus/protocol.h"
+ #include "launch/config.h"
+ #include "launch/nss-cache.h"
+@@ -676,6 +677,60 @@
+         return 0;
+ }
+
++/*
++ * Free the basename-tracking table built while scanning the <includedir>
++ * elements of one top-level configuration file.
++ */
++static void config_state_includedir_dedup_clear(ConfigState *state) {
++        size_t i;
++
++        for (i = 0; i < state->n_includedir_dedup; ++i)
++                free(state->includedir_dedup[i].name);
++        free(state->includedir_dedup);
++        state->includedir_dedup = NULL;
++        state->n_includedir_dedup = 0;
++}
++
++/*
++ * Record the outcome for one basename found under an <includedir>. A
++ * basename already seen under an earlier directory is replaced outright: its
++ * previous include node, if any, is dropped, and @node (NULL for a masked
++ * entry) becomes the new winner. This gives a later directory -- /run over
++ * /usr/share, /etc over /run -- the final say for a given file name.
++ */
++static int config_state_includedir_dedup_apply(ConfigState *state, const char *name, ConfigNode *node) {
++        void *t;
++        char *name_copy;
++        size_t i;
++
++        for (i = 0; i < state->n_includedir_dedup; ++i) {
++                if (!strcmp(state->includedir_dedup[i].name, name)) {
++                        if (state->includedir_dedup[i].node)
++                                config_node_free(state->includedir_dedup[i].node);
++                        state->includedir_dedup[i].node = node;
++                        return 0;
++                }
++        }
++
++        name_copy = strdup(name);
++        if (!name_copy)
++                return -ENOMEM;
++
++        t = realloc(state->includedir_dedup,
++                    sizeof(*state->includedir_dedup) * (state->n_includedir_dedup + 1));
++        if (!t) {
++                free(name_copy);
++                return -ENOMEM;
++        }
++
++        state->includedir_dedup = t;
++        state->includedir_dedup[state->n_includedir_dedup].name = name_copy;
++        state->includedir_dedup[state->n_includedir_dedup].node = node;
++        ++state->n_includedir_dedup;
++
++        return 0;
++}
++
+ static void config_parser_begin_fn(void *userdata, const XML_Char *name, const XML_Char **attrs) {
+         _c_cleanup_(config_node_freep) ConfigNode *node = NULL;
+         ConfigState *state = userdata;
+@@ -1101,6 +1156,9 @@
+
+                 for (i = 0; i < list->n_entries; ++i) {
+                         _c_cleanup_(config_node_freep) ConfigNode *node = NULL;
++                        _c_cleanup_(config_path_unrefp) ConfigPath *path = NULL;
++                        struct stat st;
++                        bool masked;
+
+                         de = list->entries[i];
+                         n = strlen(de->d_name);
+@@ -1110,24 +1168,48 @@
+                         if (strcmp(de->d_name + n - strlen(suffix), suffix))
+                                 continue;
+
+-                        r = config_node_new(&node, state->current, CONFIG_NODE_INCLUDE);
++                        r = config_path_new(&path, state->current->includedir.dir, NULL, de->d_name);
+                         if (r) {
+                                 state->error = error_trace(r);
+                                 return;
+                         }
+
+-                        r = config_path_new(&node->include.file,
+-                                            state->current->includedir.dir,
+-                                            NULL,
+-                                            de->d_name);
++                        /*
++                         * A same basename in a directory visited later (e.g.
++                         * /run or /etc) shadows one found earlier (e.g.
++                         * /usr/share). A non-regular file, such as a symlink
++                         * to /dev/null, masks the basename instead of being
++                         * included.
++                         */
++                        masked = stat(path->path, &st) == 0 && !S_ISREG(st.st_mode);
++
++                        if (!masked) {
++                                r = config_node_new(&node, state->current, CONFIG_NODE_INCLUDE);
++                                if (r) {
++                                        state->error = error_trace(r);
++                                        return;
++                                }
++
++                                r = config_path_new(&node->include.file,
++                                                    state->current->includedir.dir,
++                                                    NULL,
++                                                    de->d_name);
++                                if (r) {
++                                        state->error = error_trace(r);
++                                        return;
++                                }
++
++                                c_list_link_after(&state->last->root_link, &node->root_link);
++                                c_list_link_tail(&state->root->include_list, &node->include_link);
++                                state->last = node;
++                        }
++
++                        r = config_state_includedir_dedup_apply(state, de->d_name, node);
+                         if (r) {
+-                                state->error = error_trace(r);
++                                state->error = error_origin(r);
+                                 return;
+                         }
+
+-                        c_list_link_after(&state->last->root_link, &node->root_link);
+-                        c_list_link_tail(&state->root->include_list, &node->include_link);
+-                        state->last = node;
+                         node = NULL;
+                 }
+
+@@ -1323,24 +1405,33 @@
+
+         do {
+                 len = read(fd, buffer, sizeof(buffer));
+-                if (len < 0)
+-                        return error_origin(-errno);
++                if (len < 0) {
++                        r = error_origin(-errno);
++                        goto out;
++                }
+
+                 r = XML_Parse(parser->xml, buffer, len, len ? XML_FALSE : XML_TRUE);
+                 if (r != XML_STATUS_OK) {
+                         CONFIG_ERR(&parser->state, "Invalid XML", ": %s",
+                                    XML_ErrorString(XML_GetErrorCode(parser->xml)));
+-                        return CONFIG_E_INVALID;
++                        r = CONFIG_E_INVALID;
++                        goto out;
+                 }
+
+-                if (parser->state.error)
+-                        return error_trace(parser->state.error);
++                if (parser->state.error) {
++                        r = error_trace(parser->state.error);
++                        goto out;
++                }
+         } while (len);
+
+         c_assert(!parser->state.n_depth);
+         c_assert(!parser->state.n_failed);
+
+-        return 0;
++        r = 0;
++
++out:
++        config_state_includedir_dedup_clear(&parser->state);
++        return r;
+ }
+
+ /**
+diff -urN a/src/launch/test-config.c b/src/launch/test-config.c
+--- a/src/launch/test-config.c	2026-08-17 12:26:51.580786373 -0400
++++ b/src/launch/test-config.c	2026-08-17 12:28:04.000792111 -0400
+@@ -90,7 +90,11 @@
+         c_assert(!r);
+
+         c_list_for_each_entry(i_node, &root->node_list, root_link) {
+-                fprintf(stderr, "<%s>\n", test_type2str[i_node->type]);
++                if (i_node->type == CONFIG_NODE_INCLUDE)
++                        fprintf(stderr, "<%s> %s\n", test_type2str[i_node->type],
++                                i_node->include.file->path);
++                else
++                        fprintf(stderr, "<%s>\n", test_type2str[i_node->type]);
+         }
+ }
+
