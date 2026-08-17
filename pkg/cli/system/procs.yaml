@@ -6,7 +6,7 @@ package:
   version: 0.14.10
   description: A modern replacement for ps written in Rust
   homepage: https://github.com/dalance/procs
-  checksum: c349d48f36b3f107bd7f9e6f8dee6fc7ae1ef19e492c4264002a05b210b4ad98
+  checksum: de0416d279e40219a92ac5dddda59371b1c347013faa48debce544c44cd9ab22
 
 sources:
 - name: procs
@@ -15,6 +15,9 @@ sources:
 - name: vendor
   sha256: af1943fb3ee9121dc061e1b1dfbfba7809969c6f14f25cacca170c66813877eb
   cargo_lock: https://raw.githubusercontent.com/dalance/procs/v0.14.10/Cargo.lock
+- name: uapi_config
+  file: pkg/cli/system/procs-uapi-config.patch
+  sha256: 2c42a813e8abe358f8d28d28a0dd2a53d3f8dfe0cf65e5441c0ffff8a7fe4a06
 
 dependencies:
 - name: bash
@@ -43,14 +46,20 @@ dependencies:
   commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
 - name: zlib
   commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4118:21376, 5933:311937]
+  profile: [4106:6107, 6025:56604]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_procs} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     tar --no-same-owner -xf /./${SOURCE_vendor} -C "${WORK_DIR}"
 
@@ -78,6 +87,66 @@ build:
     install -m 755 target/x86_64-unknown-linux-gnu/release/procs ${OUT_DIR}/usr/bin/procs
 
     strip --strip-unneeded ${OUT_DIR}/usr/bin/procs
+
+    # get_config() overlays no files; it picks the first path that exists,
+    # in order: --load-config, ~/.procs.toml, the preference dir, the XDG
+    # dir, /etc/procs/procs.toml, /run/procs/procs.toml, then
+    # /usr/lib/procs/procs.toml. Each candidate config below sets
+    # display.separator to a letter naming its tier, and the Separator
+    # column renders that letter as both its JSON key and value, so the
+    # letter found in --json output proves which single file was read.
+    mkdir -p /etc/procs /run/procs /usr/lib/procs
+    export HOME=
+
+    vendor=/usr/lib/procs/procs.toml
+    runtime=/run/procs/procs.toml
+    admin=/etc/procs/procs.toml
+    load_cfg="${WORK_DIR}/procs-load-config.toml"
+    rm -f "${vendor}" "${runtime}" "${admin}"
+
+    write_cfg() {
+      sed -e "s/separator = \"│\"/separator = \"$2\"/" \
+          -e "s/show_self = false/show_self = true/" \
+          config/small.toml > "$1"
+    }
+
+    run_and_expect() {
+      desc="$1"
+      letter="$2"
+      shift 2
+      if ! out=$("${OUT_DIR}/usr/bin/procs" --json "$@" 2>&1); then
+        printf 'procs UAPI smoke: expected a clean run for %s\n' "${desc}" >&2
+        printf '%s\n' "${out}" >&2
+        exit 1
+      fi
+      case "${out}" in
+        *"\"${letter}\": \"${letter}\""*) ;;
+        *)
+          printf 'procs UAPI smoke: expected separator %s for %s\n' "${letter}" "${desc}" >&2
+          printf '%s\n' "${out}" >&2
+          exit 1
+          ;;
+      esac
+    }
+
+    write_cfg "${vendor}" V
+    run_and_expect "vendor alone" V
+
+    write_cfg "${runtime}" R
+    run_and_expect "vendor and runtime present" R
+
+    write_cfg "${admin}" A
+    run_and_expect "vendor, runtime and admin present" A
+
+    rm -f "${admin}"
+    run_and_expect "admin removed uncovers runtime" R
+
+    write_cfg "${admin}" A
+    write_cfg "${load_cfg}" L
+    run_and_expect "--load-config still beats /etc" L --load-config "${load_cfg}"
+
+    rm -f "${vendor}" "${runtime}" "${admin}" "${load_cfg}"
+    printf 'procs UAPI smoke: the config loader read all three tiers in order\n'
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
