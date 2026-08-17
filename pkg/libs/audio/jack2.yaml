@@ -6,12 +6,15 @@ package:
   version: 1.9.22
   description: JACK audio server and client libraries
   homepage: https://jackaudio.org/
-  checksum: 0c0c44bf11ac17e377e138a5896f93b2f9f9654befd0036bc28dd6e056bea521
+  checksum: 3c5b550afc453b8b2f020268419bf0c42c20992802a2bcbdb8389ac3039353d5
 
 sources:
 - name: jack2
   url: https://github.com/jackaudio/jack2/archive/refs/tags/v1.9.22.tar.gz
   sha256: 1e42b9fc4ad7db7befd414d45ab2f8a159c0b30fcd6eee452be662298766a849
+- name: uapi_config
+  file: pkg/libs/audio/jack2-uapi-config.patch
+  sha256: 42d3861911945a37b534f5e0e3e7b74b52995d52724d5b537adceaaf62a7b286
 
 dependencies:
 - name: glibc
@@ -48,6 +51,8 @@ dependencies:
   commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: alsa-lib
   commit: x86_64/pkg/libs/audio/alsa-lib/1.2.14/bundles/dev
 - name: opus
@@ -55,13 +60,15 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4134:17330, 8279:34479, 12429:51732, 16532:58720, 20663:63957, 24768:71280, 28903:74439, 33038:80241, 33570:81350]
+  profile: [4112:1092, 8288:1860, 12473:2469, 16584:3126, 20694:4266, 24830:4539, 28949:4791, 33060:15529, 36492:16446]
 
   script: |
-    set -eu
+    set -eux
 
     tar --no-same-owner -xf /${SOURCE_jack2} -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     python3 - <<'PY'
     from pathlib import Path
@@ -96,6 +103,74 @@ build:
 
     python3 ./waf build
     python3 ./waf install --destdir="${OUT_DIR}"
+
+    mkdir -p /etc /run /usr/lib
+    probe_src="${WORK_DIR}/jack2-uapi-probe.c"
+    cat > "${probe_src}" <<'PROBE'
+    #include <jack/jack.h>
+
+    int main(void)
+    {
+        jack_status_t status;
+        jack_client_t *client = jack_client_open("nex-uapi-probe", JackNullOption, &status);
+        if (client) {
+            jack_client_close(client);
+        }
+        return 0;
+    }
+    PROBE
+
+    gcc -I "${OUT_DIR}/usr/include" "${probe_src}" \
+      -L "${OUT_DIR}/usr/lib" -Wl,-rpath,"${OUT_DIR}/usr/lib" \
+      -ljackserver -o "${WORK_DIR}/jack2-uapi-probe"
+
+    probe_home="${WORK_DIR}/jack2-uapi-home"
+    mkdir -p "${probe_home}"
+
+    run_probe() {
+      HOME="${probe_home}" JACK_DRIVER_DIR="${OUT_DIR}/usr/lib/jack" \
+        "${WORK_DIR}/jack2-uapi-probe" 2>&1 1>/dev/null
+    }
+
+    expect_driver() {
+      expected=$1
+      out="$(run_probe)" || true
+      case "${out}" in
+        *"${expected}"*) ;;
+        *)
+          printf 'jack2 UAPI smoke: expected %s, got: %s\n' "${expected}" "${out}" >&2
+          exit 1
+          ;;
+      esac
+    }
+
+    # Only the vendor tier exists.
+    printf -- 'jackd -d nex-usr-marker\n' > /usr/lib/jackdrc
+    expect_driver nex-usr-marker
+
+    # The runtime tier appears and must shadow the vendor tier.
+    printf -- 'jackd -d nex-run-marker\n' > /run/jackdrc
+    expect_driver nex-run-marker
+
+    # The admin tier appears and must shadow both lower tiers.
+    printf -- 'jackd -d nex-etc-marker\n' > /etc/jackdrc
+    expect_driver nex-etc-marker
+
+    # An empty admin file still counts as complete and must mask the lower tiers.
+    : > /etc/jackdrc
+    out="$(run_probe)" || true
+    if printf '%s' "${out}" | grep -q 'nex-run-marker\|nex-usr-marker'; then
+      printf 'jack2 UAPI smoke: empty /etc/jackdrc failed to mask lower tiers: %s\n' "${out}" >&2
+      exit 1
+    fi
+
+    # Remove the three tiers; the legacy jackd.conf alias is the last resort.
+    rm -f /etc/jackdrc /run/jackdrc /usr/lib/jackdrc
+    printf -- 'jackd -d nex-legacy-marker\n' > /etc/jackd.conf
+    expect_driver nex-legacy-marker
+
+    rm -f /etc/jackd.conf
+    printf 'jack2 UAPI smoke: autostart jackdrc read all three tiers in order\n'
 
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
