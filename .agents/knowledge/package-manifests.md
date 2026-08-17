@@ -516,6 +516,44 @@ JavaScriptCore manifests.
 Evidence: `rg --files pkg` found GTK, libsoup3, and Chromium manifests, but no
 WebKitGTK, WPE, JavaScriptCore, or Vimb stack.
 
+## Deciding whether a file needs three tiers
+
+EP016 audited every package manifest for configuration ownership. Four
+decision rules came out of it, each after a wrong call was caught.
+
+A machine-wide file is three-tier distribution policy when an administrator
+could reasonably set it *and* a package could reasonably ship a default. Apply
+that test to the file, not to the mechanism: FreeRDP's Windows registry hive,
+Looking Glass's `/etc/looking-glass-client.ini`, and Chromium's
+`/etc/chromium/policies` were each described accurately and then excused as
+"machine state" by a worker, and all three were real gaps.
+
+The opposite call is just as common. A file that names the local paths a host
+exports, the accounts it has, or the devices it owns is machine-owned state,
+and shipping a vendor copy would be wrong rather than helpful: rsync's
+`rsyncd.conf` exports modules, aardvark-dns's zone files are generated, and
+cryptsetup's lock directory belongs to one boot. Those are `pass`.
+
+Gaps come in both shapes. Most are `/etc`-only readers with no vendor tier, so
+a deployment cannot ship a default. Vim was the inverse: its only system file
+was `$VIM/vimrc` under the install prefix, so the package could ship a default
+but an administrator had nowhere to put policy at all, which on an immutable
+`/usr` means the setting cannot be made.
+
+When a record's `pass` rests on a mechanism an assembly supplies, follow the
+`extends:` chain rather than the file that ships the package.
+`asm/edgebox-rootfs.yaml` contains no `profile.d` text of its own but extends
+`asm/flat-systemd.yaml`, which merges `/usr/lib/profile.d`, `/run/profile.d`,
+and `/etc/profile.d`; `asm/desktop-dev.yaml` inherits `XDG_CONFIG_DIRS` from
+`asm/desktop-vwl/desktop-vwl.yaml` the same way. Check which assemblies ship a
+package with `grep -rln '<namespace>/<pkg>' asm/`.
+
+Nothing below `pkg/bootstrap/` binds to these rules, because no assembly
+references those manifests and they appear only as build dependencies of other
+packages. Confirm for one package with
+`grep -rln '<manifest path>' pkg/ | grep -v '^pkg/bootstrap/'`. They still get
+full records, because a later change could ship them.
+
 ## UAPI Configuration Parser Patches
 
 Before moving a package default from `/etc`, find every reader, reload path,
