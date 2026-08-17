@@ -1,0 +1,26 @@
+From: Nex package maintainers
+Subject: [PATCH] main: read the UAPI system config hierarchy
+Source: Nex
+Upstream: not submitted; suitable for upstream review
+
+get_config_path only tries SYSCONFDIR "/swaylock/config" after the user
+files, so a package cannot ship a default under /usr/lib and a boot-time
+tool has nowhere under /run to place a temporary override.
+
+Walk the same three tiers other Nex-patched readers use after the user
+files: SYSCONFDIR (the administrator's /etc), then /run, then /usr/lib.
+Keep the existing user paths and their priority, and keep the -C override
+untouched. The PAM service file move stays as-is.
+
+diff -urN a/main.c b/main.c
+--- a/main.c
++++ b/main.c
+@@ -1041,6 +1041,8 @@
+ 		"$HOME/.swaylock/config",
+ 		"$XDG_CONFIG_HOME/swaylock/config",
+ 		SYSCONFDIR "/swaylock/config",
++		"/run/swaylock/config",
++		"/usr/lib/swaylock/config",
+ 	};
+
+ 	char *config_home = getenv("XDG_CONFIG_HOME");

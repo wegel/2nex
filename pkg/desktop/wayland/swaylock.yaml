@@ -6,12 +6,15 @@ package:
   version: 1.7.2
   description: Screen locker for Wayland
   homepage: https://github.com/swaywm/swaylock
-  checksum: 883fb2383f9c011646571b6651528802b0ce2d6105fa7cc6183ce89e47cf612a
+  checksum: 714a8888dfe795e00a94bfbb5b4ef34693963e2ebbf8cd25d21059b9b81135b2
 
 sources:
 - name: swaylock
   url: https://github.com/swaywm/swaylock/releases/download/v1.7.2/swaylock-1.7.2.tar.gz
   sha256: bf965d47fb6fc1402f854d4679d21a9459713fc0f330bc607c9585db097b4304
+- name: uapi_config_patch
+  file: pkg/desktop/wayland/swaylock-uapi-config.patch
+  sha256: 22fe57526cbf571acd02b1e6e8a58b0c15992c6c52a92ecbd4901b9a2b96458a
 
 dependencies:
 - name: bash
@@ -20,6 +23,10 @@ dependencies:
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
 - name: coreutils
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: tar
@@ -101,16 +108,19 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [3662:1526]
+  profile: [3774:1414]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_swaylock} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config_patch}"
+
     export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
 
     meson setup build \
       --prefix=/usr \
+      --sysconfdir=/etc \
       --buildtype=release \
       --pkg-config-path=/usr/lib/pkgconfig:/usr/share/pkgconfig \
       -Dpam=enabled \
@@ -124,6 +134,64 @@ build:
       "${OUT_DIR}/usr/lib/pam.d/swaylock"
     rm "${OUT_DIR}/etc/pam.d/swaylock"
     rmdir "${OUT_DIR}/etc/pam.d" "${OUT_DIR}/etc"
+
+    # get_config_path tries the user files, then the admin, runtime, and
+    # vendor tiers in that order. Plant a config in all three system paths and
+    # remove the winning one at each step to prove the loader still reads the
+    # next tier down rather than stopping at the first miss.
+    admin_conf=/etc/swaylock/config
+    runtime_conf=/run/swaylock/config
+    vendor_conf=/usr/lib/swaylock/config
+    mkdir -p /etc/swaylock /run/swaylock /usr/lib/swaylock
+    rm -f "${admin_conf}" "${runtime_conf}" "${vendor_conf}"
+
+    probe_home="${WORK_DIR}/swaylock-uapi-home"
+    mkdir -p "${probe_home}"
+    probe_out="${WORK_DIR}/swaylock-uapi-probe.out"
+
+    # initialize_pw_backend() forks a PAM worker before the config or
+    # display is touched, and that worker can sit inside pam_start() well
+    # past the point where main() itself has returned. Kill any leftover
+    # worker after each run so it cannot hold the binary open for strip.
+    reap_pw_worker() {
+        for proc_dir in /proc/[0-9]*; do
+            [ "$(cat "${proc_dir}/comm" 2>/dev/null)" = "swaylock" ] || continue
+            kill -KILL "${proc_dir#/proc/}" 2>/dev/null || true
+        done
+    }
+
+    run_probe() {
+        env -u WAYLAND_DISPLAY -u XDG_CONFIG_HOME HOME="${probe_home}" \
+            LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+            "${OUT_DIR}/usr/bin/swaylock" -d \
+            > "${probe_out}" 2>&1 || true
+        reap_pw_worker
+    }
+
+    expect_loaded() {
+        run_probe
+        if ! grep -qF "Found config at $1" "${probe_out}"; then
+            printf 'swaylock UAPI smoke: expected config at %s, log:\n' "$1" >&2
+            cat "${probe_out}" >&2
+            exit 1
+        fi
+    }
+
+    : > "${admin_conf}"
+    : > "${runtime_conf}"
+    : > "${vendor_conf}"
+    expect_loaded "${admin_conf}"
+
+    rm -f "${admin_conf}"
+    expect_loaded "${runtime_conf}"
+
+    rm -f "${runtime_conf}"
+    expect_loaded "${vendor_conf}"
+
+    rm -f "${vendor_conf}"
+    rm -rf "${probe_home}" "${probe_out}"
+
+    printf 'swaylock UAPI smoke: config loader read all three tiers in order\n'
 
     strip --strip-unneeded ${OUT_DIR}/usr/bin/swaylock
 
