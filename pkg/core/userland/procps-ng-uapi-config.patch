@@ -1,0 +1,74 @@
+From: Nex package maintainers
+Subject: top: read topdefaultrc from three tiers, /etc winning
+
+Source: no upstream commit; written for Nex against procps-ng 4.0.5
+Upstream: not submitted. top intentionally has a single admin-set
+  SYS_RCDEFAULTS and treats layering as distribution policy.
+
+configs_reads() (top.c:4209-4266) reads exactly one system-wide default
+file, hardcoded to SYS_RCDEFAULTS (/etc/topdefaultrc), when no user rc
+file exists at ~/.config/procps/toprc, the legacy ~/.toprc, or the XDG
+locations (top.c:4257-4265, top.h:530-531). That collapses the
+vendor-shipped default configuration and any runtime-generated default
+into the same file an administrator edits by hand, so a package that
+wants to ship a default topdefaultrc has nowhere to put it but /etc,
+in violation of this distribution's package manifest policy of keeping
+vendor defaults out of /etc.
+
+Add SYS_RCDEFAULTS_RUN (/run/top/topdefaultrc) and SYS_RCDEFAULTS_VENDOR
+(/usr/lib/top/topdefaultrc) and try SYS_RCDEFAULTS, then the run tier,
+then the vendor tier, in that order, using the first one that opens.
+Only an existing file is read; a missing file falls through to the
+next tier exactly as a missing SYS_RCDEFAULTS already fell through to
+built-in defaults. SYS_RCRESTRICT (/etc/toprc) stays the single
+administrator secure-mode switch, and every user rc path stays tried
+ahead of all three system tiers, both unaffected by this change.
+
+diff -urN a/src/top/top.h b/src/top/top.h
+--- a/src/top/top.h
++++ b/src/top/top.h
+@@ -529,6 +529,8 @@
+         /* Configuration files support */
+ #define SYS_RCRESTRICT  "/etc/toprc"
+ #define SYS_RCDEFAULTS  "/etc/topdefaultrc"
++#define SYS_RCDEFAULTS_RUN    "/run/top/topdefaultrc"
++#define SYS_RCDEFAULTS_VENDOR "/usr/lib/top/topdefaultrc"
+ #define RCF_EYECATCHER  "Config File (Linux processes with windows)\n"
+ #define RCF_PLUS_H      "\\]^_`abcdefghij"
+ #define RCF_PLUS_J      "klmnopqrstuvwxyz"
+diff -urN a/src/top/top.c b/src/top/top.c
+--- a/src/top/top.c
++++ b/src/top/top.c
+@@ -4255,16 +4255,29 @@
+       if (p) goto default_or_error;
+    } else {
+ system_default:
+-      fp = fopen(SYS_RCDEFAULTS, "r");
++   {
++      static const char *const sys_defaults[] = {
++         SYS_RCDEFAULTS, SYS_RCDEFAULTS_RUN, SYS_RCDEFAULTS_VENDOR
++      };
++      const char *sys_name = NULL;
++      size_t i;
++
++      for (i = 0; i < sizeof(sys_defaults) / sizeof(sys_defaults[0]); i++) {
++         fp = fopen(sys_defaults[i], "r");
++         if (fp) {
++            sys_name = sys_defaults[i];
++            break;
++         }
++      }
+       if (fp) {
+-         p = configs_file(fp, SYS_RCDEFAULTS, &tmp_delay);
++         p = configs_file(fp, sys_name, &tmp_delay);
+          fclose(fp);
+          if (p) goto default_or_error;
+          // as this file ages, suppress the compatibility warning ...
+          Rc_compatibilty = 0;
+       }
+    }
+-
++   }
+    // lastly, establish the true runtime secure mode and delay time
+    if (!getuid()) Secure_mode = 0;
+    if (!Secure_mode) Rc.delay_time = tmp_delay;
