@@ -1,0 +1,58 @@
+From: Nex package maintainers
+Subject: [PATCH] loader: insert /run/osinfo between the vendor and admin tiers
+Source: Nex
+Upstream: not submitted; needs agreement on a machine-generated transient tier
+
+osinfo_loader_process_default_path() merges, in order, the PCI/USB
+ID files, the vendor DATA_DIR/osinfo tree, SYS_CONF_DIR/osinfo (the
+administrator tier), and the per-user config tree, with later
+entries overlaying entities loaded from earlier ones. There was no
+tier for transient, machine-generated device or OS entries such as
+those a running system might stage under /run before an
+administrator's static /etc/osinfo takes effect. Add
+osinfo_loader_get_run_path(), honoring an OSINFO_RUN_DIR override
+the same way the existing system/local/user tiers honor
+OSINFO_SYSTEM_DIR, OSINFO_LOCAL_DIR, and OSINFO_USER_DIR, and insert
+it between the vendor and admin tiers so the merge order becomes
+vendor, /run, /etc, user.
+
+diff -urN a/osinfo/osinfo_loader.c b/osinfo/osinfo_loader.c
+--- a/osinfo/osinfo_loader.c
++++ b/osinfo/osinfo_loader.c
+@@ -2666,6 +2666,20 @@
+     return file;
+ }
+ 
++static GFile *osinfo_loader_get_run_path(void)
++{
++    GFile *file;
++    const gchar *path = g_getenv("OSINFO_RUN_DIR");
++
++    if (!path)
++        path = "/run/osinfo";
++
++    file = g_file_new_for_path(path);
++    g_object_set_data(G_OBJECT(file), "data-format",
++                      GINT_TO_POINTER(OSINFO_DATA_FORMAT_NATIVE));
++    return file;
++}
++
+ static GFile *osinfo_loader_get_local_path(void)
+ {
+     GFile *file;
+@@ -2739,6 +2753,7 @@
+         osinfo_loader_get_pci_path(),
+         osinfo_loader_get_usb_path(),
+         osinfo_loader_get_system_path(),
++        osinfo_loader_get_run_path(),
+         osinfo_loader_get_local_path(),
+         osinfo_loader_get_user_path(),
+         NULL,
+@@ -2750,6 +2765,7 @@
+     g_object_unref(dirs[2]);
+     g_object_unref(dirs[3]);
+     g_object_unref(dirs[4]);
++    g_object_unref(dirs[5]);
+ }
+ 
+ /**

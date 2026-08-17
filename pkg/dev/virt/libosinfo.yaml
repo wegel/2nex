@@ -6,12 +6,15 @@ package:
   version: 1.12.0
   description: Operating system information library
   homepage: https://libosinfo.org/
-  checksum: 64637fe8e68a543b3382574e43217954bf0ae014f40d49b6ca45759df85d3f41
+  checksum: c4d3ef98b28f28f9303c44706ec9b0fbd8be8d870e43aa1ffe7c0735fe17d1b8
 
 sources:
 - name: libosinfo
   url: https://releases.pagure.org/libosinfo/libosinfo-1.12.0.tar.xz
   sha256: ad8557ece26793da43d26de565e3d68ce2ee6bfb8d0113b7cc7dfe07f6bfc6b6
+- name: uapi_config
+  file: pkg/dev/virt/libosinfo-uapi-config.patch
+  sha256: 9a14eac35dc3ce878489987f1d50583cd7bb80bb1e2410170c98fce3315d0ffd
 
 dependencies:
 - name: bash
@@ -20,6 +23,12 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
 - name: xz
@@ -79,15 +88,17 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4138:3426, 8297:7380, 12443:10026, 16590:10210, 20741:10364, 22933:10995]
+  profile: [4112:1069, 8222:1069, 12328:1836, 16472:4776, 20618:4776, 23087:5135]
 
   script: |
     set -eu
     tar --no-same-owner -xf /${SOURCE_libosinfo} -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     meson setup build \
       --prefix=/usr \
+      --sysconfdir=/etc \
       --libdir=lib \
       --buildtype=release \
       -Denable-gtk-doc=false \
@@ -100,6 +111,64 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    installed_lib="${OUT_DIR}/usr/lib/libosinfo-1.0.so.0.1012.0"
+    if grep -qa '/usr/etc' "${installed_lib}"; then
+      printf 'libosinfo UAPI smoke: found /usr/etc compiled into libosinfo-1.0.so\n' >&2
+      exit 1
+    fi
+    if ! grep -qa '/run/osinfo' "${installed_lib}"; then
+      printf 'libosinfo UAPI smoke: /run/osinfo missing from libosinfo-1.0.so\n' >&2
+      exit 1
+    fi
+    if ! grep -qa '/etc/osinfo' "${installed_lib}"; then
+      printf 'libosinfo UAPI smoke: /etc/osinfo missing from libosinfo-1.0.so\n' >&2
+      exit 1
+    fi
+
+    plant_os() {
+      dir="$1"
+      name="$2"
+      mkdir -p "${dir}/os/nex.internal"
+      cat > "${dir}/os/nex.internal/test-uapi-loader-tier.xml" <<EOX
+    <?xml version="1.0" encoding="UTF-8"?>
+    <libosinfo version="0.0.1">
+      <os id="http://nex.internal/test/uapi-loader-tier">
+        <short-id>nex-uapi-loader-tier</short-id>
+        <name>${name}</name>
+        <vendor>libosinfo.org</vendor>
+        <family>test</family>
+      </os>
+    </libosinfo>
+    EOX
+    }
+
+    mkdir -p /usr/share/osinfo /run/osinfo /etc/osinfo
+    plant_os /usr/share/osinfo "Nex UAPI vendor os"
+    plant_os /run/osinfo "Nex UAPI run os"
+    plant_os /etc/osinfo "Nex UAPI admin os"
+
+    run_query() {
+      env -u OSINFO_SYSTEM_DIR -u OSINFO_RUN_DIR -u OSINFO_LOCAL_DIR -u OSINFO_USER_DIR \
+        LD_LIBRARY_PATH="${OUT_DIR}/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+        "${OUT_DIR}/usr/bin/osinfo-query" --fields=name os short-id=nex-uapi-loader-tier \
+        | tail -n +3 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+    }
+    expect_name() {
+      actual="$(run_query)"
+      if [ "${actual}" != "$1" ]; then
+        printf 'libosinfo UAPI smoke: expected %s, got %s\n' "$1" "${actual}" >&2
+        exit 1
+      fi
+    }
+    expect_name "Nex UAPI admin os"
+    rm -f /etc/osinfo/os/nex.internal/test-uapi-loader-tier.xml
+    expect_name "Nex UAPI run os"
+    rm -f /run/osinfo/os/nex.internal/test-uapi-loader-tier.xml
+    expect_name "Nex UAPI vendor os"
+    rm -rf /usr/share/osinfo /run/osinfo /etc/osinfo
+
+    printf 'libosinfo UAPI smoke: loader searched /usr/share/osinfo, /run/osinfo, and /etc/osinfo\n'
 
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
