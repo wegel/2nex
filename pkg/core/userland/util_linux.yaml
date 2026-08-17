@@ -6,12 +6,15 @@ package:
   version: "2.40"
   description: A suite of essential utilities for any Linux system
   homepage: https://git.kernel.org/pub/scm/utils/util-linux/util-linux.git
-  checksum: 6975cca68abb0e0abeea5fca17de9eabc7e13b73050cf1ad21fcf00c0bdb3780
+  checksum: 375d872e8d2d02c5fa6aa977de4116b2aeca47732d30e9d969e1f349a0b1b662
 
 sources:
 - name: util_linux
   url: https://www.kernel.org/pub/linux/utils/util-linux/v2.40/util-linux-2.40.tar.xz
   sha256: d57a626081f9ead02fa44c63a6af162ec19c58f53e993f206ab7c3a6641c2cd7
+- name: uapi_config
+  file: pkg/core/userland/util-linux-uapi-config.patch
+  sha256: 6bd60d12f49dbd1272ea9d9ab1332cefdd9828d8c10e327a3288013931775cab
 
 dependencies:
 - name: glibc
@@ -26,6 +29,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: ncurses
@@ -59,11 +64,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4140:12073, 8261:15944, 16503:29906, 24748:36288, 32981:47497, 41276:51229, 46093:51620, 58860:52568, 71818:53896, 74933:54920]
+  profile: [4105:1154, 8227:2222, 16486:8708, 24719:11702, 32965:12797, 41230:17757, 45368:18003, 57897:18069, 71848:19028, 75034:20289]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     ./configure --bindir=/usr/bin     \
             --libdir=/usr/lib     \
@@ -87,6 +94,40 @@ build:
     make DESTDIR=$OUT_DIR install
     mv ${OUT_DIR}/usr/sbin/* ${OUT_DIR}/usr/bin/
     rmdir ${OUT_DIR}/usr/sbin
+
+    mkdir -p /etc /run /usr/lib
+    printf 'root:x:0:0:root:/root:/usr/bin/bash\n' > /etc/passwd
+    printf 'root:x:0:\n' > /etc/group
+    write_smoke_login_defs() {
+      printf 'SYS_UID_MIN %s\nSYS_UID_MAX 999\n' "$2" > "$1"
+    }
+    expect_root_smoke() {
+      desc="$1"
+      expect="$2"
+      out="${WORK_DIR}/lslogins-smoke.out"
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+        "${OUT_DIR}/usr/bin/lslogins" -s -o USER --noheadings > "${out}" 2>&1
+      present=no
+      grep -q '^root$' "${out}" && present=yes
+      if [ "${present}" != "${expect}" ]; then
+        printf 'util-linux UAPI smoke: expected root present=%s for %s, log:\n' \
+          "${expect}" "${desc}" >&2
+        cat "${out}" >&2
+        exit 1
+      fi
+    }
+
+    rm -f /etc/login.defs /run/login.defs /usr/lib/login.defs
+    write_smoke_login_defs /usr/lib/login.defs 1
+    write_smoke_login_defs /run/login.defs 0
+    write_smoke_login_defs /etc/login.defs 1
+    expect_root_smoke "admin tier" no
+    rm -f /etc/login.defs
+    expect_root_smoke "runtime tier" yes
+    rm -f /run/login.defs
+    expect_root_smoke "vendor tier" no
+    rm -f /usr/lib/login.defs
+    printf 'util-linux UAPI smoke: login.defs loader read all three tiers in order\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true

@@ -1,0 +1,50 @@
+From: Nex package maintainers
+Subject: [PATCH] lib: read the UAPI login.defs hierarchy
+Source: Nex
+Upstream: not submitted; suitable for upstream review
+
+This build of util-linux has no libeconf support, so lib/logindefs.c only
+ever opens /etc/login.defs (_PATH_LOGINDEFS). agetty and lslogins therefore
+never see /run/login.defs or the vendor copy at /usr/lib/login.defs that
+Shadow already ships and reads through its own three-tier loader.
+
+Walk the same three locations in the same priority Shadow uses -
+/etc/login.defs, then /run/login.defs, then /usr/lib/login.defs - and load
+the first one that exists. Keep the compiled-in defaults when none of the
+three exist. This package's reader has no drop-in support, so unlike
+Shadow's econf_readConfig there is no login.defs.d merge here; the three
+main files are enough.
+
+diff -urN a/lib/logindefs.c b/lib/logindefs.c
+--- a/lib/logindefs.c
++++ b/lib/logindefs.c
+@@ -156,10 +156,26 @@
+ 
+ static void load_defaults(void)
+ {
+-	if (logindefs_loader)
++	static const char *const uapi_paths[] = {
++		_PATH_LOGINDEFS,
++		"/run/login.defs",
++		"/usr/lib/login.defs",
++	};
++	size_t i;
++
++	if (logindefs_loader) {
+ 		logindefs_loader(logindefs_loader_data);
+-	else
+-		logindefs_load_file(_PATH_LOGINDEFS);
++		return;
++	}
++
++	for (i = 0; i < ARRAY_SIZE(uapi_paths); i++) {
++		struct stat st;
++
++		if (stat(uapi_paths[i], &st) == 0) {
++			logindefs_load_file(uapi_paths[i]);
++			return;
++		}
++	}
+ }
+ 
+ static struct item *search(const char *name)
