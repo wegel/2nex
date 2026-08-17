@@ -6,12 +6,15 @@ package:
   version: 2.9.2
   description: NCurses Disk Usage analyzer
   homepage: https://dev.yorhel.nl/ncdu
-  checksum: cceef822007a8eccb607b39e25e2087d59443f1b082333913202676e3c6a5018
+  checksum: 2237bd9f2af18645825bdcedd75cf33e3b54779f0274e918069c94410c32d276
 
 sources:
 - name: ncdu
   url: https://dev.yorhel.nl/download/ncdu-2.9.2.tar.gz
   sha256: e91135281cb66569f2ca4c0bac277246991e7e52524c0ca8cba3de5c8e81cec9
+- name: uapi_config
+  file: pkg/cli/system/ncdu-uapi-config.patch
+  sha256: f6f2df5ad5784b7201e6dd71aa03c4b5cd823544d658580b9121b87c7b690ab8
 
 dependencies:
 - name: bash
@@ -56,14 +59,18 @@ dependencies:
   commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [187:47673]
+  profile: [133:19759]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_ncdu} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     export ZIG_GLOBAL_CACHE_DIR=/tmp/.zig-cache
     export PKG_CONFIG_PATH=/usr/lib/pkgconfig
@@ -74,6 +81,76 @@ build:
       --search-prefix /usr \
       --search-prefix /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0 \
       --global-cache-dir "${ZIG_GLOBAL_CACHE_DIR}"
+
+    # ncdu overlays every config file that exists, later files winning.
+    # Plant a distinct --exclude in each system tier and export a scan so
+    # the TUI is never needed. The sandbox already lets the script write
+    # /etc, /run, and /usr/lib, which is how the other UAPI smokes work.
+    tree="${WORK_DIR}/ncdu-uapi-tree"
+    mkdir -p "${tree}/vendor" "${tree}/runtime" "${tree}/admin" "${tree}/keep"
+    printf 'x\n' > "${tree}/vendor/f"
+    printf 'x\n' > "${tree}/runtime/f"
+    printf 'x\n' > "${tree}/admin/f"
+    printf 'x\n' > "${tree}/keep/f"
+
+    policy_admin=/etc/ncdu.conf
+    policy_runtime=/run/ncdu.conf
+    policy_vendor=/usr/lib/ncdu/ncdu.conf
+    mkdir -p /etc /run /usr/lib/ncdu
+    rm -f "${policy_admin}" "${policy_runtime}" "${policy_vendor}"
+
+    printf '%s\n' '--exclude vendor' > "${policy_vendor}"
+    printf '%s\n' '--exclude runtime' > "${policy_runtime}"
+    printf '%s\n' '--exclude admin' > "${policy_admin}"
+
+    export HOME="${WORK_DIR}/ncdu-empty-home"
+    mkdir -p "${HOME}"
+    unset XDG_CONFIG_HOME || true
+
+    run_export() {
+      "${OUT_DIR}/usr/bin/ncdu" -o "$1" "${tree}"
+    }
+
+    # ncdu still lists an excluded directory, but marks it
+    # "excluded":"pattern" and does not descend into it.
+    expect_excluded() {
+      if ! grep -q "\"name\":\"$1\",\"excluded\":\"pattern\"" "$2"; then
+        printf 'ncdu UAPI smoke: expected %s excluded in %s\n' "$1" "$2" >&2
+        cat "$2" >&2
+        exit 1
+      fi
+    }
+    expect_included() {
+      if ! grep -q "\"name\":\"$1\"" "$2" \
+        || grep -q "\"name\":\"$1\",\"excluded\"" "$2"; then
+        printf 'ncdu UAPI smoke: expected %s included in %s\n' "$1" "$2" >&2
+        cat "$2" >&2
+        exit 1
+      fi
+    }
+
+    run_export "${WORK_DIR}/ncdu-uapi-export"
+    expect_excluded vendor "${WORK_DIR}/ncdu-uapi-export"
+    expect_excluded runtime "${WORK_DIR}/ncdu-uapi-export"
+    expect_excluded admin "${WORK_DIR}/ncdu-uapi-export"
+    expect_included keep "${WORK_DIR}/ncdu-uapi-export"
+
+    rm -f "${policy_admin}"
+    run_export "${WORK_DIR}/ncdu-uapi-export2"
+    expect_excluded vendor "${WORK_DIR}/ncdu-uapi-export2"
+    expect_excluded runtime "${WORK_DIR}/ncdu-uapi-export2"
+    expect_included admin "${WORK_DIR}/ncdu-uapi-export2"
+    expect_included keep "${WORK_DIR}/ncdu-uapi-export2"
+
+    "${OUT_DIR}/usr/bin/ncdu" --ignore-config -o \
+      "${WORK_DIR}/ncdu-uapi-export3" "${tree}"
+    expect_included vendor "${WORK_DIR}/ncdu-uapi-export3"
+    expect_included runtime "${WORK_DIR}/ncdu-uapi-export3"
+    expect_included admin "${WORK_DIR}/ncdu-uapi-export3"
+    expect_included keep "${WORK_DIR}/ncdu-uapi-export3"
+
+    rm -f "${policy_admin}" "${policy_runtime}" "${policy_vendor}"
+    printf 'ncdu UAPI smoke: the config loader read all three tiers in order\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
