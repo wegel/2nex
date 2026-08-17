@@ -6,7 +6,7 @@ package:
   version: 2.2.0
   description: A program which helps to configure compiler and linker flags for development frameworks
   homepage: https://github.com/pkgconf/pkgconf
-  checksum: f8d0a1fa24de795a3db94bc14efbbc17b781b2daebd8c1bd93bc2d8c54d85435
+  checksum: 4446edbd460556d901aa7a600af0d000ef96947958fabffb1ed0e32b27763d5f
 
 sources:
 - name: pkgconf
@@ -55,13 +55,14 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4113:14961, 8219:28727, 8584:29059]
+  profile: [4113:1054, 8219:3076, 8645:3119]
 
   script: |
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
     ./configure --prefix=/usr              \
+              --sysconfdir=/etc            \
               --docdir=/usr/share/doc/pkgconf-2.2.0
 
     make
@@ -71,6 +72,24 @@ build:
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+
+    if grep -qa '/usr/etc' "${OUT_DIR}"/usr/lib/libpkgconf.so.5.0.0; then
+      echo "pkgconf UAPI smoke FAILED: /usr/etc found in libpkgconf" >&2
+      exit 1
+    fi
+    if ! grep -qa '/etc/pkgconfig/personality.d' "${OUT_DIR}"/usr/lib/libpkgconf.so.5.0.0; then
+      echo "pkgconf UAPI smoke FAILED: /etc/pkgconfig/personality.d not found in libpkgconf" >&2
+      exit 1
+    fi
+    pc_path="$(LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" "${OUT_DIR}"/usr/bin/pkgconf --variable pc_path pkgconf)"
+    case "${pc_path}" in
+      *:/etc*|/etc*|*:/usr/etc*|/usr/etc*)
+        echo "pkgconf UAPI smoke FAILED: pc_path leaked /etc: ${pc_path}" >&2
+        exit 1
+        ;;
+    esac
+    echo "pkgconf UAPI smoke: PERSONALITY_PATH uses /etc, not /usr/etc"
+
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
