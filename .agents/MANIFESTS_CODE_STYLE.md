@@ -18,6 +18,27 @@ or configure Nex-built readers to honor `/etc`, `/run`, and `/usr` in that
 priority. An assembly that adds an unpatched outside program owns any fixed
 `/etc` compatibility path that program needs.
 
+Autotools packages need an explicit `--sysconfdir=/etc`. Autoconf defaults
+`sysconfdir` to `${prefix}/etc`, and unlike Meson it does not special-case a
+`/usr` prefix, so `./configure --prefix=/usr` alone compiles `/usr/etc/...`
+into every reader that uses that directory. That path is banned above, and the
+machine's real `/etc` then goes unread. GnuPG shipped this way: its components
+looked for `/usr/etc/gnupg` while the `applygnupgdefaults` tool it installs
+refused to run without `/etc/gnupg/gpgconf.conf`. A package whose readers never
+use `sysconfdir` is unaffected, so pass the flag or confirm with `strings` on a
+built binary that no `/usr/etc` path is compiled in.
+
+`scripts/check-package-config-paths.sh` cannot catch that, because it inspects
+declared output paths and a compiled reader path is not an output. To sweep the
+whole store for the mistake:
+
+```sh
+grep -rhoa --binary-files=text -E '/usr/etc/[A-Za-z0-9_.+-]+' .zub/objects/blobs
+```
+
+Hits include historical builds and documentation, so check each one against the
+current `<pkg>/<version>/files` ref before treating it as a defect.
+
 Run `scripts/check-package-config-paths.sh` after changing package outputs.
 Literal `/etc` paths remain valid in build-time reader tests; the check inspects
 only declared package output paths.
