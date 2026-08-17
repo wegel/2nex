@@ -1,0 +1,35 @@
+From: Nex package maintainers
+Subject: [PATCH] alsa.conf: replace /usr/etc drop-ins with the three UAPI tiers
+Source: Nex
+Upstream: not submitted; needs agreement on a machine-generated transient tier
+
+The installed src/conf/alsa.conf loaded distribution drop-ins from
+/usr/etc/alsa/conf.d and fell back from /etc/asound.conf straight to
+/usr/etc/asound.conf. /usr/etc is not a real search path on this
+distribution, so both the drop-in directory and the single-file
+fallback were silently unreadable.
+
+Move the vendor drop-ins to /usr/share/alsa/conf.d, add a /run/alsa/conf.d
+tier for transient, machine-generated fragments, and keep /etc/alsa/conf.d
+as the administrator tier, loaded last so it overlays the other two. Give
+the single-file fallback the matching order: /etc/asound.conf first, then
+/run/asound.conf, then /usr/share/alsa/asound.conf as the packaged default.
+/var/lib/alsa/conf.d (alsactl machine state), ~/.asoundrc,
+$XDG_CONFIG_HOME/alsa/asoundrc, and ALSA_CONFIG_PATH are unchanged.
+
+diff -urN a/src/conf/alsa.conf b/src/conf/alsa.conf
+--- a/src/conf/alsa.conf
++++ b/src/conf/alsa.conf
+@@ -9,9 +9,10 @@
+ 		func load
+ 		files [
+ 			"/var/lib/alsa/conf.d"
+-			"/usr/etc/alsa/conf.d"
++			"/usr/share/alsa/conf.d"
++			"/run/alsa/conf.d"
+ 			"/etc/alsa/conf.d"
+-			"/etc/asound.conf|||/usr/etc/asound.conf"
++			"/etc/asound.conf|||/run/asound.conf|||/usr/share/alsa/asound.conf"
+ 			"~/.asoundrc"
+ 			{
+ 				@func concat

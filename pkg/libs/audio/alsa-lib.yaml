@@ -6,12 +6,15 @@ package:
   version: 1.2.14
   description: ALSA library
   homepage: https://www.alsa-project.org/
-  checksum: 9ea9a4a7edd71261286b49a6438b5fb72fdc841f857f5fab5145fa4d3c8ba59f
+  checksum: a0700dbc3e6578c094a82a7b8f6348eeb49f204bb12caf5a81d0918d982f4a71
 
 sources:
 - name: alsa-lib
   url: https://www.alsa-project.org/files/pub/lib/alsa-lib-1.2.14.tar.bz2
   sha256: be9c88a0b3604367dd74167a2b754a35e142f670292ae47a2fdef27a2ee97a32
+- name: uapi_config
+  file: pkg/libs/audio/alsa-lib-uapi-config.patch
+  sha256: e7782b52477d4d362531d570fcd0a666c3d04c72ebfe7eeb6ced34b0ccf7046e
 
 dependencies:
 - name: glibc
@@ -44,6 +47,8 @@ dependencies:
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: make
@@ -55,11 +60,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4145:17468, 8276:30987, 12374:35762, 16478:65788, 20598:66121, 24868:66297, 28968:73152, 31344:74220]
+  profile: [4099:1528, 8235:3509, 12334:4470, 16450:7723, 20582:7777, 24901:7834, 29001:8771, 31455:8909]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_alsa_lib} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     ./configure \
       --prefix=/usr \
@@ -68,6 +75,20 @@ build:
 
     make
     make DESTDIR="${OUT_DIR}" install
+
+    installed_conf="${OUT_DIR}/usr/share/alsa/alsa.conf"
+    if grep -q '/usr/etc' "${installed_conf}"; then
+      printf 'alsa-lib UAPI smoke: leftover /usr/etc in alsa.conf\n' >&2
+      exit 1
+    fi
+    for p in '/usr/share/alsa/conf.d' '/run/alsa/conf.d' '/etc/alsa/conf.d' \
+             '/etc/asound.conf' '/run/asound.conf' '/usr/share/alsa/asound.conf'; do
+      if ! grep -q "${p}" "${installed_conf}"; then
+        printf 'alsa-lib UAPI smoke: missing %s\n' "${p}" >&2
+        exit 1
+      fi
+    done
+    printf 'alsa-lib UAPI smoke: alsa.conf names /etc, /run, and /usr/share, not /usr/etc\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
