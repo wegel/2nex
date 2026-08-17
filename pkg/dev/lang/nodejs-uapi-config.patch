@@ -1,0 +1,49 @@
+From: Nex package maintainers
+Subject: [PATCH] config: walk the UAPI system config hierarchy for globalconfig
+Source: Nex
+Upstream: not submitted; suitable for upstream review
+
+loadGlobalConfig() always opens the single file named by the
+`globalconfig` setting, whose default is `resolve(prefix, 'etc/npmrc')`.
+With node installed at /usr that default is /usr/etc/npmrc, so a package
+cannot ship a vendor default under /usr/lib and a boot-time tool has no
+/run tier to place a temporary override. The real /etc/npmrc is never
+opened.
+
+Keep `--globalconfig` and `NPM_CONFIG_GLOBALCONFIG` as unconditional
+overrides. When neither is set, walk /etc/npmrc, then /run/npmrc, then
+/usr/lib/npm/npmrc. The first existing regular file wins. If none exist,
+load the vendor path so `npm config get globalconfig` still names a
+location under /usr.
+
+diff -urN a/deps/npm/node_modules/@npmcli/config/lib/index.js b/deps/npm/node_modules/@npmcli/config/lib/index.js
+--- a/deps/npm/node_modules/@npmcli/config/lib/index.js
++++ b/deps/npm/node_modules/@npmcli/config/lib/index.js
+@@ -734,8 +734,25 @@
+     return this.#loadFile(this.#get('userconfig'), 'user')
+   }
+ 
+-  loadGlobalConfig () {
+-    return this.#loadFile(this.#get('globalconfig'), 'global')
++  async loadGlobalConfig () {
++    const override = this.#get('globalconfig', 'cli') || this.#get('globalconfig', 'env')
++    if (override) {
++      return this.#loadFile(override, 'global')
++    }
++
++    const uapiTiers = [
++      '/etc/npmrc',
++      '/run/npmrc',
++      '/usr/lib/npm/npmrc',
++    ]
++
++    for (const file of uapiTiers.slice(0, -1)) {
++      if (await fileExists(file)) {
++        return this.#loadFile(file, 'global')
++      }
++    }
++
++    return this.#loadFile(uapiTiers[uapiTiers.length - 1], 'global')
+   }
+ 
+   async save (where) {

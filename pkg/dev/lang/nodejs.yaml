@@ -6,12 +6,15 @@ package:
   version: 20.11.1
   description: JavaScript runtime built on Chrome's V8 engine
   homepage: https://nodejs.org/
-  checksum: ff583bfe632b3d011b80b60310d2de858fa42ce71108771cf1d3a7d181b1281b
+  checksum: bfcc86f4306f33769ae01b172f14b25bbb7bf74c1d9ad20b619a97f27395708c
 
 sources:
 - name: node
   url: https://nodejs.org/dist/v20.11.1/node-v20.11.1.tar.xz
   sha256: 77813edbf3f7f16d2d35d3353443dee4e61d5ee84d9e3138c7538a3c0ca5209e
+- name: uapi_config_patch
+  file: pkg/dev/lang/nodejs-uapi-config.patch
+  sha256: 4842b21f81ce362d806968e424ad77697512f49690a232e689e25c5b15f6fdc4
 
 dependencies:
 - name: glibc
@@ -32,6 +35,8 @@ dependencies:
   commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
 - name: grep
   commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: gzip
@@ -59,11 +64,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [160676:32654, 636465:40881, 1425120:53499, 2373521:69275, 3166475:109506, 3954562:192816, 4744826:498611, 5932392:674907, 7117816:846514, 7906136:905097]
+  profile: [160740:3782, 636532:5281, 1425187:7823, 2373585:13166, 3166539:29119, 3954626:52341, 4744890:196393, 5932456:390464, 7117880:584394, 7906266:646972]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config_patch}"
 
     CFLAGS=${CFLAGS/-flto=auto/}
     CXXFLAGS=${CXXFLAGS/-flto=auto/}
@@ -75,6 +82,51 @@ build:
     ./configure --prefix=/usr --without-node-snapshot
     make
     make DESTDIR="${OUT_DIR}" install
+
+    # loadGlobalConfig() walks the admin, runtime, and vendor tiers only
+    # when neither --globalconfig nor NPM_CONFIG_GLOBALCONFIG names an
+    # override. Plant a distinct registry in each tier and remove the
+    # winning one at each step to prove npm falls through to the next
+    # tier in order.
+    admin_conf=/etc/npmrc
+    runtime_conf=/run/npmrc
+    vendor_conf=/usr/lib/npm/npmrc
+    mkdir -p /etc /run /usr/lib/npm
+    rm -f "${admin_conf}" "${runtime_conf}" "${vendor_conf}"
+
+    probe_home="${WORK_DIR}/npm-uapi-home"
+    mkdir -p "${probe_home}"
+    npm_cli="${OUT_DIR}/usr/lib/node_modules/npm/bin/npm-cli.js"
+
+    run_probe() {
+        env -u NPM_CONFIG_GLOBALCONFIG -u npm_config_globalconfig \
+            HOME="${probe_home}" \
+            "${OUT_DIR}/usr/bin/node" "${npm_cli}" config get registry
+    }
+
+    expect_registry() {
+        actual="$(run_probe)"
+        if [ "${actual}" != "$1" ]; then
+            printf 'nodejs UAPI smoke: expected registry %s, got %s\n' "$1" "${actual}" >&2
+            exit 1
+        fi
+    }
+
+    printf 'registry=https://admin.example/\n' > "${admin_conf}"
+    printf 'registry=https://runtime.example/\n' > "${runtime_conf}"
+    printf 'registry=https://vendor.example/\n' > "${vendor_conf}"
+    expect_registry https://admin.example/
+
+    rm -f "${admin_conf}"
+    expect_registry https://runtime.example/
+
+    rm -f "${runtime_conf}"
+    expect_registry https://vendor.example/
+
+    rm -f "${vendor_conf}"
+    rm -rf "${probe_home}"
+
+    printf 'nodejs UAPI smoke: npm globalconfig read all three tiers in order\n'
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
