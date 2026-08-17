@@ -1,0 +1,34 @@
+From: Nex package maintainers
+Subject: Add a /run tier to the texi2any and texinfo config directory search
+Source: Nex package maintainers
+Upstream: not submitted; this codifies a Nex-specific UAPI layering rule
+
+texi2any.pl builds its texi2any-config.pm and texinfo language config
+search lists from the user directories, $sysconfdir/texinfo(or
+texi2any), and $datadir/texinfo(or texi2any), loaded from lowest to
+highest priority (curdir and $HOME beat $sysconfdir, which beats
+$datadir). Nex layers configuration across /usr (vendor defaults),
+/run (runtime overlay), and /etc (administrator overrides), with /etc
+winning over /run winning over /usr. Insert a /run/texinfo and
+/run/texi2any tier between $sysconfdir and $datadir so /etc keeps
+priority over /run, and /run keeps priority over the vendor tree in
+$datadir.
+
+--- a/tp/texi2any.pl
++++ b/tp/texi2any.pl
+@@ -378,6 +378,7 @@
+                                 if (defined($ENV{'HOME'}));
+ push @language_config_dirs, File::Spec->catdir($sysconfdir, 'texinfo')
+                                if (defined($sysconfdir));
++push @language_config_dirs, File::Spec->catdir('/run', 'texinfo');
+ push @language_config_dirs, File::Spec->catdir($datadir, 'texinfo')
+                                if (defined($datadir));
+ my @texinfo_config_dirs = ($curdir, @language_config_dirs);
+@@ -392,6 +393,7 @@
+        if (defined($ENV{'HOME'}));
+ push @program_config_dirs, File::Spec->catdir($sysconfdir, $program_name)
+        if (defined($sysconfdir));
++push @program_config_dirs, File::Spec->catdir('/run', $program_name);
+ push @program_config_dirs, File::Spec->catdir($datadir, $program_name)
+   if (defined($datadir));
+

@@ -6,15 +6,20 @@ package:
   version: "7.1"
   description: GNU documentation system for online information and printed output
   homepage: https://www.gnu.org/software/texinfo/
-  checksum: 7c4e6c7cd3c985843d4d5ffd5a56938bc118b6c0b63a9f280f2ede9d50bfae1a
+  checksum: a8740540bb8628a2423ef06115733817d4108503557c593046b92625e5a21864
   seed: true
 
 sources:
 - name: texinfo
   url: https://ftp.gnu.org/gnu/texinfo/texinfo-7.1.tar.xz
   sha256: deeec9f19f159e046fdf8ad22231981806dac332cc372f1c763504ad82b30953
+- name: uapi_config
+  file: pkg/cli/text/texinfo-uapi-config.patch
+  sha256: 7045bc913c7f1be33673a7152ceea1f0b8b612681fb47888a1a47067f939d5a7
 
 dependencies:
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
 - name: glibc
@@ -50,15 +55,97 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [8239:4939, 24712:10006, 49437:11103, 82422:11381, 113493:11428, 138717:11802, 167808:12071, 206696:12128, 249335:12902, 274169:14544]
+  profile: [8268:8978, 24696:19064, 49459:20957, 82409:20991, 113825:21102, 138854:22138, 167857:22194, 206745:22469, 250851:23971, 274282:27167]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-    ./configure --prefix=/usr
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+    touch -r configure.ac tp/texi2any.pl
+
+    ./configure --prefix=/usr --sysconfdir=/etc
     make
     make DESTDIR=$OUT_DIR install
+
+    # texi2any is a Perl script, not a compiled binary: reading it as
+    # text (this build environment has no strings(1)) yields source
+    # lines, and the sysconfdir path is a compile-time literal while
+    # the '/run' and 'texinfo'/'texi2any' path components are
+    # concatenated at runtime with File::Spec->catdir, so no single
+    # line reads "/etc/texinfo" or "/run/texi2any" verbatim. Check
+    # the pieces that must be present together instead.
+    installed_texi2any="${OUT_DIR}/usr/bin/texi2any"
+    if grep -qaF '/usr/etc' "${installed_texi2any}"; then
+      printf 'texinfo UAPI smoke: found /usr/etc compiled into texi2any\n' >&2
+      exit 1
+    fi
+    grep -qaF "eval '\"/etc\"'" "${installed_texi2any}"
+    grep -qaF "catdir(\$sysconfdir, 'texinfo')" "${installed_texi2any}"
+    grep -qaF "catdir(\$sysconfdir, \$program_name)" "${installed_texi2any}"
+    grep -qaF "catdir('/run', 'texinfo')" "${installed_texi2any}"
+    grep -qaF "catdir('/run', \$program_name)" "${installed_texi2any}"
+
+    # texi2any-config.pm is do()-ed from lowest to highest priority
+    # (vendor share tree, then /run, then /etc, then the user's own
+    # files); each tier below sets the same EXTRA_HEAD customization
+    # so the last one loaded, /etc, is the one that shows up in the
+    # rendered HTML <head>.
+    mkdir -p /usr/share/texi2any /run/texi2any /etc/texi2any
+    rm -f /usr/share/texi2any/texi2any-config.pm \
+          /run/texi2any/texi2any-config.pm \
+          /etc/texi2any/texi2any-config.pm
+
+    cat > /usr/share/texi2any/texi2any-config.pm << 'PERLEOF'
+    texinfo_set_from_init_file('EXTRA_HEAD', 'tier=usr-share');
+    1;
+    PERLEOF
+    cat > /run/texi2any/texi2any-config.pm << 'PERLEOF'
+    texinfo_set_from_init_file('EXTRA_HEAD', 'tier=run');
+    1;
+    PERLEOF
+    cat > /etc/texi2any/texi2any-config.pm << 'PERLEOF'
+    texinfo_set_from_init_file('EXTRA_HEAD', 'tier=etc');
+    1;
+    PERLEOF
+
+    export HOME=""
+    smoke_home="${WORK_DIR}/texinfo-smoke"
+    mkdir -p "${smoke_home}"
+    cd "${smoke_home}"
+    printf '\\input texinfo\n@settitle Smoke\n@node Top\nHello.\n@bye\n' \
+      > smoke.texi
+
+    "${OUT_DIR}/usr/bin/texi2any" --html --no-split --force -o smoke.html \
+      smoke.texi
+    if ! grep -q 'tier=etc' smoke.html; then
+      printf 'texinfo UAPI smoke: expected the /etc tier to win, got:\n' >&2
+      grep 'tier=' smoke.html >&2 || true
+      exit 1
+    fi
+
+    rm -f /etc/texi2any/texi2any-config.pm
+    "${OUT_DIR}/usr/bin/texi2any" --html --no-split --force -o smoke.html \
+      smoke.texi
+    if ! grep -q 'tier=run' smoke.html; then
+      printf 'texinfo UAPI smoke: expected /run to win once /etc is gone, got:\n' >&2
+      grep 'tier=' smoke.html >&2 || true
+      exit 1
+    fi
+
+    rm -f /run/texi2any/texi2any-config.pm
+    "${OUT_DIR}/usr/bin/texi2any" --html --no-split --force -o smoke.html \
+      smoke.texi
+    if ! grep -q 'tier=usr-share' smoke.html; then
+      printf 'texinfo UAPI smoke: expected the vendor tier once /etc and /run are gone, got:\n' >&2
+      grep 'tier=' smoke.html >&2 || true
+      exit 1
+    fi
+
+    rm -f /usr/share/texi2any/texi2any-config.pm
+    cd "${WORK_DIR}"
+    rm -rf "${smoke_home}"
+    printf 'texinfo UAPI smoke: the config loader read all three tiers in order\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
