@@ -1,0 +1,40 @@
+From: Nex package maintainers
+Subject: [PATCH] core: read the UAPI system config hierarchy
+Source: Nex
+Upstream: not submitted; suitable for upstream review
+
+get_config_path only tries SYSCONFDIR "/xdg" (the administrator's /etc)
+after the user files, so it never reaches the desktop overlay's
+XDG_CONFIG_DIRS tiers and a package cannot ship a default under
+/usr/share with a boot-time tool free to override it under /run.
+
+Walk the same three system tiers other Nex-patched readers use after
+the user prefix: /etc/xdg, then /run/xdg, then /usr/share/xdg. Keep
+the existing per-prefix desktop-token then "config" filename walk,
+keep the -c override untouched, and keep compiled-in defaults when
+none of the tiers has a file.
+
+diff -urN a/src/core/config.c b/src/core/config.c
+--- a/src/core/config.c
++++ b/src/core/config.c
+@@ -133,15 +133,17 @@
+ 		config_home = config_home_fallback;
+ 	}
+
+-	const char *prefix[2];
++	const char *prefix[4];
+ 	prefix[0] = config_home;
+-	prefix[1] = SYSCONFDIR "/xdg";
++	prefix[1] = "/etc/xdg";
++	prefix[2] = "/run/xdg";
++	prefix[3] = "/usr/share/xdg";
+
+ 	const char *xdg_current_desktop = getenv("XDG_CURRENT_DESKTOP");
+ 	const char *config_fallback = "config";
+
+ 	char *config_list = NULL;
+-	for (size_t i = 0; i < 2; i++) {
++	for (size_t i = 0; i < 4; i++) {
+ 		if (xdg_current_desktop) {
+ 			config_list = strdup(xdg_current_desktop);
+ 			char *config = strtok(config_list, ":");

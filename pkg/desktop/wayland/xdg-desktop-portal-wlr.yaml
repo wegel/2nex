@@ -6,12 +6,15 @@ package:
   version: 0.8.2
   description: XDG Desktop Portal backend for wlroots compositors
   homepage: https://github.com/emersion/xdg-desktop-portal-wlr
-  checksum: bb177fa4dbf0362a69a66a10a4d7725ae911ba59ec1057300ee6da886ada9dbf
+  checksum: ccb43baa437bf345be0aabafa75789f58d7aaa7c5a484ca93e65cd80c668afe0
 
 sources:
 - name: xdg_desktop_portal_wlr
   url: https://github.com/emersion/xdg-desktop-portal-wlr/releases/download/v0.8.2/xdg-desktop-portal-wlr-0.8.2.tar.gz
   sha256: 5e6840d3326a4afb440c353ee19cf68d4e4fba40a5648224904b3a06612aae87
+- name: uapi_config_patch
+  file: pkg/desktop/wayland/xdg-desktop-portal-wlr-uapi-config.patch
+  sha256: cd5240a55a7c0f63a648e587738f85d47bdaabaaa31418fb082682fc6a6651bd
 
 dependencies:
 - name: glibc
@@ -30,6 +33,10 @@ dependencies:
   commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
 - name: meson
@@ -73,7 +80,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4150:2293, 6099:4502]
+  profile: [4134:681, 6236:2189]
 
   script: |
     set -eu
@@ -81,10 +88,13 @@ build:
     tar --no-same-owner -xf /${SOURCE_xdg_desktop_portal_wlr} -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
 
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config_patch}"
+
     export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
 
     meson setup build \
       --prefix=/usr \
+      --sysconfdir=/etc \
       --libdir=lib \
       --libexecdir=libexec \
       --buildtype=release \
@@ -94,6 +104,45 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    admin_conf=/etc/xdg/xdg-desktop-portal-wlr/config
+    runtime_conf=/run/xdg/xdg-desktop-portal-wlr/config
+    vendor_conf=/usr/share/xdg/xdg-desktop-portal-wlr/config
+    mkdir -p /etc/xdg/xdg-desktop-portal-wlr \
+      /run/xdg/xdg-desktop-portal-wlr \
+      /usr/share/xdg/xdg-desktop-portal-wlr
+    write_conf() {
+      printf '[screencast]\nmax_fps = %s\n' "$2" > "$1"
+    }
+    probe_home="${WORK_DIR}/xdpw-uapi-home"
+    mkdir -p "${probe_home}"
+    probe_out="${WORK_DIR}/xdpw-uapi-probe.out"
+    run_probe() {
+      env -u WAYLAND_DISPLAY -u XDG_CONFIG_HOME -u XDG_CURRENT_DESKTOP \
+        HOME="${probe_home}" \
+        "${OUT_DIR}/usr/libexec/xdg-desktop-portal-wlr" -l DEBUG \
+        > "${probe_out}" 2>&1 || true
+    }
+    expect_fps() {
+      run_probe
+      if ! grep -qF "config: max_fps:  $1" "${probe_out}"; then
+        printf 'xdg-desktop-portal-wlr UAPI smoke: expected max_fps %s, log:\n' \
+          "$1" >&2
+        cat "${probe_out}" >&2
+        exit 1
+      fi
+    }
+
+    write_conf "${admin_conf}" 11
+    write_conf "${runtime_conf}" 22
+    write_conf "${vendor_conf}" 33
+    expect_fps 11
+    rm -f "${admin_conf}"
+    expect_fps 22
+    rm -f "${runtime_conf}"
+    expect_fps 33
+    rm -f "${vendor_conf}"
+    printf 'xdg-desktop-portal-wlr UAPI smoke: config loader read all three tiers in order\n'
 
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
@@ -132,7 +181,9 @@ resolution:
   /usr/lib/libc.so.6: glibc
   /usr/lib/libinih.so.0: inih
   /usr/lib/libdrm.so.2: libdrm
-  /usr/lib/libgbm.so.1: mesa
   /usr/lib/libpipewire-0.3.so.0: pipewire
   /usr/lib/libsystemd.so.0: systemd
   /usr/lib/libwayland-client.so.0: wayland
+  /usr/lib/libgbm.so.1:
+    capability: graphics.gbm
+    fallback: mesa
