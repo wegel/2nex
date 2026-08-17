@@ -6,12 +6,15 @@ package:
   version: 3.6a
   description: Terminal multiplexer
   homepage: https://github.com/tmux/tmux
-  checksum: ba5793081036afff1bef66e603c64cc41b894ae629f44fe265d86c3171b465ee
+  checksum: 137dbaf7b2751344e6b94f101827db037b5de7aa1ddea5499e2918d3e51768b0
 
 sources:
 - name: tmux
   url: https://github.com/tmux/tmux/releases/download/3.6a/tmux-3.6a.tar.gz
   sha256: b6d8d9c76585db8ef5fa00d4931902fa4b8cbe8166f528f44fc403961a3f3759
+- name: uapi_config
+  file: pkg/cli/system/tmux-uapi-config.patch
+  sha256: 26dad8fc1d01692cf94aa9abafaf50415a71596c1940b2034344b0915a1edd51
 
 dependencies:
 - name: bash
@@ -56,14 +59,20 @@ dependencies:
   commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: glibc-locale-en-us
+  commit: x86_64/pkg/libs/system/glibc-locale-en-us/2.39/bundles/full
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [9910:13218, 26585:13830, 54522:15312, 88284:16179, 116297:17953, 144122:18670, 171916:19172, 210395:22584, 255453:26390, 279170:29593]
+  profile: [8283:6176, 25223:6186, 53828:6217, 86502:6439, 115136:6599, 143701:6745, 171894:6895, 215308:7223, 258987:7611, 285688:12149]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_tmux} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     ./configure --prefix=/usr --sysconfdir=/etc
 
@@ -71,6 +80,58 @@ build:
     make DESTDIR=${OUT_DIR} install
 
     strip --strip-unneeded ${OUT_DIR}/usr/bin/tmux
+
+    # TMUX_CONF is an overlay list. Plant a distinct @nexuapi value in
+    # each system tier and read it with start-server, which needs no TTY.
+    # The sandbox sets LC_ALL=C; tmux 3.6 refuses to start without UTF-8.
+    # C.UTF-8 is not installed here, but LANG=en_US.UTF-8 is in the
+    # environment and -u forces UTF-8 output.
+    unset LC_ALL
+    export LANG=en_US.UTF-8
+    export LC_CTYPE=en_US.UTF-8
+    mkdir -p /etc /run/tmux /usr/lib/tmux
+    export HOME="${WORK_DIR}/tmux-empty-home"
+    mkdir -p "${HOME}"
+    unset XDG_CONFIG_HOME || true
+    TMUX="${OUT_DIR}/usr/bin/tmux"
+    vendor=/usr/lib/tmux/tmux.conf
+    runtime=/run/tmux/tmux.conf
+    admin=/etc/tmux.conf
+    rm -f "${vendor}" "${runtime}" "${admin}"
+
+    expect_uapi() {
+      "${TMUX}" -u -L nexuapi kill-server >/dev/null 2>&1 || true
+      actual=$("${TMUX}" -u -L nexuapi start-server \; show -gv @nexuapi)
+      "${TMUX}" -u -L nexuapi kill-server >/dev/null 2>&1 || true
+      if [ "${actual}" != "$1" ]; then
+        printf 'tmux UAPI smoke: expected @nexuapi %s, got %s\n' "$1" "${actual}" >&2
+        exit 1
+      fi
+    }
+
+    printf 'set -g @nexuapi vendor\n' > "${vendor}"
+    expect_uapi vendor
+
+    printf 'set -g @nexuapi runtime\n' > "${runtime}"
+    expect_uapi runtime
+
+    printf 'set -g @nexuapi admin\n' > "${admin}"
+    expect_uapi admin
+
+    rm -f "${admin}"
+    expect_uapi runtime
+
+    printf 'set -g @nexuapi only\n' > "${WORK_DIR}/only.conf"
+    "${TMUX}" -u -L nexuapi kill-server >/dev/null 2>&1 || true
+    actual=$("${TMUX}" -u -L nexuapi -f "${WORK_DIR}/only.conf" start-server \; show -gv @nexuapi)
+    "${TMUX}" -u -L nexuapi kill-server >/dev/null 2>&1 || true
+    if [ "${actual}" != "only" ]; then
+      printf 'tmux UAPI smoke: -f should ignore the system files, got %s\n' "${actual}" >&2
+      exit 1
+    fi
+
+    rm -f "${vendor}" "${runtime}" "${admin}"
+    printf 'tmux UAPI smoke: the config loader read all three tiers in order\n'
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
