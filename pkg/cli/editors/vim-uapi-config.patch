@@ -1,0 +1,104 @@
+From: Nex package maintainers
+Subject: [PATCH] main: read the system vimrc from all three UAPI paths
+Source: no upstream commit; written for Nex against Vim 9.2.0340
+Upstream: not submitted. Vim ships exactly one system-wide vimrc, and on a
+ system whose /usr is immutable that leaves an administrator with nowhere to
+ put a machine-wide setting. The change below adds the generic vendor, /run,
+ and /etc order, keeps the existing file as the lowest priority one, and names
+ no Nex path, so any Linux system that follows the UAPI configuration files
+ specification can use it.
+
+os_unix.h defines SYS_VIMRC_FILE as "$VIM/vimrc", which resolves inside the
+installation directory, and main.c sourced exactly that one file. feature.h
+already carries a commented-out "/etc/vimrc" for this macro, so packagers are
+expected to move it, but moving it only swaps one single location for another:
+either the package can ship a default or the administrator can set policy,
+never both.
+
+Source three files instead, lowest priority first: the package's own
+SYS_VIMRC_FILE, then SYS_VIMRC_RUN_FILE for settings a single boot owns, then
+SYS_VIMRC_ADMIN_FILE for the administrator's. do_source() already ignores a
+file that does not exist, so a system that uses none of the new paths behaves
+exactly as before, and a setting made by a later file replaces the same setting
+from an earlier one, which is Vim's normal behaviour for sourced scripts. Both
+new macros have defaults that a packager can override, and a build that defines
+neither keeps a single system vimrc.
+
+The 'exrc' guard further down still compares only SYS_VIMRC_FILE against a
+./vimrc in the current directory. That comparison exists to avoid sourcing the
+same file twice, and neither new path can name a file in the current
+directory, so it is left alone.
+
+diff -urN a/src/main.c b/src/main.c
+--- a/src/main.c
++++ b/src/main.c
+@@ -31,6 +31,24 @@
+ #if (defined(UNIX) || defined(VMS)) && !defined(NO_VIM_MAIN)
+ static int file_owned(char *fname);
+ #endif
++#ifdef SYS_VIMRC_FILE
++/*
++ * The system-wide vimrc files, lowest priority first.  SYS_VIMRC_FILE is the
++ * one the installed package ships.  SYS_VIMRC_RUN_FILE holds settings that a
++ * single boot owns, and SYS_VIMRC_ADMIN_FILE holds the administrator's.  A
++ * file that does not exist is skipped, so a system that uses none of them
++ * behaves exactly as before.
++ */
++static char *const sys_vimrc_files[] = {
++    SYS_VIMRC_FILE,
++# ifdef SYS_VIMRC_RUN_FILE
++    SYS_VIMRC_RUN_FILE,
++# endif
++# ifdef SYS_VIMRC_ADMIN_FILE
++    SYS_VIMRC_ADMIN_FILE,
++# endif
++};
++#endif
+ static void mainerr(int, char_u *);
+ static void early_arg_scan(mparm_T *parmp);
+ #ifndef NO_VIM_MAIN
+@@ -3383,7 +3401,22 @@
+ 	 * Get system wide defaults, if the file name is defined.
+ 	 */
+ # ifdef SYS_VIMRC_FILE
+-	(void)do_source((char_u *)SYS_VIMRC_FILE, FALSE, DOSO_NONE, NULL);
++	/*
++	 * The system-wide files, lowest priority first: the one the installed
++	 * package ships, then one that a single boot owns, then the
++	 * administrator's.  do_source() ignores a file that does not exist, and
++	 * a setting made by a later file replaces an earlier one, so the
++	 * administrator wins and the package default still applies to every
++	 * setting nobody overrode.
++	 */
++	{
++	    int	    sysrc;
++
++	    for (sysrc = 0; sysrc < (int)(sizeof(sys_vimrc_files)
++					/ sizeof(sys_vimrc_files[0])); ++sysrc)
++		(void)do_source((char_u *)sys_vimrc_files[sysrc], FALSE,
++							      DOSO_NONE, NULL);
++	}
+ # endif
+ # ifdef MACOS_X
+ 	(void)do_source((char_u *)"$VIMRUNTIME/macmap.vim", FALSE,
+diff -urN a/src/os_unix.h b/src/os_unix.h
+--- a/src/os_unix.h
++++ b/src/os_unix.h
+@@ -190,6 +190,17 @@
+ #ifndef SYS_VIMRC_FILE
+ # define SYS_VIMRC_FILE "$VIM/vimrc"
+ #endif
++/*
++ * The two system-wide vimrc files that rank above SYS_VIMRC_FILE: one that a
++ * single boot owns, and the administrator's.  Both are optional; a file that
++ * does not exist is skipped.
++ */
++#ifndef SYS_VIMRC_RUN_FILE
++# define SYS_VIMRC_RUN_FILE "/run/vim/vimrc"
++#endif
++#ifndef SYS_VIMRC_ADMIN_FILE
++# define SYS_VIMRC_ADMIN_FILE "/etc/vimrc"
++#endif
+ #ifndef SYS_GVIMRC_FILE
+ # define SYS_GVIMRC_FILE "$VIM/gvimrc"
+ #endif

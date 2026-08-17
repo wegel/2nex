@@ -6,7 +6,7 @@ package:
   version: 9.2.0340
   description: Modal text editor with syntax highlighting, help, and scripting support
   homepage: https://www.vim.org/
-  checksum: 03cfbed73d35992c81820af919b3781cc186d4ef460641eaab9f94cca1f13495
+  checksum: 8a4a6e7a5d150844ce623b6d2830a4641f81b5565824f0370f062855333da4b1
 
 sources:
 - name: vim
@@ -15,6 +15,9 @@ sources:
 - name: reproducible_patch
   file: pkg/cli/editors/vim-reproducible.patch
   sha256: eee0b4104caaf2c915a550a5271c699dbd50216b438a775b2c7280d6de676891
+- name: uapi_config
+  file: pkg/cli/editors/vim-uapi-config.patch
+  sha256: b0c9ba3372c99c599b48d6c2b01ca61b308707e1b446b65f9e8fcaa6a6d3ec8e
 
 dependencies:
 - name: acl
@@ -58,13 +61,14 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4106:1153, 12360:7329, 20661:7561, 33810:7907, 46636:8300, 55420:8585, 68712:9142, 85417:14445, 101911:14610, 109855:15972]
+  profile: [4159:1042, 12413:6277, 20714:6333, 33863:6604, 47024:6889, 55810:7112, 68765:7558, 85433:11933, 101927:12067, 109783:13276]
 
   script: |
     set -eu
     tar --no-same-owner -xf "${SOURCE_vim}" -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
     patch --batch --fuzz=0 -Np1 -i "/./${SOURCE_reproducible_patch}"
+    patch --batch --fuzz=0 -Np1 -i "/./${SOURCE_uapi_config}"
 
     ./configure \
       --prefix=/usr \
@@ -73,6 +77,84 @@ build:
     make DESTDIR="${OUT_DIR}" install
 
     sed -i '1s|^#!/bin/sh$|#!/usr/bin/sh|' "${OUT_DIR}/usr/bin/vimtutor"
+
+    # The system vimrc carries machine policy, so the editor must source the
+    # package file, then /run/vim/vimrc, then /etc/vimrc, with a later file
+    # overriding the settings an earlier one made. Each tier sets a different
+    # tabstop and the probe prints the value startup produced.
+    vendor_vimrc="${OUT_DIR}/usr/share/vim/vimrc"
+    runtime_vimrc=/run/vim/vimrc
+    admin_vimrc=/etc/vimrc
+
+    mkdir -p /run/vim /etc
+    rm -f "${vendor_vimrc}" "${runtime_vimrc}" "${admin_vimrc}"
+
+    probe_home="${WORK_DIR}/vim-uapi-home"
+    probe_out="${WORK_DIR}/vim-uapi-probe.out"
+    mkdir -p "${probe_home}"
+
+    # vim writes the value straight to a file: /dev/stdout is a symlink into
+    # /proc, which the build sandbox does not provide.
+    probe_tabstop() {
+        rm -f "${probe_out}"
+        HOME="${probe_home}" \
+            VIM="${OUT_DIR}/usr/share/vim" \
+            VIMRUNTIME="${OUT_DIR}/usr/share/vim/vim92" \
+            TERM=dumb "${OUT_DIR}/usr/bin/vim" --not-a-term -n \
+            -c "redir! > ${probe_out}" -c 'echo &tabstop' -c 'redir END' \
+            -c 'qa!' < /dev/null > /dev/null 2>&1 || true
+
+        # main.c guards the system vimrc block with "else if (!silent_mode)",
+        # so -e and -s would skip the very file this smoke tests. Normal mode
+        # with --not-a-term is the non-interactive run that still sources it.
+        cat "${probe_out}" 2>/dev/null | tr -d ' \n\r'
+    }
+
+    expect_tabstop() {
+        actual=$(probe_tabstop)
+        if [ "${actual}" != "$1" ]; then
+            printf 'vim UAPI smoke: expected tabstop %s, got %s\n' \
+                "$1" "${actual}" >&2
+            printf 'probe output was:\n' >&2
+            cat "${probe_out}" >&2 || true
+            exit 1
+        fi
+    }
+
+    # With no system file the compiled default stands. Every tier value below
+    # differs from it, so a tier that is silently ignored cannot pass.
+    default_tabstop=$(probe_tabstop)
+    for taken in 11 12 13; do
+        if [ "${default_tabstop}" = "${taken}" ]; then
+            printf 'vim UAPI smoke: default tabstop %s collides with a tier\n' \
+                "${default_tabstop}" >&2
+            exit 1
+        fi
+    done
+
+    printf 'set tabstop=11\n' > "${vendor_vimrc}"
+    expect_tabstop 11
+
+    printf 'set tabstop=12\n' > "${runtime_vimrc}"
+    expect_tabstop 12
+
+    printf 'set tabstop=13\n' > "${admin_vimrc}"
+    expect_tabstop 13
+
+    # Removing a tier uncovers the one below it, which proves every file is
+    # sourced on each run rather than resolved once.
+    rm -f "${admin_vimrc}"
+    expect_tabstop 12
+
+    rm -f "${runtime_vimrc}"
+    expect_tabstop 11
+
+    rm -f "${vendor_vimrc}"
+    expect_tabstop "${default_tabstop}"
+
+    rm -rf "${probe_home}" "${probe_out}"
+
+    printf 'vim UAPI smoke: all three system vimrc tiers and their order behaved\n'
 
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
