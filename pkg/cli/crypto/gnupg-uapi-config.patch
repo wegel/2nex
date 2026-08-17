@@ -1,0 +1,84 @@
+From: Nex package maintainers
+Subject: [PATCH] homedir: select the system configuration directory from UAPI paths
+Source: no upstream commit; written for Nex against GnuPG 2.5.17
+Upstream: not submitted. GnuPG resolves every system configuration file through
+ one compiled directory, so a distribution cannot ship a default that a boot or
+ an administrator may replace. The change below adds the generic sysconfdir,
+ /run, and libdir order, keeps the administrator's directory as the highest
+ priority one, and names no Nex path, so any Linux system that follows the UAPI
+ configuration files specification can use it.
+
+gnupg_sysconfdir() returned the single compiled GNUPG_SYSCONFDIR, and every
+component hands that one directory to libgpg-error with
+gpgrt_set_confdir (GPGRT_CONFDIR_SYS, ...), while agent/trustlist.c and
+agent/genkey.c build filenames from it directly. gpg.conf, gpg-agent.conf,
+dirmngr.conf, gpgsm.conf, scdaemon.conf, common.conf, gpgconf.conf,
+trustlist.txt, and qualified.txt therefore had exactly one system location. A
+package could not ship a default below its own libdir, and a boot-time tool had
+nowhere to put a temporary one.
+
+Try the administrator's directory, then /run/gnupg, then the package's own
+libdir, and use the first that exists. Because the option parser takes one
+directory rather than a search path, the choice is made per directory rather
+than per file: the highest tier that exists supplies all of them. That is
+coarser than a per-file rule, but it is what the single-directory interface
+allows, and it makes the package and boot tiers reachable at all, which they
+previously were not. When no directory exists the administrator's path is
+still returned, so a component keeps its old behaviour of finding no system
+configuration. The directory is resolved on each call, so gpg-agent picks up a
+newly created directory on SIGHUP. An explicit gpgconf.ctl relocation still
+wins over all three.
+
+The /run directory is written literally rather than derived from a new
+automake macro, because the release tarball ships generated Makefile.in files
+that already embed the -D flags; adding one to am/cmacros.am would require
+regenerating the build system for no gain.
+
+diff -urN a/common/homedir.c b/common/homedir.c
+--- a/common/homedir.c
++++ b/common/homedir.c
+@@ -1486,6 +1486,35 @@
+ /* Return the name of the sysconfdir.  This is a static string.  This
+    function is required because under Windows we can't simply compile
+    it in.  */
++#ifndef HAVE_W32_SYSTEM
++/* Return the system configuration directory that is in force.  The three
++   directories are tried in decreasing priority: the administrator's
++   directory, then a directory that one boot owns, then the directory the
++   installed package ships.  The first one that exists supplies every system
++   configuration file, because the option parser takes a single directory
++   rather than a search path.  When none exists the administrator's directory
++   is returned, which keeps the previous behaviour of quietly finding no
++   system configuration.  The directory is resolved on each call rather than
++   cached, so a reload sees a directory that an administrator has just
++   created.  */
++static const char *
++sysconf_dir_in_force (void)
++{
++  static const char *const dirs[] = { GNUPG_SYSCONFDIR,
++                                      "/run/gnupg",
++                                      GNUPG_LIBDIR };
++  struct stat sb;
++  int i;
++
++  for (i = 0; i < DIM (dirs); i++)
++    if (!stat (dirs[i], &sb) && S_ISDIR (sb.st_mode))
++      return dirs[i];
++
++  return GNUPG_SYSCONFDIR;
++}
++#endif /*!HAVE_W32_SYSTEM*/
++
++
+ const char *
+ gnupg_sysconfdir (void)
+ {
+@@ -1504,7 +1533,7 @@
+   if (dir)
+     return dir;
+   else
+-    return GNUPG_SYSCONFDIR;
++    return sysconf_dir_in_force ();
+ #endif /*!HAVE_W32_SYSTEM*/
+ }
+ 

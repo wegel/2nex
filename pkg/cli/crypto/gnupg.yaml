@@ -6,14 +6,19 @@ package:
   version: 2.5.17
   description: OpenPGP encryption and signing tools
   homepage: https://gnupg.org/
-  checksum: 321c8c84846536f948d41be3e4ff34ce29d752fca4762fda582b57d2f1ea9120
+  checksum: 22661374427c01f39fd358895d1a735abd217ab03b6ee87d9d2b29a12844cb9a
 
 sources:
 - name: gnupg
   url: https://gnupg.org/ftp/gcrypt/gnupg/gnupg-2.5.17.tar.bz2
   sha256: 2c1fbe20e2958fd8fb53cf37d7c38e84a900edc0d561a1c4af4bc3a10888685d
+- name: uapi_config
+  file: pkg/cli/crypto/gnupg-uapi-config.patch
+  sha256: bd2be0b5ece68ad23227fef4ca4efc0df63a05a94174ba9ad9da61f2d21e58ec
 
 dependencies:
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: gcc
@@ -89,14 +94,20 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [12352:15221, 35293:17633, 78426:17799, 126487:17969, 168241:18473, 212337:19463, 253351:19758, 315632:23682, 377678:26243, 416395:29534]
+  profile: [12356:14304, 35232:16476, 74691:16580, 127663:16702, 168441:17110, 208507:17946, 249310:18225, 315172:21808, 373503:24129, 414950:27056]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_gnupg} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    # Autoconf defaults sysconfdir to ${prefix}/etc, which would compile the
+    # banned /usr/etc/gnupg into every component. Upstream's own installation
+    # guide tells packagers to pass this flag.
     ./configure \
       --prefix=/usr \
+      --sysconfdir=/etc \
       --sbindir=/usr/bin \
       --enable-gnutls \
       --with-zlib=/usr \
@@ -108,6 +119,52 @@ build:
 
     make
     make DESTDIR="${OUT_DIR}" install
+
+    # The system configuration directory carries machine policy, so the
+    # components must take it from /etc/gnupg, then /run/gnupg, then
+    # /usr/lib/gnupg. gpgconf reports the directory that gnupg_sysconfdir()
+    # chose, so it shows the selection directly.
+    admin_dir=/etc/gnupg
+    runtime_dir=/run/gnupg
+    vendor_dir=/usr/lib/gnupg
+
+    rmdir "${admin_dir}" "${runtime_dir}" "${vendor_dir}" 2>/dev/null || true
+
+    expect_sysconfdir() {
+        actual=$("${OUT_DIR}/usr/bin/gpgconf" --list-dirs sysconfdir 2>&1)
+        if [ "${actual}" != "$1" ]; then
+            printf 'gnupg UAPI smoke: expected sysconfdir %s, got %s\n' \
+                "$1" "${actual}" >&2
+            exit 1
+        fi
+    }
+
+    # With no directory present the administrator path is still named, which
+    # keeps the old behaviour of finding no system configuration. Before the
+    # fix this printed /usr/etc/gnupg, the path CONFIGURATION.md bans.
+    expect_sysconfdir "${admin_dir}"
+
+    mkdir -p "${vendor_dir}"
+    expect_sysconfdir "${vendor_dir}"
+
+    mkdir -p "${runtime_dir}"
+    expect_sysconfdir "${runtime_dir}"
+
+    mkdir -p "${admin_dir}"
+    expect_sysconfdir "${admin_dir}"
+
+    # Removing a tier uncovers the one below it, which proves the choice is
+    # made on each call rather than resolved once.
+    rmdir "${admin_dir}"
+    expect_sysconfdir "${runtime_dir}"
+
+    rmdir "${runtime_dir}"
+    expect_sysconfdir "${vendor_dir}"
+
+    rmdir "${vendor_dir}"
+    expect_sysconfdir "${admin_dir}"
+
+    printf 'gnupg UAPI smoke: the system configuration directory honoured all tiers\n'
 
     find ${OUT_DIR}/usr/bin ${OUT_DIR}/usr/libexec -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
