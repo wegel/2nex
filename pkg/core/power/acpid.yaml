@@ -6,12 +6,15 @@ package:
   version: 2.0.34
   description: Daemon that dispatches hardware ACPI events to configured handlers
   homepage: https://sourceforge.net/projects/acpid2/
-  checksum: 641601483183db9647d3a757d38136f26d6207310306d36e2c77cc7e00a543db
+  checksum: f72292006b358bcf9d866cd1360222484e6980bd884281bcab62a77af15018bb
 
 sources:
 - name: acpid
   url: https://downloads.sourceforge.net/project/acpid2/acpid-2.0.34.tar.xz
   sha256: 2d095c8cfcbc847caec746d62cdc8d0bff1ec1bc72ef7c674c721e04da6ab333
+- name: uapi_config
+  file: pkg/core/power/acpid-uapi-config.patch
+  sha256: 902e4ac53e71ca8c0780e7d2e72ce7b16e75795c7d004df794da6780c73ee774
 
 dependencies:
 - name: bash
@@ -36,6 +39,8 @@ dependencies:
   commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: sed
   commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
 - name: tar
@@ -47,7 +52,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4538:2338, 9059:2489, 13531:2491, 16764:2856]
+  profile: [4098:3636, 8590:3847, 13070:3848, 16918:5409]
 
   script: |
     set -eu
@@ -58,6 +63,8 @@ build:
     # acpid already enables large-file support. Use the normal stat API so the
     # source also builds with C libraries that no longer expose stat64 names.
     sed -i 's/struct stat64 st;/struct stat st;/; s/fstat64(fd, \&st)/fstat(fd, \&st)/' sock.c
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     ./configure \
       --prefix=/usr \
@@ -81,6 +88,47 @@ build:
     WantedBy=multi-user.target
     EOF
     chmod 644 "${OUT_DIR}/usr/lib/systemd/system/acpid.service"
+
+    mkdir -p /usr/lib/acpi/events /run/acpi/events /etc/acpi/events
+    rm -f /usr/lib/acpi/events/* /run/acpi/events/* /etc/acpi/events/*
+    printf 'event=.*\naction=/bin/true\n' > /usr/lib/acpi/events/shared
+    printf 'event=.*\naction=/bin/true\n' > /usr/lib/acpi/events/vendor-only
+    printf 'event=.*\naction=/bin/true\n' > /run/acpi/events/shared
+    printf 'event=.*\naction=/bin/true\n' > /run/acpi/events/run-only
+    printf 'event=.*\naction=/bin/true\n' > /etc/acpi/events/shared
+    printf 'event=.*\naction=/bin/true\n' > /etc/acpi/events/admin-only
+    ln -sf /dev/null /etc/acpi/events/masked-rule
+    printf 'event=.*\naction=/bin/true\n' > /usr/lib/acpi/events/masked-rule
+
+    smoke_log="${WORK_DIR}/acpid-uapi-smoke.log"
+    : > "${WORK_DIR}/acpi-event"
+    set +e
+    "${OUT_DIR}/usr/bin/acpid" -d -f -S -e "${WORK_DIR}/acpi-event" \
+      >"${smoke_log}" 2>&1 &
+    smoke_pid=$!
+    sleep 1
+    kill "${smoke_pid}" 2>/dev/null
+    wait "${smoke_pid}" 2>/dev/null
+    set -e
+
+    if ! grep -q 'parsing conf file /etc/acpi/events/shared' "${smoke_log}"; then
+      printf 'acpid UAPI smoke: missing /etc shared parse, log follows\n' >&2
+      cat "${smoke_log}" >&2
+      exit 1
+    fi
+    grep -q 'parsing conf file /etc/acpi/events/admin-only' "${smoke_log}"
+    grep -q 'parsing conf file /run/acpi/events/run-only' "${smoke_log}"
+    grep -q 'parsing conf file /usr/lib/acpi/events/vendor-only' "${smoke_log}"
+    grep -q 'shadowing conf file /run/acpi/events/shared' "${smoke_log}"
+    grep -q 'shadowing conf file /usr/lib/acpi/events/shared' "${smoke_log}"
+    grep -q 'masking conf file /etc/acpi/events/masked-rule' "${smoke_log}"
+    if grep -q 'parsing conf file /usr/lib/acpi/events/masked-rule' "${smoke_log}"; then
+      printf 'acpid UAPI smoke: masked vendor rule was still parsed\n' >&2
+      cat "${smoke_log}" >&2
+      exit 1
+    fi
+    rm -f /usr/lib/acpi/events/* /run/acpi/events/* /etc/acpi/events/*
+    printf 'acpid UAPI smoke: the config loader read all three tiers in order\n'
 
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
