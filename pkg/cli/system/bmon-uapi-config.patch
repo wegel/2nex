@@ -1,0 +1,33 @@
+From: Nex package maintainers
+Subject: [PATCH] main: read the system bmon.conf from all three UAPI paths
+Source: no upstream commit; written for Nex against bmon 4.0
+Upstream: not submitted. bmon reads one system file at SYSCONFDIR/bmon.conf,
+ so a distribution cannot ship a default that a boot or an administrator may
+ replace. The change below adds the generic /usr/lib and /run tiers ahead of
+ that file, keeps the existing user file after those, and names no Nex path.
+
+At startup, when no -f configfile is given, bmon reads SYSCONFDIR/bmon.conf
+and then ~/.bmonrc. There is no vendor or runtime tier, so a distribution
+cannot ship a default configuration below /usr, and a running system cannot
+install a temporary override below /run: only a persistent /etc file works.
+
+Read /usr/lib/bmon/bmon.conf, then /run/bmon.conf, then the existing
+SYSCONFDIR/bmon.conf, before the user file. conf_read() already overlays
+each file it can read onto the config parsed so far and silently skips a
+missing file, so this only adds two more optional overlay reads: an
+administrator file still overrides a runtime file, which still overrides a
+vendor file, which still overrides nothing. -f still replaces all three
+system files with the one path given.
+
+diff -urN a/src/conf.c b/src/conf.c
+--- a/src/conf.c
++++ b/src/conf.c
+@@ -605,6 +605,8 @@ void configfile_read(void)
+ 	if (configfile)
+ 		conf_read(configfile, 1);
+ 	else {
++		conf_read("/usr/lib/bmon/bmon.conf", 0);
++		conf_read("/run/bmon.conf", 0);
+ 		conf_read(SYSCONFDIR "/bmon.conf", 0);
+ 		
+ 		if (getenv("HOME")) {
