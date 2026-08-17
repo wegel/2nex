@@ -6,12 +6,15 @@ package:
   version: 0.21.2
   description: Python documentation utilities - includes rst2man
   homepage: https://docutils.sourceforge.io/
-  checksum: 59407497e1359287ea2b786d031ade36925dee573e58d4393d8ce0409d3bd5fd
+  checksum: a70bae1fe3a861e9a643ef2960db2b76424cf678e9b7c52fe96d8cb690c3600e
 
 sources:
 - name: docutils
   url: https://files.pythonhosted.org/packages/source/d/docutils/docutils-0.21.2.tar.gz
   sha256: 3a6b18732edf182daa3cd12775bbb338cf5691468f91eeeb109deff6ebfa986f
+- name: uapi_config
+  file: pkg/dev/python/docutils-uapi-config.patch
+  sha256: 2565908f2f0719f24c96991663d66140b07100c3dc055e46964b27b16281057c
 
 dependencies:
 - name: glibc
@@ -48,17 +51,62 @@ dependencies:
   commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
 - name: flit-core
   commit: x86_64/pkg/dev/python/flit-core/3.9.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [1263:1681]
+  profile: [3098:1135]
 
   script: |
     set -eux
     tar --no-same-owner -xf /${SOURCE_docutils} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
     python3 -m pip install --no-build-isolation --no-deps --root="${OUT_DIR}" --prefix=/usr .
+
+    mkdir -p /etc /run /usr/lib/docutils
+    vendor_conf=/usr/lib/docutils/docutils.conf
+    runtime_conf=/run/docutils.conf
+    admin_conf=/etc/docutils.conf
+    probe_home="${WORK_DIR}/docutils-uapi-home"
+    probe_cwd="${WORK_DIR}/docutils-uapi-cwd"
+    mkdir -p "${probe_home}" "${probe_cwd}"
+    probe_out="${WORK_DIR}/docutils-uapi-probe.out"
+    printf 'test\n====\n\n' > "${probe_cwd}/in.rst"
+    write_conf() {
+      printf '[general]\nreport_level: %s\n' "$2" > "$1"
+    }
+    run_probe() {
+      env -u DOCUTILSCONFIG HOME="${probe_home}" \
+        PYTHONPATH="${OUT_DIR}/usr/lib/python3.12/site-packages${PYTHONPATH:+:$PYTHONPATH}" \
+        "${OUT_DIR}/usr/bin/rst2html" --dump-settings in.rst \
+        > "${probe_out}" 2>&1 || true
+    }
+    expect_level() {
+      (
+        cd "${probe_cwd}"
+        run_probe
+      )
+      if ! grep -q "'report_level': $1" "${probe_out}"; then
+        printf 'docutils UAPI smoke: expected report_level %s, log:\n' "$1" >&2
+        cat "${probe_out}" >&2
+        exit 1
+      fi
+    }
+
+    write_conf "${vendor_conf}" 1
+    write_conf "${runtime_conf}" 2
+    write_conf "${admin_conf}" 3
+    expect_level 3
+    rm -f "${admin_conf}"
+    expect_level 2
+    rm -f "${runtime_conf}"
+    expect_level 1
+    rm -f "${vendor_conf}"
+    printf 'docutils UAPI smoke: config loader read all three tiers in order\n'
 
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
