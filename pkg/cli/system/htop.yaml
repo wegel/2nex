@@ -6,12 +6,15 @@ package:
   version: 3.3.0
   description: Interactive process viewer
   homepage: https://htop.dev/
-  checksum: d864a6b6d7af8042791bf2343d3b5bea9012205e6163f3ca568ea806b1bcf07a
+  checksum: 8e4700f17c9fe56a1e0213fa2ce47aa634d72d1e994d536684554f271105e2c1
 
 sources:
 - name: htop
   url: https://github.com/htop-dev/htop/releases/download/3.3.0/htop-3.3.0.tar.xz
   sha256: a69acf9b42ff592c4861010fce7d8006805f0d6ef0e8ee647a6ee6e59b743d5c
+- name: uapi_config
+  file: pkg/cli/system/htop-uapi-config.patch
+  sha256: 36da2c99ab6db0caedabff530f3f3a155f9309dd7f041dd52422af65dfb50553
 
 dependencies:
 - name: glibc
@@ -52,14 +55,18 @@ dependencies:
   commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4135:17518, 8473:19963, 16691:20031, 25570:20109, 30285:20159, 39093:20264, 47913:21120, 56709:21203, 69133:21282, 74402:26821]
+  profile: [4103:3442, 8541:4038, 16759:4041, 25638:4046, 30353:4050, 39161:4191, 47981:4228, 56777:4276, 69201:4394, 74535:5744]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_htop} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     ./configure \
       --prefix=/usr \
@@ -69,6 +76,87 @@ build:
 
     make
     make DESTDIR="${OUT_DIR}" install
+
+    # Settings_new() tries HTOPRC, then the user file, then the legacy
+    # dotfile, and only when none of those parse does it fall through the
+    # system tiers in order: SYSCONFDIR/htoprc (admin), /run/htop/htoprc
+    # (transient), /usr/lib/htop/htoprc (vendor). Settings_read() returns
+    # false on a missing or unparsed file, so a tier is tried only when
+    # every higher-priority tier is absent, and the first tier it can
+    # parse wins. htop needs a real terminal past Settings_new(), so this
+    # smoke never reaches the screen: it forces each tier's file to fail
+    # config_reader_min_version, which makes Settings_read() name the
+    # exact path it opened on stderr before moving to the next tier.
+    mkdir -p /etc /run /usr/lib/htop
+    mkdir -p /run/htop
+    export HOME="${WORK_DIR}/htop-empty-home"
+    mkdir -p "${HOME}"
+    unset TERM
+
+    admin=/etc/htoprc
+    runtime=/run/htop/htoprc
+    vendor=/usr/lib/htop/htoprc
+    rm -f "${admin}" "${runtime}" "${vendor}"
+
+    invalid_tier() {
+      printf 'config_reader_min_version=999\n' > "$1"
+    }
+
+    run_htop() {
+      timeout 5 "${OUT_DIR}/usr/bin/htop" </dev/null 2>&1 || true
+    }
+
+    fail() {
+      printf 'htop UAPI smoke: %s\n' "$1" >&2
+      printf '%s\n' "${out}" >&2
+      exit 1
+    }
+
+    line_of() {
+      printf '%s\n' "${out}" | grep -n -F "$1" | head -1 | cut -d: -f1
+    }
+
+    invalid_tier "${vendor}"
+    out=$(run_htop)
+    case "${out}" in
+      *"${vendor}"*) ;;
+      *) fail "expected ${vendor} named when it is the only system tier" ;;
+    esac
+
+    invalid_tier "${runtime}"
+    out=$(run_htop)
+    case "${out}" in
+      *"${runtime}"*) ;;
+      *) fail "expected ${runtime} named ahead of the vendor tier" ;;
+    esac
+    case "${out}" in
+      *"${vendor}"*) ;;
+      *) fail "expected cascade to reach ${vendor} after an invalid ${runtime}" ;;
+    esac
+    if [ "$(line_of "${runtime}")" -ge "$(line_of "${vendor}")" ]; then
+      fail "expected ${runtime} named before ${vendor}"
+    fi
+
+    invalid_tier "${admin}"
+    out=$(run_htop)
+    case "${out}" in
+      *"${admin}"*) ;;
+      *) fail "expected ${admin} named ahead of the runtime and vendor tiers" ;;
+    esac
+    if [ "$(line_of "${admin}")" -ge "$(line_of "${runtime}")" ] || [ "$(line_of "${runtime}")" -ge "$(line_of "${vendor}")" ]; then
+      fail "expected ${admin} named before ${runtime} named before ${vendor}"
+    fi
+
+    printf 'delay=10\n' > "${admin}"
+    out=$(run_htop)
+    case "${out}" in
+      *"${runtime}"*|*"${vendor}"*)
+        fail "expected the cascade to stop at the parseable ${admin}"
+        ;;
+    esac
+
+    rm -f "${admin}" "${runtime}" "${vendor}"
+    printf 'htop UAPI smoke: the config loader read all three tiers in order\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
