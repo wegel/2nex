@@ -1,0 +1,132 @@
+From: Nex package maintainers
+Subject: [PATCH] conf.c: add a /run/pipewire tier between /etc and vendor
+Source: Nex
+Upstream: not submitted; needs agreement on a machine-generated transient tier
+
+meson.build derives PIPEWIRE_CONFIG_DIR from sysconfdir, so without
+--sysconfdir=/etc it compiled to /usr/etc/pipewire, a path this
+distribution does not read. The build now passes --sysconfdir=/etc so
+PIPEWIRE_CONFIG_DIR is /etc/pipewire, the admin tier, and
+PIPEWIRE_CONFDATADIR stays /usr/share/pipewire, the vendor tier.
+
+get_config_path (single file, first match wins) and get_config_dir
+(drop-in directory merge) only knew those two tiers plus the env
+override and the user's XDG config. Add /run/pipewire so machine-
+generated fragments have a place, ranked below /etc and above the
+vendor default in both lookups: /etc/pipewire, /run/pipewire,
+/usr/share/pipewire for the single file, and vendor first, then
+/run, then /etc last (so /etc overlays the others) for the drop-in
+directory merge, with the user's XDG config still applied last.
+
+Reordering the directory scan alone does not give a later tier
+priority. pw_conf_load_conf calls check_override() before loading each
+drop-in file in a scanned directory, and check_override() rejected a
+file whenever ANY earlier-scanned file already used the same
+basename, regardless of which tier scanned first. Because the scan is
+strictly vendor, then /run, then /etc, that earlier file is always the
+lower-priority one, so a same-named /run or /etc file was silently
+skipped and the vendor copy stayed loaded. Fix check_override() to
+drop the earlier, lower-level file's own override entries (via the new
+clear_override()) instead of rejecting the later, higher-level file,
+so the higher tier's file fully replaces the lower tier's file of the
+same name instead of merging keys with it or losing to it.
+
+diff -urN a/src/pipewire/conf.c b/src/pipewire/conf.c
+--- a/src/pipewire/conf.c
++++ b/src/pipewire/conf.c
+@@ -132,6 +132,22 @@
+ 	return 0;
+ }
+
++/*
++ * Nex compiles PIPEWIRE_CONFIG_DIR as /etc/pipewire (the admin tier) and
++ * PIPEWIRE_CONFDATADIR as /usr/share/pipewire (the vendor tier). This adds
++ * a /run/pipewire tier in between for transient, machine-generated
++ * fragments, ranked below /etc and above the vendor default.
++ */
++static int get_runconf_path(char *path, size_t size, const char *prefix, const char *name)
++{
++	const char *dir = "/run/pipewire";
++	const char *paths[] = { dir, prefix, name, NULL };
++	if (make_path(path, size, paths) == 0 &&
++	    access(path, R_OK) == 0)
++		return 1;
++	return 0;
++}
++
+ static int get_config_path(char *path, size_t size, const char *prefix, const char *name)
+ {
+ 	int res;
+@@ -154,6 +170,9 @@
+
+ 	if ((res = get_configdir_path(path, size, prefix, name)) != 0)
+ 		return res;
++
++	if ((res = get_runconf_path(path, size, prefix, name)) != 0)
++		return res;
+ no_config:
+ 	if ((res = get_confdata_path(path, size, prefix, name)) != 0)
+ 		return res;
+@@ -195,11 +214,16 @@
+ 	}
+ 	if (*level == 1) {
+ 		(*level)++;
+-		if ((res = get_configdir_path(path, size, prefix, name)) != 0)
++		if ((res = get_runconf_path(path, size, prefix, name)) != 0)
+ 			return res;
+ 	}
+ 	if (*level == 2) {
+ 		(*level)++;
++		if ((res = get_configdir_path(path, size, prefix, name)) != 0)
++			return res;
++	}
++	if (*level == 3) {
++		(*level)++;
+ 		if ((res = get_homeconf_path(path, size, prefix, name)) != 0)
+ 			return res;
+ 	}
+@@ -430,10 +454,32 @@
+ 	return res;
+ }
+
++/*
++ * Nex's /run/pipewire tier means a same-basename drop-in can now be
++ * loaded at several levels (vendor, /run, /etc). Remove a lower-level
++ * file's own override entries so a higher-level file with the same
++ * basename replaces it completely instead of merging keys with it.
++ */
++static void clear_override(struct pw_properties *conf, int level, int index)
++{
++	const struct spa_dict_item *it;
++	char prefix[32];
++
++	snprintf(prefix, sizeof(prefix), "override.%d.%d.", level, index);
++restart:
++	spa_dict_for_each(it, &conf->dict) {
++		if (spa_strstartswith(it->key, prefix)) {
++			pw_properties_set(conf, it->key, NULL);
++			goto restart;
++		}
++	}
++}
++
+ static bool check_override(struct pw_properties *conf, const char *name, int level)
+ {
+ 	const struct spa_dict_item *it;
+
++restart:
+ 	spa_dict_for_each(it, &conf->dict) {
+ 		int lev, idx;
+
+@@ -441,8 +487,10 @@
+ 			continue;
+ 		if (sscanf(it->key, "override.%d.%d.config.name", &lev, &idx) != 2)
+ 			continue;
+-		if (lev < level)
++		if (lev >= level)
+ 			return false;
++		clear_override(conf, lev, idx);
++		goto restart;
+ 	}
+ 	return true;
+ }

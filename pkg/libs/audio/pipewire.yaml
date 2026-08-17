@@ -6,7 +6,7 @@ package:
   version: 1.4.9
   description: Low-latency audio/video router and processor
   homepage: https://pipewire.org/
-  checksum: 39dcd9b0b389cba437384c51390d1367fe36af49834f9457181ebae588bf0af0
+  checksum: df069d95709ca98b4f3b247c6d3fb0d9c9fc28cf16ea7e5afd3cf7205191fe10
 
 sources:
 - name: pipewire
@@ -15,6 +15,9 @@ sources:
 - name: limits_smoke
   file: pkg/libs/audio/pipewire-limits-smoke.c
   sha256: 734ed6215791fb75dc4204fbaf4410968c3a1ae39459289a8676daa4f0abc83d
+- name: uapi_config
+  file: pkg/libs/audio/pipewire-uapi-config.patch
+  sha256: 4adb34f874626d90866170369ce6ccab9a04a76ad85f79bc750a5a4c58073236
 
 dependencies:
 - name: glibc
@@ -59,6 +62,10 @@ dependencies:
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: gettext
   commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: alsa-lib
   commit: x86_64/pkg/libs/audio/alsa-lib/1.2.14/bundles/dev
 - name: systemd
@@ -68,15 +75,18 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4171:986, 12425:1469, 28938:2431, 49653:3434, 62115:3990, 78684:4856, 95185:5973, 115805:16757, 140603:16784, 154266:17142]
+  profile: [4122:1396, 12382:2081, 28922:3095, 49709:4888, 62301:5269, 78809:6864, 95349:9261, 115890:26188, 140688:26222, 154422:26772]
 
   script: |
     set -eu
     tar --no-same-owner -xzf /${SOURCE_pipewire} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
     meson setup build \
       --prefix=/usr \
+      --sysconfdir=/etc \
       --buildtype=release \
       -Dsystemd=enabled \
       -Dalsa=enabled \
@@ -148,6 +158,127 @@ build:
     rmdir /usr/lib/security/limits.d \
       /run/security/limits.d /run/security \
       /etc/security/limits.d /etc/security || true
+
+    mkdir -p /usr/share/pipewire/pipewire.conf.d \
+      /run/pipewire/pipewire.conf.d \
+      /etc/pipewire/pipewire.conf.d
+    cp "${OUT_DIR}/usr/share/pipewire/pipewire.conf" /usr/share/pipewire/pipewire.conf
+
+    uapi_assert_has() {
+      if ! grep -q -- "$2" "$1"; then
+        echo "pipewire uapi smoke: $3" >&2
+        echo "--- ${1} ---" >&2
+        cat "$1" >&2
+        exit 1
+      fi
+    }
+    uapi_assert_absent() {
+      if grep -q -- "$2" "$1"; then
+        echo "pipewire uapi smoke: $3" >&2
+        echo "--- ${1} ---" >&2
+        cat "$1" >&2
+        exit 1
+      fi
+    }
+    uapi_pw_config() {
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" "${OUT_DIR}/usr/bin/pw-config" "$@"
+    }
+
+    # Distinct basenames must all load and merge, in vendor, /run, /etc order.
+    printf 'context.properties = {\n    vendor.only = 1\n}\n' \
+      > /usr/share/pipewire/pipewire.conf.d/05-vendor-only.conf
+    printf 'context.properties = {\n    run.only = 1\n}\n' \
+      > /run/pipewire/pipewire.conf.d/06-run-only.conf
+    printf 'context.properties = {\n    etc.only = 1\n}\n' \
+      > /etc/pipewire/pipewire.conf.d/07-etc-only.conf
+
+    uapi_pw_config list context.properties > "${WORK_DIR}/uapi-list-distinct.out"
+    uapi_assert_has "${WORK_DIR}/uapi-list-distinct.out" 'vendor.only = 1' \
+      "the vendor drop-in did not load"
+    uapi_assert_has "${WORK_DIR}/uapi-list-distinct.out" 'run.only = 1' \
+      "the /run drop-in did not load"
+    uapi_assert_has "${WORK_DIR}/uapi-list-distinct.out" 'etc.only = 1' \
+      "the /etc drop-in did not load"
+
+    vendor_line="$(grep -n -m1 'vendor.only = 1' "${WORK_DIR}/uapi-list-distinct.out")"
+    run_line="$(grep -n -m1 'run.only = 1' "${WORK_DIR}/uapi-list-distinct.out")"
+    etc_line="$(grep -n -m1 'etc.only = 1' "${WORK_DIR}/uapi-list-distinct.out")"
+    vendor_line="${vendor_line%%:*}"
+    run_line="${run_line%%:*}"
+    etc_line="${etc_line%%:*}"
+    if [ "${vendor_line}" -ge "${run_line}" ] || [ "${run_line}" -ge "${etc_line}" ]; then
+      echo "pipewire uapi smoke: distinct drop-ins did not load in vendor, /run, /etc order" >&2
+      cat "${WORK_DIR}/uapi-list-distinct.out" >&2
+      exit 1
+    fi
+    rm /usr/share/pipewire/pipewire.conf.d/05-vendor-only.conf \
+      /run/pipewire/pipewire.conf.d/06-run-only.conf \
+      /etc/pipewire/pipewire.conf.d/07-etc-only.conf
+
+    # A shared basename must be fully shadowed by the highest tier present,
+    # with no key or array entry from a lower tier leaking through.
+    printf 'context.properties = {\n    default.clock.min-quantum = 64\n}\n' \
+      > /usr/share/pipewire/pipewire.conf.d/10-uapi-smoke.conf
+    printf 'context.properties = {\n    default.clock.min-quantum = 128\n}\n' \
+      > /run/pipewire/pipewire.conf.d/10-uapi-smoke.conf
+    printf 'context.properties = {\n    default.clock.min-quantum = 256\n}\n' \
+      > /etc/pipewire/pipewire.conf.d/10-uapi-smoke.conf
+
+    uapi_pw_config list context.properties > "${WORK_DIR}/uapi-list-etc.out"
+    uapi_assert_has "${WORK_DIR}/uapi-list-etc.out" 'min-quantum = 256' \
+      "the /etc drop-in did not shadow the collision"
+    uapi_assert_absent "${WORK_DIR}/uapi-list-etc.out" 'min-quantum = 64' \
+      "the shadowed vendor drop-in leaked into the loaded config"
+    uapi_assert_absent "${WORK_DIR}/uapi-list-etc.out" 'min-quantum = 128' \
+      "the shadowed /run drop-in leaked into the loaded config"
+
+    uapi_pw_config -L merge context.properties > "${WORK_DIR}/uapi-merge-etc.out"
+    uapi_assert_has "${WORK_DIR}/uapi-merge-etc.out" '"default.clock.min-quantum": 256' \
+      "the merged config did not pick the /etc value"
+
+    rm /etc/pipewire/pipewire.conf.d/10-uapi-smoke.conf
+    uapi_pw_config list context.properties > "${WORK_DIR}/uapi-list-run.out"
+    uapi_assert_has "${WORK_DIR}/uapi-list-run.out" 'min-quantum = 128' \
+      "/run did not win after the /etc drop-in was removed"
+    uapi_assert_absent "${WORK_DIR}/uapi-list-run.out" 'min-quantum = 64' \
+      "the shadowed vendor drop-in leaked after the /etc drop-in was removed"
+    uapi_assert_absent "${WORK_DIR}/uapi-list-run.out" 'min-quantum = 256' \
+      "the removed /etc drop-in still appears in the loaded config"
+
+    rm /run/pipewire/pipewire.conf.d/10-uapi-smoke.conf
+    uapi_pw_config list context.properties > "${WORK_DIR}/uapi-list-vendor.out"
+    uapi_assert_has "${WORK_DIR}/uapi-list-vendor.out" 'min-quantum = 64' \
+      "the vendor file did not win once /run and /etc were removed"
+    uapi_assert_absent "${WORK_DIR}/uapi-list-vendor.out" 'min-quantum = 128' \
+      "the removed /run drop-in still appears in the loaded config"
+    uapi_assert_absent "${WORK_DIR}/uapi-list-vendor.out" 'min-quantum = 256' \
+      "the removed /etc drop-in still appears in the loaded config"
+
+    # The main pipewire.conf must select /etc, then /run, then /usr/share.
+    cp /usr/share/pipewire/pipewire.conf /etc/pipewire/pipewire.conf
+    cp /usr/share/pipewire/pipewire.conf /run/pipewire/pipewire.conf
+
+    uapi_pw_config -L paths > "${WORK_DIR}/uapi-paths-etc.out"
+    uapi_assert_has "${WORK_DIR}/uapi-paths-etc.out" '"config.path": "/etc/pipewire/pipewire.conf"' \
+      "the main config did not select /etc first"
+
+    rm /etc/pipewire/pipewire.conf
+    uapi_pw_config -L paths > "${WORK_DIR}/uapi-paths-run.out"
+    uapi_assert_has "${WORK_DIR}/uapi-paths-run.out" '"config.path": "/run/pipewire/pipewire.conf"' \
+      "the main config did not fall back to /run"
+
+    rm /run/pipewire/pipewire.conf
+    uapi_pw_config -L paths > "${WORK_DIR}/uapi-paths-usrshare.out"
+    uapi_assert_has "${WORK_DIR}/uapi-paths-usrshare.out" '"config.path": "/usr/share/pipewire/pipewire.conf"' \
+      "the main config did not fall back to /usr/share"
+    uapi_assert_absent "${WORK_DIR}/uapi-paths-usrshare.out" '/usr/etc' \
+      "pw-config still names a /usr/etc path"
+
+    rm -rf /usr/share/pipewire/pipewire.conf.d /run/pipewire /etc/pipewire \
+      /usr/share/pipewire/pipewire.conf
+    rmdir /usr/share/pipewire
+
+    echo "pipewire UAPI smoke: config loader searched /etc, /run, and /usr/share"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true

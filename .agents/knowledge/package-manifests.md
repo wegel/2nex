@@ -572,6 +572,16 @@ environment, and per-user overrides ahead of the system tiers. Tests must call
 the built readers with distinct files under `/etc`, `/run`, and `/usr`; an
 install-path assertion cannot prove the lookup order.
 
+When a drop-in parser tracks basenames, change its scan order and basename
+filter together. PipeWire 1.4.9 scans vendor drop-ins before administrator
+drop-ins, then `check_override()` rejects a later file when an earlier level
+already used the basename. Adding `/run/pipewire` to that scan alone therefore
+leaves the vendor file in control. Its Nex patch removes the earlier file's
+complete parsed property group before loading a higher same-named file. Test
+distinct basenames to prove vendor, `/run`, `/etc` merge order, then reuse one
+basename across all three tiers and assert that no lower array item or key
+survives.
+
 Evidence: BlueZ 5.85 reads `input.conf` in two places and reads `main.conf`
 and `network.conf` in separate code. PulseAudio 17.0 sends four main files
 through two helpers and merges only two structured drop-in families. OpenSSH
