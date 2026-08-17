@@ -6,7 +6,7 @@ package:
   version: 0.26.1
   description: A cat clone with syntax highlighting and Git integration
   homepage: https://github.com/sharkdp/bat
-  checksum: b766d3902dd7d3b27595db3044a26b0bb686f582e034441a9522ca8c68b7c835
+  checksum: ca4729fe8bf863aef6709d98ad33062e546bcbb1a6cf70976b16d648ec7eef77
 
 sources:
 - name: bat
@@ -15,6 +15,9 @@ sources:
 - name: vendor
   sha256: 876bb03f99836f3f4b0457220ea9b923160ccc4c7e98709abfaf7e4d91ee6c8c
   cargo_lock: https://raw.githubusercontent.com/sharkdp/bat/v0.26.1/Cargo.lock
+- name: uapi_config
+  file: pkg/cli/text/bat-uapi-config.patch
+  sha256: cd78e05ea76bc578b926ab1b721bbcf0fa1f2a3cdb593a1f30dc4d9e96b03e10
 
 dependencies:
 - name: bash
@@ -55,14 +58,18 @@ dependencies:
   commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
 - name: pcre2
   commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4098:113585, 5376:281506]
+  profile: [4109:7040, 5476:38277]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_bat} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     tar --no-same-owner -xf /./${SOURCE_vendor} -C "${WORK_DIR}"
 
@@ -94,6 +101,53 @@ build:
     install -m 755 target/x86_64-unknown-linux-gnu/release/bat ${OUT_DIR}/usr/bin/bat
 
     strip --strip-unneeded ${OUT_DIR}/usr/bin/bat
+
+    # --style=header is silent when stdout is not a tty even with
+    # --decorations=always on bat 0.26, so the smoke uses --line-range
+    # instead: each tier keeps a different number of lines from a
+    # three-line file.
+    mkdir -p /etc/bat /run/bat /usr/lib/bat
+    unset BAT_CONFIG_PATH
+    export HOME="${WORK_DIR}/bat-smoke-home"
+    mkdir -p "${HOME}"
+
+    vendor=/usr/lib/bat/config
+    runtime=/run/bat/config
+    admin=/etc/bat/config
+    smoke_file="${WORK_DIR}/bat-smoke.txt"
+    printf 'L1\nL2\nL3\n' > "${smoke_file}"
+    rm -f "${vendor}" "${runtime}" "${admin}"
+
+    run_and_expect() {
+      desc="$1"
+      expect="$2"
+      if ! out=$("${OUT_DIR}/usr/bin/bat" --paging=never --style=plain \
+        --decorations=never "${smoke_file}" 2>&1); then
+        printf 'bat UAPI smoke: expected a clean run for %s\n' "${desc}" >&2
+        printf '%s\n' "${out}" >&2
+        exit 1
+      fi
+      if [ "${out}" != "${expect}" ]; then
+        printf 'bat UAPI smoke: expected [%s] for %s, got [%s]\n' \
+          "${expect}" "${desc}" "${out}" >&2
+        exit 1
+      fi
+    }
+
+    printf -- '--line-range=1:1\n' > "${vendor}"
+    run_and_expect "vendor alone" $'L1'
+
+    printf -- '--line-range=1:2\n' > "${runtime}"
+    run_and_expect "vendor and runtime present" $'L1\nL2'
+
+    printf -- '--line-range=1:3\n' > "${admin}"
+    run_and_expect "vendor, runtime and admin present" $'L1\nL2\nL3'
+
+    rm -f "${admin}"
+    run_and_expect "admin removed uncovers runtime" $'L1\nL2'
+
+    rm -f "${vendor}" "${runtime}" "${admin}" "${smoke_file}"
+    printf 'bat UAPI smoke: the config loader read all three tiers in order\n'
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
