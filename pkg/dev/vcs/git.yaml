@@ -6,12 +6,15 @@ package:
   version: 2.49.0
   description: Distributed version control system
   homepage: https://git-scm.com/
-  checksum: fcf8a20f347208d3f39932ff58f3ead14392dfa464e2f112c52d12bc1dc2929b
+  checksum: 51b15102f21257b22396de016d264484c94483e414eafd3e2985332cc30d3b35
 
 sources:
 - name: git
   url: https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.49.0.tar.xz
   sha256: 618190cf590b7e9f6c11f91f23b1d267cd98c3ab33b850416d8758f8b5a85628
+- name: uapi_config
+  file: pkg/dev/vcs/git-uapi-config.patch
+  sha256: 5d53e00eb54a2fadd135b49a8e4c8f66a2e7e294928c9f20abfe4e0ffb00ab69
 
 dependencies:
 - name: glibc
@@ -34,6 +37,8 @@ dependencies:
   commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: make
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: sed
   commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
 - name: tar
@@ -55,11 +60,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4101:7716, 8222:10455, 12318:66787, 16443:94761, 20540:127608, 24646:127807, 25277:132244]
+  profile: [4105:1594, 8211:2420, 12308:11674, 16425:17069, 20526:26413, 24646:26452, 25402:27924]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_git} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     # Build git directly without configure
     # pass flags explicitly since git's Makefile uses hard assignments
@@ -97,6 +104,67 @@ build:
     strip --strip-unneeded ${OUT_DIR}/usr/bin/git-upload-pack || true
     strip --strip-unneeded ${OUT_DIR}/usr/bin/scalar || true
     find ${OUT_DIR}/usr/libexec/git-core -type f -perm /u+x -exec strip --strip-unneeded {} \; 2>/dev/null || true
+
+    mkdir -p /etc /run /usr/lib
+    probe="${WORK_DIR}/git-uapi-probe"
+    mkdir -p "${probe}"
+    git_bin="${OUT_DIR}/usr/bin/git"
+    run_git() {
+      env -u GIT_CONFIG_SYSTEM -u GIT_DIR -u GIT_ATTR_NOSYSTEM \
+        HOME="${probe}" GIT_CONFIG_GLOBAL=/dev/null \
+        "${git_bin}" -C "${probe}" "$@"
+    }
+    printf '[nex]\n\ttier = vendor\n' > /usr/lib/gitconfig
+    printf '[nex]\n\ttier = run\n' > /run/gitconfig
+    printf '[nex]\n\ttier = admin\n' > /etc/gitconfig
+    printf '* nexattr=vendor\n' > /usr/lib/gitattributes
+    printf '* nexattr=run\n' > /run/gitattributes
+    printf '* nexattr=admin\n' > /etc/gitattributes
+    actual="$(run_git config --get nex.tier)"
+    if [ "${actual}" != admin ]; then
+      printf 'git UAPI smoke: expected admin, got %s\n' "${actual}" >&2
+      exit 1
+    fi
+    system_target="$(run_git var GIT_CONFIG_SYSTEM)"
+    if [ "${system_target}" != /etc/gitconfig ]; then
+      printf 'git UAPI smoke: --system target is %s\n' "${system_target}" >&2
+      exit 1
+    fi
+    attr_target="$(run_git var GIT_ATTR_SYSTEM)"
+    if [ "${attr_target}" != /etc/gitattributes ]; then
+      printf 'git UAPI smoke: attr target is %s\n' "${attr_target}" >&2
+      exit 1
+    fi
+    rm -f /etc/gitconfig /etc/gitattributes
+    actual="$(run_git config --get nex.tier)"
+    if [ "${actual}" != run ]; then
+      printf 'git UAPI smoke: expected run, got %s\n' "${actual}" >&2
+      exit 1
+    fi
+    attr_target="$(run_git var GIT_ATTR_SYSTEM)"
+    if [ "${attr_target}" != /run/gitattributes ]; then
+      printf 'git UAPI smoke: attr target is %s after removing /etc\n' "${attr_target}" >&2
+      exit 1
+    fi
+    : > /etc/gitconfig
+    if actual="$(run_git config --get nex.tier)"; then
+      printf 'git UAPI smoke: empty /etc/gitconfig leaked %s\n' "${actual}" >&2
+      exit 1
+    fi
+    rm -f /etc/gitconfig /run/gitconfig /run/gitattributes
+    actual="$(run_git config --get nex.tier)"
+    if [ "${actual}" != vendor ]; then
+      printf 'git UAPI smoke: expected vendor, got %s\n' "${actual}" >&2
+      exit 1
+    fi
+    attr_target="$(run_git var GIT_ATTR_SYSTEM)"
+    if [ "${attr_target}" != /usr/lib/gitattributes ]; then
+      printf 'git UAPI smoke: attr target is %s without higher files\n' "${attr_target}" >&2
+      exit 1
+    fi
+    rm -f /etc/gitconfig /run/gitconfig /usr/lib/gitconfig \
+          /etc/gitattributes /run/gitattributes /usr/lib/gitattributes
+    printf 'git UAPI smoke: system gitconfig and gitattributes read all three tiers in order\n'
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
