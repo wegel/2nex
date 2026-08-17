@@ -554,6 +554,15 @@ packages. Confirm for one package with
 `grep -rln '<manifest path>' pkg/ | grep -v '^pkg/bootstrap/'`. They still get
 full records, because a later change could ship them.
 
+Do not add a UAPI-config patch, `--sysconfdir` remap, or other
+Nex-specific policy reader to a bootstrap seed in order to close a
+tier gap. The bootstrap must stay as close to unmodified upstream as
+possible so a reader can see that Nex is built from standard packages.
+Record the upstream reader and classify the package as `build-only
+input`. Repair the shipped copy under another `pkg/` tree instead.
+Reproducibility or build-fix patches that do not change runtime lookup
+may remain.
+
 ## UAPI Configuration Parser Patches
 
 Before moving a package default from `/etc`, find every reader, reload path,

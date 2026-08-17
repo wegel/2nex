@@ -18,6 +18,12 @@ or configure Nex-built readers to honor `/etc`, `/run`, and `/usr` in that
 priority. An assembly that adds an unpatched outside program owns any fixed
 `/etc` compatibility path that program needs.
 
+These lookup patches do not apply under `pkg/bootstrap/`. Leave those
+seeds on their upstream readers so the bootstrap stays visibly
+standard. A missing `/run` or `/usr` tier in a bootstrap program is
+not a reason to patch that seed. The shipped copy of the same program
+under another `pkg/` tree is the one that must honor the three tiers.
+
 Autotools packages need an explicit `--sysconfdir=/etc`. Autoconf defaults
 `sysconfdir` to `${prefix}/etc`, and unlike Meson it does not special-case a
 `/usr` prefix, so `./configure --prefix=/usr` alone compiles `/usr/etc/...`

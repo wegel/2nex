@@ -117,6 +117,11 @@ Three distinctions decide many of these calls. Get them right before you write
   assembly chooses the Nex layout.
 - A reader that does not implement the three tiers is a gap only when the file
   family carries distribution policy. Check the owner first.
+- A manifest below `pkg/bootstrap/` is `build-only input` even when its
+  upstream reader is `/etc`-only. Do not call that a `gap` that needs a
+  UAPI patch. Nex leaves bootstrap seeds on unmodified upstream lookup
+  so the bootstrap stays visibly standard. Name the reader, classify
+  the package as `build-only input`, and say `pass`.
 
 ## Report format
 

@@ -19,6 +19,15 @@ Git stores the manifests and scripts that define the system. The zub store
 holds build outputs as a cache. Treat Git as the source of truth and the store
 as disposable.
 
+Bootstrap seeds under `pkg/bootstrap/` stay as close to unmodified
+upstream as possible. Do not add UAPI configuration patches, extra
+sysconfdir remaps, or other Nex-specific policy readers to those
+manifests. The bootstrap exists so a reader can see that Nex is built
+from standard packages. Configuration ownership applies to shipped
+packages under the other `pkg/` trees. Reproducibility or build-fix
+patches that do not change runtime lookup may still appear on a seed
+when the build would otherwise fail.
+
 ## Operating Modes
 
 Carlos has two modes in this repository.
