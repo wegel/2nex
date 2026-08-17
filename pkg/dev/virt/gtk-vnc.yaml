@@ -147,7 +147,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4103:1130, 8217:1130, 12318:1692, 16454:5046, 17363:5093]
+  profile: [4103:3873, 8217:3873, 12370:5743, 16478:13671, 17448:13943]
 
   script: |
     set -eu
@@ -157,6 +157,7 @@ build:
 
     meson setup build \
       --prefix=/usr \
+      --sysconfdir=/etc \
       --libdir=lib \
       --buildtype=release \
       -Dintrospection=enabled \
@@ -166,6 +167,10 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    installed_lib="${OUT_DIR}/usr/lib/libgvnc-1.0.so.0.0.1"
+    python3 -c "import sys;d=open(sys.argv[1],'rb').read();assert b'/usr/etc' not in d;assert b'/etc' in d;assert b'%s/pki' in d" "${installed_lib}"
+    printf 'gtk-vnc UAPI smoke: SYSCONFDIR/pki is /etc/pki, not /usr/etc\n'
 
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
