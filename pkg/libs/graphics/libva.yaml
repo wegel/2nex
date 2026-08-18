@@ -6,12 +6,18 @@ package:
   version: 2.20.0
   description: VA-API video acceleration library
   homepage: https://github.com/intel/libva
-  checksum: 093d29f2e159235f03bbd1f27bb65de6f07208d1c97061f14835bb9c84b4e886
+  checksum: c8b1667889b871409df67ef0e9b8e9233a94cc04708da5cb4372acd87328ea90
 
 sources:
 - name: libva
   url: https://github.com/intel/libva/archive/refs/tags/2.20.0.tar.gz
   sha256: 117f8d658a5fc9ea406ca80a3eb4ae1d70b15a54807c9ed77199c812bed73b60
+- name: config_patch
+  file: pkg/libs/graphics/libva-uapi-config.patch
+  sha256: 91f04b1ce779ae81549c048008301ed62cf8e53ead579b7b866a46857637a657
+- name: config_smoke
+  file: pkg/libs/graphics/libva-config-smoke.c
+  sha256: d5ae2c4398520e0bdb440120fe1b90a699855d8fc8fa71453a9c5ad30543d133
 
 dependencies:
 - name: glibc
@@ -20,6 +26,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
   commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: ncurses
@@ -63,11 +71,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4130:32400, 5538:34747]
+  profile: [4152:2646, 5608:2785]
 
   script: |
+    set -eu
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_config_patch}"
 
     meson setup build \
       --prefix=/usr \
@@ -79,6 +89,76 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # va_parseConfig() carries DLL_HIDDEN visibility, so the smoke cannot
+    # link against it directly. It goes through vaInitialize() instead,
+    # which reads LIBVA_MESSAGING_LEVEL via va_parseConfig() on every call,
+    # so each case below runs a fresh process against the real library.
+    config_smoke="${WORK_DIR}/libva-config-smoke"
+    gcc \
+      -Wall -Wextra -Werror \
+      -I"${OUT_DIR}/usr/include" \
+      "/${SOURCE_config_smoke}" \
+      -L"${OUT_DIR}/usr/lib" \
+      -lva \
+      -o "${config_smoke}"
+
+    admin_conf=/etc/libva.conf
+    runtime_conf=/run/libva.conf
+    vendor_conf=/usr/lib/libva.conf
+
+    cleanup_config_smoke() {
+      rm -f "${admin_conf}" "${runtime_conf}" "${vendor_conf}"
+    }
+    trap cleanup_config_smoke EXIT
+    cleanup_config_smoke
+    mkdir -p /etc /run /usr/lib
+
+    assert_level() {
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" "${config_smoke}" "$1"
+    }
+    assert_level_with_env() {
+      env "LIBVA_MESSAGING_LEVEL=$1" \
+        LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+        "${config_smoke}" "$2"
+    }
+
+    printf 'LIBVA_MESSAGING_LEVEL=0\n' > "${vendor_conf}"
+    assert_level 0
+
+    printf 'LIBVA_MESSAGING_LEVEL=1\n' > "${runtime_conf}"
+    assert_level 1
+
+    printf 'LIBVA_MESSAGING_LEVEL=2\n' > "${admin_conf}"
+    assert_level 2
+
+    rm "${admin_conf}"
+    assert_level 1
+
+    rm "${runtime_conf}"
+    assert_level 0
+
+    printf 'LIBVA_MESSAGING_LEVEL=1\n' > "${runtime_conf}"
+    : > "${admin_conf}"
+    assert_level 2
+    rm "${admin_conf}"
+
+    rm "${runtime_conf}"
+    : > "${runtime_conf}"
+    assert_level 2
+    rm "${runtime_conf}"
+
+    rm "${vendor_conf}"
+    assert_level 2
+    assert_level_with_env 1 1
+
+    printf 'LIBVA_MESSAGING_LEVEL=0\n' > "${vendor_conf}"
+    assert_level_with_env 2 0
+
+    cleanup_config_smoke
+    trap - EXIT
+
+    printf 'libva UAPI smoke: libva.conf honoured all tiers\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true

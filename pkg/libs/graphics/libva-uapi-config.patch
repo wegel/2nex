@@ -1,0 +1,48 @@
+From: Package maintainers <packages@localhost>
+Subject: [PATCH] layer libva.conf across administrator, runtime, and vendor
+Source: downstream
+Upstream: not submitted; suitable for upstream review
+
+va_parseConfig() only opens SYSCONFDIR "/libva.conf". Meson compiles
+SYSCONFDIR as "/etc" whenever prefix is "/usr", so this reader never
+consults a runtime or vendor file, and a shipped copy of libva can only
+carry its default LIBVA_MESSAGING_LEVEL and LIBVA_TRACE* settings by
+writing directly into the administrator's /etc.
+
+Try the administrator file, then a runtime file, then a vendor file, and
+stop at the first one that opens. A file that opens but does not contain
+the requested key still falls through to the environment exactly as
+before, so an existing higher-priority file, even an empty one, masks
+every lower file without ever being read again. Nothing else in
+va_parseConfig changes: a value found in the selected file still beats
+the process environment.
+
+diff -urN a/va/va.c b/va/va.c
+--- a/va/va.c
++++ b/va/va.c
+@@ -81,14 +81,24 @@
+  */
+ int va_parseConfig(char *env, char *env_value)
+ {
++    static const char *const va_config_paths[] = {
++        SYSCONFDIR "/libva.conf",
++        "/run/libva.conf",
++        "/usr/lib/libva.conf",
++    };
+     char *token, *value, *saveptr;
+     char oneline[1024];
+     FILE *fp = NULL;
++    unsigned int i;
+
+     if (env == NULL)
+         return 1;
+
+-    fp = fopen(SYSCONFDIR "/libva.conf", "r");
++    for (i = 0; i < ARRAY_SIZE(va_config_paths); i++) {
++        fp = fopen(va_config_paths[i], "r");
++        if (fp)
++            break;
++    }
+     while (fp && (fgets(oneline, 1024, fp) != NULL)) {
+         if (strlen(oneline) == 1)
+             continue;
