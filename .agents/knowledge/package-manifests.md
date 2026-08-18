@@ -1003,3 +1003,20 @@ This audit measures package policy, not the complete live `/etc`. Assemblies
 still define initial accounts, networking, enabled services, and other host
 state. An assembly that adds an unpatched outside program may also add the exact
 compatibility path that program needs.
+
+## p11-kit system configuration
+
+p11-kit 0.25.5 compiles its module reader into `libp11-kit`, while
+`p11-kit print-config` links a separate copy of the same `conf.c` code. Use
+`print-config` to inspect arbitrary global and module keys, then use
+`list-modules` with a valid module at distinct absolute paths to prove the
+installed library calls the reader with the intended directories. The latter
+command exposes the chosen module through its indented `path:` field.
+
+Keep p11-kit's user modes intact by combining the three system module
+directories separately. Load vendor, then runtime, then administrator into a
+system dictionary with complete same-basename replacement. Merge that finished
+dictionary into the user dictionary so existing user entries retain priority
+and receive only missing defaults. The dictionary API documents that stealing
+the iterator's current key is safe, which lets this merge transfer ownership
+without copying.

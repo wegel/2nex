@@ -6,12 +6,15 @@ package:
   version: 0.25.5
   description: "PKCS#11 module management library"
   homepage: https://p11-glue.github.io/p11-glue/p11-kit.html
-  checksum: d8524f53a7e4fc14400f74404828eff6059072c1457baab610eac5dc5ba889a6
+  checksum: 9a23e7fbfc3b8d6c9b47b7c5370d636272f2d865c70a6d31008afafa7d8f1985
 
 sources:
 - name: p11-kit
   url: https://github.com/p11-glue/p11-kit/releases/download/0.25.5/p11-kit-0.25.5.tar.xz
   sha256: 04d0a86450cdb1be018f26af6699857171a188ac6d5b8c90786a60854e1198e5
+- name: uapi_config
+  file: pkg/libs/crypto/p11-kit-uapi-config.patch
+  sha256: faf1f5831ae924cdaf05a3fcb69acfffe55be84da06456801658e8cbff19bde9
 
 dependencies:
 - name: linux-headers
@@ -56,14 +59,22 @@ dependencies:
   commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
 - name: libtasn1
   commit: x86_64/pkg/libs/crypto/libtasn1/4.19.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4102:1635, 8229:1750, 12380:1967, 16531:2152, 20635:2348, 24750:4820, 28881:19167, 32989:21047, 33938:21106]
+  profile: [4157:2543, 8271:2717, 12400:3012, 16518:3267, 20655:3583, 24808:7005, 28936:25584, 33102:28177, 34329:28325]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_p11_kit} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     meson setup builddir \
       --prefix=/usr \
@@ -111,6 +122,144 @@ build:
         "${WORK_DIR}/masked-trust.pem"
     test "$(sed -n '/BEGIN CERTIFICATE/p' "${WORK_DIR}/masked-trust.pem" | wc -l)" \
       -eq 2
+
+    p11kit_smoke() {
+      P11_KIT_NO_USER_CONFIG=1 \
+        LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+        "${OUT_DIR}/usr/bin/p11-kit" "$@"
+    }
+    section() {
+      awk -v name="[$1]" '$0 == name { f = 1; next } /^\[/ { f = 0 } f' \
+        "${WORK_DIR}/p11kit-config.out"
+    }
+
+    mkdir -p /etc/pkcs11/modules /run/pkcs11/modules /usr/share/p11-kit/modules
+
+    # Main file: the first regular file from /etc, then /run, then the
+    # package-owned /usr tier, with an empty higher file masking lower ones.
+    echo "x-tier: vendor" > /usr/share/p11-kit/pkcs11.conf
+    p11kit_smoke print-config > "${WORK_DIR}/p11kit-config.out"
+    grep -qx "x-tier = vendor" "${WORK_DIR}/p11kit-config.out"
+
+    echo "x-tier: runtime" > /run/pkcs11/pkcs11.conf
+    p11kit_smoke print-config > "${WORK_DIR}/p11kit-config.out"
+    grep -qx "x-tier = runtime" "${WORK_DIR}/p11kit-config.out"
+
+    echo "x-tier: admin" > /etc/pkcs11/pkcs11.conf
+    p11kit_smoke print-config > "${WORK_DIR}/p11kit-config.out"
+    grep -qx "x-tier = admin" "${WORK_DIR}/p11kit-config.out"
+
+    : > /etc/pkcs11/pkcs11.conf
+    p11kit_smoke print-config > "${WORK_DIR}/p11kit-config.out"
+    ! grep -q "^x-tier" "${WORK_DIR}/p11kit-config.out"
+
+    rm -f /etc/pkcs11/pkcs11.conf
+    p11kit_smoke print-config > "${WORK_DIR}/p11kit-config.out"
+    grep -qx "x-tier = runtime" "${WORK_DIR}/p11kit-config.out"
+
+    rm -f /run/pkcs11/pkcs11.conf
+    p11kit_smoke print-config > "${WORK_DIR}/p11kit-config.out"
+    grep -qx "x-tier = vendor" "${WORK_DIR}/p11kit-config.out"
+
+    rm -f /usr/share/p11-kit/pkcs11.conf
+
+    # Distinct .module files in all three system directories merge.
+    printf 'module: alpha.so\n' > /usr/share/p11-kit/modules/alpha.module
+    printf 'module: beta.so\n' > /run/pkcs11/modules/beta.module
+    printf 'module: gamma.so\n' > /etc/pkcs11/modules/gamma.module
+    p11kit_smoke print-config > "${WORK_DIR}/p11kit-config.out"
+    grep -qx "\[alpha\]" "${WORK_DIR}/p11kit-config.out"
+    grep -qx "\[beta\]" "${WORK_DIR}/p11kit-config.out"
+    grep -qx "\[gamma\]" "${WORK_DIR}/p11kit-config.out"
+
+    # A higher same-basename .module file fully shadows a lower one: it
+    # replaces the whole file, not just the keys it repeats.
+    printf 'module: vendor.so\nvendor-only: yes\n' \
+      > /usr/share/p11-kit/modules/shared.module
+    p11kit_smoke print-config > "${WORK_DIR}/p11kit-config.out"
+    section shared | grep -qx "vendor-only = yes"
+
+    printf 'module: runtime.so\nruntime-only: yes\n' \
+      > /run/pkcs11/modules/shared.module
+    p11kit_smoke print-config > "${WORK_DIR}/p11kit-config.out"
+    section shared | grep -qx "module = runtime.so"
+    section shared | grep -qx "runtime-only = yes"
+    ! section shared | grep -q "vendor-only"
+
+    printf 'module: admin.so\nadmin-only: yes\n' \
+      > /etc/pkcs11/modules/shared.module
+    p11kit_smoke print-config > "${WORK_DIR}/p11kit-config.out"
+    section shared | grep -qx "module = admin.so"
+    section shared | grep -qx "admin-only = yes"
+    ! section shared | grep -q "runtime-only"
+    ! section shared | grep -q "vendor-only"
+
+    rm -f \
+      /etc/pkcs11/modules/shared.module \
+      /run/pkcs11/modules/shared.module \
+      /usr/share/p11-kit/modules/shared.module \
+      /usr/share/p11-kit/modules/alpha.module \
+      /run/pkcs11/modules/beta.module \
+      /etc/pkcs11/modules/gamma.module
+
+    # Explicit overrides still win outright over every tier.
+    echo "x-tier: admin" > /etc/pkcs11/pkcs11.conf
+    echo "x-tier: override" > "${WORK_DIR}/p11kit-override.conf"
+    P11_SYSTEM_CONFIG_FILE="${WORK_DIR}/p11kit-override.conf" \
+      p11kit_smoke print-config > "${WORK_DIR}/p11kit-config.out"
+    grep -qx "x-tier = override" "${WORK_DIR}/p11kit-config.out"
+    rm -f /etc/pkcs11/pkcs11.conf "${WORK_DIR}/p11kit-override.conf"
+
+    printf 'module: admin.so\n' > /etc/pkcs11/modules/only.module
+    mkdir -p "${WORK_DIR}/p11kit-override-modules"
+    printf 'module: override.so\n' \
+      > "${WORK_DIR}/p11kit-override-modules/only.module"
+    P11_SYSTEM_CONFIG_MODULES="${WORK_DIR}/p11kit-override-modules" \
+      p11kit_smoke print-config > "${WORK_DIR}/p11kit-config.out"
+    section only | grep -qx "module = override.so"
+    rm -f /etc/pkcs11/modules/only.module
+
+    # list-modules loads the library-backed real module, not just the
+    # print-config reader: a same-basename .module file in all three
+    # tiers must resolve to the administrator path, then fall back
+    # through runtime to vendor as each higher tier is removed.
+    cp "${OUT_DIR}/usr/lib/pkcs11/p11-kit-trust.so" "${WORK_DIR}/listmod-vendor.so"
+    cp "${OUT_DIR}/usr/lib/pkcs11/p11-kit-trust.so" "${WORK_DIR}/listmod-runtime.so"
+    cp "${OUT_DIR}/usr/lib/pkcs11/p11-kit-trust.so" "${WORK_DIR}/listmod-admin.so"
+
+    printf 'module: %s\n' "${WORK_DIR}/listmod-vendor.so" \
+      > /usr/share/p11-kit/modules/listmod.module
+    printf 'module: %s\n' "${WORK_DIR}/listmod-runtime.so" \
+      > /run/pkcs11/modules/listmod.module
+    printf 'module: %s\n' "${WORK_DIR}/listmod-admin.so" \
+      > /etc/pkcs11/modules/listmod.module
+
+    p11kit_smoke list-modules > "${WORK_DIR}/p11kit-listmod.out"
+    grep -qx "    path: ${WORK_DIR}/listmod-admin.so" "${WORK_DIR}/p11kit-listmod.out"
+    ! grep -qx "    path: ${WORK_DIR}/listmod-runtime.so" "${WORK_DIR}/p11kit-listmod.out"
+    ! grep -qx "    path: ${WORK_DIR}/listmod-vendor.so" "${WORK_DIR}/p11kit-listmod.out"
+
+    rm -f /etc/pkcs11/modules/listmod.module
+    p11kit_smoke list-modules > "${WORK_DIR}/p11kit-listmod.out"
+    grep -qx "    path: ${WORK_DIR}/listmod-runtime.so" "${WORK_DIR}/p11kit-listmod.out"
+    ! grep -qx "    path: ${WORK_DIR}/listmod-vendor.so" "${WORK_DIR}/p11kit-listmod.out"
+
+    rm -f /run/pkcs11/modules/listmod.module
+    p11kit_smoke list-modules > "${WORK_DIR}/p11kit-listmod.out"
+    grep -qx "    path: ${WORK_DIR}/listmod-vendor.so" "${WORK_DIR}/p11kit-listmod.out"
+
+    rm -f \
+      /usr/share/p11-kit/modules/listmod.module \
+      "${WORK_DIR}/listmod-vendor.so" \
+      "${WORK_DIR}/listmod-runtime.so" \
+      "${WORK_DIR}/listmod-admin.so"
+
+    echo "p11-kit UAPI smoke: pkcs11.conf and system .module directories honoured all tiers, every explicit override still won, and list-modules resolved the library-backed module through the same precedence"
+
+    rmdir \
+      /etc/pkcs11/modules /etc/pkcs11 \
+      /run/pkcs11/modules /run/pkcs11 \
+      /usr/share/p11-kit/modules /usr/share/p11-kit
 
     rm -f \
       /etc/pki/trust/anchors/admin.pem \
