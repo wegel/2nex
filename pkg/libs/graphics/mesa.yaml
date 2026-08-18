@@ -6,7 +6,7 @@ package:
   version: 24.2.7
   description: Open-source OpenGL/Vulkan graphics drivers
   homepage: https://mesa3d.org/
-  checksum: c17b4e9c18fe9583d5c8c60daeb5d47351e17c73cac06a49417053c0a2fa3a02
+  checksum: 122404af405511bffdf9e3d62c71099f2a258e2b5b8a76738058177289188ba8
 
 sources:
 - name: mesa
@@ -21,6 +21,9 @@ sources:
 - name: markupsafe
   url: https://files.pythonhosted.org/packages/b2/97/5d42485e71dfc078108a86d6de8fa46db44a1a9295e89c5d6d4a06e23a62/markupsafe-3.0.2.tar.gz
   sha256: ee55d3edf80167e48ea11a923c7386f4669df67d7994554387f84e7d8b0a2bf0
+- name: uapi_config
+  file: pkg/libs/graphics/mesa-drirc-uapi-config.patch
+  sha256: 24c45f5d09373b3f147ff096c0a0f11b31ff8fbac35d1853a89f1a52efb9d7a7
 
 dependencies:
 - name: glibc
@@ -33,6 +36,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
   commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: meson
   commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
 - name: ninja
@@ -104,7 +109,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4137:1304, 16691:7140, 37295:15415, 62119:17565, 82845:19531, 103370:21630, 123986:27013, 157134:31267, 186415:33851, 206198:245936]
+  profile: [4137:310, 16691:667, 37272:7614, 62139:10512, 82814:13389, 103588:18610, 124297:20477, 157500:24259, 186518:30259, 206498:293992]
 
   script: |
     # install python dependencies for mesa code generation first (before cd)
@@ -138,6 +143,9 @@ build:
     # LLVM 21 changed Module::setTargetTriple to take llvm::Triple.
     sed -i 's|setTargetTriple(TM->getTargetTriple().getTriple())|setTargetTriple(Triple(TM->getTargetTriple().getTriple()))|' src/amd/llvm/ac_llvm_helper.cpp
 
+    # merge drirc configuration from /usr, /run, and /etc UAPI directories
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
     export CFLAGS="${CFLAGS} -D_DEFAULT_SOURCE -D_GNU_SOURCE"
     export CXXFLAGS="${CXXFLAGS} -D_DEFAULT_SOURCE -D_GNU_SOURCE"
 
@@ -162,6 +170,203 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # smoke check for the merged UAPI drirc.d/drirc reader (src/util/xmlconfig.c)
+    ninja -C build src/util/libmesa_util.a src/util/libxmlconfig.a src/util/drirc_uapi_smoke
+    drirc_smoke="${WORK_DIR}/build/src/util/drirc_uapi_smoke"
+    drirc_home="${WORK_DIR}/drirc-home"
+    drirc_configdir="${WORK_DIR}/drirc-configdir"
+    saved_home="${HOME:-}"
+    drirc_fixtures=""
+
+    # every fixture this smoke creates is tracked here and removed by name;
+    # it never globs or deletes a directory's full contents, so any
+    # pre-existing file in these standard directories is left untouched.
+    cleanup_drirc_smoke() {
+      for fixture in ${drirc_fixtures}; do
+        rm -f "${fixture}"
+      done
+      export HOME="${saved_home}"
+    }
+    trap cleanup_drirc_smoke EXIT HUP INT TERM
+
+    mkdir -p /etc/drirc.d /run/drirc.d /usr/share/drirc.d \
+      "${drirc_home}" "${drirc_configdir}"
+    export HOME="${drirc_home}"
+
+    require_drirc_absent() {
+      path="$1"
+      if [ -e "${path}" ] || [ -L "${path}" ]; then
+        printf '%s\n' \
+          "drirc smoke: fixture path already exists, refusing to overwrite: ${path}" >&2
+        exit 1
+      fi
+    }
+    track_drirc_fixture() {
+      drirc_fixtures="${drirc_fixtures} $1"
+    }
+    write_drirc_conf() {
+      # $1 = path, remaining args = "name=value" pairs
+      path="$1"; shift
+      require_drirc_absent "${path}"
+      {
+        printf '%s\n' '<?xml version="1.0" standalone="yes"?>'
+        printf '%s\n' '<driconf>' '    <device>'
+        for pair in "$@"; do
+          name="${pair%%=*}"
+          value="${pair#*=}"
+          printf '        <application name="smoke" executable="smoke-app">\n'
+          printf '            <option name="%s" value="%s" />\n' "${name}" "${value}"
+          printf '        </application>\n'
+        done
+        printf '%s\n' '    </device>' '</driconf>'
+      } > "${path}"
+      track_drirc_fixture "${path}"
+    }
+    write_drirc_empty() {
+      path="$1"
+      require_drirc_absent "${path}"
+      : > "${path}"
+      track_drirc_fixture "${path}"
+    }
+    write_drirc_devnull() {
+      path="$1"
+      require_drirc_absent "${path}"
+      ln -s /dev/null "${path}"
+      track_drirc_fixture "${path}"
+    }
+    forget_drirc_fixture() {
+      path="$1"
+      rm -f "${path}"
+      drirc_fixtures="$(printf '%s\n' "${drirc_fixtures}" | sed "s# ${path}\$##; s# ${path} # #")"
+    }
+    check_drirc_output() {
+      expected_output="$1"
+      actual_output="$2"
+      if [ "${actual_output}" != "${expected_output}" ]; then
+        printf '%s\n' \
+          'unexpected drirc smoke output' \
+          "expected: ${expected_output}" \
+          "actual: ${actual_output}" >&2
+        exit 1
+      fi
+    }
+    # output columns: smoke_vendor smoke_run smoke_etc smoke_shared
+    # smoke_lower_only smoke_alpha smoke_zeta smoke_order smoke_main
+    # smoke_home smoke_configdir smoke_env
+
+    # vendor-only, runtime-only, and administrator-only drop-ins
+    write_drirc_conf /usr/share/drirc.d/zz-smoke-a-vendor.conf smoke_vendor=1
+    write_drirc_conf /run/drirc.d/zz-smoke-a-run.conf smoke_run=2
+    write_drirc_conf /etc/drirc.d/zz-smoke-a-etc.conf smoke_etc=3
+    check_drirc_output "1 2 3 -1 -1 -1 -1 -1 -1 -1 -1 -1" "$("${drirc_smoke}")"
+
+    # same-basename shadowing: run replaces vendor, etc replaces both,
+    # and a lower-only key does not leak once its basename is shadowed
+    write_drirc_conf /usr/share/drirc.d/zz-smoke-b-shared.conf smoke_shared=100 smoke_lower_only=999
+    check_drirc_output "1 2 3 100 999 -1 -1 -1 -1 -1 -1 -1" "$("${drirc_smoke}")"
+    write_drirc_conf /run/drirc.d/zz-smoke-b-shared.conf smoke_shared=200
+    check_drirc_output "1 2 3 200 -1 -1 -1 -1 -1 -1 -1 -1" "$("${drirc_smoke}")"
+    write_drirc_conf /etc/drirc.d/zz-smoke-b-shared.conf smoke_shared=300
+    check_drirc_output "1 2 3 300 -1 -1 -1 -1 -1 -1 -1 -1" "$("${drirc_smoke}")"
+    forget_drirc_fixture /usr/share/drirc.d/zz-smoke-b-shared.conf
+    forget_drirc_fixture /run/drirc.d/zz-smoke-b-shared.conf
+    forget_drirc_fixture /etc/drirc.d/zz-smoke-b-shared.conf
+
+    # an empty file, or a symlink to /dev/null, masks its vendor
+    # counterpart, both from /etc and from /run
+    write_drirc_conf /usr/share/drirc.d/zz-smoke-mask-etc-empty.conf smoke_shared=111
+    write_drirc_empty /etc/drirc.d/zz-smoke-mask-etc-empty.conf
+    check_drirc_output "1 2 3 -1 -1 -1 -1 -1 -1 -1 -1 -1" "$("${drirc_smoke}")"
+    forget_drirc_fixture /usr/share/drirc.d/zz-smoke-mask-etc-empty.conf
+    forget_drirc_fixture /etc/drirc.d/zz-smoke-mask-etc-empty.conf
+
+    write_drirc_conf /usr/share/drirc.d/zz-smoke-mask-etc-devnull.conf smoke_shared=111
+    write_drirc_devnull /etc/drirc.d/zz-smoke-mask-etc-devnull.conf
+    check_drirc_output "1 2 3 -1 -1 -1 -1 -1 -1 -1 -1 -1" "$("${drirc_smoke}")"
+    forget_drirc_fixture /usr/share/drirc.d/zz-smoke-mask-etc-devnull.conf
+    forget_drirc_fixture /etc/drirc.d/zz-smoke-mask-etc-devnull.conf
+
+    write_drirc_conf /usr/share/drirc.d/zz-smoke-mask-run-empty.conf smoke_shared=111
+    write_drirc_empty /run/drirc.d/zz-smoke-mask-run-empty.conf
+    check_drirc_output "1 2 3 -1 -1 -1 -1 -1 -1 -1 -1 -1" "$("${drirc_smoke}")"
+    forget_drirc_fixture /usr/share/drirc.d/zz-smoke-mask-run-empty.conf
+    forget_drirc_fixture /run/drirc.d/zz-smoke-mask-run-empty.conf
+
+    write_drirc_conf /usr/share/drirc.d/zz-smoke-mask-run-devnull.conf smoke_shared=111
+    write_drirc_devnull /run/drirc.d/zz-smoke-mask-run-devnull.conf
+    check_drirc_output "1 2 3 -1 -1 -1 -1 -1 -1 -1 -1 -1" "$("${drirc_smoke}")"
+    forget_drirc_fixture /usr/share/drirc.d/zz-smoke-mask-run-devnull.conf
+    forget_drirc_fixture /run/drirc.d/zz-smoke-mask-run-devnull.conf
+
+    # distinct basenames in all three trees each load exactly once
+    write_drirc_conf /usr/share/drirc.d/zz-smoke-d-01-alpha.conf smoke_alpha=7
+    write_drirc_conf /run/drirc.d/zz-smoke-d-05-mid.conf smoke_run=8
+    write_drirc_conf /etc/drirc.d/zz-smoke-d-99-zeta.conf smoke_zeta=9
+    check_drirc_output "1 8 3 -1 -1 7 9 -1 -1 -1 -1 -1" "$("${drirc_smoke}")"
+    forget_drirc_fixture /usr/share/drirc.d/zz-smoke-d-01-alpha.conf
+    forget_drirc_fixture /run/drirc.d/zz-smoke-d-05-mid.conf
+    forget_drirc_fixture /etc/drirc.d/zz-smoke-d-99-zeta.conf
+
+    # global alphanumeric filename order, not directory-tier priority,
+    # decides which distinct basename is parsed later: the vendor file's
+    # later name wins even though /etc is the higher-priority tier
+    write_drirc_conf /etc/drirc.d/zz-smoke-e-01-order.conf smoke_order=500
+    write_drirc_conf /usr/share/drirc.d/zz-smoke-e-99-order.conf smoke_order=600
+    check_drirc_output "1 2 3 -1 -1 -1 -1 600 -1 -1 -1 -1" "$("${drirc_smoke}")"
+    forget_drirc_fixture /etc/drirc.d/zz-smoke-e-01-order.conf
+    forget_drirc_fixture /usr/share/drirc.d/zz-smoke-e-99-order.conf
+
+    # main-file selection: /etc, then /run, then /usr/share, and an empty
+    # higher main file masks a lower one
+    write_drirc_conf /usr/share/drirc smoke_main=1
+    check_drirc_output "1 2 3 -1 -1 -1 -1 -1 1 -1 -1 -1" "$("${drirc_smoke}")"
+    write_drirc_conf /run/drirc smoke_main=2
+    check_drirc_output "1 2 3 -1 -1 -1 -1 -1 2 -1 -1 -1" "$("${drirc_smoke}")"
+    write_drirc_conf /etc/drirc smoke_main=3
+    check_drirc_output "1 2 3 -1 -1 -1 -1 -1 3 -1 -1 -1" "$("${drirc_smoke}")"
+    forget_drirc_fixture /etc/drirc
+    write_drirc_empty /etc/drirc
+    check_drirc_output "1 2 3 -1 -1 -1 -1 -1 -1 -1 -1 -1" "$("${drirc_smoke}")"
+    forget_drirc_fixture /etc/drirc
+    forget_drirc_fixture /run/drirc
+    forget_drirc_fixture /usr/share/drirc
+
+    # the selected main file is parsed after the merged drop-ins
+    write_drirc_conf /usr/share/drirc.d/zz-smoke-g-shared.conf smoke_shared=10
+    write_drirc_conf /usr/share/drirc smoke_shared=20
+    check_drirc_output "1 2 3 20 -1 -1 -1 -1 -1 -1 -1 -1" "$("${drirc_smoke}")"
+
+    # $HOME/.drirc still wins last, over both drop-ins and the main file
+    write_drirc_conf "${drirc_home}/.drirc" smoke_shared=30 smoke_home=99
+    check_drirc_output "1 2 3 30 -1 -1 -1 -1 -1 99 -1 -1" "$("${drirc_smoke}")"
+    forget_drirc_fixture /usr/share/drirc.d/zz-smoke-g-shared.conf
+    forget_drirc_fixture /usr/share/drirc
+    forget_drirc_fixture "${drirc_home}/.drirc"
+
+    # DRIRC_CONFIGDIR replaces every compiled tier, keeps its own ordinary
+    # multi-file order, and still parses $HOME/.drirc after it
+    write_drirc_conf "${drirc_configdir}/00-a.conf" smoke_configdir=1
+    write_drirc_conf "${drirc_configdir}/01-b.conf" smoke_configdir=2
+    check_drirc_output "-1 -1 -1 -1 -1 -1 -1 -1 -1 -1 2 -1" \
+      "$(DRIRC_CONFIGDIR="${drirc_configdir}" "${drirc_smoke}")"
+    write_drirc_conf "${drirc_home}/.drirc" smoke_configdir=3
+    check_drirc_output "-1 -1 -1 -1 -1 -1 -1 -1 -1 -1 3 -1" \
+      "$(DRIRC_CONFIGDIR="${drirc_configdir}" "${drirc_smoke}")"
+    forget_drirc_fixture "${drirc_configdir}/00-a.conf"
+    forget_drirc_fixture "${drirc_configdir}/01-b.conf"
+    forget_drirc_fixture "${drirc_home}/.drirc"
+
+    # a same-named process-environment option still overrides a file value
+    write_drirc_conf /etc/drirc.d/zz-smoke-j-env.conf smoke_env=50
+    check_drirc_output "1 2 3 -1 -1 -1 -1 -1 -1 -1 -1 50" "$("${drirc_smoke}")"
+    output="$(smoke_env=777 "${drirc_smoke}" 2>/dev/null)"
+    check_drirc_output "1 2 3 -1 -1 -1 -1 -1 -1 -1 -1 777" "${output}"
+    forget_drirc_fixture /etc/drirc.d/zz-smoke-j-env.conf
+
+    cleanup_drirc_smoke
+    trap - EXIT HUP INT TERM
+    echo "drirc UAPI smoke: OK"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true

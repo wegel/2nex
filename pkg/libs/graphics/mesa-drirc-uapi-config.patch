@@ -1,0 +1,282 @@
+Subject: merge drirc configuration from UAPI directories
+Source: downstream patch for Mesa 24.2.7
+Upstream: not submitted; needs agreement on the /run drirc.d and drirc paths
+
+driParseConfigFiles() only ever read DATADIR "/drirc.d" and SYSCONFDIR
+"/drirc" (or, if DRIRC_CONFIGDIR was set, only that directory), so an
+administrator drop-in could not shadow a single vendor file and there was
+no /run tier for transient overrides.
+
+Merge SYSCONFDIR "/drirc.d" (administrator), "/run/drirc.d" (runtime), and
+DATADIR "/drirc.d" (vendor) by basename: a runtime file replaces the same
+vendor basename, an administrator file replaces both, and a selected empty
+file or a symlink to /dev/null masks a same-named file in a lower
+directory. The retained basenames are parsed once each in global
+alphanumeric order, preserving this reader's existing later-file-wins
+behavior for distinct option names. After the merged drop-ins, parse only
+the first existing main file among SYSCONFDIR "/drirc", "/run/drirc", and
+DATADIR "/drirc"; an empty higher file still counts as existing and masks
+a lower main file. $HOME/.drirc keeps parsing last, exactly as before.
+DRIRC_CONFIGDIR keeps replacing every compiled system read with the single
+named directory in its ordinary order, followed by $HOME/.drirc.
+
+Also add a drirc_uapi_smoke helper executable, built from a new
+src/util/tests/drirc_uapi_smoke.c, that links the real xmlconfig and
+mesa_util static libraries and calls only the public
+driParseOptionInfo/driParseConfigFiles API. It does not reimplement the
+selection algorithm; the package build script drives it by writing real
+drirc XML fixtures to the merged directories between invocations and
+asserting on the printed option values.
+
+--- a/src/util/xmlconfig.c
++++ b/src/util/xmlconfig.c
+@@ -1066,6 +1066,149 @@
+
+    free(entries);
+ }
++
++struct drircDirElem {
++   char *d_name;
++   char *path;
++};
++
++static int
++drircDirElemCompare(const void *a, const void *b)
++{
++   return strcmp(((const struct drircDirElem *)a)->d_name,
++                 ((const struct drircDirElem *)b)->d_name);
++}
++
++static bool
++drircDirElemExists(const struct drircDirElem *elems, size_t count,
++                   const char *name)
++{
++   size_t i;
++
++   for (i = 0; i < count; i++) {
++      if (!strcmp(elems[i].d_name, name))
++         return true;
++   }
++   return false;
++}
++
++/** \brief Collect the basenames in dirname that are not already recorded.
++ *
++ * An empty file, or a symlink to /dev/null, masks a same-named file in a
++ * lower-priority directory: the basename is recorded with no path so a
++ * later, lower-priority directory does not supply it either.
++ */
++static void
++drircDirCollect(struct drircDirElem **elems, size_t *count,
++                const char *dirname)
++{
++   struct dirent **entries = NULL;
++   int i, n = scandir(dirname, &entries, scandir_filter, alphasort);
++
++   if (n < 0)
++      return;
++
++   for (i = 0; i < n; i++) {
++      const char *name = entries[i]->d_name;
++
++      if (!drircDirElemExists(*elems, *count, name)) {
++         char filename[PATH_MAX];
++         struct stat st;
++         struct drircDirElem *newElems;
++
++         snprintf(filename, PATH_MAX, "%s/%s", dirname, name);
++
++         /* A dropped basename here would silently expose a lower-priority
++          * file, so this must abort rather than continue with an altered
++          * precedence, matching this file's other checked allocations.
++          */
++         if (*count >= SIZE_MAX / sizeof(**elems) - 1) {
++            fprintf(stderr, "%s: %d: out of memory.\n", __FILE__, __LINE__);
++            abort();
++         }
++         newElems = realloc(*elems, (*count + 1) * sizeof(**elems));
++         if (!newElems) {
++            fprintf(stderr, "%s: %d: out of memory.\n", __FILE__, __LINE__);
++            abort();
++         }
++         *elems = newElems;
++
++         XSTRDUP((*elems)[*count].d_name, name);
++         if (stat(filename, &st) == 0 && st.st_size > 0)
++            XSTRDUP((*elems)[*count].path, filename);
++         else
++            (*elems)[*count].path = NULL;
++         (*count)++;
++      }
++
++      free(entries[i]);
++   }
++
++   free(entries);
++}
++
++/** \brief Merge and parse the vendor, runtime, and administrator drop-in
++ * directories.
++ *
++ * Merge SYSCONFDIR "/drirc.d" (administrator), "/run/drirc.d" (runtime),
++ * and DATADIR "/drirc.d" (vendor) by basename. A runtime file replaces the
++ * same vendor basename, and an administrator file replaces both. The
++ * retained basenames are then parsed once each in global alphanumeric
++ * order, preserving this reader's later-file-wins behavior for distinct
++ * option names.
++ */
++static void
++parseConfigDirTiers(struct OptConfData *data)
++{
++   static const char *const dirs[] = {
++      SYSCONFDIR "/drirc.d",
++      "/run/drirc.d",
++      DATADIR "/drirc.d",
++   };
++   struct drircDirElem *elems = NULL;
++   size_t count = 0;
++   size_t i;
++
++   for (i = 0; i < ARRAY_SIZE(dirs); i++)
++      drircDirCollect(&elems, &count, dirs[i]);
++
++   if (count > 1)
++      qsort(elems, count, sizeof(*elems), drircDirElemCompare);
++
++   for (i = 0; i < count; i++) {
++      if (elems[i].path)
++         parseOneConfigFile(data, elems[i].path);
++      free(elems[i].d_name);
++      free(elems[i].path);
++   }
++   free(elems);
++}
++
++/** \brief Parse the highest-priority existing main configuration file.
++ *
++ * Only the first existing file among SYSCONFDIR "/drirc", "/run/drirc",
++ * and DATADIR "/drirc" is parsed. An empty higher file still exists, so it
++ * masks a lower main file without contributing its own options.
++ */
++static void
++parseMainConfigFile(struct OptConfData *data)
++{
++   static const char *const files[] = {
++      SYSCONFDIR "/drirc",
++      "/run/drirc",
++      DATADIR "/drirc",
++   };
++   size_t i;
++
++   for (i = 0; i < ARRAY_SIZE(files); i++) {
++      struct stat st;
++
++      if (stat(files[i], &st) == 0) {
++         parseOneConfigFile(data, files[i]);
++         return;
++      }
++   }
++}
+ #else
+ #  include "driconf_static.h"
+
+@@ -1203,12 +1346,14 @@
+ #if WITH_XMLCONFIG
+    char *home, *configdir;
+
+-   /* parse from either $DRIRC_CONFIGDIR or $datadir/drirc.d */
++   /* parse from either $DRIRC_CONFIGDIR or the merged UAPI drirc.d tiers
++    * followed by the selected main drirc file
++    */
+    if ((configdir = getenv("DRIRC_CONFIGDIR")))
+       parseConfigDir(&userData, configdir);
+    else {
+-      parseConfigDir(&userData, DATADIR "/drirc.d");
+-      parseOneConfigFile(&userData, SYSCONFDIR "/drirc");
++      parseConfigDirTiers(&userData);
++      parseMainConfigFile(&userData);
+    }
+
+    if ((home = getenv("HOME"))) {
+--- a/src/util/meson.build
++++ b/src/util/meson.build
+@@ -321,6 +321,16 @@
+   link_with : _libxmlconfig,
+ )
+
++if use_xmlconfig
++  executable(
++    'drirc_uapi_smoke',
++    files('tests/drirc_uapi_smoke.c'),
++    dependencies : [idep_mesautil, idep_xmlconfig],
++    c_args : [c_xmlconfig_arg],
++    build_by_default : false,
++  )
++endif
++
+ files_xxd = files('xxd.py')
+ glsl2spirv = files('glsl2spirv.py')
+
+--- /dev/null
++++ b/src/util/tests/drirc_uapi_smoke.c
+@@ -0,0 +1,60 @@
++/*
++ * Smoke check for the merged UAPI drirc.d and drirc reader in xmlconfig.c.
++ *
++ * This program only calls the real driParseOptionInfo/driParseConfigFiles
++ * API; it does not reimplement the selection algorithm. The build script
++ * that invokes it creates and removes the drirc fixture files between
++ * invocations and asserts on the printed option values.
++ */
++
++#include <stdio.h>
++#include <driconf.h>
++#include <xmlconfig.h>
++
++int
++main(void)
++{
++   driInjectExecName("smoke-app");
++
++   driOptionDescription driconf[] = {
++      DRI_CONF_SECTION_MISCELLANEOUS
++      DRI_CONF_OPT_I(smoke_vendor, -1, -1, 999, "vendor tier option")
++      DRI_CONF_OPT_I(smoke_run, -1, -1, 999, "runtime tier option")
++      DRI_CONF_OPT_I(smoke_etc, -1, -1, 999, "administrator tier option")
++      DRI_CONF_OPT_I(smoke_shared, -1, -1, 999, "shared basename option")
++      DRI_CONF_OPT_I(smoke_lower_only, -1, -1, 999, "lower-only option")
++      DRI_CONF_OPT_I(smoke_alpha, -1, -1, 999, "distinct basename a")
++      DRI_CONF_OPT_I(smoke_zeta, -1, -1, 999, "distinct basename z")
++      DRI_CONF_OPT_I(smoke_order, -1, -1, 999, "global filename order option")
++      DRI_CONF_OPT_I(smoke_main, -1, -1, 999, "main file option")
++      DRI_CONF_OPT_I(smoke_home, -1, -1, 999, "home file option")
++      DRI_CONF_OPT_I(smoke_configdir, -1, -1, 999, "DRIRC_CONFIGDIR option")
++      DRI_CONF_OPT_I(smoke_env, -1, -1, 999, "process environment option")
++   };
++   unsigned num_options = sizeof(driconf) / sizeof(driconf[0]);
++
++   driOptionCache info = {0};
++   driParseOptionInfo(&info, driconf, num_options);
++
++   driOptionCache cache;
++   driParseConfigFiles(&cache, &info, 0, "smoke", "smoke", NULL,
++                       NULL, 0, NULL, 0);
++
++   printf("%d %d %d %d %d %d %d %d %d %d %d %d\n",
++          driQueryOptioni(&cache, "smoke_vendor"),
++          driQueryOptioni(&cache, "smoke_run"),
++          driQueryOptioni(&cache, "smoke_etc"),
++          driQueryOptioni(&cache, "smoke_shared"),
++          driQueryOptioni(&cache, "smoke_lower_only"),
++          driQueryOptioni(&cache, "smoke_alpha"),
++          driQueryOptioni(&cache, "smoke_zeta"),
++          driQueryOptioni(&cache, "smoke_order"),
++          driQueryOptioni(&cache, "smoke_main"),
++          driQueryOptioni(&cache, "smoke_home"),
++          driQueryOptioni(&cache, "smoke_configdir"),
++          driQueryOptioni(&cache, "smoke_env"));
++
++   driDestroyOptionCache(&cache);
++   driDestroyOptionInfo(&info);
++   return 0;
++}
