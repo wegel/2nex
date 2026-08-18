@@ -6,12 +6,21 @@ package:
   version: 1.30.0
   description: Input device management and event handling library
   homepage: https://www.freedesktop.org/wiki/Software/libinput/
-  checksum: f10e3b93488d61fb5e8d5ede7112cb7ffd4a4be1d3f37726e534500785970465
+  checksum: e7b45555dc858e140092015f00975fe1cd6f1804d94071d715d9d7a05590b6db
 
 sources:
 - name: libinput
   url: https://gitlab.freedesktop.org/libinput/libinput/-/archive/1.30.0/libinput-1.30.0.tar.gz
   sha256: fcce701746b8f5ee57c6724e963496d2223a9639856c6d1b811cff38e6dd4465
+- name: uapi_config
+  file: pkg/libs/input/libinput-uapi-config.patch
+  sha256: a1bdde46abd07e48e1829acd6ac749881f0dbe0ce86aa689bf63a096c363ac15
+- name: uapi_smoke
+  file: pkg/libs/input/libinput-uapi-smoke.c
+  sha256: 38bb03c5cc05904ee26dd82dedfcd3e93921f8e1701a2d6223211093bcbde6af
+- name: uapi_check
+  file: pkg/libs/input/libinput-uapi-check.sh
+  sha256: 37b5bae84f108c4f5e5038650db43c1cdd51b47c23bc5a61d888d0b5c4293ab6
 
 dependencies:
 - name: glibc
@@ -58,17 +67,23 @@ dependencies:
   commit: x86_64/pkg/libs/input/mtdev/1.1.7/bundles/dev
 - name: systemd
   commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4155:30315, 8291:43119, 12390:53508, 16486:61250, 20622:68215, 24735:73930, 25215:75179]
+  profile: [4147:873, 8283:1129, 12382:1271, 16482:4977, 20617:5122, 24770:5123, 25557:5253]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     meson setup build \
       --prefix=/usr \
+      --sysconfdir=/etc \
       --buildtype=release \
       -Dtests=false \
       -Ddocumentation=false \
@@ -77,6 +92,14 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # Exercise the newly built, installed libinput-quirks tool and libinput.so
+    # through the real quirks_init_subsystem() reader instead of reimplementing
+    # its tier-merge and masking rules; see the check script for detail.
+    sh "/${SOURCE_uapi_check}" \
+      "${OUT_DIR}" \
+      "${WORK_DIR}" \
+      "/${SOURCE_uapi_smoke}"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true

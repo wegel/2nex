@@ -1,0 +1,216 @@
+Subject: merge quirks configuration from UAPI vendor, run, and etc tiers
+Source: downstream patch for libinput 1.30.0
+Upstream: not submitted; needs agreement on the /run/libinput and
+  /etc/libinput tiers
+
+quirks_init_subsystem() only ever scanned one vendor directory
+(LIBINPUT_QUIRKS_DIR, compiled from datadir) and then parsed one fixed
+administrator file (LIBINPUT_QUIRKS_OVERRIDE_FILE, compiled from
+prefix/sysconfdir/libinput/local-overrides.quirks). Combined with a
+manifest that never passed --sysconfdir, that override file compiled to
+/usr/etc/libinput/local-overrides.quirks, a path under the immutable /usr
+tree that a machine owner can never write. There was also no /run tier at
+all, so a transient override had nowhere to go.
+
+Passing --sysconfdir=/etc moves the administrator directory
+(LIBINPUT_QUIRKS_ETC_DIR, now exactly /etc/libinput, the same directory
+that already held local-overrides.quirks) onto a writable path. This patch
+adds a second new directory, LIBINPUT_QUIRKS_RUN_DIR (/run/libinput), and
+changes quirks_init_subsystem() to merge the vendor, /run, and /etc quirks
+directories by basename: a /run file replaces the same vendor basename, an
+/etc file replaces both, and a selected empty file or a symlink to
+/dev/null masks a same-named file in a lower-priority tier. The retained
+basenames are then parsed once each in the same global alphanumeric order
+scandir() + versionsort() already used per directory, preserving this
+reader's existing later-file-wins behaviour for distinct quirks sections.
+A missing /run or /etc directory is not an error; a missing or empty
+vendor directory still is, matching parse_files()'s existing
+allow_empty_directory handling. Because /etc/libinput is scanned like any
+other tier directory and is_data_file() already accepts the
+local-overrides.quirks basename, that file keeps working without being
+parsed a second time, so the separate parse_file(ctx, override_file) call
+is removed.
+
+LIBINPUT_QUIRKS_DIR keeps replacing the whole system search exactly as
+before: libinput.c only sets a non-NULL override_file when it did not use
+the environment variable, and quirks_init_subsystem() now uses that same
+signal to skip tiering entirely and scan only the caller-supplied
+directory, as upstream did.
+
+meson.build also stops declaring /etc/libinput as a package output via
+install_emptydir(); Nex package manifests must not install anything below
+/etc, and the reader tolerates a missing /etc/libinput directory.
+--- a/meson.build	2025-11-24 22:40:43.000000000 -0500
++++ b/meson.build	2026-08-18 19:32:50.366080780 -0400
+@@ -383,0 +384,2 @@
++config_h.set_quoted('LIBINPUT_QUIRKS_RUN_DIR', '/run' / 'libinput')
++config_h.set_quoted('LIBINPUT_QUIRKS_ETC_DIR', dir_overrides)
+@@ -400,3 +401,0 @@
+-
+-# Create /etc/libinput
+-install_emptydir(dir_etc / 'libinput')
+--- a/src/quirks.c	2025-11-24 22:40:43.000000000 -0500
++++ b/src/quirks.c	2026-08-18 19:33:17.075292511 -0400
+@@ -37,0 +38 @@
++#include <sys/stat.h>
+@@ -1243,0 +1245,141 @@
++/**
++ * One retained basename from the merged vendor/run/etc quirks search.
++ * path is NULL when the basename is masked: an empty file or a symlink to
++ * /dev/null in a higher-priority tier claimed the basename without
++ * contributing content, so no lower-priority file with the same basename
++ * may be parsed either.
++ */
++struct quirks_tier_file {
++	char *basename;
++	char *path;
++};
++
++static bool
++quirks_tier_file_claim(struct quirks_tier_file **files,
++		       size_t *nfiles,
++		       size_t *files_size,
++		       const char *basename,
++		       const char *content_path)
++{
++	for (size_t i = 0; i < *nfiles; i++) {
++		if (streq((*files)[i].basename, basename))
++			return true; /* a higher-priority tier already decided this basename */
++	}
++
++	if (*nfiles == *files_size) {
++		size_t new_size = *files_size ? *files_size * 2 : 16;
++		struct quirks_tier_file *tmp = realloc(*files, new_size * sizeof **files);
++
++		if (!tmp)
++			return false;
++
++		*files = tmp;
++		*files_size = new_size;
++	}
++
++	(*files)[*nfiles].basename = safe_strdup(basename);
++	(*files)[*nfiles].path = safe_strdup(content_path);
++	(*nfiles)++;
++
++	return true;
++}
++
++/**
++ * Scan one quirks tier directory and claim every basename it contains that
++ * no higher-priority tier already claimed. A missing or empty directory is
++ * only an error when required is true, matching parse_files()'s
++ * allow_empty_directory handling for the vendor tier.
++ */
++static bool
++quirks_scan_tier(struct quirks_context *ctx,
++		 struct quirks_tier_file **files,
++		 size_t *nfiles,
++		 size_t *files_size,
++		 const char *dir,
++		 bool required)
++{
++	struct dirent **namelist;
++	int ndev = scandir(dir, &namelist, is_data_file, versionsort);
++
++	if (ndev <= 0) {
++		if (required) {
++			qlog_error(ctx, "%s: failed to find data files\n", dir);
++			return false;
++		}
++		return true;
++	}
++
++	bool rc = true;
++
++	for (int idx = 0; idx < ndev; idx++) {
++		if (rc) {
++			char path[PATH_MAX];
++			struct stat st;
++			bool masked;
++
++			snprintf(path, sizeof(path), "%s/%s", dir, namelist[idx]->d_name);
++			masked = (stat(path, &st) != 0 || st.st_size == 0);
++
++			if (!quirks_tier_file_claim(files, nfiles, files_size,
++						    namelist[idx]->d_name,
++						    masked ? NULL : path)) {
++				qlog_error(ctx, "%s: out of memory\n", path);
++				rc = false;
++			}
++		}
++		free(namelist[idx]);
++	}
++	free(namelist);
++
++	return rc;
++}
++
++static int
++quirks_tier_file_cmp(const void *a, const void *b)
++{
++	const struct quirks_tier_file *fa = a;
++	const struct quirks_tier_file *fb = b;
++
++	return strverscmp(fa->basename, fb->basename);
++}
++
++/**
++ * Merge the vendor, /run, and /etc quirks tiers by basename, in that
++ * priority order (a later tier overlays an earlier one), then parse each
++ * retained basename once in global alphanumeric order. This keeps this
++ * reader's existing later-file-wins behaviour for distinct quirks sections
++ * while letting a higher tier fully replace a same-named lower file.
++ * local-overrides.quirks lives in the /etc tier and is picked up by that
++ * scan, so it is not parsed separately.
++ */
++static bool
++quirks_parse_tiered_files(struct quirks_context *ctx, const char *vendor_path)
++{
++	struct quirks_tier_file *files = NULL;
++	size_t nfiles = 0, files_size = 0;
++	bool rc;
++
++	rc = quirks_scan_tier(ctx, &files, &nfiles, &files_size,
++			      LIBINPUT_QUIRKS_ETC_DIR, false) &&
++	     quirks_scan_tier(ctx, &files, &nfiles, &files_size,
++			      LIBINPUT_QUIRKS_RUN_DIR, false) &&
++	     quirks_scan_tier(ctx, &files, &nfiles, &files_size,
++			      vendor_path, true);
++
++	if (rc && nfiles > 1)
++		qsort(files, nfiles, sizeof *files, quirks_tier_file_cmp);
++
++	for (size_t i = 0; rc && i < nfiles; i++) {
++		if (files[i].path)
++			rc = parse_file(ctx, files[i].path);
++	}
++
++	for (size_t i = 0; i < nfiles; i++) {
++		free(files[i].basename);
++		free(files[i].path);
++	}
++	free(files);
++
++	return rc;
++}
++
+@@ -1269,5 +1411,13 @@
+-	if (!parse_files(ctx, data_path, false))
+-		return NULL;
+-
+-	if (override_file && !parse_file(ctx, override_file))
+-		return NULL;
++	/* override_file is non-NULL only when the caller did not replace the
++	 * whole system search with LIBINPUT_QUIRKS_DIR. In that case, merge
++	 * the vendor, /run, and /etc quirks tiers by basename; local
++	 * overrides live in the /etc tier and are already covered by that
++	 * scan, so override_file itself is not parsed separately here.
++	 */
++	if (override_file) {
++		if (!quirks_parse_tiered_files(ctx, data_path))
++			return NULL;
++	} else {
++		if (!parse_files(ctx, data_path, false))
++			return NULL;
++	}
