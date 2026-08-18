@@ -6,12 +6,18 @@ package:
   version: 1.7.0
   description: GL Vendor-Neutral Dispatch library
   homepage: https://github.com/NVIDIA/libglvnd
-  checksum: ced4b702f83a40855d51edf59fd28a7f50686408db7de62f03aca00b3cda2f3f
+  checksum: b7a914309f4e10ea7f06a5d8b9e7dc083f9708cc0fb638d3fdc1b9d7c0291d62
 
 sources:
 - name: libglvnd
   url: https://github.com/NVIDIA/libglvnd/archive/v1.7.0.tar.gz
   sha256: 073e7292788d4d3eeb45ea6c7bdcce9bfdb3b3eef8d7dbd47f2f30dce046ef98
+- name: egl_vendor_config
+  file: pkg/libs/graphics/libglvnd-egl-vendor-uapi-config.patch
+  sha256: a4673a94c4539970e9e981721befe88a3cc8439b984abf41f5605f5cd4a9c0c4
+- name: egl_vendor_smoke
+  file: pkg/libs/graphics/libglvnd-egl-vendor-smoke.c
+  sha256: 9cd2461bc62d38e427a9a6b6e620d9f88192b5ffe19f45bfd8aa829b2eb13120
 
 dependencies:
 - name: glibc
@@ -64,14 +70,19 @@ dependencies:
   commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
 - name: xorgproto
   commit: x86_64/pkg/libs/x11/xorgproto/2024.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4147:4220, 8285:5827, 12482:5979, 16591:6190, 17891:7710]
+  profile: [4107:2830, 8242:3653, 12386:4694, 16501:8495, 18047:9366]
 
   script: |
+    set -eu
+
     tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_egl_vendor_config}"
 
     meson setup build \
       --prefix=/usr \
@@ -82,6 +93,144 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # Build a third, distinctly-named EGL vendor library from the same
+    # upstream dummy vendor source that "ninja -C build" already built as
+    # libEGL_dummy0.so.0 and libEGL_dummy1.so.0. The three-tier merge smoke
+    # needs three separately loaded vendors with distinct observable names.
+    dummy0="$(find "${WORK_DIR}/build/tests/dummy" -name 'libEGL_dummy0.so.0*' -type f | head -n1)"
+    dummy1="$(find "${WORK_DIR}/build/tests/dummy" -name 'libEGL_dummy1.so.0*' -type f | head -n1)"
+    vendor_libs="${WORK_DIR}/vendor-libs"
+    mkdir -p "${vendor_libs}"
+    cp "${dummy0}" "${vendor_libs}/libEGL_dummy0.so.0"
+    cp "${dummy1}" "${vendor_libs}/libEGL_dummy1.so.0"
+    gcc -shared -fPIC -std=gnu99 \
+      -DDUMMY_VENDOR_NAME='"dummy2"' \
+      -DUSE_ATTRIBUTE_CONSTRUCTOR -DHAVE_DIRENT_DTYPE -DHAVE_PTHREAD_RWLOCK \
+      -DHAVE_SYNC_INTRINSICS -DEGL_NO_X11 \
+      -I"${WORK_DIR}/include" -I"${WORK_DIR}/src/util" -I"${WORK_DIR}/tests/dummy" \
+      "${WORK_DIR}/tests/dummy/EGL_dummy.c" "${WORK_DIR}/src/util/glvnd_pthread.c" \
+      -lpthread -ldl \
+      -o "${vendor_libs}/libEGL_dummy2.so.0"
+
+    egl_query="${WORK_DIR}/egl-vendor-query"
+    gcc -std=c11 -Wall -Wextra -Werror \
+      -DEGL_EGLEXT_PROTOTYPES \
+      -I"${OUT_DIR}/usr/include" \
+      "/${SOURCE_egl_vendor_smoke}" \
+      -L"${OUT_DIR}/usr/lib" \
+      -Wl,-rpath,"${OUT_DIR}/usr/lib" \
+      -lEGL \
+      -o "${egl_query}"
+
+    egl_library_path="${OUT_DIR}/usr/lib:${vendor_libs}"
+
+    cleanup_egl_vendor_smoke() {
+      rm -f \
+        /etc/glvnd/egl_vendor.d/*.json \
+        /run/glvnd/egl_vendor.d/*.json \
+        /usr/share/glvnd/egl_vendor.d/*.json
+      rmdir \
+        /etc/glvnd/egl_vendor.d /etc/glvnd \
+        /run/glvnd/egl_vendor.d /run/glvnd \
+        /usr/share/glvnd/egl_vendor.d /usr/share/glvnd 2>/dev/null || true
+    }
+    trap cleanup_egl_vendor_smoke EXIT HUP INT TERM
+
+    test ! -e /etc/glvnd
+    test ! -e /run/glvnd
+    test ! -e /usr/share/glvnd
+    mkdir -p \
+      /etc/glvnd/egl_vendor.d \
+      /run/glvnd/egl_vendor.d \
+      /usr/share/glvnd/egl_vendor.d
+
+    write_vendor_json() {
+      printf '{\n    "file_format_version" : "1.0.0",\n    "ICD" : {\n        "library_path" : "%s"\n    }\n}\n' \
+        "$1" > "$2"
+    }
+    query_devices() {
+      LD_LIBRARY_PATH="${egl_library_path}" "${egl_query}"
+    }
+    check_output() {
+      expected_output="$1"
+      actual_output="$2"
+      if [ "${actual_output}" != "${expected_output}" ]; then
+        printf '%s\n' \
+          'unexpected EGL vendor smoke output' \
+          "expected: ${expected_output}" \
+          "actual: ${actual_output}" >&2
+        return 1
+      fi
+    }
+
+    # Vendor-only default discovery: a single vendor installed below
+    # /usr/share is found with no /etc or /run entries present.
+    write_vendor_json libEGL_dummy0.so.0 /usr/share/glvnd/egl_vendor.d/shared.json
+    check_output "$(printf '%s\n' 2 dummy0 dummy0)" "$(query_devices)"
+
+    # /run same-basename override: a /run entry with the same basename
+    # replaces the /usr/share entry instead of both loading.
+    write_vendor_json libEGL_dummy1.so.0 /run/glvnd/egl_vendor.d/shared.json
+    check_output "$(printf '%s\n' 2 dummy1 dummy1)" "$(query_devices)"
+
+    # /etc same-basename override: an /etc entry with the same basename
+    # replaces both the /run and /usr/share entries.
+    write_vendor_json libEGL_dummy2.so.0 /etc/glvnd/egl_vendor.d/shared.json
+    check_output "$(printf '%s\n' 2 dummy2 dummy2)" "$(query_devices)"
+
+    # An empty higher-priority file still claims the basename, so it masks
+    # the lower-priority file with the same name instead of falling back
+    # to it.
+    rm /etc/glvnd/egl_vendor.d/shared.json
+    : > /run/glvnd/egl_vendor.d/shared.json
+    check_output 0 "$(query_devices)"
+
+    # A higher-priority symlink to /dev/null behaves the same way: it
+    # claims the basename and masks the lower file, even though reading
+    # it back fails once selected.
+    rm /run/glvnd/egl_vendor.d/shared.json
+    ln -s /dev/null /etc/glvnd/egl_vendor.d/shared.json
+    check_output 0 "$(query_devices)"
+    rm /etc/glvnd/egl_vendor.d/shared.json
+    rm /usr/share/glvnd/egl_vendor.d/shared.json
+
+    # Distinct basenames across all three tiers all load together, in
+    # bytewise basename order regardless of which tier each came from.
+    write_vendor_json libEGL_dummy2.so.0 /etc/glvnd/egl_vendor.d/10-etc.json
+    write_vendor_json libEGL_dummy1.so.0 /run/glvnd/egl_vendor.d/20-run.json
+    write_vendor_json libEGL_dummy0.so.0 /usr/share/glvnd/egl_vendor.d/30-share.json
+    check_output "$(printf '%s\n' 6 dummy2 dummy2 dummy1 dummy1 dummy0 dummy0)" \
+      "$(query_devices)"
+
+    # __EGL_VENDOR_LIBRARY_DIRS still replaces the compiled default tiers
+    # outright; it does not merge with them.
+    explicit_dir_one="${WORK_DIR}/explicit-egl-vendor-dir-one"
+    explicit_dir_two="${WORK_DIR}/explicit-egl-vendor-dir-two"
+    mkdir -p "${explicit_dir_one}" "${explicit_dir_two}"
+    write_vendor_json libEGL_dummy1.so.0 "${explicit_dir_one}/shared.json"
+    write_vendor_json libEGL_dummy2.so.0 "${explicit_dir_two}/shared.json"
+    check_output "$(printf '%s\n' 4 dummy1 dummy1 dummy2 dummy2)" \
+      "$(__EGL_VENDOR_LIBRARY_DIRS="${explicit_dir_one}:${explicit_dir_two}" \
+        LD_LIBRARY_PATH="${egl_library_path}" "${egl_query}")"
+
+    # __EGL_VENDOR_LIBRARY_FILENAMES still replaces the compiled default
+    # tiers outright, as an exclusive list of exact files.
+    explicit_file_one="${WORK_DIR}/explicit-egl-vendor-one.json"
+    explicit_file_two="${WORK_DIR}/explicit-egl-vendor-two.json"
+    write_vendor_json libEGL_dummy0.so.0 "${explicit_file_one}"
+    write_vendor_json libEGL_dummy2.so.0 "${explicit_file_two}"
+    check_output "$(printf '%s\n' 4 dummy0 dummy0 dummy2 dummy2)" \
+      "$(__EGL_VENDOR_LIBRARY_FILENAMES="${explicit_file_one}:${explicit_file_two}" \
+        LD_LIBRARY_PATH="${egl_library_path}" "${egl_query}")"
+
+    rm -f /etc/glvnd/egl_vendor.d/10-etc.json \
+      /run/glvnd/egl_vendor.d/20-run.json \
+      /usr/share/glvnd/egl_vendor.d/30-share.json
+    cleanup_egl_vendor_smoke
+    trap - EXIT HUP INT TERM
+
+    printf 'libglvnd EGL vendor UAPI smoke: /etc, /run, /usr/share merged and masked as expected\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
