@@ -6,12 +6,18 @@ package:
   version: 4.20.3
   description: GTK4 toolkit for creating graphical user interfaces
   homepage: https://www.gtk.org/
-  checksum: 40b25f11273cb997b8d5bbce3691af483bb2ca16a6b31208ba9a85b23754a25d
+  checksum: 2b2819c8c4a80a6112cf90828ab5c0c2168302608682047e21550dc20e1b811a
 
 sources:
 - name: gtk4
   url: https://download.gnome.org/sources/gtk/4.20/gtk-4.20.3.tar.xz
   sha256: 2873f2903088a66c71173ea2ed85ffae266a66b972c3a4842bbb2f6f187ec153
+- name: settings_config
+  file: pkg/libs/graphics/gtk4-uapi-settings.patch
+  sha256: cf42af1b78283b73bccf0341d8e0edfc3722857818993cb7ae2f2ad597ece5d7
+- name: settings_smoke
+  file: pkg/libs/graphics/gtk4-settings-smoke.c
+  sha256: c78484f46210b231a88a8ae344d54e4efce5a971a9dc298162672de5af6216e7
 
 dependencies:
 - name: glibc
@@ -22,6 +28,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
   commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: ncurses
@@ -109,11 +117,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4131:2333, 16481:3973, 37306:7721, 62051:14711, 78597:18365, 99377:23231, 119928:27824, 148810:32383, 177566:93592, 196267:94352]
+  profile: [4111:5897, 12394:7086, 24737:8421, 41173:12255, 53560:18228, 65891:25562, 78323:32147, 99031:126496, 119785:126524, 128721:127640]
 
   script: |
+    set -eu
     tar --no-same-owner -xf /${SOURCE_gtk4} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_settings_config}"
 
     meson setup build \
       --prefix=/usr \
@@ -139,6 +149,77 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # settings.ini is an overlay family: every file is loaded with the same
+    # source, so the last file read wins. XDG_CONFIG_DIRS names its
+    # highest-priority directory first, so the administrator entry must still
+    # beat the transient and vendor entries that follow it in that list. The
+    # compiled sysconfdir entry is administrator-tier too and must still beat
+    # every XDG_CONFIG_DIRS entry, including that list's own administrator
+    # entry.
+    settings_smoke="${WORK_DIR}/gtk4-settings-smoke"
+    PKG_CONFIG_PATH="${OUT_DIR}/usr/lib/pkgconfig:/usr/lib/pkgconfig" \
+      gcc "/${SOURCE_settings_smoke}" \
+      -I"${OUT_DIR}/usr/include/gtk-4.0" \
+      -L"${OUT_DIR}/usr/lib" \
+      $(PKG_CONFIG_PATH="${OUT_DIR}/usr/lib/pkgconfig:/usr/lib/pkgconfig" \
+        pkg-config --cflags --libs gtk4) \
+      -o "${settings_smoke}"
+
+    cleanup_settings_smoke() {
+      rm -f \
+        /etc/gtk-4.0/settings.ini \
+        /etc/xdg/gtk-4.0/settings.ini \
+        /run/xdg/gtk-4.0/settings.ini \
+        /usr/share/xdg/gtk-4.0/settings.ini
+      rmdir /etc/gtk-4.0 /etc/xdg/gtk-4.0 /run/xdg/gtk-4.0 /usr/share/xdg/gtk-4.0 2>/dev/null || true
+    }
+    trap cleanup_settings_smoke EXIT
+
+    mkdir -p /etc/gtk-4.0 /etc/xdg/gtk-4.0 /run/xdg/gtk-4.0 /usr/share/xdg/gtk-4.0
+
+    assert_setting() {
+      XDG_CONFIG_DIRS=/etc/xdg:/run/xdg:/usr/share/xdg \
+        XDG_CONFIG_HOME="${WORK_DIR}/empty-user-config" \
+        LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+        "${settings_smoke}" gtk-theme-name "$1"
+    }
+
+    printf '[Settings]\ngtk-theme-name = uapi-vendor\n' \
+      > /usr/share/xdg/gtk-4.0/settings.ini
+    assert_setting uapi-vendor
+    printf '[Settings]\ngtk-theme-name = uapi-runtime\n' \
+      > /run/xdg/gtk-4.0/settings.ini
+    assert_setting uapi-runtime
+    printf '[Settings]\ngtk-theme-name = uapi-admin-xdg\n' \
+      > /etc/xdg/gtk-4.0/settings.ini
+    assert_setting uapi-admin-xdg
+    printf '[Settings]\ngtk-theme-name = uapi-admin-sysconfdir\n' \
+      > /etc/gtk-4.0/settings.ini
+    assert_setting uapi-admin-sysconfdir
+
+    mkdir -p "${WORK_DIR}/user-config/gtk-4.0"
+    printf '[Settings]\ngtk-theme-name = uapi-user\n' \
+      > "${WORK_DIR}/user-config/gtk-4.0/settings.ini"
+    XDG_CONFIG_DIRS=/etc/xdg:/run/xdg:/usr/share/xdg \
+      XDG_CONFIG_HOME="${WORK_DIR}/user-config" \
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${settings_smoke}" gtk-theme-name uapi-user
+    rm -rf "${WORK_DIR}/user-config"
+    assert_setting uapi-admin-sysconfdir
+
+    rm /etc/gtk-4.0/settings.ini
+    assert_setting uapi-admin-xdg
+    rm /etc/xdg/gtk-4.0/settings.ini
+    assert_setting uapi-runtime
+    rm /run/xdg/gtk-4.0/settings.ini
+    assert_setting uapi-vendor
+
+    rm /usr/share/xdg/gtk-4.0/settings.ini
+    cleanup_settings_smoke
+    trap - EXIT
+
+    printf 'gtk4 UAPI smoke: settings.ini honoured all tiers\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
