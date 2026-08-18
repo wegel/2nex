@@ -580,6 +580,17 @@ successful same-name path. The test must also require the consumer process to
 exit successfully; never hide a crash or later failure after the expected file
 open.
 
+GNU Screen's normal windows need a PTY. The package build namespace maps only
+group 0, so Screen cannot assign a PTY to its compiled `tty` group 5. Use
+Screen's documented `//group` container window for a noninteractive package
+smoke; it allocates no PTY and leaves a real detached session alive. A
+`sessionname` command in each screenrc synchronously renames that session's
+socket before Screen creates the window. An inotify watcher can therefore
+prove every overlay in order, but the parent must wait until the watcher has
+installed its kernel watch before starting Screen. Require the full rename
+sequence, one live socket, a successful `screen -X quit`, and bounded socket
+removal.
+
 When a drop-in parser tracks basenames, change its scan order and basename
 filter together. PipeWire 1.4.9 scans vendor drop-ins before administrator
 drop-ins, then `check_override()` rejects a later file when an earlier level
