@@ -12,6 +12,15 @@ sources:
 - name: libxkbcommon
   url: https://xkbcommon.org/download/libxkbcommon-1.7.0.tar.xz
   sha256: 65782f0a10a4b455af9c6baab7040e2f537520caa2ec2092805cdfd36863b247
+- name: uapi_config
+  file: pkg/libs/input/libxkbcommon-uapi-config.patch
+  sha256: b6e183bf94425202006bc88543f1d81e327c4b09abe1847e6ca5ffe678cb904e
+- name: uapi_check
+  file: pkg/libs/input/libxkbcommon-uapi-check.sh
+  sha256: a5ac98267cd9897a3a67b5f49d0c243a3450f867fe7dd9143b6e1119c1ed1682
+- name: uapi_keymap
+  file: pkg/libs/input/libxkbcommon-uapi-keymap.xkb
+  sha256: 45f04055d056902706f1076b9b4de8ae218ce4d487d15f5b6285bc472c5d1a17
 
 dependencies:
 - name: glibc
@@ -62,17 +71,25 @@ dependencies:
   commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
   profile: [4132:42485, 8239:63043, 12373:72560, 16475:79961, 20574:81155, 24760:88256, 26126:89830]
 
   script: |
+    set -eu
+
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     meson setup build \
       --prefix=/usr \
+      --sysconfdir=/etc \
       --buildtype=release \
       -Denable-docs=false \
       -Denable-x11=false \
@@ -81,6 +98,13 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # Exercise the newly built, installed xkbcli-compile-keymap through the
+    # real default XKB include path search; see the check script for detail.
+    sh "/${SOURCE_uapi_check}" \
+      "${OUT_DIR}" \
+      "${WORK_DIR}" \
+      "/${SOURCE_uapi_keymap}"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
