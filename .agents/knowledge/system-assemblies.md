@@ -85,6 +85,16 @@ under `/nex/pkg` resolve against the checked-out root instead of the host.
 When the check also needs root privileges inside an unprivileged user
 namespace, use `unshare --user --map-root-user --root <root>`.
 
+Run `zub checkout` itself under `unshare --user --map-root-user` when the
+stored root contains directory owners that the host user cannot set. A direct
+checkout can stop with `EPERM` before the later `unshare --root` smoke even
+starts.
+
+Evidence: direct checkouts of EP016's `edgebox-rootfs` and `desktop-vwl`
+PipeWire builds stopped at each root's empty `boot` directory. The same two
+checkout commands completed inside a mapped-root user namespace, and both
+checked-out roots then ran their installed `pw-config` successfully.
+
 Evidence: host-side `test -e` failed for
 `.nex/tmp/desktop-vwl-002h-smoke/usr/include/linux/eventpoll.h`, while
 `unshare --root .nex/tmp/desktop-vwl-002h-smoke /usr/bin/test -e
