@@ -6,12 +6,18 @@ package:
   version: 3.8.8
   description: Secure communications library implementing SSL, TLS and DTLS
   homepage: https://www.gnutls.org/
-  checksum: 966438015c557d54f53629f14325f58fe59af35489331ff4e26c477a4f005af9
+  checksum: 0dc92d11e5afba54ac363d2eac4f87f76ec2268398222cec32d7fdc006387f14
 
 sources:
 - name: gnutls
   url: https://www.gnupg.org/ftp/gcrypt/gnutls/v3.8/gnutls-3.8.8.tar.xz
   sha256: ac4f020e583880b51380ed226e59033244bc536cad2623f2e26f5afa2939d8fb
+- name: uapi_config
+  file: pkg/libs/crypto/gnutls-uapi-config.patch
+  sha256: dc5496a5ebfc7a9ee64389396c05119e03709489db9f11bc0a3afe6306a3359f
+- name: uapi_smoke
+  file: pkg/libs/crypto/gnutls-uapi-smoke.c
+  sha256: 0e8a72081260651a9075d2ca59dfc934b63ccc7de69aee6cca017f6abb42435f
 
 dependencies:
 - name: linux-headers
@@ -40,6 +46,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: bash
   commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
 - name: coreutils
@@ -69,11 +77,14 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [490602:495682, 1949994:748099, 4386828:1028237, 7314161:1266570, 9751358:1486784, 12188500:1673619, 14623246:1807921, 18281539:2010410, 21935681:2199838, 24370398:2313509]
+  profile: [490208:90884, 1950371:91939, 4387239:92903, 7314592:93810, 9751098:94848, 12188337:144397, 14624492:160908, 18279106:206198, 21937290:209612, 24370689:217252]
 
   script: |
+    set -eu
     tar --no-same-owner -xf /${SOURCE_gnutls} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
 
     ./configure --prefix=/usr \
       --disable-static \
@@ -85,6 +96,128 @@ build:
     make
 
     make DESTDIR="${OUT_DIR}" install
+
+    # Reject /usr/etc: neither reader this package ships should ever resolve there.
+    if strings "${OUT_DIR}/usr/lib/libgnutls.so.30.40.2" | grep -q '/usr/etc'; then
+      echo "gnutls uapi smoke: library names a /usr/etc path" >&2
+      exit 1
+    fi
+
+    mkdir -p /etc/gnutls /run/gnutls /usr/lib/gnutls
+
+    smoke_bin="${WORK_DIR}/gnutls-uapi-smoke"
+    gcc -I"${OUT_DIR}/usr/include" \
+      "/${SOURCE_uapi_smoke}" \
+      -o "${smoke_bin}" \
+      -L"${OUT_DIR}/usr/lib" -lgnutls
+
+    uapi_smoke() {
+      GNUTLS_NO_IMPLICIT_INIT=1 LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" "${smoke_bin}" "$@"
+    }
+
+    # No tier present: both readers must keep the compiled no-file behavior.
+    uapi_smoke priority - || {
+      echo "gnutls uapi smoke: priority reader opened a file with no tier present" >&2
+      exit 1
+    }
+    uapi_smoke pkcs11 - || {
+      echo "gnutls uapi smoke: pkcs11 reader opened a file with no tier present" >&2
+      exit 1
+    }
+
+    # /usr/lib is the lowest tier: present alone, it must be selected.
+    : > /usr/lib/gnutls/config
+    : > /usr/lib/gnutls/pkcs11.conf
+    uapi_smoke priority /usr/lib/gnutls/config || {
+      echo "gnutls uapi smoke: priority reader did not select the /usr/lib vendor tier" >&2
+      exit 1
+    }
+    uapi_smoke pkcs11 /usr/lib/gnutls/pkcs11.conf || {
+      echo "gnutls uapi smoke: pkcs11 reader did not select the /usr/lib vendor tier" >&2
+      exit 1
+    }
+
+    # /run masks /usr/lib.
+    : > /run/gnutls/config
+    : > /run/gnutls/pkcs11.conf
+    uapi_smoke priority /run/gnutls/config || {
+      echo "gnutls uapi smoke: priority reader did not select /run over /usr/lib" >&2
+      exit 1
+    }
+    uapi_smoke pkcs11 /run/gnutls/pkcs11.conf || {
+      echo "gnutls uapi smoke: pkcs11 reader did not select /run over /usr/lib" >&2
+      exit 1
+    }
+
+    # /etc masks /run and /usr/lib, even though the /etc file is empty.
+    : > /etc/gnutls/config
+    : > /etc/gnutls/pkcs11.conf
+    uapi_smoke priority /etc/gnutls/config || {
+      echo "gnutls uapi smoke: priority reader did not select /etc over /run" >&2
+      exit 1
+    }
+    uapi_smoke pkcs11 /etc/gnutls/pkcs11.conf || {
+      echo "gnutls uapi smoke: pkcs11 reader did not select /etc over /run" >&2
+      exit 1
+    }
+
+    # The priority reader's explicit override is the GNUTLS_SYSTEM_PRIORITY_FILE
+    # environment variable. It must win even with /etc present.
+    : > /usr/lib/gnutls/config-override
+    GNUTLS_SYSTEM_PRIORITY_FILE=/usr/lib/gnutls/config-override \
+      GNUTLS_NO_IMPLICIT_INIT=1 LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" "${smoke_bin}" priority /usr/lib/gnutls/config-override || {
+      echo "gnutls uapi smoke: GNUTLS_SYSTEM_PRIORITY_FILE override did not win over /etc" >&2
+      exit 1
+    }
+    rm -f /usr/lib/gnutls/config-override
+
+    # The deprecated pkcs11 reader has no environment override; callers pass
+    # the file straight to gnutls_pkcs11_init() as its non-NULL
+    # deprecated_config_file argument. A file at that argument, outside all
+    # three tier names, must win even with /etc present, proving the NULL-only
+    # tier walk in the patch never runs for this call.
+    : > /usr/lib/gnutls/pkcs11-explicit.conf
+    uapi_smoke pkcs11 /usr/lib/gnutls/pkcs11-explicit.conf /usr/lib/gnutls/pkcs11-explicit.conf || {
+      echo "gnutls uapi smoke: the gnutls_pkcs11_init() explicit argument did not win over /etc" >&2
+      exit 1
+    }
+    rm -f /usr/lib/gnutls/pkcs11-explicit.conf
+
+    # Walk back down: removing /etc must fall through to /run, then /usr/lib,
+    # then to the compiled no-file default once nothing is left.
+    rm -f /etc/gnutls/config /etc/gnutls/pkcs11.conf
+    uapi_smoke priority /run/gnutls/config || {
+      echo "gnutls uapi smoke: priority reader did not fall back to /run after /etc was removed" >&2
+      exit 1
+    }
+    uapi_smoke pkcs11 /run/gnutls/pkcs11.conf || {
+      echo "gnutls uapi smoke: pkcs11 reader did not fall back to /run after /etc was removed" >&2
+      exit 1
+    }
+
+    rm -f /run/gnutls/config /run/gnutls/pkcs11.conf
+    uapi_smoke priority /usr/lib/gnutls/config || {
+      echo "gnutls uapi smoke: priority reader did not fall back to /usr/lib after /run was removed" >&2
+      exit 1
+    }
+    uapi_smoke pkcs11 /usr/lib/gnutls/pkcs11.conf || {
+      echo "gnutls uapi smoke: pkcs11 reader did not fall back to /usr/lib after /run was removed" >&2
+      exit 1
+    }
+
+    rm -f /usr/lib/gnutls/config /usr/lib/gnutls/pkcs11.conf
+    uapi_smoke priority - || {
+      echo "gnutls uapi smoke: priority reader kept a stale tier after every file was removed" >&2
+      exit 1
+    }
+    uapi_smoke pkcs11 - || {
+      echo "gnutls uapi smoke: pkcs11 reader kept a stale tier after every file was removed" >&2
+      exit 1
+    }
+
+    rmdir /etc/gnutls /run/gnutls /usr/lib/gnutls
+
+    echo "gnutls UAPI smoke: system priority file and deprecated pkcs11.conf both walk /etc, /run, then /usr/lib; GNUTLS_SYSTEM_PRIORITY_FILE overrides the priority reader and a non-NULL gnutls_pkcs11_init() argument overrides the pkcs11 reader"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true

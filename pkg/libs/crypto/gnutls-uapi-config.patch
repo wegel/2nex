@@ -1,0 +1,88 @@
+From: Nex package maintainers
+Subject: system priority and deprecated PKCS#11 config readers walk the three UAPI tiers
+Source: Nex downstream patch for GnuTLS 3.8.8
+Upstream: not submitted; needs agreement on a machine-generated transient tier
+
+GnuTLS compiles a single system priority file path, SYSTEM_PRIORITY_FILE
+("/etc/gnutls/config" by default), and only honors GNUTLS_SYSTEM_PRIORITY_FILE
+as an override. The deprecated PKCS#11 loader in lib/pkcs11.c reads a second
+fixed path, "/etc/gnutls/pkcs11.conf", whenever GNUTLS_PKCS11_FLAG_AUTO
+triggers the compat loader with a NULL deprecated_config_file, which is what
+gnutls_pkcs11_init() passes on the first PKCS#11 operation. That reader is
+live at runtime on this distribution because this package sets
+--with-default-trust-store-pkcs11="pkcs11:", so ordinary trust store lookups
+initialize the PKCS#11 subsystem and trigger compat_load().
+
+Each reader keeps its own existing explicit override. The priority reader
+still honors the GNUTLS_SYSTEM_PRIORITY_FILE environment variable, checked
+first, unconditionally. The pkcs11 reader has no environment override; a
+caller instead passes a non-NULL deprecated_config_file straight to
+gnutls_pkcs11_init(), and compat_load() still uses that exact path without
+running the new tier walk at all, because the walk is entered only when
+configfile is NULL. Both readers keep the compiled no-file behavior
+(compiled NORMAL priority defaults, no PKCS#11 modules loaded) when their
+explicit override is absent and none of the three tiers exist. In that
+unconfigured case, _gnutls_prepare_to_load_system_priorities() and
+compat_load()'s NULL branch each now walk /etc/gnutls/{config,pkcs11.conf},
+then /run/gnutls/{config,pkcs11.conf}, then
+/usr/lib/gnutls/{config,pkcs11.conf}, and select the first path that is a
+regular file. A present higher-tier file masks a lower one even if it is
+empty or only restates NORMAL defaults, because the walk stops at the first
+regular file, not the first file with content.
+
+--- a/lib/priority.c
++++ b/lib/priority.c
+@@ -2368,8 +2368,24 @@
+ 	int ret;
+
+ 	p = secure_getenv("GNUTLS_SYSTEM_PRIORITY_FILE");
+-	if (p != NULL)
++	if (p != NULL) {
+ 		system_priority_file = p;
++	} else {
++		static const char *const tiers[] = {
++			"/etc/gnutls/config",
++			"/run/gnutls/config",
++			"/usr/lib/gnutls/config",
++		};
++		struct stat sb;
++		unsigned i;
++
++		for (i = 0; i < sizeof(tiers) / sizeof(tiers[0]); i++) {
++			if (stat(tiers[i], &sb) == 0 && S_ISREG(sb.st_mode)) {
++				system_priority_file = tiers[i];
++				break;
++			}
++		}
++	}
+
+ 	p = secure_getenv("GNUTLS_SYSTEM_PRIORITY_FAIL_ON_INVALID");
+ 	if (p != NULL && p[0] == '1' && p[1] == 0)
+--- a/lib/pkcs11.c
++++ b/lib/pkcs11.c
+@@ -898,8 +898,23 @@
+ 	char line[512];
+ 	const char *library;
+
+-	if (configfile == NULL)
+-		configfile = "/etc/gnutls/pkcs11.conf";
++	if (configfile == NULL) {
++		static const char *const tiers[] = {
++			"/etc/gnutls/pkcs11.conf",
++			"/run/gnutls/pkcs11.conf",
++			"/usr/lib/gnutls/pkcs11.conf",
++		};
++		struct stat sb;
++		unsigned i;
++
++		configfile = tiers[0];
++		for (i = 0; i < sizeof(tiers) / sizeof(tiers[0]); i++) {
++			if (stat(tiers[i], &sb) == 0 && S_ISREG(sb.st_mode)) {
++				configfile = tiers[i];
++				break;
++			}
++		}
++	}
+
+ 	fp = fopen(configfile, "re");
+ 	if (fp == NULL) {
