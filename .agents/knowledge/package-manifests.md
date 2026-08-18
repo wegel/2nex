@@ -276,6 +276,17 @@ that `/usr/lib/chromium/chrome_crashpad_handler` was missing. After the
 manifest installed that helper, the QEMU graphical smoke reached the page and
 passed the screenshot pixel check.
 
+Keep machine-readable diagnostic stderr separate from arbitrary program
+stdout. A program can write NUL bytes to stdout; GNU grep then treats a merged
+capture as binary, so `grep -q` can find a marker while `grep -o` emits no
+matches. If separation is impossible, use grep's text mode explicitly.
+
+Evidence: Chromium's `--dump-dom` output introduced NUL bytes into a file that
+also held policy-loader VLOG lines. The first reader smoke found all expected
+lines but extracted an empty load order. Redirecting dump-dom stdout to its own
+file and using `grep -a` on stderr made both strict-build smokes require the
+observed vendor, runtime, administrator order.
+
 If a package runs Python tools during the build, add `python3`. Some Python
 helpers may also need package-specific Python modules.
 

@@ -6,14 +6,19 @@ package:
   version: 143.0.7499.169
   description: Chromium web browser
   homepage: https://www.chromium.org/
-  checksum: 6d6472009cd00bb0c06c7e8fccf899448335cf8907014858e711548e6873001a
+  checksum: e064f9e57a297ef56f08dd02b7d519de2b38db1d0e119cfc1eae9bd07c0e31a1
 
 sources:
 - name: chromium
   url: https://commondatastorage.googleapis.com/chromium-browser-official/chromium-143.0.7499.169.tar.xz
   sha256: 9c7d2fa3a27c296e63e7c1dcacfc8447aa3f565fb1d7e13ecb76caef97a6deaf
+- name: uapi_config
+  file: pkg/apps/web/chromium-uapi-config.patch
+  sha256: b595c6b0083caad65630d563b3c10184624fa6466e937c2b7d9cb6f3d83f70e4
 
 dependencies:
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: ncurses
@@ -257,15 +262,24 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [103499:210578, 402111:395954, 904144:639994, 1505518:946621, 2006919:1740610, 2509077:2160635, 3010281:3573092, 3760687:4805430, 4511281:5575873, 5010542:6571968]
+  profile: [104183:302560, 402384:623510, 902990:1067388, 1503925:1622500, 2005994:3082077, 2508562:3753623, 3009225:6060554, 3760033:7525917, 4510899:8709082, 5010944:9968248]
 
   script: |
-    # re-extract when the source archive changes
+    # re-extract when the source archive or a local patch changes. The patch is
+    # compared by content, because every local patch keeps the same input
+    # filename, so its name alone cannot show that its content changed. The
+    # comparison uses a stored copy rather than a digest, because this build
+    # environment has no sha256sum.
     src_id="$(basename "${SOURCE0}")"
     src_marker="${WORK_DIR}/.nex_source_id"
-    if [ ! -f "${src_marker}" ] || [ "$(cat "${src_marker}")" != "${src_id}" ]; then
+    patch_marker="${WORK_DIR}/.nex_uapi_config_patch"
+    if [ ! -f "${src_marker}" ] || [ "$(cat "${src_marker}")" != "${src_id}" ] \
+      || [ ! -f "${patch_marker}" ] \
+      || [ "$(cat "${patch_marker}")" != "$(cat "/${SOURCE_uapi_config}")" ]; then
       rm -rf "${WORK_DIR:?}"/*
       tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+      (cd "${WORK_DIR}" && patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}")
+      cp "/${SOURCE_uapi_config}" "${patch_marker}"
       echo "${src_id}" > "${src_marker}"
     fi
     cd ${WORK_DIR}
@@ -465,6 +479,82 @@ build:
     mkdir -p ${OUT_DIR}/usr/bin
     ln -sf ../lib/chromium/chromium ${OUT_DIR}/usr/bin/chromium
     ln -sf ../lib/chromium/chromedriver ${OUT_DIR}/usr/bin/chromedriver
+
+    # Enterprise policy is machine policy, so the browser must read it from
+    # /usr/lib, then /run, then /etc, with a later tier overriding an earlier
+    # one. The loader names every directory it visits at verbosity 1, so a
+    # short headless run shows which tiers it really consulted and in which
+    # order.
+    policy_admin=/etc/chromium/policies/managed
+    policy_runtime=/run/chromium/policies/managed
+    policy_vendor=/usr/lib/chromium/policies/managed
+
+    mkdir -p "${policy_admin}" "${policy_runtime}" "${policy_vendor}"
+    rm -f "${policy_admin}/nex-uapi.json" "${policy_runtime}/nex-uapi.json" \
+      "${policy_vendor}/nex-uapi.json"
+
+    probe_out="${WORK_DIR}/chromium-uapi-probe.out"
+    probe_data="${WORK_DIR}/chromium-uapi-profile"
+
+    run_probe() {
+      rm -rf "${probe_data}"
+      mkdir -p "${probe_data}"
+      # dump-dom writes HTML (and sometimes NULs) to stdout. The policy
+      # loader's VLOG lines go to stderr. Keep them apart so grep is not
+      # asked to parse a binary file; the first build failed that way with
+      # an empty load-order string after every Found line had already
+      # matched.
+      HOME="${WORK_DIR}" timeout 300 "${OUT_DIR}/usr/lib/chromium/chromium" \
+        --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage \
+        --user-data-dir="${probe_data}" --enable-logging=stderr \
+        --vmodule=config_dir_policy_loader=1 --dump-dom about:blank \
+        > "${WORK_DIR}/chromium-uapi-probe-dom.out" 2> "${probe_out}" || true
+    }
+
+    expect_line() {
+      if ! grep -a -q -F -- "$1" "${probe_out}"; then
+        printf 'chromium UAPI smoke: expected %s\n' "$1" >&2
+        tail -40 "${probe_out}" >&2
+        exit 1
+      fi
+    }
+
+    # With no file anywhere the loader still visits all three managed
+    # directories. An unpatched browser names only the administrator one.
+    run_probe
+    expect_line "no policy file was found at: ${policy_vendor}"
+    expect_line "no policy file was found at: ${policy_runtime}"
+    expect_line "no policy file was found at: ${policy_admin}"
+
+    # Each tier's file must be found, and the load order decides which tier
+    # wins a collision, so the order of the three lines is asserted too.
+    for tier in vendor runtime admin; do
+      eval "dir=\${policy_${tier}}"
+      printf '{"URLBlocklist": ["nex-%s.invalid"]}\n' "${tier}" \
+        > "${dir}/nex-uapi.json"
+    done
+
+    run_probe
+    expect_line "Found mandatory policy file: ${policy_vendor}/nex-uapi.json"
+    expect_line "Found mandatory policy file: ${policy_runtime}/nex-uapi.json"
+    expect_line "Found mandatory policy file: ${policy_admin}/nex-uapi.json"
+
+    order=$(grep -a -o -E '/(usr/lib|run|etc)/chromium/policies/managed/nex-uapi.json' \
+      "${probe_out}" | tr '\n' ' ')
+    case "${order}" in
+    "${policy_vendor}/nex-uapi.json ${policy_runtime}/nex-uapi.json ${policy_admin}/nex-uapi.json "*)
+      ;;
+    *)
+      printf 'chromium UAPI smoke: wrong load order: %s\n' "${order}" >&2
+      exit 1
+      ;;
+    esac
+
+    rm -f "${policy_admin}/nex-uapi.json" "${policy_runtime}/nex-uapi.json" \
+      "${policy_vendor}/nex-uapi.json"
+    rm -rf "${probe_data}" "${probe_out}"
+
+    printf 'chromium UAPI smoke: the policy loader read all three tiers in order\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
@@ -1076,7 +1166,6 @@ resolution:
   /usr/lib/libxml2.so.2: libxml2
   /usr/lib/libXrandr.so.2: libxrandr
   /usr/lib/libxslt.so.1: libxslt
-  /usr/lib/libgbm.so.1: mesa
   /usr/lib/libnspr4.so: nspr
   /usr/lib/libfreebl3.so: nss
   /usr/lib/libfreeblpriv3.so: nss
@@ -1093,3 +1182,6 @@ resolution:
   /usr/lib/libudev.so.1: systemd
   /usr/lib/libminizip.so.1: zlib-contrib
   /usr/lib/libz.so.1: zlib-contrib
+  /usr/lib/libgbm.so.1:
+    capability: graphics.gbm
+    fallback: mesa
