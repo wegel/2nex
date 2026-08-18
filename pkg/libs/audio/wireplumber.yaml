@@ -6,7 +6,7 @@ package:
   version: 0.5.12
   description: Session manager for PipeWire
   homepage: https://pipewire.pages.freedesktop.org/wireplumber/
-  checksum: c8cfcd74c34313f1405030c0e56e50e35d77bfa50f26307df305855e35455929
+  checksum: 3f149b178bcb364575441bf2cb7377303f121d313f732b04269dc35a1b3fa28c
 
 sources:
 - name: wireplumber
@@ -18,6 +18,12 @@ sources:
 - name: lua-wrap
   url: https://wrapdb.mesonbuild.com/v2/lua_5.4.4-1/get_patch
   sha256: e61cd965c629d6543176f41a9f1cb9050edfd1566cf00ce768ff211086e40bdc
+- name: uapi_config
+  file: pkg/libs/audio/wireplumber-uapi-config.patch
+  sha256: fa72d510dfb5028465a38de235704751dfbb63c54915bc0b6d48f87126f64e20
+- name: uapi_smoke
+  file: pkg/libs/audio/wireplumber-uapi-smoke.c
+  sha256: f5b41cd1648d75cd97c24e8d8f3397ea6e0cd0ac591cac9fa83541b76ac10893
 
 dependencies:
 - name: glibc
@@ -70,12 +76,17 @@ dependencies:
   commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
 - name: expat
   commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4114:11440, 8350:15329, 12477:17803, 16680:19412, 20830:31453, 25020:31678, 29172:31918, 33348:32239, 34017:32340]
+  profile: [4119:887, 8239:1126, 12403:2034, 16533:2688, 20653:12060, 24788:12061, 28900:12075, 33047:12075, 34199:12446]
 
   script: |
+    set -eu
     tar --no-same-owner -xzf /${SOURCE_wireplumber} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
@@ -84,8 +95,11 @@ build:
     cp /${SOURCE_lua} subprojects/packagecache/lua-5.4.4.tar.gz
     cp /${SOURCE_lua_wrap} subprojects/packagecache/lua_5.4.4-1_patch.zip
 
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
     meson setup build \
       --prefix=/usr \
+      --sysconfdir=/etc \
       --buildtype=release \
       -Dsystem-lua=false \
       -Ddoc=disabled \
@@ -94,6 +108,125 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    mkdir -p /usr/share/wireplumber/wireplumber.conf.d \
+      /run/wireplumber/wireplumber.conf.d \
+      /etc/wireplumber/wireplumber.conf.d
+    cp "${OUT_DIR}/usr/share/wireplumber/wireplumber.conf" /usr/share/wireplumber/wireplumber.conf
+
+    # Reject /usr/etc: BUILD_SYSCONFDIR must compile to /etc, not $prefix/etc.
+    if strings "${OUT_DIR}/usr/lib/libwireplumber-0.5.so.0.512.0" | grep -q '/usr/etc'; then
+      echo "wireplumber uapi smoke: library still names a /usr/etc path" >&2
+      exit 1
+    fi
+
+    smoke_bin="${WORK_DIR}/wireplumber-uapi-smoke"
+    gcc -I"${OUT_DIR}/usr/include/wireplumber-0.5" \
+      $(pkg-config --cflags glib-2.0 gobject-2.0 gio-2.0) \
+      "/${SOURCE_uapi_smoke}" \
+      -o "${smoke_bin}" \
+      -L"${OUT_DIR}/usr/lib" -lwireplumber-0.5 \
+      $(pkg-config --libs glib-2.0 gobject-2.0 gio-2.0)
+
+    uapi_smoke() {
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" "${smoke_bin}" "$@"
+    }
+
+    # The main wireplumber.conf must select /etc, then /run, then /usr/share.
+    printf 'wireplumber.uapi-smoke-main = { tier = "etc" }\n' \
+      > /etc/wireplumber/wireplumber.conf
+    printf 'wireplumber.uapi-smoke-main = { tier = "run" }\n' \
+      > /run/wireplumber/wireplumber.conf
+    printf 'wireplumber.uapi-smoke-main = { tier = "vendor" }\n' \
+      > /usr/share/wireplumber/wireplumber.conf
+
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-main 'tier = "etc"' || {
+      echo "wireplumber uapi smoke: main config did not select /etc first" >&2
+      exit 1
+    }
+
+    rm /etc/wireplumber/wireplumber.conf
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-main 'tier = "run"' || {
+      echo "wireplumber uapi smoke: main config did not fall back to /run" >&2
+      exit 1
+    }
+
+    rm /run/wireplumber/wireplumber.conf
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-main 'tier = "vendor"' || {
+      echo "wireplumber uapi smoke: main config did not fall back to /usr/share" >&2
+      exit 1
+    }
+
+    # Distinct drop-in basenames from every tier must all load together,
+    # proving /run is actually scanned and not silently skipped.
+    printf 'wireplumber.uapi-smoke-vendor = { present = true }\n' \
+      > /usr/share/wireplumber/wireplumber.conf.d/05-uapi-smoke-vendor.conf
+    printf 'wireplumber.uapi-smoke-run = { present = true }\n' \
+      > /run/wireplumber/wireplumber.conf.d/06-uapi-smoke-run.conf
+    printf 'wireplumber.uapi-smoke-etc = { present = true }\n' \
+      > /etc/wireplumber/wireplumber.conf.d/07-uapi-smoke-etc.conf
+
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-vendor 'present = true' || {
+      echo "wireplumber uapi smoke: the vendor drop-in did not load" >&2
+      exit 1
+    }
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-run 'present = true' || {
+      echo "wireplumber uapi smoke: the /run drop-in did not load" >&2
+      exit 1
+    }
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-etc 'present = true' || {
+      echo "wireplumber uapi smoke: the /etc drop-in did not load" >&2
+      exit 1
+    }
+
+    rm /usr/share/wireplumber/wireplumber.conf.d/05-uapi-smoke-vendor.conf \
+      /run/wireplumber/wireplumber.conf.d/06-uapi-smoke-run.conf \
+      /etc/wireplumber/wireplumber.conf.d/07-uapi-smoke-etc.conf
+
+    # A same-basename drop-in must be fully replaced by the highest tier
+    # present, not merged with the lower tiers. Each fragment sets its own
+    # tier-unique key (not a shared key with a different value) so a broken
+    # iterator that loaded more than one of the three files, or that let a
+    # shadowed lower-tier file's keys leak through, fails the require/forbid
+    # check below even though every fragment writes the same section name.
+    printf 'wireplumber.uapi-smoke-frag = { vendor.only = true }\n' \
+      > /usr/share/wireplumber/wireplumber.conf.d/10-uapi-smoke.conf
+    printf 'wireplumber.uapi-smoke-frag = { run.only = true }\n' \
+      > /run/wireplumber/wireplumber.conf.d/10-uapi-smoke.conf
+    printf 'wireplumber.uapi-smoke-frag = { etc.only = true }\n' \
+      > /etc/wireplumber/wireplumber.conf.d/10-uapi-smoke.conf
+
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-frag \
+      'etc.only = true' 'run.only' 'vendor.only' || {
+      echo "wireplumber uapi smoke: the /etc drop-in did not fully shadow the collision" >&2
+      exit 1
+    }
+
+    rm /etc/wireplumber/wireplumber.conf.d/10-uapi-smoke.conf
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-frag \
+      'run.only = true' 'etc.only' 'vendor.only' || {
+      echo "wireplumber uapi smoke: /run did not win, unshadowed, after the /etc drop-in was removed" >&2
+      exit 1
+    }
+
+    rm /run/wireplumber/wireplumber.conf.d/10-uapi-smoke.conf
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-frag \
+      'vendor.only = true' 'etc.only' 'run.only' || {
+      echo "wireplumber uapi smoke: the vendor file did not win, unshadowed, once /run and /etc were removed" >&2
+      exit 1
+    }
+
+    rm /usr/share/wireplumber/wireplumber.conf.d/10-uapi-smoke.conf
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-frag - || {
+      echo "wireplumber uapi smoke: a removed drop-in still appears in the loaded config" >&2
+      exit 1
+    }
+
+    rm -rf /usr/share/wireplumber/wireplumber.conf.d /run/wireplumber /etc/wireplumber \
+      /usr/share/wireplumber/wireplumber.conf
+    rmdir /usr/share/wireplumber
+
+    echo "wireplumber UAPI smoke: config loader searched /etc, /run, and /usr/share"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true

@@ -1,0 +1,67 @@
+From: Nex package maintainers
+Subject: [PATCH] base-dirs: add a /run/wireplumber tier between /etc and vendor
+Source: Nex
+Upstream: not submitted; needs agreement on a machine-generated transient tier
+
+meson.build derives BUILD_SYSCONFDIR from sysconfdir, so without
+--sysconfdir=/etc it compiled to /usr/etc/wireplumber, a path this
+distribution does not read. The build now passes --sysconfdir=/etc so
+BUILD_SYSCONFDIR is /etc, the admin tier, and BUILD_DATADIR stays
+/usr/share, the vendor tier.
+
+WpBaseDirsFlags only knew those two tiers (plus $WIREPLUMBER_CONFIG_DIR,
+the user's XDG config, and XDG_CONFIG_DIRS/XDG_DATA_DIRS). Add a new
+WP_BASE_DIRS_RUN_WIREPLUMBER flag for /run/wireplumber so machine-
+generated fragments have a place, and include it in
+WP_BASE_DIRS_CONFIGURATION right after WP_BASE_DIRS_BUILD_SYSCONFDIR and
+before WP_BASE_DIRS_XDG_DATA_DIRS/WP_BASE_DIRS_BUILD_DATADIR, so lookup
+order becomes: $WIREPLUMBER_CONFIG_DIR, the user's XDG config,
+XDG_CONFIG_DIRS, /etc, /run, XDG_DATA_DIRS, /usr/share.
+
+lookup_dirs() builds its directory list in exactly this priority order
+(highest first), so wp_base_dirs_find_file(), which returns the first
+existing match, picks /etc over /run over /usr/share unchanged.
+wp_base_dirs_new_files_iterator() (used for the *.conf.d fragment
+directories) walks the same list in reverse and removes any
+already-collected entry that shares a fragment's basename before
+appending the new one, so a same-named fragment in a higher-priority
+directory already fully replaces one from a lower-priority directory;
+no change to that override logic is needed to add the third tier.
+
+diff -urN a/lib/wp/base-dirs.h b/lib/wp/base-dirs.h
+--- a/lib/wp/base-dirs.h
++++ b/lib/wp/base-dirs.h
+@@ -40,6 +40,10 @@
+   WP_BASE_DIRS_XDG_CONFIG_DIRS = (1 << 10), /*!< XDG_CONFIG_DIRS */
+   WP_BASE_DIRS_BUILD_SYSCONFDIR = (1 << 11), /*!< compile-time $sysconfdir (/etc) */
+
++  /*! Nex transient tier: /run/wireplumber, ranked below $sysconfdir (/etc)
++      and above the vendor $datadir default */
++  WP_BASE_DIRS_RUN_WIREPLUMBER = (1 << 15),
++
+   WP_BASE_DIRS_XDG_DATA_DIRS = (1 << 12),   /*!< XDG_DATA_DIRS */
+   WP_BASE_DIRS_BUILD_DATADIR = (1 << 13),   /*!< compile-time $datadir ($prefix/share) */
+
+@@ -58,6 +62,7 @@
+        WP_BASE_DIRS_XDG_CONFIG_HOME |
+        WP_BASE_DIRS_XDG_CONFIG_DIRS |
+        WP_BASE_DIRS_BUILD_SYSCONFDIR |
++       WP_BASE_DIRS_RUN_WIREPLUMBER |
+        WP_BASE_DIRS_XDG_DATA_DIRS |
+        WP_BASE_DIRS_BUILD_DATADIR |
+        WP_BASE_DIRS_FLAG_SUBDIR_WIREPLUMBER),
+diff -urN a/lib/wp/base-dirs.c b/lib/wp/base-dirs.c
+--- a/lib/wp/base-dirs.c
++++ b/lib/wp/base-dirs.c
+@@ -106,6 +106,11 @@
+     if (flags & WP_BASE_DIRS_BUILD_SYSCONFDIR) {
+       g_ptr_array_add (dirs, g_canonicalize_filename (subdir, BUILD_SYSCONFDIR));
+     }
++    /* Nex transient tier: /run/wireplumber, between $sysconfdir (/etc) and
++       the vendor $datadir default. */
++    if (flags & WP_BASE_DIRS_RUN_WIREPLUMBER) {
++      g_ptr_array_add (dirs, g_canonicalize_filename (subdir, "/run"));
++    }
+     if (flags & WP_BASE_DIRS_XDG_DATA_DIRS) {
+       const gchar * const *xdg_dirs = g_get_system_data_dirs ();
+       for (guint i = 0; xdg_dirs[i]; i++) {
