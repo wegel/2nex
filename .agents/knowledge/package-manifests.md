@@ -572,6 +572,14 @@ environment, and per-user overrides ahead of the system tiers. Tests must call
 the built readers with distinct files under `/etc`, `/run`, and `/usr`; an
 install-path assertion cannot prove the lookup order.
 
+When a reader returns the same public value for a file at every tier, that
+value cannot prove which path won. A test may interpose the real file operation
+if the program exposes no stronger interface, but the interposer must call the
+real function, record the exact successful path, and reject every other
+successful same-name path. The test must also require the consumer process to
+exit successfully; never hide a crash or later failure after the expected file
+open.
+
 When a drop-in parser tracks basenames, change its scan order and basename
 filter together. PipeWire 1.4.9 scans vendor drop-ins before administrator
 drop-ins, then `check_override()` rejects a later file when an earlier level
