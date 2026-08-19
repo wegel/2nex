@@ -1,0 +1,122 @@
+Subject: add vendor and /run tiers to the profile and GSSAPI mechanism search
+Source: downstream patch for krb5 1.21.3
+Upstream: not submitted; needs agreement on the /run/krb5, /usr/share/krb5,
+  /run/gss/mech, and /usr/lib/gss/mech paths
+
+Both of this package's system configuration readers compiled a single
+/etc entry and nothing else.
+
+DEFAULT_SECURE_PROFILE_PATH (used by both krb5_init_context() and
+krb5_init_secure_context() through os_get_default_config_files() in
+lib/krb5/os/init_os_ctx.c) compiled to exactly "/etc/krb5.conf" once
+--sysconfdir=/etc empties the @SYSCONFCONF@ substitution that
+configure.ac otherwise appends. util/profile/prof_init.c's
+profile_init_flags() already walks every entry in a colon-separated
+profile path in order, skips a missing entry with ENOENT, and only
+fails when every entry is missing or unreadable, so this list can grow
+without any parser change. Since release 1.14 (doc/admin/conf_files/
+krb5_conf.rst) an entry may also name a directory, whose contents are
+read the same way local drop-ins are, which gives the new tiers a
+drop-in directory instead of a single file. This patch appends
+":/run/krb5:/usr/share/krb5" after the existing "/etc/krb5.conf" entry.
+util/profile/prof_get.c's profile_get_value() (the shared implementation
+behind profile_get_string() and friends) returns the first value found
+by walking profile->first_file in list order, and prof_tree.c's
+profile_node_iterator_create() starts that walk at profile->first_file,
+which util/profile/prof_init.c sets to the first entry in the list that
+profile_open_file() could open. The first-listed entry that exists
+therefore wins a relation lookup, so keeping /etc/krb5.conf first and
+appending /run/krb5 then /usr/share/krb5 makes an administrator value
+beat the same value from /run, which beats the same value from the
+vendor directory. KRB5_CONFIG is read before DEFAULT_PROFILE_PATH is
+ever consulted (see os_get_default_config_files() in
+lib/krb5/os/init_os_ctx.c), so setting it still replaces the whole
+compiled list, Nex tiers included, exactly as upstream documents.
+
+lib/gssapi/mechglue/g_initialize.c's loadConfigFiles() only ever read
+MECH_CONF ("/etc/gss/mech") and its MECH_CONF_PATTERN drop-ins
+("/etc/gss/mech.d/*.conf"). This patch adds a MECH_CONF_VENDOR tier
+("/usr/lib/gss/mech" plus its own ".d/*.conf" pattern) and a
+MECH_CONF_RUN tier ("/run/gss/mech" plus its own ".d/*.conf" pattern),
+each loaded through the same load_if_changed() calls the existing /etc
+tier already used, so a missing tier is silently skipped exactly as a
+missing MECH_CONF already was. addConfigEntry() only replaces a
+mechanism entry for a given OID when that entry has not been loaded yet
+(g_initialize.c: "if (aMech && aMech->mech) { ...; return; }" bails out
+before overwriting an already-loaded mechanism, while an existing,
+not-yet-loaded entry falls through and has its shared-library path,
+kernel module, and options replaced); the entries this loader builds
+are not loaded until a caller actually uses them, so whichever tier is
+read last for a given OID wins. The new loadConfigTier() ordering reads
+the vendor tier first, then /run, then the existing /etc tier last, so
+an /etc registration for a mechanism still beats the same OID read from
+/run or the vendor tier. GSS_MECH_CONFIG is still checked first and, when
+set, still replaces the whole search with only the named file, exactly
+as before.
+
+Neither change installs anything under /etc or /usr/etc: /run/krb5,
+/usr/share/krb5, /run/gss/mech(.d), and /usr/lib/gss/mech(.d) are only
+compiled-in search paths that this package does not populate.
+--- a/include/osconf.hin
++++ b/include/osconf.hin
+@@ -53 +53 @@
+-#define DEFAULT_SECURE_PROFILE_PATH     "/etc/krb5.conf@SYSCONFCONF"
++#define DEFAULT_SECURE_PROFILE_PATH     "/etc/krb5.conf@SYSCONFCONF:/run/krb5:/usr/share/krb5"
+--- a/lib/gssapi/mechglue/g_initialize.c
++++ b/lib/gssapi/mechglue/g_initialize.c
+@@ -65,0 +66,10 @@
++#ifndef MECH_CONF_VENDOR
++#define MECH_CONF_VENDOR "/usr/lib/gss/mech"
++#endif
++#define MECH_CONF_VENDOR_PATTERN MECH_CONF_VENDOR ".d/*.conf"
++
++#ifndef MECH_CONF_RUN
++#define MECH_CONF_RUN "/run/gss/mech"
++#endif
++#define MECH_CONF_RUN_PATTERN MECH_CONF_RUN ".d/*.conf"
++
+@@ -479,2 +489,2 @@
+-/* Try to load any config files which have changed since the last call.  Config
+- * files are MECH_CONF and any files matching MECH_CONF_PATTERN. */
++/* Load one tier's base config file and any files matching its .d/*.conf
++ * drop-in pattern. */
+@@ -482 +492 @@
+-loadConfigFiles()
++loadConfigTier(const char *conf, const char *pattern, time_t *highest)
+@@ -485 +494,0 @@
+-	time_t highest = (time_t)-1, now;
+@@ -486,0 +496,22 @@
++
++	load_if_changed(conf, g_confFileModTime, highest);
++
++	memset(&globbuf, 0, sizeof(globbuf));
++	if (glob(pattern, 0, NULL, &globbuf) == 0) {
++		for (path = globbuf.gl_pathv; *path != NULL; path++)
++			load_if_changed(*path, g_confFileModTime, highest);
++	}
++	globfree(&globbuf);
++}
++
++/* Try to load any config files which have changed since the last call.
++ * Config files are the vendor, /run, and /etc tiers, each made of one
++ * MECH_CONF-style base file plus any files matching its MECH_CONF_PATTERN.
++ * The tiers load in vendor, /run, /etc order: addConfigEntry() replaces an
++ * existing but not-yet-loaded mechanism entry when it sees the same OID
++ * again, so loading /etc last is what makes an administrator entry beat the
++ * same OID from /run, which in turn beats the vendor default. */
++static void
++loadConfigFiles()
++{
++	time_t highest = (time_t)-1, now;
+@@ -500,8 +531,3 @@
+-	load_if_changed(MECH_CONF, g_confFileModTime, &highest);
+-
+-	memset(&globbuf, 0, sizeof(globbuf));
+-	if (glob(MECH_CONF_PATTERN, 0, NULL, &globbuf) == 0) {
+-		for (path = globbuf.gl_pathv; *path != NULL; path++)
+-			load_if_changed(*path, g_confFileModTime, &highest);
+-	}
+-	globfree(&globbuf);
++	loadConfigTier(MECH_CONF_VENDOR, MECH_CONF_VENDOR_PATTERN, &highest);
++	loadConfigTier(MECH_CONF_RUN, MECH_CONF_RUN_PATTERN, &highest);
++	loadConfigTier(MECH_CONF, MECH_CONF_PATTERN, &highest);
