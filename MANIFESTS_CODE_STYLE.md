@@ -63,7 +63,7 @@ why its output cannot have a stable checksum.
 
 ## 3. Where an assembly manifest lives
 
-Four directories hold assembly manifests, and which one a manifest belongs in
+Five directories hold assembly manifests, and which one a manifest belongs in
 follows from what it is:
 
 - `base/` holds layers that other assemblies extend and that nobody runs
@@ -78,8 +78,8 @@ follows from what it is:
   a test harness boots and drives. These are exempt from the genericity policy
   in `scripts/check-generic-assembly-policy.sh`, because a fixture legitimately
   needs a known account and a fixed key, which that policy rejects. Never scan
-  them with it, and never extend a `tests/` assembly from `base/` or
-  `examples/`.
+  them with it. A `tests/` assembly should extend a `base/` layer like any
+  other system, but nothing outside `tests/` may extend a `tests/` assembly.
 - `asm/` is not Nex's. It is ignored by Git and is where the person using this
   repository keeps assemblies for their own machines, either as loose files or
   as a checkout of their own repository.
