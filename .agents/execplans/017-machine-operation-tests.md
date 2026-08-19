@@ -43,9 +43,11 @@ or journey 1 fails. Both outcomes are useful, and neither is known today.
 - [ ] Read `scripts/qemu-test-live-upgrade.sh` end to end and list the parts
       worth reusing: disk assembly, `ensure_assert_key`, `ssh_probe`,
       `wait_for_ssh`, serial logging.
-- [ ] Build the fixture image from `base/nex-systemd.yaml`, or write
-      `tests/nex-test-fixture.yaml` if that will not serve, and prove an overlay
-      boots from it with SSH reachable.
+- [x] (2026-08-19) Established the fixture: `base/nex-systemd.yaml` plus SSH
+      injected into the var tree by `scripts/prepare-qemu-test-identity.sh`. No
+      new assembly needed; see Surprises & Discoveries.
+- [ ] Build the fixture image and prove an overlay boots from it with SSH
+      reachable.
 - [ ] Implement the harness verbs: `boot`, `run`, `reboot`, `expect_deployment`.
 - [ ] Write journey 1 and record what it reports, pass or fail.
 - [ ] Write journeys 2, 3, 4.
@@ -54,7 +56,23 @@ or journey 1 fails. Both outcomes are useful, and neither is known today.
 
 ## Surprises & Discoveries
 
-(none yet)
+**2026-08-19: no fixture assembly is needed.** `base/nex-systemd.yaml` ships
+openssh and the `sshd` account but never enables the service, and root is
+locked (`root:!*:`), so it is not reachable as built. That is deliberate:
+`scripts/check-generic-assembly-policy.sh:36` rejects
+`multi-user.target.wants/sshd.service` in a reusable assembly as "enabled
+remote access".
+
+The access belongs in machine state instead, and a helper already puts it
+there. `scripts/prepare-qemu-test-identity.sh:74` writes the `sshd.service` and
+`sshd-keygen.service` enablement symlinks into the var tree's
+`/etc/systemd/system/multi-user.target.wants/`, alongside `authorized_keys` for
+root or a `nex-test` user and an `/etc/ssh/sshd_config`. `qemu-test-live-upgrade.sh:302`
+calls it that way.
+
+So the fixture is `base/nex-systemd.yaml` built normally, with SSH access
+injected at disk-assembly time. `tests/nex-test-fixture.yaml` is not written,
+and the `tests/` rule added to `MANIFESTS_CODE_STYLE.md` stands unused for now.
 
 ## Decision Log
 
@@ -84,7 +102,15 @@ or journey 1 fails. Both outcomes are useful, and neither is known today.
   so it cannot build, install, deploy, or roll back anything.
   Date/Author: 2026-08-19 / Claude
 
-- Decision: If `base/nex-systemd.yaml` will not serve, write a purpose-built
+- Decision: Use `base/nex-systemd.yaml` as the fixture and inject SSH access
+  into the var tree, rather than writing a fixture assembly.
+  Rationale: The access an assembly may not carry is exactly the access that
+  belongs in machine state, and `scripts/prepare-qemu-test-identity.sh` already
+  writes it there. A fixture assembly would duplicate that helper and would
+  have to be exempted from a policy it should never have tripped.
+  Date/Author: 2026-08-19 / Claude
+
+- Superseded: If `base/nex-systemd.yaml` will not serve, write a purpose-built
   `tests/nex-test-fixture.yaml` rather than using `examples/desktop-vwl`.
   Rationale: desktop-vwl builds a roughly 7 GB root carrying a whole desktop
   stack that none of these journeys exercise, and every fixture rebuild would
