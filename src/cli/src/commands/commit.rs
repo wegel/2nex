@@ -1,7 +1,7 @@
 use clap::Args;
 use std::fs;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::stage::{cleanup_staging, is_staged};
@@ -146,6 +146,22 @@ fn create_deployment(message: &str) -> io::Result<()> {
     store::commit_tree(NEX_REPO, &new_ref, Path::new(&staging_dir), &metadata)?;
 
     println!("  Created deployment: {}", new_ref);
+
+    // A store ref is not bootable on its own. The bootloader reads the on-disk
+    // `nex/deployments` directory and picks the highest serial, so a commit that
+    // stops here survives in the store and never boots, which makes the "keep
+    // it" half of staging inert. Materialise it the same way `nex deploy` does,
+    // reusing that path rather than growing a second one. The ref is named by
+    // timestamp and carries no checksum metadata, hence `allow_commit_hash`.
+    println!("  Activating for next boot...");
+    super::deploy::run(&super::deploy::DeployArgs {
+        system_ref: new_ref.clone(),
+        sysroot: PathBuf::from("/sysroot"),
+        repo: PathBuf::from(NEX_REPO),
+        dry_run: false,
+        force: false,
+        allow_commit_hash: true,
+    })?;
 
     // cleanup staging dir
     fs::remove_dir_all(&staging_dir)?;
