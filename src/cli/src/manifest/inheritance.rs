@@ -145,7 +145,9 @@ fn merge_meta(base: &SystemMeta, child: &SystemMeta) -> SystemMeta {
             .description
             .clone()
             .or_else(|| base.description.clone()),
-        checksum: None, // will be recomputed
+        // the resolved assembly is the child, so it keeps the child's recorded
+        // checksum and never inherits the parent's
+        checksum: child.checksum.clone(),
         stable_checksum: child.stable_checksum.or(base.stable_checksum),
         nex_structure: child.nex_structure || base.nex_structure,
         extends: None, // doesn't propagate after merge

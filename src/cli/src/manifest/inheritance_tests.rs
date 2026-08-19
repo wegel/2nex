@@ -106,6 +106,69 @@ fn package(name: &str, commit: &str) -> SystemPackage {
     }
 }
 
+#[test]
+fn resolved_child_keeps_its_own_checksum_and_drops_the_parent_one() {
+    let temp_dir = tempfile::tempdir().expect("temp dir");
+    let repository = temp_dir.path().join("repo");
+    let child_path = repository.join("asm/child.yaml");
+    let base_path = repository.join("asm/base.yaml");
+    fs::create_dir_all(repository.join(".git")).expect("git marker");
+    fs::create_dir_all(child_path.parent().unwrap()).expect("asm dir");
+    fs::write(
+        &base_path,
+        assembly_with_checksum("base", None, "/etc/base.conf", Some("aaaa")),
+    )
+    .expect("base assembly");
+    fs::write(
+        &child_path,
+        assembly_with_checksum("child", Some("asm/base.yaml"), "/etc/child.conf", Some("bbbb")),
+    )
+    .expect("child assembly");
+
+    let resolved = resolve_inheritance(&child_path).expect("resolved assembly");
+
+    assert_eq!(resolved.system.checksum.as_deref(), Some("bbbb"));
+}
+
+#[test]
+fn resolved_child_without_a_checksum_records_none() {
+    let temp_dir = tempfile::tempdir().expect("temp dir");
+    let repository = temp_dir.path().join("repo");
+    let child_path = repository.join("asm/child.yaml");
+    let base_path = repository.join("asm/base.yaml");
+    fs::create_dir_all(repository.join(".git")).expect("git marker");
+    fs::create_dir_all(child_path.parent().unwrap()).expect("asm dir");
+    fs::write(
+        &base_path,
+        assembly_with_checksum("base", None, "/etc/base.conf", Some("aaaa")),
+    )
+    .expect("base assembly");
+    fs::write(
+        &child_path,
+        assembly_with_checksum("child", Some("asm/base.yaml"), "/etc/child.conf", None),
+    )
+    .expect("child assembly");
+
+    let resolved = resolve_inheritance(&child_path).expect("resolved assembly");
+
+    assert_eq!(resolved.system.checksum, None);
+}
+
+fn assembly_with_checksum(
+    slug: &str,
+    extends: Option<&str>,
+    file_path: &str,
+    checksum: Option<&str>,
+) -> String {
+    let checksum = checksum
+        .map(|value| format!("  checksum: {value}\n"))
+        .unwrap_or_default();
+    assembly(slug, extends, file_path).replace(
+        &format!("  version: 1.0\n"),
+        &format!("  version: 1.0\n{checksum}"),
+    )
+}
+
 fn assembly(slug: &str, extends: Option<&str>, file_path: &str) -> String {
     let extends = extends
         .map(|path| format!("  extends: {path}\n"))
