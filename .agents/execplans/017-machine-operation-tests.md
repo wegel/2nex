@@ -66,13 +66,29 @@ or journey 1 fails. Both outcomes are useful, and neither is known today.
       (ref `systems/nex-test-fixture/0.0.1`). Harness repointed at it. Journey
       1 reran, still FAILs, now past environment resolution's first gate; see
       Surprises & Discoveries.
-- [ ] Write journeys 2, 3, 4.
-- [ ] Wire the four journeys into `scripts/test-machine-operations.sh`. (Only
-      journey 1 is wired; `ALL_JOURNEYS` in the script is a one-element array
-      ready to grow.)
-- [ ] Promote durable findings into `.agents/knowledge/`. (Scratch notes added
-      to `.agents/SCRATCH_KNOWLEDGE.md`; promotion deferred to plan
-      completion, once journeys 2-4 either confirm or revise this reading.)
+- [x] (2026-08-19) Wrote journeys 2, 3, 4
+      (`scripts/machine-journeys/temporary-install.sh`,
+      `persistent-install.sh`, `deploy-and-rollback.sh`). Journey 4 passes
+      end to end, twice in a row. Journeys 2 and 3 FAIL deterministically at
+      `nex stage`, for a reason this plan had not named: the fixture's kernel
+      bundle carries no `overlay.ko`. See Surprises & Discoveries.
+- [x] (2026-08-19) Wired all four journeys into
+      `scripts/test-machine-operations.sh`. `--journey <name>` still runs one
+      alone; with no flag it runs all four in order and prints one summary.
+      Journeys 3 and 4 cross a reboot, handled by a per-journey phase list
+      (`JOURNEY_PHASES`) the host steps through, calling the `reboot` verb
+      between phases -- the first real exercise of `reboot` and
+      `expect_deployment`-equivalent logic in this plan.
+- [x] (2026-08-19) Ran the acceptance checks: full suite twice in a row
+      (identical: 3 FAIL, 1 PASS, same reasons both times); a deliberately
+      broken guest command (typo'd deploy ref) made exactly
+      `deploy-and-rollback` fail, carrying `ref not found:
+      systems/nex-systemd/0.0.1-typo-deliberately-broken`, while the other
+      three journeys kept their original, unrelated failures. Reverted after.
+- [x] (2026-08-19) Promoted durable findings into `.agents/knowledge/`: the
+      OverlayFS/kernel-bundle finding into `kernel-and-boot.md` ("Kernel
+      bundle module dependencies") with a cross-reference from
+      `machine-self-hosting.md`.
 
 ## Surprises & Discoveries
 
@@ -251,7 +267,65 @@ see `.agents/knowledge/environment-pinning.md` and the `store` term in Context
 and Orientation below). Per instruction, nothing was changed to route around
 it: no repinning, no environment edits, no extra history.
 
+**2026-08-19: journeys 2 and 3 (`nex stage`) fail on this fixture because the
+kernel bundle carries no `overlay.ko`, not because of anything in `nex`
+itself.** `base/nex-systemd.yaml` names
+`x86_64/pkg/core/kernel/linux/6.18.24/bundles/vm` for its kernel. That
+bundle's component list (`pkg/core/kernel/linux.yaml:516-524`) is `boot,
+drv-net-misc, drv-net-virt, drv-net-virtio, drv-virtio, lib, modules-meta,
+net-misc` — no `fs-overlay`. The single output that carries the module,
+`fs-overlay` (`pkg/core/kernel/linux.yaml:6141-6143`,
+`/usr/lib/modules/6.18.24/kernel/fs/overlayfs/overlay.ko`), is a member of
+exactly one bundle, `all-modules`, a much larger one. Confirmed on the guest:
+`kernel/fs/overlayfs/` does not exist under `/usr/lib/modules/6.18.24` at
+all; `modprobe overlay` fails ("Unknown symbol in module, or unknown
+parameter"), `insmod` on the literal path fails ("No such file or
+directory"), and `/proc/filesystems` has no `overlay` line. `nex stage`
+(`src/cli/src/commands/stage.rs`) unconditionally does `mount -t overlay` on
+`/usr/bin`, `/nex/pkg`, `/nex/env`, so it fails outright, the same way, every
+time:
+
+    mount: /usr/bin: unknown filesystem type 'overlay'.
+    Error: Custom { kind: Other, error: "Failed to mount overlay on /usr/bin" }
+
+This blocks `nex install --system` too, since it requires staging first.
+Journey 4 (deploy/rollback) needs neither staging nor overlayfs and is
+unaffected — it passed cleanly, twice in a row.
+
+Nothing was changed to route around this: swapping in `bundles/all-modules`
+(or hand-adding the `fs-overlay` output) would make journeys 2 and 3 pass, but
+that is a choice about what this test fixture's kernel should carry, not a
+mechanical follow-on from anything asked for in this unit, so it was left
+alone and is reported here instead of decided.
+
 ## Decision Log
+
+- Decision: The harness pre-populates the guest's system store (`/nex/repo`)
+  with refs pulled from the host's own build store before boot: `tig`
+  (`outputs/bin`, small, already built, not part of this fixture's own
+  package list) for journeys 2-3, and `systems/nex-systemd/0.0.1` (a
+  different already-built system) for journey 4's deploy target.
+  Rationale: Every journey here must avoid the environment bug, which only
+  triggers on a build. The guest still runs every `stage`/`install`/
+  `discard`/`commit`/`deploy`/`rollback` command itself; only the ingredient
+  each command needs already built is placed there first, the same way the
+  fixture's own installed packages are host-built before boot. `zub pull`
+  hardlinks content-addressed objects, so seeding both refs costs about 425 MB
+  and well under two seconds.
+  Date/Author: 2026-08-19 / Claude
+
+- Decision: Journeys that cross a reboot (3 and 4) are one guest script file
+  taking a phase argument, driven by a per-journey phase list
+  (`JOURNEY_PHASES` in `scripts/test-machine-operations.sh`) that the host
+  steps through, calling the `reboot` verb between phases and stopping the
+  journey at the first failed phase without attempting the phases or reboots
+  after it.
+  Rationale: Keeps "one script per journey" from the Plan of Work while
+  giving the host what it needs to own the reboot, per the harness design.
+  State a later phase needs (e.g. "is the installed binary still there")
+  comes from the guest's own persistent files (or, for journey 4, its
+  `/proc/cmdline`), never from a value the host computed and handed back in.
+  Date/Author: 2026-08-19 / Claude
 
 - Decision: Drive every operation from inside the guest over SSH, never from the
   host.
@@ -323,7 +397,65 @@ it: no repinning, no environment edits, no extra history.
 
 ## Outcomes & Retrospective
 
-(fill in at completion)
+`scripts/test-machine-operations.sh` exists and runs all four journeys, `--journey
+<name>` runs one alone, and every journey starts from a fresh qcow2 overlay
+over one shared backing image built from `tests/nex-test-fixture.yaml`
+(`systems/nex-test-fixture/0.0.1`, checksum
+`a22e42ab383d0c108c3fb6f2ada6899c6f3a21ff31aed3c05e61b112aee6b507`, strict
+two-build reproducible). Verified twice in a row: `build-package`,
+`temporary-install`, and `persistent-install` FAIL, identically each time;
+`deploy-and-rollback` PASSes, identically each time, including two reboots.
+The deliberately-broken-command check (a typo'd deploy ref) made exactly one
+journey fail, carrying the guest's own error text, while the other three kept
+their unrelated pre-existing failures.
+
+Three of four journeys FAIL, and every one of those three is a legitimate,
+reproducible finding this plan set out to get, not a harness defect:
+
+1. `build-package`: a machine cannot build a package. Full history in
+   `/nex/manifests` (shipped via Git bundle, not a `git init` snapshot) makes
+   the manifests worktree and historical blob lookups work, but
+   `load_environment` resolves environment blobs against the zub store, which
+   is never inside a Git repository on an installed machine. EP018 territory.
+2. `temporary-install` and `persistent-install`: a machine cannot stage a
+   package for install. `nex stage` unconditionally mounts OverlayFS, and this
+   fixture's kernel bundle (`base/nex-systemd.yaml`'s choice, not something
+   this plan changed) does not carry `overlay.ko`. `deploy-and-rollback`
+   proves this is specific to staging, not to the fixture generally: it needs
+   no OverlayFS and passes cleanly.
+
+So the plan's four-journey premise holds up: a person sitting at an installed
+Nex machine can put a new system version on it and undo that (journey 4,
+proven, content-based, across two real reboots), but cannot build a package or
+stage an install today, for two distinct, now-precisely-located reasons
+neither of which was known before this plan.
+
+What was not done: the two bugs above were not fixed, per instruction — that
+is EP018's job for the store/environment issue and an open design question
+(reported, not decided) for the kernel bundle's module set. `reboot` and
+`expect_deployment`-equivalent logic are now exercised (journey 4), but
+`expect_deployment` itself as a literal harness function is unused by any
+journey; journeys use `/proc/cmdline` parsing inline instead since the
+assertions needed were about content markers, not a single deployment-name
+equality check. No stray QEMU processes or Git worktrees were left behind by
+any run.
+
+**What this plan got wrong, twice.** Two fixture decisions were recorded and
+then overturned by measurement. First that `examples/edgebox-rootfs.yaml` could
+serve, when a built edgebox root has no `/nex` at all. Then that
+`base/nex-systemd.yaml` could serve unaided, when it ships neither a manifest
+tree nor `git`. Both were caught by running something rather than by reasoning
+about it, which is the right order, but writing the plan around an unverified
+assumption cost two cycles. A plan that names a fixture should name the
+property the fixture must have, and check it first.
+
+**The fixture's bundle is generated, never committed.** `scripts/make-test-bundle.sh`
+writes `tests/nex-test-fixture.bundle`, and `.gitignore` excludes
+`/tests/*.bundle`. Committing it would put a 7.7 MB copy of this repository
+inside this repository, adding its whole size to history on every
+regeneration, which is the mistake the librsvg vendor tarball made. Anyone
+building the fixture runs that script first. It is reproducible: two runs
+produced sha256 `fc268d2210446e95…` both times.
 
 ## Context and Orientation
 

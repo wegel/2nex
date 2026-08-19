@@ -1,0 +1,64 @@
+system:
+  schema: 1
+  name: Nex Test Fixture
+  slug: nex-test-fixture
+  version: 0.0.1
+  description: Minimal nex-systemd machine that can build a package on itself
+  nex_structure: true
+  extends: nex:base/nex-systemd.yaml
+  checksum: a22e42ab383d0c108c3fb6f2ada6899c6f3a21ff31aed3c05e61b112aee6b507
+
+packages:
+# self-hosting: git lets nex-init-manifests clone the shipped bundle into a
+# real /nex/manifests repository, with full history, on first boot
+- name: git
+  commit: x86_64/pkg/dev/vcs/git/2.49.0/outputs/bin
+  manifest_ref: d832fdf152d75b7e105fbc1660ed8f95ec3d0916
+
+files:
+# Override the parent's nex-init-manifests: a machine always needs the full
+# history of the manifests repository, since packages name their build
+# environment by historical Git blob SHA. `git init` plus one commit over a
+# shipped tree cannot hold that history, so clone it from a bundle instead.
+- path: /usr/local/bin/nex-init-manifests
+  mode: 493
+  content: |
+    #!/bin/sh
+    set -eu
+
+    dst=/nex/manifests
+    bundle=/usr/share/nex/nex.bundle
+
+    if [ -d "$dst/.git" ]; then
+        exit 0
+    fi
+
+    if [ ! -f "$bundle" ]; then
+        echo "nex-init-manifests: missing bundle at $bundle" >&2
+        exit 0
+    fi
+
+    if ! command -v git >/dev/null 2>&1; then
+        echo "nex-init-manifests: git not available, cannot clone $bundle" >&2
+        exit 0
+    fi
+
+    git clone "$bundle" "$dst"
+    git -C "$dst" config user.name "nex"
+    git -C "$dst" config user.email "nex@localhost"
+
+# A bundle of this repository's full history, pinned to the commit this
+# fixture was built from. Regenerate with a detached worktree at the pinned
+# commit, then `git -c pack.threads=1 bundle create <out> HEAD` from inside
+# it: a bare commit hash makes `bundle create` refuse an empty bundle, and
+# bundling a branch name (or HEAD in a checkout on a branch that later moves)
+# leaves the clone with no ref to check out.
+- path: /usr/share/nex/nex.bundle
+  mode: 420
+  source: tests/nex-test-fixture.bundle
+
+
+build:
+  environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
+
+  script: |

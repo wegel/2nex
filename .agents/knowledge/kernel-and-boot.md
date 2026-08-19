@@ -327,3 +327,21 @@ each with its own reproducibility pass, produced package checksum
 `9745a4573612836a5e5a60d294d66300a772fd1ec332fcdba950ed9baff09a91`.
 Final Systemd and live-upgrade QEMU guests then loaded virtio networking and
 reached SSH.
+
+The `vm` bundle is also missing `overlay.ko` (EP017, 2026-08-19, not yet
+fixed). `pkg/core/kernel/linux.yaml:516-524` lists the `vm` bundle's members
+as `boot, drv-net-misc, drv-net-virt, drv-net-virtio, drv-virtio, lib,
+modules-meta, net-misc` — no `fs-overlay`. The single output that owns
+`overlay.ko` (`pkg/core/kernel/linux.yaml:6141-6143`,
+`/usr/lib/modules/6.18.24/kernel/fs/overlayfs/overlay.ko`) belongs to exactly
+one bundle, `all-modules`, much larger than `vm`. Confirmed on a booted `vm`
+guest: `kernel/fs/overlayfs/` does not exist under
+`/usr/lib/modules/6.18.24/kernel` at all, `modprobe overlay` fails ("Unknown
+symbol in module, or unknown parameter"), `insmod` on the literal expected
+path fails ("No such file or directory"), and `/proc/filesystems` has no
+`overlay` line. Any guest built from the `vm` bundle therefore cannot run
+`mount -t overlay`, which blocks `nex stage` (it unconditionally overlay-mounts
+`/usr/bin`, `/nex/pkg`, `/nex/env`) unconditionally. Whether `vm` should grow
+an `fs-overlay`-sized addition, the way it grew `lib`, is an open question,
+not decided here — see
+`.agents/execplans/017-machine-operation-tests.md`.

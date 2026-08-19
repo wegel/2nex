@@ -58,3 +58,16 @@ inside the Nex source repository, so the upward search finds that checkout's
 The fix is to resolve environment blobs against the repository that owns the
 manifest rather than against the store. `ManifestRepositories` already knows
 that root.
+
+## Staging needs a kernel feature the test fixture's kernel bundle lacks
+
+A machine also cannot `nex stage` an install, but for an unrelated,
+environment-specific reason (EP017, 2026-08-19): `nex stage`
+(`src/cli/src/commands/stage.rs`) unconditionally mounts OverlayFS on
+`/usr/bin`, `/nex/pkg`, `/nex/env`, and the `bundles/vm` Linux kernel bundle
+`base/nex-systemd.yaml` names carries no `overlay.ko`. Full details and the
+exact bundle membership are in
+`.agents/knowledge/kernel-and-boot.md` ("Kernel bundle module dependencies").
+`nex install --system` needs staging first, so this blocks it too.
+`nex deploy`/`nex rollback` need neither staging nor OverlayFS and are
+unaffected — proven on a `vm`-kernel guest across two real reboots.
