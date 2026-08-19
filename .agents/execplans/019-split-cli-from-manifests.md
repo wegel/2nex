@@ -25,9 +25,18 @@ a bundle by about 5 percent. The gains are these:
 - Nex builds its own tool the way it builds everything else, from a pinned
   external source, which is the property the project claims.
 
-The constraint this introduces: a manifests repository at some revision needs a
-CLI new enough to read it. `schema: 1` appears in every manifest and is the hook
-for stating that contract, but today nothing enforces it.
+The constraint this introduces: a machine can end up with a `nex` program and a
+set of manifests of different ages. Nothing detects that today. Manifest structs
+carry no `deny_unknown_fields`, so an older `nex` reading a newer manifest
+ignores keys it does not know and builds the wrong thing silently. When
+`files:` replaced `overlays:` on 2026-08-19, an older `nex` would have produced
+a system missing all 83 file placements without a word.
+
+The long-term answer is the `schema:` field every manifest already carries: the
+manifests declare a schema version, `nex` declares which versions it reads, and
+a mismatch is an error. That is not part of this plan. The human is currently
+the only person working on or using Nex, so keeping the two sides in step by
+hand is acceptable until the manifest format settles.
 
 A user must still be able to build the entirety of their system, the CLI
 included. This plan changes which repository carries the CLI source, never
@@ -35,7 +44,7 @@ whether it can reach a machine.
 
 ## Progress
 
-- [ ] Decide the compatibility contract and where it is checked.
+- [ ] Keep the two repositories in step by hand; no version check in this plan.
 - [ ] Create the CLI repository with full history for `src/cli`.
 - [ ] Point `pkg/core/nex/nex.yaml` at a pinned revision of it.
 - [ ] Prove a strict two-build of the nex package from the new source.
@@ -48,6 +57,14 @@ whether it can reach a machine.
 (none yet)
 
 ## Decision Log
+
+- Decision: Keep the manifests and the CLI in step by hand for now. No version
+  check, no `deny_unknown_fields`, no `schema` gate in this plan.
+  Rationale: The human is the only person working on or using Nex, so a
+  mismatch is caught by the person who created it. The manifest format is still
+  moving, and a version gate written now would encode a shape that is about to
+  change. `schema:` is the intended mechanism once the format settles.
+  Date/Author: 2026-08-19 / Human
 
 - Decision: Do not ship the crate vendor bundle in the image.
   Rationale: Rebuilding the CLI on a machine would then need no network, but no
@@ -91,34 +108,26 @@ without any of this. What this plan governs is rebuilding it.
 
 Three phases, each independently verifiable.
 
-**Phase 1, the contract.** Decide what a manifest revision requires of a CLI
-version, and where a mismatch is reported. The candidates are: a minimum CLI
-version recorded in the manifests repository, a `schema` version the CLI
-declares support for, or both. Nothing else in this plan is safe until a
-mismatch produces a clear message rather than a parse error.
-
-**Phase 2, the new repository.** Extract `src/cli` with history, publish it,
+**Phase 1, the new repository.** Extract `src/cli` with history, publish it,
 and repoint `pkg/core/nex/nex.yaml` at a pinned revision plus `cargo_lock`.
 At this point both repositories carry the code and everything still builds.
 
-**Phase 3, the removal.** Delete `src/cli` from the manifests repository, and
+**Phase 2, the removal.** Delete `src/cli` from the manifests repository, and
 confirm a machine can still build the CLI from the pinned source.
 
 ## Concrete Steps
 
-1. Write the compatibility contract into `MANIFESTS_CODE_STYLE.md`, and
-   implement the check with a test that a too-old CLI reports it clearly.
-2. `git filter-repo --path src/cli` into a fresh clone, verify the history and
+1. `git filter-repo --path src/cli` into a fresh clone, verify the history and
    that it builds standalone.
-3. Publish the CLI repository. Record its URL here.
-4. Rewrite `pkg/core/nex/nex.yaml` on the `zub.yaml` pattern: a pinned source,
+2. Publish the CLI repository. Record its URL here.
+3. Rewrite `pkg/core/nex/nex.yaml` on the `zub.yaml` pattern: a pinned source,
    a `cargo_lock` source with a recorded sha256, and
    `cargo build --release --offline --locked`.
-5. Build it with `--single --check --update-checksum` and record the checksum.
-6. Remove `src/cli` from the manifests repository, along with any references,
+4. Build it with `--single --check --update-checksum` and record the checksum.
+5. Remove `src/cli` from the manifests repository, along with any references,
    including the `nex_src_cli` source if EP018 has not already removed it.
-7. Rebuild every assembly and record the new checksums.
-8. Run EP017's journeys, and add one that builds the nex package on the machine,
+6. Rebuild every assembly and record the new checksums.
+7. Run EP017's journeys, and add one that builds the nex package on the machine,
    since "build the entirety of my system" now includes the tool.
 
 ## Validation and Acceptance
@@ -130,15 +139,13 @@ The plan is done when:
 - The manifests repository contains no `src/cli`, and `nex check` passes on
   every manifest.
 - A booted machine builds the nex package successfully.
-- A manifest revision that needs a newer CLI produces a clear message naming the
-  required version, proven by a test.
 - EP017's journeys pass, plus the new CLI-build journey.
 
 ## Idempotence and Recovery
 
-Phases 2 and 3 are separated on purpose: after phase 2 both repositories hold
-the code and nothing is lost, so phase 3 is the only irreversible step and it
-happens after the pinned build is proven. If phase 3 goes wrong, the manifests
+Phases 1 and 2 are separated on purpose: after phase 1 both repositories hold
+the code and nothing is lost, so phase 2 is the only irreversible step and it
+happens after the pinned build is proven. If phase 2 goes wrong, the manifests
 repository can be restored from the commit before the removal.
 
 The extraction is done on a throwaway clone. The manifests repository is not
@@ -155,8 +162,9 @@ The roughly 326 MB crate vendor does not ship; see the Decision Log.
 
 ## Interfaces and Dependencies
 
-New external interface: the CLI repository, and the compatibility contract
-between a manifests revision and a CLI version.
+New external interface: the CLI repository. The two sides are kept in step by
+hand until the manifest format settles, at which point `schema:` becomes the
+version check.
 
 Depends on EP017 for verification, and reads better after EP018, which removes
 the `dev:` source this plan would otherwise have to unwind first. It does not
