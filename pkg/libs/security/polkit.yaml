@@ -6,12 +6,18 @@ package:
   version: "124"
   description: Application authorization framework
   homepage: https://gitlab.freedesktop.org/polkit/polkit
-  checksum: 43ec084dcc577a49ca9dfcf7ac211f06a9529460668b24bc229171364a786727
+  checksum: 65c2d79230e0df9cbf1ea7af29208bbe5a648d1e5d29a6a1f1b76fa836712b29
 
 sources:
 - name: polkit
   url: https://gitlab.freedesktop.org/polkit/polkit/-/archive/124/polkit-124.tar.gz
   sha256: 72457d96a0538fd03a3ca96a6bf9b7faf82184d4d67c793eb759168e4fd49e20
+- name: run_tier_patch
+  file: pkg/libs/security/polkit-run-tier.patch
+  sha256: 748212f163792130c93e62bdfa67f91712551ef347a248b32f6209382a91e754
+- name: run_tier_check
+  file: pkg/libs/security/polkit-run-tier-check.sh
+  sha256: a679aeaef4aa2f336c44e81b54ff41dd634f1293a30eeab2f18cc457058bfc19
 
 dependencies:
 - name: glibc
@@ -70,14 +76,17 @@ dependencies:
   commit: x86_64/pkg/libs/security/linux-pam/1.7.1/bundles/dev
 - name: duktape
   commit: x86_64/pkg/dev/libs/duktape/2.7.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4098:940, 12321:1285, 20658:1319, 33077:1338, 45494:1344, 57912:1377, 66229:1377, 82888:1399, 99549:1402, 109603:2875]
+  profile: [4126:736, 12444:1059, 20774:1082, 33198:1088, 45676:1094, 58188:1121, 66487:1122, 82982:1147, 99558:1147, 109990:3024]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_polkit} -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_run_tier_patch}"
 
     meson setup build \
       --prefix=/usr \
@@ -98,6 +107,13 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # Drives the real, newly built polkitd through a live authorization
+    # decision over a private D-Bus system bus, checking which rules.d
+    # tier decides for a same-named file and that a missing /run tier is
+    # tolerated, instead of reimplementing the sort order this package
+    # patches; see the check script for detail.
+    sh "/${SOURCE_run_tier_check}" "${OUT_DIR}" "${WORK_DIR}"
 
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true

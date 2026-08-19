@@ -1,0 +1,112 @@
+Subject: add a /run boot tier to the duktape rules.d search
+Source: downstream patch for polkit 124
+Upstream: not submitted; needs agreement on the PACKAGE_RUN_DIR tier and on
+  staying silent when that tier is absent
+
+The duktape backend (src/polkitbackend/polkitbackendduktapeauthority.c,
+built when -Djs_engine=duktape is set) compiled exactly two rules
+directories: PACKAGE_SYSCONF_DIR "/polkit-1/rules.d" and
+PACKAGE_DATA_DIR "/polkit-1/rules.d". That gives an administrator tier
+under /etc and a vendor tier under /usr/share, with no tier for
+transient, boot-scoped authorization policy under /run.
+
+polkit_backend_common_js_authority_constructed() in that file allocates
+rules_dirs with g_new0 (gchar *, 3) and fills index 0 and 1, leaving
+index 2 as the NULL terminator load_scripts() and setup_file_monitors()
+both use to end their walk. This patch grows the allocation to 4 entries,
+inserts PACKAGE_RUN_DIR "/polkit-1/rules.d" at index 1 between the
+existing two, and leaves index 3 as the new NULL terminator that g_new0
+already zero-initializes. PACKAGE_RUN_DIR is a new compiled-in macro
+defined as the literal "/run": unlike sysconfdir and datadir, this
+project's meson.build (meson_version: '>= 0.50.0') has no runstatedir
+builtin option to derive it from (Meson never gained a project-level
+"runstatedir" builtin; only 'localstatedir', 'sysconfdir', and the other
+long-standing directory options exist), and /run is not an administrator
+choice on Nex the way /etc is, so the other Nex boot-tier repairs in this
+plan (krb5's /run/krb5, libinput's /run/libinput) also compile it in as
+a literal rather than adding a build option for it.
+
+load_scripts() sorts every basename it finds across all three
+directories with polkit_backend_common_rules_file_name_cmp()
+(src/polkitbackend/polkitbackendcommon.c), which is unchanged by this
+patch. That function compares basenames first and, on a tie, falls back
+to comparing full paths with the comment "/etc wins over /usr". A
+byte-wise comparison of "/etc/polkit-1/rules.d/NAME" against
+"/run/polkit-1/rules.d/NAME" and "/usr/share/polkit-1/rules.d/NAME"
+already sorts "/etc" ahead of "/run" ahead of "/usr" ('e' 0x65 < 'r'
+0x72 < 'u' 0x75), so inserting the /run entry between the existing two
+in rules_dirs is enough on its own to give the administrator tier
+precedence over the new boot tier, and the boot tier precedence over the
+vendor tier, for a same-named rules file, without touching the
+comparator. This model is additive rather than masking: every file from
+every directory is loaded and executed, and only a same-named file's
+runtime rule callback precedence is decided by this sort order, so a
+uniquely named file from any tier still runs regardless of what exists
+in the other tiers.
+
+load_scripts() also logged "Error opening rules directory: ..." through
+polkit_backend_authority_log() (which writes to both syslog and stdout)
+every time it could not open a configured directory, with no distinction
+between a real failure and a directory that simply does not exist yet.
+/etc and /usr/share are normally present already, so this rarely fired
+in practice, but /run/polkit-1/rules.d is not created by this package
+and has no other populator on Nex; polkit_backend_common_reload_scripts()
+calls load_scripts() again on every rules-directory change signalled by
+setup_file_monitors(), so an absent /run tier would otherwise log this
+message on every reload for the lifetime of the daemon. This patch keeps
+g_dir_open()'s failure silent when the error is G_FILE_ERROR_NOENT and
+still logs any other failure, such as a permissions problem, exactly as
+before.
+
+--- a/src/polkitbackend/meson.build
++++ b/src/polkitbackend/meson.build
+@@ -29,6 +29,7 @@
+   '-D_POLKIT_BACKEND_COMPILATION',
+   '-DPACKAGE_DATA_DIR="@0@"'.format(pk_prefix / pk_datadir),
+   '-DPACKAGE_SYSCONF_DIR="@0@"'.format(pk_prefix / pk_sysconfdir),
++  '-DPACKAGE_RUN_DIR="/run"',
+   '-D_XOPEN_SOURCE=700',
+   '-D_GNU_SOURCE=1',
+ ]
+--- a/src/polkitbackend/polkitbackendduktapeauthority.c
++++ b/src/polkitbackend/polkitbackendduktapeauthority.c
+@@ -123,9 +123,16 @@
+                         &error);
+       if (dir == NULL)
+         {
+-          polkit_backend_authority_log (POLKIT_BACKEND_AUTHORITY (authority),
+-                                        "Error opening rules directory: %s (%s, %d)",
+-                                        error->message, g_quark_to_string (error->domain), error->code);
++          /* A missing rules directory is normal for an optional tier such as
++           * PACKAGE_RUN_DIR "/polkit-1/rules.d", which nothing populates
++           * until an administrator or an early-boot helper creates it. Stay
++           * silent for that one, expected case so a reload does not log the
++           * same non-error on every rules directory change; still log any
++           * other failure, such as a permissions problem. */
++          if (!g_error_matches (error, G_FILE_ERROR, G_FILE_ERROR_NOENT))
++            polkit_backend_authority_log (POLKIT_BACKEND_AUTHORITY (authority),
++                                          "Error opening rules directory: %s (%s, %d)",
++                                          error->message, g_quark_to_string (error->domain), error->code);
+           g_clear_error (&error);
+         }
+       else
+@@ -245,9 +252,17 @@
+
+   if (authority->priv->rules_dirs == NULL)
+     {
+-      authority->priv->rules_dirs = g_new0 (gchar *, 3);
++      /* Administrator, boot, then vendor: the array holds 3 directory
++       * entries plus the NULL terminator load_scripts() and
++       * setup_file_monitors() walk it by. polkit_backend_common_rules_file_name_cmp()
++       * sorts same-named rules by full path, and "/etc" < "/run" < "/usr"
++       * lexically, so listing the tiers in this order also gives the
++       * administrator tier precedence over the boot tier, and the boot tier
++       * precedence over the vendor tier, for a same-named rules file. */
++      authority->priv->rules_dirs = g_new0 (gchar *, 4);
+       authority->priv->rules_dirs[0] = g_strdup (PACKAGE_SYSCONF_DIR "/polkit-1/rules.d");
+-      authority->priv->rules_dirs[1] = g_strdup (PACKAGE_DATA_DIR "/polkit-1/rules.d");
++      authority->priv->rules_dirs[1] = g_strdup (PACKAGE_RUN_DIR "/polkit-1/rules.d");
++      authority->priv->rules_dirs[2] = g_strdup (PACKAGE_DATA_DIR "/polkit-1/rules.d");
+     }
+
+   setup_file_monitors (authority);

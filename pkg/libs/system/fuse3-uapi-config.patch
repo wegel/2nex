@@ -1,0 +1,141 @@
+Subject: add vendor and /run tiers to the fuse.conf policy search
+Source: downstream patch for fuse3 3.17.4
+Upstream: not submitted; needs agreement on the /usr/share/fuse3 and
+  /run/fuse3 paths
+
+util/meson.build already builds FUSE_CONF from
+join_paths(get_option('prefix'), get_option('sysconfdir'), 'fuse.conf'),
+and Meson's FHS special case resolves that to the absolute /etc/fuse.conf
+whenever prefix is /usr, so the administrator tier util/fusermount.c's
+read_conf() opened was already correctly placed. What was missing was a
+vendor tier and a /run tier: a deployment could not ship a default mount
+policy and a boot could not override one.
+
+fusermount3 is a privileged mount helper: fuse.conf carries
+user_allow_other, which decides whether an unprivileged caller may expose
+a mount to other users, and mount_max, which caps how many mounts one
+caller may hold. Both new tiers stay root-owned directories an
+unprivileged user cannot write (/usr/share/fuse3 and /run/fuse3), no
+environment variable is added or honoured to redirect either path, and
+neither tier is $HOME or otherwise per-user.
+
+read_conf()'s single-tier body is factored into read_conf_file(path), then
+called three times: FUSE_CONF_VENDOR (/usr/share/fuse3/fuse.conf), then
+FUSE_CONF_RUN (/run/fuse3/fuse.conf), then the existing FUSE_CONF
+(/etc/fuse.conf) last. parse_line() assigns user_allow_other and
+mount_max unconditionally whenever it recognizes a keyword, with no
+"already set" guard, so whichever tier sets a given keyword *last*
+overwrites whatever an earlier tier set: reading the vendor tier first and
+the administrator's FUSE_CONF tier last means an administrator value beats
+a boot value, which beats a vendor default, for the same key. A tier whose
+file is simply absent (ENOENT) stays silent exactly as a missing
+/etc/fuse.conf always has, leaving whatever a lower tier already set
+untouched.
+
+A tier that exists but cannot be opened for any other reason (permission
+denied, a path component that is not a directory, and so on) is recorded
+in the new conf_read_error flag rather than silently trusting whatever the
+other tiers parsed. read_conf() checks that flag once every tier has been
+attempted and, if it was ever set, discards any value any tier parsed and
+re-applies the compiled-in defaults (user_allow_other disabled, mount_max
+at FUSE_MOUNT_MAX_DEFAULT). This keeps a broken or inaccessible tier from
+ever producing a result more permissive than today's single-tier
+behavior, where such an open failure already left both settings at their
+compiled defaults; in particular it stops a lower tier's successful
+"enable" from surviving when a higher tier's file exists but could not be
+read. A genuine stream read error (ferror()) still exits the whole program
+immediately, exactly as it always has.
+
+--- a/util/fusermount.c	2026-08-19 00:59:25.731260570 -0400
++++ b/util/fusermount.c	2026-08-19 00:59:57.417318350 -0400
+@@ -48,0 +49,13 @@
++/* FUSE_CONF (compiled from get_option('prefix')/get_option('sysconfdir'),
++ * which Meson resolves to /etc/fuse.conf) stays the administrator tier.
++ * These two add the vendor and boot tiers below /usr and /run, both
++ * root-owned directories an unprivileged mount caller cannot write. */
++#ifndef FUSE_CONF_VENDOR
++#define FUSE_CONF_VENDOR "/usr/share/fuse3/fuse.conf"
++#endif
++#ifndef FUSE_CONF_RUN
++#define FUSE_CONF_RUN "/run/fuse3/fuse.conf"
++#endif
++
++#define FUSE_MOUNT_MAX_DEFAULT 1000
++
+@@ -50 +63 @@
+-static int mount_max = 1000;
++static int mount_max = FUSE_MOUNT_MAX_DEFAULT;
+@@ -625 +638,12 @@
+-static void parse_line(char *line, int linenum)
++/* Set when read_conf_file() hits a tier whose file exists but could not be
++ * read for a reason other than plain absence (permission denied, a path
++ * component that turned out not to be a directory, and so on). read_conf()
++ * checks this after every tier has been attempted and, if it was ever set,
++ * discards whatever any tier parsed and re-applies the compiled-in defaults.
++ * This keeps a broken or inaccessible tier from ever producing a result more
++ * permissive than today's single-/etc/fuse.conf-tier behavior, where such an
++ * open failure already left user_allow_other and mount_max at their
++ * compiled defaults. */
++static bool conf_read_error = false;
++
++static void parse_line(const char *path, char *line, int linenum)
+@@ -635 +659 @@
+-			progname, FUSE_CONF, linenum, line);
++			progname, path, linenum, line);
+@@ -638 +662,6 @@
+-static void read_conf(void)
++/* Read one configuration tier's file. A missing file (ENOENT) is silent, as
++ * it already was for the single /etc/fuse.conf tier this is factored out
++ * of. Any other open failure is recorded in conf_read_error so read_conf()
++ * can fail closed once every tier has been attempted; a genuine stream read
++ * error still exits immediately, exactly as it always has. */
++static void read_conf_file(const char *path)
+@@ -640 +669 @@
+-	FILE *fp = fopen(FUSE_CONF, "r");
++	FILE *fp = fopen(path, "r");
+@@ -649 +678 @@
+-					parse_line(line, linenum);
++					parse_line(path, line, linenum);
+@@ -654 +683 @@
+-				fprintf(stderr, "%s: reading %s: line %i too long\n", progname, FUSE_CONF, linenum);
++				fprintf(stderr, "%s: reading %s: line %i too long\n", progname, path, linenum);
+@@ -662 +691 @@
+-			fprintf(stderr, "%s: reading %s: missing newline at end of file\n", progname, FUSE_CONF);
++			fprintf(stderr, "%s: reading %s: missing newline at end of file\n", progname, path);
+@@ -666 +695 @@
+-			fprintf(stderr, "%s: reading %s: read failed\n", progname, FUSE_CONF);
++			fprintf(stderr, "%s: reading %s: read failed\n", progname, path);
+@@ -675 +704 @@
+-			progname, FUSE_CONF, strerror(errno));
++			progname, path, strerror(errno));
+@@ -677,0 +707,30 @@
++		conf_read_error = true;
++	}
++}
++
++static void read_conf(void)
++{
++	/* Read the vendor tier, then the boot tier, then the administrator's
++	 * FUSE_CONF (/etc/fuse.conf) last. parse_line() assigns
++	 * user_allow_other and mount_max unconditionally whenever it
++	 * recognizes a keyword, with no "already set" guard, so whichever
++	 * tier sets a given keyword *last* is the value that survives:
++	 * reading the vendor tier first and the administrator tier last
++	 * means an administrator value beats a boot value, which beats a
++	 * vendor default, for the same key. A tier whose file is simply
++	 * absent leaves whatever a lower tier already set untouched, exactly
++	 * as a missing /etc/fuse.conf always has. */
++	conf_read_error = false;
++
++	read_conf_file(FUSE_CONF_VENDOR);
++	read_conf_file(FUSE_CONF_RUN);
++	read_conf_file(FUSE_CONF);
++
++	if (conf_read_error) {
++		fprintf(stderr,
++			"%s: one of %s, %s, %s could not be read; "
++			"enforcing compiled defaults (user_allow_other disabled, mount_max=%i)\n",
++			progname, FUSE_CONF_VENDOR, FUSE_CONF_RUN, FUSE_CONF,
++			FUSE_MOUNT_MAX_DEFAULT);
++		user_allow_other = 0;
++		mount_max = FUSE_MOUNT_MAX_DEFAULT;

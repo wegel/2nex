@@ -6,12 +6,21 @@ package:
   version: 3.17.4
   description: Filesystem in Userspace library and helpers
   homepage: https://github.com/libfuse/libfuse
-  checksum: 9829fa1b95f94bc0a3185e52c6b618b5b1d5e9eb6a26b51edbdd0b5536c79047
+  checksum: 12b6910018bda451150ec388abc7fae4a979a24793825a73ae3d0b2b1aa264b5
 
 sources:
 - name: fuse3
   url: https://github.com/libfuse/libfuse/releases/download/fuse-3.17.4/fuse-3.17.4.tar.gz
   sha256: df9e40ae927b73dc702d0bce7925c0c618af47ad0b13204fbf2be66e54d8528b
+- name: uapi_config_patch
+  file: pkg/libs/system/fuse3-uapi-config.patch
+  sha256: b121fdbf54b6f42a379e962f6877c6a6d28920d81f8becf96837a78687f7cf6a
+- name: uapi_smoke
+  file: pkg/libs/system/fuse3-uapi-smoke.c
+  sha256: a3ca9da8ea592b3075e48df3eeb8a7736c810e6a5890267f573e17389442bb87
+- name: uapi_check
+  file: pkg/libs/system/fuse3-uapi-check.sh
+  sha256: 0641c6217cc8cdf9ec0ce32b42c312d7503809664dc22a67446bfd567d0c5e53
 
 dependencies:
 - name: glibc
@@ -40,16 +49,21 @@ dependencies:
   commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4106:2959, 5011:2992]
+  profile: [4138:2708, 5280:2803]
 
   script: |
     set -eu
 
     tar --no-same-owner -xf /${SOURCE_fuse3} -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config_patch}"
 
     meson setup build \
       --prefix=/usr \
@@ -65,6 +79,14 @@ build:
 
     ninja -C build
     DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # Exercise the newly built, installed fusermount3 through its real
+    # _FUSE_COMMFD startup protocol instead of reimplementing its config
+    # search and precedence; see the check script for detail.
+    sh "/${SOURCE_uapi_check}" \
+      "${OUT_DIR}" \
+      "${WORK_DIR}" \
+      "/${SOURCE_uapi_smoke}"
 
     install -Dm644 \
       "${OUT_DIR}/etc/fuse.conf" \
