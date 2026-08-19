@@ -3,7 +3,7 @@
 use std::fs;
 use std::io;
 use std::os::unix::fs::symlink;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
 
@@ -16,16 +16,27 @@ pub(super) fn symlink_flattened_libs_to_usr(
     let usr_lib = target_dir.join("usr/lib");
     fs::create_dir_all(&usr_lib)?;
 
-    for entry in WalkDir::new(nex_pkg_dir).min_depth(1) {
-        let Ok(entry) = entry else {
-            continue;
-        };
-        if is_capsule_usr_lib(entry.path()) {
-            symlink_usr_lib_entries(nex_pkg_dir, &usr_lib, entry.path())?;
-        }
+    for capsule_usr_lib in sorted_capsule_usr_lib_dirs(nex_pkg_dir) {
+        symlink_usr_lib_entries(nex_pkg_dir, &usr_lib, &capsule_usr_lib)?;
     }
 
     Ok(())
+}
+
+/// Collect every capsule `usr/lib` directory in path order. The first capsule
+/// that provides a library name wins, so the walk must not let filesystem
+/// readdir order pick the provider. Ext4 and tmpfs return different orders for
+/// the same tree, which made one assembly build to two different checksums.
+fn sorted_capsule_usr_lib_dirs(nex_pkg_dir: &Path) -> Vec<PathBuf> {
+    let mut capsule_dirs: Vec<PathBuf> = WalkDir::new(nex_pkg_dir)
+        .min_depth(1)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| is_capsule_usr_lib(entry.path()))
+        .map(|entry| entry.path().to_path_buf())
+        .collect();
+    capsule_dirs.sort();
+    capsule_dirs
 }
 
 pub(super) fn create_file_symlinks_recursive(
@@ -34,7 +45,7 @@ pub(super) fn create_file_symlinks_recursive(
     install: &PackageInstall,
     relative_base: &str,
 ) -> io::Result<()> {
-    for entry in WalkDir::new(src_dir).min_depth(1) {
+    for entry in WalkDir::new(src_dir).min_depth(1).sort_by_file_name() {
         let entry = entry?;
         let rel_path = entry
             .path()
@@ -84,11 +95,16 @@ fn symlink_usr_lib_entries(
     usr_lib: &Path,
     capsule_usr_lib: &Path,
 ) -> io::Result<()> {
-    for lib_entry in WalkDir::new(capsule_usr_lib).min_depth(1).max_depth(1) {
-        let Ok(lib_entry) = lib_entry else {
-            continue;
-        };
-        symlink_usr_lib_entry(nex_pkg_dir, usr_lib, lib_entry.path())?;
+    let mut lib_paths: Vec<PathBuf> = WalkDir::new(capsule_usr_lib)
+        .min_depth(1)
+        .max_depth(1)
+        .into_iter()
+        .filter_map(Result::ok)
+        .map(|lib_entry| lib_entry.path().to_path_buf())
+        .collect();
+    lib_paths.sort();
+    for lib_path in &lib_paths {
+        symlink_usr_lib_entry(nex_pkg_dir, usr_lib, lib_path)?;
     }
     Ok(())
 }
@@ -115,3 +131,7 @@ fn symlink_usr_lib_entry(nex_pkg_dir: &Path, usr_lib: &Path, lib_path: &Path) ->
 fn is_dynamic_loader_name(lib_name: &str) -> bool {
     lib_name.starts_with("ld-linux") || lib_name == "ld.so"
 }
+
+#[cfg(test)]
+#[path = "nex_links_tests.rs"]
+mod nex_links_tests;
