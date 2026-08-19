@@ -59,10 +59,13 @@ pub fn run(args: &CommitArgs) -> io::Result<()> {
     }
 
     // commit staged changes to a new deployment ref
-    create_deployment(&message)?;
+    let new_ref = create_deployment(&message)?;
 
-    // cleanup staging
+    // cleanup staging before activating: activation ends by remounting the
+    // sysroot read-only, which takes the staging mount with it
     cleanup_staging()?;
+
+    activate_deployment(&new_ref)?;
 
     println!("Deployment created successfully.");
 
@@ -105,7 +108,7 @@ fn copy_dir_contents(src: &str, dst: &str) -> io::Result<()> {
     Ok(())
 }
 
-fn create_deployment(message: &str) -> io::Result<()> {
+fn create_deployment(message: &str) -> io::Result<String> {
     // get current deployment info
     let current_ref = get_current_deployment_ref()?;
     println!("  Current deployment: {}", current_ref);
@@ -147,26 +150,35 @@ fn create_deployment(message: &str) -> io::Result<()> {
 
     println!("  Created deployment: {}", new_ref);
 
-    // A store ref is not bootable on its own. The bootloader reads the on-disk
-    // `nex/deployments` directory and picks the highest serial, so a commit that
-    // stops here survives in the store and never boots, which makes the "keep
-    // it" half of staging inert. Materialise it the same way `nex deploy` does,
-    // reusing that path rather than growing a second one. The ref is named by
-    // timestamp and carries no checksum metadata, hence `allow_commit_hash`.
+    // cleanup staging dir
+    fs::remove_dir_all(&staging_dir)?;
+
+    Ok(new_ref)
+}
+
+/// Make a committed deployment bootable.
+///
+/// A store ref is not bootable on its own: the bootloader reads the on-disk
+/// `nex/deployments` directory and picks the highest serial, so a commit that
+/// stops at the ref survives in the store and never boots, which makes the
+/// "keep it" half of staging inert. `nex deploy` already does this, so reuse it
+/// rather than growing a second implementation. The ref is named by timestamp
+/// and carries no checksum metadata, hence `allow_commit_hash`.
+///
+/// This must run after every staging teardown. `deploy` remounts the sysroot
+/// read-write and back, and `/sysroot`, `/nex/staging`, and `/nex/deployments`
+/// are separate mounts of one block device, so restoring read-only takes them
+/// all with it. Anything that still needs to write would fail with `EROFS`.
+fn activate_deployment(new_ref: &str) -> io::Result<()> {
     println!("  Activating for next boot...");
     super::deploy::run(&super::deploy::DeployArgs {
-        system_ref: new_ref.clone(),
+        system_ref: new_ref.to_string(),
         sysroot: PathBuf::from("/sysroot"),
         repo: PathBuf::from(NEX_REPO),
         dry_run: false,
         force: false,
         allow_commit_hash: true,
-    })?;
-
-    // cleanup staging dir
-    fs::remove_dir_all(&staging_dir)?;
-
-    Ok(())
+    })
 }
 
 fn get_current_deployment_ref() -> io::Result<String> {
