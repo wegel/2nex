@@ -1,0 +1,139 @@
+Subject: add vendor and /run tiers to the default configuration search
+Source: downstream patch for popt 1.19
+Upstream: not submitted; needs agreement on the /usr/share/popt and
+  /run/popt paths
+
+poptReadDefaultConfig() (src/poptconfig.c) compiled a single system
+tier, POPT_SYSCONFDIR "/popt" plus its POPT_SYSCONFDIR "/popt.d/*"
+drop-ins. src/Makefile.am defines POPT_SYSCONFDIR from
+-DPOPT_SYSCONFDIR="\"$(sysconfdir)\"", and the package manifest ran
+./configure --prefix=/usr with no --sysconfdir, so autotools kept its
+${prefix}/etc default and POPT_SYSCONFDIR compiled to /usr/etc: a path
+under the immutable /usr tree that a machine owner can never write.
+There was also no vendor or /run tier, so a package could not ship a
+default alias and a transient override had nowhere to go.
+
+This patch factors the pre-existing single-tier body of
+poptReadDefaultConfig() into a new static poptReadConfigTier(), then
+calls it three times for /usr/share/popt (vendor), /run/popt (boot),
+and POPT_SYSCONFDIR (administrator, /etc once the manifest passes
+--sysconfdir=/etc). Each tier keeps the exact poptSaneFile() filtering
+and HAVE_GLOB_H glob-guard structure the single /etc tier already had,
+and poptReadConfigFile() already treats a missing base file as success
+(poptReadFile() returns ENOENT, which poptReadConfigFile() maps to rc
+== 0), while poptReadConfigTier() only globs a drop-in directory that
+stat() confirms exists, so a missing vendor, /run, or /etc tier stays
+silent exactly as the missing /etc tier already was.
+
+poptAddItem() (src/popt.c) always appends a new alias or exec entry to
+the end of con->aliases / con->execs, and handleAlias() (src/popt.c)
+looks up a name by walking that array backward from its end ("for (i =
+con->numAliases - 1; i >= 0; i--)"), so the entry added last is the
+entry a lookup finds first. Reading vendor first, then /run, then the
+administrator's POPT_SYSCONFDIR tier last therefore makes an
+administrator alias beat the same alias read from /run, which beats
+the vendor default. The per-user $HOME/.popt file keeps its current
+meaning: poptReadDefaultConfig() still reads it last, after all three
+system tiers, so it keeps overriding every one of them.
+
+Neither new tier installs anything under /etc or /usr/etc:
+/usr/share/popt and /run/popt are only compiled-in search paths that
+this package does not populate.
+--- a/src/poptconfig.c
++++ b/src/poptconfig.c
+@@ -434,24 +434,42 @@
+     return rc;
+ }
+
+-int poptReadDefaultConfig(poptContext con, UNUSED(int useEnv))
++#ifndef POPT_VENDORDIR
++#define POPT_VENDORDIR "/usr/share/popt"
++#endif
++#ifndef POPT_RUNDIR
++#define POPT_RUNDIR "/run/popt"
++#endif
++
++/**
++ * Read one system configuration tier: its single base file, then every
++ * file matching that tier's popt.d drop-in glob when HAVE_GLOB_H is
++ * available. This is the pre-existing single-tier body of
++ * poptReadDefaultConfig(), factored out so each tier keeps the same
++ * poptSaneFile() filtering and glob-guard structure.
++ * @param con		context
++ * @param base		tier's single config file, e.g. "/etc/popt"
++ * @param dropinDir	tier's drop-in directory, e.g. "/etc/popt.d"
++ * @param dropinGlob	tier's drop-in glob, matching every plain file
++ *			directly below dropinDir
++ * @return		0 on success
++ */
++static int poptReadConfigTier(poptContext con, const char * base,
++		const char * dropinDir, const char * dropinGlob)
+ {
+-    char * home;
+     struct stat sb;
+-    int rc = 0;		/* assume success */
++    int rc;
+
+-    if (con->appName == NULL) goto exit;
+-
+-    rc = poptReadConfigFile(con, POPT_SYSCONFDIR "/popt");
+-    if (rc) goto exit;
++    rc = poptReadConfigFile(con, base);
++    if (rc) return rc;
+
+ #if defined(HAVE_GLOB_H)
+-    if (!stat(POPT_SYSCONFDIR "/popt.d", &sb) && S_ISDIR(sb.st_mode)) {
++    if (!stat(dropinDir, &sb) && S_ISDIR(sb.st_mode)) {
+ 	const char ** av = NULL;
+ 	int ac = 0;
+ 	int i;
+
+-	if ((rc = poptGlob(con, POPT_SYSCONFDIR "/popt.d/*", &ac, &av)) == 0) {
++	if ((rc = poptGlob(con, dropinGlob, &ac, &av)) == 0) {
+ 	    for (i = 0; rc == 0 && i < ac; i++) {
+ 		const char * fn = av[i];
+ 		if (!poptSaneFile(fn))
+@@ -464,9 +482,42 @@
+ 	    av = NULL;
+ 	}
+     }
+-    if (rc) goto exit;
+ #endif
+
++    return rc;
++}
++
++int poptReadDefaultConfig(poptContext con, UNUSED(int useEnv))
++{
++    char * home;
++    int rc = 0;		/* assume success */
++
++    if (con->appName == NULL) goto exit;
++
++    /* Read the vendor, /run, and /etc tiers in that order. poptAddItem()
++     * (see popt.c) always appends a new alias or exec entry to the end of
++     * con->aliases / con->execs, and handleAlias() looks up a name by
++     * walking that array backward from its end ("for (i = con->numAliases
++     * - 1; i >= 0; i--)"), so the entry added last is the entry found
++     * first. Reading vendor first and the administrator's POPT_SYSCONFDIR
++     * tier last therefore makes an administrator alias beat the same
++     * alias read from /run, which beats the vendor default. A missing
++     * base file or drop-in directory in any tier is silent: poptReadFile()
++     * (via poptReadConfigFile()) treats ENOENT as success, and
++     * poptReadConfigTier() only globs a drop-in directory that stat()
++     * confirms exists. */
++    rc = poptReadConfigTier(con, POPT_VENDORDIR "/popt",
++		POPT_VENDORDIR "/popt.d", POPT_VENDORDIR "/popt.d/*");
++    if (rc) goto exit;
++
++    rc = poptReadConfigTier(con, POPT_RUNDIR "/popt",
++		POPT_RUNDIR "/popt.d", POPT_RUNDIR "/popt.d/*");
++    if (rc) goto exit;
++
++    rc = poptReadConfigTier(con, POPT_SYSCONFDIR "/popt",
++		POPT_SYSCONFDIR "/popt.d", POPT_SYSCONFDIR "/popt.d/*");
++    if (rc) goto exit;
++
+     if ((home = getenv("HOME"))) {
+ 	char * fn = malloc(strlen(home) + 20);
+ 	if (fn != NULL) {

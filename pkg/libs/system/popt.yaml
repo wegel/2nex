@@ -6,12 +6,21 @@ package:
   version: "1.19"
   description: Command line option parsing library
   homepage: http://rpm.org/
-  checksum: 904f7bd6090dce985fba24ef71b33eb10fd42953fee7c3cb0a32b17c2deb460a
+  checksum: c93761cd57cc99524cd1b56b70a026072978b3a272e5ca162fd36095d585457e
 
 sources:
 - name: popt
   url: http://ftp.rpm.org/popt/releases/popt-1.x/popt-1.19.tar.gz
   sha256: c25a4838fc8e4c1c8aacb8bd620edb3084a3d63bf8987fdad3ca2758c63240f9
+- name: uapi_config_patch
+  file: pkg/libs/system/popt-uapi-config.patch
+  sha256: 9d188d05207c48635b07208c694932b4da522efa443df15be40268ba8165b5c8
+- name: uapi_smoke
+  file: pkg/libs/system/popt-uapi-smoke.c
+  sha256: 8bb8fcf5f38e6dfa201cd84b9238cf23e7bc74081317dbc077cc20e818cea2c9
+- name: uapi_check
+  file: pkg/libs/system/popt-uapi-check.sh
+  sha256: 88621c3bca3ba7c88e4e51f123b77d50fddbf96753fc0cf92ea733b4110cf1d8
 
 dependencies:
 - name: glibc
@@ -60,19 +69,30 @@ dependencies:
   commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
 - name: linux-headers
   commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4124:10167, 8555:13538, 12822:15801, 16932:18058, 21048:23809, 21445:24703]
+  profile: [4112:902, 8585:2108, 12860:2668, 16970:2785, 21086:2886, 21708:3073]
 
   script: |
     tar --no-same-owner -xzf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config_patch}"
 
-    ./configure --prefix=/usr --disable-static CPP=cpp
+    ./configure --prefix=/usr --disable-static --sysconfdir=/etc CPP=cpp
 
     make
     make DESTDIR="${OUT_DIR}" install
+
+    # Exercise the newly built, installed libpopt through the real
+    # poptReadDefaultConfig() reader instead of reimplementing its
+    # tier-merge and precedence rules; see the check script for detail.
+    sh "/${SOURCE_uapi_check}" \
+      "${OUT_DIR}" \
+      "${WORK_DIR}" \
+      "/${SOURCE_uapi_smoke}"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
