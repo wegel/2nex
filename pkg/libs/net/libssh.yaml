@@ -6,12 +6,21 @@ package:
   version: 0.11.4
   description: C library that implements the SSH protocol for clients and servers
   homepage: https://www.libssh.org/
-  checksum: 822e077babf2292cdd3044ae17310038e683850d6128e04a5b78b683504def87
+  checksum: 8fad60098c1d6ed053a9a2d5a888b315cf3b1888a3c770bc5c220e51dff43bc8
 
 sources:
 - name: libssh
   url: https://gitlab.com/libssh/libssh-mirror/-/archive/libssh-0.11.4/libssh-mirror-libssh-0.11.4.tar.gz
   sha256: 803bc55314493fbfdd2795463f11a1f038903ccfcdcf2e1ac7c2568f3f6e3301
+- name: uapi_config_patch
+  file: pkg/libs/net/libssh-uapi-config.patch
+  sha256: 58a1fa60c8daf427bd92dbf24e68d5558bcc7477423b3d5022d1c9d964216856
+- name: uapi_smoke
+  file: pkg/libs/net/libssh-uapi-config-smoke.c
+  sha256: 968a9ca02ec46ee677d9153b834f7ab306926e262d98c64a601f3cb48132f270
+- name: uapi_check
+  file: pkg/libs/net/libssh-uapi-config-check.sh
+  sha256: 9e070aa700cdcd195f71d19a423da20642517aa263874f0110b01b0ebf9db283
 
 dependencies:
 - name: bash
@@ -28,6 +37,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
 - name: krb5
@@ -40,6 +51,8 @@ dependencies:
   commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
 - name: openssl
   commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 - name: pkgconf
   commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
 - name: tar
@@ -49,12 +62,13 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4116:1933, 8252:4668, 12358:5367, 16466:5437, 20440:9762]
+  profile: [4120:1470, 8217:3643, 12338:4243, 16484:4259, 20726:14384, 20726:14397]
 
   script: |
     set -eu
     tar --no-same-owner -xf "${SOURCE_libssh}" -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config_patch}"
 
     cmake -S . -B build -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
@@ -70,6 +84,15 @@ build:
       -DWITH_ZLIB=ON
     cmake --build build
     DESTDIR="${OUT_DIR}" cmake --install build
+
+    # Exercise the newly built, installed libssh through its real readers:
+    # ssh_options_parse_config() for the client config, ssh_bind_listen()
+    # for the server config, and a real diffie-hellman-group-exchange
+    # handshake for the moduli file. See libssh-uapi-config-check.sh.
+    sh "/${SOURCE_uapi_check}" \
+      "${OUT_DIR}" \
+      "${WORK_DIR}" \
+      "/${SOURCE_uapi_smoke}"
 
     find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;

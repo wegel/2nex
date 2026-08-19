@@ -1,0 +1,205 @@
+From: Package maintainers <packages@localhost>
+Subject: follow UAPI configuration file precedence
+Source: https://gitlab.com/libssh/libssh-mirror/-/archive/libssh-0.11.4/libssh-mirror-libssh-0.11.4.tar.gz
+Upstream: Not submitted; this is a generic UAPI configuration proposal.
+
+Give the client configuration (ssh_config), the server configuration
+(libssh_server_config), and the moduli file a /run and vendor tier in
+addition to their existing /etc/ssh path, using the same
+$(prefix)/lib/ssh, /run/ssh, and $(datadir)/ssh directories that
+pkg/cli/net/openssh-uapi-config.patch already gives the same file
+names, so the two packages agree about where a deployment and a boot
+put SSH policy.
+
+ssh_config_parse_line() skips a keyword already set earlier in the
+session (session->opts.options_seen[], see src/config.c), so the
+first file that sets a keyword wins for the life of the session,
+matching OpenSSH's documented rule. ssh_options_parse_config() now
+reads the administrator (/etc), then runtime (/run), then vendor
+tier in that order so an administrator value keeps winning.
+
+ssh_bind_config_parse_file() keeps its "seen" table only for the
+duration of one call (see the comment on that table in
+bind_config.c), so a later call's value overrides rather than is
+blocked by an earlier one. ssh_bind_options_parse_config() now reads
+the vendor tier first, then runtime, then administrator (/etc) last,
+reaching the same administrator-over-runtime-over-vendor result by
+the opposite means.
+
+The moduli file is a single file rather than a keyword list, so
+ssh_retrieve_dhgroup() now selects the first existing file among the
+same three tiers instead of merging them.
+
+A missing vendor or /run path is silent in all three readers:
+ssh_strict_fopen() already returns NULL for a missing file without
+logging above SSH_LOG_RARE, so a client or server that finds no
+system configuration today behaves identically after this change.
+
+Host key defaults (src/bind.c) and known-hosts handling are
+untouched: both are per-machine or per-user secrets, not shippable
+policy.
+
+diff -urN a/DefineOptions.cmake b/DefineOptions.cmake
+--- a/DefineOptions.cmake	2026-02-06 14:13:56.000000000 -0500
++++ b/DefineOptions.cmake	2026-08-19 01:23:13.106459335 -0400
+@@ -87,6 +87,46 @@
+     set(GLOBAL_CLIENT_CONFIG "${GLOBAL_CONF_DIR}/ssh_config")
+ endif (NOT GLOBAL_CLIENT_CONFIG)
+ 
++# UAPI vendor and runtime configuration tiers. GLOBAL_CONF_DIR above stays the
++# administrator (/etc) tier; these add the /run and vendor tiers that
++# pkg/cli/net/openssh-uapi-config.patch already gives the same file names, so
++# the two packages agree about where a deployment and a boot put SSH policy.
++if (NOT LIBSSH_VENDOR_DIR)
++    set(LIBSSH_VENDOR_DIR "${CMAKE_INSTALL_PREFIX}/lib/ssh")
++endif (NOT LIBSSH_VENDOR_DIR)
++
++if (NOT LIBSSH_VENDOR_SHARE_DIR)
++    set(LIBSSH_VENDOR_SHARE_DIR "${CMAKE_INSTALL_PREFIX}/share/ssh")
++endif (NOT LIBSSH_VENDOR_SHARE_DIR)
++
++if (NOT LIBSSH_RUNTIME_DIR)
++    set(LIBSSH_RUNTIME_DIR "/run/ssh")
++endif (NOT LIBSSH_RUNTIME_DIR)
++
++if (NOT GLOBAL_BIND_CONFIG_RUNTIME)
++    set(GLOBAL_BIND_CONFIG_RUNTIME "${LIBSSH_RUNTIME_DIR}/libssh_server_config")
++endif (NOT GLOBAL_BIND_CONFIG_RUNTIME)
++
++if (NOT GLOBAL_BIND_CONFIG_VENDOR)
++    set(GLOBAL_BIND_CONFIG_VENDOR "${LIBSSH_VENDOR_DIR}/libssh_server_config")
++endif (NOT GLOBAL_BIND_CONFIG_VENDOR)
++
++if (NOT GLOBAL_CLIENT_CONFIG_RUNTIME)
++    set(GLOBAL_CLIENT_CONFIG_RUNTIME "${LIBSSH_RUNTIME_DIR}/ssh_config")
++endif (NOT GLOBAL_CLIENT_CONFIG_RUNTIME)
++
++if (NOT GLOBAL_CLIENT_CONFIG_VENDOR)
++    set(GLOBAL_CLIENT_CONFIG_VENDOR "${LIBSSH_VENDOR_DIR}/ssh_config")
++endif (NOT GLOBAL_CLIENT_CONFIG_VENDOR)
++
++if (NOT MODULI_FILE_RUNTIME)
++    set(MODULI_FILE_RUNTIME "${LIBSSH_RUNTIME_DIR}/moduli")
++endif (NOT MODULI_FILE_RUNTIME)
++
++if (NOT MODULI_FILE_VENDOR)
++    set(MODULI_FILE_VENDOR "${LIBSSH_VENDOR_SHARE_DIR}/moduli")
++endif (NOT MODULI_FILE_VENDOR)
++
+ if (FUZZ_TESTING)
+     set(WITH_INSECURE_NONE ON)
+ endif (FUZZ_TESTING)
+diff -urN a/config.h.cmake b/config.h.cmake
+--- a/config.h.cmake	2026-02-06 14:13:56.000000000 -0500
++++ b/config.h.cmake	2026-08-19 01:23:19.910510052 -0400
+@@ -18,6 +18,15 @@
+ /* Global client configuration file path */
+ #cmakedefine GLOBAL_CLIENT_CONFIG "${GLOBAL_CLIENT_CONFIG}"
+ 
++/* UAPI /run and vendor tiers for the bind and client configuration files and
++ * the moduli file. See DefineOptions.cmake. */
++#cmakedefine GLOBAL_BIND_CONFIG_RUNTIME "${GLOBAL_BIND_CONFIG_RUNTIME}"
++#cmakedefine GLOBAL_BIND_CONFIG_VENDOR "${GLOBAL_BIND_CONFIG_VENDOR}"
++#cmakedefine GLOBAL_CLIENT_CONFIG_RUNTIME "${GLOBAL_CLIENT_CONFIG_RUNTIME}"
++#cmakedefine GLOBAL_CLIENT_CONFIG_VENDOR "${GLOBAL_CLIENT_CONFIG_VENDOR}"
++#cmakedefine MODULI_FILE_RUNTIME "${MODULI_FILE_RUNTIME}"
++#cmakedefine MODULI_FILE_VENDOR "${MODULI_FILE_VENDOR}"
++
+ /************************** HEADER FILES *************************/
+ 
+ /* Define to 1 if you have the <argp.h> header file. */
+diff -urN a/src/options.c b/src/options.c
+--- a/src/options.c	2026-02-06 14:13:56.000000000 -0500
++++ b/src/options.c	2026-08-19 01:23:42.416677701 -0400
+@@ -1855,7 +1855,26 @@
+       goto out;
+   }
+   if (filename == NULL) {
++      /*
++       * UAPI configuration precedence: a keyword already set by an earlier
++       * file is skipped by ssh_config_parse_line()'s "seen" table (see
++       * SOC_UNSUPPORTED..SOC_MAX handling), and that table is part of
++       * session->opts, so it persists across every ssh_config_parse_file()
++       * call made for this session. The first file that sets a keyword
++       * therefore wins for the life of the session, matching OpenSSH's
++       * documented "first obtained value wins" rule. Reading the
++       * administrator (/etc), then runtime (/run), then vendor tier in that
++       * order makes an administrator value beat a runtime value, which
++       * beats a vendor default, while an absent file is silently skipped by
++       * ssh_config_parse_file() itself.
++       */
+       r = ssh_config_parse_file(session, GLOBAL_CLIENT_CONFIG);
++      if (r == 0) {
++          r = ssh_config_parse_file(session, GLOBAL_CLIENT_CONFIG_RUNTIME);
++      }
++      if (r == 0) {
++          r = ssh_config_parse_file(session, GLOBAL_CLIENT_CONFIG_VENDOR);
++      }
+   }
+ 
+   /* Do not process the default configuration as part of connection again */
+@@ -2704,8 +2723,27 @@
+     }
+ 
+     /* If the global default configuration hasn't been processed yet, process it
+-     * before the provided configuration. */
++     * before the provided configuration.
++     *
++     * UAPI configuration precedence: ssh_bind_config_parse_file() keeps a
++     * "seen" table only for the duration of one call (see the comment on
++     * that table in bind_config.c), so a keyword it sets is overridden by
++     * the same keyword in a later call rather than protected by it. Reading
++     * the vendor tier first, then runtime, then administrator (/etc) last
++     * therefore makes an administrator value beat a runtime value, which
++     * beats a vendor default, the same direction ssh_options_parse_config()
++     * reaches by the opposite means. A missing file is silently skipped by
++     * ssh_bind_config_parse_file() itself.
++     */
+     if (!(sshbind->config_processed)) {
++        rc = ssh_bind_config_parse_file(sshbind, GLOBAL_BIND_CONFIG_VENDOR);
++        if (rc != 0) {
++            return rc;
++        }
++        rc = ssh_bind_config_parse_file(sshbind, GLOBAL_BIND_CONFIG_RUNTIME);
++        if (rc != 0) {
++            return rc;
++        }
+         rc = ssh_bind_config_parse_file(sshbind, GLOBAL_BIND_CONFIG);
+         if (rc != 0) {
+             return rc;
+diff -urN a/src/dh-gex.c b/src/dh-gex.c
+--- a/src/dh-gex.c	2026-02-06 14:13:56.000000000 -0500
++++ b/src/dh-gex.c	2026-08-19 01:23:50.640738925 -0400
+@@ -518,10 +518,30 @@
+         return ssh_fallback_group(pmax, p, g);
+     }
+ 
+-    if (moduli_file != NULL)
++    if (moduli_file != NULL) {
+         moduli = ssh_strict_fopen(moduli_file, SSH_MAX_CONFIG_FILE_SIZE);
+-    else
++    } else {
++        /*
++         * The moduli file is a single file rather than a keyword list, so it
++         * needs first-existing-file selection across the administrator
++         * (/etc), runtime (/run), and vendor tiers rather than a merge.
++         * ssh_strict_fopen() silently returns NULL for a missing file, so an
++         * absent higher tier falls through to the next one without error.
++         */
+         moduli = ssh_strict_fopen(MODULI_FILE, SSH_MAX_CONFIG_FILE_SIZE);
++#ifdef MODULI_FILE_RUNTIME
++        if (moduli == NULL) {
++            moduli = ssh_strict_fopen(MODULI_FILE_RUNTIME,
++                                      SSH_MAX_CONFIG_FILE_SIZE);
++        }
++#endif
++#ifdef MODULI_FILE_VENDOR
++        if (moduli == NULL) {
++            moduli = ssh_strict_fopen(MODULI_FILE_VENDOR,
++                                      SSH_MAX_CONFIG_FILE_SIZE);
++        }
++#endif
++    }
+ 
+     if (moduli == NULL) {
+         char err_msg[SSH_ERRNO_MSG_MAX] = {0};
