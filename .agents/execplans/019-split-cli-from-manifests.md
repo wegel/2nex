@@ -49,6 +49,17 @@ whether it can reach a machine.
 
 ## Decision Log
 
+- Decision: Do not ship the crate vendor bundle in the image.
+  Rationale: Rebuilding the CLI on a machine would then need no network, but no
+  other package has that property. Building any package fetches its upstream
+  source first, which is why `inputs_cache` on the development host is 19 GB.
+  Pre-carrying roughly 326 MB to make exactly one package offline-buildable is
+  a halfway position that buys little and costs image size. A machine that
+  rebuilds packages has network; a machine that does not cannot rebuild
+  anything regardless. If offline rebuilds are wanted later, the coherent
+  answer is a source mirror, not a special case for the CLI.
+  Date/Author: 2026-08-19 / Human
+
 - Decision: Preserve `src/cli` history in the new repository rather than
   starting fresh.
   Rationale: `git filter-repo --path src/cli` keeps authorship and lets a
@@ -140,10 +151,7 @@ Record here: the new repository URL, the pinned revision, the `cargo_lock`
 sha256, the nex package checksum before and after, and the size change to a
 bundle produced by EP018.
 
-Open question for the human, carried from 2026-08-19: whether the roughly
-326 MB crate vendor should ship so a machine with no network can rebuild the
-CLI. A machine that cannot reach crates.io cannot rebuild the CLI without it,
-and no other package on the system rebuilds without network either.
+The roughly 326 MB crate vendor does not ship; see the Decision Log.
 
 ## Interfaces and Dependencies
 
