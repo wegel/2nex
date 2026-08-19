@@ -43,7 +43,8 @@ or journey 1 fails. Both outcomes are useful, and neither is known today.
 - [ ] Read `scripts/qemu-test-live-upgrade.sh` end to end and list the parts
       worth reusing: disk assembly, `ensure_assert_key`, `ssh_probe`,
       `wait_for_ssh`, serial logging.
-- [ ] Build the fixture image from `base/nex-systemd.yaml` and prove an overlay
+- [ ] Build the fixture image from `base/nex-systemd.yaml`, or write
+      `base/nex-test-fixture.yaml` if that will not serve, and prove an overlay
       boots from it with SSH reachable.
 - [ ] Implement the harness verbs: `boot`, `run`, `reboot`, `expect_deployment`.
 - [ ] Write journey 1 and record what it reports, pass or fail.
@@ -82,6 +83,16 @@ or journey 1 fails. Both outcomes are useful, and neither is known today.
   built `edgebox-rootfs` root contains no `nex` directory and no `nex` binary,
   so it cannot build, install, deploy, or roll back anything.
   Date/Author: 2026-08-19 / Claude
+
+- Decision: If `base/nex-systemd.yaml` will not serve, write a purpose-built
+  `base/nex-test-fixture.yaml` rather than using `examples/desktop-vwl`.
+  Rationale: desktop-vwl builds a roughly 7 GB root carrying a whole desktop
+  stack that none of these journeys exercise, and every fixture rebuild would
+  pay for it. A purpose-built fixture is small, fast, and its contents are
+  chosen by what the tests need. Note the tension with the layout committed in
+  `6697928f`, where `base/` holds layers that are not run directly and a
+  fixture is run directly; the human chose `base/` and can move it later.
+  Date/Author: 2026-08-19 / Human
 
 - Decision: Assert on state the machine reports about itself, never on a value
   the test supplied.
@@ -143,8 +154,11 @@ does that from inside the guest.
    assemblies are `base/nex-minimal.yaml`, `base/nex-systemd.yaml`,
    `installer/installer.yaml`, `examples/desktop-vwl/desktop-vwl.yaml`, and
    `examples/desktop-dev.yaml`. Confirm the fixture boots with SSH before
-   building anything on top of it; if `nex-systemd` does not, fall back to
-   `examples/desktop-vwl/desktop-vwl.yaml` and record why.
+   building anything on top of it. If `nex-systemd` is not suitable, write
+   `base/nex-test-fixture.yaml`, a minimal `nex_structure: true` assembly
+   carrying only what these journeys need: systemd, sshd, the `nex` binary, a
+   store, and a manifests repository. Do not fall back to
+   `examples/desktop-vwl/desktop-vwl.yaml`.
 2. Build the fixture and keep its path and checksum in the plan.
 3. Write `scripts/test-machine-operations.sh` with the four verbs above and a
    `--journey <name>` flag so one journey can run alone.
