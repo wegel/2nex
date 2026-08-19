@@ -343,21 +343,44 @@ impl<'a> RemountGuard<'a> {
         Ok(())
     }
 
+    /// Restore the mount to read-only, retrying while it is still busy.
+    ///
+    /// A lazy unmount elsewhere detaches its mount immediately but the kernel
+    /// releases the underlying device asynchronously, and `/`, `/sysroot`,
+    /// `/nex/staging`, and `/nex/deployments` are separate mounts of one block
+    /// device. A remount issued while that release is still in flight is
+    /// refused as busy, so a short retry usually settles it.
+    ///
+    /// Failure is reported, not fatal. By the time this runs the deployment is
+    /// already written and complete, so returning an error here would tell the
+    /// caller their operation failed when it succeeded, and would leave the new
+    /// deployment behind as if it were debris. The machine stays writable until
+    /// the next boot, which is worth a loud warning rather than a false
+    /// failure.
     fn remount_ro(&mut self) -> io::Result<()> {
         if !self.touched_rw {
             return Ok(());
         }
-        let status = Command::new("mount")
-            .arg("-o")
-            .arg("remount,ro")
-            .arg(self.mountpoint)
-            .status()?;
-        if !status.success() {
-            return Err(io::Error::other(format!(
-                "failed to remount {} ro",
-                self.mountpoint.display()
-            )));
+
+        for attempt in 0..5 {
+            if attempt > 0 {
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+            let status = Command::new("mount")
+                .arg("-o")
+                .arg("remount,ro")
+                .arg(self.mountpoint)
+                .status()?;
+            if status.success() {
+                return Ok(());
+            }
         }
+
+        eprintln!(
+            "Warning: {} is still writable; could not restore it to read-only. \
+             The deployment is complete. A reboot restores the read-only mount.",
+            self.mountpoint.display()
+        );
         Ok(())
     }
 }
