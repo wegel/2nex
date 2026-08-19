@@ -43,7 +43,8 @@ or journey 1 fails. Both outcomes are useful, and neither is known today.
 - [ ] Read `scripts/qemu-test-live-upgrade.sh` end to end and list the parts
       worth reusing: disk assembly, `ensure_assert_key`, `ssh_probe`,
       `wait_for_ssh`, serial logging.
-- [ ] Build the fixture image once and prove an overlay boots from it.
+- [ ] Build the fixture image from `base/nex-systemd.yaml` and prove an overlay
+      boots from it with SSH reachable.
 - [ ] Implement the harness verbs: `boot`, `run`, `reboot`, `expect_deployment`.
 - [ ] Write journey 1 and record what it reports, pass or fail.
 - [ ] Write journeys 2, 3, 4.
@@ -74,6 +75,12 @@ or journey 1 fails. Both outcomes are useful, and neither is known today.
   failure. The host parses no prose.
   Rationale: This is what made the graphical smoke test legible.
   `center-pixel=srgb(240,0,255)` is checkable; "looks right" is not.
+  Date/Author: 2026-08-19 / Claude
+
+- Decision: The fixture must be a `nex_structure: true` assembly.
+  Rationale: A flat assembly has no `/nex` at all. Checked on 2026-08-19: a
+  built `edgebox-rootfs` root contains no `nex` directory and no `nex` binary,
+  so it cannot build, install, deploy, or roll back anything.
   Date/Author: 2026-08-19 / Claude
 
 - Decision: Assert on state the machine reports about itself, never on a value
@@ -128,9 +135,16 @@ does that from inside the guest.
 
 ## Concrete Steps
 
-1. Choose the fixture assembly. `examples/edgebox-rootfs.yaml` is the cheapest
-   that boots with SSH; `examples/desktop-vwl/desktop-vwl.yaml` is closer to a
-   real user machine. Record the choice and why in the Decision Log.
+1. Build the fixture from `base/nex-systemd.yaml`. It must be a
+   `nex_structure: true` assembly, and that is the cheapest one. Do not use
+   `examples/edgebox-rootfs.yaml`: it is flat, so a built edgebox root has no
+   `/nex` directory, no `/nex/repo` store, no `/nex/manifests`, and no `nex`
+   binary, and every journey here needs all four. The `nex_structure: true`
+   assemblies are `base/nex-minimal.yaml`, `base/nex-systemd.yaml`,
+   `installer/installer.yaml`, `examples/desktop-vwl/desktop-vwl.yaml`, and
+   `examples/desktop-dev.yaml`. Confirm the fixture boots with SSH before
+   building anything on top of it; if `nex-systemd` does not, fall back to
+   `examples/desktop-vwl/desktop-vwl.yaml` and record why.
 2. Build the fixture and keep its path and checksum in the plan.
 3. Write `scripts/test-machine-operations.sh` with the four verbs above and a
    `--journey <name>` flag so one journey can run alone.
@@ -182,7 +196,7 @@ defaults to `/tmp`, which is tmpfs on this host. Set
 This plan adds no product runtime interface. It adds a test interface:
 `scripts/test-machine-operations.sh` and the journey scripts beside it.
 
-It depends on QEMU, `ssh`, `ssh-keygen`, a built fixture assembly, and the zub
-binary named by `ZUB_BIN`. It does not depend on EP018 or EP019, and it should
+It depends on QEMU, `ssh`, `ssh-keygen`, a built `nex_structure: true` fixture
+assembly, and the zub binary named by `ZUB_BIN`. It does not depend on EP018 or EP019, and it should
 land before both, because EP018 changes how manifests reach a machine and these
 journeys are how that change gets verified.
