@@ -91,7 +91,12 @@ fn write_file_entry(entry: &AssemblyFile, dst: &Path) -> io::Result<()> {
     }
     if let Some(source) = &entry.source {
         let base_dir = entry.base_dir.clone().unwrap_or_else(|| PathBuf::from("."));
-        return copy_file_source(&base_dir, source, dst, entry.mode);
+        let src = crate::manifest::resolve_repository_reference(
+            source,
+            &base_dir,
+            entry.upstream_dir.as_deref(),
+        );
+        return copy_file_source(&src, dst, entry.mode);
     }
     fs::File::create(dst)?;
     set_optional_mode(dst, entry.mode)
@@ -122,14 +127,8 @@ fn write_file_content(dst: &Path, content: &str, mode: Option<u32>) -> io::Resul
     set_optional_mode(dst, mode)
 }
 
-fn copy_file_source(
-    base_dir: &Path,
-    source: &Path,
-    dst: &Path,
-    mode: Option<u32>,
-) -> io::Result<()> {
-    let src = base_dir.join(source);
-    fs::copy(&src, dst).map_err(|e| {
+fn copy_file_source(src: &Path, dst: &Path, mode: Option<u32>) -> io::Result<()> {
+    fs::copy(src, dst).map_err(|e| {
         io::Error::new(
             e.kind(),
             format!(

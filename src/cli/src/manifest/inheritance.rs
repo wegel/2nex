@@ -3,7 +3,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use super::parser::{detect_manifest_kind, resolve_system_paths};
-use super::repositories::repository_root_for_path;
+use super::repositories::{
+    repository_root_for_path, resolve_repository_reference, ManifestRepositories,
+};
 use super::types::*;
 
 /// resolve inheritance chain, loading and merging parent manifests
@@ -41,11 +43,14 @@ fn resolve_inheritance_chain(
     match &manifest.system.extends {
         Some(extends_path) => {
             let repo_root = manifest_repository_root(manifest_path);
-            let base_path = if extends_path.is_absolute() {
-                extends_path.clone()
-            } else {
-                repo_root.join(extends_path)
-            };
+            let upstream_root = ManifestRepositories::discover(manifest_path)
+                .ok()
+                .and_then(|repositories| repositories.upstream_root().map(Path::to_path_buf));
+            let base_path = resolve_repository_reference(
+                extends_path,
+                &repo_root,
+                upstream_root.as_deref(),
+            );
             let base_canonical = base_path.canonicalize().map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::NotFound,

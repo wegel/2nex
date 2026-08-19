@@ -56,3 +56,60 @@ fn create_submodule_checkout(path: &Path) {
     )
     .expect("submodule git marker");
 }
+
+#[test]
+fn a_plain_relative_reference_resolves_against_the_owning_repository() {
+    let owning = std::path::Path::new("/product");
+    let upstream = std::path::Path::new("/product/upstream/nex");
+
+    let resolved = super::resolve_repository_reference(
+        std::path::Path::new("asm/base.yaml"),
+        owning,
+        Some(upstream),
+    );
+
+    assert_eq!(resolved, std::path::Path::new("/product/asm/base.yaml"));
+}
+
+#[test]
+fn a_nex_reference_resolves_against_the_upstream_repository() {
+    let owning = std::path::Path::new("/product");
+    let upstream = std::path::Path::new("/product/upstream/nex");
+
+    let resolved = super::resolve_repository_reference(
+        std::path::Path::new("nex:base/systemd.yaml"),
+        owning,
+        Some(upstream),
+    );
+
+    assert_eq!(
+        resolved,
+        std::path::Path::new("/product/upstream/nex/base/systemd.yaml"),
+        "a nex: reference must not encode how deep the product sits"
+    );
+}
+
+#[test]
+fn a_nex_reference_falls_back_to_the_owning_repository() {
+    let owning = std::path::Path::new("/nex");
+
+    let resolved =
+        super::resolve_repository_reference(std::path::Path::new("nex:base/systemd.yaml"), owning, None);
+
+    assert_eq!(
+        resolved,
+        std::path::Path::new("/nex/base/systemd.yaml"),
+        "building inside Nex itself makes the owning repository the Nex repository"
+    );
+}
+
+#[test]
+fn an_absolute_reference_is_left_alone() {
+    let resolved = super::resolve_repository_reference(
+        std::path::Path::new("/elsewhere/base.yaml"),
+        std::path::Path::new("/product"),
+        None,
+    );
+
+    assert_eq!(resolved, std::path::Path::new("/elsewhere/base.yaml"));
+}

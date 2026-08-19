@@ -74,6 +74,7 @@ fn preserves_file_entry_content_chomping() {
             directory: false,
             replace: false,
             base_dir: None,
+            upstream_dir: None,
         }];
         let files = serde_yaml::to_string(&serde_yaml::to_value(&entries).expect("entries value"))
             .expect("test entries should serialize");

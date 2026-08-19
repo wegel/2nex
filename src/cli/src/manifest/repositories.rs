@@ -38,10 +38,41 @@ impl ManifestRepositories {
         dirs
     }
 
+    /// Return the upstream Nex repository when one is separate from the product.
+    pub fn upstream_root(&self) -> Option<&Path> {
+        self.upstream_root.as_deref()
+    }
+
     /// Report whether a manifest belongs to the writable product repository.
     pub fn is_writable(&self, manifest_path: &Path) -> io::Result<bool> {
         Ok(repository_root_for_path(manifest_path)? == self.product_root)
     }
+}
+
+/// Prefix that names the upstream Nex repository in a manifest reference.
+pub const NEX_REPOSITORY_PREFIX: &str = "nex:";
+
+/// Resolve a manifest reference that may name a repository.
+///
+/// A plain relative path resolves against `owning_root`, which keeps every
+/// existing manifest working. A reference that starts with `nex:` resolves
+/// against the upstream Nex repository, so a product manifest does not encode
+/// how deeply it sits below or above that repository. When no separate
+/// upstream repository exists, the owning repository is itself Nex.
+pub fn resolve_repository_reference(
+    reference: &Path,
+    owning_root: &Path,
+    upstream_root: Option<&Path>,
+) -> PathBuf {
+    let text = reference.to_string_lossy();
+    if let Some(rest) = text.strip_prefix(NEX_REPOSITORY_PREFIX) {
+        let rest = rest.trim_start_matches('/');
+        return upstream_root.unwrap_or(owning_root).join(rest);
+    }
+    if reference.is_absolute() {
+        return reference.to_path_buf();
+    }
+    owning_root.join(reference)
 }
 
 /// Find the nearest Git repository that owns an existing path.

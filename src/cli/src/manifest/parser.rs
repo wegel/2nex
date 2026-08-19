@@ -170,8 +170,12 @@ pub fn load_manifest_from_str(manifest_str: &str) -> io::Result<ManifestData> {
 
 pub(super) fn resolve_system_paths(manifest: &mut SystemManifest, repository_root: &Path) {
     resolve_sources(&mut manifest.sources, repository_root, None);
+    let upstream_root = super::repositories::ManifestRepositories::discover(repository_root)
+        .ok()
+        .and_then(|repositories| repositories.upstream_root().map(Path::to_path_buf));
     for entry in &mut manifest.files {
         entry.base_dir = Some(repository_root.to_path_buf());
+        entry.upstream_dir = upstream_root.clone();
     }
 }
 

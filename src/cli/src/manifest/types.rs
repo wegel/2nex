@@ -182,6 +182,10 @@ pub struct AssemblyFile {
     /// owning manifest loads
     #[serde(skip)]
     pub base_dir: Option<PathBuf>,
+    /// upstream Nex repository root, set when the owning manifest loads, so a
+    /// `nex:` prefixed `source` resolves without encoding a relative depth
+    #[serde(skip)]
+    pub upstream_dir: Option<PathBuf>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
