@@ -1,0 +1,85 @@
+Subject: add a /run tier to the provider-ordering directory search
+Source: downstream patch for enchant 2.8.2
+Upstream: not submitted; needs agreement on the /run/enchant-2 path
+
+enchant_get_conf_dirs() (lib/provider.c, generated from provider.vala)
+built an ordered list of only two system directories:
+PKGDATADIR/enchant-2 (the vendor tree, /usr/share/enchant-2) and
+SYSCONFDIR/enchant-2. src/Makefile.am:21 and lib/Makefile.am:55 both
+substitute SYSCONFDIR from $(sysconfdir), and the package manifest ran
+./configure --prefix=/usr with no --sysconfdir, so autotools kept its
+${prefix}/etc default and SYSCONFDIR/enchant-2 compiled to
+/usr/etc/enchant-2: a path under the immutable /usr tree that a
+machine owner can never write. The manifest now passes
+--sysconfdir=/etc, which fixes that unreachable administrator tier,
+but the directory list still had no /run entry, so a boot could not
+supply a transient provider-ordering override.
+
+enchant_broker_load_provider_ordering() (lib/broker.c) calls
+enchant_get_conf_dirs() and walks the returned list in order, loading
+every "enchant.ordering" file it finds with
+enchant_broker_load_ordering_from_file(), which in turn calls
+enchant_broker_set_ordering() for each "tag:ordering" line. That
+function stores the entry with g_hash_table_insert() keyed by
+language tag, and g_hash_table_insert() replaces the value already
+stored for an existing key, so a directory read later in the list
+overwrites the same tag read from a directory earlier in the list.
+enchant_broker_load_ordering_from_file() also already treats a
+missing file as routine: g_io_channel_new_file() reports it through
+the G_FILE_ERROR domain, which the generated code catches, logs with
+g_debug(), and returns from without touching the hash table or
+raising an error. A missing /run/enchant-2 (or /etc/enchant-2)
+directory is therefore silent under the pre-existing behavior, and
+this patch does not change that.
+
+This patch adds ENCHANT_RUNDIR ("/run/enchant-2") to
+enchant_get_conf_dirs()'s returned list, positioned after the vendor
+directory and before the administrator's SYSCONFDIR/enchant-2 entry.
+Because later list entries win ties per the overwrite behavior above,
+the resulting order (vendor, then /run, then administrator) lets the
+administrator's entry for a given language tag beat the same tag read
+from /run, which beats the vendor default; the per-user directory
+from enchant_get_user_config_dir() keeps its unchanged position at
+the end of the list, so it keeps overriding every system tier.
+
+This patch does not install anything under /run/enchant-2:
+ENCHANT_RUNDIR is only a compiled-in search path that this package
+does not populate.
+--- a/lib/provider.c
++++ b/lib/provider.c
+@@ -39,6 +39,14 @@
+ #include <gmodule.h>
+ #include <gobject/gvaluecollector.h>
+ 
++/* Nex UAPI patch: enchant_get_conf_dirs() (below) has no directory for a
++ * boot-time override between the vendor tree and the administrator's
++ * SYSCONFDIR tree. ENCHANT_RUNDIR names that directory; see the patch
++ * header for the full rationale. */
++#ifndef ENCHANT_RUNDIR
++#define ENCHANT_RUNDIR "/run/enchant-2"
++#endif
++
+ #if !defined(VALA_STRICT_C)
+ #if !defined(__clang__) && defined(__GNUC__) && (__GNUC__ >= 14)
+ #pragma GCC diagnostic warning "-Wincompatible-pointer-types"
+@@ -346,6 +354,20 @@
+ 		conf_dirs = g_slist_append (conf_dirs, _tmp6_);
+ #line 348 "provider.c"
+ 	}
++
++	/* Nex UAPI patch: add the /run tier between the vendor and
++	 * administrator directories so a boot can supply a transient
++	 * enchant.ordering override. enchant_broker_load_provider_ordering()
++	 * (broker.c) walks this list in order and loads every
++	 * "enchant.ordering" file it finds, and enchant_broker_set_ordering()
++	 * (also broker.c) calls g_hash_table_insert() for each one, so a
++	 * later directory in this list overwrites an earlier directory's
++	 * entry for the same language tag. Putting ENCHANT_RUNDIR ahead of
++	 * the administrator's SYSCONFDIR tier below keeps the administrator
++	 * tier's entries as the final system word, matching the existing
++	 * vendor-then-administrator precedent this patch extends. */
++	conf_dirs = g_slist_append (conf_dirs, g_strdup (ENCHANT_RUNDIR));
++
+ #line 50 "provider.vala"
+ 	_tmp7_ = _vala_gnulib_relocate (SYSCONFDIR);
+ #line 50 "provider.vala"

@@ -6,12 +6,24 @@ package:
   version: 2.8.2
   description: Generic spell checking library
   homepage: https://github.com/rrthomas/enchant
-  checksum: bd09983682d03aa57c58b099bee5dac08cbf7e049cc16741455c934b1c921584
+  checksum: 3019eb6e88828d104327c1f50065d13c9a84817ed7b857647b607c458673553a
 
 sources:
 - name: enchant
   url: https://github.com/rrthomas/enchant/releases/download/v2.8.2/enchant-2.8.2.tar.gz
   sha256: 8f19535adb5577b83b00e02f330fe9b9eb40dd21f19e2899636fc4d3a7696375
+- name: uapi_config_patch
+  file: pkg/libs/text/enchant2-uapi-config.patch
+  sha256: 1a8118d30995201ffe9bfedcbd3d71517ce4ae9d98b6eaacd29725bdd560b92b
+- name: uapi_provider
+  file: pkg/libs/text/enchant2-uapi-provider.c
+  sha256: e491b01726b4b414fa6e50dd8e516d3ebfa3a6bd528b0e3dd8630cef965719b2
+- name: uapi_smoke
+  file: pkg/libs/text/enchant2-uapi-smoke.c
+  sha256: 49227a9acb0c493d23b44bc5626c00f8e8cad8a56f20c0fa8da174981fe46636
+- name: uapi_check
+  file: pkg/libs/text/enchant2-uapi-check.sh
+  sha256: 8e24bade1eff32687239f6b1d0ba002148ade74c66e407ced866f5a6dc36cbe8
 
 dependencies:
 - name: glibc
@@ -62,18 +74,22 @@ dependencies:
   commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
 - name: util-linux
   commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4126:9477, 12347:18803, 24690:50119, 42957:106444, 54457:108417, 65586:108671, 79386:112667, 100059:133659, 121885:146128, 129835:149837]
+  profile: [4098:823, 12376:3103, 24719:6726, 43007:10698, 54436:10701, 65599:10730, 79388:10764, 100116:10786, 122155:11231, 130347:11769]
 
   script: |
     tar --no-same-owner -xzf /${SOURCE_enchant} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config_patch}"
 
     ./configure \
       --prefix=/usr \
       --disable-static \
+      --sysconfdir=/etc \
       --without-aspell \
       --without-hunspell \
       --without-nuspell \
@@ -87,6 +103,16 @@ build:
 
     make
     make DESTDIR="${OUT_DIR}" install
+
+    # Exercise the newly built, installed libenchant-2 through its real
+    # enchant_get_conf_dirs() / enchant_broker_load_provider_ordering()
+    # readers instead of reimplementing their tier-merge and precedence
+    # rules; see the check script for detail.
+    sh "/${SOURCE_uapi_check}" \
+      "${OUT_DIR}" \
+      "${WORK_DIR}" \
+      "/${SOURCE_uapi_smoke}" \
+      "/${SOURCE_uapi_provider}"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
