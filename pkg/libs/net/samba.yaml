@@ -6,7 +6,7 @@ package:
   version: 4.21.3
   description: SMB client library from Samba
   homepage: https://www.samba.org/
-  checksum: 30e3c61d110d7aad15b1a888564d8d973619734d693401440e4994889b0cff0d
+  checksum: cfd0d76804e4258a527afada4e14502e793c01021109a6161c7f6b69ff789f8c
 
 sources:
 - name: samba
@@ -15,6 +15,15 @@ sources:
 - name: linux_credential_probe_patch
   file: pkg/libs/net/samba-linux-credential-probe.patch
   sha256: 42d0056b813363e42b34a69dfdf08e9ef719585c270d41474952bfbf376a3926
+- name: uapi_config_patch
+  file: pkg/libs/net/samba-uapi-config.patch
+  sha256: 14fcee329eb4a33c3780b830cad07866c32469e9e7e3aaa89299a9320688d4d3
+- name: uapi_smoke
+  file: pkg/libs/net/samba-uapi-config-smoke.c
+  sha256: e5fa98bc733e0753ad03825771b2adea36d243507f96e51e82de3a60a3e3b801
+- name: uapi_check
+  file: pkg/libs/net/samba-uapi-config-check.sh
+  sha256: 59d7c81aaba9d41fd4107c46d069f1e67e9c2c6ac3bd12c2af05d293a164e1fe
 
 dependencies:
 - name: glibc
@@ -81,16 +90,21 @@ dependencies:
   commit: x86_64/pkg/libs/system/libbsd/0.12.2/bundles/dev
 - name: libmd
   commit: x86_64/pkg/libs/crypto/libmd/1.2.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: iproute2
+  commit: x86_64/pkg/net/misc/iproute2/6.18.0/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [12401:5274, 45509:16316, 112352:31472, 162523:33199, 212268:34926, 268409:36857, 317787:42059, 397213:60563, 479764:83583, 529146:90007]
+  profile: [12384:3789, 45555:11928, 112398:23681, 162569:25208, 212205:26572, 268457:28178, 317939:32241, 397298:47534, 479979:62964, 529334:68090]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_samba} -C "${WORK_DIR}" --strip-components=1
     cd "${WORK_DIR}"
 
     patch --batch --fuzz=0 -Np1 -i /${SOURCE_linux_credential_probe_patch}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE_uapi_config_patch}
 
     CFLAGS=${CFLAGS/-flto=auto/}
     CXXFLAGS=${CXXFLAGS/-flto=auto/}
@@ -133,6 +147,16 @@ build:
 
     PYTHONHASHSEED=1 WAF_MAKE=1 ./buildtools/bin/waf build --targets=smbclient
     PYTHONHASHSEED=1 WAF_MAKE=1 DESTDIR="${OUT_DIR}" ./buildtools/bin/waf install
+
+    # Exercise the newly built, installed libsmbclient through its real
+    # reader: smbc_new_context()/smbc_init_context() resolve the effective
+    # workgroup through the vendor, run, and etc smb.conf tiers, with the
+    # user's own $HOME/.smb/smb.conf still outranking all three. See
+    # samba-uapi-config-check.sh.
+    sh /${SOURCE_uapi_check} \
+      "${OUT_DIR}" \
+      "${WORK_DIR}" \
+      /${SOURCE_uapi_smoke}
 
     find "${OUT_DIR}" -mindepth 1 -maxdepth 1 ! -name usr -exec rm -rf {} +
     find "${OUT_DIR}/usr" -mindepth 1 -maxdepth 1 \
