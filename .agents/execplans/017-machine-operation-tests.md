@@ -96,8 +96,107 @@ or test 1 fails. Both outcomes are useful, and neither is known today.
       bundle module dependencies") with a cross-reference from
       `machine-self-hosting.md`.
 
-- [ ] Fix environment resolution: resolve blobs against the manifests
-      repository, not the store. `build-package` must then pass.
+- [x] (2026-08-19) Rebuilt the fixture after the human added
+      `kernel-fs-overlay`
+      (`x86_64/pkg/core/kernel/linux/6.18.24/outputs/fs-overlay`) to
+      `tests/nex-test-fixture.yaml`. `nex check` passes; strict two-build
+      reproducible at checksum
+      `69c012db66f612dc7074ab29d8b076876382a33e8cbda20396d410710d5fb487`
+      (still `systems/nex-test-fixture/0.0.1`). Rebuilt the backing image and
+      ran the full suite twice: `nex stage` now succeeds in both
+      `temporary-install` and `persistent-install` (confirms the OverlayFS
+      finding was accurate and the fix landed), but both now fail one step
+      later, at `nex install`, on a different, newly-confirmed gap. See
+      Surprises & Discoveries. Reported per instruction; did not attempt to
+      route around it.
+
+- [x] (2026-08-19) The human moved `kernel-fs-overlay` from the test fixture
+      into `base/nex-systemd.yaml` itself ("nobody should be running a plain
+      nex-systemd machine that cannot install a package"), so the fixture no
+      longer carries its own copy. Rebuilt the cascade: `base/nex-systemd.yaml`
+      (checksum `a271d6d1246076e032c99b3a8d2c060baff9004e428c6ae1f1fb9ddb258d31de`,
+      strict two-build reproducible) and `tests/nex-test-fixture.yaml`
+      (checksum unchanged, `69c012db66f612dc7074ab29d8b076876382a33e8cbda20396d410710d5fb487`
+      -- the merged package list is identical either way, by name-based
+      dedup in `merge_packages`). `examples/desktop-vwl/desktop-vwl.yaml`
+      failed to build at this point: it takes `bundles/all-modules` for the
+      kernel, which already carries `fs-overlay`, and now also inherited the
+      base's new `kernel-fs-overlay` with nothing excluding it, so two
+      packages delivered the same `overlay.ko`. I misdiagnosed this as a
+      `zub` bug; the human corrected it (see Surprises & Discoveries) by
+      testing the manifest change itself and fixed it with an `exclude` in
+      `desktop-vwl.yaml`. `examples/desktop-dev.yaml` (which extends
+      desktop-vwl) was not attempted by me either way.
+      Rebuilt the backing image from the fixture and reran the full suite
+      twice: identical to the previous entry (`nex stage` succeeds,
+      `nex install` fails on the unresolved-runtime-dependency gap).
+
+- [x] (2026-08-19) The human fixed environment resolution in commit
+      `28218662`: `load_environment` now resolves blobs against the
+      repository owning the manifest, not the store. Rebuilt the `nex`
+      package itself (`pkg/core/nex/nex.yaml`, which builds from
+      `dev: src/cli`, so it does not pick up source changes until rebuilt;
+      checksum `4bdb768c35538eaa8116665a074c2f0677913d919ce83321a1574e3de7bd8f06`,
+      strict two-build reproducible), then `base/nex-systemd.yaml`
+      (checksum `27e6eea03bcbf309e1199b26ed8629a168943afa2b58bb2010f7efcbf1493482`)
+      and `tests/nex-test-fixture.yaml`
+      (checksum `508027e3b4f740de92c69df1690676a32ce6fe0a6e26da085211e33e2e67e223`)
+      to pick up the fresh `nex` binary. Also fixed `seed_system_repo()` in
+      `scripts/test-machine-operations.sh` to seed `tig`'s full runtime
+      closure (resolved fresh each run via `nex resolve tig -v`, matching the
+      exact algorithm `nex install` itself uses, then `zub pull` for each ref
+      named), not just `tig`'s own ref -- this was the harness gap the
+      earlier "4 unresolved runtime dependency requirement(s)" finding
+      actually was. Ran the full suite twice: `build-package` gets past
+      environment resolution but still fails, now on a *different*,
+      newly-surfaced gap (building gzip needs its own build-sandbox
+      dependency closure, which the harness does not seed, since seeding was
+      scoped to the install tests' package). `temporary-install` and
+      `persistent-install` get past `nex install`'s dependency resolution
+      (`Runtime closure: 6 commit(s)`, matching what was seeded) but now fail
+      during the actual checkout. `deploy-and-rollback`, previously passing
+      every run, now FAILS too. All three failures are the identical error,
+      reproduced deterministically twice: `uid 0 not mapped in namespace`.
+      New finding, not decided or routed around; see Surprises & Discoveries.
+- [x] (2026-08-19) The human root-caused and fixed the uid-mapping bug:
+      `write_zub_config()` now writes an explicit identity range
+      (`inside_start=0, outside_start=0, count=65536`) for `uid_map` and
+      `gid_map` instead of an empty list, since the guest runs as real root.
+      `scripts/qemu-test-live-upgrade.sh:168` carries the same latent bug,
+      deliberately left alone per instruction. Reran the full suite twice
+      (harness rebuilds its backing image on every invocation, so no stale
+      cache to clear): `deploy-and-rollback` passes again, twice, as before
+      the regression. `temporary-install`/`persistent-install` get past the
+      checkout that was failing and reach `mount_nex_overlays()`, where they
+      hit a new, different, confirmed error: `/nex/env` does not exist on
+      this machine and can't be created, because `/nex` is on the read-only
+      deployment root and no assembly ever creates that directory. Neither
+      reaches `nex commit`. `build-package` still fails as expected, on
+      gzip's own build-time dependency closure (glibc's `/files` and others)
+      not being present in the guest store -- a real limitation (a machine
+      that cannot fetch cannot build an arbitrary package), left as reported,
+      nothing seeded around it. See Surprises & Discoveries and
+      `.agents/knowledge/machine-self-hosting.md`.
+- [x] (2026-08-19) The human fixed `/nex/env`: added `/target/nex/env` to
+      `base/nex-systemd.yaml`'s mkdir line. Rebuilt `base/nex-systemd.yaml`
+      (checksum `1ae2b42c1a0e5f24f6bf1473f0eb7089340151479c733dcf731ca6c7a2230860`)
+      and `tests/nex-test-fixture.yaml`
+      (checksum `7a902425d6315f6d66930b5a26fe4b41219baa3729a6e6cae9c0657cf691c034`),
+      both strict two-build reproducible. Ran the full suite twice, identical
+      both times. `nex install` now succeeds completely for the first time
+      in this plan: checkout, flatten, symlink into `/usr/bin`, the installed
+      `tig`/`git` binaries run. `temporary-install` then fails at `nex
+      discard` (`umount: /nex/pkg: target is busy`, then removing
+      `/nex/staging` hits `Read-only file system`) -- new, not chased to a
+      root cause. `persistent-install` reaches `nex commit` for the first
+      time and confirms the hypothesis flagged four units ago: `Error:
+      Custom { kind: NotFound, error: "Could not determine current
+      deployment" }` -- `get_current_deployment_ref()` finds neither a
+      `nex/deployments/*` ref nor `nex/base` in the store, and nothing
+      anywhere in this repository creates either on a fresh machine.
+      `deploy-and-rollback` keeps passing. `build-package` still fails on
+      gzip's build-time dependency closure, unchanged, as expected. See
+      Surprises & Discoveries and `.agents/knowledge/machine-self-hosting.md`.
 - [ ] Add the `git_bundle` source kind with a recorded sha256, generated with
       `pack.threads=1` from an explicit commit.
 - [ ] Move `examples/desktop-vwl/desktop-vwl.yaml` from its six `dev:` sources
@@ -316,6 +415,273 @@ that is a choice about what this test fixture's kernel should carry, not a
 mechanical follow-on from anything asked for in this unit, so it was left
 alone and is reported here instead of decided.
 
+**2026-08-19: the human added `kernel-fs-overlay` to the fixture; `nex stage`
+now succeeds, and both install tests fail one step later, at `nex install`,
+on a real dependency-resolution gap.** New checksum
+`69c012db66f612dc7074ab29d8b076876382a33e8cbda20396d410710d5fb487`, strict
+two-build reproducible, `nex check` passes. Rebuilt the backing image and ran
+the full suite twice; identical both times.
+
+`temporary-install` and `persistent-install` both now get past `stage-exit=0`
+and fail at `install-exit=1`, with:
+
+    Installing x86_64/pkg/dev/vcs/tig/2.6.0/outputs/bin...
+    Materializing 1 request(s)...
+      Resolving runtime dependencies (precomputed)...
+      Loaded manifest index: 533 manifests, 162938 files
+      Runtime closure: 1 commit(s)
+    Error: Custom { kind: NotFound, error: "4 unresolved runtime dependency requirement(s):
+      pkg/dev/vcs/git (run: nex compute-deps pkg/pkg/dev/vcs/git.yaml)
+        needed by: /usr/bin/tig needs git - missing 51b15102f212/files commit
+      pkg/libs/system/glibc (run: nex compute-deps pkg/pkg/libs/system/glibc.yaml)
+        needed by: /usr/bin/tig needs glibc - missing bf348eabcec2/files commit
+      pkg/libs/system/ncurses (run: nex compute-deps pkg/pkg/libs/system/ncurses.yaml)
+        needed by: /usr/bin/tig needs ncurses - missing 05d611ad0722/files commit
+      pkg/libs/system/readline (run: nex compute-deps pkg/pkg/libs/system/readline.yaml)
+        needed by: /usr/bin/tig needs readline - missing 6c7351f248a8/files commit" }
+
+Traced to `src/cli/src/materializer/mod.rs`: `nex install`'s
+`resolve_runtime_deps_precomputed` reads the target package's precomputed
+`needs` metadata and requires a `/files` commit for *every* runtime
+dependency to already be resolvable in the store (`config.repo_path` plus
+fallbacks) — not just the requested package's own ref. The harness had only
+seeded `tig`'s own `outputs/bin` ref, not its dependency closure's `/files`
+refs, so this fails deterministically. This is a different mechanism from the
+"flatten deps into the package's own capsule" step used during *system
+assembly* builds, so a package being self-contained there does not carry over
+to `nex install`. Full writeup: `.agents/knowledge/machine-self-hosting.md`
+("Installing an already-built package still needs its dependencies' own
+store refs"). Per instruction, this was reported and nothing was seeded to
+route around it.
+
+**2026-08-19: `examples/desktop-vwl/desktop-vwl.yaml` failed to build after
+the `base/nex-systemd.yaml` cascade — correctly diagnosed by the human as two
+packages delivering the same file, not the zub bug I first reported.**
+`desktop-vwl.yaml:67` takes the kernel's `bundles/all-modules`, which already
+contains the `fs-overlay` output, and now also inherits the human's new
+`kernel-fs-overlay` package from `base/nex-systemd.yaml`. Both deliver
+`/usr/lib/modules/6.18.24/kernel/fs/overlayfs/overlay.ko`, and the "direct
+layer" kernel-module installer fails placing the second one where the first
+already wrote:
+
+    Installing kernel modules: core/kernel/linux/6.18.24 (direct layer)
+    Error: Custom { kind: Other, error: "io error at .../target/usr/lib/modules/6.18.24/kernel/fs/overlayfs/overlay.ko: No such file or directory (os error 2)" }
+
+I had reported this as a probable `zub` hardlink-dedup bug, reasoning from
+two facts that were true but tested the wrong scenario (a standalone `zub
+checkout --copy` of `bundles/all-modules` alone, and the same checkout
+`--force`-repeated over itself — neither reproduces two *different* refs
+writing the same path in sequence, which is what a real build does). The
+human corrected this by testing the actual first suspect, the manifest
+change, and found the real cause immediately: `desktop-vwl.yaml` never
+excluded the base's newly-added package. Fix (the human's, not mine): add
+`exclude: packages: [kernel-fs-overlay]` in `desktop-vwl.yaml`. Builds
+reproducibly at
+`f07249fc4b6a0c5ba5cd620b4ecba941f484ccb79180e1e37f4be5cfa8e1972b`. Full
+corrected writeup in `.agents/knowledge/kernel-and-boot.md`.
+
+**2026-08-19: after fixing dependency-closure seeding, three of four tests
+fail on the same new error, `uid 0 not mapped in namespace`, including
+`deploy-and-rollback`, which had passed every run before this unit.**
+Reproduced twice, identically. Full command sequence: rebuilt
+`pkg/core/nex/nex.yaml`, `base/nex-systemd.yaml`,
+`tests/nex-test-fixture.yaml` (checksums above), fixed
+`seed_system_repo()` to seed `tig`'s full closure, rebuilt the backing image,
+ran `./scripts/test-machine-operations.sh` twice.
+
+`temporary-install`/`persistent-install`, at `nex install`:
+
+    Runtime closure: 6 commit(s)
+      Checking out to /...
+      Checking out dev/vcs/tig/2.6.0 (1 output) -> /nex/pkg/dev/vcs/tig/2.6.0/0cbb5716
+    Error: Custom { kind: Other, error: "uid 0 not mapped in namespace" }
+
+Confirms the closure-seeding fix worked: 6 commits resolved (tig + git +
+glibc + ncurses + readline + zlib, exactly what `nex resolve tig -v` names),
+and the checkout actually starts. It fails one step further in, during the
+real file materialization.
+
+`deploy-and-rollback`, at `nex deploy`:
+
+    Target:      /sysroot/nex/deployments/27e6eea03bcbf309e1199b26ed8629a168943afa2b58bb2010f7efcbf1493482.1
+    Error: Custom { kind: Other, error: "uid 0 not mapped in namespace" }
+
+Traced the error's origin (not fully to a root cause): `uid {0} not mapped in
+namespace` is `zub::Error::UnmappedUid`
+(`/home/wegel/work/perso/zub/src/error.rs:45`), raised by
+`inside_to_outside(uid, &ns.uid_map)` returning `None`
+(`/home/wegel/work/perso/zub/src/object/blob.rs:37,132`) inside `write_blob`
+-- a *commit-time* function, called from a checkout by the hardlinked-checkout
+repair path (the comment there: "A hardlinked checkout may have modified an
+older store object... The atomic rename below repairs a mismatching
+object"). `seed_system_repo`'s guest `nex/repo` config
+(`write_zub_config()` in `scripts/test-machine-operations.sh`) sets
+`uid_map = []`, `gid_map = []` -- copied verbatim from
+`scripts/qemu-test-live-upgrade.sh`'s own `write_zub_config`, an established
+pattern, not something changed this unit. An empty map has no entry
+matching uid 0, so any code path that calls `inside_to_outside` on it fails
+for any real (root-owned) file, by construction; `NsConfig::identity()`
+(`zub/src/namespace/mapping.rs:49`) is what an unrestricted mapping actually
+looks like (`[MapEntry(0, 0, u32::MAX)]`), not an empty vec.
+
+What is not established: *why this started failing now* rather than always.
+The config did not change. Two candidate explanations, neither confirmed:
+either this write-blob repair path was never reached before (every prior
+`nex install` run failed earlier, on the dependency-closure gap, before
+reaching a real checkout; only `deploy-and-rollback` reached a real checkout
+before, and always against a nex-systemd build nobody had rebuilt this
+session), or something about content freshly built this session (the new
+`nex` binary, or the rebuilt `nex-systemd`) differs from what was checked out
+in every prior successful `deploy-and-rollback` run in a way that now
+triggers the repair path. Not chased further, and not fixed: whether the fix
+belongs in the harness's zub config (identity mapping instead of empty), in
+zub itself, or somewhere else is exactly a design question, reported rather
+than decided.
+
+**2026-08-19, same day: the human fixed the uid-mapping bug; `deploy-and-rollback`
+passes again, and the install tests reach a new, real, precisely-located
+blocker before `nex commit`.** `write_zub_config()` now writes an explicit
+identity range for `uid_map`/`gid_map` (`inside_start=0, outside_start=0,
+count=65536`) instead of an empty list — the guest runs as real root, so
+identity is the correct mapping, unlike the host's own rootless
+`.nex/repo/config.toml` (inside 0 -> outside 1000). Confirmed:
+`scripts/qemu-test-live-upgrade.sh:168` has the identical empty-map pattern
+and the identical latent bug, simply never reached; left alone, recorded
+only, per instruction.
+
+No rebuild was needed for the fix itself: the config is written into the
+guest's var tree at disk-assembly time (`stage_root_and_var` ->
+`write_zub_config`), and the harness's `build_backing_image()` already does
+`rm -rf "$WORK_DIR"` and rebuilds fully on every invocation of
+`scripts/test-machine-operations.sh`, so there was no stale cached backing
+image to clear.
+
+Ran the full suite twice, identical both times:
+
+    FAIL: build-package (guest exit 1)
+    FAIL: temporary-install (guest exit 1)
+    FAIL: persistent-install (guest exit 1)
+    PASS: deploy-and-rollback (verify-deployed)
+    PASS: deploy-and-rollback
+    PASS: deploy-and-rollback
+    tests run: 4
+    failures: 3
+
+`deploy-and-rollback`: back to passing, as it did every run before the
+regression, across two real reboots each time.
+
+`build-package`: unchanged from before, and expected: `Runtime closure: 15
+commit(s)`, then 12 unresolved requirements rooted in
+`x86_64/pkg/libs/system/glibc/2.39/bf348eabcec257edace3e1e05458bf79ddad1a5164f25e706b7e50d93b25190d/files
+is missing` — gzip's own build-sandbox dependency closure is not in the
+guest's store, and was never in scope to seed (that would mean seeding the
+transitive build closure of an arbitrary package, which defeats the point of
+proving whether a machine can build one from nothing). Left exactly as
+reported; nothing seeded to route around it.
+
+`temporary-install`/`persistent-install`: both now get past the checkout that
+was failing (`Checking out dev/vcs/tig/2.6.0 (1 output) ->
+/nex/pkg/dev/vcs/tig/2.6.0/0cbb5716`, `Flattened 6 libs...`,
+`Materialization complete.`) — the uid-mapping fix and the closure-seeding
+fix both hold — then fail immediately after with `Error: Os { code: 30, kind:
+ReadOnlyFilesystem, message: "Read-only file system" }`, reproduced
+deterministically twice, before ever reaching `nex commit`. Confirmed with a
+temporary diagnostic added to the guest script (reverted after): `/nex/pkg`
+exists and is read-only (part of the assembled, read-only deployment root);
+`/nex/env` does not exist at all. `mount_nex_overlays()`
+(`src/cli/src/commands/stage.rs`) creates `/nex/pkg`'s overlay mountpoint
+fine (it already exists) but then tries `fs::create_dir_all("/nex/env")`,
+which fails because `/nex` itself is on the read-only deployment root and
+nothing in `base/nex-systemd.yaml`'s build script ever creates `/nex/env`
+(it creates `/nex/repo`, `/nex/deployments`, `/nex/users`, `/nex/staging`,
+`/nex/manifests` — not `/nex/env`). This is every first `nex install
+--system` on a machine assembled this way, not specific to `tig` or to this
+fixture. Full writeup: `.agents/knowledge/machine-self-hosting.md` ("`nex
+install --system` can't create `/nex/env` on a machine that never had one").
+Not fixed, not routed around: whether `/nex/env` belongs in the assembly's
+directory list or `mount_nex_overlays()` needs a different target is a
+product design question. `nex commit`'s own "may want a store ref nothing
+creates" question therefore remains unanswered — install still can't
+complete far enough to reach it.
+
+**2026-08-19, later still: `/nex/env` fixed by the human; `nex install`
+completes for the first time; two new findings, one per install test, and
+the `nex commit` question is finally answered.** `base/nex-systemd.yaml`
+checksum `1ae2b42c1a0e5f24f6bf1473f0eb7089340151479c733dcf731ca6c7a2230860`;
+`tests/nex-test-fixture.yaml` checksum
+`7a902425d6315f6d66930b5a26fe4b41219baa3729a6e6cae9c0657cf691c034`; both
+strict two-build reproducible. Full suite twice, identical both times:
+
+    FAIL: build-package (guest exit 1)
+    FAIL: temporary-install (guest exit 1)
+    FAIL: persistent-install (guest exit 1)
+    PASS: deploy-and-rollback (verify-deployed)
+    PASS: deploy-and-rollback
+    PASS: deploy-and-rollback
+    tests run: 4
+    failures: 3
+
+`temporary-install` and `persistent-install`, identically, up through
+install:
+
+    stage-exit=0
+    Installing x86_64/pkg/dev/vcs/tig/2.6.0/outputs/bin...
+    Materializing 1 request(s)...
+      Resolving runtime dependencies (precomputed)...
+      Loaded manifest index: 533 manifests, 162938 files
+      Runtime closure: 6 commit(s)
+      Checking out to /...
+      Checking out dev/vcs/tig/2.6.0 (1 output) -> /nex/pkg/dev/vcs/tig/2.6.0/0cbb5716
+      Flattened 6 libs into dev/vcs/tig/2.6.0/0cbb5716
+    Materialization complete.
+      Linked tig -> ../../nex/pkg/dev/vcs/tig/2.6.0/0cbb5716/usr/bin/tig
+      Linked git -> ../../nex/pkg/dev/vcs/tig/2.6.0/0cbb5716/usr/bin/git
+    Installed dev/vcs/tig 2.6.0 (set as current)
+    install-exit=0
+    tig version 2.6.0
+    ncurses version 6.4.20230520
+    readline version 8.2
+    run-exit=0
+
+Every fix from this plan holds at once: full manifest history, the seeded
+dependency closure, the uid mapping, and `/nex/env` all needed for this to
+work, and now do. `nex install` completes and the installed binary runs.
+This is the first fully successful install anywhere in this plan.
+
+`temporary-install` then calls `nex discard --force` and fails:
+
+    Discarding staging changes...
+    umount: /nex/pkg: target is busy.
+    Error: Os { code: 30, kind: ReadOnlyFilesystem, message: "Read-only file system" }
+    discard-exit=1
+
+New finding, reproduced identically twice. Not chased to a root cause this
+time (reporting only what was directly observed, after getting the earlier
+`zub` diagnosis wrong from too little evidence): `/usr/bin`'s unmount
+produced no message; only `/nex/pkg`'s reported busy. `cleanup_staging()`
+then fails removing `/nex/staging` itself with `Read-only file system`. Full
+detail: `.agents/knowledge/machine-self-hosting.md` ("`nex discard` can
+fail...").
+
+`persistent-install` calls `nex commit` and fails:
+
+    Committing changes: install tig for persistent-install test
+    Error: Custom { kind: NotFound, error: "Could not determine current deployment" }
+    commit-exit=1
+
+This is the answer to the question this plan has been carrying since the
+`nex stage`/`nex install` blockers first went away: `get_current_deployment_ref()`
+(`src/cli/src/commands/commit.rs:156`) looks for a `nex/deployments/*` ref,
+then falls back to a literal `nex/base` ref. Neither exists on a machine
+built by this fixture, and grepping `src/cli`, `scripts`, and `installer`
+finds nothing anywhere in this repository that creates either, on any
+machine. `nex commit`'s store-ref path (taken whenever `/nex/repo` exists,
+which it does here) cannot get past a first install on any machine today.
+Reported exactly, per instruction; not routed around.
+
+`build-package` and `deploy-and-rollback` are unchanged from the previous
+entry.
+
 ## Decision Log
 
 - Decision: The harness pre-populates the guest's system store (`/nex/repo`)
@@ -454,8 +820,11 @@ alone and is reported here instead of decided.
 <name>` runs one alone, and every test starts from a fresh qcow2 overlay
 over one shared backing image built from `tests/nex-test-fixture.yaml`
 (`systems/nex-test-fixture/0.0.1`, checksum
-`a22e42ab383d0c108c3fb6f2ada6899c6f3a21ff31aed3c05e61b112aee6b507`, strict
-two-build reproducible). Verified twice in a row: `build-package`,
+`69c012db66f612dc7074ab29d8b076876382a33e8cbda20396d410710d5fb487`, strict
+two-build reproducible, unchanged since it extends `base/nex-systemd.yaml`
+which now carries the module directly). Verified twice in a row, at three
+points in this plan's history as the OverlayFS finding moved from unfixed, to
+fixture-only, to fixed in the base assembly: `build-package`,
 `temporary-install`, and `persistent-install` FAIL, identically each time;
 `deploy-and-rollback` PASSes, identically each time, including two reboots.
 The deliberately-broken-command check (a typo'd deploy ref) made exactly one
@@ -470,28 +839,117 @@ reproducible finding this plan set out to get, not a harness defect:
    the manifests worktree and historical blob lookups work, but
    `load_environment` resolves environment blobs against the zub store, which
    is never inside a Git repository on an installed machine. Fixed in phase B.
-2. `temporary-install` and `persistent-install`: a machine cannot stage a
-   package for install. `nex stage` unconditionally mounts OverlayFS, and this
-   fixture's kernel bundle (`base/nex-systemd.yaml`'s choice, not something
-   this plan changed) does not carry `overlay.ko`. `deploy-and-rollback`
-   proves this is specific to staging, not to the fixture generally: it needs
-   no OverlayFS and passes cleanly.
+2. `temporary-install` and `persistent-install`: a machine could not stage a
+   package for install. `nex stage` unconditionally mounts OverlayFS, and
+   `base/nex-systemd.yaml`'s kernel bundle did not carry `overlay.ko`.
+   `deploy-and-rollback` proved this was specific to staging, not to the
+   fixture generally: it needs no OverlayFS and passed cleanly throughout.
+   The human first added `kernel-fs-overlay` to the test fixture only, then
+   decided it belonged in `base/nex-systemd.yaml` itself ("nobody should be
+   running a plain nex-systemd machine that cannot install a package") and
+   moved it there; `nex-systemd` checksum
+   `a271d6d1246076e032c99b3a8d2c060baff9004e428c6ae1f1fb9ddb258d31de`. `nex
+   stage` now succeeds either way. Both install tests now fail one step
+   later instead: `nex install` requires every runtime dependency of the
+   package being installed to have its own `/files` commit already
+   resolvable in the store, which the harness had not seeded (only the
+   requested package's own ref was seeded). A different, now-precisely-located
+   gap; see the 2026-08-19 Surprises & Discoveries entries after the
+   OverlayFS one.
+
+Rebuilding the cascade after the `base/nex-systemd.yaml` change also broke
+`examples/desktop-vwl/desktop-vwl.yaml` (and `examples/desktop-dev.yaml`,
+which extends it), briefly: `desktop-vwl.yaml` selects the kernel's
+`bundles/all-modules`, which already carries `fs-overlay`, and now also
+inherited the base's new `kernel-fs-overlay` package with nothing excluding
+it, so two packages tried to deliver the same `overlay.ko`. I misdiagnosed
+this as a `zub` bug before the human corrected it by testing the actual
+manifest change first; the human's fix (an `exclude` in `desktop-vwl.yaml`)
+resolved it. See the corrected Surprises & Discoveries entry and
+`.agents/knowledge/kernel-and-boot.md`.
 
 So the plan's four-test premise holds up: a person sitting at an installed
 Nex machine can put a new system version on it and undo that (test 4,
 proven, content-based, across two real reboots), but cannot build a package or
-stage an install today, for two distinct, now-precisely-located reasons
-neither of which was known before this plan.
+finish staging an install today, for three distinct, now-precisely-located
+reasons (one for building, two in sequence for staging) none of which was
+known before this plan.
 
-What was not done: the two bugs above were not fixed, per instruction — that
-is phase B's job for the store and environment issue, and an open design question
-(reported, not decided) for the kernel bundle's module set. `reboot` and
+What was not done: none of the three underlying issues were fixed by this
+plan's tests, per instruction. The store/environment lookup bug is phase B's
+job. Whether `base/nex-systemd.yaml` itself should carry `overlay.ko` was an
+open design question, reported not decided, and the human answered it by
+adding the module to the test fixture only, not to `base/nex-systemd.yaml`.
+The `nex install` dependency-closure gap surfaced last and was reported, not
+routed around: no dependency refs were seeded to make it pass. `reboot` and
 `expect_deployment`-equivalent logic are now exercised (test 4), but
 `expect_deployment` itself as a literal harness function is unused by any
 test; tests use `/proc/cmdline` parsing inline instead since the
 assertions needed were about content markers, not a single deployment-name
 equality check. No stray QEMU processes or Git worktrees were left behind by
 any run.
+
+**Update, 2026-08-19, later the same day: the dependency-closure gap was a
+harness bug and is fixed; a fourth issue (`uid 0 not mapped in namespace`)
+replaced it and also broke the one test that had passed every prior run.**
+The human fixed environment resolution (commit `28218662`) and I fixed
+`seed_system_repo()` to seed `tig`'s full runtime closure via `nex resolve
+tig -v`, not just its own ref. After rebuilding `pkg/core/nex/nex.yaml`,
+`base/nex-systemd.yaml`, and `tests/nex-test-fixture.yaml` so the guest
+carries the fixed CLI: `build-package` gets past environment resolution
+(progress) but still fails, now on gzip's own build-sandbox dependency
+closure, which was never in scope to seed. `temporary-install` and
+`persistent-install` get past `nex install`'s dependency resolution (also
+progress: `Runtime closure: 6 commit(s)`) but fail during the real checkout.
+`deploy-and-rollback`, which had passed every single run before this unit,
+now fails too. All three failures are the identical, deterministic error:
+`uid 0 not mapped in namespace`, traced as far as a zub commit-time
+uid-mapping check reachable from a hardlinked checkout's repair path, against
+the harness's `uid_map = []` config (unchanged this unit, copied from
+`qemu-test-live-upgrade.sh`). Why it fires now and did not before is not
+established. Reported, not fixed or routed around; see the corresponding
+Surprises & Discoveries entry and `.agents/knowledge/machine-self-hosting.md`.
+
+**Update, 2026-08-19, later still: the human root-caused and fixed the
+uid-mapping bug; `deploy-and-rollback` is back to passing, and the install
+tests reached one blocker further before hitting a new, real, and clearly
+located one.** `write_zub_config()` now writes an explicit identity uid/gid
+map instead of an empty one (the guest is real root, so identity is
+correct). Reran the suite twice, identical both times:
+`build-package`/`temporary-install`/`persistent-install` FAIL,
+`deploy-and-rollback` PASSes (including two real reboots, both runs).
+`build-package` fails exactly as expected on gzip's own build-time
+dependency closure, not seeded, a genuine limitation. The two install tests
+now get through the checkout that used to fail and reach
+`mount_nex_overlays()`, which fails creating `/nex/env` — nothing in
+`base/nex-systemd.yaml` ever creates that directory, and `/nex` is on the
+read-only deployment root, so it can never be created after the fact either.
+Neither test reaches `nex commit`; that question is still open. Full detail
+in the corresponding Surprises & Discoveries entry and
+`.agents/knowledge/machine-self-hosting.md`.
+
+**Update, 2026-08-19, later still: `/nex/env` fixed; `nex install` completes
+end to end for the first time in this plan; the `nex commit` question is
+finally answered.** `base/nex-systemd.yaml` and `tests/nex-test-fixture.yaml`
+rebuilt (checksums `1ae2b42c1a0e5f24f6bf1473f0eb7089340151479c733dcf731ca6c7a2230860`
+and `7a902425d6315f6d66930b5a26fe4b41219baa3729a6e6cae9c0657cf691c034`). Full
+suite twice, identical both times: still 3 FAIL / 1 PASS, but not the same
+three reasons as before. `temporary-install` and `persistent-install` both
+now get all the way through `nex stage` and `nex install` -- checkout,
+symlink into `/usr/bin`, the installed `tig`/`git` binaries actually run.
+That is a real milestone: every fix landed across this plan (full manifest
+history, seeded dependency closure, uid mapping, `/nex/env`) was necessary
+and together sufficient to make a real `nex install` work. `temporary-install`
+then fails at `nex discard` (`/nex/pkg` unmount reports busy, then removing
+`/nex/staging` hits `Read-only file system`) -- new, not yet root-caused.
+`persistent-install` reaches `nex commit` and confirms, at last, what this
+plan flagged as a hypothesis units ago: no machine built by anything in this
+repository today has a `nex/deployments/*` or `nex/base` ref in its store,
+so `nex commit`'s store-ref path can never find a "current deployment" to
+commit on top of. `deploy-and-rollback` keeps passing; `build-package`
+fails exactly as before, on gzip's build-time dependency closure, a genuine
+limitation left alone. Full detail in the corresponding Surprises &
+Discoveries entry and `.agents/knowledge/machine-self-hosting.md`.
 
 **What this plan got wrong, twice.** Two fixture decisions were recorded and
 then overturned by measurement. First that `examples/edgebox-rootfs.yaml` could

@@ -345,3 +345,45 @@ path fails ("No such file or directory"), and `/proc/filesystems` has no
 an `fs-overlay`-sized addition, the way it grew `lib`, is an open question,
 not decided here — see
 `.agents/execplans/017-machine-operation-tests.md`.
+
+Update, 2026-08-19: the human resolved the open question above by adding
+`x86_64/pkg/core/kernel/linux/6.18.24/outputs/fs-overlay` as its own package
+entry to `base/nex-systemd.yaml` (not by widening the `vm` bundle itself).
+`nex-systemd` checksum `a271d6d1246076e032c99b3a8d2c060baff9004e428c6ae1f1fb9ddb258d31de`.
+`nex stage` succeeds on the resulting guest.
+
+## Two packages delivering the same kernel module file break the "direct layer" install
+
+Found rebuilding `examples/desktop-vwl/desktop-vwl.yaml` after the
+`nex-systemd` cascade above (EP017, 2026-08-19; corrected 2026-08-19 by the
+human after an initial wrong diagnosis on my part — see below).
+`desktop-vwl.yaml:67` overrides `linux` to
+`x86_64/pkg/core/kernel/linux/6.18.24/bundles/all-modules`, which already
+contains the `fs-overlay` output (`overlay.ko`). After `base/nex-systemd.yaml`
+gained its own `kernel-fs-overlay` package
+(`x86_64/pkg/core/kernel/linux/6.18.24/outputs/fs-overlay`), `desktop-vwl.yaml`
+inherits *that* too, since it never excluded it. Two package entries both
+deliver `/usr/lib/modules/6.18.24/kernel/fs/overlayfs/overlay.ko`, and the
+"direct layer" kernel-module installer
+(`install_kernel_modules` in `src/cli/src/system/nex.rs`) fails installing the
+second one into a location the first one already populated:
+
+    Installing kernel modules: core/kernel/linux/6.18.24 (direct layer)
+    Error: Custom { kind: Other, error: "io error at .../target/usr/lib/modules/6.18.24/kernel/fs/overlayfs/overlay.ko: No such file or directory (os error 2)" }
+
+Fix: exclude `kernel-fs-overlay` in `desktop-vwl.yaml`, since
+`bundles/all-modules` already carries it. Built reproducibly at
+`f07249fc4b6a0c5ba5cd620b4ecba941f484ccb79180e1e37f4be5cfa8e1972b`.
+
+Wrong diagnosis, corrected: I first reported this as a probable `zub`
+hardlink-dedup bug in `checkout_from_tree_hash`/`create_hardlink`
+(`/home/wegel/work/perso/zub/src/ops/checkout.rs`,
+`zub/src/fs/write.rs:152`), because a standalone `zub checkout --copy` of
+`bundles/all-modules` alone succeeded, including a repeat `--force` checkout
+over itself. Both of those facts were correct but tested the wrong scenario:
+neither reproduces two *different* refs (`bundles/all-modules` then
+`kernel-fs-overlay`) writing the same destination path in sequence, which is
+what a real system build does and what actually fails. The lesson, as put to
+me directly: when a build breaks immediately after a manifest change, treat
+the change as the first suspect and test *that*, rather than reasoning about
+ordering inside the installer from a partial repro.

@@ -14,8 +14,9 @@ TEST_IDENTITY_HELPER="$SCRIPT_DIR/prepare-qemu-test-identity.sh"
 
 ZUB_BIN="${ZUB_BIN:-/home/wegel/work/perso/zub/target/debug/zub}"
 ZUB_REPO="${ZUB_REPO:-$ROOT_DIR/.nex/repo}"
+NEX_BIN="${NEX_BIN:-$ROOT_DIR/src/cli/target/debug/nex}"
 FROM_REF="${FROM_REF:-systems/nex-test-fixture/0.0.1}"
-EXPECTED_CHECKSUM="${EXPECTED_CHECKSUM:-a22e42ab383d0c108c3fb6f2ada6899c6f3a21ff31aed3c05e61b112aee6b507}"
+EXPECTED_CHECKSUM="${EXPECTED_CHECKSUM:-7a902425d6315f6d66930b5a26fe4b41219baa3729a6e6cae9c0657cf691c034}"
 
 SSH_PORT_BASE="${SSH_PORT_BASE:-10040}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-240}"
@@ -47,6 +48,11 @@ SEED_REFS=(
     "x86_64/pkg/dev/vcs/tig/2.6.0/outputs/bin"
     "systems/nex-systemd/0.0.1"
 )
+
+# Package `nex resolve` is asked for tig's full runtime closure (see
+# seed_system_repo()). `nex install` needs every one of those dependencies'
+# own /files refs already in the store, not just tig's own ref.
+SEED_CLOSURE_PACKAGE="tig"
 
 # All tests this harness knows about, in run order.
 ALL_TESTS=(build-package temporary-install persistent-install deploy-and-rollback)
@@ -99,6 +105,7 @@ require_tools() {
     [[ -x "$QEMU_IMG_BIN" ]] || die "qemu-img not found at $QEMU_IMG_BIN"
     [[ -x "$TEST_IDENTITY_HELPER" ]] || die "$TEST_IDENTITY_HELPER not found"
     [[ -x "$ZUB_BIN" ]] || die "zub binary not found or not executable: $ZUB_BIN"
+    [[ -x "$NEX_BIN" ]] || die "nex binary not found or not executable: $NEX_BIN"
     [[ -d "$ZUB_REPO" ]] || die "zub repo not found: $ZUB_REPO"
 }
 
@@ -189,10 +196,21 @@ wait_for_ssh() {
 
 write_zub_config() {
     local repo_dir=$1
+    # The guest runs as real root, so the store's namespace maps identically.
+    # An empty map is not "no translation needed": zub's inside_to_outside
+    # returns None for every id, so any code path that writes a blob fails with
+    # "uid 0 not mapped in namespace". scripts/qemu-test-live-upgrade.sh carries
+    # the same empty map and has the same latent bug.
     cat > "$repo_dir/config.toml" <<'EOF'
-[namespace]
-uid_map = []
-gid_map = []
+[[namespace.uid_map]]
+inside_start = 0
+outside_start = 0
+count = 65536
+
+[[namespace.gid_map]]
+inside_start = 0
+outside_start = 0
+count = 65536
 EOF
 }
 
@@ -204,11 +222,32 @@ EOF
 # every stage/install/discard/commit/deploy/rollback command itself. Objects
 # are pulled from the host's own build store, so nothing is fetched from the
 # network and nothing is built here.
+#
+# `nex install` resolves a package's full runtime dependency closure and
+# requires every dependency's own `/files` ref to already be in the store
+# (src/cli/src/materializer/mod.rs, resolve_runtime_deps_precomputed) -- it
+# is not enough to seed the requested package's own ref. `nex resolve
+# <package> -v` computes that closure with the same logic `nex install`
+# uses, so the host resolves it fresh each run and pulls every ref it names,
+# rather than hand-listing dependency refs that would drift out of date the
+# next time tig or its dependencies are rebuilt.
 seed_system_repo() {
     local repo_dir=$1
     local ref
+    local closure_refs=()
 
     for ref in "${SEED_REFS[@]}"; do
+        "$ZUB_BIN" --repo "$repo_dir" pull "$ZUB_REPO" "$ref" >/dev/null
+    done
+
+    [[ -x "$NEX_BIN" ]] || die "nex binary not found or not executable: $NEX_BIN"
+    mapfile -t closure_refs < <(
+        cd "$ROOT_DIR" && "$NEX_BIN" resolve "$SEED_CLOSURE_PACKAGE" --repo "$ZUB_REPO" -v 2>/dev/null |
+            grep -oE 'x86_64/pkg/[^ ]+/files' | sort -u
+    )
+    [[ "${#closure_refs[@]}" -gt 0 ]] ||
+        die "nex resolve $SEED_CLOSURE_PACKAGE produced no dependency refs to seed"
+    for ref in "${closure_refs[@]}"; do
         "$ZUB_BIN" --repo "$repo_dir" pull "$ZUB_REPO" "$ref" >/dev/null
     done
 }
