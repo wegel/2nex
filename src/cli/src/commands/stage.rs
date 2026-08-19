@@ -131,16 +131,60 @@ fn mount_overlay(lower: &str, upper: &str, work: &str, target: &str) -> io::Resu
 
 pub fn cleanup_staging() -> io::Result<()> {
     // unmount overlays (in reverse order)
-    let _ = Command::new("umount").arg(USR_BIN_DIR).status();
-    let _ = Command::new("umount").arg("/nex/env").status();
-    let _ = Command::new("umount").arg(NEX_PKG_DIR).status();
+    unmount_overlay(USR_BIN_DIR)?;
+    unmount_overlay("/nex/env")?;
+    unmount_overlay(NEX_PKG_DIR)?;
 
-    // remove staging state
+    // remove staging state, which is safe only once every overlay above it is
+    // gone: otherwise this recurses into a live upperdir
     if Path::new(STAGING_STATE_DIR).exists() {
         fs::remove_dir_all(STAGING_STATE_DIR)?;
     }
 
     Ok(())
+}
+
+/// Unmount a staging overlay, lazily when the mount point is busy.
+///
+/// `/nex/pkg` is always busy on a `nex_structure` system. FHS paths are
+/// symlinks into the capsules beneath it, so every running process holds
+/// something there: PID 1 keeps an open descriptor on
+/// `/nex/pkg/core/init/systemd/<version>/<hash>/usr/lib/systemd/systemd-executor`,
+/// and nothing can stop PID 1 to release it. A lazy unmount detaches the mount
+/// immediately and lets the kernel release it when the last user goes away,
+/// which is exactly this case.
+///
+/// Failures used to be discarded, so a busy mount stayed mounted and the caller
+/// then tried to delete through it, reporting a read-only filesystem instead of
+/// the real cause.
+fn unmount_overlay(target: &str) -> io::Result<()> {
+    if !is_mounted(target) {
+        return Ok(());
+    }
+
+    if Command::new("umount").arg(target).status()?.success() {
+        return Ok(());
+    }
+
+    let lazy = Command::new("umount").arg("-l").arg(target).status()?;
+    if lazy.success() {
+        return Ok(());
+    }
+
+    Err(io::Error::other(format!(
+        "could not unmount the staging overlay on {}",
+        target
+    )))
+}
+
+fn is_mounted(target: &str) -> bool {
+    let Ok(mounts) = fs::read_to_string("/proc/mounts") else {
+        return false;
+    };
+    mounts
+        .lines()
+        .filter_map(|line| line.split_whitespace().nth(1))
+        .any(|mount_point| mount_point == target)
 }
 
 fn chrono_now() -> String {
