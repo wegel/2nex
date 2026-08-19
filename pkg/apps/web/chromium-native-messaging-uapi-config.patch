@@ -1,0 +1,119 @@
+From: Nex package maintainers
+Subject: [PATCH] native messaging: select a host manifest from all three UAPI tiers
+Source: no upstream commit; written for Nex against Chromium 143.0.7499.169
+Upstream: not submitted. Chromium compiles one system directory for native
+ messaging host manifests, so a distribution cannot ship a default that a
+ boot or an administrator may replace. The change below adds the generic
+ /usr/lib, /run, and /etc order, keeps the existing administrator path as
+ the highest-priority system directory, and names no Nex path, so any Linux
+ system that follows the UAPI configuration files specification can use it.
+
+A native messaging host manifest is a JSON file that names the program an
+extension may talk to over a native messaging port. LaunchContext::FindManifest
+already checks the user's own directory ahead of the system directory; that
+ordering is unchanged here. Its posix helper, FindManifestInDir, resolved the
+system directory through the single PathService key chrome::DIR_NATIVE_MESSAGING,
+which chrome_paths.cc compiled to /etc/chromium/native-messaging-hosts (or the
+matching /etc/opt/chrome path for branded builds). A package could therefore
+not ship a default host manifest below /usr, and a boot-time tool had nowhere
+to put a temporary one.
+
+A host manifest is selected by name, not merged, so completing the three
+system tiers only needs two more PathService keys and two more first-existing
+lookups, in the same shape FindManifest already uses for the user and
+administrator directories. chrome_paths.cc gains
+chrome::DIR_NATIVE_MESSAGING_RUNTIME, which compiles to
+/run/chromium/native-messaging-hosts, and chrome::DIR_NATIVE_MESSAGING_VENDOR,
+which compiles to /usr/lib/chromium/native-messaging-hosts. Both keys are
+scoped to BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CHROMEOS), the same distribution
+this patch targets; the Mac, ChromeOS, and Android directories are unchanged.
+FindManifest in launch_context_posix.cc then falls through to
+DIR_NATIVE_MESSAGING_RUNTIME, then DIR_NATIVE_MESSAGING_VENDOR, only after the
+user directory (when allowed) and the existing administrator directory both
+miss. A missing directory produces no error and no warning: FindManifestInDir
+already treats a missing directory as a plain miss, and this patch does not
+change that, because Chrome runs this lookup on every normal browser launch.
+
+The enterprise policy loader's system directories, the profile paths, and the
+enrollment token handling are untouched by this patch.
+
+diff -urN a/chrome/common/chrome_paths.h b/chrome/common/chrome_paths.h
+--- a/chrome/common/chrome_paths.h
++++ b/chrome/common/chrome_paths.h
+@@ -112,6 +112,16 @@
+                               // manifest files are stored.
+   DIR_USER_NATIVE_MESSAGING,  // Directory with Native Messaging Hosts
+                               // installed per-user.
++#if BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CHROMEOS)
++  DIR_NATIVE_MESSAGING_RUNTIME,  // Directory for a native messaging host
++                                 // manifest that one boot owns. Read after
++                                 // DIR_NATIVE_MESSAGING and before
++                                 // DIR_NATIVE_MESSAGING_VENDOR.
++  DIR_NATIVE_MESSAGING_VENDOR,   // Directory where the installed package may
++                                 // ship a default native messaging host
++                                 // manifest. Lowest priority of the three
++                                 // system directories.
++#endif
+ #endif
+ #if !BUILDFLAG(IS_ANDROID)
+   DIR_GLOBAL_GCM_STORE,  // Directory where the global GCM instance
+diff -urN a/chrome/common/chrome_paths.cc b/chrome/common/chrome_paths.cc
+--- a/chrome/common/chrome_paths.cc
++++ b/chrome/common/chrome_paths.cc
+@@ -481,6 +481,31 @@
+ #endif  // !BUILDFLAG(IS_MAC)
+       break;
+
++#if BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CHROMEOS)
++    // The administrator directory above is DIR_NATIVE_MESSAGING. These two
++    // directories complete the UAPI three tiers: a boot-owned directory, then
++    // the directory the installed package may ship a default manifest in.
++    case chrome::DIR_NATIVE_MESSAGING_RUNTIME:
++#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
++      cur = base::FilePath(
++          FILE_PATH_LITERAL("/run/opt/chrome/native-messaging-hosts"));
++#else
++      cur = base::FilePath(
++          FILE_PATH_LITERAL("/run/chromium/native-messaging-hosts"));
++#endif
++      break;
++
++    case chrome::DIR_NATIVE_MESSAGING_VENDOR:
++#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
++      cur = base::FilePath(
++          FILE_PATH_LITERAL("/usr/lib/opt/chrome/native-messaging-hosts"));
++#else
++      cur = base::FilePath(
++          FILE_PATH_LITERAL("/usr/lib/chromium/native-messaging-hosts"));
++#endif
++      break;
++#endif  // BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CHROMEOS)
++
+     case chrome::DIR_USER_NATIVE_MESSAGING:
+       if (!base::PathService::Get(chrome::DIR_USER_DATA, &cur)) {
+         return false;
+diff -urN a/chrome/browser/extensions/api/messaging/launch_context_posix.cc b/chrome/browser/extensions/api/messaging/launch_context_posix.cc
+--- a/chrome/browser/extensions/api/messaging/launch_context_posix.cc
++++ b/chrome/browser/extensions/api/messaging/launch_context_posix.cc
+@@ -47,6 +47,21 @@
+   if (result.empty()) {
+     result = FindManifestInDir(chrome::DIR_NATIVE_MESSAGING, host_name);
+   }
++#if BUILDFLAG(IS_LINUX) && !BUILDFLAG(IS_CHROMEOS)
++  // DIR_NATIVE_MESSAGING is the administrator directory. A host manifest is
++  // selected by name, not merged, so a miss there falls through to the
++  // boot-owned directory, then the directory the installed package may ship
++  // a default manifest in. A missing directory is silent: Chrome runs this
++  // lookup on every normal launch.
++  if (result.empty()) {
++    result = FindManifestInDir(chrome::DIR_NATIVE_MESSAGING_RUNTIME,
++                               host_name);
++  }
++  if (result.empty()) {
++    result = FindManifestInDir(chrome::DIR_NATIVE_MESSAGING_VENDOR,
++                               host_name);
++  }
++#endif
+
+   if (result.empty()) {
+     error_message = "Can't find native messaging host " + host_name;

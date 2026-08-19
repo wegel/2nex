@@ -6,7 +6,7 @@ package:
   version: 143.0.7499.169
   description: Chromium web browser
   homepage: https://www.chromium.org/
-  checksum: e064f9e57a297ef56f08dd02b7d519de2b38db1d0e119cfc1eae9bd07c0e31a1
+  checksum: 77d055fafef093c2b5b97581c603c3ad956e511d2a6e60719d9ba026337997c1
 
 sources:
 - name: chromium
@@ -15,6 +15,9 @@ sources:
 - name: uapi_config
   file: pkg/apps/web/chromium-uapi-config.patch
   sha256: b595c6b0083caad65630d563b3c10184624fa6466e937c2b7d9cb6f3d83f70e4
+- name: native_messaging_uapi_config
+  file: pkg/apps/web/chromium-native-messaging-uapi-config.patch
+  sha256: 21f5dcafcb63bcb1cba2b13901fe0cb471cbf8dd523c923a3b056a577b8b0ef5
 
 dependencies:
 - name: patch
@@ -262,7 +265,7 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [104183:302560, 402384:623510, 902990:1067388, 1503925:1622500, 2005994:3082077, 2508562:3753623, 3009225:6060554, 3760033:7525917, 4510899:8709082, 5010944:9968248]
+  profile: [103668:213554, 401928:399776, 903515:645195, 1504950:953286, 2006269:1750440, 2508388:2174596, 3009392:3583603, 3760045:4838007, 4510352:5609875, 5011224:6618628]
 
   script: |
     # re-extract when the source archive or a local patch changes. The patch is
@@ -273,13 +276,18 @@ build:
     src_id="$(basename "${SOURCE0}")"
     src_marker="${WORK_DIR}/.nex_source_id"
     patch_marker="${WORK_DIR}/.nex_uapi_config_patch"
+    nm_patch_marker="${WORK_DIR}/.nex_native_messaging_uapi_config_patch"
     if [ ! -f "${src_marker}" ] || [ "$(cat "${src_marker}")" != "${src_id}" ] \
       || [ ! -f "${patch_marker}" ] \
-      || [ "$(cat "${patch_marker}")" != "$(cat "/${SOURCE_uapi_config}")" ]; then
+      || [ "$(cat "${patch_marker}")" != "$(cat "/${SOURCE_uapi_config}")" ] \
+      || [ ! -f "${nm_patch_marker}" ] \
+      || [ "$(cat "${nm_patch_marker}")" != "$(cat "/${SOURCE_native_messaging_uapi_config}")" ]; then
       rm -rf "${WORK_DIR:?}"/*
       tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
       (cd "${WORK_DIR}" && patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}")
+      (cd "${WORK_DIR}" && patch --batch --fuzz=0 -Np1 -i "/${SOURCE_native_messaging_uapi_config}")
       cp "/${SOURCE_uapi_config}" "${patch_marker}"
+      cp "/${SOURCE_native_messaging_uapi_config}" "${nm_patch_marker}"
       echo "${src_id}" > "${src_marker}"
     fi
     cd ${WORK_DIR}
@@ -555,6 +563,125 @@ build:
     rm -rf "${probe_data}" "${probe_out}"
 
     printf 'chromium UAPI smoke: the policy loader read all three tiers in order\n'
+
+    # A native messaging host manifest is selected by name, not merged, so
+    # closing this gap only needs a first-existing-file walk across the same
+    # three system directories, with the user's own directory still ahead of
+    # all three. Chrome ships a real production entry point that reaches
+    # LaunchContext::FindManifest without an installed extension: the
+    # --native-messaging-connect-host/--native-messaging-connect-extension
+    # switches, normally used when a native app reconnects Chrome to itself,
+    # are read on a normal cold start by
+    # StartupBrowserCreator::ProcessCmdLineImpl. Because no such extension is
+    # installed here, LaunchNativeMessageHostFromNativeApp falls into
+    # NativeMessagingHostErrorReporter::Report, which still builds a real
+    # NativeProcessLauncher and starts it, driving the same FindManifest call
+    # a genuine chrome.runtime.connectNative port would. When FindManifest
+    # selects a manifest whose "path" does not exist on disk, Chrome logs
+    # that exact path, so a distinct absent marker path per tier proves which
+    # tier's manifest was chosen. This does not open a live native messaging
+    # port to a running host process or drive a real installed extension; it
+    # proves the manifest-selection reader, not the message channel.
+    nm_host=nex.uapi_test
+    nm_ext=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    nm_admin=/etc/chromium/native-messaging-hosts
+    nm_runtime=/run/chromium/native-messaging-hosts
+    nm_vendor=/usr/lib/chromium/native-messaging-hosts
+    nm_marker_dir="${WORK_DIR}/chromium-uapi-nm-markers"
+
+    mkdir -p "${nm_admin}" "${nm_runtime}" "${nm_vendor}" "${nm_marker_dir}"
+    rm -f "${nm_admin}/${nm_host}.json" "${nm_runtime}/${nm_host}.json" \
+      "${nm_vendor}/${nm_host}.json"
+
+    write_nm_manifest() {
+      # $1 = directory to write into, $2 = tier label for the marker path
+      cat > "$1/${nm_host}.json" <<NMEOF
+    {
+      "name": "${nm_host}",
+      "description": "Nex UAPI native messaging tier probe",
+      "path": "${nm_marker_dir}/marker-$2",
+      "type": "stdio",
+      "allowed_origins": ["chrome-extension://${nm_ext}/*"]
+    }
+    NMEOF
+    }
+
+    nm_probe_out="${WORK_DIR}/chromium-uapi-nm-probe.out"
+    nm_probe_data="${WORK_DIR}/chromium-uapi-nm-profile"
+
+    run_nm_probe() {
+      if [ "${1:-}" != "keep-profile" ]; then
+        rm -rf "${nm_probe_data}"
+        mkdir -p "${nm_probe_data}"
+      fi
+      HOME="${WORK_DIR}" timeout --kill-after=10 30 \
+        "${OUT_DIR}/usr/lib/chromium/chromium" \
+        --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage \
+        --user-data-dir="${nm_probe_data}" --profile-directory=Default \
+        --no-first-run --enable-logging=stderr \
+        --enable-features=OnConnectNative \
+        --native-messaging-connect-host="${nm_host}" \
+        --native-messaging-connect-extension="${nm_ext}" \
+        --native-messaging-connect-id=nexuapiprobe \
+        --no-startup-window \
+        > /dev/null 2> "${nm_probe_out}" || true
+    }
+
+    expect_nm_line() {
+      if ! grep -a -q -F -- "$1" "${nm_probe_out}"; then
+        printf 'chromium UAPI smoke: expected %s\n' "$1" >&2
+        tail -40 "${nm_probe_out}" >&2
+        exit 1
+      fi
+    }
+
+    reject_nm_line() {
+      if grep -a -q -F -- "$1" "${nm_probe_out}"; then
+        printf 'chromium UAPI smoke: unexpected %s\n' "$1" >&2
+        tail -40 "${nm_probe_out}" >&2
+        exit 1
+      fi
+    }
+
+    # No manifest anywhere: FindManifest misses every tier, and the only line
+    # Chrome logs is the single generic miss, never a per-tier warning. This
+    # is the shape every normal launch takes, since no host is preinstalled.
+    run_nm_probe
+    expect_nm_line "Can't find manifest for native messaging host ${nm_host}"
+    reject_nm_line "Found manifest"
+    reject_nm_line "${nm_admin}"
+    reject_nm_line "${nm_runtime}"
+    reject_nm_line "${nm_vendor}"
+
+    # Vendor only: FindManifest must fall all the way to the directory the
+    # installed package owns and find it there.
+    write_nm_manifest "${nm_vendor}" vendor
+    run_nm_probe
+    expect_nm_line "Found manifest, but not the binary for native messaging host ${nm_host}. Host path specified in the manifest: ${nm_marker_dir}/marker-vendor"
+
+    # The boot-owned directory beats the vendor directory.
+    write_nm_manifest "${nm_runtime}" runtime
+    run_nm_probe
+    expect_nm_line "Found manifest, but not the binary for native messaging host ${nm_host}. Host path specified in the manifest: ${nm_marker_dir}/marker-runtime"
+
+    # The administrator directory beats both system tiers below it.
+    write_nm_manifest "${nm_admin}" admin
+    run_nm_probe
+    expect_nm_line "Found manifest, but not the binary for native messaging host ${nm_host}. Host path specified in the manifest: ${nm_marker_dir}/marker-admin"
+
+    # The user's own directory still wins over every system tier, matching
+    # the ordering LaunchContext::FindManifest already had before this patch.
+    rm -rf "${nm_probe_data}"
+    mkdir -p "${nm_probe_data}/NativeMessagingHosts"
+    write_nm_manifest "${nm_probe_data}/NativeMessagingHosts" user
+    run_nm_probe keep-profile
+    expect_nm_line "Found manifest, but not the binary for native messaging host ${nm_host}. Host path specified in the manifest: ${nm_marker_dir}/marker-user"
+
+    rm -f "${nm_admin}/${nm_host}.json" "${nm_runtime}/${nm_host}.json" \
+      "${nm_vendor}/${nm_host}.json"
+    rm -rf "${nm_probe_data}" "${nm_probe_out}" "${nm_marker_dir}"
+
+    printf 'chromium UAPI smoke: native messaging host manifest selection read the user, admin, run, and vendor tiers in order\n'
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
