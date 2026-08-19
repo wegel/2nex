@@ -61,7 +61,11 @@ pub fn build_package_manifest_with_dir(
     let download_dir = "./inputs_cache";
     fs::create_dir_all(download_dir)?;
 
-    let build_env = load_environment(&opts.repo_path, &manifest.build.environment)?;
+    let build_env = load_environment(
+        Path::new(&opts.manifest_file),
+        &opts.repo_path,
+        &manifest.build.environment,
+    )?;
     let dependency_commits =
         resolve_dependency_commits(&manifest.dependencies, &opts.repo_path, &opts.manifest_dirs)?;
     prepare_package_root(

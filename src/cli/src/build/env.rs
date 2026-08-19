@@ -2,8 +2,10 @@
 
 use std::fs;
 use std::io;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::manifest::repositories::repository_root_for_path;
 use crate::manifest::types::BuildEnvironment;
 
 fn is_sha1(value: &str) -> bool {
@@ -11,9 +13,21 @@ fn is_sha1(value: &str) -> bool {
 }
 
 /// Load a build environment from a Git blob SHA1 or filesystem path.
-pub fn load_environment(repo_path: &str, env_ref: &str) -> io::Result<BuildEnvironment> {
+///
+/// A blob is read from the Git repository that owns `manifest_path`, because
+/// that is where the manifest's history lives. Resolving against the package
+/// store instead only appears to work in a development checkout, where the
+/// store happens to sit inside the source repository; on an installed machine
+/// the store is a sibling of the manifests repository and holds no Git objects
+/// at all.
+pub fn load_environment(
+    manifest_path: &Path,
+    fallback_path: &str,
+    env_ref: &str,
+) -> io::Result<BuildEnvironment> {
     let content = if is_sha1(env_ref) {
-        load_environment_blob(repo_path, env_ref)?
+        let owning_root = environment_repository_root(manifest_path, fallback_path);
+        load_environment_blob(&owning_root.to_string_lossy(), env_ref)?
     } else {
         load_environment_file(env_ref)?
     };
@@ -46,6 +60,14 @@ pub fn expand_env_templates(
     result
 }
 
+/// Pick the repository a Git blob reference resolves against.
+///
+/// The manifest's own repository comes first. `fallback_path` keeps older
+/// call sites and tests working when the manifest is not inside a repository.
+fn environment_repository_root(manifest_path: &Path, fallback_path: &str) -> PathBuf {
+    repository_root_for_path(manifest_path).unwrap_or_else(|_| PathBuf::from(fallback_path))
+}
+
 fn load_environment_blob(repo_path: &str, env_ref: &str) -> io::Result<String> {
     let output = Command::new("git")
         .args(["-C", repo_path, "cat-file", "blob", env_ref])
@@ -73,3 +95,7 @@ fn load_environment_file(env_ref: &str) -> io::Result<String> {
         )
     })
 }
+
+#[cfg(test)]
+#[path = "env_tests.rs"]
+mod env_tests;

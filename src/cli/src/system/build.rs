@@ -95,7 +95,11 @@ fn prepare_system_build_inputs(
         .iter()
         .map(|package| package.commit.clone())
         .collect();
-    let build_env = load_environment(&opts.repo_path, &manifest.build.environment)?;
+    let build_env = load_environment(
+        Path::new(&opts.manifest_file),
+        &opts.repo_path,
+        &manifest.build.environment,
+    )?;
     let use_absolute_paths = !build_env.execution.chroot;
 
     Ok(SystemBuildInputs {
