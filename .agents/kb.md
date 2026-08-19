@@ -924,11 +924,11 @@ Systemd, printed `ASSERT-BOOT-PASS`, and powered QEMU off.
 
 ## Edgebox rootfs assembly
 
-Use `asm/flat-systemd.yaml` as the parent for a conventional root filesystem.
+Use `base/flat-systemd.yaml` as the parent for a conventional root filesystem.
 It produces merged `/usr`, `/etc`, and `/var` trees without Nex deployment
 links, so its artifact is the closest existing base for comparison with the
 rootfs-builder image. An `extends` path resolves from the repository root, so
-write `asm/flat-systemd.yaml`, not a path relative to the child manifest.
+write `base/flat-systemd.yaml`, not a path relative to the child manifest.
 
 The system builder materializes packages, applies the assembly's `files`
 entries, and then runs the merged build script. Inherited build scripts run
@@ -940,7 +940,7 @@ four files in the child build script.
 
 Keep package manifests generic. Put the chosen locale, timezone, enabled
 services, users, network policy, and system-wide PipeWire policy in
-`asm/edgebox-rootfs.yaml`. Do not put
+`examples/edgebox-rootfs.yaml`. Do not put
 product users, service presets, firewall rules, Docker policy, proprietary
 modules, or Yocto package splits into reusable package manifests.
 
@@ -993,7 +993,7 @@ a later strict two-build run reproduced that value.
 A mistaken broad Edgebox check with `--update-checksum` also added transient
 checksums to 20 `pkg/bootstrap/phase0/` seed manifests while it rebuilt the
 closure. Those edits were reverted. Use
-`./nex build asm/edgebox-rootfs.yaml --single --check --update-checksum
+`./nex build examples/edgebox-rootfs.yaml --single --check --update-checksum
 --verbose` for the assembly gate.
 
 The final timestamp walk in a flat assembly must use `touch -h`. Plain `touch`
@@ -1020,7 +1020,7 @@ assembly's entries apply after its parent's, which is what the old inherited
 overlay list did. A `source` path resolves from the repository root that owns
 the manifest, not from the file's own directory.
 
-`asm/edgebox-rootfs.yaml` makes a generic
+`examples/edgebox-rootfs.yaml` makes a generic
 appliance-style flat root from reusable packages. The assembly chooses its
 locked root account, service accounts and groups, DHCP through networkd, resolved,
 timesyncd, SSH, ACPI, container services, system-wide PipeWire wrappers,
@@ -1465,7 +1465,7 @@ packages should stay generic and move into Nex when possible.
 
 Nex retains the repository that owns each loaded manifest. Nex manifests
 commonly use repository-root paths such as
-`pkg/cli/editors/vim-reproducible.patch` and `asm/nex-systemd.yaml`.
+`pkg/cli/editors/vim-reproducible.patch` and `base/nex-systemd.yaml`.
 The loader resolves local package sources and inherited assemblies from the
 owning repository root in memory. A `source:` path in an assembly's `files`
 section resolves from that same root. Nex does not rewrite YAML paths to
@@ -1634,7 +1634,7 @@ stale dependencies and entered the phase-zero bootstrap chain; the corrected
 commands built each image twice from its declared store refs.
 
 Manifest `extends` paths resolve from the repository root, so `flat-podman`
-extends `asm/flat-systemd.yaml`. After EP011 added Glibc's vendor databases,
+extends `base/flat-systemd.yaml`. After EP011 added Glibc's vendor databases,
 its strict checksum is
 `f8feefae4d82452da5dec9f6fe69e5d65c008a7e6a34273184838f0fe9bd31c9`.
 EP011 resolved the earlier missing GN ref by strictly rebuilding GN 0.2289,

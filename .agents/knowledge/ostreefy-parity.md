@@ -94,7 +94,7 @@ deferred with concrete policy decisions:
   app policies.
 - `nvidia-580xx-dkms` is covered by
   `pkg/libs/graphics/nvidia-580.yaml` and
-  `asm/desktop-vwl/desktop-vwl-nvidia-580.yaml`. The checked-out root proves
+  `asm/desktop-vwl-nvidia-580.yaml`. The checked-out root proves
   the 580.159.04 module, userspace tools, and Nvidia GL/Vulkan vendor files.
   `nvidia-container-toolkit` still waits for a container-runtime hook package
   and proof.

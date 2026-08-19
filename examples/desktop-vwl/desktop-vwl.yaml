@@ -5,16 +5,20 @@ system:
   version: 0.0.1
   description: Desktop system with vwl compositor, wayland tools, and CLI utilities
   nex_structure: true
-  extends: asm/nex-systemd.yaml
-  checksum: bd79a3917467f0bbc338faf1a1649e9f588624ea81c6fdf2e21e861765139da7
+  extends: nex:base/nex-systemd.yaml
+  checksum: b7f2c3448b1c25bdea458c41647abc47366740671312001f34349d911c1004ef
 
 sources:
 # Ship a snapshot of the Nex repo needed for self-hosting. The installed system
 # copies this template into writable /var on first boot.
 - name: nex_pkg
   dev: pkg
-- name: nex_asm
-  dev: asm
+- name: nex_base
+  dev: base
+- name: nex_examples
+  dev: examples
+- name: nex_installer
+  dev: installer
 - name: nex_src_cli
   dev: src/cli
 - name: nex_scripts
@@ -928,7 +932,9 @@ build:
 
     # ship manifests + sources for self-hosting (template copied to /var on first boot)
     mkdir -p /target/usr/share/nex/manifests/pkg
-    mkdir -p /target/usr/share/nex/manifests/asm
+    mkdir -p /target/usr/share/nex/manifests/base
+    mkdir -p /target/usr/share/nex/manifests/examples
+    mkdir -p /target/usr/share/nex/manifests/installer
     mkdir -p /target/usr/share/nex/manifests/src/cli
     mkdir -p /target/usr/share/nex/manifests/scripts
 
@@ -936,10 +942,18 @@ build:
     if [ -n "${SOURCE_nex_pkg_IS_DEV:-}" ]; then
         tar --no-same-owner -xf "/${SOURCE_nex_pkg}" -C /target/usr/share/nex/manifests/pkg --strip-components=1
     fi
-    if [ -n "${SOURCE_nex_asm_IS_DEV:-}" ]; then
-        tar --no-same-owner -xf "/${SOURCE_nex_asm}" -C /target/usr/share/nex/manifests/asm --strip-components=1
-        find /target/usr/share/nex/manifests/asm -name '*.yaml' -exec sed -i '/^[[:space:]]*checksum:[[:space:]]/d' {} +
-    fi
+    for shipped in base examples installer; do
+        source_var="SOURCE_nex_${shipped}"
+        dev_var="SOURCE_nex_${shipped}_IS_DEV"
+        eval "source_path=\${${source_var}:-}"
+        eval "is_dev=\${${dev_var}:-}"
+        if [ -n "${is_dev}" ]; then
+            tar --no-same-owner -xf "/${source_path}" \
+                -C "/target/usr/share/nex/manifests/${shipped}" --strip-components=1
+            find "/target/usr/share/nex/manifests/${shipped}" -name '*.yaml' \
+                -exec sed -i '/^[[:space:]]*checksum:[[:space:]]/d' {} +
+        fi
+    done
     if [ -n "${SOURCE_nex_src_cli_IS_DEV:-}" ]; then
         tar --no-same-owner -xf "/${SOURCE_nex_src_cli}" -C /target/usr/share/nex/manifests/src/cli --strip-components=1
     fi

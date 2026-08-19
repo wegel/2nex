@@ -816,7 +816,7 @@ else
     # build installer image if missing or --rebuild
     if [ ! -f "$INSTALLER_IMG" ] || [ "$REBUILD" = "true" ]; then
         [ -x "$NEX_BIN" ] || die "nex binary not found or not executable: $NEX_BIN"
-        "$NEX_BIN" build asm/installer/installer.yaml --verbose
+        "$NEX_BIN" build installer/installer.yaml --verbose
         echo "building installer image..."
         if [ "$AUTOINSTALL" = "true" ]; then
             KCMDLINE_TMP="$TMP_DIR/kcmdline.qemu-autoinstall.txt"

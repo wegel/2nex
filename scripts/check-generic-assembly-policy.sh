@@ -126,8 +126,8 @@ case "${1:-}" in
         ;;
     '')
         scan_assemblies \
-            asm/nex-systemd.yaml \
-            asm/desktop-vwl/desktop-vwl.yaml
+            base/nex-systemd.yaml \
+            examples/desktop-vwl/desktop-vwl.yaml
         ;;
     *)
         scan_assemblies "$@"

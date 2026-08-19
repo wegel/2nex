@@ -136,8 +136,8 @@ Evidence: the first `desktop-vwl-nvidia-580` assembly smoke showed
 `misc` to the runtime bundle, rebuilt 580 and current roots exposed both
 `nvidia_icd.json` and `nvidia_layers.json`.
 
-`asm/desktop-vwl/desktop-vwl-nvidia-580.yaml` and
-`asm/desktop-vwl/desktop-vwl-nvidia-current.yaml` are the desktop variants
+`asm/desktop-vwl-nvidia-580.yaml` and
+`asm/desktop-vwl-nvidia-current.yaml` are the desktop variants
 that activate one Nvidia branch at a time. Both variants also include
 v4l2loopback, `kvmfr`, and Looking Glass. The 580 root uses Nvidia 580.159.04;
 the current root uses Nvidia 595.84.
@@ -238,7 +238,7 @@ disappear from `pkg/core/kernel/linux.yaml`. Remove any bundle entry that still
 names the old module output.
 
 Evidence: after virtio GPU became built-in, `drv-gpu-virtio` disappeared from
-the kernel outputs, and `nex check asm/desktop-vwl/desktop-vwl.yaml` failed
+the kernel outputs, and `nex check examples/desktop-vwl/desktop-vwl.yaml` failed
 until `bundles.all-modules` stopped naming `drv-gpu-virtio`.
 
 Set `TARGET_REF=systems/<slug>/<version>` to boot a nondefault system ref with

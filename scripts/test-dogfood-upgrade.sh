@@ -126,7 +126,7 @@ grep -F "dry-run passed" "$TMPDIR/dry-run.out" >/dev/null
 grep -F "nex build pkg/core/nex/nex.yaml" "$LOG" >/dev/null
 grep -F -- "--compute-deps" "$LOG" >/dev/null
 grep -F -- "--fallback-repo $TARGET_REPO" "$LOG" >/dev/null
-grep -F "nex build asm/desktop-vwl/desktop-vwl-nvidia-580.yaml" "$LOG" >/dev/null
+grep -F "nex build asm/desktop-vwl-nvidia-580.yaml" "$LOG" >/dev/null
 grep -F "nex upgrade $SYSTEM_REF --repo $TARGET_REPO --sysroot $SYSROOT --dry-run" "$LOG" >/dev/null
 ! test -d "$SYSROOT/nex/deployments/$SYSTEM_COMMIT.1"
 

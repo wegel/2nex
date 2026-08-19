@@ -10,7 +10,7 @@ scripts/qemu-test-graphical.sh --target-ref systems/desktop-vwl/0.0.1 --app chro
 ```
 
 The script creates a disposable direct-initramfs disk under
-`.nex/tmp/graphical-smoke`, checks `asm/desktop-vwl/desktop-vwl.yaml`, checks
+`.nex/tmp/graphical-smoke`, checks `examples/desktop-vwl/desktop-vwl.yaml`, checks
 out the target system ref, injects guest assertion services, and saves logs and
 artifacts under `.nex/tmp/graphical-smoke/artifacts`.
 

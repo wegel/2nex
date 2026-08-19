@@ -26,7 +26,7 @@ embedding mutable `checksum:` fields from those copied manifests. Otherwise
 `--update-checksum` changes the source tree between the first and second
 build pass, and the root filesystem checksum can never stay stable.
 
-`asm/desktop-vwl/desktop-vwl.yaml` strips `checksum:` lines from copied
+`examples/desktop-vwl/desktop-vwl.yaml` strips `checksum:` lines from copied
 `asm/*.yaml` files after extracting the dev source.
 
 The installer assembly embeds the package manifest database under
@@ -162,8 +162,8 @@ standalone manifests. Check the assembly that consumes the overlay instead.
 
 Evidence: `./src/cli/target/debug/nex check asm/nex-systemd-overlay.yaml`
 reported `needs formatting` and `missing field package`, while
-`./src/cli/target/debug/nex check asm/nex-systemd.yaml` passed because
-`asm/nex-systemd.yaml` consumes the overlay through `overlays:`.
+`./src/cli/target/debug/nex check base/nex-systemd.yaml` passed because
+`base/nex-systemd.yaml` consumes the overlay through `overlays:`.
 
 ## First UAPI Parser Wave System Proof
 
@@ -204,7 +204,7 @@ package explicitly unless another package already supplies it.
 Evidence: after `desktop-vwl` added `dool` and `mosh` package refs, the
 checked-out system could not run `dool --version` because `python3` was absent,
 and could not run `mosh --version` because Perl was absent. Adding the Python
-and Perl runtime package refs to `asm/desktop-vwl/desktop-vwl.yaml` made the
+and Perl runtime package refs to `examples/desktop-vwl/desktop-vwl.yaml` made the
 next reproducible assembly build and checked-out system smoke pass.
 
 ## Command Name Conflicts

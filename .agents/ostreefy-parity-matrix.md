@@ -9,9 +9,9 @@ Sources:
 
 - the ostreefy Arch Linux `Containerfile` and its example variant, both outside
   this repository
-- `asm/nex-systemd.yaml`
-- `asm/desktop-vwl/desktop-vwl.yaml`
-- `asm/desktop-dev.yaml`
+- `base/nex-systemd.yaml`
+- `examples/desktop-vwl/desktop-vwl.yaml`
+- `examples/desktop-dev.yaml`
 
 Status values:
 
@@ -126,7 +126,7 @@ Status values:
 | npm | personal | covered | none | Nex Node.js package provides npm; checkout smoke `npm --version`. |
 | ntp | personal | replaced | 002h | Nex uses systemd-timesyncd; checked-out `desktop-vwl` ran `systemd-timesyncd --help`, and `80-systemd-timesync.list` names `systemd-timesyncd.service`. |
 | nushell | personal | deferred-request | none | Human said to skip Nushell on 2026-06-28 after reproducibility attempts failed; they do not use it. |
-| nvidia-580xx-dkms | aur | covered | 003 | `pkg/libs/graphics/nvidia-580.yaml` builds Nvidia 580.159.04 for Linux 6.12.58, and `asm/desktop-vwl/desktop-vwl-nvidia-580.yaml` activates it with the desktop and capture stack. Checked-out root smoke verified module version, vermagic, userspace tools, and Nvidia GL/Vulkan vendor files. |
+| nvidia-580xx-dkms | aur | covered | 003 | `pkg/libs/graphics/nvidia-580.yaml` builds Nvidia 580.159.04 for Linux 6.12.58, and `asm/desktop-vwl-nvidia-580.yaml` activates it with the desktop and capture stack. Checked-out root smoke verified module version, vermagic, userspace tools, and Nvidia GL/Vulkan vendor files. |
 | nvidia-container-toolkit | aur | needs-manifest | 003 | Nvidia driver policy now exists, and the desktop variants activate one Nvidia branch at a time. Nex still needs a container runtime hook package and proof that the selected container runtime can see the Nvidia hook or equivalent. |
 | openbsd-netcat | personal | covered | none | `desktop-vwl` includes OpenBSD netcat; system smoke ran `nc -h`. |
 | openconnect-sso | aur | deferred-policy | 002h | Deferred until Nex chooses an AUR/Python desktop authentication-helper policy and confirms this helper is still used. |

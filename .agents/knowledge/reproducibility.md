@@ -61,11 +61,11 @@ recorded these new checksums: `pkg/core/kernel/initramfs.yaml`
 `c216a714681fc7ddc0231b73dae59ca5a513837e733e38f1bc6ac9c1bcaed7e1`,
 `pkg/core/kernel/linux.yaml`
 `dc2995d71ac81a53479483d95653d4661424a62f7d02a9f1bdd90547932e22b9`,
-`asm/desktop-vwl/desktop-vwl.yaml`
+`examples/desktop-vwl/desktop-vwl.yaml`
 `7b2c4dc656274d3d1501e00ae3193a12b45a4df31cd9a8d52a6bbcb7f6de83d2`,
-`asm/desktop-vwl/desktop-vwl-nvidia-580.yaml`
+`asm/desktop-vwl-nvidia-580.yaml`
 `3b710c76449a913b982b34e85ca186aa1f9e602b0a5f7d3dd915e233107c9194`, and
-`asm/installer/installer.yaml`
+`installer/installer.yaml`
 `7aaa274c8963d618ed1e7739628043d4e85247e0d7384c5baec51c0b190cc246`.
 
 When a manifest checksum mismatch blocks an ordinary package repair, isolate

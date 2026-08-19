@@ -630,7 +630,7 @@ build_direct_initramfs_disk() {
     local expected_var_kib
     local factory_etc
 
-    "$NEX_BIN" check "$ROOT_DIR/asm/desktop-vwl/desktop-vwl.yaml"
+    "$NEX_BIN" check "$ROOT_DIR/examples/desktop-vwl/desktop-vwl.yaml"
 
     rm -rf "$WORK_DIR"
     mkdir -p "$DIRECT_ROOT"/{boot,initramfs,root-content,var-content} "$ARTIFACT_DIR"

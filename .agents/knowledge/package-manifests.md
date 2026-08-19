@@ -553,10 +553,10 @@ but an administrator had nowhere to put policy at all, which on an immutable
 
 When a record's `pass` rests on a mechanism an assembly supplies, follow the
 `extends:` chain rather than the file that ships the package.
-`asm/edgebox-rootfs.yaml` contains no `profile.d` text of its own but extends
-`asm/flat-systemd.yaml`, which merges `/usr/lib/profile.d`, `/run/profile.d`,
-and `/etc/profile.d`; `asm/desktop-dev.yaml` inherits `XDG_CONFIG_DIRS` from
-`asm/desktop-vwl/desktop-vwl.yaml` the same way. Check which assemblies ship a
+`examples/edgebox-rootfs.yaml` contains no `profile.d` text of its own but extends
+`base/flat-systemd.yaml`, which merges `/usr/lib/profile.d`, `/run/profile.d`,
+and `/etc/profile.d`; `examples/desktop-dev.yaml` inherits `XDG_CONFIG_DIRS` from
+`examples/desktop-vwl/desktop-vwl.yaml` the same way. Check which assemblies ship a
 package with `grep -rln '<namespace>/<pkg>' asm/`.
 
 Nothing below `pkg/bootstrap/` binds to these rules, because no assembly
