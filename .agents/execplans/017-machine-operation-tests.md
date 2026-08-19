@@ -29,14 +29,14 @@ The four operations, in the words a user would use:
 3. Install a package and keep it across a reboot.
 4. Put a new system version on the machine so it boots next time, and undo that.
 
-Journey 1 also settles a question this repository cannot currently answer from
+Test 1 also settles a question this repository cannot currently answer from
 source alone. Package manifests name their build environment by Git blob SHA,
 and 476 of them name `27b6e5dc`, a historical revision of `env/standard.yaml`
 (see `.agents/knowledge/environment-pinning.md`). `/nex/manifests` is created on
 first boot by `git init` plus one commit of the shipped snapshot
 (`base/nex-systemd.yaml:222`), and a repository with one commit cannot hold a
 past revision of a file. Either the machine gets its manifests some other way,
-or journey 1 fails. Both outcomes are useful, and neither is known today.
+or test 1 fails. Both outcomes are useful, and neither is known today.
 
 ## Progress
 
@@ -50,11 +50,11 @@ or journey 1 fails. Both outcomes are useful, and neither is known today.
       with SSH reachable (9s to SSH, three runs in a row).
 - [x] (2026-08-19) Implemented the harness verbs: `boot`, `run`, `reboot`,
       `expect_deployment`, in `scripts/test-machine-operations.sh`. `reboot`
-      and `expect_deployment` are exercised by no journey yet (journey 1 needs
+      and `expect_deployment` are exercised by no test yet (test 1 needs
       neither); they are written and match the reference script's proven
       `assert_current_deployment`/reboot-by-killing-qemu pattern, but unproven
-      end to end until journeys 3/4 exist.
-- [x] (2026-08-19) Wrote journey 1 (`scripts/machine-journeys/build-package.sh`)
+      end to end until tests 3/4 exist.
+- [x] (2026-08-19) Wrote test 1 (`scripts/machine-tests/build-package.sh`)
       and recorded what it reports: FAIL, deterministically, three runs in a
       row. See Surprises & Discoveries.
 - [x] (2026-08-19) Wrote `tests/nex-test-fixture.yaml` (extends
@@ -63,20 +63,20 @@ or journey 1 fails. Both outcomes are useful, and neither is known today.
       clone it). `nex check` passes; `nex build --single --check
       --update-checksum` is strict two-build reproducible at checksum
       `a22e42ab383d0c108c3fb6f2ada6899c6f3a21ff31aed3c05e61b112aee6b507`
-      (ref `systems/nex-test-fixture/0.0.1`). Harness repointed at it. Journey
+      (ref `systems/nex-test-fixture/0.0.1`). Harness repointed at it. Test
       1 reran, still FAILs, now past environment resolution's first gate; see
       Surprises & Discoveries.
-- [x] (2026-08-19) Wrote journeys 2, 3, 4
-      (`scripts/machine-journeys/temporary-install.sh`,
-      `persistent-install.sh`, `deploy-and-rollback.sh`). Journey 4 passes
-      end to end, twice in a row. Journeys 2 and 3 FAIL deterministically at
+- [x] (2026-08-19) Wrote tests 2, 3, 4
+      (`scripts/machine-tests/temporary-install.sh`,
+      `persistent-install.sh`, `deploy-and-rollback.sh`). Test 4 passes
+      end to end, twice in a row. Tests 2 and 3 FAIL deterministically at
       `nex stage`, for a reason this plan had not named: the fixture's kernel
       bundle carries no `overlay.ko`. See Surprises & Discoveries.
-- [x] (2026-08-19) Wired all four journeys into
-      `scripts/test-machine-operations.sh`. `--journey <name>` still runs one
+- [x] (2026-08-19) Wired all four tests into
+      `scripts/test-machine-operations.sh`. `--test <name>` still runs one
       alone; with no flag it runs all four in order and prints one summary.
-      Journeys 3 and 4 cross a reboot, handled by a per-journey phase list
-      (`JOURNEY_PHASES`) the host steps through, calling the `reboot` verb
+      Tests 3 and 4 cross a reboot, handled by a per-test phase list
+      (`TEST_PHASES`) the host steps through, calling the `reboot` verb
       between phases -- the first real exercise of `reboot` and
       `expect_deployment`-equivalent logic in this plan.
 - [x] (2026-08-19) Ran the acceptance checks: full suite twice in a row
@@ -84,7 +84,7 @@ or journey 1 fails. Both outcomes are useful, and neither is known today.
       broken guest command (typo'd deploy ref) made exactly
       `deploy-and-rollback` fail, carrying `ref not found:
       systems/nex-systemd/0.0.1-typo-deliberately-broken`, while the other
-      three journeys kept their original, unrelated failures. Reverted after.
+      three tests kept their original, unrelated failures. Reverted after.
 - [x] (2026-08-19) Promoted durable findings into `.agents/knowledge/`: the
       OverlayFS/kernel-bundle finding into `kernel-and-boot.md` ("Kernel
       bundle module dependencies") with a cross-reference from
@@ -110,7 +110,7 @@ So SSH access is injected at disk-assembly time rather than carried by an
 assembly.
 
 **2026-08-19, correcting the above: `base/nex-systemd.yaml` still cannot serve
-as the fixture.** Journey 1 ran against it and failed one step earlier than
+as the fixture.** Test 1 ran against it and failed one step earlier than
 this plan predicted. It reported:
 
     manifests-system-exists=true
@@ -144,7 +144,7 @@ package, a Git bundle carrying full history, and an override of
 `git init`. It must not copy desktop-vwl's `dev:` snapshot, which would
 reproduce the historyless repository described above.
 
-**2026-08-19: journey 1 fails, and the cause is one step earlier than the
+**2026-08-19: test 1 fails, and the cause is one step earlier than the
 blob-SHA question this plan opened with.** `/nex/manifests` never becomes a
 Git repository at all on this fixture, so the question of which revision of
 `env/standard.yaml` a historical `manifest_ref` resolves to never comes up.
@@ -221,7 +221,7 @@ passes. `nex build tests/nex-test-fixture.yaml --single --check
 `a22e42ab383d0c108c3fb6f2ada6899c6f3a21ff31aed3c05e61b112aee6b507`, stored at
 `systems/nex-test-fixture/0.0.1`.
 
-**2026-08-19: journey 1 against the new fixture gets past the finding above,
+**2026-08-19: test 1 against the new fixture gets past the finding above,
 then fails one level deeper, in `load_environment` itself.** Rerun (twice,
 identical both times) with the harness pointed at
 `systems/nex-test-fixture/0.0.1`:
@@ -267,7 +267,7 @@ see `.agents/knowledge/environment-pinning.md` and the `store` term in Context
 and Orientation below). Per instruction, nothing was changed to route around
 it: no repinning, no environment edits, no extra history.
 
-**2026-08-19: journeys 2 and 3 (`nex stage`) fail on this fixture because the
+**2026-08-19: tests 2 and 3 (`nex stage`) fail on this fixture because the
 kernel bundle carries no `overlay.ko`, not because of anything in `nex`
 itself.** `base/nex-systemd.yaml` names
 `x86_64/pkg/core/kernel/linux/6.18.24/bundles/vm` for its kernel. That
@@ -289,11 +289,11 @@ time:
     Error: Custom { kind: Other, error: "Failed to mount overlay on /usr/bin" }
 
 This blocks `nex install --system` too, since it requires staging first.
-Journey 4 (deploy/rollback) needs neither staging nor overlayfs and is
+Test 4 (deploy/rollback) needs neither staging nor overlayfs and is
 unaffected — it passed cleanly, twice in a row.
 
 Nothing was changed to route around this: swapping in `bundles/all-modules`
-(or hand-adding the `fs-overlay` output) would make journeys 2 and 3 pass, but
+(or hand-adding the `fs-overlay` output) would make tests 2 and 3 pass, but
 that is a choice about what this test fixture's kernel should carry, not a
 mechanical follow-on from anything asked for in this unit, so it was left
 alone and is reported here instead of decided.
@@ -303,9 +303,9 @@ alone and is reported here instead of decided.
 - Decision: The harness pre-populates the guest's system store (`/nex/repo`)
   with refs pulled from the host's own build store before boot: `tig`
   (`outputs/bin`, small, already built, not part of this fixture's own
-  package list) for journeys 2-3, and `systems/nex-systemd/0.0.1` (a
-  different already-built system) for journey 4's deploy target.
-  Rationale: Every journey here must avoid the environment bug, which only
+  package list) for tests 2-3, and `systems/nex-systemd/0.0.1` (a
+  different already-built system) for test 4's deploy target.
+  Rationale: Every test here must avoid the environment bug, which only
   triggers on a build. The guest still runs every `stage`/`install`/
   `discard`/`commit`/`deploy`/`rollback` command itself; only the ingredient
   each command needs already built is placed there first, the same way the
@@ -314,16 +314,16 @@ alone and is reported here instead of decided.
   and well under two seconds.
   Date/Author: 2026-08-19 / Claude
 
-- Decision: Journeys that cross a reboot (3 and 4) are one guest script file
-  taking a phase argument, driven by a per-journey phase list
-  (`JOURNEY_PHASES` in `scripts/test-machine-operations.sh`) that the host
+- Decision: Tests that cross a reboot (3 and 4) are one guest script file
+  taking a phase argument, driven by a per-test phase list
+  (`TEST_PHASES` in `scripts/test-machine-operations.sh`) that the host
   steps through, calling the `reboot` verb between phases and stopping the
-  journey at the first failed phase without attempting the phases or reboots
+  test at the first failed phase without attempting the phases or reboots
   after it.
-  Rationale: Keeps "one script per journey" from the Plan of Work while
+  Rationale: Keeps "one script per test" from the Plan of Work while
   giving the host what it needs to own the reboot, per the harness design.
   State a later phase needs (e.g. "is the installed binary still there")
-  comes from the guest's own persistent files (or, for journey 4, its
+  comes from the guest's own persistent files (or, for test 4, its
   `/proc/cmdline`), never from a value the host computed and handed back in.
   Date/Author: 2026-08-19 / Claude
 
@@ -333,15 +333,15 @@ alone and is reported here instead of decided.
   that performs it on the guest's behalf proves only that the harness works.
   Date/Author: 2026-08-19 / Claude
 
-- Decision: Give each journey its own qcow2 overlay over one shared backing
+- Decision: Give each test its own qcow2 overlay over one shared backing
   image.
-  Rationale: Every journey then starts from an identical known deployment, a
+  Rationale: Every test then starts from an identical known deployment, a
   failure names one operation rather than a sequence, and discarding state is
   deleting a file. The existing script builds guest state inline, which couples
-  journeys together.
+  tests together.
   Date/Author: 2026-08-19 / Claude
 
-- Decision: Journeys emit `key=value` lines on stdout and exit non-zero on
+- Decision: Tests emit `key=value` lines on stdout and exit non-zero on
   failure. The host parses no prose.
   Rationale: This is what made the graphical smoke test legible.
   `center-pixel=srgb(240,0,255)` is checkable; "looks right" is not.
@@ -366,7 +366,7 @@ alone and is reported here instead of decided.
   `nex:base/nex-systemd.yaml` and adding a `git` package plus a populated
   `/usr/share/nex/manifests`.
   Rationale: Measured, not assumed. `nex-systemd` alone boots with an empty
-  `/nex/manifests` and no git, so no journey that touches manifests can run.
+  `/nex/manifests` and no git, so no test that touches manifests can run.
   Only desktop-vwl ships those today, and it costs roughly 7 GB per build.
   Date/Author: 2026-08-19 / Claude
 
@@ -381,7 +381,7 @@ alone and is reported here instead of decided.
 - Superseded: If `base/nex-systemd.yaml` will not serve, write a purpose-built
   `tests/nex-test-fixture.yaml` rather than using `examples/desktop-vwl`.
   Rationale: desktop-vwl builds a roughly 7 GB root carrying a whole desktop
-  stack that none of these journeys exercise, and every fixture rebuild would
+  stack that none of these tests exercise, and every fixture rebuild would
   pay for it. A purpose-built fixture is small, fast, and its contents are
   chosen by what the tests need. It lives in `tests/` rather than `base/` or
   `examples/`, because a fixture is run directly, which `base/` is not for, and
@@ -397,8 +397,8 @@ alone and is reported here instead of decided.
 
 ## Outcomes & Retrospective
 
-`scripts/test-machine-operations.sh` exists and runs all four journeys, `--journey
-<name>` runs one alone, and every journey starts from a fresh qcow2 overlay
+`scripts/test-machine-operations.sh` exists and runs all four tests, `--test
+<name>` runs one alone, and every test starts from a fresh qcow2 overlay
 over one shared backing image built from `tests/nex-test-fixture.yaml`
 (`systems/nex-test-fixture/0.0.1`, checksum
 `a22e42ab383d0c108c3fb6f2ada6899c6f3a21ff31aed3c05e61b112aee6b507`, strict
@@ -406,10 +406,10 @@ two-build reproducible). Verified twice in a row: `build-package`,
 `temporary-install`, and `persistent-install` FAIL, identically each time;
 `deploy-and-rollback` PASSes, identically each time, including two reboots.
 The deliberately-broken-command check (a typo'd deploy ref) made exactly one
-journey fail, carrying the guest's own error text, while the other three kept
+test fail, carrying the guest's own error text, while the other three kept
 their unrelated pre-existing failures.
 
-Three of four journeys FAIL, and every one of those three is a legitimate,
+Three of four tests FAIL, and every one of those three is a legitimate,
 reproducible finding this plan set out to get, not a harness defect:
 
 1. `build-package`: a machine cannot build a package. Full history in
@@ -424,8 +424,8 @@ reproducible finding this plan set out to get, not a harness defect:
    proves this is specific to staging, not to the fixture generally: it needs
    no OverlayFS and passes cleanly.
 
-So the plan's four-journey premise holds up: a person sitting at an installed
-Nex machine can put a new system version on it and undo that (journey 4,
+So the plan's four-test premise holds up: a person sitting at an installed
+Nex machine can put a new system version on it and undo that (test 4,
 proven, content-based, across two real reboots), but cannot build a package or
 stage an install today, for two distinct, now-precisely-located reasons
 neither of which was known before this plan.
@@ -433,9 +433,9 @@ neither of which was known before this plan.
 What was not done: the two bugs above were not fixed, per instruction — that
 is EP018's job for the store/environment issue and an open design question
 (reported, not decided) for the kernel bundle's module set. `reboot` and
-`expect_deployment`-equivalent logic are now exercised (journey 4), but
+`expect_deployment`-equivalent logic are now exercised (test 4), but
 `expect_deployment` itself as a literal harness function is unused by any
-journey; journeys use `/proc/cmdline` parsing inline instead since the
+test; tests use `/proc/cmdline` parsing inline instead since the
 assertions needed were about content markers, not a single deployment-name
 equality check. No stray QEMU processes or Git worktrees were left behind by
 any run.
@@ -474,7 +474,7 @@ Files this plan touches:
 
 - `scripts/qemu-test-live-upgrade.sh`, read for reusable parts, not extended.
 - `scripts/test-machine-operations.sh`, new, the entry point.
-- `scripts/machine-journeys/*.sh`, new, one per journey, run on the guest.
+- `scripts/machine-tests/*.sh`, new, one per test, run on the guest.
 
 The CLI verbs a user has: `build`, `stage`, `install`, `remove`, `discard`,
 `commit`, `switch`, `deploy`, `upgrade`, `deployments`, `status`, `rollback`,
@@ -482,19 +482,19 @@ The CLI verbs a user has: `build`, `stage`, `install`, `remove`, `discard`,
 
 ## Plan of Work
 
-Build the harness first and prove it with the cheapest journey, then add the
+Build the harness first and prove it with the cheapest test, then add the
 rest. The harness is three pieces:
 
 **Fixture.** One bootable disk built once from an assembly this repository
-already builds, then a qcow2 overlay per journey with the fixture as backing
-file. Journeys never mutate the fixture.
+already builds, then a qcow2 overlay per test with the fixture as backing
+file. Tests never mutate the fixture.
 
-**Guest contract.** A journey is a shell script copied to the guest and run
+**Guest contract.** A test is a shell script copied to the guest and run
 there. It prints `key=value` facts and exits non-zero on failure. The host
 collects stdout, the serial log, and the guest journal on failure.
 
 **Transitions.** `boot`, `run`, `reboot`, `expect_deployment`. A reboot is a
-step the harness owns, because journeys 3 and 4 cross one and nothing today
+step the harness owns, because tests 3 and 4 cross one and nothing today
 does that from inside the guest.
 
 ## Concrete Steps
@@ -503,54 +503,54 @@ does that from inside the guest.
    `nex_structure: true` assembly, and that is the cheapest one. Do not use
    `examples/edgebox-rootfs.yaml`: it is flat, so a built edgebox root has no
    `/nex` directory, no `/nex/repo` store, no `/nex/manifests`, and no `nex`
-   binary, and every journey here needs all four. The `nex_structure: true`
+   binary, and every test here needs all four. The `nex_structure: true`
    assemblies are `base/nex-minimal.yaml`, `base/nex-systemd.yaml`,
    `installer/installer.yaml`, `examples/desktop-vwl/desktop-vwl.yaml`, and
    `examples/desktop-dev.yaml`. Confirm the fixture boots with SSH before
    building anything on top of it. If `nex-systemd` is not suitable, write
    `tests/nex-test-fixture.yaml`, a minimal `nex_structure: true` assembly
-   carrying only what these journeys need: systemd, sshd, the `nex` binary, a
+   carrying only what these tests need: systemd, sshd, the `nex` binary, a
    store, and a manifests repository. Do not fall back to
    `examples/desktop-vwl/desktop-vwl.yaml`.
 2. Build the fixture and keep its path and checksum in the plan.
 3. Write `scripts/test-machine-operations.sh` with the four verbs above and a
-   `--journey <name>` flag so one journey can run alone.
-4. Journey `build-package`: guest runs
+   `--test <name>` flag so one test can run alone.
+4. Test `build-package`: guest runs
    `nex build pkg/cli/archive/gzip.yaml --single` from its manifests worktree.
    `gzip` has 16 dependencies and 114 lines, the smallest real candidate.
    Report `build-exit`, `output-ref`, and on failure the first error line.
-5. Journey `temporary-install`: `nex stage`, `nex install`, assert the binary
+5. Test `temporary-install`: `nex stage`, `nex install`, assert the binary
    runs, `nex discard`, assert it is gone and the previous state is intact.
-6. Journey `persistent-install`: same, but `nex commit`, then reboot, then
+6. Test `persistent-install`: same, but `nex commit`, then reboot, then
    assert the package is still there.
-7. Journey `deploy-and-rollback`: guest runs `nex deploy <ref>`, reboots,
+7. Test `deploy-and-rollback`: guest runs `nex deploy <ref>`, reboots,
    asserts `nex status` names the new deployment and that a marker unique to
    that version is present in the running root, then `nex rollback`, reboots,
    asserts the old deployment is back.
-8. Record what journey 1 revealed about `/nex/manifests` and environment
+8. Record what test 1 revealed about `/nex/manifests` and environment
    resolution in `Surprises & Discoveries`, then promote it.
 
 ## Validation and Acceptance
 
 The plan is done when:
 
-- `scripts/test-machine-operations.sh` runs all four journeys and prints one
-  `PASS:` line per journey plus a final summary.
-- Each journey passes from a fresh overlay, in any order, and twice in a row.
-- A deliberately broken guest command makes exactly one journey fail, and the
+- `scripts/test-machine-operations.sh` runs all four tests and prints one
+  `PASS:` line per test plus a final summary.
+- Each test passes from a fresh overlay, in any order, and twice in a row.
+- A deliberately broken guest command makes exactly one test fail, and the
   failure output names the operation and carries the guest's error line.
-- Journey 4 proves the reboot by content, not by a string the test supplied.
+- Test 4 proves the reboot by content, not by a string the test supplied.
 
 ## Idempotence and Recovery
 
-Journeys are safe to rerun: each starts by discarding its overlay and creating a
+Tests are safe to rerun: each starts by discarding its overlay and creating a
 new one from the fixture. The fixture is rebuilt only when its assembly
 checksum changes. If a guest hangs, the harness kills QEMU on timeout and keeps
 the serial log under the artifact directory. Nothing writes to the host store.
 
 ## Artifacts and Notes
 
-Keep per-run artifacts under `.nex/tmp/machine-tests/<journey>/`: serial log,
+Keep per-run artifacts under `.nex/tmp/machine-tests/<test>/`: serial log,
 guest stdout, and the guest journal on failure. Do not add them to Git.
 
 Note for whoever runs this: `.nex-dev-prepare` uses `mktemp -d`, and `TMPDIR`
@@ -561,9 +561,9 @@ defaults to `/tmp`, which is tmpfs on this host. Set
 ## Interfaces and Dependencies
 
 This plan adds no product runtime interface. It adds a test interface:
-`scripts/test-machine-operations.sh` and the journey scripts beside it.
+`scripts/test-machine-operations.sh` and the test scripts beside it.
 
 It depends on QEMU, `ssh`, `ssh-keygen`, a built `nex_structure: true` fixture
 assembly, and the zub binary named by `ZUB_BIN`. It does not depend on EP018 or EP019, and it should
 land before both, because EP018 changes how manifests reach a machine and these
-journeys are how that change gets verified.
+tests are how that change gets verified.

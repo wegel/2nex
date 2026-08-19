@@ -1,5 +1,5 @@
 #!/bin/sh
-# build-package.sh: journey 1, "build a package on my machine."
+# build-package.sh: test 1, "build a package on my machine."
 #
 # Runs on the guest, copied there by scripts/test-machine-operations.sh. Prints
 # key=value facts on stdout and exits non-zero on failure. The host parses no

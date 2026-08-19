@@ -1,8 +1,8 @@
 #!/bin/sh
-# persistent-install.sh: journey 3, "install a package and keep it across a
+# persistent-install.sh: test 3, "install a package and keep it across a
 # reboot."
 #
-# Same package and staging path as journey 2 (temporary-install.sh), but
+# Same package and staging path as test 2 (temporary-install.sh), but
 # nex commit instead of nex discard, then the host reboots the guest and
 # this script runs again with "after-reboot" to check the package survived.
 #
@@ -62,7 +62,7 @@ if [ "$PHASE" = "before-reboot" ]; then
         exit 1
     fi
 
-    if ! run_step commit nex commit -m "install $BIN for persistent-install journey"; then
+    if ! run_step commit nex commit -m "install $BIN for persistent-install test"; then
         exit 1
     fi
 

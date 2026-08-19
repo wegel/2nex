@@ -1,5 +1,5 @@
 #!/bin/sh
-# deploy-and-rollback.sh: journey 4, "put a new system version on the
+# deploy-and-rollback.sh: test 4, "put a new system version on the
 # machine so it boots next time, and undo that."
 #
 # Runs in four phases, driven by the host across two reboots (the host owns

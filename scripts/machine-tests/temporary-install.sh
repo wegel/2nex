@@ -1,5 +1,5 @@
 #!/bin/sh
-# temporary-install.sh: journey 2, "install a package temporarily, then throw
+# temporary-install.sh: test 2, "install a package temporarily, then throw
 # it away."
 #
 # Uses the staging path a real user would type: nex stage, nex install

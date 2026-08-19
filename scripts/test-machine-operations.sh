@@ -3,13 +3,13 @@
 # installed Nex machine, driven entirely from inside a booted guest over SSH.
 #
 # See .agents/execplans/017-machine-operation-tests.md for the design. This
-# implements the harness and all four journeys: build-package,
+# implements the harness and all four tests: build-package,
 # temporary-install, persistent-install, deploy-and-rollback.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-JOURNEY_DIR="$SCRIPT_DIR/machine-journeys"
+TEST_DIR="$SCRIPT_DIR/machine-tests"
 TEST_IDENTITY_HELPER="$SCRIPT_DIR/prepare-qemu-test-identity.sh"
 
 ZUB_BIN="${ZUB_BIN:-/home/wegel/work/perso/zub/target/debug/zub}"
@@ -39,17 +39,17 @@ ROOT_MARGIN_MB=2048
 VAR_MARGIN_MB=1536
 
 # Refs pulled from the host's build store into the guest's system store
-# (/nex/repo) before boot, so journeys that install or deploy never need to
+# (/nex/repo) before boot, so tests that install or deploy never need to
 # build. tig/outputs/bin is a small already-built package outside the
-# fixture's own package list, for journeys 2-3. nex-systemd/0.0.1 is a
-# different already-built system, for journey 4's deploy target.
+# fixture's own package list, for tests 2-3. nex-systemd/0.0.1 is a
+# different already-built system, for test 4's deploy target.
 SEED_REFS=(
     "x86_64/pkg/dev/vcs/tig/2.6.0/outputs/bin"
     "systems/nex-systemd/0.0.1"
 )
 
-# All journeys this harness knows about, in run order.
-ALL_JOURNEYS=(build-package temporary-install persistent-install deploy-and-rollback)
+# All tests this harness knows about, in run order.
+ALL_TESTS=(build-package temporary-install persistent-install deploy-and-rollback)
 
 CURRENT_SSH_PORT=""
 CURRENT_ASSERT_KEY="$ASSERT_KEY"
@@ -197,7 +197,7 @@ EOF
 }
 
 # seed_system_repo REPO_DIR
-# Pre-populates the guest's system store with refs journeys 2-4 need already
+# Pre-populates the guest's system store with refs tests 2-4 need already
 # built, so the guest never has to build a package (which the environment bug
 # recorded in .agents/knowledge/machine-self-hosting.md would make fail). This
 # is host-side test setup, not the operation under test: the guest still runs
@@ -523,29 +523,29 @@ expect_deployment() {
         die "expected deployment $expected, got $actual"
 }
 
-# --- journeys ------------------------------------------------------------
+# --- tests ------------------------------------------------------------
 
-# Phase list per journey, "|"-separated. "_" means run the guest script with
+# Phase list per test, "|"-separated. "_" means run the guest script with
 # no argument. "REBOOT" means the host reboots the guest (killing and
-# restarting QEMU on the same overlay) before the next phase. Journeys that
+# restarting QEMU on the same overlay) before the next phase. Tests that
 # cross a reboot pass state to their later phases through the guest's own
 # persistent files, never through the host.
-declare -A JOURNEY_PHASES=(
+declare -A TEST_PHASES=(
     [build-package]="_"
     [temporary-install]="_"
     [persistent-install]="before-reboot|REBOOT|after-reboot"
     [deploy-and-rollback]="deploy|REBOOT|verify-deployed|rollback|REBOOT|verify-rolled-back"
 )
 
-run_journey() {
-    local journey=$1
-    local artifact_dir="$ARTIFACT_ROOT/$journey"
+run_test() {
+    local test=$1
+    local artifact_dir="$ARTIFACT_ROOT/$test"
     local overlay_img="$artifact_dir/overlay.qcow2"
-    local guest_script="$JOURNEY_DIR/$journey.sh"
+    local guest_script="$TEST_DIR/$test.sh"
     local ssh_port=$((SSH_PORT_BASE + RANDOM % 1000))
     local stdout_log="$artifact_dir/guest-stdout.log"
     local journal_log="$artifact_dir/guest-journal.log"
-    local phases_spec="${JOURNEY_PHASES[$journey]:-_}"
+    local phases_spec="${TEST_PHASES[$test]:-_}"
     local phase_list=()
     local phase
     local phase_arg
@@ -553,39 +553,39 @@ run_journey() {
     local failed=0
     local reboot_count=0
 
-    [[ -f "$guest_script" ]] || die "no journey script for $journey ($guest_script)"
+    [[ -f "$guest_script" ]] || die "no test script for $test ($guest_script)"
 
     rm -rf "$artifact_dir"
     mkdir -p "$artifact_dir"
     : > "$stdout_log"
 
-    log "[$journey] creating overlay over $BACKING_IMG"
+    log "[$test] creating overlay over $BACKING_IMG"
     "$QEMU_IMG_BIN" create -q -f qcow2 -F raw -b "$BACKING_IMG" "$overlay_img" >/dev/null
 
-    log "[$journey] booting on port $ssh_port"
+    log "[$test] booting on port $ssh_port"
     boot "$overlay_img" "$ssh_port" "$artifact_dir"
-    log "[$journey] SSH ready after ${BOOT_WAITED_SECS}s"
+    log "[$test] SSH ready after ${BOOT_WAITED_SECS}s"
 
-    log "[$journey] copying $guest_script to guest"
-    scp_to_guest "$guest_script" "/root/$journey.sh"
+    log "[$test] copying $guest_script to guest"
+    scp_to_guest "$guest_script" "/root/$test.sh"
 
     IFS='|' read -r -a phase_list <<< "$phases_spec"
     for phase in "${phase_list[@]}"; do
         if [[ "$phase" == "REBOOT" ]]; then
             reboot_count=$((reboot_count + 1))
-            log "[$journey] rebooting (reboot #$reboot_count)"
+            log "[$test] rebooting (reboot #$reboot_count)"
             printf '\n=== reboot #%s ===\n' "$reboot_count" >> "$stdout_log"
             reboot "$artifact_dir" "$overlay_img" "$ssh_port"
-            log "[$journey] SSH ready after reboot (${BOOT_WAITED_SECS}s)"
+            log "[$test] SSH ready after reboot (${BOOT_WAITED_SECS}s)"
             continue
         fi
 
         phase_arg=""
         [[ "$phase" != "_" ]] && phase_arg="$phase"
-        log "[$journey] running $journey.sh $phase_arg"
+        log "[$test] running $test.sh $phase_arg"
         printf '\n=== phase: %s ===\n' "${phase_arg:-default}" >> "$stdout_log"
         set +e
-        run "chmod +x /root/$journey.sh && /root/$journey.sh $phase_arg" >> "$stdout_log" 2>&1
+        run "chmod +x /root/$test.sh && /root/$test.sh $phase_arg" >> "$stdout_log" 2>&1
         guest_exit=$?
         set -e
         if [[ "$guest_exit" -ne 0 ]]; then
@@ -603,10 +603,10 @@ run_journey() {
     stop_guest
 
     if [[ "$failed" -eq 0 ]]; then
-        printf 'PASS: %s\n' "$journey"
+        printf 'PASS: %s\n' "$test"
         return 0
     else
-        printf 'FAIL: %s (guest exit %s)\n' "$journey" "$guest_exit"
+        printf 'FAIL: %s (guest exit %s)\n' "$test" "$guest_exit"
         printf 'artifacts: %s\n' "$artifact_dir"
         return 1
     fi
@@ -614,25 +614,25 @@ run_journey() {
 
 usage() {
     cat <<EOF
-usage: $(basename "$0") [--journey NAME]
+usage: $(basename "$0") [--test NAME]
 
-Runs the machine-operation journeys against a freshly overlaid boot of the
-$FROM_REF fixture. With no --journey, runs every journey this harness knows:
-${ALL_JOURNEYS[*]}
+Runs the machine-operation tests against a freshly overlaid boot of the
+$FROM_REF fixture. With no --test, runs every test this harness knows:
+${ALL_TESTS[*]}
 EOF
 }
 
 main() {
-    local only_journey=""
-    local journeys=()
-    local journey
+    local only_test=""
+    local tests=()
+    local test
     local failures=0
     local from_checksum
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --journey)
-                only_journey=$2
+            --test)
+                only_test=$2
                 shift 2
                 ;;
             -h|--help)
@@ -658,20 +658,20 @@ main() {
     mkdir -p "$ARTIFACT_ROOT"
     build_backing_image "$FROM_REF" "$from_checksum"
 
-    if [[ -n "$only_journey" ]]; then
-        journeys=("$only_journey")
+    if [[ -n "$only_test" ]]; then
+        tests=("$only_test")
     else
-        journeys=("${ALL_JOURNEYS[@]}")
+        tests=("${ALL_TESTS[@]}")
     fi
 
-    for journey in "${journeys[@]}"; do
-        if ! run_journey "$journey"; then
+    for test in "${tests[@]}"; do
+        if ! run_test "$test"; then
             failures=$((failures + 1))
         fi
     done
 
     printf '\n=== summary ===\n'
-    printf 'journeys run: %d\n' "${#journeys[@]}"
+    printf 'tests run: %d\n' "${#tests[@]}"
     printf 'failures: %d\n' "$failures"
 
     [[ "$failures" -eq 0 ]]
