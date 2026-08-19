@@ -103,12 +103,21 @@ package. Only `examples/desktop-vwl/desktop-vwl.yaml` does either. So
 (`repo.rs:261`) then cannot create the per-user worktree, because it needs
 `/nex/manifests` to already be a Git repository.
 
-The environment blob question is therefore still unanswered: the build never
-got far enough to resolve an environment.
+The build never got far enough to resolve an environment. That is not a gap in
+the finding, because there was never a question there to answer. The design
+requirement, restated by the human on 2026-08-19, is that a machine running Nex
+always carries the full Git history of the manifests repository, so that every
+pinned document is reachable. `nex-init-manifests` doing `git init` plus one
+commit over a shipped file tree is therefore wrong code, not a condition to
+measure: a one-commit repository cannot hold the historical
+`env/standard.yaml` revisions that 476 manifests name.
 
 `tests/nex-test-fixture.yaml` must be written after all. It extends
-`nex:base/nex-systemd.yaml` and adds the two things that make a machine
-self-hosting: a `git` package, and a populated `/usr/share/nex/manifests`.
+`nex:base/nex-systemd.yaml` and adds what makes a machine self-hosting: a `git`
+package, a Git bundle carrying full history, and an override of
+`nex-init-manifests` that clones from that bundle rather than running
+`git init`. It must not copy desktop-vwl's `dev:` snapshot, which would
+reproduce the historyless repository described above.
 
 **2026-08-19: journey 1 fails, and the cause is one step earlier than the
 blob-SHA question this plan opened with.** `/nex/manifests` never becomes a
@@ -174,7 +183,16 @@ make it pass, per instruction.
   so it cannot build, install, deploy, or roll back anything.
   Date/Author: 2026-08-19 / Claude
 
-- Decision: Write `tests/nex-test-fixture.yaml`, extending
+- Decision: The fixture ships a Git bundle with full history and clones from it
+  on first boot, rather than shipping a file tree.
+  Rationale: A machine always needs full history so every pinned document is
+  reachable; this is a design requirement, not a measurement. Shipping a tree
+  and running `git init` over it cannot satisfy it. This anticipates EP018 in
+  one test assembly, which also proves the mechanism before EP018 generalises
+  it.
+  Date/Author: 2026-08-19 / Human
+
+- Superseded: Write `tests/nex-test-fixture.yaml`, extending
   `nex:base/nex-systemd.yaml` and adding a `git` package plus a populated
   `/usr/share/nex/manifests`.
   Rationale: Measured, not assumed. `nex-systemd` alone boots with an empty
