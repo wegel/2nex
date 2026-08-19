@@ -1,4 +1,4 @@
-# Test the operations a user performs on an installed machine
+# Make an installed machine work, and test that it does
 
 This ExecPlan is a living document. Agents must keep `Progress`, `Surprises &
 Discoveries`, `Decision Log`, and `Outcomes & Retrospective` current as work
@@ -10,10 +10,16 @@ At plan completion, agents must promote verified durable notes into
 
 ## Purpose / Big Picture
 
-After this plan, one command proves that a person sitting at an installed Nex
-machine can do the four things Nex exists to let them do:
+After this plan, one command passes, and it proves that a person sitting at an
+installed Nex machine can do the four things Nex exists to let them do:
 
     scripts/test-machine-operations.sh
+
+It passes because this plan both writes the tests and fixes what they find.
+Writing tests that fail against a broken product proves nothing on its own, so
+the fixes are in scope here rather than deferred. This plan absorbs what was
+ExecPlan 018, now deleted: shipping manifests as a Git bundle, and renaming the
+store.
 
 It boots a real installed disk image in QEMU and makes the guest perform each
 operation itself, over SSH, then checks the machine's own state afterwards.
@@ -89,6 +95,18 @@ or test 1 fails. Both outcomes are useful, and neither is known today.
       OverlayFS/kernel-bundle finding into `kernel-and-boot.md` ("Kernel
       bundle module dependencies") with a cross-reference from
       `machine-self-hosting.md`.
+
+- [ ] Fix environment resolution: resolve blobs against the manifests
+      repository, not the store. `build-package` must then pass.
+- [ ] Add the `git_bundle` source kind with a recorded sha256, generated with
+      `pack.threads=1` from an explicit commit.
+- [ ] Move `examples/desktop-vwl/desktop-vwl.yaml` from its six `dev:` sources
+      to one bundle source, and delete `src/cli/.nex-dev-prepare`.
+- [ ] Rewrite `nex-init-manifests` in `base/nex-systemd.yaml` to clone the
+      bundle, then drop the fixture's override of it.
+- [ ] Rename `/nex/repo` to `/nex/store` and `--repo` to `--store`, with a
+      migration for machines carrying the old path.
+- [ ] Rebuild every assembly, record checksums, and run the full suite green.
 
 ## Surprises & Discoveries
 
@@ -395,6 +413,41 @@ alone and is reported here instead of decided.
   just wrote there proves nothing about booting.
   Date/Author: 2026-08-19 / Claude
 
+- Decision: Generate bundles with `git -c pack.threads=1 bundle create`, from
+  an explicit commit reached through a detached worktree.
+  Rationale: Measured 2026-08-19. Three default runs produced three different
+  sha256 values; three with `pack.threads=1` produced one, at the same size, so
+  the nondeterminism is parallel work-splitting rather than content. Adding
+  `pack.window=0 pack.depth=0` is also deterministic but grows 7.4 MB to
+  24.9 MB. `git bundle create <file> <commit-sha>` refuses with "empty bundle"
+  because it needs a named ref, and bundling a branch yields a clone with an
+  empty tree, so a detached worktree supplies a HEAD to bundle. Carried from
+  the deleted ExecPlan 018 and since confirmed in `scripts/make-test-bundle.sh`.
+  Date/Author: 2026-08-19 / Claude
+
+- Decision: Record each bundle's sha256 in the manifest, as `cargo_lock` does.
+  Rationale: It makes the snapshot a verified input rather than whatever the
+  build host produced, and it restores pinning, which `dev:` blocks
+  (`link.rs:284`). Carried from the deleted ExecPlan 018.
+  Date/Author: 2026-08-19 / Claude
+
+- Decision: Rename `/nex/repo` to `/nex/store` and `--repo` to `--store`.
+  Rationale: Two different things were called "repo", a zub object store and a
+  Git repository, and the confusion cost real time on 2026-08-19. The code
+  already prefers the other word: `main.rs:18` declares `pub mod store` and the
+  dependency at `Cargo.toml:27` is the `zub-store` crate. Carried from the
+  deleted ExecPlan 018.
+  Date/Author: 2026-08-19 / Human
+
+- Decision: Fix the product defects here rather than deferring them, and merge
+  ExecPlan 018 into this one.
+  Rationale: This plan's acceptance is that all four tests pass, and three
+  cannot pass while the defects stand. A plan that forbids itself from reaching
+  its own acceptance is malformed. Merging also removes an ordering trap: the
+  bundle alone does not make a machine able to build, because environment
+  resolution reads the wrong directory.
+  Date/Author: 2026-08-19 / Human
+
 ## Outcomes & Retrospective
 
 `scripts/test-machine-operations.sh` exists and runs all four tests, `--test
@@ -482,64 +535,80 @@ The CLI verbs a user has: `build`, `stage`, `install`, `remove`, `discard`,
 
 ## Plan of Work
 
-Build the harness first and prove it with the cheapest test, then add the
-rest. The harness is three pieces:
+Five phases, in this order. The order matters: each phase turns a failing test
+green, and a later phase would be unverifiable without the earlier one.
 
-**Fixture.** One bootable disk built once from an assembly this repository
-already builds, then a qcow2 overlay per test with the fixture as backing
-file. Tests never mutate the fixture.
+**A. Harness and tests.** Done. It establishes measurement, so every later
+phase is checked rather than argued.
 
-**Guest contract.** A test is a shell script copied to the guest and run
-there. It prints `key=value` facts and exits non-zero on failure. The host
-collects stdout, the serial log, and the guest journal on failure.
+**B. Fix environment resolution.** The fixture already ships full history, so
+this single fix should make `build-package` pass on its own. Doing it before
+anything else proves it in isolation, against a machine whose manifests are
+known good.
 
-**Transitions.** `boot`, `run`, `reboot`, `expect_deployment`. A reboot is a
-step the harness owns, because tests 3 and 4 cross one and nothing today
-does that from inside the guest.
+**C. Generalise the bundle.** Add the `git_bundle` source kind, move desktop-vwl
+onto it, rewrite `nex-init-manifests` to clone rather than `git init`, and
+delete `.nex-dev-prepare`. The fixture's override of `nex-init-manifests` then
+becomes redundant and is removed, which is itself the proof that the general
+mechanism works.
+
+**D. Rename the store.** Mechanical, but it touches on-disk layout, so it needs
+a migration and it comes after the behaviour changes rather than tangled with
+them.
+
+**E. Rebuild and prove.** Rebuild every assembly, record checksums, run the
+full suite green.
 
 ## Concrete Steps
 
-1. Build the fixture from `base/nex-systemd.yaml`. It must be a
-   `nex_structure: true` assembly, and that is the cheapest one. Do not use
-   `examples/edgebox-rootfs.yaml`: it is flat, so a built edgebox root has no
-   `/nex` directory, no `/nex/repo` store, no `/nex/manifests`, and no `nex`
-   binary, and every test here needs all four. The `nex_structure: true`
-   assemblies are `base/nex-minimal.yaml`, `base/nex-systemd.yaml`,
-   `installer/installer.yaml`, `examples/desktop-vwl/desktop-vwl.yaml`, and
-   `examples/desktop-dev.yaml`. Confirm the fixture boots with SSH before
-   building anything on top of it. If `nex-systemd` is not suitable, write
-   `tests/nex-test-fixture.yaml`, a minimal `nex_structure: true` assembly
-   carrying only what these tests need: systemd, sshd, the `nex` binary, a
-   store, and a manifests repository. Do not fall back to
-   `examples/desktop-vwl/desktop-vwl.yaml`.
-2. Build the fixture and keep its path and checksum in the plan.
-3. Write `scripts/test-machine-operations.sh` with the four verbs above and a
-   `--test <name>` flag so one test can run alone.
-4. Test `build-package`: guest runs
-   `nex build pkg/cli/archive/gzip.yaml --single` from its manifests worktree.
-   `gzip` has 16 dependencies and 114 lines, the smallest real candidate.
-   Report `build-exit`, `output-ref`, and on failure the first error line.
-5. Test `temporary-install`: `nex stage`, `nex install`, assert the binary
-   runs, `nex discard`, assert it is gone and the previous state is intact.
-6. Test `persistent-install`: same, but `nex commit`, then reboot, then
-   assert the package is still there.
-7. Test `deploy-and-rollback`: guest runs `nex deploy <ref>`, reboots,
-   asserts `nex status` names the new deployment and that a marker unique to
-   that version is present in the running root, then `nex rollback`, reboots,
-   asserts the old deployment is back.
-8. Record what test 1 revealed about `/nex/manifests` and environment
-   resolution in `Surprises & Discoveries`, then promote it.
+1. Resolve environment blobs against the repository that owns the manifest
+   rather than against the store. `build/package.rs:64` and
+   `system/build.rs:98` both pass `opts.repo_path`; `env.rs:49` runs
+   `git -C <path> cat-file blob`. `ManifestRepositories` already knows the
+   owning root. Add a test that fails when the lookup uses the store.
+2. Run `scripts/test-machine-operations.sh --test build-package`. It must pass.
+   If it does not, report why before continuing.
+3. Add `git_bundle: <commit>` to `Source` in `manifest/types.rs` and a
+   `fetch_git_bundle` beside `fetch_cargo_lock` in `outputs/sources.rs`,
+   generating with `pack.threads=1` from a detached worktree and verifying a
+   recorded sha256. `scripts/make-test-bundle.sh` is the working recipe.
+4. Prove the generated bundle is byte-identical across two strict builds.
+5. In `examples/desktop-vwl/desktop-vwl.yaml`, replace the six `dev:` sources
+   with one `git_bundle` source installed at `/usr/share/nex/nex.bundle`.
+   Delete the extraction loop and the `sed -i '/checksum:/d'` that existed only
+   because a working-tree tarball could change between the two `--check`
+   passes. Confirm the image no longer carries `vendor/zub-store`, which is
+   3.8 GB of another repository's build output.
+6. Rewrite `/usr/local/bin/nex-init-manifests` in `base/nex-systemd.yaml` to
+   `git clone /usr/share/nex/nex.bundle /nex/manifests`, keeping the guard that
+   exits when `/nex/manifests/.git` exists. Then delete the fixture's override
+   and confirm the tests still pass.
+7. Delete `src/cli/.nex-dev-prepare`. Keep the `dev:` source kind, which stays
+   the deliberate unpinnable escape hatch for local iteration.
+8. Rename `/nex/repo` to `/nex/store` and `--repo` to `--store` across the 29
+   references, with a migration that is safe to run twice.
+9. Rebuild every assembly with `--single --check --update-checksum`, record the
+   checksums here, and run the full suite.
 
 ## Validation and Acceptance
 
 The plan is done when:
 
-- `scripts/test-machine-operations.sh` runs all four tests and prints one
-  `PASS:` line per test plus a final summary.
-- Each test passes from a fresh overlay, in any order, and twice in a row.
+- `scripts/test-machine-operations.sh` prints `PASS:` for all four tests, from
+  a fresh overlay, in any order, and twice in a row.
 - A deliberately broken guest command makes exactly one test fail, and the
-  failure output names the operation and carries the guest's error line.
-- Test 4 proves the reboot by content, not by a string the test supplied.
+  failure names the operation and carries the guest's error line.
+- `deploy-and-rollback` proves the reboot by content, not by a string the test
+  supplied.
+- On a booted machine, `git -C /nex/manifests log --oneline | wc -l` exceeds 1
+  and `git -C /nex/manifests cat-file -t 27b6e5dc...` prints `blob`.
+- The shipped image carries `/usr/share/nex/nex.bundle` and no
+  `/usr/share/nex/manifests` tree, and no `vendor/zub-store`.
+- `nex link examples/desktop-vwl/desktop-vwl.yaml` succeeds, where the `dev:`
+  sources make it refuse today.
+- `/nex/store` exists on a machine upgraded from an older deployment, with its
+  objects intact.
+- Two strict builds of every assembly agree.
 
 ## Idempotence and Recovery
 
@@ -560,10 +629,27 @@ defaults to `/tmp`, which is tmpfs on this host. Set
 
 ## Interfaces and Dependencies
 
-This plan adds no product runtime interface. It adds a test interface:
-`scripts/test-machine-operations.sh` and the test scripts beside it.
+This plan adds a test interface and changes two machine interfaces.
 
-It depends on QEMU, `ssh`, `ssh-keygen`, a built `nex_structure: true` fixture
-assembly, and the zub binary named by `ZUB_BIN`. It does not depend on EP018 or EP019, and it should
-land before both, because EP018 changes how manifests reach a machine and these
-tests are how that change gets verified.
+Test interface: `scripts/test-machine-operations.sh` with `--test <name>`, the
+test scripts under `scripts/machine-tests/`, the fixture
+`tests/nex-test-fixture.yaml`, and `scripts/make-test-bundle.sh`, which
+generates the fixture's bundle. That bundle is gitignored and never committed:
+a bundle of this repository stored inside it would add its whole size to
+history on every regeneration.
+
+New manifest interface: the `git_bundle` source kind, usable by any manifest.
+
+Changed machine interfaces: `/nex/store` replaces `/nex/repo`, `--store`
+replaces `--repo`, and `/usr/share/nex/nex.bundle` replaces the
+`/usr/share/nex/manifests` tree.
+
+Depends on QEMU, `ssh`, `ssh-keygen`, a built fixture, and the zub binary named
+by `ZUB_BIN`. ExecPlan 019, splitting the CLI into its own repository, is
+paused and does not depend on this plan, though it is easier afterwards.
+
+One product question stays open and deliberately does not block this plan:
+whether `base/nex-systemd.yaml` should carry the kernel's `fs-overlay` output
+so that a shipped Nex system can stage an install. The fixture adds it, so the
+tests can run; a machine built from `nex-systemd` alone still cannot stage. See
+`.agents/knowledge/kernel-and-boot.md`.
