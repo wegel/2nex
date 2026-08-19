@@ -74,6 +74,12 @@ follows from what it is:
   built and run, and other assemblies may extend them.
   `scripts/check-generic-assembly-policy.sh` enforces that they stay generic.
 - `installer/` holds the installer, which is neither a layer nor an example.
+- `tests/` holds assemblies that exist to be tested against, such as a fixture
+  a test harness boots and drives. These are exempt from the genericity policy
+  in `scripts/check-generic-assembly-policy.sh`, because a fixture legitimately
+  needs a known account and a fixed key, which that policy rejects. Never scan
+  them with it, and never extend a `tests/` assembly from `base/` or
+  `examples/`.
 - `asm/` is not Nex's. It is ignored by Git and is where the person using this
   repository keeps assemblies for their own machines, either as loose files or
   as a checkout of their own repository.

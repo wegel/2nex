@@ -44,7 +44,7 @@ or journey 1 fails. Both outcomes are useful, and neither is known today.
       worth reusing: disk assembly, `ensure_assert_key`, `ssh_probe`,
       `wait_for_ssh`, serial logging.
 - [ ] Build the fixture image from `base/nex-systemd.yaml`, or write
-      `base/nex-test-fixture.yaml` if that will not serve, and prove an overlay
+      `tests/nex-test-fixture.yaml` if that will not serve, and prove an overlay
       boots from it with SSH reachable.
 - [ ] Implement the harness verbs: `boot`, `run`, `reboot`, `expect_deployment`.
 - [ ] Write journey 1 and record what it reports, pass or fail.
@@ -85,13 +85,14 @@ or journey 1 fails. Both outcomes are useful, and neither is known today.
   Date/Author: 2026-08-19 / Claude
 
 - Decision: If `base/nex-systemd.yaml` will not serve, write a purpose-built
-  `base/nex-test-fixture.yaml` rather than using `examples/desktop-vwl`.
+  `tests/nex-test-fixture.yaml` rather than using `examples/desktop-vwl`.
   Rationale: desktop-vwl builds a roughly 7 GB root carrying a whole desktop
   stack that none of these journeys exercise, and every fixture rebuild would
   pay for it. A purpose-built fixture is small, fast, and its contents are
-  chosen by what the tests need. Note the tension with the layout committed in
-  `6697928f`, where `base/` holds layers that are not run directly and a
-  fixture is run directly; the human chose `base/` and can move it later.
+  chosen by what the tests need. It lives in `tests/` rather than `base/` or
+  `examples/`, because a fixture is run directly, which `base/` is not for, and
+  because it needs a known account and a fixed key, which
+  `scripts/check-generic-assembly-policy.sh:29` rejects in anything it scans.
   Date/Author: 2026-08-19 / Human
 
 - Decision: Assert on state the machine reports about itself, never on a value
@@ -155,7 +156,7 @@ does that from inside the guest.
    `installer/installer.yaml`, `examples/desktop-vwl/desktop-vwl.yaml`, and
    `examples/desktop-dev.yaml`. Confirm the fixture boots with SSH before
    building anything on top of it. If `nex-systemd` is not suitable, write
-   `base/nex-test-fixture.yaml`, a minimal `nex_structure: true` assembly
+   `tests/nex-test-fixture.yaml`, a minimal `nex_structure: true` assembly
    carrying only what these journeys need: systemd, sshd, the `nex` binary, a
    store, and a manifests repository. Do not fall back to
    `examples/desktop-vwl/desktop-vwl.yaml`.
