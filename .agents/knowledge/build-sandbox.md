@@ -94,3 +94,79 @@ compiled string:
 That finished over 23 GB in a few minutes. It also matches historical build
 outputs and documentation, so a hit is a candidate rather than a defect: always
 re-check it against the current `<pkg>/<version>/files` ref before acting.
+
+## What the sandbox is missing when a smoke runs
+
+EP016 wrote a behavior test into a dozen package builds, and the same handful
+of sandbox gaps cost real build cycles each time. Check these before blaming
+your own code.
+
+`lo` exists but is down. samba's `SMBC_module_init()` calls
+`load_interfaces()` right after loading configuration and exits when it finds
+no usable interface and no `interfaces=` line. Run `ip link set lo up` first,
+which means adding `iproute2` as a build dependency.
+
+There is no useful `/etc/passwd`. libssh's `ssh_connect()` resolves a username
+through `getpwuid_r()` with no environment fallback, so it fails before any
+network activity. Set the username explicitly, for libssh through
+`SSH_OPTIONS_USER`.
+
+The root process keeps `CAP_DAC_OVERRIDE`. A test that makes a file unreadable
+with `chmod 000` and expects an open to fail will silently succeed. fuse3's
+fail-closed path was instead exercised with `ENOTDIR`, by making the directory
+a plain file, which reaches the same non-`ENOENT` branch and no capability can
+bypass.
+
+`/dev/fuse` is a plain regular file, so no real FUSE mount completes. Only the
+policy decisions that happen before the `mount(2)` call can be proven.
+
+A caller-owned file descriptor is not closed for you. libssh's smoke deadlocked
+because `SSH_OPTIONS_FD` hands the session a socket that `ssh_free()` leaves
+open, parking the client in `waitpid()` and the forked server in `poll()`.
+
+## Write smokes against exported symbols only
+
+Check with `nm -D` before compiling anything that calls into the library you
+just built. The enchant2 repair lost four consecutive full builds to a smoke
+referencing `normalize_dictionary_tag()`, which `broker.c` defines but the
+library does not export.
+
+A symbol can be exported yet absent from the installed header, which is a
+legitimate but deliberate choice to record: enchant's
+`enchant_broker_get_ordered_providers()` and `enchant_get_conf_dirs()` are both
+exported and both missing from `enchant.h`, so that smoke declares its own
+prototypes. Driving the installed command line tool instead avoids the private
+prototypes at the cost of parsing output.
+
+## Proving a repair fails without its patch
+
+Copy the manifest, replace only the `patch --batch ...` line with `true`, and
+build that copy:
+
+    sed 's|^\( *\)patch --batch --fuzz=0 -Np1 -i /\${SOURCE_uapi_config_patch}|\1true # omitted|' \
+        <manifest> > .nex/tmp/<pkg>-unpatched.yaml
+    ./nex build .nex/tmp/<pkg>-unpatched.yaml --verbose --single --check --force
+
+Match the quoting exactly. Manifests differ: some write
+`-i "/${SOURCE_...}"` with quotes and some write `-i /${SOURCE_...}` without,
+and a `sed` that fails to match produces an identical copy that then builds
+successfully and appears to disprove the gap. Always `diff` the copy against
+the original before trusting the result.
+
+Where a package applies more than one patch, omit only the one under test.
+samba's negative proof had to keep `samba-linux-credential-probe.patch` applied.
+
+A good negative proof fails behaviorally rather than by crashing. The ones EP016
+produced read: `got "WORKGROUP", want "VENDORWG"` for samba, `got "NONE", want
+"true vendor"` for libssh, `expected "table mainrun" ... got ... table
+mainvendor` for iproute2, and `order: nex-uapi-other nex-uapi-want` for
+enchant2.
+
+## An interrupted `--update-checksum` run edits phase0 seeds
+
+Killing an assembly build that carried `--update-checksum` left a new
+`checksum:` line on five `pkg/bootstrap/phase0/` manifests. No phase0 manifest
+carries a committed `checksum:` key, because phase zero sets
+`stable_checksum: false` deliberately. Revert those lines with
+`git checkout --` before committing anything else, and inspect `git status`
+for stray phase0 checksums after any interrupted build.

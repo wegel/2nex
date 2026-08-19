@@ -1020,3 +1020,102 @@ dictionary into the user dictionary so existing user entries retain priority
 and receive only missing defaults. The dictionary API documents that stealing
 the iterator's current key is safe, which lets this merge transfer ownership
 without copying.
+
+## Where `sysconfdir` actually lands: meson versus autotools
+
+This is the single most useful fact EP016 established, and it was established
+wrong first, so trust the evidence rather than the intuition.
+
+Meson applies an FHS special case. With `--prefix=/usr` and no `--sysconfdir`,
+it sets `sysconfdir` to the absolute `/etc`, so
+`get_option('prefix') / get_option('sysconfdir')` yields `/etc`, not
+`/usr/etc`. Verified directly with a three-line meson project, and confirmed
+against `libinput.so` artifacts built before any `--sysconfdir` was added,
+which already contained `/etc/libinput/local-overrides.quirks`.
+
+Autotools does not. It keeps its `${prefix}/etc` default, which is `/usr/etc`
+under `--prefix=/usr`. Proven by built binaries, not inference: `libxml2.so`
+contained `file:///usr/etc/xml/catalog` and nothing else, `libpopt.so`
+contained `/usr/etc/popt` and `/usr/etc/popt.d`, and `libenchant-2.so`
+contained `/usr/etc`.
+
+So `--sysconfdir=/etc` is load-bearing on an autotools package and a no-op on a
+meson one. Adding it to a meson manifest is harmless and states intent, but it
+fixes nothing by itself, and a repair that adds only that flag to a meson
+package has not closed any gap.
+
+Two packages sidestep the question entirely and are worth knowing as
+counterexamples. zlib's `configure` matches `--sysconfdir=` only to print
+`ignored option`, so no such path can be compiled. libXcursor, libXt, and
+libpciaccess derive their data paths from `datadir` rather than `sysconfdir`,
+so they land under `/usr/share` regardless.
+
+## Finding `/usr/etc` readers by scanning built artifacts
+
+    grep -rl "/usr/etc" .nex/tmp/<some>-root/nex/pkg
+
+Over a 204-package rootfs this surfaced libxml2 and popt directly. It is faster
+and more reliable than reading build files, because the C-side macro name
+varies: appstream uses `SYSCONFDIR`, fuse3 defines `-DFUSE_CONF`, krb5 uses a
+`SYSCONFCONF` substitution inside a `.hin` template, and popt uses
+`POPT_SYSCONFDIR`. A grep for `SYSCONFDIR` misses most of them.
+
+Three cautions, each learned by getting it wrong.
+
+Read the string before believing it. Most hits are not readers: `bash` carries
+a default PATH constant containing `/usr/etc`, `whereis` carries a built-in
+directory list, `fish` carries it inside a TODO comment, and perl `.pod` files
+and shell completions are documentation.
+
+Check the package's current audit result. Snapshots go stale: `useradd`
+contained `/usr/etc/skel` and `libpkgconf` contained
+`/usr/etc/pkgconfig/personality.d`, but both packages were already `gap fixed`,
+so those strings predated their repairs.
+
+Check provenance. Only a path containing `/nex/pkg/` is a Nex build. The single
+`libpciaccess.so.0.11.1` under `.nex/tmp` belongs to Chromium's bundled Debian
+sysroot and says nothing about the Nex package.
+
+A `/usr/etc` string also does not prove a reader exists. libgpg-error contains
+one because `_gpgrt_fnameconcat()` prefixes `SYSCONFDIR` when a *caller* passes
+`GPGRT_FCONCAT_SYSCONF`; the library opens nothing itself. pango is the same
+shape, and its two functions are deprecated with no callers at all.
+
+The narrow build-file screen
+`get_option\('prefix'\).*get_option\('sysconfdir'\)` is a useful first pass but
+misses a prefix alias: pango assigns `get_option('prefix')` to `pango_prefix`
+first, so the two calls never appear on one line. Search for
+`get_option('sysconfdir')` alone and follow each variable back.
+
+## Verify "this binary is not shipped" against the manifest outputs
+
+Workers repeatedly excused a configuration reader as belonging to a program the
+package does not install. Sometimes true, sometimes not, and it is one command
+to check:
+
+    sed -n '/^outputs:/,$p' <manifest> | grep 'path: /usr/bin'
+
+It held for libpcap, whose `pcap-sita.c` is in the distribution list but absent
+from `COMMON_C_SRC`; for openh264, which declares no `/usr/bin` path at all; and
+for libcap, which ships no `pam_cap.so`. It failed for libaom and libvpx, where
+both encoders ship despite a report claiming only the decoders do. Those two
+verdicts survived for different reasons, but the stated evidence was wrong.
+
+The same caution applies to code excused as compiled out. libXmu's
+`get_os_name()` contains two `fopen()` calls that never compile, because
+neither `X_OS_FILE` nor `MOTD_FILE` is ever defined and the header selects
+`USE_UNAME` instead. Confirm the macro is genuinely undefined rather than
+trusting the `#ifdef`.
+
+## Families that correctly have one tier
+
+Not every single-path reader is a gap, and EP016 settled a reusable list.
+Machine-owned state belongs in `/etc` alone: `/etc/resolv.conf` read by
+libslirp and libevent, `/etc/hosts`, `/etc/ethers` read by libpcap,
+`/etc/localtime` read by icu, `/etc/pki/nssdb` written by certutil, and
+`/etc/X<display>.hosts` read by Xwayland. Per-user secrets belong to the user:
+libXau's `~/.Xauthority` and libICE's `~/.ICEauthority`. Vendor reference data
+belongs under `/usr`: ncurses' terminfo, pciutils' and libpciaccess' `pci.ids`,
+libX11's `XErrorDB`, `Xcms.txt`, and `XKeysymDB`, and iso-codes' JSON.
+Generated indexes need no tiers at all: gstreamer's plugin registry,
+shared-mime-info's `mime.cache`, and ell's `hwdb.bin`.

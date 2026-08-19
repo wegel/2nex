@@ -71,3 +71,45 @@ and runtime dependencies still come from installed-file analysis.
 Evidence: On 2026-07-01, after a checksum audit needed a YAML parser, the human
 said, "You can always install whatever you jeed in this sandbox; record this
 knowledge."
+
+## Supervising background workers
+
+A worker launched as `claude --print ... &` does not survive the supervising
+session being torn down, and neither do its builds. Launch with
+`setsid nohup ... < /dev/null &` so the worker outlives the session, and treat
+any long build the worker starts as needing the same treatment.
+
+Capture the worker's PID with `pgrep -x claude` and read
+`/proc/<pid>/cmdline` to identify it. A `pgrep -f` on the flags matches the
+short-lived `sh -c` wrapper, which exits within seconds, so a
+`while [ -d /proc/$p ]` wait then reports the worker finished when it had
+barely started. The supervising session's own process appears in that list too;
+it is the one carrying `--input-format stream-json`.
+
+When a worker is killed mid-build, its `nex build` can survive as an orphan
+with `ppid=1`. Before relaunching that same repair, check for one and kill it,
+or the two builds will collide in the shared
+`.nex/tmp/build_rootfs_<pkg>_<ns>` directory and race on the manifest's
+checksum. Two workers given the same assignment in one worktree will also
+write to the same output JSON.
+
+A worker killed mid-task often leaves usable work. Check the manifest's
+`checksum:` against `HEAD` before redoing anything: if it changed, a build
+completed and the evidence can be verified directly from the logs rather than
+paid for twice. iproute2 and libxml2 were both recovered that way.
+
+Some workers return their report through a plan file under `~/.claude/plans/`
+and leave only a one-line pointer in the result field, so a very short result
+is not evidence of a failed batch.
+
+## Editing a large records file safely
+
+Replacing one record by slicing between its heading and "the next heading"
+deletes every record in between if they are not actually adjacent. This
+happened three times in EP016, losing the `readline`, `attr`, and `libtirpc`
+records, each restored from `HEAD` afterwards.
+
+Compute the real next heading rather than assuming which one follows, and run
+the file's own checker immediately after every rewrite. Gate the commit on that
+checker with `&&` so a failure blocks it: running the check beside the commit
+rather than before it is what let one of those deletions reach a commit.
