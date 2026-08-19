@@ -6,12 +6,18 @@ package:
   version: 2.13.5
   description: XML C parser and toolkit
   homepage: https://gitlab.gnome.org/GNOME/libxml2
-  checksum: 510e33f4cc17c1076c0449de486b411682743dff9a14b2a2340322b85f8c82da
+  checksum: 758cd863cebe954a5ab71a015ed99a4a5c9f6d53fbb3107b01e8e8c2bb968732
 
 sources:
 - name: libxml2
   url: https://download.gnome.org/sources/libxml2/2.13/libxml2-2.13.5.tar.xz
   sha256: 74fc163217a3964257d3be39af943e08861263c4231f9ef5b496b6f6d4c7b2b6
+- name: uapi_config_patch
+  file: pkg/libs/system/libxml2-uapi-config.patch
+  sha256: 731652466379bb52821381786ac55c0b0446c47979f68aa19eed7bd81698859f
+- name: uapi_check
+  file: pkg/libs/system/libxml2-uapi-check.sh
+  sha256: bf28e500a9ef079989064cff6029fe63aaa6b8d21cb26e7bd5c8061ff33db15f
 
 dependencies:
 - name: linux-headers
@@ -52,17 +58,21 @@ dependencies:
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
 - name: tar
   commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4129:10846, 8255:48119, 12398:49121, 15917:50822]
+  profile: [4104:839, 8218:4036, 12327:4500, 16209:4636]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_libxml2} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config_patch}"
 
     ./configure \
       --prefix=/usr \
+      --sysconfdir=/etc \
       --disable-static \
       --without-python \
       --without-http \
@@ -70,6 +80,13 @@ build:
 
     make
     make DESTDIR="${OUT_DIR}" install
+
+    # Exercise the newly built, installed libxml2 through the real
+    # xmlInitializeCatalog() reader instead of reimplementing its
+    # tier-merge and precedence rules; see the check script for detail.
+    sh "/${SOURCE_uapi_check}" \
+      "${OUT_DIR}" \
+      "${WORK_DIR}"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true

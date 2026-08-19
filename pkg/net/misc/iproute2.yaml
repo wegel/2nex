@@ -6,12 +6,18 @@ package:
   version: 6.18.0
   description: Networking utilities for Linux
   homepage: https://wiki.linuxfoundation.org/networking/iproute2
-  checksum: 6bfb54241dfb0d5cdf79b9266839ec237004b372f5054bb4591fa958613f3e4d
+  checksum: 3dc21f27bff9ae14a1eff3e4628b7603ee626d4262480d22c84528d8572216c9
 
 sources:
 - name: iproute2
   url: https://mirrors.edge.kernel.org/pub/linux/utils/net/iproute2/iproute2-6.18.0.tar.xz
   sha256: 6ba520e1975e4c50dc931eeae91ea37c198b8a173744885f8895b84325f9d456
+- name: uapi_config_patch
+  file: pkg/net/misc/iproute2-uapi-config.patch
+  sha256: 783bef9e8e6a475586ed3734f4d9ae5c9c99039f62598c370bf735bea1121e20
+- name: uapi_check
+  file: pkg/net/misc/iproute2-uapi-check.sh
+  sha256: 277e030a5035175f5282aab767984cdb7167af62f2c65c91f60b14c52ba86ac8
 
 dependencies:
 - name: glibc
@@ -62,14 +68,17 @@ dependencies:
   commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4109:9038, 8224:22834, 12411:23371, 12710:23410]
+  profile: [4114:1649, 8217:7509, 12524:8714, 13080:8924]
 
   script: |
     tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config_patch}"
 
     # disable iptables and berkeley db support
     sed -i /ARPD/d Makefile
@@ -77,6 +86,13 @@ build:
 
     make PREFIX=/usr SBINDIR=/usr/bin
     make PREFIX=/usr SBINDIR=/usr/bin DESTDIR=${OUT_DIR} install
+
+    # Exercise the newly built, installed `ip` through its real rt_tables
+    # reader instead of reimplementing its tier-merge and precedence rules;
+    # see the check script for detail.
+    sh "/${SOURCE_uapi_check}" \
+      "${OUT_DIR}" \
+      "${WORK_DIR}"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
@@ -209,18 +225,164 @@ outputs:
 
   lib:
     files:
-    - path: /usr/lib/tc
+    - path: /usr/lib/tc/experimental.dist
+    - path: /usr/lib/tc/normal.dist
+    - path: /usr/lib/tc/pareto.dist
+    - path: /usr/lib/tc/paretonormal.dist
 
   man:
     files:
-    - path: /usr/share/man/man7
-    - path: /usr/share/man/man8
+    - path: /usr/share/man/man3/libnetlink.3
+    - path: /usr/share/man/man7/tc-hfsc.7
+    - path: /usr/share/man/man8/bridge.8
+    - path: /usr/share/man/man8/ctstat.8
+    - path: /usr/share/man/man8/dcb-app.8
+    - path: /usr/share/man/man8/dcb-apptrust.8
+    - path: /usr/share/man/man8/dcb-buffer.8
+    - path: /usr/share/man/man8/dcb-dcbx.8
+    - path: /usr/share/man/man8/dcb-ets.8
+    - path: /usr/share/man/man8/dcb-maxrate.8
+    - path: /usr/share/man/man8/dcb-pfc.8
+    - path: /usr/share/man/man8/dcb-rewr.8
+    - path: /usr/share/man/man8/dcb.8
+    - path: /usr/share/man/man8/devlink-dev.8
+    - path: /usr/share/man/man8/devlink-dpipe.8
+    - path: /usr/share/man/man8/devlink-health.8
+    - path: /usr/share/man/man8/devlink-lc.8
+    - path: /usr/share/man/man8/devlink-monitor.8
+    - path: /usr/share/man/man8/devlink-port.8
+    - path: /usr/share/man/man8/devlink-rate.8
+    - path: /usr/share/man/man8/devlink-region.8
+    - path: /usr/share/man/man8/devlink-resource.8
+    - path: /usr/share/man/man8/devlink-sb.8
+    - path: /usr/share/man/man8/devlink-trap.8
+    - path: /usr/share/man/man8/devlink.8
+    - path: /usr/share/man/man8/genl.8
+    - path: /usr/share/man/man8/ifstat.8
+    - path: /usr/share/man/man8/ip-address.8
+    - path: /usr/share/man/man8/ip-addrlabel.8
+    - path: /usr/share/man/man8/ip-fou.8
+    - path: /usr/share/man/man8/ip-gue.8
+    - path: /usr/share/man/man8/ip-ioam.8
+    - path: /usr/share/man/man8/ip-l2tp.8
+    - path: /usr/share/man/man8/ip-link.8
+    - path: /usr/share/man/man8/ip-macsec.8
+    - path: /usr/share/man/man8/ip-maddress.8
+    - path: /usr/share/man/man8/ip-monitor.8
+    - path: /usr/share/man/man8/ip-mptcp.8
+    - path: /usr/share/man/man8/ip-mroute.8
+    - path: /usr/share/man/man8/ip-neighbour.8
+    - path: /usr/share/man/man8/ip-netconf.8
+    - path: /usr/share/man/man8/ip-netns.8
+    - path: /usr/share/man/man8/ip-nexthop.8
+    - path: /usr/share/man/man8/ip-ntable.8
+    - path: /usr/share/man/man8/ip-route.8
+    - path: /usr/share/man/man8/ip-rule.8
+    - path: /usr/share/man/man8/ip-sr.8
+    - path: /usr/share/man/man8/ip-stats.8
+    - path: /usr/share/man/man8/ip-tcp_metrics.8
+    - path: /usr/share/man/man8/ip-token.8
+    - path: /usr/share/man/man8/ip-tunnel.8
+    - path: /usr/share/man/man8/ip-vrf.8
+    - path: /usr/share/man/man8/ip-xfrm.8
+    - path: /usr/share/man/man8/ip.8
+    - path: /usr/share/man/man8/lnstat.8
+    - path: /usr/share/man/man8/netshaper.8
+    - path: /usr/share/man/man8/nstat.8
+    - path: /usr/share/man/man8/rdma-dev.8
+    - path: /usr/share/man/man8/rdma-link.8
+    - path: /usr/share/man/man8/rdma-monitor.8
+    - path: /usr/share/man/man8/rdma-resource.8
+    - path: /usr/share/man/man8/rdma-statistic.8
+    - path: /usr/share/man/man8/rdma-system.8
+    - path: /usr/share/man/man8/rdma.8
+    - path: /usr/share/man/man8/routel.8
+    - path: /usr/share/man/man8/rtacct.8
+    - path: /usr/share/man/man8/rtmon.8
+    - path: /usr/share/man/man8/rtstat.8
+    - path: /usr/share/man/man8/ss.8
+    - path: /usr/share/man/man8/tc-actions.8
+    - path: /usr/share/man/man8/tc-basic.8
+    - path: /usr/share/man/man8/tc-bfifo.8
+    - path: /usr/share/man/man8/tc-bpf.8
+    - path: /usr/share/man/man8/tc-cake.8
+    - path: /usr/share/man/man8/tc-cbs.8
+    - path: /usr/share/man/man8/tc-cgroup.8
+    - path: /usr/share/man/man8/tc-choke.8
+    - path: /usr/share/man/man8/tc-codel.8
+    - path: /usr/share/man/man8/tc-connmark.8
+    - path: /usr/share/man/man8/tc-csum.8
+    - path: /usr/share/man/man8/tc-ct.8
+    - path: /usr/share/man/man8/tc-ctinfo.8
+    - path: /usr/share/man/man8/tc-drr.8
+    - path: /usr/share/man/man8/tc-dualpi2.8
+    - path: /usr/share/man/man8/tc-ematch.8
+    - path: /usr/share/man/man8/tc-etf.8
+    - path: /usr/share/man/man8/tc-ets.8
+    - path: /usr/share/man/man8/tc-flow.8
+    - path: /usr/share/man/man8/tc-flower.8
+    - path: /usr/share/man/man8/tc-fq.8
+    - path: /usr/share/man/man8/tc-fq_codel.8
+    - path: /usr/share/man/man8/tc-fq_pie.8
+    - path: /usr/share/man/man8/tc-fw.8
+    - path: /usr/share/man/man8/tc-gact.8
+    - path: /usr/share/man/man8/tc-gate.8
+    - path: /usr/share/man/man8/tc-hfsc.8
+    - path: /usr/share/man/man8/tc-htb.8
+    - path: /usr/share/man/man8/tc-ife.8
+    - path: /usr/share/man/man8/tc-matchall.8
+    - path: /usr/share/man/man8/tc-mirred.8
+    - path: /usr/share/man/man8/tc-mpls.8
+    - path: /usr/share/man/man8/tc-mqprio.8
+    - path: /usr/share/man/man8/tc-nat.8
+    - path: /usr/share/man/man8/tc-netem.8
+    - path: /usr/share/man/man8/tc-pedit.8
+    - path: /usr/share/man/man8/tc-pfifo.8
+    - path: /usr/share/man/man8/tc-pfifo_fast.8
+    - path: /usr/share/man/man8/tc-pie.8
+    - path: /usr/share/man/man8/tc-police.8
+    - path: /usr/share/man/man8/tc-prio.8
+    - path: /usr/share/man/man8/tc-red.8
+    - path: /usr/share/man/man8/tc-route.8
+    - path: /usr/share/man/man8/tc-sample.8
+    - path: /usr/share/man/man8/tc-sfb.8
+    - path: /usr/share/man/man8/tc-sfq.8
+    - path: /usr/share/man/man8/tc-simple.8
+    - path: /usr/share/man/man8/tc-skbedit.8
+    - path: /usr/share/man/man8/tc-skbmod.8
+    - path: /usr/share/man/man8/tc-skbprio.8
+    - path: /usr/share/man/man8/tc-stab.8
+    - path: /usr/share/man/man8/tc-taprio.8
+    - path: /usr/share/man/man8/tc-tbf.8
+    - path: /usr/share/man/man8/tc-tunnel_key.8
+    - path: /usr/share/man/man8/tc-u32.8
+    - path: /usr/share/man/man8/tc-vlan.8
+    - path: /usr/share/man/man8/tc.8
+    - path: /usr/share/man/man8/tipc-bearer.8
+    - path: /usr/share/man/man8/tipc-link.8
+    - path: /usr/share/man/man8/tipc-media.8
+    - path: /usr/share/man/man8/tipc-nametable.8
+    - path: /usr/share/man/man8/tipc-node.8
+    - path: /usr/share/man/man8/tipc-peer.8
+    - path: /usr/share/man/man8/tipc-socket.8
+    - path: /usr/share/man/man8/tipc.8
+    - path: /usr/share/man/man8/vdpa-dev.8
+    - path: /usr/share/man/man8/vdpa-mgmtdev.8
+    - path: /usr/share/man/man8/vdpa.8
 
   misc:
     files:
     - path: /usr/share/bash-completion/completions/devlink
     - path: /usr/share/bash-completion/completions/tc
-    - path: /usr/share/iproute2
+    - path: /usr/share/iproute2/bpf_pinning
+    - path: /usr/share/iproute2/ematch_map
+    - path: /usr/share/iproute2/group
+    - path: /usr/share/iproute2/nl_protos
+    - path: /usr/share/iproute2/rt_dsfield
+    - path: /usr/share/iproute2/rt_protos
+    - path: /usr/share/iproute2/rt_realms
+    - path: /usr/share/iproute2/rt_scopes
+    - path: /usr/share/iproute2/rt_tables
 
 resolution:
   /usr/lib/ld-linux-x86-64.so.2: glibc

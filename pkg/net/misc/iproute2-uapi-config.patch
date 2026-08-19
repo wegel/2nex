@@ -1,0 +1,262 @@
+Subject: add a /run tier between the administrator and vendor config trees
+Source: downstream patch for iproute2 6.18.0
+Upstream: not submitted; needs agreement on the /run/iproute2 vendor path
+
+iproute2 already resolves rt_protos, rt_addrprotos, rt_scopes, rt_realms,
+rt_tables, rt_dsfield, group, nl_protos, and bpf_pinning across two
+tiers: the administrator's CONF_ETC_DIR (/etc/iproute2) and the vendor's
+CONF_USR_DIR ($(DATADIR)/iproute2, /usr/share/iproute2 in this manifest).
+Each main-file reader in lib/rt_names.c calls rtnl_tab_initialize() or
+rtnl_hash_initialize() against CONF_ETC_DIR first and only tries
+CONF_USR_DIR when that first call returns -ENOENT; bpf_hash_init() in
+lib/bpf_legacy.c follows the same shape for CONF_ETC_DIR "/bpf_pinning".
+Neither tier list names /run, so a boot cannot supply a transient
+mapping between the vendor default and the administrator's file. This
+patch adds a CONF_RUN_DIR ("/run/iproute2" unless the Makefile defines
+it, matching CONF_USR_DIR and CONF_ETC_DIR's own -D/#ifndef convention
+in include/utils.h) and threads it through every one of those nine
+readers plus their matching *.d drop-in directories, so the discipline
+becomes /etc, then /run, then /usr/share for a main file, first
+existing file winning exactly as before.
+
+While adding the CONF_RUN_DIR step to bpf_hash_init()'s caller
+(lib/bpf_legacy.c, inside bpf_elf_ctx_init()), this patch also fixes a
+pre-existing bug in the CONF_ETC_DIR call: the original line called
+"bpf_hash_init(ctx, CONF_ETC_DIR "/bpf_pinning");" without assigning
+its return value to "ret", so the following "if (ret == -ENOENT)"
+tested whatever bpf_elf_check_ehdr() had left in "ret" a few lines
+earlier (0 on every reachable path) instead of the CONF_ETC_DIR call's
+actual result. In practice this meant the CONF_USR_DIR fallback almost
+never ran: a missing /etc/iproute2/bpf_pinning already made
+bpf_hash_init() return -ENOENT correctly, but that -ENOENT was
+discarded before the check that was supposed to notice it. This patch
+assigns "ret =" on the CONF_ETC_DIR call so the three-way -ENOENT
+cascade below it (CONF_ETC_DIR, then CONF_RUN_DIR, then CONF_USR_DIR)
+now works for all three tiers, which the added /run tier already
+depended on being correct.
+
+Drop-in masking (rtnl_tabhash_readdir() and rtnl_tabhash_initialize_dir()
+in lib/rt_names.c) previously took one "dirpath_overload" directory to
+skip a basename against: the CONF_USR_DIR pass skipped any basename
+also present in CONF_ETC_DIR, and the CONF_ETC_DIR pass had no overload
+to skip. This patch changes that single directory argument into a
+"dirpath_overloads" array with a count, so a pass can be masked by more
+than one higher tier at once. The vendor CONF_USR_DIR pass now skips a
+basename present in CONF_RUN_DIR or CONF_ETC_DIR; the new CONF_RUN_DIR
+pass skips a basename present in CONF_ETC_DIR; the CONF_ETC_DIR pass is
+unmasked, as before. A basename present in more than one tier is loaded
+from the highest tier only, matching this repository's UAPI masking
+model (Nex's CONFIGURATION.md, "Programs Read All Three Configuration
+Tiers"). A missing CONF_RUN_DIR directory is silent: opendir() on a
+missing directory already made the pre-existing CONF_ETC_DIR pass a
+silent no-op when /etc/iproute2/foo.d did not exist, and the new
+CONF_RUN_DIR pass reuses that same rtnl_tabhash_readdir() body.
+
+Neither the CONF_RUN_DIR macro nor this patch installs anything below
+/run or /etc; /run/iproute2 is only a compiled-in search path that this
+package's install rule does not populate. NETNS_ETC_DIR and
+NETNS_RUN_DIR, iproute2's per-namespace /etc/netns and
+/var/run/netns paths, are untouched: those are machine-owned files an
+administrator creates on this machine, not distribution policy, so they
+need no vendor or /run tier.
+--- a/Makefile
++++ b/Makefile
+@@ -21,6 +21,7 @@
+ DATADIR?=$(PREFIX)/share
+ HDRDIR?=$(PREFIX)/include/iproute2
+ CONF_ETC_DIR?=/etc/iproute2
++CONF_RUN_DIR?=/run/iproute2
+ CONF_USR_DIR?=$(DATADIR)/iproute2
+ DOCDIR?=$(DATADIR)/doc/iproute2
+ MANDIR?=$(DATADIR)/man
+@@ -40,6 +41,7 @@
+
+ DEFINES+=-DCONF_USR_DIR=\"$(CONF_USR_DIR)\" \
+          -DCONF_ETC_DIR=\"$(CONF_ETC_DIR)\" \
++         -DCONF_RUN_DIR=\"$(CONF_RUN_DIR)\" \
+          -DNETNS_RUN_DIR=\"$(NETNS_RUN_DIR)\" \
+          -DNETNS_ETC_DIR=\"$(NETNS_ETC_DIR)\" \
+          -DARPDDIR=\"$(ARPDDIR)\" \
+--- a/include/utils.h
++++ b/include/utils.h
+@@ -45,6 +45,9 @@
+ #ifndef CONF_ETC_DIR
+ #define CONF_ETC_DIR "/etc/iproute2"
+ #endif
++#ifndef CONF_RUN_DIR
++#define CONF_RUN_DIR "/run/iproute2"
++#endif
+
+ #define SPRINT_BSIZE 64
+ #define SPRINT_BUF(x)	char x[SPRINT_BSIZE]
+--- a/lib/rt_names.c
++++ b/lib/rt_names.c
+@@ -159,8 +159,8 @@
+ };
+
+ static void
+-rtnl_tabhash_readdir(const char *dirpath_base, const char *dirpath_overload,
+-		     const struct tabhash tabhash, const int size)
++rtnl_tabhash_readdir(const char *dirpath_base, const char **dirpath_overloads,
++		     int noverloads, const struct tabhash tabhash, const int size)
+ {
+ 	struct dirent *de;
+ 	DIR *d;
+@@ -170,6 +170,7 @@
+ 		char path[PATH_MAX];
+ 		size_t len;
+ 		struct stat sb;
++		int i, masked = 0;
+
+ 		if (*de->d_name == '.')
+ 			continue;
+@@ -181,13 +182,17 @@
+ 		if (strcmp(de->d_name + len - 5, ".conf"))
+ 			continue;
+
+-		if (dirpath_overload) {
+-			/* only consider filenames not present in
+-			   the overloading directory, e.g. /etc */
+-			snprintf(path, sizeof(path), "%s/%s", dirpath_overload, de->d_name);
+-			if (lstat(path, &sb) == 0)
+-				continue;
++		/* only consider filenames not present in a higher
++		   overloading directory, e.g. /run and/or /etc */
++		for (i = 0; i < noverloads; i++) {
++			snprintf(path, sizeof(path), "%s/%s", dirpath_overloads[i], de->d_name);
++			if (lstat(path, &sb) == 0) {
++				masked = 1;
++				break;
++			}
+ 		}
++		if (masked)
++			continue;
+
+ 		/* load the conf file in the base directory, e.g., /usr */
+ 		snprintf(path, sizeof(path), "%s/%s", dirpath_base, de->d_name);
+@@ -203,16 +208,28 @@
+ static void
+ rtnl_tabhash_initialize_dir(const char *ddir, const struct tabhash tabhash, const int size)
+ {
+-	char dirpath_usr[PATH_MAX], dirpath_etc[PATH_MAX];
++	char dirpath_usr[PATH_MAX], dirpath_run[PATH_MAX], dirpath_etc[PATH_MAX];
++	const char *usr_overloads[2];
++	const char *run_overloads[1];
+
+ 	snprintf(dirpath_usr, sizeof(dirpath_usr), "%s/%s", CONF_USR_DIR, ddir);
++	snprintf(dirpath_run, sizeof(dirpath_run), "%s/%s", CONF_RUN_DIR, ddir);
+ 	snprintf(dirpath_etc, sizeof(dirpath_etc), "%s/%s", CONF_ETC_DIR, ddir);
+
+-	/* load /usr/lib/iproute2/foo.d/X conf files, unless /etc/iproute2/foo.d/X exists */
+-	rtnl_tabhash_readdir(dirpath_usr, dirpath_etc, tabhash, size);
++	usr_overloads[0] = dirpath_run;
++	usr_overloads[1] = dirpath_etc;
++	run_overloads[0] = dirpath_etc;
++
++	/* load /usr/lib/iproute2/foo.d/X conf files, unless
++	   /run/iproute2/foo.d/X or /etc/iproute2/foo.d/X exists */
++	rtnl_tabhash_readdir(dirpath_usr, usr_overloads, 2, tabhash, size);
++
++	/* load /run/iproute2/foo.d/X conf files, unless
++	   /etc/iproute2/foo.d/X exists */
++	rtnl_tabhash_readdir(dirpath_run, run_overloads, 1, tabhash, size);
+
+ 	/* load /etc/iproute2/foo.d/X conf files */
+-	rtnl_tabhash_readdir(dirpath_etc, NULL, tabhash, size);
++	rtnl_tabhash_readdir(dirpath_etc, NULL, 0, tabhash, size);
+ }
+
+ static void
+@@ -239,6 +256,9 @@
+ 	ret = rtnl_tab_initialize(CONF_ETC_DIR "/rt_protos",
+ 				  rtnl_rtprot_tab, 256);
+ 	if (ret == -ENOENT)
++		ret = rtnl_tab_initialize(CONF_RUN_DIR "/rt_protos",
++					  rtnl_rtprot_tab, 256);
++	if (ret == -ENOENT)
+ 		rtnl_tab_initialize(CONF_USR_DIR "/rt_protos",
+ 				    rtnl_rtprot_tab, 256);
+
+@@ -312,6 +332,10 @@
+ 				  rtnl_addrprot_tab,
+ 				  ARRAY_SIZE(rtnl_addrprot_tab));
+ 	if (ret == -ENOENT)
++		ret = rtnl_tab_initialize(CONF_RUN_DIR "/rt_addrprotos",
++					  rtnl_addrprot_tab,
++					  ARRAY_SIZE(rtnl_addrprot_tab));
++	if (ret == -ENOENT)
+ 		ret = rtnl_tab_initialize(CONF_USR_DIR "/rt_addrprotos",
+ 					  rtnl_addrprot_tab,
+ 					  ARRAY_SIZE(rtnl_addrprot_tab));
+@@ -376,6 +400,9 @@
+ 	ret = rtnl_tab_initialize(CONF_ETC_DIR "/rt_scopes",
+ 				  rtnl_rtscope_tab, 256);
+ 	if (ret == -ENOENT)
++		ret = rtnl_tab_initialize(CONF_RUN_DIR "/rt_scopes",
++					  rtnl_rtscope_tab, 256);
++	if (ret == -ENOENT)
+ 		rtnl_tab_initialize(CONF_USR_DIR "/rt_scopes",
+ 				    rtnl_rtscope_tab, 256);
+ }
+@@ -446,6 +473,9 @@
+ 	ret = rtnl_tab_initialize(CONF_ETC_DIR "/rt_realms",
+ 				  rtnl_rtrealm_tab, 256);
+ 	if (ret == -ENOENT)
++		ret = rtnl_tab_initialize(CONF_RUN_DIR "/rt_realms",
++					  rtnl_rtrealm_tab, 256);
++	if (ret == -ENOENT)
+ 		rtnl_tab_initialize(CONF_USR_DIR "/rt_realms",
+ 				    rtnl_rtrealm_tab, 256);
+ }
+@@ -525,6 +555,9 @@
+ 	ret = rtnl_hash_initialize(CONF_ETC_DIR "/rt_tables",
+ 				   rtnl_rttable_hash, 256);
+ 	if (ret == -ENOENT)
++		ret = rtnl_hash_initialize(CONF_RUN_DIR "/rt_tables",
++					   rtnl_rttable_hash, 256);
++	if (ret == -ENOENT)
+ 		rtnl_hash_initialize(CONF_USR_DIR "/rt_tables",
+ 				     rtnl_rttable_hash, 256);
+
+@@ -596,6 +629,9 @@
+ 	ret = rtnl_tab_initialize(CONF_ETC_DIR "/rt_dsfield",
+ 				  rtnl_rtdsfield_tab, 256);
+ 	if (ret == -ENOENT)
++		ret = rtnl_tab_initialize(CONF_RUN_DIR "/rt_dsfield",
++					  rtnl_rtdsfield_tab, 256);
++	if (ret == -ENOENT)
+ 		rtnl_tab_initialize(CONF_USR_DIR "/rt_dsfield",
+ 				    rtnl_rtdsfield_tab, 256);
+ }
+@@ -703,6 +739,9 @@
+ 	ret = rtnl_hash_initialize(CONF_ETC_DIR "/group",
+ 				   rtnl_group_hash, 256);
+ 	if (ret == -ENOENT)
++		ret = rtnl_hash_initialize(CONF_RUN_DIR "/group",
++					   rtnl_group_hash, 256);
++	if (ret == -ENOENT)
+ 		rtnl_hash_initialize(CONF_USR_DIR "/group",
+ 				     rtnl_group_hash, 256);
+ }
+@@ -798,6 +837,9 @@
+ 	ret = rtnl_tab_initialize(CONF_ETC_DIR "/nl_protos",
+ 				  nl_proto_tab, 256);
+ 	if (ret == -ENOENT)
++		ret = rtnl_tab_initialize(CONF_RUN_DIR "/nl_protos",
++					  nl_proto_tab, 256);
++	if (ret == -ENOENT)
+ 		rtnl_tab_initialize(CONF_USR_DIR "/nl_protos",
+ 				    nl_proto_tab, 256);
+ }
+--- a/lib/bpf_legacy.c
++++ b/lib/bpf_legacy.c
+@@ -2929,7 +2929,9 @@
+ 	}
+
+ 	bpf_save_finfo(ctx);
+-	bpf_hash_init(ctx, CONF_ETC_DIR "/bpf_pinning");
++	ret = bpf_hash_init(ctx, CONF_ETC_DIR "/bpf_pinning");
++	if (ret == -ENOENT)
++		ret = bpf_hash_init(ctx, CONF_RUN_DIR "/bpf_pinning");
+ 	if (ret == -ENOENT)
+ 		ret = bpf_hash_init(ctx, CONF_USR_DIR "/bpf_pinning");
