@@ -154,6 +154,12 @@ pub fn load_manifest_from_str(manifest_str: &str) -> io::Result<ManifestData> {
             Ok(ManifestData::Package(manifest))
         }
         ManifestKind::System => {
+            if doc.get("overlays").is_some() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "'overlays' is no longer a manifest section; move the overlay's entries into this assembly's 'files' section",
+                ));
+            }
             let sys: SystemManifest = serde_yaml::from_value(doc)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
             validate_system_manifest(&sys)?;
@@ -164,10 +170,8 @@ pub fn load_manifest_from_str(manifest_str: &str) -> io::Result<ManifestData> {
 
 pub(super) fn resolve_system_paths(manifest: &mut SystemManifest, repository_root: &Path) {
     resolve_sources(&mut manifest.sources, repository_root, None);
-    for overlay in &mut manifest.overlays {
-        if overlay.is_relative() {
-            *overlay = repository_root.join(&*overlay);
-        }
+    for entry in &mut manifest.files {
+        entry.base_dir = Some(repository_root.to_path_buf());
     }
 }
 

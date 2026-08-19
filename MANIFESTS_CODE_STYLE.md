@@ -66,12 +66,12 @@ why its output cannot have a stable checksum.
 An assembly manifest must use this top-level order:
 
 1. `system`
-2. `overlays`
-3. `sources`
-4. `dependencies`
-5. `packages`
-6. `providers`
-7. `exclude`
+2. `sources`
+3. `dependencies`
+4. `packages`
+5. `providers`
+6. `exclude`
+7. `files`
 8. `build`
 
 Fields under `system` must use this order:
@@ -89,10 +89,15 @@ Fields under `system` must use this order:
 11. `checksum`
 
 Use `extends` for an assembly that adds to another assembly. Use `exclude` only
-when the child must remove a named package or dependency from its parent. Keep
-overlay paths relative to the repository root. Put one blank line before the
-generated `checksum` field when the header also contains `nex_structure` or
-`extends`.
+when the child must remove a named package or dependency from its parent. Put
+one blank line before the generated `checksum` field when the header also
+contains `nex_structure` or `extends`.
+
+Use `files` for the literal files, symlinks, and directories the assembly places
+in the built root. Each entry uses the field order `path`, `mode`, `content`,
+`source`, `symlink`, `directory`, `replace`. A `source` path is relative to the
+repository root that owns the manifest. A child assembly's entries apply after
+its parent's entries.
 
 Use `providers` when an assembly binds an abstract runtime capability to a
 specific package output or bundle. Sort capability names alphabetically. The
@@ -300,7 +305,7 @@ git diff -- path/to/manifest.yaml
 ```
 
 The formatter diff must preserve every supported field and useful comment. If
-the formatter removes `extends`, `overlays`, `exclude`, or another schema field,
+the formatter removes `extends`, `files`, `exclude`, or another schema field,
 fix `src/cli/src/manifest/format.rs` before accepting the formatted file. Never
 delete valid manifest behavior merely to make `nex check` pass.
 

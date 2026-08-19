@@ -43,9 +43,9 @@ product/
 Nex finds this layout from the requested manifest, so the product does not need
 a workspace file. It reads packages from both `product/pkg/` and
 `product/upstream/nex/pkg/`. Package source paths, inherited assembly paths,
-overlay manifest paths, and pinned Git revisions resolve from the Git repository
-that owns each manifest. A file named inside an overlay remains relative to
-that overlay file.
+and pinned Git revisions resolve from the Git repository that owns each
+manifest. A `source` path in an assembly's `files` section resolves from that
+same repository root.
 
 Nex rejects the same package namespace and slug in both repositories. Product
 packages should use a product-owned namespace instead of replacing an upstream

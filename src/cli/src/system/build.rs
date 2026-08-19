@@ -21,7 +21,7 @@ use super::dependencies::dependencies_from_system_packages;
 use super::env::build_system_env_vars;
 use super::flat::materialize_system_packages;
 use super::nex::materialize_nex_structure;
-use super::overlays::apply_overlays;
+use super::files::apply_file_entries;
 
 #[cfg(test)]
 #[path = "build_tests.rs"]
@@ -118,7 +118,7 @@ fn build_system_once(
 ) -> io::Result<()> {
     prepare_system_rootfs(opts, base_dir, inputs, reuse_rootfs)?;
     materialize_system_package_set(opts, manifest, base_dir, inputs)?;
-    apply_overlays(&manifest.overlays, base_dir)?;
+    apply_file_entries(&manifest.files, base_dir)?;
     run_system_script(manifest, base_dir, download_dir, inputs)?;
     if manifest.system.nex_structure {
         move_legacy_etc_to_factory(&Path::new(base_dir).join("target"))?;

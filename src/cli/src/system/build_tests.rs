@@ -51,7 +51,7 @@ fn manifest(checksum: Option<&str>) -> SystemManifest {
         providers: BTreeMap::new(),
         dependencies: Vec::new(),
         sources: Vec::new(),
-        overlays: Vec::new(),
+        files: Vec::new(),
         build: Build {
             environment: "env/test.yaml".to_string(),
             script: "true".to_string(),

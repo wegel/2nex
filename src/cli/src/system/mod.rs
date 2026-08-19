@@ -10,7 +10,7 @@ mod nex;
 mod nex_db;
 mod nex_links;
 mod nex_shim;
-mod overlays;
+mod files;
 
 pub use build::{build_system_manifest, build_system_manifest_with_dir};
 pub use commit::commit_system_rootfs;

@@ -3,11 +3,27 @@ use std::io::ErrorKind;
 use serde_yaml::Value;
 
 use super::format::format_manifest_string;
-use super::{Overlay, OverlayEntry};
+use super::AssemblyFile;
+
+/// Wrap file entries in the smallest assembly manifest the formatter accepts.
+fn assembly_with_files(files: &str) -> String {
+    format!("system:\n  name: test\n  slug: test\n  version: 1.0\n\n{files}")
+}
+
+/// Read the `files` section back out of a formatted assembly.
+fn parse_files(formatted: &str) -> Vec<AssemblyFile> {
+    let document: Value = serde_yaml::from_str(formatted).expect("formatted assembly should parse");
+    let files = document
+        .get("files")
+        .cloned()
+        .unwrap_or(Value::Sequence(Vec::new()));
+    serde_yaml::from_value(files).expect("files should deserialize")
+}
 
 #[test]
-fn formats_overlay_without_losing_files_or_comments() {
-    let input = r#"files:
+fn formats_assembly_files_without_losing_entries_or_comments() {
+    let input = assembly_with_files(
+        r#"files:
 # locale policy
 - path: /etc/locale.conf
   replace: true
@@ -18,9 +34,10 @@ fn formats_overlay_without_losing_files_or_comments() {
 # resolver policy
 - path: /etc/resolv.conf
   symlink: /run/systemd/resolve/stub-resolv.conf
-"#;
+"#,
+    );
 
-    let formatted = format_manifest_string(input).expect("overlay should format");
+    let formatted = format_manifest_string(&input).expect("assembly should format");
     assert!(
         formatted.contains(
             "files:\n# locale policy\n- path: /etc/locale.conf\n  mode: 420\n  content: |\n    LANG=en_GB.UTF-8\n  replace: true\n"
@@ -31,19 +48,15 @@ fn formats_overlay_without_losing_files_or_comments() {
         "# resolver policy\n- path: /etc/resolv.conf\n  symlink: /run/systemd/resolve/stub-resolv.conf\n"
     ));
 
-    let overlay: Overlay =
-        serde_yaml::from_str(&formatted).expect("formatted overlay should parse");
-    assert_eq!(overlay.files.len(), 2);
-    assert_eq!(overlay.files[0].mode, Some(420));
-    assert_eq!(
-        overlay.files[0].content.as_deref(),
-        Some("LANG=en_GB.UTF-8\n")
-    );
-    assert!(overlay.files[0].replace);
+    let files = parse_files(&formatted);
+    assert_eq!(files.len(), 2);
+    assert_eq!(files[0].mode, Some(420));
+    assert_eq!(files[0].content.as_deref(), Some("LANG=en_GB.UTF-8\n"));
+    assert!(files[0].replace);
 }
 
 #[test]
-fn preserves_overlay_content_chomping() {
+fn preserves_file_entry_content_chomping() {
     for content in [
         "no newline",
         "one newline\n",
@@ -52,26 +65,26 @@ fn preserves_overlay_content_chomping() {
         "\n",
         "",
     ] {
-        let input = serde_yaml::to_string(&Overlay {
-            files: vec![OverlayEntry {
-                path: "/test".into(),
-                mode: None,
-                content: Some(content.to_string()),
-                source: None,
-                symlink: None,
-                directory: false,
-                replace: false,
-            }],
-        })
-        .expect("test overlay should serialize");
+        let entries = vec![AssemblyFile {
+            path: "/test".into(),
+            mode: None,
+            content: Some(content.to_string()),
+            source: None,
+            symlink: None,
+            directory: false,
+            replace: false,
+            base_dir: None,
+        }];
+        let files = serde_yaml::to_string(&serde_yaml::to_value(&entries).expect("entries value"))
+            .expect("test entries should serialize");
+        let input = assembly_with_files(&format!("files:\n{files}"));
 
-        let formatted = format_manifest_string(&input).expect("overlay should format");
-        let overlay: Overlay =
-            serde_yaml::from_str(&formatted).expect("formatted overlay should parse");
+        let formatted = format_manifest_string(&input).expect("assembly should format");
+        let parsed = parse_files(&formatted);
         assert_eq!(
-            overlay.files[0].content.as_deref(),
+            parsed[0].content.as_deref(),
             Some(content),
-            "formatter changed this overlay:\n{formatted}"
+            "formatter changed this file entry:\n{formatted}"
         );
         assert!(
             !formatted.lines().any(|line| line == "    "),
@@ -87,7 +100,7 @@ fn rejects_unknown_manifest_roots_instead_of_erasing_them() {
     assert_eq!(error.kind(), ErrorKind::InvalidData);
     assert!(error
         .to_string()
-        .contains("manifest must contain package, system, or files"));
+        .contains("manifest must contain package or system"));
 }
 
 #[test]

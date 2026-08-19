@@ -224,8 +224,9 @@ fn base_assembly() -> &'static str {
   slug: upstream-base
   version: 1.0
 
-overlays:
-- asm/base-overlay.yaml
+files:
+- path: /etc/base.conf
+  content: "base\n"
 
 packages: []
 
@@ -243,8 +244,9 @@ fn product_assembly() -> &'static str {
   version: 1.0
   extends: upstream/nex/asm/base.yaml
 
-overlays:
-- asm/device-overlay.yaml
+files:
+- path: /etc/device.conf
+  content: "device\n"
 
 packages:
 - name: product-agent

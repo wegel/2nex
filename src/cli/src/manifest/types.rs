@@ -137,8 +137,9 @@ pub struct SystemManifest {
     pub dependencies: Vec<Dependency>,
     #[serde(default)]
     pub sources: Vec<Source>,
-    #[serde(default)]
-    pub overlays: Vec<PathBuf>,
+    /// literal files this assembly places into the built root
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<AssemblyFile>,
     pub build: Build,
     /// items to exclude from parent assembly when extending
     #[serde(default)]
@@ -163,13 +164,7 @@ pub enum ExcludeSpec {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct Overlay {
-    #[serde(default)]
-    pub files: Vec<OverlayEntry>,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct OverlayEntry {
+pub struct AssemblyFile {
     pub path: PathBuf,
     #[serde(default)]
     pub mode: Option<u32>,
@@ -183,6 +178,10 @@ pub struct OverlayEntry {
     pub directory: bool,
     #[serde(default)]
     pub replace: bool,
+    /// directory that a relative `source` resolves against, set when the
+    /// owning manifest loads
+    #[serde(skip)]
+    pub base_dir: Option<PathBuf>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

@@ -55,7 +55,7 @@ fn child_package_appends_a_different_name() {
 }
 
 #[test]
-fn product_assembly_extends_upstream_and_keeps_each_overlay_owner() {
+fn product_assembly_extends_upstream_and_keeps_each_file_owner() {
     let temp_dir = tempfile::tempdir().expect("temp dir");
     let product = temp_dir.path().join("product");
     let upstream = product.join("upstream/nex");
@@ -65,26 +65,37 @@ fn product_assembly_extends_upstream_and_keeps_each_overlay_owner() {
     fs::create_dir_all(upstream.join(".git")).expect("upstream git marker");
     fs::create_dir_all(child_path.parent().unwrap()).expect("product asm dir");
     fs::create_dir_all(base_path.parent().unwrap()).expect("upstream asm dir");
-    fs::write(&base_path, assembly("base", None, "asm/base-overlay.yaml")).expect("base assembly");
+    fs::write(&base_path, assembly("base", None, "/etc/base.conf")).expect("base assembly");
     fs::write(
         &child_path,
         assembly(
             "device",
             Some("upstream/nex/asm/base.yaml"),
-            "asm/device-overlay.yaml",
+            "/etc/device.conf",
         ),
     )
     .expect("child assembly");
 
     let resolved = resolve_inheritance(&child_path).expect("resolved assembly");
 
+    let paths: Vec<_> = resolved
+        .files
+        .iter()
+        .map(|entry| entry.path.clone())
+        .collect();
     assert_eq!(
-        resolved.overlays,
+        paths,
         vec![
-            upstream.join("asm/base-overlay.yaml"),
-            product.join("asm/device-overlay.yaml"),
+            std::path::PathBuf::from("/etc/base.conf"),
+            std::path::PathBuf::from("/etc/device.conf"),
         ]
     );
+    let owners: Vec<_> = resolved
+        .files
+        .iter()
+        .map(|entry| entry.base_dir.clone().expect("owner"))
+        .collect();
+    assert_eq!(owners, vec![upstream.clone(), product.clone()]);
 }
 
 fn package(name: &str, commit: &str) -> SystemPackage {
@@ -95,11 +106,11 @@ fn package(name: &str, commit: &str) -> SystemPackage {
     }
 }
 
-fn assembly(slug: &str, extends: Option<&str>, overlay: &str) -> String {
+fn assembly(slug: &str, extends: Option<&str>, file_path: &str) -> String {
     let extends = extends
         .map(|path| format!("  extends: {path}\n"))
         .unwrap_or_default();
     format!(
-        "system:\n  name: {slug}\n  slug: {slug}\n  version: 1.0\n{extends}\noverlays:\n- {overlay}\n\npackages:\n- name: demo\n  commit: x86_64/pkg/demo/1.0/outputs/bin\n\nbuild:\n  environment: abcdef\n  script: \"\"\n"
+        "system:\n  name: {slug}\n  slug: {slug}\n  version: 1.0\n{extends}\npackages:\n- name: demo\n  commit: x86_64/pkg/demo/1.0/outputs/bin\n\nfiles:\n- path: {file_path}\n  content: \"{slug}\\n\"\n\nbuild:\n  environment: abcdef\n  script: \"\"\n"
     )
 }

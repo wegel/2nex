@@ -930,17 +930,17 @@ links, so its artifact is the closest existing base for comparison with the
 rootfs-builder image. An `extends` path resolves from the repository root, so
 write `asm/flat-systemd.yaml`, not a path relative to the child manifest.
 
-The system builder materializes packages, applies overlays, and then runs the
-merged build script. Inherited build scripts run before the child script. A
-child overlay therefore cannot replace `/etc/passwd`, `/etc/group`,
-`/etc/shadow`, or `/etc/os-release` from `flat-systemd`, because the parent
-script rewrites those files afterward. Put service units, links, and ordinary
-configuration in the overlay, but write those four files in the child build
-script.
+The system builder materializes packages, applies the assembly's `files`
+entries, and then runs the merged build script. Inherited build scripts run
+before the child script. A child's `files` entry therefore cannot replace
+`/etc/passwd`, `/etc/group`, `/etc/shadow`, or `/etc/os-release` from
+`flat-systemd`, because the parent script rewrites those files afterward. Put
+service units, links, and ordinary configuration in `files`, but write those
+four files in the child build script.
 
 Keep package manifests generic. Put the chosen locale, timezone, enabled
 services, users, network policy, and system-wide PipeWire policy in
-`asm/edgebox-rootfs.yaml` or `asm/edgebox-rootfs-overlay.yaml`. Do not put
+`asm/edgebox-rootfs.yaml`. Do not put
 product users, service presets, firewall rules, Docker policy, proprietary
 modules, or Yocto package splits into reusable package manifests.
 
@@ -1012,15 +1012,15 @@ generic Systemd package rather than adding an assembly substitute. After the
 UAPI vendor-path work, its strict two-build checksum is
 `c9ca9f12fa799ce8632962dbb302578e239f1c04c7c1e3471d242af95dedb7ce`.
 
-`nex format` must recognize an overlay whose root key is `files`. The old
-package-or-system choice formatted such a file as an empty document. The
-formatter now preserves overlay entries, their comments, field order, and the
-exact newline suffix of inline content. It rejects unknown root keys and
-unknown overlay fields instead of silently dropping them. Focused tests cover
-the original erase case and YAML block-scalar newline behavior. After the
-third-party repository work, the full CLI suite passes 173 tests.
+An assembly carries its own `files` section. The separate overlay manifest kind
+is gone, and `overlays:` is now a hard error that names `files` instead. The
+formatter emits `files` between `exclude` and `build`, and preserves entry
+comments, field order, and the exact newline suffix of inline content. A child
+assembly's entries apply after its parent's, which is what the old inherited
+overlay list did. A `source` path resolves from the repository root that owns
+the manifest, not from the file's own directory.
 
-`asm/edgebox-rootfs.yaml` and `asm/edgebox-rootfs-overlay.yaml` make a generic
+`asm/edgebox-rootfs.yaml` makes a generic
 appliance-style flat root from reusable packages. The assembly chooses its
 locked root account, service accounts and groups, DHCP through networkd, resolved,
 timesyncd, SSH, ACPI, container services, system-wide PipeWire wrappers,
@@ -1091,8 +1091,8 @@ host-owned `/etc`. Keep this transformation out of reusable package manifests;
 ordinary flat assemblies must still receive upstream's normal files.
 
 The system builder performs that transformation only when an assembly sets
-`nex_structure: true`. It runs after package materialization, overlays, and the
-assembly script, moves the completed `/etc` tree to
+`nex_structure: true`. It runs after package materialization, the assembly's
+`files` entries, and the assembly script, moves the completed `/etc` tree to
 `/usr/share/factory/etc`, and leaves an empty `/etc` mount point. If an
 assembly or package already supplied native factory files, the builder merges
 directories but fails on every file, link, or type collision instead of
@@ -1426,7 +1426,7 @@ symbolic link. The link formatter updates the correct YAML section even when
 two dependencies use the same commit.
 
 Nex deliberately rejects `manifest_ref` on an assembly manifest itself.
-Assembly inheritance and overlays would otherwise require every related file
+Assembly inheritance would otherwise require every related file
 to come from the same historical tree. A product repository pins its whole
 upstream Nex tree with the `upstream/nex/` submodule commit instead. Direct
 package entries inside the active product assembly still receive their own
@@ -1465,11 +1465,11 @@ packages should stay generic and move into Nex when possible.
 
 Nex retains the repository that owns each loaded manifest. Nex manifests
 commonly use repository-root paths such as
-`pkg/cli/editors/vim-reproducible.patch` and `asm/nex-systemd-overlay.yaml`.
-The loader resolves local package sources, inherited assemblies, and overlay
-manifest paths from the owning repository root in memory. A `source:` path
-inside an overlay remains relative to the overlay file. Nex does not rewrite
-YAML paths to host-specific absolute paths.
+`pkg/cli/editors/vim-reproducible.patch` and `asm/nex-systemd.yaml`.
+The loader resolves local package sources and inherited assemblies from the
+owning repository root in memory. A `source:` path in an assembly's `files`
+section resolves from that same root. Nex does not rewrite YAML paths to
+host-specific absolute paths.
 
 Pinned `manifest_ref` values use the same repository context. Nex package
 snapshots come from the submodule repository, while product package snapshots
@@ -1486,7 +1486,7 @@ fail before one file can overwrite another.
 `src/cli/tests/external_repository_tests.rs` builds a temporary outer Git
 repository and nested upstream Git repository without a workspace file. It
 checks cross-repository package lookup, an upstream pinned repository commit,
-assembly inheritance, per-repository overlays, and duplicate rejection.
+assembly inheritance, per-repository file entries, and duplicate rejection.
 Unit tests also cover historical local patches, dirty-source refusal, package
 and system-package pins, duplicate commit values in different YAML sections,
 invalid refs, and symbolic-link rejection. The full CLI suite has 180 tests.

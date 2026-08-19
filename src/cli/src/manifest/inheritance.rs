@@ -110,7 +110,7 @@ fn merge_manifests(base: &SystemManifest, child: &SystemManifest) -> SystemManif
             &excludes.dependencies,
         ),
         sources: merge_sources(&base.sources, &child.sources),
-        overlays: [base.overlays.clone(), child.overlays.clone()].concat(),
+        files: [base.files.clone(), child.files.clone()].concat(),
         build: merge_build(&base.build, &child.build),
         exclude: None, // doesn't propagate
     }

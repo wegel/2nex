@@ -5,10 +5,7 @@ system:
   version: 0.0.1
   description: Minimal bootable installer for nex systems
   nex_structure: true
-  checksum: adf0be5320e0f008774dd9b2c568b97dc10e63f7aa85b087d469d2ca20f5d879
-
-overlays:
-- asm/installer/installer-overlay.yaml
+  checksum: 790a2fc8a62659118709a45017e2ad5ef6a8bfb74893b2ef07e768bf8b45691b
 
 dependencies:
 - name: glibc
@@ -61,6 +58,174 @@ packages:
   commit: x86_64/pkg/core/kernel/kmod/32/bundles/runtime
 - name: zub
   commit: x86_64/pkg/core/nex/zub/0.0.3-17f2ca6/outputs/bin
+
+files:
+# install script
+- path: /usr/bin/nex-install
+  mode: 493
+  source: scripts/nex-install
+
+# installer release identity
+- path: /usr/lib/os-release
+  mode: 420
+  content: |
+    NAME="nex"
+    PRETTY_NAME="nex Installer"
+    ID=nex
+    VERSION_ID=0.0.1
+
+# basic passwd/group for root
+- path: /etc/passwd
+  mode: 420
+  content: |
+    root:x:0:0:root:/root:/bin/bash
+
+- path: /etc/group
+  mode: 420
+  content: |
+    root:x:0:
+
+- path: /etc/shadow
+  mode: 384
+  content: |
+    root:!*:19735:0:99999:7:::
+
+# symlinks
+- path: /bin
+  symlink: usr/bin
+
+- path: /sbin
+  symlink: usr/bin
+
+- path: /usr/bin/sh
+  symlink: bash
+
+- path: /usr/bin/init
+  symlink: ../../init
+
+- path: /init
+  mode: 493
+  content: |
+    #!/bin/bash
+    # installer init: mount filesystems
+
+    mount -t proc proc /proc
+    mount -t sysfs sys /sys
+    mount -t devtmpfs dev /dev
+
+    echo "INSTALLER: init started, PID=$$" > /dev/kmsg
+    echo "INSTALLER: script=$0" > /dev/kmsg
+
+    mkdir -p /run /run/sysroot
+    mount -t tmpfs run /run
+    mkdir -p /run/sysroot
+
+    modprobe vfat 2>/dev/null || true
+
+    echo "INSTALLER: checking /nex/installer" > /dev/kmsg
+    if [ -d /nex/installer ]; then
+        echo "INSTALLER: found /nex/installer, ready to install" > /dev/kmsg
+    else
+        echo "INSTALLER: /nex/installer not found (test mode)" > /dev/kmsg
+    fi
+
+    CMDLINE="$(cat /proc/cmdline)"
+    echo "INSTALLER: cmdline: $CMDLINE" > /dev/kmsg
+
+    poweroff_now() {
+        sync
+        if command -v poweroff >/dev/null 2>&1; then
+            poweroff -f
+        fi
+        if command -v busybox >/dev/null 2>&1; then
+            busybox poweroff -f
+        fi
+        echo 1 > /proc/sys/kernel/sysrq 2>/dev/null || true
+        echo o > /proc/sysrq-trigger 2>/dev/null || true
+    }
+
+    for word in $CMDLINE; do
+        case "$word" in
+            installer.autoinstall=*)
+                target=${word#installer.autoinstall=}
+                echo "INSTALLER: autoinstall target $target" > /dev/kmsg
+                if nex-install --yes "$target"; then
+                    echo "INSTALLER: autoinstall complete" > /dev/kmsg
+                    poweroff_now
+                else
+                    echo "INSTALLER: autoinstall failed" > /dev/kmsg
+                    exec /bin/bash
+                fi
+                ;;
+        esac
+    done
+
+    echo "INSTALLER: starting shell" > /dev/kmsg
+
+    export HOME=/root
+    export TERM=linux
+    export PATH=/usr/bin
+
+    CONSOLE=""
+    case "$CMDLINE" in
+        *installer.console=ttyS0*) CONSOLE=/dev/ttyS0 ;;
+        *installer.console=tty0*) CONSOLE=/dev/tty0 ;;
+        *installer.console=console*) CONSOLE=/dev/console ;;
+        *installer.console=tty[0-9]*)
+            tnum=$(echo "$CMDLINE" | sed -n 's/.*installer.console=tty\([0-9][0-9]*\).*/\1/p' | head -1)
+            [ -n "$tnum" ] && CONSOLE="/dev/tty${tnum}"
+            ;;
+    esac
+
+    if [ -z "$CONSOLE" ]; then
+        if echo "$CMDLINE" | grep -q "console=tty0" && [ -c /dev/tty0 ]; then
+            CONSOLE=/dev/tty0
+        elif echo "$CMDLINE" | grep -q "console=ttyS0" && [ -c /dev/ttyS0 ]; then
+            CONSOLE=/dev/ttyS0
+        else
+            CONSOLE=/dev/console
+        fi
+    fi
+
+    if [ ! -c "$CONSOLE" ]; then
+        echo "INSTALLER: console $CONSOLE missing, falling back" > /dev/kmsg
+        if [ -c /dev/tty0 ]; then
+            CONSOLE=/dev/tty0
+        elif [ -c /dev/console ]; then
+            CONSOLE=/dev/console
+        fi
+    fi
+
+    echo "INSTALLER: console probe: tty0=$(ls -l /dev/tty0 2>/dev/null || echo missing) tty1=$(ls -l /dev/tty1 2>/dev/null || echo missing) ttyS0=$(ls -l /dev/ttyS0 2>/dev/null || echo missing) console=$(ls -l /dev/console 2>/dev/null || echo missing)" > /dev/kmsg
+    echo "INSTALLER: using console $CONSOLE" > /dev/kmsg
+
+    exec setsid -c /bin/bash --login <$CONSOLE >$CONSOLE 2>&1
+
+- path: /etc/mtab
+  symlink: /proc/self/mounts
+
+# mount points
+- path: /mnt
+  directory: true
+
+- path: /run/sysroot
+  directory: true
+
+# root home
+- path: /root
+  directory: true
+
+- path: /root/.bashrc
+  mode: 420
+  content: |
+    export PATH=/usr/bin
+    export PS1='installer# '
+    printf "\n"
+    printf "=== nex Installer ===\n"
+    printf "\n"
+    printf "run 'nex-install' to install nex to disk\n"
+    printf "\n"
+
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c

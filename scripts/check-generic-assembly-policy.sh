@@ -1,5 +1,5 @@
 #!/bin/sh
-# Reject product and test policy from Nex's reusable system overlays.
+# Reject product and test policy from Nex's reusable assemblies.
 set -eu
 
 die() {
@@ -19,11 +19,11 @@ check_pattern() {
     fi
 }
 
-scan_overlay() {
+scan_assembly() {
     file=$1
     failed=0
 
-    [ -f "$file" ] || die "overlay not found: $file"
+    [ -f "$file" ] || die "assembly not found: $file"
 
     check_pattern "$file" 'built-in test identity or home' \
         'testuser|/home/[[:alnum:]_.-]+' || failed=1
@@ -48,15 +48,15 @@ scan_overlay() {
     return "$failed"
 }
 
-scan_overlays() {
+scan_assemblies() {
     failed=0
 
     for file in "$@"; do
-        scan_overlay "$file" || failed=1
+        scan_assembly "$file" || failed=1
     done
 
     [ "$failed" -eq 0 ] || return 1
-    printf 'PASS: reusable assembly overlays contain only generic access and network policy\n'
+    printf 'PASS: reusable assemblies contain only generic access and network policy\n'
 }
 
 self_test() {
@@ -64,6 +64,11 @@ self_test() {
     trap 'rm -rf "$test_root"' EXIT HUP INT TERM
 
     cat > "$test_root/safe.yaml" <<'EOF'
+system:
+  name: safe
+  slug: safe
+  version: 1.0
+
 files:
 - path: /etc/passwd
   content: |
@@ -73,10 +78,15 @@ files:
   content: |
     root:!*:19735:0:99999:7:::
 EOF
-    scan_overlays "$test_root/safe.yaml" > "$test_root/safe.out" ||
+    scan_assemblies "$test_root/safe.yaml" > "$test_root/safe.out" ||
         die 'self-test rejected a locked generic assembly'
 
     cat > "$test_root/unsafe.yaml" <<'EOF'
+system:
+  name: unsafe
+  slug: unsafe
+  version: 1.0
+
 files:
   testuser:x:1000:1000:Test:/home/testuser:/bin/bash
   root::19735:0:99999:7:::
@@ -89,7 +99,7 @@ files:
   nm-autoconnect nex-boot-dump
   /etc/systemd/system/multi-user.target.wants/sshd.service
 EOF
-    if scan_overlays "$test_root/unsafe.yaml" > "$test_root/unsafe.out" 2>&1; then
+    if scan_assemblies "$test_root/unsafe.yaml" > "$test_root/unsafe.out" 2>&1; then
         die 'self-test accepted unsafe reusable assembly policy'
     fi
     for label in \
@@ -111,15 +121,15 @@ EOF
 
 case "${1:-}" in
     --self-test)
-        [ "$#" -eq 1 ] || die 'usage: check-generic-assembly-policy.sh [--self-test | OVERLAY...]'
+        [ "$#" -eq 1 ] || die 'usage: check-generic-assembly-policy.sh [--self-test | ASSEMBLY...]'
         self_test
         ;;
     '')
-        scan_overlays \
-            asm/nex-systemd-overlay.yaml \
-            asm/desktop-vwl/desktop-vwl-overlay.yaml
+        scan_assemblies \
+            asm/nex-systemd.yaml \
+            asm/desktop-vwl/desktop-vwl.yaml
         ;;
     *)
-        scan_overlays "$@"
+        scan_assemblies "$@"
         ;;
 esac

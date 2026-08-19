@@ -5,7 +5,6 @@ use std::io;
 use std::process::Command;
 
 use crate::deps::{resolve_dependency_closure, resolve_dependency_closure_with_providers};
-use crate::manifest::types::Overlay;
 use crate::manifest::types::{ManifestSource, Source, SystemManifest};
 use crate::manifest::{load_manifest_from_source, Manifest, ManifestData, ManifestIndex};
 use crate::refs::{PackageRef, RefType};
@@ -146,58 +145,34 @@ pub fn run(args: &CheckArgs) -> io::Result<()> {
             }
         }
 
-        // check 3: no forbidden usrmerge paths in system overlays
+        // check 3: no forbidden usrmerge paths in assembly file entries
         if let ManifestData::System(ref manifest) = manifest_data {
-            for overlay_path in &manifest.overlays {
-                let overlay_path = Path::new(overlay_path);
-                let overlay_content = std::fs::read_to_string(overlay_path).map_err(|e| {
-                    io::Error::new(
-                        e.kind(),
-                        format!("failed to read {}: {}", overlay_path.display(), e),
-                    )
-                })?;
+            for entry in &manifest.files {
+                let path_str = entry.path.to_string_lossy();
+                let Some(prefix) = forbidden_usrmerge_prefix(&path_str) else {
+                    continue;
+                };
+                if path_str != prefix {
+                    eprintln!(
+                        "  error: file entry '{}' is under forbidden usrmerge path '{}'",
+                        path_str, prefix
+                    );
+                    has_errors = true;
+                    continue;
+                }
 
-                let overlay: Overlay = serde_yaml::from_str(&overlay_content).map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("failed to parse {}: {}", overlay_path.display(), e),
-                    )
-                })?;
-
-                for entry in &overlay.files {
-                    let path_str = entry.path.to_string_lossy();
-                    if let Some(prefix) = forbidden_usrmerge_prefix(&path_str) {
-                        if path_str != prefix {
-                            eprintln!(
-                                "  error: overlay '{}' places '{}' under forbidden usrmerge path '{}'",
-                                overlay_path.display(),
-                                path_str,
-                                prefix
-                            );
-                            has_errors = true;
-                            continue;
-                        }
-
-                        match entry.symlink.as_ref().and_then(|p| p.to_str()) {
-                            Some(target) if is_allowed_usrmerge_symlink(&path_str, target) => {}
-                            Some(target) => {
-                                eprintln!(
-                                    "  error: overlay '{}' has invalid symlink target '{}' for '{}'",
-                                    overlay_path.display(),
-                                    target,
-                                    path_str
-                                );
-                                has_errors = true;
-                            }
-                            None => {
-                                eprintln!(
-                                    "  error: overlay '{}' must define a symlink for '{}'",
-                                    overlay_path.display(),
-                                    path_str
-                                );
-                                has_errors = true;
-                            }
-                        }
+                match entry.symlink.as_ref().and_then(|p| p.to_str()) {
+                    Some(target) if is_allowed_usrmerge_symlink(&path_str, target) => {}
+                    Some(target) => {
+                        eprintln!(
+                            "  error: file entry '{}' has invalid symlink target '{}'",
+                            path_str, target
+                        );
+                        has_errors = true;
+                    }
+                    None => {
+                        eprintln!("  error: file entry '{}' must define a symlink", path_str);
+                        has_errors = true;
                     }
                 }
             }

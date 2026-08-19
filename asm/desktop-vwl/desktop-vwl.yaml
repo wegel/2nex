@@ -6,10 +6,7 @@ system:
   description: Desktop system with vwl compositor, wayland tools, and CLI utilities
   nex_structure: true
   extends: asm/nex-systemd.yaml
-  checksum: ba5935db1809c603c931e5db49cba90824371bc26955e227d9c1653ca04a04da
-
-overlays:
-- asm/desktop-vwl/desktop-vwl-overlay.yaml
+  checksum: 02b3486f31bd7f85abdf2644fc8c95f55bd28fc143f4da42760fe14fe9f804eb
 
 sources:
 # Ship a snapshot of the Nex repo needed for self-hosting. The installed system
@@ -542,6 +539,328 @@ providers:
   graphics.gbm: x86_64/pkg/libs/graphics/mesa/24.2.7/outputs/lib
   graphics.gles: x86_64/pkg/libs/graphics/mesa/24.2.7/outputs/lib
 
+files:
+# users and groups
+- path: /etc/passwd
+  mode: 420
+  content: |
+    root:x:0:0:root:/root:/bin/bash
+    systemd-network:x:192:192:systemd Network Management:/:/usr/bin/nologin
+    systemd-resolve:x:193:193:systemd Resolver:/:/usr/bin/nologin
+    systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/bin/nologin
+    sshd:x:74:74:Privilege-separated SSH:/var/lib/sshd:/usr/bin/nologin
+
+- path: /etc/group
+  mode: 420
+  content: |
+    root:x:0:
+    systemd-network:x:192:
+    systemd-resolve:x:193:
+    systemd-timesync:x:194:
+    systemd-journal:x:190:
+    sshd:x:74:
+    audio:x:29:
+    video:x:39:
+    input:x:97:
+    render:x:998:
+    seat:x:999:
+    utmp:x:22:
+    lp:x:7:
+
+- path: /etc/shadow
+  mode: 384
+  content: |
+    root:!*:19735:0:99999:7:::
+    systemd-network:!*:19735::::::
+    systemd-resolve:!*:19735::::::
+    systemd-timesync:!*:19735::::::
+    sshd:!*:19735::::::
+
+# distribution defaults
+- path: /usr/lib/os-release
+  mode: 420
+  content: |
+    NAME="nex"
+    PRETTY_NAME="nex Desktop"
+    ID=nex
+    VERSION_ID=0.0.1
+  replace: true
+
+- path: /etc/machine-id
+  mode: 420
+
+- path: /usr/lib/environment.d/10-desktop.conf
+  mode: 420
+  content: |
+    LANG=en_US.UTF-8
+    XDG_SESSION_TYPE=wayland
+    MOZ_ENABLE_WAYLAND=1
+    QT_QPA_PLATFORM=wayland
+    SDL_VIDEODRIVER=wayland
+    _JAVA_AWT_WM_NONREPARENTING=1
+
+- path: /usr/lib/environment.d/20-xdg-config-dirs.conf
+  mode: 420
+  content: |
+    XDG_CONFIG_DIRS=/etc/xdg:/run/xdg:/usr/share/xdg
+
+- path: /usr/lib/inputrc
+  mode: 420
+  content: |
+    # readline config for bash/zsh
+    set editing-mode emacs
+    set bell-style none
+
+    # ctrl+left/right for word navigation
+    "\e[1;5C": forward-word
+    "\e[1;5D": backward-word
+    "\e[5C": forward-word
+    "\e[5D": backward-word
+
+    # ctrl+backspace to delete word
+    "\C-h": backward-kill-word
+
+    # ctrl+delete to delete word forward
+    "\e[3;5~": kill-word
+  replace: true
+
+# systemd
+- path: /usr/lib/systemd/system/logrotate.service
+  mode: 420
+  content: |
+    [Unit]
+    Description=Rotate log files
+    RequiresMountsFor=/var/lib/logrotate.status
+
+    [Service]
+    Type=oneshot
+    ExecStart=/usr/bin/logrotate
+    Nice=19
+    IOSchedulingClass=best-effort
+    IOSchedulingPriority=7
+
+- path: /usr/lib/systemd/system/logrotate.timer
+  mode: 420
+  content: |
+    [Unit]
+    Description=Daily rotation of log files
+
+    [Timer]
+    OnCalendar=daily
+    AccuracySec=1h
+    Persistent=true
+
+    [Install]
+    WantedBy=timers.target
+
+- path: /etc/systemd/system/timers.target.wants/logrotate.timer
+  symlink: /usr/lib/systemd/system/logrotate.timer
+
+- path: /usr/lib/systemd/system/systemd-networkd.service
+  symlink: /dev/null
+  replace: true
+
+- path: /usr/lib/systemd/system/systemd-networkd.socket
+  symlink: /dev/null
+  replace: true
+
+- path: /usr/lib/systemd/system/systemd-networkd-wait-online.service
+  symlink: /dev/null
+  replace: true
+
+- path: /usr/lib/systemd/logind.conf.d/10-desktop.conf
+  mode: 420
+  content: |
+    [Login]
+    HandleLidSwitch=suspend
+    HandlePowerKey=poweroff
+    NAutoVTs=6
+    ReserveVT=6
+
+- path: /usr/lib/systemd/system/systemd-logind.service.d/dbus-ordering.conf
+  mode: 420
+  content: |
+    [Unit]
+    After=dbus-broker.service
+    Wants=dbus-broker.service
+
+- path: /usr/lib/tmpfiles.d/xdg-runtime.conf
+  mode: 420
+  content: |
+    d /run/user/0 0700 root root -
+
+- path: /usr/lib/tmpfiles.d/utmp.conf
+  mode: 420
+  content: |
+    f /run/utmp 0664 root utmp -
+    f /var/log/wtmp 0664 root utmp -
+    f /var/log/btmp 0660 root utmp -
+
+# udev
+- path: /usr/lib/udev/rules.d/70-seat.rules
+  mode: 420
+  content: |
+    # allow seat group access to input devices
+    SUBSYSTEM=="input", GROUP="input", MODE="0660"
+    # allow seat group access to drm devices
+    SUBSYSTEM=="drm", GROUP="video", MODE="0660"
+    # allow seat group access to graphics
+    KERNEL=="card[0-9]*", SUBSYSTEM=="drm", GROUP="video", MODE="0660"
+    KERNEL=="renderD*", SUBSYSTEM=="drm", GROUP="render", MODE="0660"
+
+# PAM
+- path: /etc/pam.d/system-auth
+  mode: 420
+  content: |
+    auth      sufficient pam_unix.so
+    auth      required   pam_deny.so
+
+    account   required   pam_nologin.so
+    account   sufficient pam_unix.so
+    account   required   pam_permit.so
+
+    password  sufficient pam_unix.so sha512 shadow try_first_pass
+    password  required   pam_deny.so
+
+    -session  optional   pam_loginuid.so
+    session   required   pam_systemd.so
+    session   required   pam_unix.so
+  replace: true
+
+- path: /etc/pam.d/login
+  mode: 420
+  content: |
+    auth       include   system-auth
+    account    include   system-auth
+    password   include   system-auth
+    session    include   system-auth
+
+- path: /etc/pam.d/other
+  mode: 420
+  content: |
+    auth      required pam_deny.so
+    account   required pam_deny.so
+    password  required pam_deny.so
+    session   required pam_deny.so
+  replace: true
+
+- path: /root/.bashrc
+  mode: 420
+  content: |
+    export XDG_RUNTIME_DIR=/run/user/0
+
+- path: /root
+  mode: 448
+  directory: true
+
+# directories
+- path: /var/lib/sshd
+  mode: 448
+  directory: true
+
+# symlinks
+- path: /var/run
+  symlink: /run
+
+- path: /etc/mtab
+  symlink: /proc/self/mounts
+
+- path: /etc/resolv.conf
+  symlink: /run/systemd/resolve/stub-resolv.conf
+
+- path: /init
+  symlink: usr/bin/init
+
+# dbus.service alias
+- path: /usr/lib/systemd/system/dbus.service
+  symlink: dbus-broker.service
+  replace: true
+
+# NetworkManager + iwd configuration
+- path: /usr/lib/NetworkManager/conf.d/wifi-backend.conf
+  mode: 420
+  content: |
+    [device]
+    wifi.backend=iwd
+
+# iwd configuration
+- path: /usr/lib/iwd/main.conf
+  mode: 420
+  content: |
+    [General]
+    EnableNetworkConfiguration=false
+
+    [Network]
+    NameResolvingService=systemd
+
+- path: /usr/lib/systemd/journald.conf.d/00-persistent.conf
+  mode: 420
+  content: |
+    [Journal]
+    Storage=persistent
+    SystemMaxUse=50M
+
+# systemd service enablement
+- path: /etc/systemd/system/multi-user.target.wants/NetworkManager.service
+  symlink: /usr/lib/systemd/system/NetworkManager.service
+
+- path: /etc/systemd/system/multi-user.target.wants/iwd.service
+  symlink: /usr/lib/systemd/system/iwd.service
+
+- path: /etc/systemd/system/multi-user.target.wants/bluetooth.service
+  symlink: /usr/lib/systemd/system/bluetooth.service
+
+- path: /etc/systemd/system/multi-user.target.wants/systemd-resolved.service
+  symlink: /usr/lib/systemd/system/systemd-resolved.service
+
+- path: /etc/systemd/system/getty.target.wants/getty@tty1.service
+  symlink: /usr/lib/systemd/system/getty@.service
+
+- path: /etc/systemd/system/sockets.target.wants/dbus.socket
+  symlink: /usr/lib/systemd/system/dbus.socket
+
+- path: /etc/systemd/user/sockets.target.wants/dbus.socket
+  symlink: /usr/lib/systemd/user/dbus.socket
+
+- path: /etc/systemd/user/default.target.wants/pipewire.socket
+  symlink: /usr/lib/systemd/user/pipewire.socket
+
+- path: /etc/systemd/user/default.target.wants/pipewire-pulse.socket
+  symlink: /usr/lib/systemd/user/pipewire-pulse.socket
+
+- path: /etc/systemd/user/default.target.wants/wireplumber.service
+  symlink: /usr/lib/systemd/user/wireplumber.service
+
+# container config
+- path: /usr/share/containers/containers.conf
+  mode: 420
+  content: |
+    [engine]
+    runtime = "runc"
+
+    [network]
+    firewall_driver = "nftables"
+
+- path: /usr/share/containers/registries.conf
+  mode: 420
+  content: |
+    unqualified-search-registries = ["docker.io"]
+
+- path: /usr/share/containers/policy.json
+  mode: 420
+  content: |
+    {
+      "default": [{ "type": "insecureAcceptAnything" }]
+    }
+
+# gsettings overrides
+- path: /usr/share/glib-2.0/schemas/90_nex.gschema.override
+  mode: 420
+  content: |
+    [org.gnome.TextEditor]
+    spellcheck=false
+
+
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
 
@@ -588,7 +907,7 @@ build:
     mkdir -p /target/usr/lib/locale
     localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias /target/usr/lib/locale/en_US.UTF-8
 
-    # recompile gsettings schemas (includes overrides from overlay)
+    # recompile gsettings schemas (includes overrides from the files section)
     for f in /target/usr/share/glib-2.0/schemas/*.xml; do
       if [ -L "$f" ]; then
         real=$(readlink "$f")

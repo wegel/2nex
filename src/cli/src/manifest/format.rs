@@ -29,17 +29,14 @@ pub fn format_manifest_string(contents: &str) -> io::Result<String> {
 
     let system_key = Value::String("system".to_string());
     let package_key = Value::String("package".to_string());
-    let files_key = Value::String("files".to_string());
     let formatted = if mapping.contains_key(&system_key) {
         format_root(mapping, true, original_version.as_deref())?
     } else if mapping.contains_key(&package_key) {
         format_root(mapping, false, original_version.as_deref())?
-    } else if mapping.contains_key(&files_key) {
-        format_overlay(mapping)?
     } else {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "manifest must contain package, system, or files",
+            "manifest must contain package or system",
         ));
     };
     Ok(restore_section_item_comments(contents, &formatted))
@@ -199,12 +196,12 @@ fn format_root(
     let sections: &[&str] = if is_system {
         &[
             "system",
-            "overlays",
             "sources",
             "dependencies",
             "packages",
             "providers",
             "exclude",
+            "files",
             "build",
         ]
     } else {
@@ -236,12 +233,12 @@ fn format_root(
             match section {
                 "package" => output.push_str(&format_package(value, original_version, unstable)?),
                 "system" => output.push_str(&format_system(value, original_version, unstable)?),
-                "overlays" => output.push_str(&format_overlays(value)?),
                 "sources" => output.push_str(&format_sources(value)?),
                 "dependencies" => output.push_str(&format_dependencies(value)?),
                 "packages" => output.push_str(&format_packages(value)?),
                 "providers" => output.push_str(&format_providers(value)?),
                 "exclude" => output.push_str(&format_generic_section("exclude", value)?),
+                "files" => output.push_str(&format_files(value)?),
                 "build" => output.push_str(&format_build(value)?),
                 "bundles" => output.push_str(&format_bundles(value)?),
                 "outputs" => output.push_str(&format_outputs(value, skip_needs)?),
@@ -365,18 +362,12 @@ fn format_generic_section(name: &str, value: &Value) -> io::Result<String> {
     Ok(output)
 }
 
-fn format_overlay(mapping: &Mapping) -> io::Result<String> {
-    let files_key = Value::String("files".to_string());
-    if mapping.keys().any(|key| key != &files_key) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "overlay manifest may only contain files",
-        ));
+fn format_files(value: &Value) -> io::Result<String> {
+    if value.is_null() {
+        return Ok(String::from("files: []\n"));
     }
-
-    let files = mapping
-        .get(&files_key)
-        .and_then(Value::as_sequence)
+    let files = value
+        .as_sequence()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "files must be a sequence"))?;
     if files.is_empty() {
         return Ok(String::from("files: []\n"));
@@ -384,13 +375,13 @@ fn format_overlay(mapping: &Mapping) -> io::Result<String> {
 
     let mut output = String::from("files:\n");
     for file in files {
-        format_overlay_entry(file, &mut output)?;
+        format_file_entry(file, &mut output)?;
     }
 
     Ok(output)
 }
 
-const OVERLAY_FIELDS: [&str; 7] = [
+const FILE_ENTRY_FIELDS: [&str; 7] = [
     "path",
     "mode",
     "content",
@@ -400,48 +391,48 @@ const OVERLAY_FIELDS: [&str; 7] = [
     "replace",
 ];
 
-fn format_overlay_entry(value: &Value, output: &mut String) -> io::Result<()> {
+fn format_file_entry(value: &Value, output: &mut String) -> io::Result<()> {
     let file = value.as_mapping().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidData, "overlay file must be a mapping")
+        io::Error::new(io::ErrorKind::InvalidData, "file entry must be a mapping")
     })?;
-    validate_overlay_fields(file)?;
+    validate_file_entry_fields(file)?;
 
-    let path = overlay_field(file, "path")
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "overlay file requires path"))?;
+    let path = file_entry_field(file, "path")
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "file entry requires path"))?;
     output.push_str(&format!("- path: {}\n", format_scalar(path)));
 
-    for field in OVERLAY_FIELDS.iter().skip(1) {
-        if let Some(value) = overlay_field(file, field) {
-            format_overlay_field(field, value, output)?;
+    for field in FILE_ENTRY_FIELDS.iter().skip(1) {
+        if let Some(value) = file_entry_field(file, field) {
+            format_file_entry_field(field, value, output)?;
         }
     }
     output.push('\n');
     Ok(())
 }
 
-fn validate_overlay_fields(file: &Mapping) -> io::Result<()> {
+fn validate_file_entry_fields(file: &Mapping) -> io::Result<()> {
     for key in file.keys() {
         let field = key.as_str().ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
-                "overlay file fields must be strings",
+                "file entry fields must be strings",
             )
         })?;
-        if !OVERLAY_FIELDS.contains(&field) {
+        if !FILE_ENTRY_FIELDS.contains(&field) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("unknown overlay file field: {field}"),
+                format!("unknown file entry field: {field}"),
             ));
         }
     }
     Ok(())
 }
 
-fn overlay_field<'a>(file: &'a Mapping, field: &str) -> Option<&'a Value> {
+fn file_entry_field<'a>(file: &'a Mapping, field: &str) -> Option<&'a Value> {
     file.get(Value::String(field.to_string()))
 }
 
-fn format_overlay_field(field: &str, value: &Value, output: &mut String) -> io::Result<()> {
+fn format_file_entry_field(field: &str, value: &Value, output: &mut String) -> io::Result<()> {
     if field != "content" {
         output.push_str(&format!("  {field}: {}\n", format_scalar(value)));
         return Ok(());
@@ -450,14 +441,14 @@ fn format_overlay_field(field: &str, value: &Value, output: &mut String) -> io::
     let content = value.as_str().ok_or_else(|| {
         io::Error::new(
             io::ErrorKind::InvalidData,
-            "overlay file content must be a string",
+            "file entry content must be a string",
         )
     })?;
-    format_overlay_content(content, output);
+    format_file_entry_content(content, output);
     Ok(())
 }
 
-fn format_overlay_content(content: &str, output: &mut String) {
+fn format_file_entry_content(content: &str, output: &mut String) {
     if !content.is_empty() && content.bytes().all(|byte| byte == b'\n') {
         output.push_str("  content: \"");
         output.push_str(&"\\n".repeat(content.len()));
@@ -502,18 +493,6 @@ fn format_version(original: Option<&str>, parsed: &Value) -> String {
     } else {
         version_str
     }
-}
-
-fn format_overlays(value: &Value) -> io::Result<String> {
-    let seq = value
-        .as_sequence()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "overlays must be a sequence"))?;
-
-    let mut output = String::from("overlays:\n");
-    for overlay in seq {
-        output.push_str(&format!("- {}\n", format_scalar(overlay)));
-    }
-    Ok(output)
 }
 
 fn format_sources(value: &Value) -> io::Result<String> {
@@ -1095,14 +1074,15 @@ mod tests {
     }
 
     #[test]
-    fn formats_system_overlays() {
+    fn formats_system_files() {
         let input = r#"system:
   schema: 1
   name: test system
   slug: test
   version: 1.0
-overlays:
-  - asm/test-overlay.yaml
+files:
+  - path: /etc/test.conf
+    symlink: /run/test.conf
 dependencies: []
 packages: []
 build:
@@ -1111,7 +1091,8 @@ build:
 "#;
 
         let formatted = format_manifest_string(input).unwrap();
-        assert!(formatted.contains("overlays:\n- asm/test-overlay.yaml\n"));
+        assert!(formatted
+            .contains("files:\n- path: /etc/test.conf\n  symlink: /run/test.conf\n"));
         assert!(formatted.contains("\ndependencies: []\n"));
     }
 
