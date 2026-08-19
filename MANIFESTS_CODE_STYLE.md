@@ -61,7 +61,41 @@ store refs and other manifests use them. Pin `version`, source hashes, and the
 package output checksum. A manifest with `stable_checksum: false` must explain
 why its output cannot have a stable checksum.
 
-## 3. Assembly section order
+## 3. Where an assembly manifest lives
+
+Four directories hold assembly manifests, and which one a manifest belongs in
+follows from what it is:
+
+- `base/` holds layers that other assemblies extend and that nobody runs
+  directly, such as `flat-systemd.yaml` and `nex-systemd.yaml`. A manifest here
+  must be reusable and must carry no site, product, or machine detail.
+- `examples/` holds complete systems that Nex ships as de-branded patterns,
+  such as `edgebox-rootfs.yaml` and `desktop-vwl/desktop-vwl.yaml`. They are
+  built and run, and other assemblies may extend them.
+  `scripts/check-generic-assembly-policy.sh` enforces that they stay generic.
+- `installer/` holds the installer, which is neither a layer nor an example.
+- `asm/` is not Nex's. It is ignored by Git and is where the person using this
+  repository keeps assemblies for their own machines, either as loose files or
+  as a checkout of their own repository.
+
+Nex ships nothing in `asm/`. An assembly that names a specific graphics card,
+network, or user belongs there or in the owner's own repository, never in
+`base/` or `examples/`.
+
+Reference another assembly with a repository-qualified path, `nex:` followed by
+a path from the Nex repository root:
+
+```yaml
+system:
+  extends: nex:base/nex-systemd.yaml
+```
+
+The `nex:` prefix resolves against the upstream Nex repository when the manifest
+lives in a product repository that carries Nex as an `upstream/nex` submodule,
+and against the owning repository when it does not. A plain relative path still
+resolves against the repository that owns the manifest.
+
+## 4. Assembly section order
 
 An assembly manifest must use this top-level order:
 
@@ -108,7 +142,7 @@ providers:
   graphics.egl: x86_64/pkg/libs/graphics/mesa/24.2.7/outputs/graphics-runtime
 ```
 
-## 4. Sources
+## 5. Sources
 
 Keep source entries in the order the build script consumes them. Fields in each
 entry must use this order:
@@ -127,7 +161,7 @@ Use one of `url`, `file`, or `dev` for the main source location. Pin every
 download with `sha256`. A local `dev` source may omit `sha256`. Prefer an
 upstream release archive over a moving branch or an unpinned generated file.
 
-## 5. Dependencies and packages
+## 6. Dependencies and packages
 
 Each dependency entry must put `name` before `commit`, then `manifest_ref` when
 the schema needs it:
@@ -158,7 +192,7 @@ group, keep packages in the order the root filesystem should layer them. Use
 the smallest output or bundle that supplies the files the running system needs.
 Do not install a development bundle merely because it is convenient.
 
-## 6. Build section and shell
+## 7. Build section and shell
 
 Fields under `build` must use this order:
 
@@ -193,7 +227,7 @@ a nearby comment names the accepted failure.
 An assembly that inherits its parent's build script may use `script: ""`. Do
 not use an empty script for a package manifest.
 
-## 7. Bundles
+## 8. Bundles
 
 Sort bundle names alphabetically. Use the compact sequence form established by
 current package manifests:
@@ -213,7 +247,7 @@ bundles:
 Sort included output names alphabetically. A bundle must contain only outputs
 that belong together for a concrete build or runtime use.
 
-## 8. Outputs
+## 9. Outputs
 
 Sort output names alphabetically. Put one blank line between outputs. Each
 output must contain a non-empty `files` list, and each file entry must put
@@ -254,7 +288,7 @@ Keep generated output lists current. Run the package build with
 `--generate-outputs` when installed files change. Do not weaken a
 reproducibility check to keep stale output metadata.
 
-## 9. Resolution
+## 10. Resolution
 
 `resolution` maps each required installed file to the package that supplies it.
 Use `self` when the same package supplies the file. A generated graphics entry
@@ -275,7 +309,7 @@ string entries and sort them naturally by path.
 Do not guess a provider. Build the dependency first and let `nex compute-deps`
 derive the map. Review the generated map before committing it.
 
-## 10. Scalars and quoting
+## 11. Scalars and quoting
 
 Leave ordinary names, paths, URLs, checksums, and store refs unquoted. Use
 double quotes when YAML could parse a string as another type or when the value
@@ -294,7 +328,7 @@ version: 6.12.58
 version: 0.40.0+20251205
 ```
 
-## 11. Formatter and checks
+## 12. Formatter and checks
 
 Run these commands from the repository root for every changed manifest:
 
