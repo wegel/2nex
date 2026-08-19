@@ -57,6 +57,15 @@ or journey 1 fails. Both outcomes are useful, and neither is known today.
 - [x] (2026-08-19) Wrote journey 1 (`scripts/machine-journeys/build-package.sh`)
       and recorded what it reports: FAIL, deterministically, three runs in a
       row. See Surprises & Discoveries.
+- [x] (2026-08-19) Wrote `tests/nex-test-fixture.yaml` (extends
+      `nex:base/nex-systemd.yaml`, adds `git`, ships
+      `tests/nex-test-fixture.bundle` and overrides `nex-init-manifests` to
+      clone it). `nex check` passes; `nex build --single --check
+      --update-checksum` is strict two-build reproducible at checksum
+      `a22e42ab383d0c108c3fb6f2ada6899c6f3a21ff31aed3c05e61b112aee6b507`
+      (ref `systems/nex-test-fixture/0.0.1`). Harness repointed at it. Journey
+      1 reran, still FAILs, now past environment resolution's first gate; see
+      Surprises & Discoveries.
 - [ ] Write journeys 2, 3, 4.
 - [ ] Wire the four journeys into `scripts/test-machine-operations.sh`. (Only
       journey 1 is wired; `ALL_JOURNEYS` in the script is a one-element array
@@ -154,6 +163,93 @@ fundamental reason than the one named there: the machine never gets a
 manifests source at all on this fixture, so the question of *which revision*
 it would resolve `27b6e5dc` against never arises. Nothing here was changed to
 make it pass, per instruction.
+
+**2026-08-19: `tests/nex-test-fixture.yaml` ships a Git bundle, not a
+`dev:` tree.** Writing the fixture surfaced two mechanical problems, both
+resolved without touching the design:
+
+1. `git bundle create <file> <commit>` refuses with "Refusing to create empty
+   bundle" for a bare 40-hex commit SHA; it needs a *named* ref to advertise.
+   Bundling a branch name (tested: `reorg-assemblies`, same commit) creates
+   the bundle fine but the clone warns `remote HEAD refers to nonexistent
+   ref, unable to checkout` and leaves an empty working tree — confirmed by
+   direct test, not assumed. The combination that works: `git worktree add
+   --detach <dir> <commit>` to pin an exact commit without touching the main
+   checkout, then `git -c pack.threads=1 bundle create <out> HEAD` from
+   inside that detached worktree. `pack.threads=1` was confirmed to make the
+   bundle byte-identical across three regenerations (same sha256); without it
+   the plan's own warning about non-determinism would apply.
+2. A `sources:` entry of kind `file:` must be tracked by Git
+   (`check.rs:377`, `git ls-files --error-unmatch`) or `nex check` fails with
+   "path is not tracked by Git". Staging the bundle would satisfy this, but
+   the task rule for this unit is to leave everything unstaged. Fix: don't
+   use a `sources:` `file:` entry at all. The assembly's own `files:` entries
+   support a `source:` field (`system/files.rs:90`, `copy_file_source`) that
+   reads directly from a path relative to the repository root at build time,
+   with no Git-tracking check anywhere in `check.rs`. The bundle is placed at
+   `/usr/share/nex/nex.bundle` via a `files:` entry, same as the
+   `nex-init-manifests` override. Confirmed `fs::copy`'s per-copy mtime
+   (which is not fixed the way `SOURCE_DATE_EPOCH` fixes build-script output)
+   does not break `--check` reproducibility: the two-build checksum matched
+   both times this was tried.
+
+Fixture: extends `nex:base/nex-systemd.yaml`, adds `git` (same
+`commit`/`manifest_ref` desktop-vwl uses), overrides
+`/usr/local/bin/nex-init-manifests` to `git clone /usr/share/nex/nex.bundle
+/nex/manifests` (keeping the original's `.git`-already-exists guard) instead
+of `git init`, and ships `tests/nex-test-fixture.bundle` (7.8 MB, full history
+from commit `f2f342f9008549aec28d10faa7758ec40afd733e`, the tip of
+`reorg-assemblies` when this was built). `nex check tests/nex-test-fixture.yaml`
+passes. `nex build tests/nex-test-fixture.yaml --single --check
+--update-checksum` is strict two-build reproducible; checksum
+`a22e42ab383d0c108c3fb6f2ada6899c6f3a21ff31aed3c05e61b112aee6b507`, stored at
+`systems/nex-test-fixture/0.0.1`.
+
+**2026-08-19: journey 1 against the new fixture gets past the finding above,
+then fails one level deeper, in `load_environment` itself.** Rerun (twice,
+identical both times) with the harness pointed at
+`systems/nex-test-fixture/0.0.1`:
+
+    manifests-system-exists=true
+    manifests-system-is-git=true
+    manifests-commit-count=784
+    manifests-pinned-env-blob-reachable=true
+    manifests-worktree-exists=false
+    build-cwd=/nex/manifests
+    pkg-manifest-exists=true
+    Created manifests worktree at /nex/users/root/manifests
+    Created user environment at /nex/users/root
+    Building package: cli/archive/gzip
+    Error: Custom { kind: NotFound, error: "Failed to load environment blob 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0: fatal: not a git repository (or any parent up to mount point /nex)\nStopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).\n" }
+    build-exit=1
+
+Full history is confirmed present and reachable (`manifests-commit-count=784`
+matches `git rev-list f2f342f9... | wc -l` on the host that built the bundle;
+the pinned blob itself is confirmed reachable by `git cat-file -e`, not just
+inferred from commit count). The worktree machinery this plan flagged as
+untested now runs: `/nex/manifests` clones with a resolvable `HEAD`,
+`setup_user_manifests_worktree` (`repo.rs:261`) successfully runs `git
+worktree add --detach /nex/users/root/manifests HEAD`, and `nex build` reaches
+`load_environment` and starts building the package.
+
+It still fails there, for a reason this plan had not identified: `run_build`
+passes `opts.repo_path` to `load_environment` (`src/cli/src/build/package.rs:64`),
+and `opts.repo_path` is the *zub store* (`/nex/users/root/repo` in user
+context, `detect_context`, `repo.rs`), not the manifests Git repository.
+`load_environment_blob` (`src/cli/src/build/env.rs:47`) runs `git -C
+<repo_path> cat-file blob <sha>`. `git -C` changes directory then lets normal
+upward discovery find the nearest `.git`; on a dev checkout this works by
+coincidence, because `.nex/repo` happens to sit inside the Nex source
+checkout's own `.git`. On an installed machine `/nex/users/root/repo` is a
+sibling of `/nex/manifests` under `/nex`, not a descendant of it, so no amount
+of history in `/nex/manifests` makes this resolve: the walk never reaches a
+`.git` at all, on any machine, regardless of what `/nex/manifests` contains.
+This is a different, more specific bug than "one-commit repository missing a
+blob" — it is "blob resolution is wired to the wrong directory" — and it is
+squarely EP018 territory (EP018 renames/reworks the `--repo` store concept;
+see `.agents/knowledge/environment-pinning.md` and the `store` term in Context
+and Orientation below). Per instruction, nothing was changed to route around
+it: no repinning, no environment edits, no extra history.
 
 ## Decision Log
 
