@@ -154,3 +154,34 @@ fn host_lacks_root_user_namespace_mapping(error: &io::Error) -> bool {
 fn checksum(fill: char) -> String {
     std::iter::repeat(fill).take(64).collect()
 }
+
+/// `Store::refs` filters with a glob, so a prefix needs a wildcard. A bare
+/// prefix matches only that exact literal and silently returns nothing, which
+/// made `nex commit` unable to find any deployment on any machine.
+#[test]
+fn a_prefix_pattern_needs_a_wildcard_to_match_refs_beneath_it() {
+    let temp_dir = tempfile::tempdir().expect("temp dir");
+    let store = super::Store::init(temp_dir.path()).expect("store");
+
+    let source = temp_dir.path().join("content");
+    std::fs::create_dir_all(&source).expect("content dir");
+    std::fs::write(source.join("marker"), "deployment\n").expect("marker");
+
+    zub::ops::commit(
+        store.repo(),
+        &source,
+        "nex/deployments/abc.0",
+        Some("deployment"),
+        Some("test"),
+    )
+    .expect("commit a deployment ref");
+
+    let bare = store.refs(Some("nex/deployments/")).expect("bare prefix");
+    let wildcard = store.refs(Some("nex/deployments/*")).expect("wildcard");
+
+    assert!(
+        bare.is_empty(),
+        "a bare prefix matches only the literal, which is the trap this guards"
+    );
+    assert_eq!(wildcard, vec!["nex/deployments/abc.0".to_string()]);
+}

@@ -9,7 +9,7 @@ use clap::Args;
 use nix::unistd::Uid;
 use walkdir::WalkDir;
 
-use crate::store::Store;
+use crate::store::{self, Store};
 
 #[derive(Args)]
 pub struct DeployArgs {
@@ -99,6 +99,15 @@ pub fn run(args: &DeployArgs) -> io::Result<()> {
     {
         let _ = fs::remove_dir_all(&temp_path);
         return Err(error);
+    }
+
+    // Publish the store ref that later operations look for. `nex commit` needs
+    // to check the running deployment out again before layering staged changes
+    // on top; without this ref it fails with "Could not determine current
+    // deployment" on every machine.
+    let deployment_ref = format!("nex/deployments/{}", deployment_name);
+    if let Err(error) = store::publish_ref(&repo_path.to_string_lossy(), &deployment_ref, &args.system_ref) {
+        eprintln!("Warning: could not publish {}: {}", deployment_ref, error);
     }
 
     remount.remount_ro()?;

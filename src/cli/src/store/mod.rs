@@ -531,6 +531,21 @@ pub struct CommitInfo {
 // ============================================================================
 
 /// check if a branch/ref exists in the repository
+/// Point a ref at the same commit another ref names.
+///
+/// A deployment needs a store ref so that later operations can check the
+/// running system out again. `nex commit` looks for `nex/deployments/<name>`
+/// (`commands/commit.rs:158`); without this, that lookup finds nothing on
+/// every machine and no package can be installed persistently.
+pub fn publish_ref(repo_path: &str, new_ref: &str, source_ref: &str) -> io::Result<()> {
+    let repo = Repo::open(Path::new(repo_path))
+        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
+    let hash = zub::resolve_ref(&repo, source_ref)
+        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
+    zub::write_ref(&repo, new_ref, &hash)
+        .map_err(|e| io::Error::other(format!("failed to write ref {}: {}", new_ref, e)))
+}
+
 pub fn ensure_branch_exists(repo_path: &str, branch: &str) -> io::Result<()> {
     let repo = Repo::open(Path::new(repo_path))
         .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;

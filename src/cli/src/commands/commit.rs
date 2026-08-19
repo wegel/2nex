@@ -156,7 +156,11 @@ fn create_deployment(message: &str) -> io::Result<()> {
 fn get_current_deployment_ref() -> io::Result<String> {
     // try to find the latest deployment ref
     let store = store::Store::open(NEX_REPO)?;
-    let refs = store.refs(Some("nex/deployments/"))?;
+    // The trailing `*` is required. `Store::refs` filters with a glob pattern
+    // (`zub::list_refs_matching`), and a pattern with no wildcard matches only
+    // that exact literal, so a bare prefix returns nothing however many refs
+    // exist beneath it.
+    let refs = store.refs(Some("nex/deployments/*"))?;
 
     if let Some(latest) = refs.iter().max() {
         return Ok(latest.clone());
