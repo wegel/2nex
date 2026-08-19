@@ -42,7 +42,11 @@ ship the new library, which is why the gap above stayed invisible.
 ## Open question, do not change without approval
 
 The human called this behavior incorrect and counter-intuitive on 2026-08-19,
-from the point of view of developing Nex and its packages. Revisit it as a
+from the point of view of developing Nex and its packages, and said on the same
+day that this analysis may itself be wrong, or that something is broken. Treat
+the finding above as unconfirmed until it is reproduced from a clean state.
+The `gtk4 --dry-run` observation was taken after librsvg had already been
+rebuilt, so it shows the cached branch, never the stale branch. Revisit it as a
 design question, not as a defect to patch on sight. The human will approve any
 modification or design change when the work reaches that point.
 
