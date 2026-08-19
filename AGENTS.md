@@ -226,10 +226,9 @@ Do not use `sudo` unless the human explicitly asks for it.
 ## Current Context
 
 Read the lowest-numbered incomplete ExecPlan under `.agents/execplans/` first.
-Each ExecPlan must include the context needed for its work. Project notes such
-as `CURRENT_TODO.md`, `SONIQ_YOCTO_PARITY_PLAN.md`, and
-`OSTREEFY_REPLICATION_REPORT.md` can supply source material for a new ExecPlan,
-but they do not set Ralph's work order.
+Each ExecPlan must include the context needed for its work. A project note at
+the repository root can supply source material for a new ExecPlan, but such a
+note does not set Ralph's work order.
 
 Plans below `.agents/execplans/paused/` preserve unfinished work that the human
 has taken out of the active queue. Ralph does not execute a paused plan unless

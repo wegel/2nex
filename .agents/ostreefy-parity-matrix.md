@@ -7,9 +7,8 @@ or splits files into separate outputs.
 
 Sources:
 
-- `/home/wegel/work/wegelcorp/ostreefy/flavours/archlinux/Containerfile`
-- `/home/wegel/work/wegelcorp/ostreefy/flavours/archlinux/examples/Containerfile.wegel`
-- `OSTREEFY_REPLICATION_REPORT.md`
+- the ostreefy Arch Linux `Containerfile` and its example variant, both outside
+  this repository
 - `asm/nex-systemd.yaml`
 - `asm/desktop-vwl/desktop-vwl.yaml`
 - `asm/desktop-dev.yaml`
