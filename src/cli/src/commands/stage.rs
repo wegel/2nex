@@ -181,7 +181,7 @@ fn clear_staging_state() -> io::Result<()> {
 /// Failures used to be discarded, so a busy mount stayed mounted and the caller
 /// then tried to delete through it, reporting a read-only filesystem instead of
 /// the real cause.
-fn unmount_overlay(target: &str) -> io::Result<()> {
+pub(super) fn unmount_overlay(target: &str) -> io::Result<()> {
     if !is_mounted(target) {
         return Ok(());
     }

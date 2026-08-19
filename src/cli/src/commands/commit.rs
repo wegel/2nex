@@ -78,13 +78,21 @@ fn merge_overlay_changes() -> io::Result<()> {
     let upper_nex = format!("{}/upper/nex", STAGING_STATE_DIR);
     let upper_usr_bin = format!("{}/upper/usr_bin", STAGING_STATE_DIR);
 
-    // unmount overlays first
-    let _ = Command::new("umount").arg("/usr/bin").status();
-    let _ = Command::new("umount").arg("/nex/pkg").status();
+    // unmount overlays first, lazily when busy: `/nex/pkg` is always busy on a
+    // nex_structure system, since FHS paths are symlinks into its capsules and
+    // PID 1 holds one open. Swallowing the failure here would copy into a live
+    // overlay instead of the real location.
+    super::stage::unmount_overlay("/usr/bin")?;
+    super::stage::unmount_overlay("/nex/pkg")?;
+    super::stage::unmount_overlay("/nex/env")?;
 
     // copy changes from upper to real locations
+    // `upper/nex` holds one directory per mounted overlay, `pkg` and `env`, so
+    // its contents belong at `/nex`, not at `/nex/pkg`. Copying them a level too
+    // deep produces `/nex/pkg/pkg/...` and leaves every `/usr/bin` symlink
+    // dangling.
     if Path::new(&upper_nex).exists() {
-        copy_dir_contents(&upper_nex, "/nex/pkg")?;
+        copy_dir_contents(&upper_nex, "/nex")?;
     }
     if Path::new(&upper_usr_bin).exists() {
         copy_dir_contents(&upper_usr_bin, "/usr/bin")?;
@@ -125,8 +133,11 @@ fn create_deployment(message: &str) -> io::Result<String> {
     let upper_nex = format!("{}/upper/nex", STAGING_STATE_DIR);
     let upper_usr_bin = format!("{}/upper/usr_bin", STAGING_STATE_DIR);
 
+    // As in `merge_overlay_changes`: the children of `upper/nex` are the
+    // overlay names, `pkg` and `env`, so they belong under `nex/`, not under
+    // `nex/pkg/`.
     if Path::new(&upper_nex).exists() {
-        let nex_target = format!("{}/nex/pkg", staging_dir);
+        let nex_target = format!("{}/nex", staging_dir);
         fs::create_dir_all(&nex_target)?;
         copy_dir_contents(&upper_nex, &nex_target)?;
     }
