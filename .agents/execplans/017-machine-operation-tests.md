@@ -280,7 +280,7 @@ of history in `/nex/manifests` makes this resolve: the walk never reaches a
 `.git` at all, on any machine, regardless of what `/nex/manifests` contains.
 This is a different, more specific bug than "one-commit repository missing a
 blob" — it is "blob resolution is wired to the wrong directory" — and it is
-squarely EP018 territory (EP018 renames/reworks the `--repo` store concept;
+squarely phase B of this plan (which fixes where environment blobs resolve;
 see `.agents/knowledge/environment-pinning.md` and the `store` term in Context
 and Orientation below). Per instruction, nothing was changed to route around
 it: no repinning, no environment edits, no extra history.
@@ -375,8 +375,8 @@ alone and is reported here instead of decided.
   on first boot, rather than shipping a file tree.
   Rationale: A machine always needs full history so every pinned document is
   reachable; this is a design requirement, not a measurement. Shipping a tree
-  and running `git init` over it cannot satisfy it. This anticipates EP018 in
-  one test assembly, which also proves the mechanism before EP018 generalises
+  and running `git init` over it cannot satisfy it. This anticipates phase C in
+  one test assembly, which also proves the mechanism before phase C generalises
   it.
   Date/Author: 2026-08-19 / Human
 
@@ -469,7 +469,7 @@ reproducible finding this plan set out to get, not a harness defect:
    `/nex/manifests` (shipped via Git bundle, not a `git init` snapshot) makes
    the manifests worktree and historical blob lookups work, but
    `load_environment` resolves environment blobs against the zub store, which
-   is never inside a Git repository on an installed machine. EP018 territory.
+   is never inside a Git repository on an installed machine. Fixed in phase B.
 2. `temporary-install` and `persistent-install`: a machine cannot stage a
    package for install. `nex stage` unconditionally mounts OverlayFS, and this
    fixture's kernel bundle (`base/nex-systemd.yaml`'s choice, not something
@@ -484,7 +484,7 @@ stage an install today, for two distinct, now-precisely-located reasons
 neither of which was known before this plan.
 
 What was not done: the two bugs above were not fixed, per instruction — that
-is EP018's job for the store/environment issue and an open design question
+is phase B's job for the store and environment issue, and an open design question
 (reported, not decided) for the kernel bundle's module set. `reboot` and
 `expect_deployment`-equivalent logic are now exercised (test 4), but
 `expect_deployment` itself as a literal harness function is unused by any
@@ -516,7 +516,7 @@ Terms used here, defined once:
 
 - **store**: the content-addressed object store at `/nex/repo` on a machine, a
   zub repository. Note that the CLI flag is `--repo`, which collides with the
-  Git sense of the word. EP018 renames it.
+  Git sense of the word. Phase D renames it.
 - **deployment**: a system root at `/nex/deployments/<checksum>.<n>`, with
   `/nex/current` symlinked at the active one.
 - **manifests repository**: `/nex/manifests`, a Git repository the machine can
