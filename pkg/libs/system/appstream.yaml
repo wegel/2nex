@@ -6,16 +6,29 @@ package:
   version: 1.1.1
   description: Software component metadata library
   homepage: https://github.com/ximion/appstream
-  checksum: c7a11ceaa9e511f5483d1799a7b2f0d45427942bfcc72dad3f6c5f03345ca505
+  checksum: faaa75411930fb443d58c0c8c1d8da677be45662660026ab2a7749a0f6ae6478
 
 sources:
 - name: appstream
   url: https://www.freedesktop.org/software/appstream/releases/AppStream-1.1.1.tar.xz
   sha256: 3b9d325074ede328eed4746d0c4fbfc3b8f6f4fdbc9c173ed70e40569a79b117
+- name: uapi_config_patch
+  file: pkg/libs/system/appstream-uapi-config.patch
+  sha256: 3ae539d40a24657b92a01b317e47432542201e67724de6fea144f14bbdcea4d8
+- name: uapi_smoke
+  file: pkg/libs/system/appstream-uapi-smoke.c
+  sha256: 28203a1126d7e4e47ca06b7fb5fe7d3923d5a83e9fca827ed3814f57cfd9e172
+- name: uapi_check
+  file: pkg/libs/system/appstream-uapi-check.sh
+  sha256: 62baaa6a167e89373010e694d5ca6528b96a4b1166513f26fd5e28d4bac547a6
 
 dependencies:
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
 - name: gcc
   commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
 - name: binutils
@@ -83,11 +96,12 @@ dependencies:
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
-  profile: [4105:38951, 8215:52636, 12329:58757, 16454:65294, 20550:65415, 24696:67051, 28805:67204, 29328:67223]
+  profile: [4130:595, 8273:970, 12422:1421, 16595:6486, 20700:6486, 24813:6493, 28913:6493, 29608:6746]
 
   script: |
     tar --no-same-owner -xf /${SOURCE_appstream} -C "${WORK_DIR}" --strip-components=2
     cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config_patch}"
 
     # create /usr/local/include to satisfy -Werror=missing-include-dirs
     mkdir -p /usr/local/include
@@ -107,6 +121,14 @@ build:
 
     LD_LIBRARY_PATH="${WORK_DIR}/build/src" ninja -C build
     LD_LIBRARY_PATH="${WORK_DIR}/build/src" DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # Exercise the newly built, installed libappstream through the real
+    # as_context_ensure_os_config_loaded() reader instead of reimplementing
+    # its tier-selection rules; see the check script for detail.
+    sh "/${SOURCE_uapi_check}" \
+      "${OUT_DIR}" \
+      "${WORK_DIR}" \
+      "/${SOURCE_uapi_smoke}"
 
     find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
     find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
