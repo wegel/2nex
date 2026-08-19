@@ -135,10 +135,34 @@ pub fn cleanup_staging() -> io::Result<()> {
     unmount_overlay("/nex/env")?;
     unmount_overlay(NEX_PKG_DIR)?;
 
-    // remove staging state, which is safe only once every overlay above it is
+    // clear staging state, which is safe only once every overlay above it is
     // gone: otherwise this recurses into a live upperdir
-    if Path::new(STAGING_STATE_DIR).exists() {
-        fs::remove_dir_all(STAGING_STATE_DIR)?;
+    clear_staging_state()?;
+
+    Ok(())
+}
+
+/// Empty the staging directory without removing the directory itself.
+///
+/// `/nex/staging` is a mount point that `base/nex-systemd.yaml` creates, and
+/// `rmdir` needs write permission on the target's parent rather than on the
+/// target. The parent here is `/nex`, on the read-only deployment root, so
+/// removing the directory fails with `EROFS` however empty it is. Only its
+/// contents are ours to delete.
+fn clear_staging_state() -> io::Result<()> {
+    let staging = Path::new(STAGING_STATE_DIR);
+    if !staging.exists() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(staging)? {
+        let entry = entry?;
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            fs::remove_dir_all(&path)?;
+        } else {
+            fs::remove_file(&path)?;
+        }
     }
 
     Ok(())
