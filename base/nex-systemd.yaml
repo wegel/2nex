@@ -5,7 +5,7 @@ system:
   version: 0.0.1
   description: Minimal nex rootfs with systemd, networking, and SSH
   nex_structure: true
-  checksum: 2520d85d9f1ab5ad87b56fe2555d227a19fe4f30dfc9738637fb7734cb88e7b0
+  checksum: 1ae2b42c1a0e5f24f6bf1473f0eb7089340151479c733dcf731ca6c7a2230860
 
 dependencies:
 - name: findutils
@@ -80,6 +80,11 @@ packages:
   commit: x86_64/pkg/core/kernel/kmod/32/bundles/runtime
 - name: linux
   commit: x86_64/pkg/core/kernel/linux/6.18.24/bundles/vm
+# nex stage mounts OverlayFS on /usr/bin, so a machine that installs a package
+# needs overlay.ko. The vm bundle carries 8 outputs and not this one; only the
+# 141-output all-modules bundle has it. Take the single output.
+- name: kernel-fs-overlay
+  commit: x86_64/pkg/core/kernel/linux/6.18.24/outputs/fs-overlay
 - name: initramfs
   commit: x86_64/pkg/core/kernel/initramfs/1.0.0/outputs/boot
 # networking
@@ -362,7 +367,10 @@ build:
 
     # deployment-root boot mountpoints (initramfs bind-mounts sysroot/var/nex into the deployment)
     mkdir -p /target/sysroot
-    mkdir -p /target/nex/repo /target/nex/deployments /target/nex/users /target/nex/staging /target/nex/manifests
+    # /nex/env is required as well: nex stage mounts an overlay there
+    # (stage.rs:108), and /nex sits on the read-only deployment root, so the
+    # mount point cannot be created at install time.
+    mkdir -p /target/nex/repo /target/nex/deployments /target/nex/users /target/nex/staging /target/nex/manifests /target/nex/env
 
     # openssh libexec symlinks
     mkdir -p /target/usr/libexec
