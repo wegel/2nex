@@ -197,6 +197,339 @@ or test 1 fails. Both outcomes are useful, and neither is known today.
       `deploy-and-rollback` keeps passing. `build-package` still fails on
       gzip's build-time dependency closure, unchanged, as expected. See
       Surprises & Discoveries and `.agents/knowledge/machine-self-hosting.md`.
+- [x] (2026-08-19) The human published deployment refs two ways: `nex deploy`
+      now publishes `nex/deployments/<checksum>.<serial>` after checkout
+      (`deploy.rs`, uncommitted, "the code builds and 202 tests pass"), and
+      `seed_system_repo()` now publishes `nex/deployments/<checksum>.0` for
+      the fixture's initial deployment (a correct installer would do this;
+      `scripts/nex-install` does not today -- separate, known, left alone).
+      Rebuilt `pkg/core/nex/nex.yaml`
+      (checksum `3d766d5c90c456045045c54b4f0fc664d753a5b1c2451faed558571ecbdbceda`),
+      `base/nex-systemd.yaml`
+      (checksum `79ddf69671945f774c6955aa898b257b5c5ccaafdac97c28866046a7f200c645`),
+      `tests/nex-test-fixture.yaml`
+      (checksum `26f48b39b377a76f200d59a19e8ec5fefcb557ae9977291e8b9138449bf2eb53`),
+      all strict two-build reproducible. Ran the full suite twice, identical
+      both times -- unchanged from the previous entry in every observable
+      way: `persistent-install` still fails at `nex commit` with the exact
+      same `Could not determine current deployment`, even though a ref is
+      now published in the right place. Traced further: `commit.rs:159`
+      calls `store.refs(Some("nex/deployments/"))`, and the underlying
+      `glob::Pattern` requires an exact match for a pattern with no wildcard
+      -- `zub`'s own test for this exact function
+      (`/home/wegel/work/perso/zub/src/refs.rs:381`) uses
+      `"x86_64/*"`, with a trailing `*`, to get prefix-style matching.
+      Reported as a probable second, independent cause, not asserted as
+      certain and not fixed -- see Surprises & Discoveries.
+- [x] (2026-08-19) The human confirmed the glob theory directly (a two-line
+      repro) and fixed `commit.rs:159`, with a pinning test in
+      `store/store_tests.rs`. Committed `d1e79485`. Rebuilt the cascade again
+      (`pkg/core/nex/nex.yaml`
+      `08cb193376fb4242149c554c2bb4d9d802343bd2b3c2c849af7eb59c0c8a3351`,
+      `base/nex-systemd.yaml`
+      `81b9557705e99d4214bd417fd9793226e9a4cad6bda642229ed57ca4ed810799`,
+      `tests/nex-test-fixture.yaml`
+      `2335f8ba7481717d770eb369fbfe96fcada5740e04e4c1d468f789fadd247be5`, all
+      strict two-build reproducible) and reran: `persistent-install` still
+      failed identically. Found and fixed a third cause myself, this time in
+      the harness, not product code: `seed_system_repo()` tried to
+      `rev-parse "$FROM_REF"` against the guest's own store to get the hash
+      to publish, but `$FROM_REF` was never pulled into that store (only
+      checked out via `zub checkout --copy` into the root filesystem
+      content by an earlier step), so the resolve always failed silently
+      and nothing ever got published -- visible in the log as `note: could
+      not resolve systems/nex-test-fixture/0.0.1, initial deployment ref
+      not published` on every run. Fixed by pulling `$FROM_REF` into the
+      guest's store first. With all three fixes together, `nex commit`'s
+      core logic now runs for real (finds the current deployment, checks it
+      out, applies staged changes, creates a new commit ref) -- but the
+      command still exits non-zero, because `create_deployment()` calls
+      `cleanup_staging()` afterward, the same function `nex discard` calls,
+      which hits the exact same `/nex/pkg` busy/EROFS failure. Root-caused
+      by direct `/proc` inspection (no product code touched, diagnostics
+      added to a copy of the guest script and reverted): PID 1 (`systemd`)
+      holds an open file descriptor into `/nex/pkg`
+      (`/usr/lib/systemd/systemd-executor`, a real symlink into a package
+      capsule there), and roughly a dozen other processes have `/nex/pkg`
+      paths in their memory maps, because `/usr/lib` and similar FHS paths
+      are symlinked directly into `/nex/pkg` capsules on this kind of
+      system. `/nex/pkg` may therefore be unable to unmount while anything
+      is running, by construction. Full detail, observations kept separate
+      from the proposed mechanism, in
+      `.agents/knowledge/machine-self-hosting.md`.
+- [x] (2026-08-19) The human verified both halves of the `/nex/pkg`
+      diagnosis independently and fixed it in `stage.rs` (`f1a7dcfb`):
+      `cleanup_staging` now unmounts each overlay with a fallback to `umount
+      -l` (lazy) when busy, and only errors (naming the mount) if that also
+      fails. Rebuilt the cascade again
+      (`pkg/core/nex/nex.yaml` `325803c9b11b1910ab9401aa82fd6345cf00ef6bcd0c98e7f659ab650c151a02`,
+      `base/nex-systemd.yaml` `bf3fddb017733ea2b04310e2cfd54b8040c202f1d14cbf59a69196973641e0f5`,
+      `tests/nex-test-fixture.yaml` `b62f51326661982ee51ba674858de1652f30427247b9cedd223d7c2e1e36e790`,
+      all strict two-build reproducible). Ran the full suite twice, identical
+      both times: the mount-level problem is gone (confirmed: after a failed
+      `nex discard`, no overlay remains in `/proc/mounts`, `/nex/staging` is
+      confirmed completely empty, and `/usr/bin/tig` cleanly disappears, no
+      stale view) but `nex discard`/`nex commit` both still fail with the
+      same `Read-only file system` text, one layer deeper: `/nex/staging`
+      itself is a separate mounted filesystem (its own bind mount from
+      `/var/nex`), and removing that directory *entry* needs write access
+      to its *parent*, `/nex`, which is on the read-only deployment root --
+      so `rmdir("/nex/staging")` fails no matter how empty it is.
+      `persistent-install` reaches `nex commit`'s real work again (finds
+      current deployment, checks out, applies changes, creates the new
+      commit) and fails at the same shared `cleanup_staging` step
+      afterward, so it still never reaches reboot. `deploy-and-rollback`
+      keeps passing; `build-package` unchanged. See Surprises &
+      Discoveries and `.agents/knowledge/machine-self-hosting.md`.
+- [x] (2026-08-19) The human fixed the mount-point removal in `stage.rs`
+      (`eacb11f5`): `cleanup_staging` now clears `/nex/staging`'s contents
+      via a new `clear_staging_state` instead of trying to `rmdir` the mount
+      point itself. Also added a `current-deployment=` diagnostic to
+      `persistent-install.sh`'s after-reboot phase (mine, harness-only, same
+      `/proc/cmdline` convention used elsewhere). Rebuilt the cascade
+      (`pkg/core/nex/nex.yaml`
+      `3e6805c8a7250f84ee21d2f7818bd84a73e492cea1d11ba3d8f5d56671ef8ed4`,
+      `base/nex-systemd.yaml`
+      `f3b550a81361d56006da2026fed50c2505ad8adb102144ef1f524b469c07b25d`,
+      `tests/nex-test-fixture.yaml`
+      `319b995d56114e057ff8991e317dfd1aea2edb51629c45fd4c91502c158c570d`, all
+      strict two-build reproducible). Ran the full suite twice, identical
+      both times, 2 of 4 passing: `temporary-install` now passes completely
+      -- the first fully green install-and-remove journey in this plan.
+      `persistent-install` gets past `nex commit` (`commit-exit=0`,
+      "Deployment created successfully.") and reboots cleanly for the first
+      time, but its after-reboot assertion fails; checked which deployment
+      actually booted per instruction, and it is the same one the machine
+      started with. `nex commit` writes a new commit to the store under
+      `nex/deployments/<timestamp>` but never touches `/sysroot` or the
+      on-disk `/nex/deployments` directory the bootloader reads, so nothing
+      new is ever bootable after a plain reboot. Real finding, not a test
+      bug; not routed around. `deploy-and-rollback` and `build-package`
+      unchanged. Only 2 of 4 passed, so the third confirmation run wasn't
+      triggered. See Surprises & Discoveries and
+      `.agents/knowledge/machine-self-hosting.md`.
+- [x] (2026-08-19) The human made a committed install bootable (`a084cf66`):
+      `create_deployment` now calls `deploy::run` on the new ref directly
+      (reusing the activation path, `allow_commit_hash: true`). Rebuilt the
+      cascade again
+      (`pkg/core/nex/nex.yaml` `df49013f299e5196e73c19f2a2bbdda738c575506f7cf517d19cb292aaf03216`,
+      `base/nex-systemd.yaml` `5cfeea15437583829a55724dfd05f866f675eb294d0637789665adb25b860471`,
+      `tests/nex-test-fixture.yaml` `7591db572902f2a934cdd1a0f68b49eb7c2047baeae9c16b2fe34dbb8b0d2e5b`,
+      all strict two-build reproducible). Ran the full suite twice, identical
+      both times, still 2 of 4 passing (`temporary-install`,
+      `deploy-and-rollback`). `persistent-install` now genuinely creates and
+      activates a new on-disk deployment (`Deployed: <checksum>.1`,
+      confirmed by listing `/sysroot/nex/deployments` directly: both the
+      original and the new one present) -- but `nex commit` still exits
+      non-zero right after, same `Read-only file system` text, one layer
+      deeper again: `deploy::run`'s own remount-to-read-only for `/sysroot`
+      also flips `/nex/deployments` and `/nex/staging` read-only, confirmed
+      by direct before/after `/proc/mounts` comparison, because all three
+      (plus `/`) are separate mounts of the same block device and a
+      `remount` on any one changes the shared filesystem instance for all of
+      them. The very next line, `commit.rs:151`'s
+      `fs::remove_dir_all(&staging_dir)` (already checked once before and
+      believed fine on its own terms), then fails because `/nex/staging` has
+      just been made read-only as a side effect. Reboot never happens
+      because the phase fails first (by the harness's own design). No
+      cross-run serial accumulation was observable (fresh overlay per run,
+      `Next serial: 1` every time), but the activation succeeding before the
+      failing cleanup means a "failed" `nex commit` still leaves a real new
+      deployment behind, worth flagging without fixing. `deploy-and-rollback`
+      and `build-package` unchanged. See Surprises & Discoveries and
+      `.agents/knowledge/machine-self-hosting.md`.
+- [x] (2026-08-19) The human fixed the ordering (`9c94ef56`):
+      `create_deployment` now only creates the ref and returns it;
+      `cleanup_staging()` runs next; `activate_deployment(&new_ref)` runs
+      last. Rebuilt the cascade again
+      (`pkg/core/nex/nex.yaml` `225750ba4ddd31f366f6d4dca64666f06aedc666f248e31020549ebbeeaaee46`,
+      `base/nex-systemd.yaml` `ab83690c7267a8ecf9f81dcf0b31061d7b73040f9c48939f045f81832d78fe77`,
+      `tests/nex-test-fixture.yaml` `2a89a4ab2e540c4e4433d80a3069a54e4a33f1de311dfa2836ab7658da2bd949`,
+      all strict two-build reproducible). Ran the full suite twice, identical
+      both times, still 2 of 4 (`temporary-install`, `deploy-and-rollback`).
+      `persistent-install`: activation again genuinely succeeds (confirmed:
+      both deployments present on disk after the failure) but `nex commit`
+      now fails on a new, different, downstream error:
+      `mount: /sysroot: mount point is busy.` (twice, from `RemountGuard`'s
+      explicit call plus its `Drop` retry) then `Error: Custom { kind:
+      Other, error: "failed to remount /sysroot ro" }`. Confirmed directly:
+      `/sysroot` is left mounted `rw` afterward -- the remount-to-read-only
+      never happened. Reported as a new, precisely-located failure with a
+      separately-flagged, not-yet-verified hypothesis (the same
+      shared-block-device tension as before, now interacting with
+      `cleanup_staging`'s lazy unmount happening immediately before
+      activation). A stray deployment was again left on disk after this
+      failure, as asked to watch for. Only 2 of 4 passed, so no third
+      stability run. `deploy-and-rollback` and `build-package` unchanged.
+      See Surprises & Discoveries and
+      `.agents/knowledge/machine-self-hosting.md`.
+- [x] (2026-08-19) The human fixed the remount retry (`49df0574`):
+      `RemountGuard::remount_ro` now retries five times with a 200ms gap and,
+      if `/sysroot` is still busy after that, prints a warning and returns
+      success instead of an error. Rebuilt the cascade again
+      (`pkg/core/nex/nex.yaml` `8e7419c35736574027fa79b908c18a90d0781fc9f68cea3030721d0b45c7498c`,
+      `base/nex-systemd.yaml` `fd1951a09958ecf0d8d231fac3445f93412b0f9bb441d2024e85e8ad2ee7e81b`,
+      `tests/nex-test-fixture.yaml` `6fc6aa8a93a1aadcff76545096c643167337dcdd69023b18962e6fc906e54a3a`,
+      all strict two-build reproducible). Ran the full suite twice, identical
+      both times, still 2 of 4 (`temporary-install`, `deploy-and-rollback`).
+      `persistent-install` reaches `PASS: persistent-install (before-reboot)`
+      for the first time in this plan: `commit-exit=0`, "Deployment created
+      successfully.", the warning text present as predicted (twice, both
+      runs -- the explicit call and the `Drop` retry). Reboot succeeds and
+      `current-deployment=` genuinely differs from the pre-commit value
+      (`746563fd97dc42f12e41a3312c39e72eb5d71cb5f04e0215905df02846a3ab4f.1`
+      vs. the starting `6fc6aa8a93a1aadcff76545096c643167337dcdd69023b18962e6fc906e54a3a.0`),
+      confirming activation itself now works end to end. But `tig` is absent
+      after reboot: `post-reboot-binary-present=false`. Root-caused with a
+      disposable diagnostic copy of the guest script (reverted after) plus a
+      source read of `commit.rs`, not just a guess: `create_deployment`'s
+      `copy_dir_contents(&upper_nex, &nex_target)` call, where
+      `upper_nex = "{STAGING_STATE_DIR}/upper/nex"` and
+      `nex_target = "{staging_dir}/nex/pkg"`, uses `cp -a "$src/." "$dst"`,
+      which copies `upper_nex`'s *contents* into `nex_target`. `upper_nex`'s
+      actual children are `pkg/` and `env/` (the two separate overlay
+      upperdirs, confirmed earlier via `/proc/mounts`), so the copy lands
+      them as `nex_target/pkg/...` and `nex_target/env/...` -- one extra
+      `pkg/` nesting level, and `env/` misplaced under `nex/pkg/env` instead
+      of `nex/env`. Confirmed directly on the booted new deployment:
+      `/nex/pkg` (the FHS-visible top level of the current deployment) has an
+      unexpected `pkg/` subdirectory alongside the legitimate namespace dirs
+      (`apps`, `cli`, `core`, `dev`, `env`, `libs`), and `dev/vcs/tig/...`
+      lives one level too deep at `/nex/pkg/pkg/dev/vcs/tig/2.6.0/0cbb5716`.
+      `/usr/bin/tig`'s symlink itself is correct
+      (`../../nex/pkg/dev/vcs/tig/2.6.0/0cbb5716/usr/bin/tig`, since the
+      `usr/bin` copy is a separate, correctly-structured call in the same
+      function) but dangling: `stat -L /usr/bin/tig` reports "No such file or
+      directory" because nothing exists at the path the symlink names.
+      `command -v` (and thus `post-reboot-binary-present`) correctly reports
+      the dangling symlink as absent. This is confirmed, not a hypothesis:
+      both the `cp -a`-into-contents mechanism and the resulting on-disk tree
+      were inspected directly. Not fixed (product code). `deploy-and-rollback`
+      and `build-package` unchanged. Only 2 of 4 passed, so no third
+      stability run. See Surprises & Discoveries and
+      `.agents/knowledge/machine-self-hosting.md`.
+- [x] (2026-08-19) The human fixed the copy-nesting bug in both places
+      (`dc561b55`): `create_deployment` now copies `upper/nex`'s contents to
+      `{staging_dir}/nex` instead of `{staging_dir}/nex/pkg`, and the same bug
+      existed a second time in `merge_overlay_changes` (the non-store,
+      discard-adjacent path, `commit.rs:87`), copying to `/nex` instead of
+      `/nex/pkg` there too. `merge_overlay_changes` also switched its two raw
+      `let _ = Command::new("umount")...` calls to `stage.rs`'s
+      `unmount_overlay` helper (now `pub(super)`), and added a missing
+      `/nex/env` unmount alongside `/usr/bin` and `/nex/pkg`, for the same
+      reason `cleanup_staging` needed it before: a swallowed unmount failure
+      would copy into a still-live overlay instead of the real location.
+      Rebuilt the cascade
+      (`pkg/core/nex/nex.yaml` `25512d668f797e420416c7af8a1edebce7278f99bae778626c731ede217c5b94`,
+      `base/nex-systemd.yaml` `fc83635fe2f5c6121df4bed654658fc493fa445d9aaaf8dd6ecbd7353fd526b3`,
+      `tests/nex-test-fixture.yaml` `7a8781f3fe195bb626230c38a82cb773c4bc343a4a95c4d28c8d7eb8d266b0ff`,
+      all strict two-build reproducible). Ran the full suite three times
+      (three, since the first two runs both landed 3 of 4): identical every
+      time. `persistent-install` passes completely for the first time in this
+      plan, including the after-reboot run (`post-reboot-binary-present=true`,
+      `tig version 2.6.0` executes). Checked the tree shape directly, not just
+      the presence check, per instruction, with a disposable diagnostic on a
+      copy of the guest script (reverted after; no product code touched):
+      `/nex/pkg/pkg` absent, `/nex/env` present as a sibling of `/nex/pkg`,
+      `/nex/pkg/env` absent, and `/usr/bin/tig`'s symlink resolves
+      (`stat -L` succeeds) rather than dangling. The `/sysroot is still
+      writable` warning still appeared every run, twice per `nex commit` call
+      as before -- expected, not a failure, per instruction.
+      `temporary-install` and `deploy-and-rollback` kept passing.
+      `build-package` still fails, same root cause across all three runs
+      (glibc's `/usr/lib/gconv/*` split outputs missing from the guest
+      store -- the build-time dependency closure gzip needs was never seeded,
+      a real, expected, unrouted-around limitation). This closes out
+      `persistent-install`; three of four tests now pass deterministically,
+      leaving `build-package` as the one understood, expected failure. See
+      Surprises & Discoveries and `.agents/knowledge/machine-self-hosting.md`.
+- [x] (2026-08-19) The human corrected an earlier call: seeding gzip's
+      build-time dependency closure is legitimate host-side setup, the same
+      kind `SEED_CLOSURE_PACKAGE` already does for tig's runtime closure --
+      not something that weakens the test. Added `seed_gzip_build_closure()`
+      to `scripts/test-machine-operations.sh`, called from
+      `seed_system_repo()`. It extracts gzip's 14 (actually 15 --
+      miscounted at first, corrected by an automated `grep`, not a hand
+      count) `dependencies:` commits straight from
+      `pkg/cli/archive/gzip.yaml` at seed time, pulls each exactly as
+      declared (`nex build` uses that literal string as a resolver root,
+      matching `src/cli/src/build/dependencies.rs:resolve_dependency_commits`),
+      then discovers each dependency's own `/files` closure -- the same
+      `resolve_runtime_deps_precomputed` resolver `nex build`'s chroot
+      hydration calls
+      (`src/cli/src/build/rootfs.rs:materialize_build_dependencies`) --
+      via `nex resolve`, and pulls those too. `nex resolve` cannot be
+      pointed at an exact ref (confirmed directly, not assumed: passing a
+      full ref string as the query matches nothing, since
+      `find_package_ref`'s matching is always name-based), and this
+      repository has real collisions: `binutils`, `gcc`, `bash`,
+      `coreutils`, `findutils`, `gawk`, `grep`, `make`, `sed`, `tar`, and
+      `xz` each exist twice -- once under `bootstrap/phase1/*` (what
+      gzip's manifest names) and once as the self-hosted `core/*`/`cli/*`
+      build of the same name and version -- and a single-word query picked
+      the wrong one for every single one of those in testing, silently,
+      no error. A full `namespace/slug` query (no version) disambiguates
+      those correctly but not `glibc`, which collides the other way:
+      `libs/system/glibc` is a literal prefix of the unrelated
+      `libs/system/glibc-locale-en-gb`, which the substring-matching query
+      form picks instead; a single-word query (exact-equality on slug)
+      resolves `glibc` correctly. The function tries both forms per
+      dependency and verifies the resolved ref's namespace/slug/version
+      against the manifest's own declared ref before trusting it,
+      failing loudly (not silently seeding a wrong or partial set) if
+      neither form matches. Verified compact, not "impractically large":
+      one standalone run seeded 15 dep roots plus exactly one `/files`
+      closure ref (glibc's own, `~815MB`, `~30k` objects, `zub fsck`
+      healthy) in about 70 seconds.
+      Rebuilt the cascade
+      (`pkg/core/nex/nex.yaml` `25512d668f797e420416c7af8a1edebce7278f99bae778626c731ede217c5b94`,
+      `base/nex-systemd.yaml` `fc83635fe2f5c6121df4bed654658fc493fa445d9aaaf8dd6ecbd7353fd526b3`,
+      `tests/nex-test-fixture.yaml` `7a8781f3fe195bb626230c38a82cb773c4bc343a4a95c4d28c8d7eb8d266b0ff`
+      -- unchanged from the previous unit; nothing in `src/cli` changed
+      this unit) and ran the full suite three times: identical every
+      time, still 3 of 4 (`build-package` still fails, same text, same
+      checksum named, all three runs). Root-caused why the seeding did
+      not close the gap, confirmed by direct reproduction rather than
+      guessed: `nex build` without `--system`, run as root, uses
+      `detect_context`'s *user* context
+      (`src/cli/src/repo.rs:163-180`), whose primary repo is
+      `/nex/users/root/repo` (empty on a fresh machine), not `/nex/repo`
+      (the system store everything gets seeded into). `detect_context`
+      does add `/nex/repo` to that context's `fallback_repos` when it
+      exists, but `BuildOpts.fallback_repos`
+      (`src/cli/src/commands/build.rs`) is populated only from the
+      explicit `--fallback-repo` CLI flag, never from
+      `NexContext.fallback_repos` -- so the auto-detected fallback the
+      context computes is never threaded into
+      `materialize_build_dependencies`'s `MaterializeConfig`, and the
+      resolver's `self.store.resolve_ref` for glibc's self-referencing
+      `/files` need (`src/cli/src/materializer/resolver.rs:308-318`,
+      `queue_self_file_dependency`) only ever checks the empty per-user
+      repo. Proved this precisely with a disposable diagnostic in a copy
+      of `build-package.sh` (reverted after; no product code touched):
+      `nex build pkg/cli/archive/gzip.yaml --single --repo /nex/repo`
+      (explicit repo, bypassing user-context entirely) resolved the full
+      15-commit closure, found every `/files` ref including glibc's,
+      downloaded gzip's source, and reached the actual build sandbox --
+      proving the seeding is complete and correct. It then hit a
+      different, unrelated failure: `unshare: unshare failed: Invalid
+      argument`, from the build script's
+      `unshare --user --pid --mount --uts --fork --ipc --net
+      --map-root-user` sandbox setup
+      (`src/cli/src/build/script.rs:264`) -- not investigated further,
+      flagged as a second, separate blocker. This is the stop condition
+      the human named in advance ("resolving it needs a design
+      decision"): no amount of host-side seeding closes this gap, because
+      the guest's plain `nex build pkg/cli/archive/gzip.yaml --single`
+      (no flags, exactly what a person would type, matching this test's
+      own stated purpose) never consults `/nex/repo` for build-dependency
+      resolution at all in the user-context path. Fixing it means either
+      threading `NexContext.fallback_repos` into `BuildOpts.fallback_repos`
+      in product code, or deciding the test should invoke `nex build`
+      with `--system` or `--repo /nex/repo` instead of the bare command --
+      a product or test-scope decision, not a seeding gap. Stopped per
+      instruction rather than routing around it. See Surprises &
+      Discoveries and `.agents/knowledge/machine-self-hosting.md`.
 - [ ] Add the `git_bundle` source kind with a recorded sha256, generated with
       `pack.threads=1` from an explicit commit.
 - [ ] Move `examples/desktop-vwl/desktop-vwl.yaml` from its six `dev:` sources
@@ -681,6 +1014,774 @@ Reported exactly, per instruction; not routed around.
 
 `build-package` and `deploy-and-rollback` are unchanged from the previous
 entry.
+
+**2026-08-19, later still: a deployment ref is now published in the right
+place, and `persistent-install` fails at `nex commit` with the exact same
+error anyway -- a second, independent, likely cause found by reading the
+matching code, not yet confirmed by a standalone test.** Rebuild cascade in
+dependency order (`pkg/core/nex/nex.yaml` builds from `dev: src/cli`, so the
+human's `deploy.rs`/`store/mod.rs` changes reach the guest only once this
+package is rebuilt):
+
+    pkg/core/nex/nex.yaml        3d766d5c90c456045045c54b4f0fc664d753a5b1c2451faed558571ecbdbceda
+    base/nex-systemd.yaml        79ddf69671945f774c6955aa898b257b5c5ccaafdac97c28866046a7f200c645
+    tests/nex-test-fixture.yaml  26f48b39b377a76f200d59a19e8ec5fefcb557ae9977291e8b9138449bf2eb53
+
+All three strict two-build reproducible. Full suite twice, identical both
+times:
+
+    FAIL: build-package (guest exit 1)
+    FAIL: temporary-install (guest exit 1)
+    FAIL: persistent-install (guest exit 1)
+    PASS: deploy-and-rollback (verify-deployed)
+    PASS: deploy-and-rollback
+    PASS: deploy-and-rollback
+
+`persistent-install` reaches `nex commit` and fails with byte-identical
+output to before the ref-publishing fix:
+
+    Committing changes: install tig for persistent-install test
+    Error: Custom { kind: NotFound, error: "Could not determine current deployment" }
+    commit-exit=1
+
+`temporary-install` also unchanged: `nex install` still succeeds completely
+(checkout, symlinks, the binary runs), `nex discard` still fails the same
+way (`/nex/pkg` busy, then `Read-only file system` removing
+`/nex/staging`). `deploy-and-rollback` still passes, now with the new
+publish-a-ref code path exercised silently (no stdout evidence either way,
+since `deploy.rs` doesn't print anything about it).
+
+`persistent-install`'s unchanged failure, despite a ref now genuinely
+existing at `refs/heads/nex/deployments/<checksum>.0` (confirmed by
+inspecting `zub`'s own ref layout: `Repo::refs_path()` in
+`/home/wegel/work/perso/zub/src/repo.rs:112` is `<repo>/refs/heads`, so a ref
+named `nex/deployments/X` lives on disk at exactly the path
+`seed_system_repo()` writes), pointed at a real second suspect:
+`get_current_deployment_ref()` calls `store.refs(Some("nex/deployments/"))`
+(`src/cli/src/commands/commit.rs:159`) to find it. That resolves to
+`zub::list_refs_matching(repo, "nex/deployments/")`
+(`/home/wegel/work/perso/zub/src/refs.rs:114`), which builds a
+`glob::Pattern` from the given string and keeps only refs where
+`pattern.matches(ref_name)`. A pattern with no wildcard character matches
+only that exact string -- standard, documented behavior for the `glob`
+crate, and confirmed against this codebase's own usage: `zub`'s own test of
+this exact function, `test_list_refs_matching`
+(`/home/wegel/work/perso/zub/src/refs.rs:381`), passes `"x86_64/*"` -- with a
+trailing `*` -- to get prefix-style matching, and a second call there
+(`"*/pkg/foo/*"`) also always carries a wildcard. `"nex/deployments/"`, as
+written in `commit.rs`, has none, so (if this reading holds) the call would
+return an empty list regardless of what refs exist under that prefix, making
+`nex/deployments/*` refs permanently invisible to `get_current_deployment_ref()`
+by construction, independent of whether anything ever publishes one.
+
+This is reported as a strong, evidence-based hypothesis, not a confirmed
+fact: I did not write and run a standalone test to watch
+`store.refs(Some("nex/deployments/"))` return empty against a repo holding
+exactly that ref, and I got an earlier diagnosis in this same file wrong
+before by reasoning from adjacent-but-not-identical evidence (the `zub`
+hardlink note, since corrected). No product code was changed to check or
+route around this.
+
+**2026-08-19, later still: the glob theory was right, and a third,
+independent cause -- this time a harness bug of my own -- was blocking
+`nex commit` even after the human's fix landed.** The human confirmed the
+glob theory directly (a two-line repro), fixed `commit.rs:159`, added a
+pinning test, and committed as `d1e79485`. Rebuild cascade in the same
+order:
+
+    pkg/core/nex/nex.yaml        08cb193376fb4242149c554c2bb4d9d802343bd2b3c2c849af7eb59c0c8a3351
+    base/nex-systemd.yaml        81b9557705e99d4214bd417fd9793226e9a4cad6bda642229ed57ca4ed810799
+    tests/nex-test-fixture.yaml  2335f8ba7481717d770eb369fbfe96fcada5740e04e4c1d468f789fadd247be5
+
+All three strict two-build reproducible. `persistent-install` still failed
+with the byte-identical `Could not determine current deployment` error.
+Before assuming the fix hadn't worked, checked the log for the harness's own
+diagnostic line first, and found it: `note: could not resolve
+systems/nex-test-fixture/0.0.1, initial deployment ref not published`, on
+every run. `seed_system_repo()` (`scripts/test-machine-operations.sh`)
+publishes `nex/deployments/<checksum>.0` by `rev-parse`-ing `$FROM_REF`
+*against the guest's own store*, but `$FROM_REF` is never pulled into that
+store anywhere -- the fixture's content only ever gets *checked out* (via
+`zub checkout --copy`, from the host's own repo) directly into the root
+filesystem content, a completely separate mechanism from the object-pull
+`seed_system_repo()` uses for everything else it seeds. So the `rev-parse`
+always failed, and the failure was swallowed (`2>/dev/null || true`),
+landing silently in the "could not resolve" branch. This is harness code,
+not product code, and unambiguously a bug in implementing what was already
+the stated intent, not a design question, so I fixed it directly: pull
+`$FROM_REF` into the guest's store before resolving it, same as every other
+seeded ref.
+
+With that fixed, ran the full suite twice more, identical both times.
+`nex commit` now runs its real logic and succeeds at it:
+
+    Committing changes: install tig for persistent-install test
+      Current deployment: nex/deployments/<fixture-checksum>.0
+      Checking out current deployment...
+      Applying staged changes...
+      Creating new commit...
+      Created deployment: nex/deployments/<unix-timestamp>
+
+This is the first time in this plan that `nex commit` has done real work.
+But the command still exits non-zero and `persistent-install` still fails,
+because `create_deployment()` (`commit.rs`) calls `cleanup_staging()`
+afterward -- the exact same function `nex discard` calls -- and it hits the
+exact same failure `temporary-install` already reported: `/nex/pkg` reports
+busy on `umount`, then `fs::remove_dir_all("/nex/staging")` hits `Read-only
+file system`. So this was never two separate bugs, one per test; it is one
+bug in `cleanup_staging()`, reached from both commands.
+
+Given persistent-install did not go green, I spent the remaining effort
+diagnosing that shared failure, per instruction: report observations first,
+separately from any proposed mechanism, and change no product code (all
+diagnostics below were added to a disposable copy of the guest script and
+reverted immediately after each check; `git diff` on it is clean).
+
+**Observations:**
+
+- `fuser` and `lsof` are not installed on this fixture.
+- Immediately before cleanup runs, `/proc/mounts` shows three active overlay
+  mounts: `/usr/bin`, `/nex/pkg`, `/nex/env` -- all three get mounted
+  unconditionally by `mount_nex_overlays()`, even on a run where nothing was
+  ever installed under `/nex/env`.
+- A manual `umount /nex/pkg`, run directly in the guest shell before `nex
+  discard`/`nex commit` is invoked at all, fails the same way: `umount:
+  /nex/pkg: target is busy` (exit 32). Not specific to how `nex` itself
+  calls `umount`, and not a timing artifact of running right after install.
+- After the failed cleanup, `/proc/mounts` shows `/usr/bin` and `/nex/env`
+  successfully unmounted; only `/nex/pkg` remains mounted.
+- `/nex/staging` itself is writable both before and after the failed
+  cleanup (`touch` succeeds both times). Writing into `/nex/pkg` afterward
+  fails with "No such file or directory", not "Read-only file system".
+  `/nex/staging/upper/nex/pkg` -- the still-mounted overlay's own upperdir
+  -- no longer exists at all after the failed cleanup, even though
+  `/proc/mounts` still lists that exact path as the mounted overlay's
+  `upperdir=`.
+- Scanning `/proc/*/cwd`, `/proc/*/fd/*`, and `/proc/*/maps` for `/nex/pkg`
+  references while `/nex/pkg` was confirmed busy: PID 1 (`systemd`, the
+  init process) has file descriptor 9 open on
+  `/nex/pkg/core/init/systemd/257.5/1223026e/usr/lib/systemd/systemd-executor`,
+  and roughly a dozen other running PIDs have `/nex/pkg` paths present in
+  their memory maps. Separately confirmed `/usr/lib/systemd/systemd-executor`
+  is a real symlink to exactly that path, and that `/usr/lib` in general is
+  full of symlinks into `/nex/pkg/<namespace>/<slug>/<version>/<checksum>/...`.
+
+**Proposed mechanism** (kept separate from the observations above, and not
+acted on): on a `nex_structure: true` system, FHS paths like `/usr/lib` and
+`/usr/bin` are symlinked directly into package capsules under `/nex/pkg`, so
+every running process that has loaded a shared library or executed a helper
+binary holds it open or mapped from there -- starting with PID 1, which
+cannot be stopped to release it. Mounting an overlay on `/nex/pkg`
+(`mount_nex_overlays()`) succeeds because mounting only needs the
+mountpoint directory to exist. Unmounting it does not: the kernel refuses a
+busy `umount`, `cleanup_staging()`'s plain `Command::new("umount")` (no
+`-l`/`-f`) does not force it and silently discards the failure either way,
+and the subsequent `fs::remove_dir_all` then tries to recurse into the
+still-mounted overlay's own live upperdir, which is where the visible
+`Read-only file system` error actually surfaces. On this reading, `/nex/pkg`
+may be structurally unable to fully unstage while any process is running --
+not about `tig`, not about timing, not fixable by retrying.
+
+`temporary-install` (`nex discard`) and `deploy-and-rollback` are unchanged
+from before this unit; `build-package` is unchanged, still failing on
+gzip's build-time dependency closure.
+
+**2026-08-19, later still: the lazy-unmount fix landed and independently
+verified both halves of the diagnosis; the mount-level failure is gone, and
+a third, deeper layer of the same shared `cleanup_staging` problem is now
+the blocker.** The human verified `/usr/lib/systemd/systemd-executor`'s
+symlink target and that 199 of the first 200 `/usr/lib` symlinks point into
+`/nex/pkg` directly, confirming PID 1 genuinely pins the mount. Fixed in
+`stage.rs`, committed `f1a7dcfb`: `cleanup_staging` now calls a new
+`unmount_overlay` per target that skips an already-unmounted target, tries
+a plain `umount`, falls back to `umount -l` (lazy) when busy, and only
+returns an error (naming the mount) if both fail -- failures are no longer
+silently swallowed.
+
+Rebuild cascade, same order:
+
+    pkg/core/nex/nex.yaml        325803c9b11b1910ab9401aa82fd6345cf00ef6bcd0c98e7f659ab650c151a02
+    base/nex-systemd.yaml        bf3fddb017733ea2b04310e2cfd54b8040c202f1d14cbf59a69196973641e0f5
+    tests/nex-test-fixture.yaml  b62f51326661982ee51ba674858de1652f30427247b9cedd223d7c2e1e36e790
+
+All three strict two-build reproducible. Full suite twice, identical both
+times:
+
+    FAIL: build-package (guest exit 1)
+    FAIL: temporary-install (guest exit 1)
+    FAIL: persistent-install (guest exit 1)
+    PASS: deploy-and-rollback (verify-deployed)
+    PASS: deploy-and-rollback
+    PASS: deploy-and-rollback
+
+Not three of four green. `temporary-install` and `persistent-install` still
+fail, with byte-identical error text to before the fix:
+
+    Error: Os { code: 30, kind: ReadOnlyFilesystem, message: "Read-only file system" }
+
+Confirmed via disposable diagnostics on a copy of the guest script (reverted
+after; no product code touched) that the mount-level problem this fix
+targeted is genuinely gone: after a failed `nex discard`, `/proc/mounts` no
+longer lists any of the three overlays at all (`/usr/bin`, `/nex/pkg`,
+`/nex/env` all detached, lazily where the plain unmount was refused), and
+`/nex/staging` is confirmed completely empty afterward (`ls -la
+/nex/staging` shows only `.` and `..` -- `upper/`, `work/`, and the `active`
+marker are all gone). The coordinator's flagged risk did not materialize
+either: `/usr/bin/tig` cleanly disappears, `command -v tig` finds nothing,
+`tig --version` reports "command not found" -- no stale post-discard view.
+
+One layer deeper: `cleanup_staging`'s `fs::remove_dir_all("/nex/staging")`
+now successfully empties the directory but still fails to remove
+`/nex/staging` itself. `/proc/mounts` shows `/nex/staging` is its own
+mounted filesystem, `/dev/sda2 /nex/staging ext4 rw,relatime`, separate from
+the deployment root -- matching the "boot mountpoints... bind-mounts
+sysroot/var/nex into the deployment" comment in `base/nex-systemd.yaml`'s
+build script, the same mechanism as `/nex/repo`, `/nex/users`,
+`/nex/manifests`, `/nex/env`. `rmdir` on a directory needs write permission
+on that directory's *parent* to remove the entry, independent of whether
+the target itself is a separate writable mount; `/nex/staging`'s parent is
+`/nex`, which is on the read-only deployment root. So `rmdir("/nex/staging")`
+fails with the same EROFS regardless of how empty `/nex/staging` is. This
+reads as structural, not content- or timing-dependent: nothing can ever
+remove the `/nex/staging` mountpoint directory itself while the deployment
+root stays read-only, so `cleanup_staging` clearing everything *inside* it
+and then trying to `rmdir` it cannot succeed as written. Not fixed, not
+routed around; observation and proposed explanation both recorded, kept
+separate, in `.agents/knowledge/machine-self-hosting.md`.
+
+`persistent-install` reaches `nex commit`'s real work again -- `Current
+deployment: nex/deployments/<checksum>.0`, checks it out, applies staged
+changes, `Created deployment: nex/deployments/<timestamp>` -- and fails at
+the same shared `cleanup_staging` step immediately after, so it still never
+reaches reboot; that ground remains untested. `deploy-and-rollback` and
+`build-package` are unchanged.
+
+**2026-08-19, later still: the mount-point fix landed; `temporary-install`
+passes completely for the first time; `persistent-install` reaches reboot
+for the first time and its after-reboot assertion reveals a real product
+gap, not a test bug.** Fixed in `stage.rs`, commit `eacb11f5`:
+`cleanup_staging` now calls `clear_staging_state`, which removes only
+`/nex/staging`'s *contents*, leaving the mount point directory alone (it is
+one of `base/nex-systemd.yaml`'s own boot mountpoints, created on purpose).
+Also added a `current-deployment=` line to `persistent-install.sh`'s
+after-reboot phase (harness-only, same `/proc/cmdline` `zub=` convention
+already used elsewhere in this plan), so a failed assertion can be
+diagnosed without a follow-up unit.
+
+Rebuild cascade, same order:
+
+    pkg/core/nex/nex.yaml        3e6805c8a7250f84ee21d2f7818bd84a73e492cea1d11ba3d8f5d56671ef8ed4
+    base/nex-systemd.yaml        f3b550a81361d56006da2026fed50c2505ad8adb102144ef1f524b469c07b25d
+    tests/nex-test-fixture.yaml  319b995d56114e057ff8991e317dfd1aea2edb51629c45fd4c91502c158c570d
+
+All three strict two-build reproducible. Full suite twice, identical both
+times:
+
+    FAIL: build-package (guest exit 1)
+    PASS: temporary-install
+    FAIL: persistent-install (guest exit 1)
+    PASS: deploy-and-rollback (verify-deployed)
+    tests run: 4
+    failures: 2
+
+`temporary-install`, full output, both runs identical: stage, install
+(`Runtime closure: 6 commit(s)`, checkout, symlinks), the installed binary
+runs (`tig version 2.6.0`), discard (`umount: /nex/pkg: target is busy.`
+still prints -- informational now, from the plain-unmount attempt before the
+lazy fallback -- `discard-exit=0`), and the binary is confirmed gone
+(`post-discard-binary-present=false`, `post-discard-staging-active=false`).
+This is the first install-and-remove journey in this plan to go fully
+green.
+
+`persistent-install`: `nex commit` now succeeds outright --
+
+    Committing changes: install tig for persistent-install test
+      Current deployment: nex/deployments/319b995d56114e057ff8991e317dfd1aea2edb51629c45fd4c91502c158c570d.0
+      Checking out current deployment...
+      Applying staged changes...
+      Creating new commit...
+      Created deployment: nex/deployments/1787180328
+    umount: /nex/pkg: target is busy.
+    Deployment created successfully.
+    commit-exit=0
+
+-- and the host reboots the guest cleanly for the first time on this path.
+The after-reboot assertion then fails:
+
+    phase=after-reboot
+    current-deployment=319b995d56114e057ff8991e317dfd1aea2edb51629c45fd4c91502c158c570d.0
+    post-reboot-binary-present=false
+    error-line=tig not present after reboot
+
+Per instruction, checked which deployment actually booted before concluding
+the install was lost: `current-deployment` after reboot is the exact same
+`<fixture-checksum>.0` the machine was running before `nex commit` ran --
+not a different, unexpected deployment, and not absent (which would suggest
+a boot-selection problem); the machine simply never left the deployment it
+started in. Traced why: `create_deployment()`
+(`src/cli/src/commands/commit.rs:108`) calls only `store::commit_tree(NEX_REPO,
+&new_ref, ...)` -- it writes the new content into the *store* as a ref named
+`nex/deployments/<unix-timestamp>`, and never touches `/sysroot`, the
+on-disk `/nex/deployments/<checksum>.<serial>` directories `nex
+deploy`/`nex rollback` create, or anything boot-time deployment selection
+looks at. The commit itself is correct and complete (a real ref exists, with
+`nex.deployment.parent` naming the prior deployment and the commit message
+attached), it is just never promoted to something bootable. So a plain
+reboot after `nex commit`, with no other command, can never boot the new
+content -- this is not about `tig`, not a race, and not fixable by waiting
+or rebooting again. Not fixed, not routed around: the test was not changed
+to also call `nex deploy` on the new ref, since that would test a different
+operation than "install a package and keep it across a reboot" as the plan
+specifies it. Full detail in
+`.agents/knowledge/machine-self-hosting.md` ("`nex commit` records a new
+deployment in the store, but never activates it").
+
+`deploy-and-rollback` and `build-package` are unchanged. Only 2 of 4 tests
+passed, so the third stability-confirmation run was not triggered (that was
+conditioned on 3 of 4 passing).
+
+**2026-08-19, later still: a committed install now activates a real on-disk
+deployment; `nex commit` still fails, one layer deeper, because activation's
+own cleanup remounts more than it means to.** The human made the commit
+bootable (`a084cf66`): `create_deployment` now calls `deploy::run` on the
+new ref (`allow_commit_hash: true`), reusing the same activation path `nex
+deploy` uses instead of growing a second one.
+
+Rebuild cascade, same order:
+
+    pkg/core/nex/nex.yaml        df49013f299e5196e73c19f2a2bbdda738c575506f7cf517d19cb292aaf03216
+    base/nex-systemd.yaml        5cfeea15437583829a55724dfd05f866f675eb294d0637789665adb25b860471
+    tests/nex-test-fixture.yaml  7591db572902f2a934cdd1a0f68b49eb7c2047baeae9c16b2fe34dbb8b0d2e5b
+
+All three strict two-build reproducible. Full suite twice, identical both
+times, still 2 of 4:
+
+    FAIL: build-package (guest exit 1)
+    PASS: temporary-install
+    FAIL: persistent-install (guest exit 1)
+    PASS: deploy-and-rollback (verify-deployed)
+    tests run: 4
+    failures: 2
+
+`persistent-install`'s `nex commit` output, both runs, structurally
+identical (the timestamp-derived ref name and content hash naturally differ
+run to run):
+
+    Committing changes: install tig for persistent-install test
+      Current deployment: nex/deployments/<fixture-checksum>.0
+      Checking out current deployment...
+      Applying staged changes...
+      Creating new commit...
+      Created deployment: nex/deployments/<unix-timestamp>
+      Activating for next boot...
+    System ref:   nex/deployments/<unix-timestamp>
+    Checksum:    <new-checksum>
+    Next serial: 1
+    Target:      /sysroot/nex/deployments/<new-checksum>.1
+    Staging:     /sysroot/nex/deployments/.<new-checksum>.1.tmp
+
+    Deployed: <new-checksum>.1
+    Reboot to activate (bootloader picks highest serial).
+    Error: Os { code: 30, kind: ReadOnlyFilesystem, message: "Read-only file system" }
+    commit-exit=1
+
+The activation genuinely works this time -- confirmed directly, not
+inferred: a disposable diagnostic added to a copy of the guest script
+(reverted after; no product code touched) ran `ls -la
+/sysroot/nex/deployments` right after the failure and found both the
+original `<fixture-checksum>.0` and the new `<new-checksum>.1`, intact, on
+disk. The failure is in what runs immediately after activation.
+
+Root-caused by a direct, unfiltered `/proc/mounts` before/after comparison
+around the `nex commit` call (same disposable-diagnostic method). Before:
+
+    /dev/sda2 / ext4 ro,relatime
+    /dev/sda2 /sysroot ext4 ro,relatime
+    /dev/sda2 /nex/deployments ext4 rw,relatime
+    /dev/sda2 /nex/staging ext4 rw,relatime
+
+After (captured right after `deploy::run` printed "Deployed:..." /
+"Reboot to activate...", i.e. after its own `RemountGuard` remounted
+`/sysroot` back to read-only on the way out):
+
+    /dev/sda2 / ext4 ro,relatime
+    /dev/sda2 /sysroot ext4 ro,relatime
+    /dev/sda2 /nex/deployments ext4 ro,relatime
+    /dev/sda2 /nex/staging ext4 ro,relatime
+
+`/nex/deployments` and `/nex/staging` flip from `rw` to `ro`, even though
+`RemountGuard::remount_ro` (`deploy.rs`) names only `/sysroot`
+(`mount -o remount,ro /sysroot`) and touches nothing else by name. This
+matches exactly what was flagged as worth watching for: `deploy::run`
+remounts the sysroot read-write and back, and inside a running system --
+where `/sysroot`, `/nex/deployments`, and `/nex/staging` are separate mount
+entries for the *same block device*, `/dev/sda2` -- a remount targeted at
+one of them changes the underlying filesystem instance's read-only state
+for all of them at once. `create_deployment`'s very next line,
+`fs::remove_dir_all(&staging_dir)` (`commit.rs:151`, removing
+`/nex/staging/commit_staging`), which the human had already confirmed
+correct on its own terms (its parent is normally writable), then fails,
+because by that point its parent has just been made read-only as an
+unintended side effect of cleanup meant only for `/sysroot`.
+
+Because the failure happens after the phase already reported non-zero, the
+host-side harness -- by design, stopping at the first failed phase --
+does not attempt the reboot. Whether the newly activated deployment would
+actually have booted was therefore not tested; forcing a reboot past a
+phase the harness is designed to stop at was judged out of scope for an
+observation, not a decision to make unilaterally. Not fixed, not routed
+around.
+
+On the accumulation question: every run in this harness starts from a
+fresh overlay, so cross-run serial accumulation could not be observed --
+`Next serial: 1` every time. Within one run, only one `nex commit` call
+happens, so no within-run accumulation was observed either. Worth flagging
+regardless: because activation completes and commits its result *before*
+the failing cleanup, a `nex commit` that ultimately reports failure (exit
+1) still leaves a new, real, on-disk deployment behind every time it's
+tried. Not fixed, per instruction.
+
+Full detail in `.agents/knowledge/machine-self-hosting.md` ("`deploy::run`'s
+remount to read-only affects more than `/sysroot` when it shares a block
+device"). `deploy-and-rollback` and `build-package` are unchanged. Still 2
+of 4, so the third stability run was not triggered.
+
+**2026-08-19, later still: the ordering fix landed (`9c94ef56`); activation
+keeps succeeding, and `nex commit` now fails on a different, downstream
+mount error.** `create_deployment` now only writes the ref and returns it;
+`cleanup_staging()` runs next; `activate_deployment(&new_ref)` runs last,
+with a comment in the source explaining why.
+
+Rebuild cascade, same order:
+
+    pkg/core/nex/nex.yaml        225750ba4ddd31f366f6d4dca64666f06aedc666f248e31020549ebbeeaaee46
+    base/nex-systemd.yaml        ab83690c7267a8ecf9f81dcf0b31061d7b73040f9c48939f045f81832d78fe77
+    tests/nex-test-fixture.yaml  2a89a4ab2e540c4e4433d80a3069a54e4a33f1de311dfa2836ab7658da2bd949
+
+All three strict two-build reproducible. Full suite twice, identical both
+times, still 2 of 4:
+
+    FAIL: build-package (guest exit 1)
+    PASS: temporary-install
+    FAIL: persistent-install (guest exit 1)
+    PASS: deploy-and-rollback (verify-deployed)
+    tests run: 4
+    failures: 2
+
+`persistent-install`'s `nex commit`, both runs, structurally identical:
+
+    Committing changes: install tig for persistent-install test
+      Current deployment: nex/deployments/<fixture-checksum>.0
+      Checking out current deployment...
+      Applying staged changes...
+      Creating new commit...
+      Created deployment: nex/deployments/<unix-timestamp>
+    umount: /nex/pkg: target is busy.
+      Activating for next boot...
+    System ref:   nex/deployments/<unix-timestamp>
+    Checksum:    <new-checksum>
+    Next serial: 1
+    Target:      /sysroot/nex/deployments/<new-checksum>.1
+    Staging:     /sysroot/nex/deployments/.<new-checksum>.1.tmp
+
+    mount: /sysroot: mount point is busy.
+           dmesg(1) may have more information after failed mount system call.
+    mount: /sysroot: mount point is busy.
+           dmesg(1) may have more information after failed mount system call.
+    Error: Custom { kind: Other, error: "failed to remount /sysroot ro" }
+    commit-exit=1
+
+The reordering is visible and real: `cleanup_staging`'s unmount attempt
+(`umount: /nex/pkg: target is busy.`) now runs *before* "Activating for next
+boot...", where it used to run after. Confirmed with a disposable diagnostic
+on a copy of the guest script (reverted after; no product code touched)
+that activation again genuinely succeeds: `ls -la /sysroot/nex/deployments`
+after the failure shows both the original deployment and the new one,
+intact. The doubled "mount point is busy" message is `RemountGuard`'s own
+shape -- an explicit `remount_ro()` call fails and its error propagates via
+`?`, then its `Drop` impl retries on the way out of scope and fails again,
+silently. Confirmed directly that the remount genuinely never completed:
+`/proc/mounts` right after shows `/dev/sda2 /sysroot ext4 rw,relatime`, and
+`touch /sysroot/.diagtest` succeeds -- `/sysroot` is stuck read-write, not a
+misleading error message. `/nex/pkg` and `/nex/env`'s overlays are gone from
+`/proc/mounts` (the lazy unmount completed); `/nex/deployments` and
+`/nex/staging` show `rw`, unaffected this time (unlike the previous
+manifestation, where they flipped to `ro`).
+
+Proposed mechanism, kept separate from the observations above and flagged
+as unconfirmed by a standalone reproduction (unlike the `glob` and
+`rmdir`-parent findings, which were independently verified before being
+acted on): the same block-device sharing as before (`/`, `/sysroot`,
+`/nex/deployments`, `/nex/staging` are all `/dev/sda2`), now interacting
+with timing rather than flag state -- `cleanup_staging`'s lazy unmount of
+`/nex/pkg` detaches immediately but the kernel may still be releasing the
+underlying mount in the background; if that is still in flight when
+`deploy::run`'s `mount -o remount,ro /sysroot` runs moments later, a
+remount of the shared device could plausibly be refused as busy until it
+settles. Not verified further.
+
+On the accumulation question raised last time: this run's failure mode
+(a busy remount, not a cleanup failure) still happens *after* activation
+completes, so the same pattern recurred -- a stray deployment left on disk
+after a `nex commit` that ultimately failed, confirmed the same way.
+Watched for as asked; not fixed.
+
+Full detail in `.agents/knowledge/machine-self-hosting.md`. `deploy-and-rollback`
+and `build-package` are unchanged. Still 2 of 4, so no third stability run.
+
+**2026-08-19: the retry landed, activation is proven, and `nex commit` reaches
+`PASS` for the first time -- but the new deployment is missing the package it
+was told to install.** With the retry-then-warn fix in place, `persistent-install`
+reaches `PASS: persistent-install (before-reboot)` for the first time in this
+plan. Full `before-reboot` output, both runs identical:
+
+    Committing changes: install tig for persistent-install test
+      Current deployment: nex/deployments/6fc6aa8a93a1aadcff76545096c643167337dcdd69023b18962e6fc906e54a3a.0
+      Checking out current deployment...
+      Applying staged changes...
+      Creating new commit...
+      Created deployment: nex/deployments/<unix-timestamp>
+    umount: /nex/pkg: target is busy.
+      Activating for next boot...
+    System ref:   nex/deployments/<unix-timestamp>
+    Checksum:    <new-checksum>
+    Next serial: 1
+    Target:      /sysroot/nex/deployments/<new-checksum>.1
+    Staging:     /sysroot/nex/deployments/.<new-checksum>.1.tmp
+
+    mount: /sysroot: mount point is busy.
+           dmesg(1) may have more information after failed mount system call.
+    [x5]
+    Warning: /sysroot is still writable; could not restore it to read-only. The deployment is complete. A reboot restores the read-only mount.
+    Deployed: <new-checksum>.1
+    Reboot to activate (bootloader picks highest serial).
+    mount: /sysroot: mount point is busy.
+           dmesg(1) may have more information after failed mount system call.
+    [x5]
+    Warning: /sysroot is still writable; could not restore it to read-only. The deployment is complete. A reboot restores the read-only mount.
+    Deployment created successfully.
+    commit-exit=0
+    PASS: persistent-install (before-reboot)
+
+The warning text appears exactly twice per run (the explicit `remount_ro()`
+call, then the `Drop` retry), both runs of the suite, as predicted. The
+retry loop does not fully solve the busy remount here -- it still exhausts
+all five attempts and falls back to the warning -- but the machine is left
+writable rather than the command failing, which is the documented trade-off.
+
+Reboot succeeds and the after-reboot phase confirms activation genuinely
+worked: `current-deployment=746563fd97dc42f12e41a3312c39e72eb5d71cb5f04e0215905df02846a3ab4f.1`,
+different from the pre-commit `6fc6aa8a93a1aadcff76545096c643167337dcdd69023b18962e6fc906e54a3a.0`
+in both runs. But `post-reboot-binary-present=false`, and the guest reports
+`error-line=tig not present after reboot`.
+
+Root-caused, not guessed -- confirmed by both a source read and a direct
+on-disk check (disposable diagnostic added to a copy of the guest script,
+reverted after; no product code touched). `commit.rs`'s `create_deployment`
+builds the new deployment's tree by checking out the current deployment into
+a scratch dir, then layering the two staged overlays on top:
+
+    let upper_nex = format!("{}/upper/nex", STAGING_STATE_DIR);       // /nex/staging/upper/nex
+    let upper_usr_bin = format!("{}/upper/usr_bin", STAGING_STATE_DIR);
+    if Path::new(&upper_nex).exists() {
+        let nex_target = format!("{}/nex/pkg", staging_dir);
+        fs::create_dir_all(&nex_target)?;
+        copy_dir_contents(&upper_nex, &nex_target)?;
+    }
+    if Path::new(&upper_usr_bin).exists() {
+        let bin_target = format!("{}/usr/bin", staging_dir);
+        fs::create_dir_all(&bin_target)?;
+        copy_dir_contents(&upper_usr_bin, &bin_target)?;
+    }
+
+`copy_dir_contents(src, dst)` runs `cp -a "$src/." "$dst"` -- it copies
+`src`'s *contents* into `dst`, not `src` itself. `upper_nex`
+(`/nex/staging/upper/nex`) is the parent of two separate overlay upperdirs,
+confirmed earlier via `/proc/mounts` (`upperdir=/nex/staging/upper/nex/pkg`
+for the `/nex/pkg` overlay, `upperdir=/nex/staging/upper/nex/env` for the
+`/nex/env` overlay), so its direct children are `pkg/` and `env/`. Passing
+`upper_nex` itself (rather than `upper_nex/pkg`) as `src` into a `dst` of
+`{staging_dir}/nex/pkg` copies those two children *into* `nex/pkg`, landing
+tig's files at `nex/pkg/pkg/dev/vcs/tig/...` (one extra `pkg/` level) and
+also misplacing `env/`'s content at `nex/pkg/env/...` instead of `nex/env/...`.
+
+Confirmed directly on the booted new deployment, both matching the
+prediction:
+
+    diag-nex-pkg-listing=... apps cli core dev env libs pkg ...
+    diag-nex-pkg-pkg-listing=... dev ...
+    diag-usrbin-tig-readlink=../../nex/pkg/dev/vcs/tig/2.6.0/0cbb5716/usr/bin/tig
+    diag-usrbin-tig-stat=stat: cannot statx '/usr/bin/tig': No such file or directory
+
+`/nex/pkg` (the real, booted, top-level FHS path) carries an unexpected
+`pkg/` entry alongside the legitimate namespace directories
+(`apps`, `cli`, `core`, `dev`, `env`, `libs`), and `dev/vcs/tig/2.6.0/0cbb5716`
+lives one level too deep, under that extra `pkg/`. The `/usr/bin/tig` symlink
+itself is correctly placed and correctly named (its copy, via `upper_usr_bin`,
+is a separate call with matching source/target shapes and has no such bug),
+but it points at a path (`/nex/pkg/dev/vcs/tig/...`) where nothing exists, so
+it is dangling: `stat -L` reports "No such file or directory" and
+`command -v` correctly reports it absent. This fully explains the failure;
+no further hypothesis needed. Not fixed (product code, `commit.rs`, not
+touched).
+
+`deploy-and-rollback` and `build-package` unchanged. Still 2 of 4, so no
+third stability run.
+
+**2026-08-19: `persistent-install` passes end to end, tree shape confirmed
+correct, three runs in a row.** With the copy-nesting fix landed in two
+places (`dc561b55`: `create_deployment` and `merge_overlay_changes`), ran the
+full suite three times (the third triggered because the first two both
+landed 3 of 4). Identical every time:
+
+    FAIL: build-package (guest exit 1)
+    PASS: temporary-install
+    PASS: persistent-install (before-reboot)
+    PASS: persistent-install
+    PASS: deploy-and-rollback
+    tests run: 4
+    failures: 1
+
+`persistent-install`'s after-reboot phase now reports
+`post-reboot-binary-present=true` and runs `tig --version` successfully
+(`tig version 2.6.0`, `post-reboot-run-exit=0`).
+
+Per instruction, checked the tree shape directly rather than trusting the
+presence check alone, using a disposable diagnostic on a copy of the guest
+script (reverted after; no product code touched):
+
+    diag-nex-pkg-has-stray-pkg=false
+    diag-nex-env-is-sibling=true
+    diag-nex-pkg-env-should-not-exist=false
+    diag-usrbin-tig-readlink=../../nex/pkg/dev/vcs/tig/2.6.0/0cbb5716/usr/bin/tig
+    diag-usrbin-tig-resolves=true
+
+All three of the requested checks hold: no `/nex/pkg/pkg`, `/nex/env` exists
+as a sibling of `/nex/pkg` rather than nested under it, and `/usr/bin/tig`'s
+symlink resolves rather than dangling. The fix is structurally correct, not
+just accidentally passing the presence test.
+
+The `/sysroot is still writable` warning still appeared every run, twice per
+`nex commit` call, matching the previous unit exactly -- the retry still
+does not settle the busy remount here, but per the coordinator this is now
+expected and not a failure.
+
+`build-package` unchanged across all three runs: same error text each time,
+`glibc`'s split `/usr/lib/gconv/*` outputs (e.g. `libCNS.so`, `libGB.so`,
+`libISOIR165.so`, `libJIS.so`) missing from the guest store, because the
+harness only seeds `tig`'s runtime closure, not the build-time dependency
+closure gzip's own build needs. Real, expected, understood limitation, left
+as reported, not routed around.
+
+This closes the `persistent-install` line of investigation: three of four
+tests now pass deterministically. `build-package` is the one remaining,
+understood failure -- a machine that cannot fetch cannot build an arbitrary
+package from a closure the harness never seeded for it.
+
+**2026-08-19: seeding gzip's build closure is correct and sufficient, but
+does not make `build-package` pass -- the guest's plain `nex build` never
+looks at the store the harness seeds.** The human corrected the previous
+call that gzip's build closure was an inherent limitation not worth
+seeding: seeding it is legitimate host-side setup, no different from
+seeding tig's runtime closure, and does not weaken what the test proves.
+
+Extended `seed_system_repo()` with `seed_gzip_build_closure()`, which reads
+gzip's manifest's own `dependencies:` list (15 commits, not 14 -- an
+early hand-count was off by one, corrected once the extraction was
+scripted rather than eyeballed) and pulls each exactly as declared, then
+discovers and pulls each dependency's own `/files` closure using the same
+resolver `nex build`'s chroot hydration path uses
+(`resolve_runtime_deps_precomputed`, via `nex resolve`).
+
+Getting there required ruling out `nex resolve <name>` as a safe lookup
+first, and this was checked by hand before trusting it, not assumed: it
+matches by name, and this repository has real, confirmed collisions.
+`binutils`, `gcc`, `bash`, `coreutils`, `findutils`, `gawk`, `grep`,
+`make`, `sed`, `tar`, and `xz` all exist twice -- once under
+`bootstrap/phase1/*` (what gzip's manifest actually names) and once as
+the self-hosted `core/*`/`cli/*` package of the same name and version --
+and a plain single-word query silently picked the *wrong* one for every
+single one of those, confirmed by running all 15 and comparing each
+"Resolving:" line against the manifest's own declared ref. A full
+`namespace/slug` query (no version) disambiguates those correctly, but
+not `glibc`, which collides the opposite way: `libs/system/glibc` is a
+literal prefix of the unrelated `libs/system/glibc-locale-en-gb`, and the
+substring-matching query form picks that instead; a single-word query
+(exact equality on slug there) resolves `glibc` correctly. The function
+tries both forms per dependency and verifies the resolved ref's
+namespace/slug/version against the manifest's own declared ref before
+trusting it, refusing to seed (loud failure, not a silent wrong or
+partial closure) if neither form matches -- self-verifying at every run,
+not something that could quietly drift.
+
+Also checked, not assumed: for the two dependencies where both `bundles/dev`
+(what gzip wants) and `bundles/full` exist (`glibc`, `texinfo`), reading
+each manifest's `bundles:` section directly confirmed `full` is either
+identical in output categories to `dev` (`glibc`) or a strict superset
+(`texinfo`, which only adds an `info` category), so resolving via `full`
+(which `nex resolve`'s priority order always prefers when both exist)
+cannot miss anything `dev`'s own closure would have required.
+
+Verified the seeding was compact, not "impractically large" -- the other
+condition to stop and ask about: a standalone run seeded the 15 dependency
+roots plus exactly one discovered `/files` closure ref (glibc's own,
+matching the checksum this exact investigation started from four units
+ago), about 815MB and 30202 objects, `zub fsck`-healthy, in about 70
+seconds.
+
+Rebuilt the cascade (unchanged from the previous unit -- nothing in
+`src/cli` changed this unit) and ran the full suite three times: identical
+every time, still 3 of 4. `build-package` failed with the *exact same*
+error text and the *exact same* checksum
+(`x86_64/pkg/libs/system/glibc/2.39/bf348eabcec257edace3e1e05458bf79ddad1a5164f25e706b7e50d93b25190d/files`)
+as before the seeding was added, all three runs.
+
+Root-caused why, confirmed by direct reproduction rather than left as a
+guess: `nex build`, run as root without `--system`, uses `detect_context`'s
+*user* context (`src/cli/src/repo.rs`), whose primary repo is
+`/nex/users/root/repo` -- empty on a fresh machine -- not `/nex/repo`,
+the system store everything gets seeded into. `detect_context` does add
+`/nex/repo` to that context's `fallback_repos` when it exists (confirmed
+present on the guest: `diag-nex-repo-exists=true`, and the exact glibc
+`/files` ref confirmed sitting at
+`/nex/repo/refs/heads/x86_64/pkg/libs/system/glibc/2.39/.../files` via a
+disposable diagnostic, both checked directly on the booted guest, not
+assumed) -- but `BuildOpts.fallback_repos`
+(`src/cli/src/commands/build.rs`) is populated only from the explicit
+`--fallback-repo` CLI flag, never from `NexContext.fallback_repos`. The
+auto-detected fallback the context computes is therefore never threaded
+into `materialize_build_dependencies`'s `MaterializeConfig`, and the
+resolver's self-referencing-need check
+(`src/cli/src/materializer/resolver.rs`, `queue_self_file_dependency`,
+`self.store.resolve_ref`) only ever looks in the empty per-user repo.
+
+Proved this precisely, not just reasoned about it: added a disposable
+diagnostic to a copy of `build-package.sh` (reverted after; no product
+code touched) that ran `nex build pkg/cli/archive/gzip.yaml --single
+--repo /nex/repo` explicitly. With the repo forced, dependency resolution
+found the full 15-commit closure including glibc's `/files` ref,
+"Materialization complete", fetched gzip's source over the network,
+started the build sandbox -- proof the seeding is complete and correct.
+It then hit a second, different, unrelated failure: `unshare: unshare
+failed: Invalid argument`, from the build script's `unshare --user --pid
+--mount --uts --fork --ipc --net --map-root-user` sandbox setup
+(`src/cli/src/build/script.rs`). Not investigated further this unit --
+flagged as a separate, second blocker, observed but not chased.
+
+This is the condition the human named in advance: resolving it needs a
+design decision, not more seeding. No amount of host-side seeding can
+close this gap, because the guest's plain `nex build
+pkg/cli/archive/gzip.yaml --single` -- no flags, exactly what a person
+sitting at the machine would type, matching this test's own stated
+purpose -- never consults `/nex/repo` for build-dependency resolution at
+all on the path this harness exercises. Closing it means either product
+code threading `NexContext.fallback_repos` into
+`BuildOpts.fallback_repos` so a build's dependency resolution sees the
+same fallback its own context already computes, or a decision that this
+test should invoke `nex build` with `--system` or `--repo /nex/repo`
+rather than the bare command -- and if the latter, that changes what the
+test is proving. Stopped per instruction rather than seeding around it or
+changing the guest script's invocation unilaterally.
 
 ## Decision Log
 

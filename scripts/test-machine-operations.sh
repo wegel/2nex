@@ -16,7 +16,7 @@ ZUB_BIN="${ZUB_BIN:-/home/wegel/work/perso/zub/target/debug/zub}"
 ZUB_REPO="${ZUB_REPO:-$ROOT_DIR/.nex/repo}"
 NEX_BIN="${NEX_BIN:-$ROOT_DIR/src/cli/target/debug/nex}"
 FROM_REF="${FROM_REF:-systems/nex-test-fixture/0.0.1}"
-EXPECTED_CHECKSUM="${EXPECTED_CHECKSUM:-7a902425d6315f6d66930b5a26fe4b41219baa3729a6e6cae9c0657cf691c034}"
+EXPECTED_CHECKSUM="${EXPECTED_CHECKSUM:-7a8781f3fe195bb626230c38a82cb773c4bc343a4a95c4d28c8d7eb8d266b0ff}"
 
 SSH_PORT_BASE="${SSH_PORT_BASE:-10040}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-240}"
@@ -53,6 +53,11 @@ SEED_REFS=(
 # seed_system_repo()). `nex install` needs every one of those dependencies'
 # own /files refs already in the store, not just tig's own ref.
 SEED_CLOSURE_PACKAGE="tig"
+
+# The manifest build-package builds, and whose build-time dependency closure
+# gets seeded the same way tig's runtime closure does. See
+# seed_gzip_build_closure().
+BUILD_PACKAGE_MANIFEST="pkg/cli/archive/gzip.yaml"
 
 # All tests this harness knows about, in run order.
 ALL_TESTS=(build-package temporary-install persistent-install deploy-and-rollback)
@@ -233,6 +238,7 @@ EOF
 # next time tig or its dependencies are rebuilt.
 seed_system_repo() {
     local repo_dir=$1
+    local source_checksum=$2
     local ref
     local closure_refs=()
 
@@ -250,6 +256,126 @@ seed_system_repo() {
     for ref in "${closure_refs[@]}"; do
         "$ZUB_BIN" --repo "$repo_dir" pull "$ZUB_REPO" "$ref" >/dev/null
     done
+
+    seed_gzip_build_closure "$repo_dir"
+
+    # Publish the store ref for the initial deployment, which is what a correct
+    # installer would do. `nex commit` checks the running deployment out of the
+    # store before layering staged changes on top (commit.rs:158), so without
+    # this ref the first install on a machine cannot be committed.
+    # scripts/nex-install does not do this today: it runs `zub init` on an empty
+    # target store and copies the deployment tree in directly, so the system it
+    # installed is never in the machine's store at all.
+    #
+    # The fixture's own commit must be pulled into this store first: $FROM_REF
+    # only ever gets checked out (via `zub checkout --copy`) from the host's
+    # own repo into the root filesystem content, never pulled as an object
+    # into the guest's own store, so a bare `rev-parse` here would find
+    # nothing to resolve and silently skip publishing the ref.
+    "$ZUB_BIN" --repo "$repo_dir" pull "$ZUB_REPO" "$FROM_REF" >/dev/null
+    local fixture_hash
+    fixture_hash=$("$ZUB_BIN" --repo "$repo_dir" rev-parse "$FROM_REF" 2>/dev/null || true)
+    if [[ -n "$fixture_hash" ]]; then
+        local ref_file="$repo_dir/refs/heads/nex/deployments/${source_checksum}.0"
+        mkdir -p "$(dirname "$ref_file")"
+        printf '%s\n' "$fixture_hash" > "$ref_file"
+    else
+        log "note: could not resolve $FROM_REF, initial deployment ref not published"
+    fi
+}
+
+# seed_gzip_build_closure REPO_DIR
+# Seeds the build-time dependency closure `build-package`'s guest needs to
+# actually compile gzip: the same kind of host-side setup as
+# SEED_CLOSURE_PACKAGE above, not something the harness routes around. A real
+# machine fetches its build dependencies from a remote; this harness has no
+# remote, so it fetches them from the host's own store instead. The guest
+# still runs `nex build` itself and does the actual compiling.
+#
+# `nex build`, for a chroot build, hydrates each of the manifest's own
+# `dependencies:` commits through the same resolver tig's install closure
+# uses (src/cli/src/build/rootfs.rs:materialize_build_dependencies ->
+# src/cli/src/materializer::resolve_runtime_deps_precomputed), one root per
+# direct dependency, not the transitive `dependencies:` graph `nex dep-graph`
+# would walk (which would follow build deps of build deps, e.g. glibc's own
+# bootstrap inputs, that a chroot build never touches because it only needs
+# each dependency's already-built output).
+#
+# `nex resolve <name>` cannot be pointed at an exact ref: it matches by
+# name, and this repository has several exact collisions among the
+# manifest's direct dependencies -- confirmed by hand before writing this,
+# not assumed: `binutils`, `gcc`, `bash`, `coreutils`, `findutils`, `gawk`,
+# `grep`, `make`, `sed`, `tar`, and `xz` each exist twice, once under
+# `bootstrap/phase1/*` (what gzip's manifest names) and once as the
+# self-hosted `core/*`/`cli/*` build of the same name and version; a
+# single-word query picks whichever the store happens to iterate first,
+# which was the wrong one for every one of those in testing. A full
+# `namespace/slug` query (no version) disambiguates all of those correctly,
+# but not `glibc`, which collides the other way: `libs/system/glibc` is a
+# literal prefix of the unrelated `libs/system/glibc-locale-en-gb`, and
+# `find_package_ref`'s substring match picks that instead. A single-word
+# query is exact-equality on slug there and resolves correctly. So each
+# dependency's query is verified against the manifest's own declared ref
+# (namespace/slug/version, ignoring bundle name, since resolving via
+# `bundles/full` where the manifest names `bundles/dev` is harmless: for
+# every ambiguous dependency here the two bundles are either identical in
+# output categories or `full` is a strict superset of `dev`, confirmed by
+# reading each manifest's `bundles:` section, so the discovered closure
+# cannot be missing anything `dev` would have required) before being
+# trusted; if neither query form matches, seeding stops rather than
+# guessing.
+seed_gzip_build_closure() {
+    local repo_dir=$1
+    local manifest="$ROOT_DIR/$BUILD_PACKAGE_MANIFEST"
+    local dep_refs=()
+
+    mapfile -t dep_refs < <(
+        sed -n '/^dependencies:/,/^build:/p' "$manifest" |
+            grep -oE '^\s*commit:\s*\S+' | awk '{print $2}'
+    )
+    [[ "${#dep_refs[@]}" -gt 0 ]] ||
+        die "no dependencies found in $manifest to seed a build closure for"
+
+    local closure_refs=()
+    local dep_ref
+    for dep_ref in "${dep_refs[@]}"; do
+        # Pull the exact ref the manifest names: `nex build` uses this
+        # literal string as a resolver root, not a name lookup, so this
+        # part needs no disambiguation.
+        "$ZUB_BIN" --repo "$repo_dir" pull "$ZUB_REPO" "$dep_ref" >/dev/null
+
+        local rest="${dep_ref#x86_64/pkg/}"
+        local namespace_slug slug expect_prefix resolved_output resolved_ref query candidate_prefix
+        namespace_slug="$(echo "$rest" | rev | cut -d/ -f4- | rev)"
+        slug="${namespace_slug##*/}"
+        expect_prefix="${dep_ref%/bundles/*}"
+        resolved_ref=""
+
+        for query in "$namespace_slug" "$slug"; do
+            resolved_output=$(cd "$ROOT_DIR" && "$NEX_BIN" resolve "$query" --repo "$ZUB_REPO" -v 2>/dev/null)
+            candidate_prefix=$(printf '%s\n' "$resolved_output" | sed -n 's/^Resolving: //p')
+            candidate_prefix="${candidate_prefix%/bundles/*}"
+            if [[ -n "$candidate_prefix" && "$candidate_prefix" == "$expect_prefix" ]]; then
+                resolved_ref="$resolved_output"
+                break
+            fi
+        done
+        [[ -n "$resolved_ref" ]] ||
+            die "nex resolve could not unambiguously match $dep_ref (tried '$namespace_slug' and '$slug'); a manifest change likely needs this disambiguation logic updated"
+
+        local dep_closure_refs=()
+        mapfile -t dep_closure_refs < <(
+            printf '%s\n' "$resolved_ref" | grep -oE 'x86_64/pkg/[^ ]+/files' | sort -u
+        )
+        closure_refs+=("${dep_closure_refs[@]}")
+    done
+
+    if [[ "${#closure_refs[@]}" -gt 0 ]]; then
+        mapfile -t closure_refs < <(printf '%s\n' "${closure_refs[@]}" | sort -u)
+        for ref in "${closure_refs[@]}"; do
+            "$ZUB_BIN" --repo "$repo_dir" pull "$ZUB_REPO" "$ref" >/dev/null
+        done
+    fi
 }
 
 prepare_qemu_network() {
@@ -355,7 +481,7 @@ stage_root_and_var() {
     touch "$var_content/etc/.initialized"
     "$ZUB_BIN" init "$var_content/nex/repo" >/dev/null
     write_zub_config "$var_content/nex/repo"
-    seed_system_repo "$var_content/nex/repo"
+    seed_system_repo "$var_content/nex/repo" "$source_checksum"
 
     factory_etc="$deploy_dir/usr/share/factory/etc"
     if [[ ! -d "$factory_etc" ]]; then

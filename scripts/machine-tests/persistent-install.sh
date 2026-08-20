@@ -71,6 +71,8 @@ if [ "$PHASE" = "before-reboot" ]; then
 fi
 
 # after-reboot
+current_deployment=$(sed -n 's/.*zub=\([^ ]*\).*/\1/p' /proc/cmdline | sed 's#.*/##')
+printf 'current-deployment=%s\n' "$current_deployment"
 post_present=$(command -v $BIN >/dev/null 2>&1 && echo true || echo false)
 printf 'post-reboot-binary-present=%s\n' "$post_present"
 
