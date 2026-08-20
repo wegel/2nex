@@ -21,7 +21,15 @@ printf 'nex-bin=%s\n' "$(command -v nex || echo missing)"
 printf 'manifests-system-exists=%s\n' "$( [ -d "$MANIFESTS_SYSTEM" ] && echo true || echo false )"
 printf 'manifests-system-is-git=%s\n' "$( [ -d "$MANIFESTS_SYSTEM/.git" ] && echo true || echo false )"
 printf 'manifests-commit-count=%s\n' "$(git -C "$MANIFESTS_SYSTEM" rev-list --count HEAD 2>/dev/null || echo unknown)"
-printf 'manifests-pinned-env-blob-reachable=%s\n' "$(git -C "$MANIFESTS_SYSTEM" cat-file -e 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0 2>/dev/null && echo true || echo false)"
+# 476 manifests name their build environment by this historical blob, so a
+# machine that clones only recent history cannot build any of them. Ask for
+# the object's type rather than its mere presence: the answer must be `blob`.
+pinned_env_blob_type=$(git -C "$MANIFESTS_SYSTEM" cat-file -t 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0 2>/dev/null || echo missing)
+printf 'manifests-pinned-env-blob-type=%s\n' "$pinned_env_blob_type"
+if [ "$pinned_env_blob_type" != blob ]; then
+    printf 'error-line=%s\n' "the pinned build environment is not in this machine's manifests: cat-file -t says $pinned_env_blob_type"
+    exit 1
+fi
 printf 'manifests-worktree-exists=%s\n' "$( [ -d "$WORKTREE" ] && echo true || echo false )"
 
 build_cwd=""

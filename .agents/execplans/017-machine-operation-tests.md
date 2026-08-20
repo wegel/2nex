@@ -530,15 +530,50 @@ or test 1 fails. Both outcomes are useful, and neither is known today.
       a product or test-scope decision, not a seeding gap. Stopped per
       instruction rather than routing around it. See Surprises &
       Discoveries and `.agents/knowledge/machine-self-hosting.md`.
-- [ ] Add the `git_bundle` source kind with a recorded sha256, generated with
-      `pack.threads=1` from an explicit commit.
-- [ ] Move `examples/desktop-vwl/desktop-vwl.yaml` from its six `dev:` sources
-      to one bundle source, and delete `src/cli/.nex-dev-prepare`.
-- [ ] Rewrite `nex-init-manifests` in `base/nex-systemd.yaml` to clone the
-      bundle, then drop the fixture's override of it.
-- [ ] Rename `/nex/repo` to `/nex/store` and `--repo` to `--store`, with a
-      migration for machines carrying the old path.
-- [ ] Rebuild every assembly, record checksums, and run the full suite green.
+- [x] Add the `git_bundle` source kind with a recorded sha256, generated with
+      `pack.threads=1` from an explicit commit. `fetch_git_bundle` in
+      `src/cli/src/outputs/sources.rs`. Three requirements are not obvious and
+      are documented at the call site: `pack.threads=1` for byte-reproducibility,
+      a detached worktree (a bare SHA gives "empty bundle"), and an explicit
+      commit (a branch name gives a clone with an empty tree).
+- [x] Move `examples/desktop-vwl/desktop-vwl.yaml` from its six `dev:` sources
+      to one bundle source. **The second half of this step was wrong and was
+      not done**: `src/cli/.nex-dev-prepare` cannot be deleted, because
+      `pkg/core/nex/nex.yaml:12` still builds the CLI from `dev: src/cli` and
+      that script is what makes the source tarball. Deleting it would have
+      broken the `nex` package on every machine. It was kept, and the actual
+      defect in it fixed instead: `cp -a "$ZUB_PATH" vendor/zub-store` nests
+      when the destination already exists, producing
+      `vendor/zub-store/zub`, whose `target/` the cleanup then missed. That
+      is how 3.8 GB of another repository's build output reached the image.
+      It now removes any carried-in copy first.
+- [x] Rewrite `nex-init-manifests` in `base/nex-systemd.yaml` to clone the
+      bundle, then drop the fixture's override of it. A booted machine reports
+      804 commits in `/nex/manifests`, and `git cat-file -t` on the pinned
+      environment blob answers `blob`.
+- [x] Rename `/nex/repo` to `/nex/store` and `--repo` to `--store`, with a
+      migration for machines carrying the old path. Done in two passes,
+      because the first missed the half that matters. The CLI rename landed
+      first (`SYSTEM_STORE`, `LEGACY_SYSTEM_STORE` and `is_store()` in
+      `src/cli/src/repo.rs`), but `pkg/core/kernel/initramfs-init.sh` still
+      bound the store at `/nex/repo`, so `/nex/store` stayed an empty
+      directory on every machine and all five tests were green through the
+      legacy fallback alone: the new name had never carried a store.
+      `store_bind_source()` now searches both names on both the root
+      partition and `/var`, always preferring a directory that holds an
+      actual store over one that is merely present, and binds what it finds
+      onto `/nex/store`. `nex-systemd` stopped creating `/nex/repo`, so a
+      deployment has one store path. Test `store-upgrade` is the migration's
+      proof.
+- [x] Rebuild every assembly, record checksums, and run the full suite green.
+      Every assembly rebuilt with `--single --check --update-checksum`, both
+      builds agreeing in each case: `flat-minimal` (unchanged),
+      `flat-systemd` `9a6ceacf`, `flat-podman` `a510f95a`, `nex-minimal`
+      `9f068c97`, `nex-systemd` `a93baa49`, `edgebox-rootfs` `f2ae7c90`,
+      `desktop-vwl` `76db6f83`, `desktop-dev` `c0730028`, `installer`
+      `98f0803d`, `nex-test-fixture` `83aec127`. `installer` was rebuilt a
+      second time and produced the same checksum, so its earlier change was a
+      caught-up record rather than a moving target.
 
 ## Surprises & Discoveries
 
@@ -1917,6 +1952,11 @@ changing the guest script's invocation unilaterally.
 
 ## Outcomes & Retrospective
 
+Entries are in the order they happened, and each was true when written. The
+suite grew from four tests to five and most of what the early entries report
+as broken was later fixed, so read the last entry, dated 2026-08-20, for the
+finished state.
+
 `scripts/test-machine-operations.sh` exists and runs all four tests, `--test
 <name>` runs one alone, and every test starts from a fresh qcow2 overlay
 over one shared backing image built from `tests/nex-test-fixture.yaml`
@@ -2069,6 +2109,64 @@ regeneration, which is the mistake the librsvg vendor tarball made. Anyone
 building the fixture runs that script first. It is reproducible: two runs
 produced sha256 `fc268d2210446e95…` both times.
 
+**Update, 2026-08-20: the plan's own acceptance is met. Five tests, green
+twice in a row, and every product defect they found is fixed.** The suite is
+`build-package`, `temporary-install`, `persistent-install`,
+`deploy-and-rollback` and `store-upgrade`, all passing from a fresh overlay,
+twice consecutively, `failures: 0` both times. `build-package` reports
+`MAKEFLAGS: -j2` (the guest's own CPU count, so the build really ran there),
+804 commits in `/nex/manifests`, and `git cat-file -t` answering `blob` for
+the pinned environment object -- that last check now fails the test rather
+than merely printing a fact, since 476 manifests name their environment by
+that blob and a shallow clone would strand all of them.
+
+Twelve defects were found and fixed over this plan, and not one was visible
+from reading the code. Every one needed a real machine to boot: environment
+blobs resolved against the store rather than the manifests repository;
+`overlay.ko` missing from the kernel bundle a machine ships; `/nex/env` never
+created, so `nex stage` failed on a read-only root; `nex deploy` never
+publishing the store ref `nex commit` looks for; a bare glob prefix matching
+only the literal string; a swallowed unmount failure that left cleanup
+deleting through a live overlay; `remove_dir_all` on a mount point whose
+parent is read-only; `nex commit` writing a ref that was never made bootable;
+activation ordered before a cleanup that needs a writable filesystem; staged
+overlay contents copied one level too deep; `BuildOpts` never receiving the
+context's fallback stores; and `CONFIG_IPC_NS` silently dropped for want of
+`CONFIG_SYSVIPC`.
+
+The last of the twelve arrived after the tests were already green, and it is
+the one worth remembering. Renaming `/nex/repo` to `/nex/store` looked done:
+the CLI used the new name, every test passed, and nothing complained. It was
+not done. `pkg/core/kernel/initramfs-init.sh` still bound the store at the
+old path, so `/nex/store` was an empty directory on every machine and all
+five tests were passing through the legacy fallback -- the code path meant
+for old machines was the only one anyone had ever exercised. A green suite
+said nothing about it, because the tests had been built on machines the
+harness itself set up under the old name. The check that caught it was
+reading the acceptance list literally: `/nex/store` was supposed to exist on
+an upgraded machine, and it did not exist anywhere. `store-upgrade` now
+proves both directions, and it proves them by content: it renames
+`/var/nex/store` back to `/var/nex/repo`, reboots, and checks that
+`/nex/store` is served from the legacy directory (read from
+`/proc/self/mountinfo`, field 4) with 34311 objects, 24 refs and the seeded
+ref's commit id all unchanged, then has `nex deploy` resolve a ref through
+it.
+
+The deliberately-broken-command check was rerun against the finished suite,
+which is the only run where it proves anything: with four tests failing for
+their own reasons, "exactly one test fails" is not a claim about isolation.
+A typo'd deploy ref made `deploy-and-rollback` fail alone, reporting
+`deploy-exit=1` and the guest's own line `ref not found:
+systems/nex-systemd/0.0.1-typo-deliberately-broken`, while the other four
+stayed green -- including `store-upgrade`, which resolves the same system ref
+for its own probe and was unaffected.
+
+`nex link examples/desktop-vwl/desktop-vwl.yaml` succeeds, linking 163
+references, where the six `dev:` sources made it refuse before. The built
+image carries `/usr/share/nex/nex.bundle` at 7.5 MB and nothing else under
+`/usr/share/nex`, with zero `vendor/zub-store` paths anywhere in the tree.
+`cargo test` in `src/cli` passes 205 tests.
+
 ## Context and Orientation
 
 Terms used here, defined once:
@@ -2153,7 +2251,7 @@ full suite green.
 
 The plan is done when:
 
-- `scripts/test-machine-operations.sh` prints `PASS:` for all four tests, from
+- `scripts/test-machine-operations.sh` prints `PASS:` for all five tests, from
   a fresh overlay, in any order, and twice in a row.
 - A deliberately broken guest command makes exactly one test fail, and the
   failure names the operation and carries the guest's error line.
@@ -2199,16 +2297,22 @@ history on every regeneration.
 
 New manifest interface: the `git_bundle` source kind, usable by any manifest.
 
-Changed machine interfaces: `/nex/store` replaces `/nex/repo`, `--store`
-replaces `--repo`, and `/usr/share/nex/nex.bundle` replaces the
-`/usr/share/nex/manifests` tree.
+Changed machine interfaces: `/nex/store` replaces `/nex/repo` as the one path
+a machine's content store is reachable at, `--store` replaces `--repo`, and
+`/usr/share/nex/nex.bundle` replaces the `/usr/share/nex/manifests` tree. The
+rename reaches the boot path: `store_bind_source()` in
+`pkg/core/kernel/initramfs-init.sh` binds whichever directory actually holds a
+store -- new name or old -- onto `/nex/store`, so a machine installed before
+the rename keeps its objects.
 
 Depends on QEMU, `ssh`, `ssh-keygen`, a built fixture, and the zub binary named
 by `ZUB_BIN`. ExecPlan 019, splitting the CLI into its own repository, is
 paused and does not depend on this plan, though it is easier afterwards.
 
-One product question stays open and deliberately does not block this plan:
-whether `base/nex-systemd.yaml` should carry the kernel's `fs-overlay` output
-so that a shipped Nex system can stage an install. The fixture adds it, so the
-tests can run; a machine built from `nex-systemd` alone still cannot stage. See
+The question this plan left open -- whether `base/nex-systemd.yaml` should
+carry the kernel's `fs-overlay` output so that a shipped Nex system can stage
+an install -- was answered during the work: the human asked for the minimum
+that makes staging work, so `nex-systemd` now lists `kernel-fs-overlay`
+(`base/nex-systemd.yaml:86`) and the fixture no longer has to add it. Any
+machine built from `nex-systemd` can stage. See
 `.agents/knowledge/kernel-and-boot.md`.
