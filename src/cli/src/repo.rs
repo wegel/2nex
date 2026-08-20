@@ -130,14 +130,24 @@ pub const SYSTEM_STORE: &str = "/nex/store";
 const LEGACY_SYSTEM_STORE: &str = "/nex/repo";
 
 /// Return the machine store, preferring the current name.
+///
+/// Both paths exist as mount points in a built image, so mere existence proves
+/// nothing: an empty `/nex/store` would otherwise win over a populated
+/// `/nex/repo` and every operation would fail with "not a zub repository".
+/// Test for an actual store instead.
 pub fn system_store_path() -> PathBuf {
-    if Path::new(SYSTEM_STORE).exists() {
+    if is_store(Path::new(SYSTEM_STORE)) {
         return PathBuf::from(SYSTEM_STORE);
     }
-    if Path::new(LEGACY_SYSTEM_STORE).exists() {
+    if is_store(Path::new(LEGACY_SYSTEM_STORE)) {
         return PathBuf::from(LEGACY_SYSTEM_STORE);
     }
     PathBuf::from(SYSTEM_STORE)
+}
+
+/// A zub store keeps its objects and refs at the top level.
+fn is_store(path: &Path) -> bool {
+    path.join("objects").is_dir() && path.join("refs").is_dir()
 }
 
 pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
