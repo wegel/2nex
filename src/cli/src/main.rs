@@ -161,13 +161,14 @@ fn run_build(args: &commands::build::BuildArgs) -> io::Result<()> {
     let manifest_dirs = build_manifest_dirs(args, &repositories)?;
     let repo_path = resolve_build_repo_path(args, &repositories)?;
     configure_build_jobs(args.jobs)?;
-    let opts = BuildOpts::from_args(
+    let mut opts = BuildOpts::from_args(
         args,
         repo_path.clone(),
         &manifest_path,
         manifest_dirs.clone(),
         repositories.product_root().to_path_buf(),
     );
+    add_detected_fallback_repos(&mut opts, &repo_path);
 
     if args.hydrate_dependencies {
         hydrate_dependencies(&repo_path, &opts.manifest_file, &manifest_dirs)
@@ -175,6 +176,27 @@ fn run_build(args: &commands::build::BuildArgs) -> io::Result<()> {
         build::build_single(&opts)
     } else {
         build_with_dependencies(&manifest_path, &manifest_dirs, &opts)
+    }
+}
+
+/// Let a build see the stores the context already knows about.
+///
+/// `BuildOpts::fallback_repos` was filled only from `--fallback-repo`, while
+/// `repo::detect_context` separately works out that a user store falls back to
+/// `/nex/repo`. The two never met, so on an installed machine `nex build` could
+/// not resolve a dependency out of the system store however complete that store
+/// was, and reported the dependency as missing instead.
+fn add_detected_fallback_repos(opts: &mut BuildOpts, repo_path: &str) {
+    let Ok(context) = repo::detect_context(false) else {
+        return;
+    };
+
+    for fallback in context.fallback_repos {
+        let candidate = fallback.to_string_lossy().to_string();
+        if candidate == repo_path || opts.fallback_repos.contains(&candidate) {
+            continue;
+        }
+        opts.fallback_repos.push(candidate);
     }
 }
 
