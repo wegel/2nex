@@ -21,7 +21,12 @@ CONFIG_DMIID=y
 CONFIG_DMI_SYSFS=y
 CONFIG_BLK_DEV_BSG=y
 
-# namespaces used by systemd units
+# namespaces used by systemd units, and by the build sandbox, which unshares
+# all of them at once. CONFIG_IPC_NS depends on CONFIG_SYSVIPC: without it the
+# option is silently dropped, /proc/self/ns/ipc never appears, and every
+# `unshare --ipc` fails with EINVAL, which is what stopped a machine building
+# any package.
+CONFIG_SYSVIPC=y
 CONFIG_NAMESPACES=y
 CONFIG_UTS_NS=y
 CONFIG_IPC_NS=y

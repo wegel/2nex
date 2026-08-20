@@ -16,7 +16,7 @@ ZUB_BIN="${ZUB_BIN:-/home/wegel/work/perso/zub/target/debug/zub}"
 ZUB_REPO="${ZUB_REPO:-$ROOT_DIR/.nex/repo}"
 NEX_BIN="${NEX_BIN:-$ROOT_DIR/src/cli/target/debug/nex}"
 FROM_REF="${FROM_REF:-systems/nex-test-fixture/0.0.1}"
-EXPECTED_CHECKSUM="${EXPECTED_CHECKSUM:-c977b94d9847f527c55eb9afb855194b8eeac50b6a15015451631de641e88d9e}"
+EXPECTED_CHECKSUM="${EXPECTED_CHECKSUM:-f0f4c0a9279ff81c2e30466a9808fc488a8809d2772d0786bc554b915c73a582}"
 
 SSH_PORT_BASE="${SSH_PORT_BASE:-10040}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-240}"
@@ -787,59 +787,3 @@ ${ALL_TESTS[*]}
 EOF
 }
 
-main() {
-    local only_test=""
-    local tests=()
-    local test
-    local failures=0
-    local from_checksum
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --test)
-                only_test=$2
-                shift 2
-                ;;
-            -h|--help)
-                usage
-                exit 0
-                ;;
-            *)
-                die "unknown argument: $1"
-                ;;
-        esac
-    done
-
-    require_tools
-
-    ensure_ref "$FROM_REF"
-    from_checksum=$(checksum_for_ref "$FROM_REF")
-    [[ "$from_checksum" == "$EXPECTED_CHECKSUM" ]] ||
-        die "fixture checksum drifted: expected $EXPECTED_CHECKSUM, got $from_checksum for $FROM_REF"
-
-    log "fixture ref: $FROM_REF"
-    log "fixture checksum: $from_checksum"
-
-    mkdir -p "$ARTIFACT_ROOT"
-    build_backing_image "$FROM_REF" "$from_checksum"
-
-    if [[ -n "$only_test" ]]; then
-        tests=("$only_test")
-    else
-        tests=("${ALL_TESTS[@]}")
-    fi
-
-    for test in "${tests[@]}"; do
-        if ! run_test "$test"; then
-            failures=$((failures + 1))
-        fi
-    done
-
-    printf '\n=== summary ===\n'
-    printf 'tests run: %d\n' "${#tests[@]}"
-    printf 'failures: %d\n' "$failures"
-
-    [[ "$failures" -eq 0 ]]
-}
-
-main "$@"

@@ -6,7 +6,7 @@ system:
   description: Minimal nex-systemd machine that can build a package on itself
   nex_structure: true
   extends: nex:base/nex-systemd.yaml
-  checksum: 7a902425d6315f6d66930b5a26fe4b41219baa3729a6e6cae9c0657cf691c034
+  checksum: c977b94d9847f527c55eb9afb855194b8eeac50b6a15015451631de641e88d9e
 
 packages:
 # self-hosting: git lets nex-init-manifests clone the shipped bundle into a
@@ -16,37 +16,9 @@ packages:
   manifest_ref: d832fdf152d75b7e105fbc1660ed8f95ec3d0916
 
 files:
-# Override the parent's nex-init-manifests: a machine always needs the full
-# history of the manifests repository, since packages name their build
-# environment by historical Git blob SHA. `git init` plus one commit over a
-# shipped tree cannot hold that history, so clone it from a bundle instead.
-- path: /usr/local/bin/nex-init-manifests
-  mode: 493
-  content: |
-    #!/bin/sh
-    set -eu
-
-    dst=/nex/manifests
-    bundle=/usr/share/nex/nex.bundle
-
-    if [ -d "$dst/.git" ]; then
-        exit 0
-    fi
-
-    if [ ! -f "$bundle" ]; then
-        echo "nex-init-manifests: missing bundle at $bundle" >&2
-        exit 0
-    fi
-
-    if ! command -v git >/dev/null 2>&1; then
-        echo "nex-init-manifests: git not available, cannot clone $bundle" >&2
-        exit 0
-    fi
-
-    git clone "$bundle" "$dst"
-    git -C "$dst" config user.name "nex"
-    git -C "$dst" config user.email "nex@localhost"
-
+# base/nex-systemd.yaml's own nex-init-manifests already clones this bundle
+# (it looks for /usr/share/nex/nex.bundle and runs `git clone`), so no
+# override is needed here -- only the bundle file itself, below.
 # A bundle of this repository's full history, pinned to the commit this
 # fixture was built from. Regenerate with a detached worktree at the pinned
 # commit, then `git -c pack.threads=1 bundle create <out> HEAD` from inside
