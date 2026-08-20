@@ -252,7 +252,7 @@ stage_root_and_var() {
         "$deploy_dir/dev" \
         "$deploy_dir/run" \
         "$deploy_dir/tmp" \
-        "$deploy_dir/nex/repo" \
+        "$deploy_dir/nex/store" \
         "$deploy_dir/nex/deployments" \
         "$deploy_dir/nex/staging" \
         "$deploy_dir/nex/users" \
@@ -279,7 +279,7 @@ stage_root_and_var() {
         "$var_content/lib/systemd/coredump" \
         "$var_content/cache/fontconfig" \
         "$var_content/tmp" \
-        "$var_content/nex/repo" \
+        "$var_content/nex/store" \
         "$var_content/nex/users" \
         "$var_content/nex/manifests" \
         "$var_content/nex/upgrade-source"
@@ -302,7 +302,7 @@ stage_root_and_var() {
     "$TEST_IDENTITY_HELPER" "$factory_etc" "$var_content" "$ASSERT_KEY.pub" root
     prepare_qemu_network "$var_content"
 
-    build_guest_repo "$var_content/nex/repo" "$var_content/nex/upgrade-source"
+    build_guest_repo "$var_content/nex/store" "$var_content/nex/upgrade-source"
 }
 
 create_esp() {
@@ -552,7 +552,7 @@ assert_deployment_file_materialized() {
     run_guest_cmd "
         set -eu
         deployment_root='/sysroot/nex/deployments/${deployment}'
-        repo_blobs='/nex/repo/objects/blobs'
+        repo_blobs='/nex/store/objects/blobs'
         file=\"\$deployment_root/${HARDLINK_PROBE_PATH}\"
         test -f \"\$file\"
         links=\$(stat -c '%h' \"\$file\")
@@ -606,10 +606,10 @@ run_upgrade_flow() {
     assert_administrator_state
     assert_adapters
 
-    run_guest_cmd "! zub --repo /nex/repo rev-parse '$TO_REF' >/tmp/to-ref-before 2>&1"
-    run_guest_cmd "nex upgrade '$TO_REF' --sysroot /sysroot --repo /nex/repo"
+    run_guest_cmd "! zub --repo /nex/store rev-parse '$TO_REF' >/tmp/to-ref-before 2>&1"
+    run_guest_cmd "nex upgrade '$TO_REF' --sysroot /sysroot --repo /nex/store"
     run_guest_cmd "test -d '/sysroot/nex/deployments/${to_checksum}.1'"
-    run_guest_cmd "zub --repo /nex/repo rev-parse '$TO_REF' >/dev/null"
+    run_guest_cmd "zub --repo /nex/store rev-parse '$TO_REF' >/dev/null"
     assert_deployment_file_materialized "${to_checksum}.1"
     stop_guest "$qemu_pid"
 

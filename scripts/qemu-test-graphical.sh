@@ -656,7 +656,7 @@ build_direct_initramfs_disk() {
     var_content="$DIRECT_ROOT/var-content"
 
     mkdir -p \
-        "$root_content/nex/repo" \
+        "$root_content/nex/store" \
         "$root_content/nex/staging" \
         "$root_content/proc" \
         "$root_content/sys" \
@@ -680,7 +680,7 @@ build_direct_initramfs_disk() {
         "$deploy_dir/dev" \
         "$deploy_dir/run" \
         "$deploy_dir/tmp" \
-        "$deploy_dir/nex/repo" \
+        "$deploy_dir/nex/store" \
         "$deploy_dir/nex/deployments" \
         "$deploy_dir/nex/staging" \
         "$deploy_dir/nex/users" \
@@ -707,7 +707,7 @@ build_direct_initramfs_disk() {
         "$var_content/lib/systemd/coredump" \
         "$var_content/cache/fontconfig" \
         "$var_content/tmp" \
-        "$var_content/nex/repo" \
+        "$var_content/nex/store" \
         "$var_content/nex/staging" \
         "$var_content/nex/users" \
         "$var_content/nex/manifests"

@@ -93,12 +93,12 @@ zub --repo="$REPO" checkout "$SYSTEM_REF" "$DEPLOY_DIR"
 ln -sfn "deployments/${SYSTEM_CHECKSUM}.0" "$ROOT_CONTENT/nex/current"
 
 log "Initializing repo with remote (SSH to host)..."
-rm -rf "$ROOT_CONTENT/nex/repo"
-zub init "$ROOT_CONTENT/nex/repo"
+rm -rf "$ROOT_CONTENT/nex/store"
+zub init "$ROOT_CONTENT/nex/store"
 
 HOST_USER="$USER"
 HOST_REPO_PATH="$REPO"
-cat > "$ROOT_CONTENT/nex/repo/config.toml" << EOF
+cat > "$ROOT_CONTENT/nex/store/config.toml" << EOF
 [namespace]
 uid_map = []
 gid_map = []

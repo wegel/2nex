@@ -258,7 +258,7 @@ var_src=$(source_for /var)
 source_contains /etc "$expected_var"
 source_contains /home "$expected_var"
 source_contains /root "$expected_var"
-source_contains /nex/repo "$root_src"
+source_contains /nex/store "$root_src"
 source_contains /nex/staging "$root_src"
 source_contains /nex/users "$expected_var"
 source_contains /nex/manifests "$expected_var"
@@ -266,7 +266,7 @@ source_contains /nex/manifests "$expected_var"
 assert_writable_dir /etc
 assert_writable_dir /home
 assert_writable_dir /root
-assert_writable_dir /nex/repo
+assert_writable_dir /nex/store
 assert_writable_dir /nex/staging
 assert_writable_dir /nex/users
 assert_writable_dir /nex/manifests
@@ -392,7 +392,7 @@ var_src=$(source_for /var)
 source_contains /etc "$expected_var"
 source_contains /home "$expected_var"
 source_contains /root "$expected_var"
-source_contains /nex/repo "$root_src"
+source_contains /nex/store "$root_src"
 source_contains /nex/staging "$root_src"
 source_contains /nex/users "$expected_var"
 source_contains /nex/manifests "$expected_var"
@@ -400,7 +400,7 @@ source_contains /nex/manifests "$expected_var"
 assert_writable_dir /etc
 assert_writable_dir /home
 assert_writable_dir /root
-assert_writable_dir /nex/repo
+assert_writable_dir /nex/store
 assert_writable_dir /nex/staging
 assert_writable_dir /nex/users
 assert_writable_dir /nex/manifests
@@ -541,7 +541,7 @@ build_direct_initramfs_disk() {
     "$ZUB_BIN" checkout --copy "$TARGET_REF" "$DEPLOY_DIR"
 
     mkdir -p \
-        "$DIRECT_ROOT/root-content/nex/repo" \
+        "$DIRECT_ROOT/root-content/nex/store" \
         "$DIRECT_ROOT/root-content/nex/staging" \
         "$DIRECT_ROOT/root-content/proc" \
         "$DIRECT_ROOT/root-content/sys" \
@@ -565,7 +565,7 @@ build_direct_initramfs_disk() {
         "$DEPLOY_DIR/dev" \
         "$DEPLOY_DIR/run" \
         "$DEPLOY_DIR/tmp" \
-        "$DEPLOY_DIR/nex/repo" \
+        "$DEPLOY_DIR/nex/store" \
         "$DEPLOY_DIR/nex/deployments" \
         "$DEPLOY_DIR/nex/staging" \
         "$DEPLOY_DIR/nex/users" \

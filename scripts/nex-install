@@ -303,9 +303,9 @@ format_partitions() {
 
 seed_installer_remotes() {
     target_root=$1
-    repo_dir="$target_root/nex/repo"
-    config_path="$repo_dir/config.toml"
-    mkdir -p "$repo_dir/remotes"
+    store_dir="$target_root/nex/store"
+    config_path="$store_dir/config.toml"
+    mkdir -p "$store_dir/remotes"
 
     cmdline_path=${NEX_INSTALL_CMDLINE:-/proc/cmdline}
     cmdline=$(cat "$cmdline_path" 2>/dev/null || true)
@@ -321,25 +321,13 @@ seed_installer_remotes() {
                 url=${remote#*=}
                 [ -n "$name" ] || continue
                 [ -n "$url" ] || continue
-                ensure_zub_config "$config_path"
+                [ -f "$config_path" ] ||
+                    die "$config_path is missing; the store was not initialized"
                 append_zub_remote "$config_path" "$name" "$url"
-                printf "%s\n" "$url" > "$repo_dir/remotes/$name"
+                printf "%s\n" "$url" > "$store_dir/remotes/$name"
                 ;;
         esac
     done
-}
-
-ensure_zub_config() {
-    config_path=$1
-    if [ -f "$config_path" ]; then
-        return 0
-    fi
-
-    cat > "$config_path" <<'EOF'
-[namespace]
-uid_map = []
-gid_map = []
-EOF
 }
 
 append_zub_remote() {
@@ -500,15 +488,18 @@ copy_system() {
     mkdir -p /run/sysroot/var/tmp
     chmod 1777 /run/sysroot/var/tmp
     ln -sf /run /run/sysroot/var/run
-    mkdir -p /run/sysroot/nex/repo
+    mkdir -p /run/sysroot/nex/store
     mkdir -p /run/sysroot/nex/staging
     mkdir -p /run/sysroot/var/nex/users
     mkdir -p /run/sysroot/var/nex/manifests
     mkdir -p /run/sysroot/var/nex/system
 
-    if command -v zub >/dev/null 2>&1; then
-        zub init /run/sysroot/nex/repo 2>/dev/null || true
-    fi
+    # zub init records this machine's own uid/gid mapping in the store's
+    # config.toml, and every write to the store needs it. A machine without a
+    # usable store cannot install or build anything, so a failure here ends the
+    # install rather than being swallowed.
+    command -v zub >/dev/null 2>&1 || die "zub not found; cannot initialize the machine store"
+    zub init /run/sysroot/nex/store || die "zub init failed for /nex/store"
     seed_installer_remotes /run/sysroot
 
     seed_factory_etc "/run/sysroot${deploy_dir}" /run/sysroot/var/etc

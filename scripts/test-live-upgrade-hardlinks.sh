@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Prove the live-upgrade checkout path hardlinks files from /nex/repo.
+# Prove the live-upgrade checkout path hardlinks files from /nex/store.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -55,7 +55,7 @@ if [[ -z "$WORK_DIR" ]]; then
     WORK_DIR="$(mktemp -d "$TMP_PARENT/live-upgrade-hardlink.XXXXXX")"
 fi
 
-repo="$WORK_DIR/nex/repo"
+repo="$WORK_DIR/nex/store"
 sysroot="$WORK_DIR/sysroot"
 source_root="$WORK_DIR/source"
 probe_name="nex-hardlink-probe"

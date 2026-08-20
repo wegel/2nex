@@ -104,14 +104,14 @@ ln -sfn "deployments/${SYSTEM_CHECKSUM}.0" "$ROOT_CONTENT/nex/current"
 
 # initialize empty zub repo with remote pointing to host
 log "Initializing repo with remote (SSH to host)..."
-rm -rf "$ROOT_CONTENT/nex/repo"
-zub init "$ROOT_CONTENT/nex/repo"
+rm -rf "$ROOT_CONTENT/nex/store"
+zub init "$ROOT_CONTENT/nex/store"
 
 # configure remote to fetch from host via SSH
 # VM sees host at 10.0.2.2 (QEMU user-mode networking)
 HOST_USER="$USER"
 HOST_REPO_PATH="$REPO"
-cat > "$ROOT_CONTENT/nex/repo/config.toml" << EOF
+cat > "$ROOT_CONTENT/nex/store/config.toml" << EOF
 [namespace]
 uid_map = []
 gid_map = []
