@@ -20,7 +20,7 @@ fn deploy_reaches_store_open_when_repo_and_deployments_use_different_devices() {
     let error = run(&DeployArgs {
         system_ref: "systems/demo/0.0.1".to_string(),
         sysroot,
-        repo: PathBuf::from("/proc"),
+        repo: Some(PathBuf::from("/proc")),
         dry_run: true,
         force: false,
         allow_commit_hash: false,
@@ -45,7 +45,7 @@ fn deploy_requires_system_checksum_metadata_by_default() -> io::Result<()> {
     let error = run(&DeployArgs {
         system_ref: "systems/demo/0.0.1".to_string(),
         sysroot,
-        repo,
+        repo: Some(repo),
         dry_run: true,
         force: false,
         allow_commit_hash: false,
@@ -74,7 +74,7 @@ fn deploy_accepts_build_checksum_metadata() -> io::Result<()> {
     run(&DeployArgs {
         system_ref: "systems/demo/0.0.1".to_string(),
         sysroot: sysroot.clone(),
-        repo,
+        repo: Some(repo),
         dry_run: false,
         force: false,
         allow_commit_hash: false,
@@ -108,7 +108,7 @@ fn deploy_rejects_existing_checksum_without_force() -> io::Result<()> {
     let error = run(&DeployArgs {
         system_ref: "systems/demo/0.0.1".to_string(),
         sysroot,
-        repo,
+        repo: Some(repo),
         dry_run: true,
         force: false,
         allow_commit_hash: false,
@@ -140,7 +140,7 @@ fn deploy_publishes_temp_checkout_atomically() -> io::Result<()> {
     run(&DeployArgs {
         system_ref: "systems/demo/0.0.1".to_string(),
         sysroot,
-        repo,
+        repo: Some(repo),
         dry_run: false,
         force: false,
         allow_commit_hash: false,
@@ -176,7 +176,7 @@ fn deploy_allows_duplicate_checksum_with_force() -> io::Result<()> {
     run(&DeployArgs {
         system_ref: "systems/demo/0.0.1".to_string(),
         sysroot,
-        repo,
+        repo: Some(repo),
         dry_run: false,
         force: true,
         allow_commit_hash: false,
@@ -202,7 +202,7 @@ fn deploy_hardlinks_from_repo_outside_sysroot() -> io::Result<()> {
     run(&DeployArgs {
         system_ref: "systems/demo/0.0.1".to_string(),
         sysroot: sysroot.clone(),
-        repo: repo.clone(),
+        repo: Some(repo.clone()),
         dry_run: false,
         force: false,
         allow_commit_hash: false,

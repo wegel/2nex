@@ -20,9 +20,10 @@ pub struct DeployArgs {
     #[clap(long, default_value = "/sysroot")]
     pub sysroot: PathBuf,
 
-    /// System zub repo (default: /nex/repo)
-    #[clap(long, default_value = "/nex/repo")]
-    pub repo: PathBuf,
+    /// Machine content store (default: /nex/store, or /nex/repo when that is
+    /// what this machine has)
+    #[clap(long = "store", alias = "repo")]
+    pub repo: Option<PathBuf>,
 
     /// Print what would be done without writing
     #[clap(long)]
@@ -40,7 +41,12 @@ pub struct DeployArgs {
 pub fn run(args: &DeployArgs) -> io::Result<()> {
     let sysroot = &args.sysroot;
     let deployments_dir = sysroot.join("nex/deployments");
-    let repo_path = &args.repo;
+    // unset means "whatever this machine calls its store"
+    let resolved_store = args
+        .repo
+        .clone()
+        .unwrap_or_else(crate::repo::system_store_path);
+    let repo_path = &resolved_store;
     let mut remount = RemountGuard::new(sysroot)?;
 
     if !deployments_dir.exists() {

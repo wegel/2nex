@@ -25,9 +25,10 @@ pub fn detect_repo_path() -> String {
     if Path::new(".nex/repo").exists() {
         return ".nex/repo".to_string();
     }
-    // runtime: system has repo at /nex/repo
-    if Path::new("/nex/repo").exists() {
-        return "/nex/repo".to_string();
+    // runtime: the machine store, current name first
+    let system_store = system_store_path();
+    if system_store.exists() {
+        return system_store.to_string_lossy().to_string();
     }
     // default for new builds
     ".nex/repo".to_string()
@@ -116,6 +117,29 @@ impl NexContext {
 /// - regular user: operates on /nex/users/$USER/, no staging required
 /// - root without --system: operates on /nex/users/root/, no staging required
 /// - root with --system: operates on /nex/, staging required
+/// The machine-wide content store.
+///
+/// It was called `/nex/repo`, which collided with the Git sense of the word:
+/// `/nex/manifests` is a repository, this is a store of content-addressed
+/// objects. The code has always preferred "store" (`main.rs` declares
+/// `pub mod store`, the dependency is the `zub-store` crate), so the path now
+/// matches. `/nex/repo` is still honoured when present, because the store lives
+/// on the persistent root and is bind-mounted into each deployment: renaming it
+/// outright would strand the data on every machine already installed.
+pub const SYSTEM_STORE: &str = "/nex/store";
+const LEGACY_SYSTEM_STORE: &str = "/nex/repo";
+
+/// Return the machine store, preferring the current name.
+pub fn system_store_path() -> PathBuf {
+    if Path::new(SYSTEM_STORE).exists() {
+        return PathBuf::from(SYSTEM_STORE);
+    }
+    if Path::new(LEGACY_SYSTEM_STORE).exists() {
+        return PathBuf::from(LEGACY_SYSTEM_STORE);
+    }
+    PathBuf::from(SYSTEM_STORE)
+}
+
 pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
     let is_root = Uid::effective().is_root();
     let user = std::env::var("USER").unwrap_or_else(|_| "unknown".into());
@@ -127,8 +151,9 @@ pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
         // in build-time context, still use /nex/repo as fallback if it exists
         // (useful when building on a system that already has packages)
         let mut fallback_repos = Vec::new();
-        if Path::new("/nex/repo").exists() {
-            fallback_repos.push(PathBuf::from("/nex/repo"));
+        let system_store = system_store_path();
+        if system_store.exists() {
+            fallback_repos.push(system_store);
         }
 
         return Ok(NexContext {
@@ -158,7 +183,7 @@ pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
         }
 
         return Ok(NexContext {
-            repo_path: PathBuf::from("/nex/repo"),
+            repo_path: system_store_path(),
             pkg_path: PathBuf::from("/nex/pkg"),
             env_path: PathBuf::from("/nex/env"),
             fallback_repos: Vec::new(), // system is the ultimate fallback
@@ -176,8 +201,9 @@ pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
 
     // build fallback chain: user -> system
     let mut fallback_repos = Vec::new();
-    if Path::new("/nex/repo").exists() {
-        fallback_repos.push(PathBuf::from("/nex/repo"));
+    let system_store = system_store_path();
+    if system_store.exists() {
+        fallback_repos.push(system_store);
     }
 
     let manifest_dirs = prefer_local_manifest_dirs(

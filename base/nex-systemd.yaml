@@ -372,7 +372,11 @@ build:
     # /nex/env is required as well: nex stage mounts an overlay there
     # (stage.rs:108), and /nex sits on the read-only deployment root, so the
     # mount point cannot be created at install time.
-    mkdir -p /target/nex/repo /target/nex/deployments /target/nex/users /target/nex/staging /target/nex/manifests /target/nex/env
+    # /nex/store is the machine's content store. /nex/repo is the name it used
+    # to have, kept as a mount point so a machine installed before the rename
+    # still finds its data after upgrading: the store lives on the persistent
+    # root and is bind-mounted in, so renaming outright would strand it.
+    mkdir -p /target/nex/store /target/nex/repo /target/nex/deployments /target/nex/users /target/nex/staging /target/nex/manifests /target/nex/env
 
     # openssh libexec symlinks
     mkdir -p /target/usr/libexec

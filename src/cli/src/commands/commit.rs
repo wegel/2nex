@@ -8,7 +8,13 @@ use super::stage::{cleanup_staging, is_staged};
 use crate::store;
 
 const STAGING_STATE_DIR: &str = super::stage::STAGING_STATE_DIR;
-const NEX_REPO: &str = "/nex/repo";
+/// The machine store. Resolved rather than hardcoded so a machine installed
+/// before the rename, which still has `/nex/repo`, keeps working.
+fn nex_repo() -> String {
+    crate::repo::system_store_path()
+        .to_string_lossy()
+        .to_string()
+}
 
 #[derive(Args)]
 pub struct CommitArgs {
@@ -49,7 +55,7 @@ pub fn run(args: &CommitArgs) -> io::Result<()> {
     println!("Committing changes: {}", message);
 
     // check if we're on a nex system with repo
-    if !Path::new(NEX_REPO).exists() {
+    if !Path::new(&nex_repo()).exists() {
         // no system repo - just merge the overlay and exit staging
         println!("No system repo found. Merging overlay changes directly...");
         merge_overlay_changes()?;
@@ -126,7 +132,7 @@ fn create_deployment(message: &str) -> io::Result<String> {
 
     // checkout current deployment
     println!("  Checking out current deployment...");
-    store::checkout_into(NEX_REPO, &current_ref, Path::new(&staging_dir), false)?;
+    store::checkout_into(&nex_repo(), &current_ref, Path::new(&staging_dir), false)?;
 
     // apply overlay changes
     println!("  Applying staged changes...");
@@ -157,7 +163,7 @@ fn create_deployment(message: &str) -> io::Result<String> {
         ("nex.deployment.parent".to_string(), current_ref),
     ];
 
-    store::commit_tree(NEX_REPO, &new_ref, Path::new(&staging_dir), &metadata)?;
+    store::commit_tree(&nex_repo(), &new_ref, Path::new(&staging_dir), &metadata)?;
 
     println!("  Created deployment: {}", new_ref);
 
@@ -185,7 +191,7 @@ fn activate_deployment(new_ref: &str) -> io::Result<()> {
     super::deploy::run(&super::deploy::DeployArgs {
         system_ref: new_ref.to_string(),
         sysroot: PathBuf::from("/sysroot"),
-        repo: PathBuf::from(NEX_REPO),
+        repo: Some(crate::repo::system_store_path()),
         dry_run: false,
         force: false,
         allow_commit_hash: true,
@@ -194,7 +200,7 @@ fn activate_deployment(new_ref: &str) -> io::Result<()> {
 
 fn get_current_deployment_ref() -> io::Result<String> {
     // try to find the latest deployment ref
-    let store = store::Store::open(NEX_REPO)?;
+    let store = store::Store::open(nex_repo())?;
     // The trailing `*` is required. `Store::refs` filters with a glob pattern
     // (`zub::list_refs_matching`), and a pattern with no wildcard matches only
     // that exact literal, so a bare prefix returns nothing however many refs
