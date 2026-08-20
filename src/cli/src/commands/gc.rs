@@ -16,7 +16,7 @@ pub struct GcArgs {
     #[clap(long, default_value_t = 2)]
     pub keep: usize,
 
-    /// Also run zub object GC on the system repo (/nex/repo)
+    /// Also run zub object GC on the machine store (/nex/store)
     #[clap(long)]
     pub zub: bool,
 

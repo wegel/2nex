@@ -19,7 +19,7 @@ use zub;
 use crate::manifest::ManifestRepositories;
 
 /// detect the appropriate repo path based on environment.
-/// checks in order: .nex/repo (local build-time) -> /nex/repo (runtime)
+/// checks in order: .nex/repo (local build-time) -> /nex/store (runtime)
 pub fn detect_repo_path() -> String {
     // build-time: local .nex/repo takes priority
     if Path::new(".nex/repo").exists() {
@@ -158,7 +158,7 @@ pub fn detect_context(system_flag: bool) -> io::Result<NexContext> {
     if Path::new(".nex/repo").exists() && !system_flag {
         let manifest_dirs = detect_local_manifest_dirs();
 
-        // in build-time context, still use /nex/repo as fallback if it exists
+        // in build-time context, still use the machine store as fallback if it exists
         // (useful when building on a system that already has packages)
         let mut fallback_repos = Vec::new();
         let system_store = system_store_path();

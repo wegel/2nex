@@ -4,7 +4,7 @@ use std::io;
 use std::path::Path;
 use std::process::Command;
 
-// staging must be on the same filesystem as /nex/repo for hardlinks to work
+// staging must be on the same filesystem as /nex/store for hardlinks to work
 pub const STAGING_STATE_DIR: &str = "/nex/staging";
 const NEX_PKG_DIR: &str = "/nex/pkg";
 const USR_BIN_DIR: &str = "/usr/bin";

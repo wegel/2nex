@@ -183,7 +183,7 @@ fn run_build(args: &commands::build::BuildArgs) -> io::Result<()> {
 ///
 /// `BuildOpts::fallback_repos` was filled only from `--fallback-repo`, while
 /// `repo::detect_context` separately works out that a user store falls back to
-/// `/nex/repo`. The two never met, so on an installed machine `nex build` could
+/// `/nex/store`. The two never met, so on an installed machine `nex build` could
 /// not resolve a dependency out of the system store however complete that store
 /// was, and reported the dependency as missing instead.
 fn add_detected_fallback_repos(opts: &mut BuildOpts, repo_path: &str) {
