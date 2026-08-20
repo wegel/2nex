@@ -43,12 +43,20 @@ only the primary store.
 - [x] (2026-08-20 12:54Z) Confirm that the current kernel already builds FUSE,
       CUSE, and virtiofs as modules in `outputs/fs-fuse`; no kernel change is
       needed.
-- [ ] Add the existing kernel `fs-fuse` output to the machine test fixture.
-- [ ] Export the host store read-only for only the tests that request a remote.
-- [ ] Let each machine test choose its initial store refs and remote access.
-- [ ] Add a test that installs tig by pulling its target and runtime closure.
-- [ ] Add a test that makes `nex install` build two guest-only packages in
-      dependency order.
+- [x] (2026-08-20 13:28Z) Add the existing kernel `fs-fuse` output to the
+      machine fixture and prove a booted guest loads `virtiofs` plus `fuse`.
+- [x] (2026-08-20 13:28Z) Export the host store with virtiofsd `--readonly`
+      only for tests that request it. Guest write probes fail, and cleanup
+      removes every daemon and socket.
+- [x] (2026-08-20 13:28Z) Give each machine test explicit tig, gzip, deploy,
+      and remote switches. The original five keep all EP017 seeds and receive
+      no remote device; the two new tests start without optional refs.
+- [x] (2026-08-20 13:28Z) Add `remote-install`: tig and its runtime closure
+      start absent, six refs pull from the read-only host store, the primary
+      target matches the remote commit, and `tig --version` runs.
+- [x] (2026-08-20 13:28Z) Add `build-missing-closure`: one install builds a
+      guest-only leaf before its root, keeps both refs out of the remote, and
+      runs the root command to print the leaf marker.
 - [x] (2026-08-20 13:08Z) Change `nex install` to send an uncached package
       through the dependency graph, with a focused test that finds a missing
       leaf and root through that install helper.
@@ -58,8 +66,9 @@ only the primary store.
 - [x] (2026-08-20 13:15Z) Rebuild `pkg/core/nex/nex.yaml` through its strict
       two-build path. Both builds produced checksum `a0d7a7b1`, and the
       packaged `usr/bin/nex --version` printed `nex 1.0`.
-- [ ] Run focused checks, rebuild the Nex package and its four system
-      consumers reproducibly, and run every machine test green twice.
+- [x] (2026-08-20 13:36Z) Run focused and full Rust checks, rebuild the Nex
+      package and four systems reproducibly, run each machine test alone, and
+      run all seven twice with `failures: 0`.
 
 ## Surprises & Discoveries
 
@@ -84,6 +93,20 @@ only the primary store.
   `src/cli/src/build/orchestration/graph.rs` and the passing tests
   `fresh_fallback_dependency_is_not_scheduled` and
   `stale_fallback_dependency_is_scheduled`.
+
+- Observation: `/nex/users/root/manifests` does not exist on the first SSH
+  command because Nex creates that Git worktree lazily. A read-only test can
+  start in `/nex/manifests`; a test that must edit manifests first creates the
+  detached user worktree explicitly.
+  Evidence: the first `remote-install` run stopped at `cd`, then both corrected
+  guest scripts passed alone and in both full suites.
+
+- Observation: The host's rootless zub setup returns `EPERM` while a direct
+  system checkout applies `/boot` ownership. Running the checkout under
+  `fakeroot` completes the tree, after which `unshare --root` runs the packaged
+  Nex binary normally.
+  Evidence: all four checked-out systems printed `nex 1.0` after the fakeroot
+  checkout; the first direct checkout stopped at `.nex/tmp/ep018-nex-systemd-root/boot`.
 
 ## Decision Log
 
@@ -129,6 +152,20 @@ only the primary store.
   Rationale: `Store` already owns primary, fallback, and remote lookup order.
   Path-only helpers cannot inspect that full chain and recreated the exact
   fallback bug this plan targets.
+  Date/Author: 2026-08-20 / Codex
+
+- Decision: Build one backing image per seed tuple and reuse it for tests with
+  the same tuple during a suite.
+  Rationale: The original tests keep their exact seed set, both new tests share
+  the empty optional set, and a seven-test suite avoids rebuilding the same
+  multi-gigabyte disk image seven times.
+  Date/Author: 2026-08-20 / Codex
+
+- Decision: Give the two synthetic packages a committed host-mode build
+  environment inside the guest's disposable manifests worktree.
+  Rationale: The test needs to prove graph order, not bootstrap a compiler or
+  shell. The leaf installs one shell command, and the root must execute that
+  command from its materialized dependency before it can build.
   Date/Author: 2026-08-20 / Codex
 
 ## Outcomes & Retrospective
@@ -467,6 +504,33 @@ Package check at 2026-08-20 13:15Z:
   this rootless host, but it left the complete binary readable;
   `.nex/tmp/ep018-nex-package-root/usr/bin/nex --version` exited 0 and printed
   `nex 1.0`.
+
+System and machine checks at 2026-08-20 13:36Z:
+
+- `nex check` passed for `base/nex-systemd.yaml`,
+  `tests/nex-test-fixture.yaml`, `examples/desktop-vwl/desktop-vwl.yaml`, and
+  `examples/desktop-dev.yaml`.
+- Strict two-build checks produced matching first and second checksums:
+  `nex-systemd` `62323460`, `nex-test-fixture` `142c22a6`, `desktop-vwl`
+  `0e01885b`, and `desktop-dev` `2b566872`. Full logs are the four matching
+  `.nex/tmp/ep018/*.log` files.
+- Fakeroot checkouts of all four system refs completed. Running each packaged
+  `/usr/bin/nex --version` through `unshare --user --map-root-user --root`
+  printed `nex 1.0`.
+- Each of the seven `scripts/test-machine-operations.sh --test NAME` commands
+  passed alone. The five original test logs also contain no
+  `vhost-user-fs-pci` QEMU argument and no virtiofsd log.
+- `scripts/test-machine-operations.sh` passed twice consecutively with seven
+  tests and zero failures. Logs: `.nex/tmp/ep018/full-suite-1.log` and
+  `.nex/tmp/ep018/full-suite-2.log`.
+- In both full suites each remote test saw host-store counts of 439411 objects
+  and 16859 refs before and after. No `virtiofsd` process or socket remained.
+- The remote install pulled tig's target with 1,374,989 bytes and 27 objects,
+  then pulled five runtime refs, matched target commit `efc64fd7` in primary
+  and remote stores, and ran `tig version 2.6.0`.
+- The guest-only build reported `leaf-before-root`, published both exact refs
+  only in `/nex/store`, and ran `ep018-root`, which printed
+  `EP018_LEAF_MARKER`.
 
 ## Interfaces and Dependencies
 

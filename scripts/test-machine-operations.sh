@@ -3,8 +3,9 @@
 # installed Nex machine, driven entirely from inside a booted guest over SSH.
 #
 # See .agents/execplans/017-machine-operation-tests.md for the design. This
-# implements the harness and all five tests: build-package,
-# temporary-install, persistent-install, deploy-and-rollback, store-upgrade.
+# implements the harness and all seven tests: build-package,
+# temporary-install, persistent-install, deploy-and-rollback, store-upgrade,
+# remote-install, and build-missing-closure.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -16,7 +17,7 @@ ZUB_BIN="${ZUB_BIN:-/home/wegel/work/perso/zub/target/debug/zub}"
 ZUB_REPO="${ZUB_REPO:-$ROOT_DIR/.nex/repo}"
 NEX_BIN="${NEX_BIN:-$ROOT_DIR/src/cli/target/debug/nex}"
 FROM_REF="${FROM_REF:-systems/nex-test-fixture/0.0.1}"
-EXPECTED_CHECKSUM="${EXPECTED_CHECKSUM:-83aec1272aa42d051635280f922e8f555bcea29ac95f8f341ecc03bdf8f93abc}"
+EXPECTED_CHECKSUM="${EXPECTED_CHECKSUM:-142c22a6194d17cc971ae2b20484ecc6f8b530b2dbaa677b6819bd9b42496293}"
 
 SSH_PORT_BASE="${SSH_PORT_BASE:-10040}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-240}"
@@ -26,10 +27,10 @@ KEEP_WORK="${KEEP_MACHINE_TEST_WORK:-0}"
 
 MKE2FS_BIN="${MKE2FS_BIN:-/usr/bin/mke2fs}"
 QEMU_IMG_BIN="${QEMU_IMG_BIN:-/usr/bin/qemu-img}"
+VIRTIOFSD_BIN="${VIRTIOFSD_BIN:-/usr/lib/virtiofsd}"
 
 WORK_DIR="${WORK_DIR:-$ROOT_DIR/.nex/tmp/machine-tests-work}"
 ARTIFACT_ROOT="${ARTIFACT_ROOT:-$ROOT_DIR/.nex/tmp/machine-tests}"
-BACKING_IMG="$WORK_DIR/backing.img"
 ASSERT_KEY="$WORK_DIR/machine-test-ed25519"
 
 BOOTLOADER_SRC="$ROOT_DIR/src/bootloader"
@@ -60,11 +61,34 @@ SEED_CLOSURE_PACKAGE="tig"
 BUILD_PACKAGE_MANIFEST="pkg/cli/archive/gzip.yaml"
 
 # All tests this harness knows about, in run order.
-ALL_TESTS=(build-package temporary-install persistent-install deploy-and-rollback store-upgrade)
+ALL_TESTS=(build-package temporary-install persistent-install deploy-and-rollback store-upgrade remote-install build-missing-closure)
+
+# The original five tests keep their EP017 seed set and have no remote. The
+# two EP018 tests start from only the fixture's own deployment ref and opt in
+# to the host store separately, so a missing seed cannot hide a pull or build.
+declare -A TEST_SEED_TIG=(
+    [remote-install]=0
+    [build-missing-closure]=0
+)
+declare -A TEST_SEED_GZIP=(
+    [remote-install]=0
+    [build-missing-closure]=0
+)
+declare -A TEST_SEED_DEPLOY=(
+    [remote-install]=0
+    [build-missing-closure]=0
+)
+declare -A TEST_REMOTE=(
+    [remote-install]=1
+    [build-missing-closure]=1
+)
 
 CURRENT_SSH_PORT=""
 CURRENT_ASSERT_KEY="$ASSERT_KEY"
 QEMU_PID=""
+VIRTIOFSD_PID=""
+CURRENT_REMOTE_ENABLED=0
+CURRENT_VIRTIOFS_SOCKET=""
 BOOT_WAITED_SECS=""
 
 die() {
@@ -86,6 +110,7 @@ cleanup() {
         kill "$QEMU_PID" 2>/dev/null || true
         wait "$QEMU_PID" 2>/dev/null || true
     fi
+    stop_virtiofsd
     if [[ "$status" -eq 0 && "$KEEP_WORK" != 1 ]]; then
         rm -rf "$WORK_DIR"
     else
@@ -112,6 +137,11 @@ require_tools() {
     [[ -x "$ZUB_BIN" ]] || die "zub binary not found or not executable: $ZUB_BIN"
     [[ -x "$NEX_BIN" ]] || die "nex binary not found or not executable: $NEX_BIN"
     [[ -d "$ZUB_REPO" ]] || die "zub repo not found: $ZUB_REPO"
+}
+
+require_remote_tools() {
+    [[ -x "$VIRTIOFSD_BIN" ]] ||
+        die "virtiofsd not found or not executable: $VIRTIOFSD_BIN"
 }
 
 find_ovmf_code() {
@@ -219,8 +249,8 @@ count = 65536
 EOF
 }
 
-# seed_system_store STORE_DIR
-# Pre-populates the guest's system store with refs tests 2-4 need already
+# seed_system_store STORE_DIR SOURCE_CHECKSUM SEED_TIG SEED_GZIP SEED_DEPLOY
+# Pre-populates the guest's system store with refs selected tests need already
 # built, so the guest never has to build a package (which the environment bug
 # recorded in .agents/knowledge/machine-self-hosting.md would make fail). This
 # is host-side test setup, not the operation under test: the guest still runs
@@ -239,25 +269,36 @@ EOF
 seed_system_store() {
     local repo_dir=$1
     local source_checksum=$2
+    local seed_tig=$3
+    local seed_gzip=$4
+    local seed_deploy=$5
     local ref
     local closure_refs=()
 
-    for ref in "${SEED_REFS[@]}"; do
+    if [[ "$seed_tig" == 1 ]]; then
+        ref=${SEED_REFS[0]}
         "$ZUB_BIN" --repo "$repo_dir" pull "$ZUB_REPO" "$ref" >/dev/null
-    done
 
-    [[ -x "$NEX_BIN" ]] || die "nex binary not found or not executable: $NEX_BIN"
-    mapfile -t closure_refs < <(
-        cd "$ROOT_DIR" && "$NEX_BIN" resolve "$SEED_CLOSURE_PACKAGE" --repo "$ZUB_REPO" -v 2>/dev/null |
-            grep -oE 'x86_64/pkg/[^ ]+/files' | sort -u
-    )
-    [[ "${#closure_refs[@]}" -gt 0 ]] ||
-        die "nex resolve $SEED_CLOSURE_PACKAGE produced no dependency refs to seed"
-    for ref in "${closure_refs[@]}"; do
+        [[ -x "$NEX_BIN" ]] || die "nex binary not found or not executable: $NEX_BIN"
+        mapfile -t closure_refs < <(
+            cd "$ROOT_DIR" && "$NEX_BIN" resolve "$SEED_CLOSURE_PACKAGE" --repo "$ZUB_REPO" -v 2>/dev/null |
+                grep -oE 'x86_64/pkg/[^ ]+/files' | sort -u
+        )
+        [[ "${#closure_refs[@]}" -gt 0 ]] ||
+            die "nex resolve $SEED_CLOSURE_PACKAGE produced no dependency refs to seed"
+        for ref in "${closure_refs[@]}"; do
+            "$ZUB_BIN" --repo "$repo_dir" pull "$ZUB_REPO" "$ref" >/dev/null
+        done
+    fi
+
+    if [[ "$seed_deploy" == 1 ]]; then
+        ref=${SEED_REFS[1]}
         "$ZUB_BIN" --repo "$repo_dir" pull "$ZUB_REPO" "$ref" >/dev/null
-    done
+    fi
 
-    seed_gzip_build_closure "$repo_dir"
+    if [[ "$seed_gzip" == 1 ]]; then
+        seed_gzip_build_closure "$repo_dir"
+    fi
 
     # Publish the store ref for the initial deployment, which is what a correct
     # installer would do. `nex commit` checks the running deployment out of the
@@ -415,6 +456,9 @@ stage_root_and_var() {
     local source_checksum=$2
     local root_content=$3
     local var_content=$4
+    local seed_tig=$5
+    local seed_gzip=$6
+    local seed_deploy=$7
     local deploy_dir="$root_content/nex/deployments/${source_checksum}.0"
     local factory_etc
 
@@ -481,7 +525,12 @@ stage_root_and_var() {
     touch "$var_content/etc/.initialized"
     "$ZUB_BIN" init "$var_content/nex/store" >/dev/null
     write_zub_config "$var_content/nex/store"
-    seed_system_store "$var_content/nex/store" "$source_checksum"
+    seed_system_store \
+        "$var_content/nex/store" \
+        "$source_checksum" \
+        "$seed_tig" \
+        "$seed_gzip" \
+        "$seed_deploy"
 
     factory_etc="$deploy_dir/usr/share/factory/etc"
     if [[ ! -d "$factory_etc" ]]; then
@@ -506,15 +555,21 @@ create_esp() {
 build_backing_image() {
     local source_ref=$1
     local source_checksum=$2
-    local root_content="$WORK_DIR/root-content"
-    local var_content="$WORK_DIR/var-content"
-    local esp_img="$WORK_DIR/esp.img"
-    local root_img="$WORK_DIR/root.img"
-    local var_img="$WORK_DIR/var.img"
+    local backing_img=$3
+    local seed_tig=$4
+    local seed_gzip=$5
+    local seed_deploy=$6
+    local policy_name=$7
+    local build_dir="$WORK_DIR/build-$policy_name"
+    local root_content="$build_dir/root-content"
+    local var_content="$build_dir/var-content"
+    local esp_img="$build_dir/esp.img"
+    local root_img="$build_dir/root.img"
+    local var_img="$build_dir/var.img"
     local root_size_mb root_payload_mb var_payload_mb var_size_mb
     local root_start root_sectors var_start var_sectors disk_size_mb
 
-    rm -rf "$WORK_DIR"
+    rm -rf "$build_dir"
     mkdir -p "$root_content" "$var_content"
 
     ensure_assert_key
@@ -523,7 +578,14 @@ build_backing_image() {
     [[ -f "$BOOTLOADER_EFI" ]] || die "bootloader was not created"
 
     log "staging fixture from $source_ref (checksum $source_checksum)"
-    stage_root_and_var "$source_ref" "$source_checksum" "$root_content" "$var_content"
+    stage_root_and_var \
+        "$source_ref" \
+        "$source_checksum" \
+        "$root_content" \
+        "$var_content" \
+        "$seed_tig" \
+        "$seed_gzip" \
+        "$seed_deploy"
     create_esp "$esp_img"
 
     root_payload_mb=$(du -sm "$root_content" | awk '{ print $1 }')
@@ -547,8 +609,8 @@ build_backing_image() {
     disk_size_mb=$((ESP_SIZE_MB + root_size_mb + var_size_mb + 64))
 
     log "creating backing image (${disk_size_mb}MiB)"
-    truncate -s "${disk_size_mb}M" "$BACKING_IMG"
-    sfdisk "$BACKING_IMG" >/dev/null <<EOF
+    truncate -s "${disk_size_mb}M" "$backing_img"
+    sfdisk "$backing_img" >/dev/null <<EOF
 label: gpt
 unit: sectors
 
@@ -556,13 +618,78 @@ start=2048, size=$((ESP_SIZE_MB * 2048)), type=uefi, name="EFI"
 start=${root_start}, size=${root_sectors}, type=linux, name="nex"
 start=${var_start}, size=${var_sectors}, type=linux, name="nex-var"
 EOF
-    dd if="$esp_img" of="$BACKING_IMG" bs=1M seek=1 conv=notrunc,sparse status=none
-    dd if="$root_img" of="$BACKING_IMG" bs=1M seek="$((root_start / 2048))" \
+    dd if="$esp_img" of="$backing_img" bs=1M seek=1 conv=notrunc,sparse status=none
+    dd if="$root_img" of="$backing_img" bs=1M seek="$((root_start / 2048))" \
         conv=notrunc,sparse status=none
-    dd if="$var_img" of="$BACKING_IMG" bs=1M seek="$((var_start / 2048))" \
+    dd if="$var_img" of="$backing_img" bs=1M seek="$((var_start / 2048))" \
         conv=notrunc,sparse status=none
-    rm -f "$esp_img" "$root_img" "$var_img"
-    rm -rf "$root_content" "$var_content"
+    rm -rf "$build_dir"
+}
+
+start_virtiofsd() {
+    local artifact_dir=$1
+    local socket="$artifact_dir/virtiofsd.sock"
+    local daemon_log="$artifact_dir/virtiofsd.log"
+    local host_store
+    local waited=0
+
+    host_store=$(readlink -f "$ZUB_REPO")
+    [[ -n "$host_store" ]] || die "could not resolve host store path: $ZUB_REPO"
+    [[ ! -e "$socket" ]] || die "refusing stale virtiofs socket: $socket"
+    : > "$daemon_log"
+
+    "$VIRTIOFSD_BIN" \
+        --shared-dir "$host_store" \
+        --socket-path "$socket" \
+        --readonly \
+        > "$daemon_log" 2>&1 &
+    VIRTIOFSD_PID=$!
+    CURRENT_VIRTIOFS_SOCKET="$socket"
+
+    while [[ ! -S "$socket" && "$waited" -lt 100 ]]; do
+        if ! kill -0 "$VIRTIOFSD_PID" 2>/dev/null; then
+            wait "$VIRTIOFSD_PID" 2>/dev/null || true
+            VIRTIOFSD_PID=""
+            die "virtiofsd exited before creating $socket (log: $daemon_log)"
+        fi
+        sleep 0.1
+        waited=$((waited + 1))
+    done
+    [[ -S "$socket" ]] || die "virtiofsd did not create $socket"
+}
+
+stop_virtiofsd() {
+    if [[ -n "$VIRTIOFSD_PID" ]]; then
+        kill "$VIRTIOFSD_PID" 2>/dev/null || true
+        wait "$VIRTIOFSD_PID" 2>/dev/null || true
+        VIRTIOFSD_PID=""
+    fi
+    if [[ -n "$CURRENT_VIRTIOFS_SOCKET" ]]; then
+        rm -f "$CURRENT_VIRTIOFS_SOCKET"
+        CURRENT_VIRTIOFS_SOCKET=""
+    fi
+}
+
+configure_guest_remote() {
+    ssh_probe '
+        set -eu
+        modprobe virtiofs
+        mkdir -p /run/nex-host-store
+        mount -t virtiofs -o ro nex-host-store /run/nex-host-store
+        grep -q "^virtiofs " /proc/modules
+        grep -q "^fuse " /proc/modules
+        if touch /run/nex-host-store/.nex-machine-test-write-probe 2>/dev/null; then
+            rm -f /run/nex-host-store/.nex-machine-test-write-probe
+            echo "remote-write-probe=unexpected-success"
+            exit 1
+        fi
+        echo "remote-write-probe=read-only"
+        if ! grep -q "^name = \"host-machine-test\"$" /nex/store/config.toml; then
+            printf "\n[[remotes]]\nname = \"host-machine-test\"\nurl = \"/run/nex-host-store\"\n" >> /nex/store/config.toml
+        fi
+        echo "remote-modules=virtiofs,fuse"
+        echo "remote-mount=/run/nex-host-store"
+    '
 }
 
 qemu_args() {
@@ -587,6 +714,13 @@ qemu_args() {
         -drive "if=pflash,format=raw,readonly=on,file=$ovmf_code"
     if [[ -f "$ovmf_vars" ]]; then
         printf '%s\0' -drive "if=pflash,format=raw,file=$ovmf_vars"
+    fi
+    if [[ "$CURRENT_REMOTE_ENABLED" == 1 ]]; then
+        printf '%s\0' \
+            -object "memory-backend-memfd,id=mem,size=${MEMORY}M,share=on" \
+            -numa node,memdev=mem \
+            -chardev "socket,id=char-vfs,path=$CURRENT_VIRTIOFS_SOCKET" \
+            -device vhost-user-fs-pci,chardev=char-vfs,tag=nex-host-store
     fi
     printf '%s\0' \
         -drive "file=$overlay_img,format=qcow2,if=none,id=disk" \
@@ -625,6 +759,10 @@ boot() {
     : > "$serial_log"
     : > "$qemu_log"
 
+    if [[ "$CURRENT_REMOTE_ENABLED" == 1 ]]; then
+        start_virtiofsd "$artifact_dir"
+    fi
+
     CURRENT_SSH_PORT="$ssh_port"
     mapfile -d '' -t qemu_argv < <(qemu_args "$ovmf_code" "$overlay_img" "$ssh_port" "$ovmf_vars" "$serial_log")
 
@@ -639,6 +777,9 @@ boot() {
         die "guest SSH probe did not become ready within ${TIMEOUT_SECS}s (serial log: $serial_log, qemu log: $qemu_log)"
     fi
     BOOT_WAITED_SECS="$waited"
+    if [[ "$CURRENT_REMOTE_ENABLED" == 1 ]]; then
+        configure_guest_remote
+    fi
 }
 
 stop_guest() {
@@ -647,6 +788,7 @@ stop_guest() {
         wait "$QEMU_PID" 2>/dev/null || true
         QEMU_PID=""
     fi
+    stop_virtiofsd
 }
 
 # run CMD...
@@ -669,6 +811,7 @@ reboot() {
         wait "$qemu_pid" 2>/dev/null || true
     fi
     QEMU_PID=""
+    stop_virtiofsd
     boot "$overlay_img" "$ssh_port" "$artifact_dir"
 }
 
@@ -701,11 +844,46 @@ declare -A TEST_PHASES=(
     [persistent-install]="before-reboot|REBOOT|after-reboot"
     [deploy-and-rollback]="deploy|REBOOT|verify-deployed|rollback|REBOOT|verify-rolled-back"
     [store-upgrade]="to-legacy|REBOOT|verify-legacy"
+    [remote-install]="_"
+    [build-missing-closure]="_"
 )
+
+host_store_counts() {
+    local objects refs
+    objects=$(find "$ZUB_REPO/objects" -type f | wc -l)
+    refs=$(find "$ZUB_REPO/refs" -type f | wc -l)
+    printf '%s %s\n' "$objects" "$refs"
+}
+
+ensure_backing_image() {
+    local backing_img=$1
+    local source_checksum=$2
+    local seed_tig=$3
+    local seed_gzip=$4
+    local seed_deploy=$5
+    local policy_name=$6
+
+    [[ -f "$backing_img" ]] && return 0
+    log "building backing image for seed policy $policy_name"
+    build_backing_image \
+        "$FROM_REF" \
+        "$source_checksum" \
+        "$backing_img" \
+        "$seed_tig" \
+        "$seed_gzip" \
+        "$seed_deploy" \
+        "$policy_name"
+}
 
 run_test() {
     local test=$1
     local artifact_dir="$ARTIFACT_ROOT/$test"
+    local seed_tig=${TEST_SEED_TIG[$test]:-1}
+    local seed_gzip=${TEST_SEED_GZIP[$test]:-1}
+    local seed_deploy=${TEST_SEED_DEPLOY[$test]:-1}
+    local remote_enabled=${TEST_REMOTE[$test]:-0}
+    local policy_name="tig${seed_tig}-gzip${seed_gzip}-deploy${seed_deploy}"
+    local backing_img="$WORK_DIR/backing-${policy_name}.img"
     local overlay_img="$artifact_dir/overlay.qcow2"
     local guest_script="$TEST_DIR/$test.sh"
     local ssh_port=$((SSH_PORT_BASE + RANDOM % 1000))
@@ -718,17 +896,36 @@ run_test() {
     local guest_exit=0
     local failed=0
     local reboot_count=0
+    local host_objects_before=0
+    local host_refs_before=0
+    local host_objects_after=0
+    local host_refs_after=0
 
     [[ -f "$guest_script" ]] || die "no test script for $test ($guest_script)"
+
+    log "[$test] seeds: tig=$seed_tig gzip=$seed_gzip deploy=$seed_deploy; remote=$remote_enabled"
+    ensure_backing_image \
+        "$backing_img" \
+        "$EXPECTED_CHECKSUM" \
+        "$seed_tig" \
+        "$seed_gzip" \
+        "$seed_deploy" \
+        "$policy_name"
+    if [[ "$remote_enabled" == 1 ]]; then
+        read -r host_objects_before host_refs_before < <(host_store_counts)
+        printf 'host-store-before=objects:%s,refs:%s\n' \
+            "$host_objects_before" "$host_refs_before"
+    fi
 
     rm -rf "$artifact_dir"
     mkdir -p "$artifact_dir"
     : > "$stdout_log"
 
-    log "[$test] creating overlay over $BACKING_IMG"
-    "$QEMU_IMG_BIN" create -q -f qcow2 -F raw -b "$BACKING_IMG" "$overlay_img" >/dev/null
+    log "[$test] creating overlay over $backing_img"
+    "$QEMU_IMG_BIN" create -q -f qcow2 -F raw -b "$backing_img" "$overlay_img" >/dev/null
 
     log "[$test] booting on port $ssh_port"
+    CURRENT_REMOTE_ENABLED=$remote_enabled
     boot "$overlay_img" "$ssh_port" "$artifact_dir"
     log "[$test] SSH ready after ${BOOT_WAITED_SECS}s"
 
@@ -767,6 +964,24 @@ run_test() {
     fi
 
     stop_guest
+
+    if [[ "$remote_enabled" == 1 ]]; then
+        read -r host_objects_after host_refs_after < <(host_store_counts)
+        printf 'host-store-after=objects:%s,refs:%s\n' \
+            "$host_objects_after" "$host_refs_after"
+        if [[ "$host_objects_before" != "$host_objects_after" ||
+              "$host_refs_before" != "$host_refs_after" ]]; then
+            die "[$test] read-only host store changed: objects $host_objects_before -> $host_objects_after, refs $host_refs_before -> $host_refs_after"
+        fi
+        [[ ! -e "$artifact_dir/virtiofsd.sock" ]] ||
+            die "[$test] virtiofsd socket remained after cleanup"
+    else
+        if [[ -e "$artifact_dir/virtiofsd.log" ]] ||
+            grep -q 'vhost-user-fs-pci' "$artifact_dir/qemu.log"; then
+            die "[$test] remote-disabled run started virtiofs support"
+        fi
+    fi
+    CURRENT_REMOTE_ENABLED=0
 
     if [[ "$failed" -eq 0 ]]; then
         printf 'PASS: %s\n' "$test"
@@ -811,7 +1026,19 @@ main() {
         esac
     done
 
+    if [[ -n "$only_test" ]]; then
+        tests=("$only_test")
+    else
+        tests=("${ALL_TESTS[@]}")
+    fi
+
     require_tools
+    for test in "${tests[@]}"; do
+        if [[ "${TEST_REMOTE[$test]:-0}" == 1 ]]; then
+            require_remote_tools
+            break
+        fi
+    done
 
     ensure_ref "$FROM_REF"
     from_checksum=$(checksum_for_ref "$FROM_REF")
@@ -821,14 +1048,8 @@ main() {
     log "fixture ref: $FROM_REF"
     log "fixture checksum: $from_checksum"
 
-    mkdir -p "$ARTIFACT_ROOT"
-    build_backing_image "$FROM_REF" "$from_checksum"
-
-    if [[ -n "$only_test" ]]; then
-        tests=("$only_test")
-    else
-        tests=("${ALL_TESTS[@]}")
-    fi
+    rm -rf "$WORK_DIR"
+    mkdir -p "$WORK_DIR" "$ARTIFACT_ROOT"
 
     for test in "${tests[@]}"; do
         if ! run_test "$test"; then
