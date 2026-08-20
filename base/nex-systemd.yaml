@@ -204,31 +204,33 @@ files:
     set -eu
 
     dst=/nex/manifests
-    src=/usr/share/nex/manifests
+    bundle=/usr/share/nex/nex.bundle
 
     if [ -d "$dst/.git" ]; then
         exit 0
     fi
 
-    if [ ! -d "$src" ]; then
-        echo "nex-init-manifests: missing source snapshot at $src" >&2
+    if [ ! -f "$bundle" ]; then
+        echo "nex-init-manifests: missing repository bundle at $bundle" >&2
         exit 0
     fi
-
-    mkdir -p "$dst"
-    cp -a "$src/." "$dst/"
 
     if ! command -v git >/dev/null 2>&1; then
-        echo "nex-init-manifests: git not available, leaving snapshot without .git" >&2
+        echo "nex-init-manifests: git not available, cannot clone the bundle" >&2
         exit 0
     fi
 
-    cd "$dst"
-    git init -q
-    git config user.name "nex"
-    git config user.email "nex@localhost"
-    git add -A >/dev/null 2>&1 || true
-    git commit -q -m "nex manifests snapshot" --allow-empty || true
+    # Clone rather than init: manifests name their build environment by
+    # historical Git blob, and a repository created from a file tree holds only
+    # current content, so none of those blobs resolve and no package can build.
+    mkdir -p "$dst"
+    if ! git clone -q "$bundle" "$dst"; then
+        echo "nex-init-manifests: could not clone $bundle" >&2
+        exit 0
+    fi
+
+    git -C "$dst" config user.name "nex"
+    git -C "$dst" config user.email "nex@localhost"
 
 - path: /usr/lib/systemd/system/nex-init-manifests.service
   mode: 420

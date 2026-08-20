@@ -285,13 +285,14 @@ fn validate_source_shape(source: &Source, errors: &mut Vec<String>) {
         source.cargo_lock.is_some(),
         source.go_sum.is_some(),
         source.zig_zon.is_some(),
+        source.git_bundle.is_some(),
     ]
     .into_iter()
     .filter(|present| *present)
     .count();
     if selector_count != 1 {
         errors.push(format!(
-            "source '{}' must set exactly one of url, file, dev, cargo_lock, go_sum, or zig_zon",
+            "source '{}' must set exactly one of url, file, dev, cargo_lock, go_sum, zig_zon, or git_bundle",
             source.name
         ));
     }

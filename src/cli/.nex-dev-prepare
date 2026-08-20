@@ -17,8 +17,13 @@ mkdir -p .cargo
 cargo vendor vendor > .cargo/config.toml
 
 # copy zub into vendor and patch Cargo.toml
-ZUB_PATH="/var/home/wegel/work/perso/zub"
+ZUB_PATH="${ZUB_SOURCE_PATH:-/var/home/wegel/work/perso/zub}"
 if [ -d "$ZUB_PATH" ]; then
+    # Remove any copy carried in from the working tree first. `cp -a src dst`
+    # nests when dst already exists, producing vendor/zub-store/zub, whose
+    # target/ the cleanup below then misses. That put 3.8G of another
+    # repository's build output into this source tarball.
+    rm -rf vendor/zub-store
     cp -a "$ZUB_PATH" vendor/zub-store
     # remove .git to reduce size
     rm -rf vendor/zub-store/.git vendor/zub-store/target

@@ -9,20 +9,14 @@ system:
   checksum: eb588a888d2b6bace1efea60cdc8a859100029cad1825dad22d7d7339d0c514b
 
 sources:
-# Ship a snapshot of the Nex repo needed for self-hosting. The installed system
-# copies this template into writable /var on first boot.
-- name: nex_pkg
-  dev: pkg
-- name: nex_base
-  dev: base
-- name: nex_examples
-  dev: examples
-- name: nex_installer
-  dev: installer
-- name: nex_src_cli
-  dev: src/cli
-- name: nex_scripts
-  dev: scripts
+# Ship the Nex repository for self-hosting, as a Git bundle rather than a file
+# tree. Manifests name their build environment by historical blob, so a machine
+# given only current files can resolve none of them. First boot clones this.
+# The pinned commit necessarily predates the manifest that names it; a
+# self-rebuild converges on a fixed point without reaching one.
+- name: nex_bundle
+  sha256: 6d8250bc44650b99db9b3826f5efc3640d8f3f2cbea8e328114edbfd5b89c0b8
+  git_bundle: 08df833ef49eb69d1b454ede5a3646c7a9ffbebe
 
 dependencies:
 # desktop-specific libs; base libs come from nex-systemd
@@ -934,39 +928,11 @@ build:
       chmod u+s "$f"
     done
 
-    # ship manifests + sources for self-hosting (template copied to /var on first boot)
-    mkdir -p /target/usr/share/nex/manifests/pkg
-    mkdir -p /target/usr/share/nex/manifests/base
-    mkdir -p /target/usr/share/nex/manifests/examples
-    mkdir -p /target/usr/share/nex/manifests/installer
-    mkdir -p /target/usr/share/nex/manifests/src/cli
-    mkdir -p /target/usr/share/nex/manifests/scripts
-
-    # extract dev sources (uncompressed tarballs)
-    if [ -n "${SOURCE_nex_pkg_IS_DEV:-}" ]; then
-        tar --no-same-owner -xf "/${SOURCE_nex_pkg}" -C /target/usr/share/nex/manifests/pkg --strip-components=1
-    fi
-    for shipped in base examples installer; do
-        source_var="SOURCE_nex_${shipped}"
-        dev_var="SOURCE_nex_${shipped}_IS_DEV"
-        eval "source_path=\${${source_var}:-}"
-        eval "is_dev=\${${dev_var}:-}"
-        if [ -n "${is_dev}" ]; then
-            tar --no-same-owner -xf "/${source_path}" \
-                -C "/target/usr/share/nex/manifests/${shipped}" --strip-components=1
-            find "/target/usr/share/nex/manifests/${shipped}" -name '*.yaml' \
-                -exec sed -i '/^[[:space:]]*checksum:[[:space:]]/d' {} +
-        fi
-    done
-    if [ -n "${SOURCE_nex_src_cli_IS_DEV:-}" ]; then
-        tar --no-same-owner -xf "/${SOURCE_nex_src_cli}" -C /target/usr/share/nex/manifests/src/cli --strip-components=1
-    fi
-    if [ -n "${SOURCE_nex_scripts_IS_DEV:-}" ]; then
-        tar --no-same-owner -xf "/${SOURCE_nex_scripts}" -C /target/usr/share/nex/manifests/scripts --strip-components=1
-    fi
-
-    # keep deterministic timestamps for the shipped snapshot
-    find /target/usr/share/nex/manifests -exec touch -d "2024-01-01T00:00:00+00:00" {} \; || true
+    # ship the repository bundle for self-hosting; nex-init-manifests clones it
+    mkdir -p /target/usr/share/nex
+    cp "/${SOURCE_nex_bundle}" /target/usr/share/nex/nex.bundle
+    chmod 0644 /target/usr/share/nex/nex.bundle
+    touch -d "2024-01-01T00:00:00+00:00" /target/usr/share/nex/nex.bundle
 
     test -f /target/usr/lib/os-release
     grep -Fq 'PRETTY_NAME="nex Desktop"' /target/usr/lib/os-release
