@@ -2113,7 +2113,10 @@ produced sha256 `fc268d2210446e95…` both times.
 twice in a row, and every product defect they found is fixed.** The suite is
 `build-package`, `temporary-install`, `persistent-install`,
 `deploy-and-rollback` and `store-upgrade`, all passing from a fresh overlay,
-twice consecutively, `failures: 0` both times. `build-package` reports
+twice consecutively, `failures: 0` both times. Each also passes run alone
+with `--test`, in reverse order, which is what "in any order" comes to here:
+every test discards its overlay and creates a new one from the fixture, so no
+test can leave state for another. `build-package` reports
 `MAKEFLAGS: -j2` (the guest's own CPU count, so the build really ran there),
 804 commits in `/nex/manifests`, and `git cat-file -t` answering `blob` for
 the pinned environment object -- that last check now fails the test rather
