@@ -529,6 +529,7 @@ fn format_sources(value: &Value) -> io::Result<String> {
                 "cargo_toml",
                 "go_sum",
                 "zig_zon",
+                "git_bundle",
             ] {
                 let key = Value::String(field.to_string());
                 if let Some(val) = mapping.get(&key) {

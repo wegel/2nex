@@ -22,6 +22,9 @@ pub fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Re
     if let Some(zig_zon_ref) = &input_spec.zig_zon {
         return fetch_zig_zon(input_spec, zig_zon_ref, download_dir);
     }
+    if let Some(commit) = &input_spec.git_bundle {
+        return fetch_git_bundle(input_spec, commit, download_dir);
+    }
     if let Some(dev_path) = &input_spec.dev {
         return fetch_dev_source(input_spec, dev_path, download_dir);
     }
@@ -36,6 +39,139 @@ pub fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Re
         io::ErrorKind::InvalidInput,
         "No URL or file path specified for input.",
     ))
+}
+
+/// Produce a Git bundle of one commit from the repository owning the manifest.
+///
+/// A bundle is a single file holding a header of refs and a packfile, and
+/// `git clone <file> <dir>` treats it as a remote. Unlike a tarball of the
+/// working tree it carries history, which manifests need: they name build
+/// environments by historical blob, and a repository built from a snapshot
+/// contains none of them.
+///
+/// Three details are not optional, each learned the hard way:
+///
+/// - `pack.threads=1`, or the output is not byte-reproducible. Three default
+///   runs produce three different sha256 values at the same size; the
+///   nondeterminism is parallel work-splitting, not content.
+/// - a detached worktree, because `git bundle create <file> <commit-sha>`
+///   refuses with "empty bundle": it needs a named ref, and a HEAD in a
+///   detached worktree supplies one.
+/// - an explicit commit rather than a branch, because bundling a branch whose
+///   name differs from the repository's HEAD yields a clone with an empty tree
+///   and `remote HEAD refers to nonexistent ref`.
+fn fetch_git_bundle(
+    input_spec: &Source,
+    commit: &str,
+    download_dir: &str,
+) -> io::Result<PathBuf> {
+    let expected = required_sha256(input_spec, "git_bundle")?;
+    let bundle_path = Path::new(download_dir).join(format!("{}.bundle", input_spec.name));
+
+    if bundle_path.exists() && file_sha256(&bundle_path)? == expected {
+        println!("Found cached bundle: {}", bundle_path.display());
+        return Ok(bundle_path);
+    }
+
+    let repository = repository_for_source(input_spec)?;
+    let resolved = git_output(&repository, &["rev-parse", "--verify", &format!("{}^{{commit}}", commit)])?;
+
+    let worktree = tempfile::tempdir()?;
+    let worktree_path = worktree.path().join("tree");
+    git_run(
+        &repository,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            "--quiet",
+            &worktree_path.to_string_lossy(),
+            &resolved,
+        ],
+    )?;
+
+    let bundle_result = git_run(
+        &worktree_path,
+        &[
+            "-c",
+            "pack.threads=1",
+            "bundle",
+            "create",
+            &bundle_path.to_string_lossy(),
+            "HEAD",
+        ],
+    );
+    let _ = git_run(
+        &repository,
+        &[
+            "worktree",
+            "remove",
+            "--force",
+            &worktree_path.to_string_lossy(),
+        ],
+    );
+    bundle_result?;
+
+    let actual = file_sha256(&bundle_path)?;
+    if actual != expected {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "bundle checksum mismatch for {}: expected {}, got {}",
+                input_spec.name, expected, actual
+            ),
+        ));
+    }
+
+    println!("Created bundle: {} ({})", bundle_path.display(), resolved);
+    Ok(bundle_path)
+}
+
+fn repository_for_source(input_spec: &Source) -> io::Result<PathBuf> {
+    let start = match &input_spec.repository_snapshot {
+        Some(snapshot) => snapshot.git_root.clone(),
+        None => std::env::current_dir()?,
+    };
+    crate::manifest::repository_root_for_path(&start)
+}
+
+fn git_run(dir: &Path, args: &[&str]) -> io::Result<()> {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(io::Error::other(format!(
+        "git {} failed in {}: {}",
+        args.join(" "),
+        dir.display(),
+        String::from_utf8_lossy(&output.stderr).trim()
+    )))
+}
+
+fn git_output(dir: &Path, args: &[&str]) -> io::Result<String> {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()?;
+    if !output.status.success() {
+        return Err(io::Error::other(format!(
+            "git {} failed in {}: {}",
+            args.join(" "),
+            dir.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn file_sha256(path: &Path) -> io::Result<String> {
+    let contents = fs::read(path)?;
+    Ok(hex::encode(Sha256::digest(&contents)))
 }
 
 fn fetch_cargo_lock(

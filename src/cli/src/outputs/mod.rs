@@ -9,3 +9,7 @@ pub use bundle::{bundle_branch_metadata, commit_bundle, output_branch_metadata};
 pub use categories::{categorize_files, categorize_files_with_existing_outputs};
 pub use checksum::calculate_output_checksum;
 pub use sources::fetch_and_verify_input;
+
+#[cfg(test)]
+#[path = "sources_tests.rs"]
+mod sources_tests;

@@ -231,6 +231,13 @@ pub struct Source {
     /// URL or path to build.zig.zon file for automatic Zig dependency vendoring
     #[serde(default)]
     pub zig_zon: Option<String>,
+    /// commit to archive from the owning repository as a Git bundle
+    ///
+    /// A bundle carries history, which a file tree cannot. Manifests name their
+    /// build environment by historical blob, so a machine given only a snapshot
+    /// of current files can resolve none of them.
+    #[serde(default)]
+    pub git_bundle: Option<String>,
     /// sha256 checksum (optional for dev sources)
     #[serde(default)]
     pub sha256: Option<String>,
