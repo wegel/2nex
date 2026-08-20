@@ -55,6 +55,9 @@ only the primary store.
 - [x] (2026-08-20 13:08Z) Make dependency-graph ref and manifest-hash checks
       inspect the primary store plus every fallback store. The fresh and stale
       fallback tests pass, as does the full 208-test CLI suite.
+- [x] (2026-08-20 13:15Z) Rebuild `pkg/core/nex/nex.yaml` through its strict
+      two-build path. Both builds produced checksum `a0d7a7b1`, and the
+      packaged `usr/bin/nex --version` printed `nex 1.0`.
 - [ ] Run focused checks, rebuild the Nex package and its four system
       consumers reproducibly, and run every machine test green twice.
 
@@ -451,6 +454,19 @@ Rust checks at 2026-08-20 13:08Z:
   file: passed. The whole-tree `cargo fmt --check` still reports pre-existing
   drift in unrelated committed files, including `commands/deploy.rs` and
   `manifest/format.rs`.
+
+Package check at 2026-08-20 13:15Z:
+
+- `TMPDIR="$PWD/.nex/tmp/mktemp" ./nex build pkg/core/nex/nex.yaml
+  --verbose --single --check --update-checksum --force --compute-deps
+  --record-profile --generate-outputs`: passed; both builds produced
+  `a0d7a7b18bfbd1c470f99822d290591331a8cace0ff63db20b504eb84b6be1ce`.
+  Full log: `.nex/tmp/ep018/nex.log`.
+- `./src/cli/target/debug/nex check pkg/core/nex/nex.yaml`: passed.
+- The package checkout reported `EPERM` while applying directory metadata on
+  this rootless host, but it left the complete binary readable;
+  `.nex/tmp/ep018-nex-package-root/usr/bin/nex --version` exited 0 and printed
+  `nex 1.0`.
 
 ## Interfaces and Dependencies
 
