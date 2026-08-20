@@ -848,3 +848,42 @@ script's sandbox setup (`src/cli/src/build/script.rs`,
 `unshare --user --pid --mount --uts --fork --ipc --net --map-root-user`).
 Observed, not investigated -- a second blocker behind the first, not yet
 chased to a cause.
+
+## Package acquisition on a booted machine
+
+ExecPlan 018 proved two paths on 2026-08-20. A configured read-only remote can
+supply a requested package and its runtime closure, and one `nex install`
+request can build a missing root plus its build-dependency closure locally.
+The seven-test machine suite passed twice in succession.
+
+The dependency graph must ask one `Store` about both artifact availability and
+manifest freshness. Checking only the primary repository path causes two bad
+answers: a fresh fallback-only ref looks absent, and its manifest history also
+looks absent. `Store::artifact_exists` and
+`Store::find_commit_by_manifest_hash` now search the primary repository and
+every fallback. The tests `fresh_fallback_dependency_is_not_scheduled` and
+`stale_fallback_dependency_is_scheduled` prove the two sides of this rule.
+
+An uncached `nex install` must call `build_with_dependencies` with the same
+manifest roots that the install command already found. Calling `build_single`
+assumes every build dependency already resolves and cannot satisfy a package
+request on a fresh machine. `install_builds_missing_dependency_closure` covers
+this call path, while `scripts/machine-tests/build-missing-closure.sh` proves
+the behavior in a booted guest with a synthetic leaf and root.
+
+The machine harness exposes the host store only to tests that ask for a remote.
+It starts `/usr/lib/virtiofsd` with `--readonly`, waits for its socket, gives
+QEMU a shared memfd and `vhost-user-fs-pci`, then mounts the `nex-host-store`
+tag read-only at `/run/nex-host-store`. The fixture carries the kernel's
+existing `outputs/fs-fuse` package so the guest can load `fuse` and `virtiofs`
+after boot. A reboot must reap the old daemon and socket before starting a new
+one because virtiofsd exits when QEMU disconnects on this host.
+
+`/nex/users/root/manifests` appears lazily. A read-only guest test can use
+`/nex/manifests`. A test that writes a manifest before its first Nex command
+must create the detached user worktree itself with `git worktree add`.
+
+On the rootless development host, a direct `zub checkout --copy` of a system
+can fail with `EPERM` while applying `/boot` metadata. Running the checkout
+under `fakeroot` produces a complete tree that works with
+`unshare --user --map-root-user --root <tree> /usr/bin/nex --version`.

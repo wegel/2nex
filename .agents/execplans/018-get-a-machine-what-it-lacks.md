@@ -170,7 +170,29 @@ only the primary store.
 
 ## Outcomes & Retrospective
 
-Not started.
+One `nex install` now gets a package through either path the plan required. If
+a configured store holds the package, Nex pulls it and its runtime closure. If
+no store holds it, Nex walks the build graph and builds each missing dependency
+before the requested package. The graph now treats fallback stores consistently
+when it checks both artifact refs and manifest freshness.
+
+The machine harness proves both paths without weakening the five earlier
+tests. Only the two new tests receive the read-only virtiofs remote. The remote
+test pulled tig plus five runtime refs, matched the target commit in both
+stores, and ran tig. The local-build test kept both synthetic refs out of every
+source store, built its leaf before its root, and ran the root command with the
+leaf's marker. Each of seven tests passed alone, and the full suite passed twice
+with no changed host-store counts, daemon, or socket left behind.
+
+Three commits carry the finished work: `32d57f98` changes the CLI and its Rust
+tests, `28319670` rebuilds the Nex package, and `00a349ef` adds the fixture,
+machine tests, harness support, and rebuilt system checksums.
+
+The only skipped repository-wide check is `cargo fmt --check`: it reports
+pre-existing formatting drift in unrelated committed Rust files. Rustfmt
+accepted every Rust file changed by this plan. Direct rootless system checkout
+also cannot apply `/boot` metadata on this host, so the artifact exercise used
+`fakeroot`; all four resulting roots ran their packaged Nex binary.
 
 ## Context and Orientation
 
@@ -443,10 +465,53 @@ The plan is done when:
 
 ### Completion Check
 
-Before the human review gate, compare the final diff and commits with every
-acceptance item above. Record each command, exit status, important guest fact,
-fixture checksum, and any skipped check. Name the exact artifact directory for
-both new tests and ask the human to inspect their captured guest output.
+Completed 2026-08-20. The implementation commits are `32d57f98`, `28319670`,
+and `00a349ef`. `git diff --check` and the staged diff check passed before
+every commit.
+
+- `cargo test --manifest-path src/cli/Cargo.toml
+  install_builds_missing_dependency_closure`,
+  `fresh_fallback_dependency_is_not_scheduled`, and
+  `stale_fallback_dependency_is_scheduled` each exited 0 with one passing test.
+  The complete CLI command exited 0 with 208 passing tests.
+- Rustfmt with edition 2021 and `skip_children=true` accepted every changed
+  Rust file. The repository-wide `cargo fmt --check` was skipped as a gate
+  because unrelated committed files, including `commands/deploy.rs` and
+  `manifest/format.rs`, already fail it.
+- The strict Nex package build exited 0 twice with checksum
+  `a0d7a7b18bfbd1c470f99822d290591331a8cace0ff63db20b504eb84b6be1ce`.
+  Its packaged binary printed `nex 1.0`.
+- `nex check` exited 0 for `pkg/core/nex/nex.yaml`,
+  `base/nex-systemd.yaml`, `tests/nex-test-fixture.yaml`,
+  `examples/desktop-vwl/desktop-vwl.yaml`, and
+  `examples/desktop-dev.yaml`. The four strict system builds each produced the
+  same checksum twice: `623234606cd201ab14b9faf047f9b0f13cf5adce013942ed0cbd60630eaeb251`,
+  `142c22a6194d17cc971ae2b20484ecc6f8b530b2dbaa677b6819bd9b42496293`,
+  `0e01885b1f037b6f49562f18d2fb558729d3f574c9f4b9e89029dda3f4d4acf9`,
+  and `2b566872a6561af0d38336f5ce9f4b1da81bc84850e2e43bb99d6bb339653450`.
+  Fakeroot checkouts of all four system refs completed, and each root printed
+  `nex 1.0` through `unshare --user --map-root-user --root`.
+- Each of the seven named machine-test commands exited 0 alone. Two consecutive
+  complete suite commands each reported seven tests and `failures: 0`.
+- Both remote-enabled guests loaded `fuse` and `virtiofs`, mounted the host
+  store read-only, and failed their write probes. Host counts stayed at 439411
+  objects and 16859 refs before and after each test.
+- `remote-install` pulled 1,374,989 bytes and 27 objects for tig, pulled five
+  runtime refs, matched target commit `efc64fd7` in the primary and remote
+  stores, and printed `tig version 2.6.0`.
+- `build-missing-closure` reported `leaf-before-root`, published both refs only
+  in the guest's primary store, and printed `EP018_LEAF_MARKER` through the
+  installed root command.
+- The five remote-disabled QEMU logs contain no `vhost-user-fs-pci` argument
+  and their artifact directories contain no virtiofsd log. After both full
+  suites, `pgrep -a virtiofsd` found no process and no test socket remained.
+- `bash -n scripts/test-machine-operations.sh` and `sh -n` on both new guest
+  scripts exited 0.
+
+The latest captured guest output for human review is
+`.nex/tmp/machine-tests/remote-install/guest-stdout.log` and
+`.nex/tmp/machine-tests/build-missing-closure/guest-stdout.log`. The complete
+second suite log is `.nex/tmp/ep018/full-suite-2.log`.
 
 ## Idempotence and Recovery
 
