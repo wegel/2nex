@@ -5,7 +5,7 @@
 # Uses the staging path a real user would type: nex stage, nex install
 # <pkg>, then nex discard. Package chosen: pkg/dev/vcs/tig.yaml
 # (outputs/bin) -- already built on the host and pulled into this machine's
-# store by the harness before boot (see seed_system_repo() in
+# store by the harness before boot (see seed_system_store() in
 # test-machine-operations.sh), so nothing here needs to build, and tig is
 # not part of this fixture's own package list, so its presence or absence is
 # a real before/after signal, not something already on the machine anyway.

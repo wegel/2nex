@@ -5,7 +5,7 @@ system:
   version: 0.0.1
   description: Minimal nex rootfs with systemd, networking, and SSH
   nex_structure: true
-  checksum: 98e4265d5b707f91e8b9ce6d5c49acbc6d52a6a753894e5d0aa85655564a48e5
+  checksum: a93baa493c857612cd675199e39645d6bf27a7342f215194bbd0111db0cbbd42
 
 dependencies:
 - name: findutils
@@ -372,11 +372,13 @@ build:
     # /nex/env is required as well: nex stage mounts an overlay there
     # (stage.rs:108), and /nex sits on the read-only deployment root, so the
     # mount point cannot be created at install time.
-    # /nex/store is the machine's content store. /nex/repo is the name it used
-    # to have, kept as a mount point so a machine installed before the rename
-    # still finds its data after upgrading: the store lives on the persistent
-    # root and is bind-mounted in, so renaming outright would strand it.
-    mkdir -p /target/nex/store /target/nex/repo /target/nex/deployments /target/nex/users /target/nex/staging /target/nex/manifests /target/nex/env
+    # /nex/store is the machine's content store, and only a mount point here:
+    # the store itself lives on the persistent root or on /var, and the
+    # initramfs binds it in at boot. A machine installed before the store was
+    # renamed keeps its objects under the older /var/nex/repo name, and
+    # store_bind_source() in initramfs-init.sh binds that directory onto this
+    # same /nex/store, so the data is never stranded by the new name.
+    mkdir -p /target/nex/store /target/nex/deployments /target/nex/users /target/nex/staging /target/nex/manifests /target/nex/env
 
     # openssh libexec symlinks
     mkdir -p /target/usr/libexec

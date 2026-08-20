@@ -130,31 +130,46 @@ ensure_var_dirs() {
         "${SYSROOT_MOUNT}/var/lib" \
         "${SYSROOT_MOUNT}/var/cache" \
         "${SYSROOT_MOUNT}/var/tmp" \
-        "${SYSROOT_MOUNT}/var/nex/repo" \
         "${SYSROOT_MOUNT}/var/nex/manifests" \
         "${SYSROOT_MOUNT}/var/nex/users" \
         || die "failed to create standard /var directories"
     chmod 1777 "${SYSROOT_MOUNT}/var/tmp" 2>/dev/null || true
 }
 
-repo_bind_source() {
-    root_repo="${SYSROOT_MOUNT}/nex/repo"
-    var_repo="${SYSROOT_MOUNT}/var/nex/repo"
+# Print the directory holding the machine's content store.
+#
+# The store sits on the persistent root or on /var and is bind-mounted into
+# the deployment, so a machine installed before the store was renamed still
+# keeps its objects under the older "repo" name. Both names are searched, and
+# a directory that holds an actual store always wins over one that is merely
+# present: a built deployment carries empty mount points, and binding an empty
+# one would hide every object the machine owns.
+store_bind_source() {
+    for candidate in \
+        "${SYSROOT_MOUNT}/nex/store" \
+        "${SYSROOT_MOUNT}/var/nex/store" \
+        "${SYSROOT_MOUNT}/nex/repo" \
+        "${SYSROOT_MOUNT}/var/nex/repo"
+    do
+        if [ -f "${candidate}/config.toml" ] || [ -d "${candidate}/objects" ]; then
+            echo "$candidate"
+            return 0
+        fi
+    done
 
-    if [ -f "${root_repo}/config.toml" ] || [ -d "${root_repo}/objects" ]; then
-        echo "$root_repo"
+    # No store anywhere. An installer that put a directory on the root
+    # partition meant that directory to hold one.
+    if [ -d "${SYSROOT_MOUNT}/nex/store" ]; then
+        echo "${SYSROOT_MOUNT}/nex/store"
         return 0
     fi
-    if [ -f "${var_repo}/config.toml" ] || [ -d "${var_repo}/objects" ]; then
-        echo "$var_repo"
+    if [ -d "${SYSROOT_MOUNT}/nex/repo" ]; then
+        echo "${SYSROOT_MOUNT}/nex/repo"
         return 0
     fi
-    if [ -d "$root_repo" ]; then
-        echo "$root_repo"
-        return 0
-    fi
-    mkdir -p "$var_repo" || die "failed to create /var/nex/repo"
-    echo "$var_repo"
+
+    mkdir -p "${SYSROOT_MOUNT}/var/nex/store" || die "failed to create /var/nex/store"
+    echo "${SYSROOT_MOUNT}/var/nex/store"
 }
 
 if [ -n "$ROOT" ]; then
@@ -209,7 +224,7 @@ mkdirp_deploy "${DEPLOY}/var"
 mkdirp_deploy "${DEPLOY}/etc"
 mkdirp_deploy "${DEPLOY}/home"
 mkdirp_deploy "${DEPLOY}/root"
-mkdirp_deploy "${DEPLOY}/nex/repo"
+mkdirp_deploy "${DEPLOY}/nex/store"
 mkdirp_deploy "${DEPLOY}/nex/deployments"
 mkdirp_deploy "${DEPLOY}/nex/staging"
 mkdirp_deploy "${DEPLOY}/nex/users"
@@ -232,8 +247,8 @@ mount --bind "${SYSROOT_MOUNT}/var/etc" "${DEPLOY}/etc" || die "failed to bind-m
 mount --bind "${SYSROOT_MOUNT}/var/home" "${DEPLOY}/home" || die "failed to bind-mount /home"
 mount --bind "${SYSROOT_MOUNT}/var/root" "${DEPLOY}/root" || die "failed to bind-mount /root"
 
-REPO_SOURCE="$(repo_bind_source)"
-mount --bind "$REPO_SOURCE" "${DEPLOY}/nex/repo" || die "failed to bind-mount /nex/repo"
+STORE_SOURCE="$(store_bind_source)"
+mount --bind "$STORE_SOURCE" "${DEPLOY}/nex/store" || die "failed to bind-mount /nex/store"
 mount --bind "${SYSROOT_MOUNT}/nex/deployments" "${DEPLOY}/nex/deployments" || die "failed to bind-mount /nex/deployments"
 mount --bind "${SYSROOT_MOUNT}/nex/staging" "${DEPLOY}/nex/staging" || die "failed to bind-mount /nex/staging"
 mkdir -p "${SYSROOT_MOUNT}/var/nex/users" 2>/dev/null || true
@@ -244,7 +259,7 @@ mkdir -p "${SYSROOT_MOUNT}/var/nex/manifests" 2>/dev/null || true
 mount --bind "${SYSROOT_MOUNT}/var/nex/manifests" "${DEPLOY}/nex/manifests" || die "failed to bind-mount /nex/manifests"
 
 mount -o remount,ro,bind "${DEPLOY}/sysroot" || die "failed to remount /sysroot read-only"
-mount -o remount,rw,bind "${DEPLOY}/nex/repo" || die "failed to remount /nex/repo writable"
+mount -o remount,rw,bind "${DEPLOY}/nex/store" || die "failed to remount /nex/store writable"
 mount -o remount,rw,bind "${DEPLOY}/nex/staging" || die "failed to remount /nex/staging writable"
 
 # Move virtual filesystems into deployment root for systemd

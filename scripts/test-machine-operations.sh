@@ -3,8 +3,8 @@
 # installed Nex machine, driven entirely from inside a booted guest over SSH.
 #
 # See .agents/execplans/017-machine-operation-tests.md for the design. This
-# implements the harness and all four tests: build-package,
-# temporary-install, persistent-install, deploy-and-rollback.
+# implements the harness and all five tests: build-package,
+# temporary-install, persistent-install, deploy-and-rollback, store-upgrade.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -16,7 +16,7 @@ ZUB_BIN="${ZUB_BIN:-/home/wegel/work/perso/zub/target/debug/zub}"
 ZUB_REPO="${ZUB_REPO:-$ROOT_DIR/.nex/repo}"
 NEX_BIN="${NEX_BIN:-$ROOT_DIR/src/cli/target/debug/nex}"
 FROM_REF="${FROM_REF:-systems/nex-test-fixture/0.0.1}"
-EXPECTED_CHECKSUM="${EXPECTED_CHECKSUM:-c977b94d9847f527c55eb9afb855194b8eeac50b6a15015451631de641e88d9e}"
+EXPECTED_CHECKSUM="${EXPECTED_CHECKSUM:-83aec1272aa42d051635280f922e8f555bcea29ac95f8f341ecc03bdf8f93abc}"
 
 SSH_PORT_BASE="${SSH_PORT_BASE:-10040}"
 TIMEOUT_SECS="${TIMEOUT_SECS:-240}"
@@ -40,7 +40,7 @@ ROOT_MARGIN_MB=2048
 VAR_MARGIN_MB=1536
 
 # Refs pulled from the host's build store into the guest's system store
-# (/nex/repo) before boot, so tests that install or deploy never need to
+# (/nex/store) before boot, so tests that install or deploy never need to
 # build. tig/outputs/bin is a small already-built package outside the
 # fixture's own package list, for tests 2-3. nex-systemd/0.0.1 is a
 # different already-built system, for test 4's deploy target.
@@ -50,7 +50,7 @@ SEED_REFS=(
 )
 
 # Package `nex resolve` is asked for tig's full runtime closure (see
-# seed_system_repo()). `nex install` needs every one of those dependencies'
+# seed_system_store()). `nex install` needs every one of those dependencies'
 # own /files refs already in the store, not just tig's own ref.
 SEED_CLOSURE_PACKAGE="tig"
 
@@ -60,7 +60,7 @@ SEED_CLOSURE_PACKAGE="tig"
 BUILD_PACKAGE_MANIFEST="pkg/cli/archive/gzip.yaml"
 
 # All tests this harness knows about, in run order.
-ALL_TESTS=(build-package temporary-install persistent-install deploy-and-rollback)
+ALL_TESTS=(build-package temporary-install persistent-install deploy-and-rollback store-upgrade)
 
 CURRENT_SSH_PORT=""
 CURRENT_ASSERT_KEY="$ASSERT_KEY"
@@ -219,7 +219,7 @@ count = 65536
 EOF
 }
 
-# seed_system_repo REPO_DIR
+# seed_system_store STORE_DIR
 # Pre-populates the guest's system store with refs tests 2-4 need already
 # built, so the guest never has to build a package (which the environment bug
 # recorded in .agents/knowledge/machine-self-hosting.md would make fail). This
@@ -236,7 +236,7 @@ EOF
 # uses, so the host resolves it fresh each run and pulls every ref it names,
 # rather than hand-listing dependency refs that would drift out of date the
 # next time tig or its dependencies are rebuilt.
-seed_system_repo() {
+seed_system_store() {
     local repo_dir=$1
     local source_checksum=$2
     local ref
@@ -445,7 +445,7 @@ stage_root_and_var() {
         "$deploy_dir/dev" \
         "$deploy_dir/run" \
         "$deploy_dir/tmp" \
-        "$deploy_dir/nex/repo" \
+        "$deploy_dir/nex/store" \
         "$deploy_dir/nex/deployments" \
         "$deploy_dir/nex/staging" \
         "$deploy_dir/nex/users" \
@@ -472,16 +472,16 @@ stage_root_and_var() {
         "$var_content/lib/systemd/coredump" \
         "$var_content/cache/fontconfig" \
         "$var_content/tmp" \
-        "$var_content/nex/repo" \
+        "$var_content/nex/store" \
         "$var_content/nex/users" \
         "$var_content/nex/manifests"
     chmod 1777 "$var_content/tmp"
     chmod 700 "$var_content/lib/sshd"
     cp -a "$deploy_dir/etc/." "$var_content/etc/"
     touch "$var_content/etc/.initialized"
-    "$ZUB_BIN" init "$var_content/nex/repo" >/dev/null
-    write_zub_config "$var_content/nex/repo"
-    seed_system_repo "$var_content/nex/repo" "$source_checksum"
+    "$ZUB_BIN" init "$var_content/nex/store" >/dev/null
+    write_zub_config "$var_content/nex/store"
+    seed_system_store "$var_content/nex/store" "$source_checksum"
 
     factory_etc="$deploy_dir/usr/share/factory/etc"
     if [[ ! -d "$factory_etc" ]]; then
@@ -700,6 +700,7 @@ declare -A TEST_PHASES=(
     [temporary-install]="_"
     [persistent-install]="before-reboot|REBOOT|after-reboot"
     [deploy-and-rollback]="deploy|REBOOT|verify-deployed|rollback|REBOOT|verify-rolled-back"
+    [store-upgrade]="to-legacy|REBOOT|verify-legacy"
 )
 
 run_test() {

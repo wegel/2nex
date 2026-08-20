@@ -6,7 +6,7 @@
 # reboot; nothing in the guest can reboot itself and keep reporting).
 # Deploy target: systems/nex-systemd/0.0.1, a different already-built system
 # (pulled into this machine's store by the harness before boot; see
-# seed_system_repo() in test-machine-operations.sh) -- no build needed.
+# seed_system_store() in test-machine-operations.sh) -- no build needed.
 #
 # Content markers distinguish the two systems without reading back a value
 # this test supplied: /usr/share/nex/nex.bundle and the git binary exist
