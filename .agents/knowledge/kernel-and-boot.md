@@ -344,7 +344,7 @@ path fails ("No such file or directory"), and `/proc/filesystems` has no
 `/usr/bin`, `/nex/pkg`, `/nex/env`) unconditionally. Whether `vm` should grow
 an `fs-overlay`-sized addition, the way it grew `lib`, is an open question,
 not decided here — see
-`.agents/execplans/017-machine-operation-tests.md`.
+`.agents/execplans/done/017-machine-operation-tests.md`.
 
 Update, 2026-08-19: the human resolved the open question above by adding
 `x86_64/pkg/core/kernel/linux/6.18.24/outputs/fs-overlay` as its own package
