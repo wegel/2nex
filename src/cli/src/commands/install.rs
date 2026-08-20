@@ -15,6 +15,10 @@ use crate::refs::PackageRef;
 use crate::repo::{detect_context, ensure_user_dirs, resolve_repo_path};
 use crate::store::Store;
 
+#[cfg(test)]
+#[path = "install_tests.rs"]
+mod tests;
+
 #[derive(Args)]
 pub struct InstallArgs {
     /// Manifest path (e.g., /nex/db/pkg/cli/editors/neovim.yaml)
@@ -152,7 +156,12 @@ pub fn run(args: &InstallArgs) -> io::Result<()> {
     // build if not cached or stale
     if !is_cached {
         println!("Building {}...", package_ref);
-        build_package_to_user_repo(&repo_path, &ctx.fallback_repos, manifest_path)?;
+        build_package_to_user_repo(
+            &repo_path,
+            &ctx.fallback_repos,
+            manifest_path,
+            &manifest_db_paths,
+        )?;
     }
 
     println!("Installing {}...", package_ref);
@@ -505,15 +514,30 @@ fn build_package_to_user_repo(
     repo_path: &str,
     fallback_repos: &[PathBuf],
     manifest_path: &Path,
+    manifest_dirs: &[PathBuf],
+) -> io::Result<()> {
+    build_package_to_user_repo_with_mode(
+        repo_path,
+        fallback_repos,
+        manifest_path,
+        manifest_dirs,
+        false,
+    )
+}
+
+fn build_package_to_user_repo_with_mode(
+    repo_path: &str,
+    fallback_repos: &[PathBuf],
+    manifest_path: &Path,
+    manifest_dirs: &[PathBuf],
+    dry_run: bool,
 ) -> io::Result<()> {
     println!("Building from manifest: {}", manifest_path.display());
 
     let opts = BuildOpts {
         repo_path: repo_path.to_string(),
         manifest_file: manifest_path.to_string_lossy().to_string(),
-        manifest_dirs: crate::manifest::ManifestRepositories::discover(manifest_path)
-            .map(|repositories| repositories.package_dirs())
-            .unwrap_or_else(|_| vec![PathBuf::from("pkg")]),
+        manifest_dirs: manifest_dirs.to_vec(),
         writable_manifest_root: None,
         check: false,
         update_checksum: false,
@@ -530,7 +554,7 @@ fn build_package_to_user_repo(
         verbose: false,
         record_profile: false,
         no_progress: false,
-        dry_run: false,
+        dry_run,
         add_checksums: false,
         show_dep_paths: false,
         trace_dependency: None,
@@ -538,5 +562,5 @@ fn build_package_to_user_repo(
         reuse_rootfs: false,
     };
 
-    build::build_single(&opts)
+    build::orchestration::build_with_dependencies(manifest_path, &opts.manifest_dirs, &opts)
 }

@@ -11,7 +11,7 @@ use crate::manifest::{
     ManifestData,
 };
 use crate::refs::PackageRef;
-use crate::store::{ensure_branch_exists, Store};
+use crate::store::Store;
 use crate::system;
 use crate::utils::short_hash;
 use petgraph::graph::{DiGraph, NodeIndex};
@@ -195,7 +195,10 @@ impl GraphBuilder<'_> {
         manifest_hash: &str,
         mode: &str,
     ) -> io::Result<bool> {
-        match build_exists_for_manifest(self.repo_path, ref_to_check, manifest_hash) {
+        let Some(store) = self.store else {
+            return Ok(false);
+        };
+        match build_exists_for_manifest(store, ref_to_check, manifest_hash) {
             Ok(true) => {
                 self.print_cached(dep, mode);
                 Ok(true)
@@ -283,10 +286,9 @@ impl GraphBuilder<'_> {
         if let Some(available) = self.ref_cache.get(ref_to_check) {
             return *available;
         }
-        let available = ensure_branch_exists(self.repo_path, ref_to_check).is_ok()
-            || self
-                .store
-                .is_some_and(|store| store.pull_from_remote(ref_to_check).unwrap_or(false));
+        let available = self
+            .store
+            .is_some_and(|store| store.resolve_ref(ref_to_check).is_ok());
         self.ref_cache.insert(ref_to_check.to_string(), available);
         available
     }

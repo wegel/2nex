@@ -357,6 +357,34 @@ impl Store {
         Ok(info.metadata.get(key).cloned())
     }
 
+    /// Check whether an artifact ref exists in the primary or a fallback store.
+    pub fn artifact_exists(&self, artifact_path: &str) -> io::Result<bool> {
+        if zub::artifact_ref_exists(&self.repo, artifact_path) {
+            return Ok(true);
+        }
+        Ok(self
+            .fallback_chain
+            .iter()
+            .any(|repo| zub::artifact_ref_exists(repo, artifact_path)))
+    }
+
+    /// Find a commit with matching manifest metadata in the primary or a fallback store.
+    pub fn find_commit_by_manifest_hash(
+        &self,
+        branch: &str,
+        target_hash: &str,
+    ) -> io::Result<Option<String>> {
+        if let Some(hash) = find_commit_by_manifest_hash_in_repo(&self.repo, branch, target_hash)? {
+            return Ok(Some(hash));
+        }
+        for repo in &self.fallback_chain {
+            if let Some(hash) = find_commit_by_manifest_hash_in_repo(repo, branch, target_hash)? {
+                return Ok(Some(hash));
+            }
+        }
+        Ok(None)
+    }
+
     /// list files in a commit (recursive directory listing).
     pub fn ls(&self, commit: &str) -> io::Result<Vec<String>> {
         // try to find which repo has this commit
@@ -914,6 +942,14 @@ pub fn find_commit_by_manifest_hash(
     let repo = Repo::open(Path::new(repo_path))
         .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
 
+    find_commit_by_manifest_hash_in_repo(&repo, branch, target_hash)
+}
+
+fn find_commit_by_manifest_hash_in_repo(
+    repo: &Repo,
+    branch: &str,
+    target_hash: &str,
+) -> io::Result<Option<String>> {
     // resolve branch to commit hash
     let head_hash = match zub::resolve_ref(&repo, branch) {
         Ok(h) => h,

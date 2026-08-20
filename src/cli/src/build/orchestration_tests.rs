@@ -71,6 +71,92 @@ fn rebuilds_when_dependency_manifest_changes() -> io::Result<()> {
 }
 
 #[test]
+fn fresh_fallback_dependency_is_not_scheduled() -> io::Result<()> {
+    let temp_dir = TempDir::new()?;
+    let primary_repo = temp_dir.path().join("primary");
+    let fallback_repo = temp_dir.path().join("fallback");
+    if !init_store_at(&primary_repo)? || !init_store_at(&fallback_repo)? {
+        return Ok(());
+    }
+
+    let root_manifest_path = temp_dir.path().join("pkg/apps/kernel.yaml");
+    let dep_manifest_path = temp_dir.path().join("pkg/deps/initramfs.yaml");
+    write_dependency_manifest(&dep_manifest_path)?;
+    write_root_manifest(&root_manifest_path)?;
+    write_built_output(
+        fallback_repo.to_str().expect("fallback repo path"),
+        &dep_manifest_path,
+        "x86_64/pkg/deps/initramfs/1.0/outputs/boot",
+        "boot",
+    )?;
+    write_built_output(
+        primary_repo.to_str().expect("primary repo path"),
+        &root_manifest_path,
+        "x86_64/pkg/apps/kernel/1.0/outputs/bin",
+        "kernel",
+    )?;
+
+    let (graph, manifest_map) = collect_test_graph_with_fallbacks(
+        &primary_repo,
+        &[fallback_repo],
+        &temp_dir,
+        root_manifest_path.clone(),
+    )?;
+
+    assert!(!manifest_map.contains_key(&dep_manifest_path));
+    let root = manifest_map
+        .get(&root_manifest_path)
+        .expect("root manifest should be in graph");
+    assert!(
+        graph[*root].is_skip(),
+        "the fresh graph should schedule no build"
+    );
+    Ok(())
+}
+
+#[test]
+fn stale_fallback_dependency_is_scheduled() -> io::Result<()> {
+    let temp_dir = TempDir::new()?;
+    let primary_repo = temp_dir.path().join("primary");
+    let fallback_repo = temp_dir.path().join("fallback");
+    if !init_store_at(&primary_repo)? || !init_store_at(&fallback_repo)? {
+        return Ok(());
+    }
+
+    let root_manifest_path = temp_dir.path().join("pkg/apps/kernel.yaml");
+    let dep_manifest_path = temp_dir.path().join("pkg/deps/initramfs.yaml");
+    let dep_manifest_v1 = write_dependency_manifest(&dep_manifest_path)?;
+    write_root_manifest(&root_manifest_path)?;
+    write_built_output(
+        fallback_repo.to_str().expect("fallback repo path"),
+        &dep_manifest_path,
+        "x86_64/pkg/deps/initramfs/1.0/outputs/boot",
+        "boot",
+    )?;
+    write_built_output(
+        primary_repo.to_str().expect("primary repo path"),
+        &root_manifest_path,
+        "x86_64/pkg/apps/kernel/1.0/outputs/bin",
+        "kernel",
+    )?;
+    write_manifest(
+        &dep_manifest_path,
+        &dep_manifest_v1.replace("description: v1", "description: v2"),
+    )?;
+
+    let (graph, manifest_map) = collect_test_graph_with_fallbacks(
+        &primary_repo,
+        &[fallback_repo],
+        &temp_dir,
+        root_manifest_path.clone(),
+    )?;
+
+    assert_node_rebuilds(&graph, &manifest_map, &dep_manifest_path, "dependency");
+    assert_node_rebuilds(&graph, &manifest_map, &root_manifest_path, "root");
+    Ok(())
+}
+
+#[test]
 fn missing_dependency_manifest_stops_graph_collection() -> io::Result<()> {
     let temp_dir = TempDir::new()?;
     let root_manifest_path = temp_dir.path().join("pkg/apps/kernel.yaml");
@@ -148,6 +234,17 @@ fn init_test_store(temp_dir: &TempDir) -> io::Result<Option<String>> {
     Ok(Some(repo_dir.to_string_lossy().to_string()))
 }
 
+fn init_store_at(repo_dir: &Path) -> io::Result<bool> {
+    match Store::init(repo_dir) {
+        Ok(_) => Ok(true),
+        Err(error) if host_lacks_root_user_namespace_mapping(&error) => {
+            eprintln!("skipping fallback graph test: host cannot map uid 0");
+            Ok(false)
+        }
+        Err(error) => Err(error),
+    }
+}
+
 fn write_dependency_manifest(path: &Path) -> io::Result<String> {
     let manifest = r#"package:
   schema: 1
@@ -223,7 +320,19 @@ fn collect_test_graph(
     DiGraph<ManifestSource, ()>,
     HashMap<std::path::PathBuf, petgraph::prelude::NodeIndex>,
 )> {
-    let store = Store::open(repo_path)?;
+    collect_test_graph_with_fallbacks(Path::new(repo_path), &[], temp_dir, root_manifest_path)
+}
+
+fn collect_test_graph_with_fallbacks(
+    repo_path: &Path,
+    fallback_paths: &[std::path::PathBuf],
+    temp_dir: &TempDir,
+    root_manifest_path: std::path::PathBuf,
+) -> io::Result<(
+    DiGraph<ManifestSource, ()>,
+    HashMap<std::path::PathBuf, petgraph::prelude::NodeIndex>,
+)> {
+    let store = Store::open_with_fallback_chain(repo_path, fallback_paths)?;
     let mut graph = DiGraph::new();
     let mut manifest_map = HashMap::new();
     let mut ref_cache = HashMap::new();
@@ -232,7 +341,7 @@ fn collect_test_graph(
 
     collect_dependencies_recursive(DependencyGraphRequest {
         manifest_source: &root_source,
-        repo_path,
+        repo_path: repo_path.to_str().expect("repo path should be UTF-8"),
         manifest_dirs: &manifest_dirs,
         graph: &mut graph,
         manifest_map: &mut manifest_map,

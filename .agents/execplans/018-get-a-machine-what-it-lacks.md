@@ -49,7 +49,12 @@ only the primary store.
 - [ ] Add a test that installs tig by pulling its target and runtime closure.
 - [ ] Add a test that makes `nex install` build two guest-only packages in
       dependency order.
-- [ ] Make dependency-graph cache checks honor every fallback store.
+- [x] (2026-08-20 13:08Z) Change `nex install` to send an uncached package
+      through the dependency graph, with a focused test that finds a missing
+      leaf and root through that install helper.
+- [x] (2026-08-20 13:08Z) Make dependency-graph ref and manifest-hash checks
+      inspect the primary store plus every fallback store. The fresh and stale
+      fallback tests pass, as does the full 208-test CLI suite.
 - [ ] Run focused checks, rebuild the Nex package and its four system
       consumers reproducibly, and run every machine test green twice.
 
@@ -66,6 +71,16 @@ only the primary store.
   Evidence: `zub ls-tree -r
   x86_64/pkg/core/kernel/linux/6.18.24/outputs/fs-fuse` and
   `pkg/core/kernel/linux.yaml`.
+
+- Observation: `GraphBuilder::ref_is_available` called
+  `ensure_branch_exists(repo_path, ref)` before trying a remote, so it skipped
+  every configured fallback. `cached_for_hash` then passed the same primary
+  path to `build_exists_for_manifest`, which repeated the omission for
+  artifact refs and commit metadata.
+  Evidence: the old paths in
+  `src/cli/src/build/orchestration/graph.rs` and the passing tests
+  `fresh_fallback_dependency_is_not_scheduled` and
+  `stale_fallback_dependency_is_scheduled`.
 
 ## Decision Log
 
@@ -104,6 +119,13 @@ only the primary store.
   Rationale: Virtiofsd and QEMU are present on the test host. A second transport
   would add kernel modules, branches, and failure cases without proving another
   product behavior.
+  Date/Author: 2026-08-20 / Codex
+
+- Decision: Put layered artifact and manifest-history queries on `Store`, and
+  pass that same open `Store` through the dependency graph.
+  Rationale: `Store` already owns primary, fallback, and remote lookup order.
+  Path-only helpers cannot inspect that full chain and recreated the exact
+  fallback bug this plan targets.
   Date/Author: 2026-08-20 / Codex
 
 ## Outcomes & Retrospective
@@ -413,6 +435,22 @@ bytes, objects, and elapsed time for each pull. Record which existing tests ran
 without the remote device.
 
 Do not add command logs or `tests/nex-test-fixture.bundle` to Git.
+
+Rust checks at 2026-08-20 13:08Z:
+
+- `git status --short --untracked-files=all` before work: clean; there were no
+  pre-task commit candidates or local-only files to classify.
+- `cargo test --manifest-path src/cli/Cargo.toml
+  install_builds_missing_dependency_closure`: 1 passed.
+- `cargo test --manifest-path src/cli/Cargo.toml
+  fresh_fallback_dependency_is_not_scheduled`: 1 passed.
+- `cargo test --manifest-path src/cli/Cargo.toml
+  stale_fallback_dependency_is_scheduled`: 1 passed.
+- `cargo test --manifest-path src/cli/Cargo.toml`: 208 passed.
+- `rustfmt --edition 2021 --config skip_children=true` on every changed Rust
+  file: passed. The whole-tree `cargo fmt --check` still reports pre-existing
+  drift in unrelated committed files, including `commands/deploy.rs` and
+  `manifest/format.rs`.
 
 ## Interfaces and Dependencies
 

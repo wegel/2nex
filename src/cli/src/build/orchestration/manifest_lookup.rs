@@ -7,22 +7,22 @@ use std::path::{Path, PathBuf};
 
 use crate::manifest::types::Manifest;
 use crate::refs::PackageRef;
-use crate::store::{find_commit_by_manifest_hash, lookup_artifact};
+use crate::store::Store;
 
 /// Check if a build output exists for a manifest hash.
 pub fn build_exists_for_manifest(
-    repo_path: &str,
+    store: &Store,
     commit_ref: &str,
     manifest_hash: &str,
 ) -> io::Result<bool> {
     if let Ok(pkg_ref) = PackageRef::parse(commit_ref) {
         let artifact_path = pkg_ref.artifact_ref_path(manifest_hash);
-        if let Ok(Some(_tree)) = lookup_artifact(repo_path, &artifact_path) {
+        if store.artifact_exists(&artifact_path)? {
             return Ok(true);
         }
     }
 
-    match find_commit_by_manifest_hash(repo_path, commit_ref, manifest_hash) {
+    match store.find_commit_by_manifest_hash(commit_ref, manifest_hash) {
         Ok(Some(_)) => Ok(true),
         Ok(None) => Ok(false),
         Err(e) => Err(e),
