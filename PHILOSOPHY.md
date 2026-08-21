@@ -8,9 +8,10 @@ packaging worlds for each one.
 Nex refers to several related things:
 
 - The Nex concept: reproducible builds, explicit inputs, isolated package
-  dependencies, and system state identified by the checksum of its contents.
-- The Nex tools: the builder, package manager, zub store integration,
-  deployment tools, and boot tools.
+  dependencies, and system state recorded as an immutable Zub commit built
+  from exact inputs.
+- The Nex tools: the builder, package manager, Zub store integration, system
+  checkout tools, isolated-execution tools, and boot tools.
 - The Nex distribution: the manifests and assemblies that this project
   maintains for complete Linux systems.
 
@@ -28,13 +29,12 @@ combines them into a root filesystem.
 An embedded device will often use a frozen, read-only root filesystem. It does
 not need to carry a full package manager or support package-level changes on
 the device. A device that must replace its whole system at once and retain the
-old system for rollback can also carry zub and use whole-system deployments.
+old system for rollback can also carry Zub and use whole-system checkouts.
 
 A desktop can keep packages in the Nex layout, install user packages without
-root, switch package versions, and commit system changes as new deployments.
-Both systems consume the same built package artifacts. Zub deduplicates shared
-content rather than forcing each system style to maintain another package
-format.
+root, switch package versions, and create new system checkouts. Both systems
+consume the same built package artifacts. Zub deduplicates shared content
+rather than forcing each system style to maintain another package format.
 
 Flat root filesystems remain valid Nex products. Containers, embedded images,
 recovery systems, and machines with another boot or update process may need
@@ -120,21 +120,25 @@ and run conflicting dependency versions side by side.
 
 This package model should make Docker images, AppImage files, and similar
 dependency-bundling formats unnecessary for ordinary software distribution.
-Nex does not claim that package dependency separation creates a security
-boundary. Users should still use namespaces or virtual machines when programs
-need filesystem, process, or network isolation. Nex may eventually provide
-convenient tools for those boundaries.
+Package dependency separation alone does not create a security boundary. Nex
+will also run applications and complete systems with explicit filesystem,
+process, user, capability, and network isolation. It will use the same package
+and Assembly realizations instead of copying them into another container image
+or requiring a background container daemon. Users may still choose virtual
+machines when they need a stronger boundary than the host kernel can provide.
 
 ## Git Defines The System
 
-Git stores the manifests that define packages and systems. A zub store caches
-the results. The store must never become the only record of how to recreate a
-system.
+An Assembly lives in its own Git repository and history. The package manifests
+that the Assembly selects live in the separate Nex manifests repository or in
+another manifest repository. Exact commits from those repositories define the
+system and preserve the instructions needed to recreate it.
 
-A user should be able to delete the store and rebuild the same outputs from the
-same Git revision. An old Git revision should continue to describe and rebuild
-the complete old system, subject to the declared source files remaining
-available.
+The local Zub store holds the realized objects and files that those Git commits
+describe. It is installed storage, not a disposable cache. Losing it requires
+a rebuild or a pull from another Zub store. An exact set of old Git commits
+should continue to describe and rebuild the complete old system, subject to
+the declared source files remaining available.
 
 Dependencies should point to immutable manifest content. Git branches and tags
 may tell users which versions to follow, but mutable branch names must not
@@ -186,28 +190,27 @@ installs it under a home directory and an administrator installs it for the
 whole machine.
 
 Nex must not require a background package-management daemon. The CLI performs
-builds, installs, updates, deployment changes, and cleanup when a person or an
-external scheduler invokes it.
+builds, installs, updates, changes to system checkouts, and cleanup when a
+person or an external scheduler invokes it.
 
 ## System Changes Are Atomic
 
-A Nex-managed system should boot an immutable, read-only deployment. Mutable
-data such as home directories, application state, logs, and device identity
-must live outside that deployment.
+A Nex-managed system should boot an immutable, read-only system checkout.
+Mutable data such as home directories, application state, logs, and device
+identity must live outside that checkout.
 
-Every committed system change creates a new deployment. A user may build a
-complete assembly or stage several individual package changes, but Nex commits
-the result together as another complete system state. Nex should generally
-retain the previous deployment until the new one boots successfully.
+Every system change creates a new immutable realization and a new system
+checkout. A machine may keep several complete system checkouts. Each present
+checkout remains bootable until a person removes it.
 
-A rollback switches the system deployment without rolling back personal files
-or application data. Nex must not garbage-collect the only known-good system
-while a new deployment remains unproven.
+A rollback boots another present system checkout without rolling back personal
+files or application data. Nex must not garbage-collect any object that a
+present system checkout still needs.
 
-A kernel update may create a deployment that differs only in its kernel
+A kernel update may create a system checkout that differs only in its kernel
 package. Zub can hardlink every unchanged file, so Nex does not need to rebuild
 or duplicate the rest of the system. The project may still adjust how kernels
-and deployments relate as real machines expose constraints.
+and system checkouts relate as real machines expose constraints.
 
 ## Packages Ship Defaults; Hosts Own Configuration
 
@@ -215,8 +218,8 @@ Nex follows the UAPI Group Configuration Files Specification. Packages and
 assemblies place vendor defaults under `/usr`. Programs may accept temporary
 overrides under `/run`. The machine owner writes lasting, machine-specific
 settings under `/etc`. A Nex-managed machine mounts or otherwise supplies
-`/etc` from persistent host state outside the selected deployment, so the
-deployment can stay read-only while an administrator changes files such as
+`/etc` from persistent host state outside the selected system checkout, so the
+checkout can stay read-only while an administrator changes files such as
 `/etc/passwd`, `/etc/group`, `/etc/hosts`, or network settings.
 
 Programs should search `/etc`, then `/run`, then `/usr` when they choose one
@@ -229,9 +232,10 @@ structured documents may use full-file selection when combining fragments
 would change their meaning.
 
 Package upgrades must not merge or overwrite host-owned files in `/etc`.
-Because programs read vendor defaults directly from `/usr`, a new deployment
-can update those defaults while leaving the host's explicit choices intact. A
-rollback selects the earlier `/usr` tree and keeps the same host-owned `/etc`.
+Because programs read vendor defaults directly from `/usr`, a new system
+checkout can update those defaults while leaving the host's explicit choices
+intact. A rollback selects the earlier `/usr` tree and keeps the same host-owned
+`/etc`.
 Tools may show the administrator how a local file differs from the vendor
 default, but they must not guess how to combine the two.
 
@@ -253,15 +257,15 @@ package that does not know whether an assembly needs it.
 
 Product repositories place their own vendor defaults and service choices in
 product packages or assemblies. Flat root filesystems must continue to work
-without the Nex deployment or boot tools. `CONFIGURATION.md` describes the
+without the Nex system-checkout or boot tools. `CONFIGURATION.md` describes the
 concrete directory rules, compatibility adapters, and upgrade behavior.
 
 ## Nex Prefers Its Boot Path But Does Not Require It
 
 The Nex distribution prefers its custom UEFI boot manager, kernels with the
 common boot drivers built in, and a constant built-in early userspace instead
-of a generated initramfs. This design lets the boot manager read deployments
-directly and keeps each boot state reproducible.
+of a generated initramfs. This design lets the boot manager read system
+checkouts directly and keeps each boot state reproducible.
 
 The wider Nex concept does not require that boot path. Embedded boards may need
 vendor firmware, another bootloader, or an initramfs. Flat assemblies may boot

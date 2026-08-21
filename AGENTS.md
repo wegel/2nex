@@ -15,9 +15,12 @@ scripts. Package manifests under `pkg/` build individual programs and
 libraries. Assembly manifests under `asm/` combine built packages into
 bootable systems or root filesystems.
 
-Git stores the manifests and scripts that define the system. The zub store
-holds build outputs as a cache. Treat Git as the source of truth and the store
-as disposable.
+Git repositories store the manifests and scripts that define the system. The
+local Zub store is the persistent object database where realized outputs and
+system files live; do not treat it as a disposable cache. Remote Zub stores may
+distribute exact outputs so another machine can verify and reuse them instead
+of rebuilding them. The pinned Git inputs define what Nex must realize, while
+the local Zub store holds the realized files.
 
 Bootstrap seeds under `pkg/bootstrap/` stay as close to unmodified
 upstream as possible. Do not add UAPI configuration patches, extra
