@@ -17,7 +17,7 @@ use crate::BuildOpts;
 
 use super::base::{layer_base_commit, resolve_base_commit};
 use super::commit::commit_system_rootfs;
-use super::config::move_legacy_etc_to_factory;
+use super::config::{capture_factory_defaults, move_legacy_etc_to_factory};
 use super::dependencies::dependencies_from_system_packages;
 use super::env::build_system_env_vars;
 use super::files::apply_file_entries;
@@ -126,11 +126,17 @@ fn build_system_once(
 ) -> io::Result<()> {
     prepare_system_rootfs(opts, base_dir, inputs, reuse_rootfs)?;
     layer_base_commit(inputs.base_commit.as_deref(), opts, base_dir)?;
+    let target = Path::new(base_dir).join("target");
+    let base_factory_defaults = inputs
+        .base_commit
+        .as_ref()
+        .map(|_| capture_factory_defaults(&target))
+        .transpose()?;
     materialize_system_package_set(opts, manifest, base_dir, inputs)?;
     apply_file_entries(&manifest.files, base_dir)?;
     run_system_script(manifest, base_dir, download_dir, inputs)?;
     if manifest.system.nex_structure {
-        move_legacy_etc_to_factory(&Path::new(base_dir).join("target"))?;
+        move_legacy_etc_to_factory(&target, base_factory_defaults.as_ref())?;
     }
     Ok(())
 }
