@@ -59,21 +59,27 @@ fn bundle_source(commit: &str, sha256: Option<&str>) -> Source {
     }
 }
 
+/// Scenario: a package build passes its normal relative `./inputs_cache` path,
+/// then Nex runs `git bundle create` from a detached worktree elsewhere.
+/// Nex must keep the bundle in the caller's cache and reproduce the same bytes.
 #[test]
 fn a_git_bundle_source_is_byte_reproducible_and_carries_history() {
     let temp_dir = tempfile::tempdir().expect("temp dir");
     let repo = temp_dir.path().join("repo");
     let head = repository_with_history(&repo);
-    let downloads = temp_dir.path().join("downloads");
+    let downloads = repo.join("inputs_cache");
     fs::create_dir_all(&downloads).expect("downloads");
 
     let previous = std::env::current_dir().expect("cwd");
     std::env::set_current_dir(&repo).expect("enter repo");
 
     // the first build does not know the checksum, so it reports the real one
-    let discovered = fetch_and_verify_input(&bundle_source(&head, Some(&"0".repeat(64))), &downloads.to_string_lossy())
-        .expect_err("a wrong checksum must be rejected")
-        .to_string();
+    let discovered = fetch_and_verify_input(
+        &bundle_source(&head, Some(&"0".repeat(64))),
+        "./inputs_cache",
+    )
+    .expect_err("a wrong checksum must be rejected")
+    .to_string();
     let actual = discovered
         .split("got ")
         .nth(1)
@@ -81,10 +87,10 @@ fn a_git_bundle_source_is_byte_reproducible_and_carries_history() {
         .trim()
         .to_string();
 
-    let first = fetch_and_verify_input(&bundle_source(&head, Some(&actual)), &downloads.to_string_lossy())
+    let first = fetch_and_verify_input(&bundle_source(&head, Some(&actual)), "./inputs_cache")
         .expect("bundle builds");
     fs::remove_file(&first).expect("drop the cached bundle");
-    let second = fetch_and_verify_input(&bundle_source(&head, Some(&actual)), &downloads.to_string_lossy())
+    let second = fetch_and_verify_input(&bundle_source(&head, Some(&actual)), "./inputs_cache")
         .expect("bundle rebuilds");
 
     std::env::set_current_dir(previous).expect("restore cwd");

@@ -60,13 +60,15 @@ pub fn fetch_and_verify_input(input_spec: &Source, download_dir: &str) -> io::Re
 /// - an explicit commit rather than a branch, because bundling a branch whose
 ///   name differs from the repository's HEAD yields a clone with an empty tree
 ///   and `remote HEAD refers to nonexistent ref`.
-fn fetch_git_bundle(
-    input_spec: &Source,
-    commit: &str,
-    download_dir: &str,
-) -> io::Result<PathBuf> {
+fn fetch_git_bundle(input_spec: &Source, commit: &str, download_dir: &str) -> io::Result<PathBuf> {
     let expected = required_sha256(input_spec, "git_bundle")?;
-    let bundle_path = Path::new(download_dir).join(format!("{}.bundle", input_spec.name));
+    let download_root = Path::new(download_dir);
+    let download_root = if download_root.is_absolute() {
+        download_root.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(download_root)
+    };
+    let bundle_path = download_root.join(format!("{}.bundle", input_spec.name));
 
     if bundle_path.exists() && file_sha256(&bundle_path)? == expected {
         println!("Found cached bundle: {}", bundle_path.display());
@@ -74,7 +76,10 @@ fn fetch_git_bundle(
     }
 
     let repository = repository_for_source(input_spec)?;
-    let resolved = git_output(&repository, &["rev-parse", "--verify", &format!("{}^{{commit}}", commit)])?;
+    let resolved = git_output(
+        &repository,
+        &["rev-parse", "--verify", &format!("{}^{{commit}}", commit)],
+    )?;
 
     let worktree = tempfile::tempdir()?;
     let worktree_path = worktree.path().join("tree");
