@@ -5,8 +5,26 @@ system:
   version: 0.0.1
   description: Minimal nex-systemd machine that can build a package on itself
   nex_structure: true
-  extends: nex:base/nex-systemd.yaml
-  checksum: 142c22a6194d17cc971ae2b20484ecc6f8b530b2dbaa677b6819bd9b42496293
+  checksum: ac9754edd58eda2474cbe4a9787a4550dd9ee20406fae9b5587e761889e14f6a
+
+base:
+  commit: systems/nex-systemd/0.0.1
+  manifest: base/nex-systemd.yaml
+
+sources:
+# base/nex-systemd.yaml's nex-init-manifests service clones this bundle on
+# first boot. Nex generates it from the exact Git commit instead of copying the
+# ignored developer fixture from tests/.
+- name: nex_bundle
+  sha256: d36fba0ca487948b706caa568940a196b47475a5f4a7a068c4cf7cdec8844fb5
+  git_bundle: 2fb292c68b0256d9628e6c963ee3ace1babdb1d8
+
+dependencies:
+# The immutable base contributes target files, not tools for this child script.
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
 
 packages:
 # machine tests load virtiofs after boot to mount a read-only host store
@@ -16,24 +34,12 @@ packages:
 # real /nex/manifests repository, with full history, on first boot
 - name: git
   commit: x86_64/pkg/dev/vcs/git/2.49.0/outputs/bin
-  manifest_ref: d832fdf152d75b7e105fbc1660ed8f95ec3d0916
-
-files:
-# base/nex-systemd.yaml's own nex-init-manifests already clones this bundle
-# (it looks for /usr/share/nex/nex.bundle and runs `git clone`), so no
-# override is needed here -- only the bundle file itself, below.
-# A bundle of this repository's full history, pinned to the commit this
-# fixture was built from. Regenerate with a detached worktree at the pinned
-# commit, then `git -c pack.threads=1 bundle create <out> HEAD` from inside
-# it: a bare commit hash makes `bundle create` refuse an empty bundle, and
-# bundling a branch name (or HEAD in a checkout on a branch that later moves)
-# leaves the clone with no ref to check out.
-- path: /usr/share/nex/nex.bundle
-  mode: 420
-  source: tests/nex-test-fixture.bundle
-
 
 build:
   environment: 13ce31fd97c19f5756e4413babf279d543b5a71c
 
   script: |
+    mkdir -p /target/usr/share/nex
+    cp "/${SOURCE_nex_bundle}" /target/usr/share/nex/nex.bundle
+    chmod 0644 /target/usr/share/nex/nex.bundle
+    touch -d "2024-01-01T00:00:00+00:00" /target/usr/share/nex/nex.bundle

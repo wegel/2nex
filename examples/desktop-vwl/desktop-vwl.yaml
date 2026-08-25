@@ -5,8 +5,11 @@ system:
   version: 0.0.1
   description: Desktop system with vwl compositor, wayland tools, and CLI utilities
   nex_structure: true
-  extends: nex:base/nex-systemd.yaml
-  checksum: 0e01885b1f037b6f49562f18d2fb558729d3f574c9f4b9e89029dda3f4d4acf9
+  checksum: fb58d452a4b34df60c134e3678db339b210c1f7d87d1a4f58f0bf4fa7352e708
+
+base:
+  commit: systems/nex-systemd/0.0.1
+  manifest: base/nex-systemd.yaml
 
 sources:
 # Ship the Nex repository for self-hosting, as a Git bundle rather than a file
@@ -15,531 +18,375 @@ sources:
 # The pinned commit necessarily predates the manifest that names it; a
 # self-rebuild converges on a fixed point without reaching one.
 - name: nex_bundle
-  sha256: 6d8250bc44650b99db9b3826f5efc3640d8f3f2cbea8e328114edbfd5b89c0b8
-  git_bundle: 08df833ef49eb69d1b454ede5a3646c7a9ffbebe
+  sha256: d36fba0ca487948b706caa568940a196b47475a5f4a7a068c4cf7cdec8844fb5
+  git_bundle: 2fb292c68b0256d9628e6c963ee3ace1babdb1d8
 
 dependencies:
-# desktop-specific libs; base libs come from nex-systemd
+# Child scripts declare their own tools; immutable bases supply target files.
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+# desktop-specific libs
 - name: libcap-bin
   commit: x86_64/pkg/libs/security/libcap/2.69/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: linux-pam
   commit: x86_64/pkg/libs/security/linux-pam/1.7.1/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: glibc-i18n
   commit: x86_64/pkg/libs/system/glibc/2.39/outputs/misc
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
+- name: glibc-bin
+  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/bin
 - name: bzip2
   commit: x86_64/pkg/libs/compression/bzip2/1.0.8/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: gzip
   commit: x86_64/pkg/cli/archive/gzip/1.13/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: libproc2
   commit: x86_64/pkg/core/userland/procps-ng/4.0.5/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: libmnl
   commit: x86_64/pkg/libs/net/libmnl/1.0.5/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: libnftnl
   commit: x86_64/pkg/libs/net/libnftnl/1.3.1/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: readline
   commit: x86_64/pkg/libs/system/readline/8.2/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: jansson
   commit: x86_64/pkg/libs/system/jansson/2.14.1/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 
 packages:
 # PAM support
 - name: linux-pam
   commit: x86_64/pkg/libs/security/linux-pam/1.7.1/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # kernel
 - name: linux
   commit: x86_64/pkg/core/kernel/linux/6.18.24/bundles/all-modules
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: linux-vm
   commit: x86_64/pkg/core/kernel/linux/6.18.24/bundles/vm
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: linux-headers
   commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: linux-firmware
   commit: x86_64/pkg/core/kernel/linux-firmware/20251125/bundles/desktop
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: amd-ucode-initramfs
   commit: x86_64/pkg/core/kernel/amd-ucode-initramfs/20251125/outputs/boot
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: intel-ucode-initramfs
   commit: x86_64/pkg/core/kernel/intel-ucode-initramfs/20260512/outputs/boot
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: wireless-regdb
   commit: x86_64/pkg/core/kernel/wireless-regdb/2024.10.07/outputs/regdb
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # networking
 - name: networkmanager
   commit: x86_64/pkg/net/manager/networkmanager/1.50.0/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: iwd
   commit: x86_64/pkg/net/wifi/iwd/2.22/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: bluez
   commit: x86_64/pkg/net/bluetooth/bluez/5.85/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: inetutils
   commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: iproute2
   commit: x86_64/pkg/net/misc/iproute2/6.18.0/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: nftables
   commit: x86_64/pkg/net/firewall/nftables/1.1.1/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # additional core utilities
 - name: psmisc
   commit: x86_64/pkg/core/userland/psmisc/23.7/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: diffutils
   commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: file
   commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: gawk
   commit: x86_64/pkg/cli/text/gawk/5.3.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: procps-ng
   commit: x86_64/pkg/core/userland/procps-ng/4.0.5/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: which
   commit: x86_64/pkg/core/userland/which/2.23/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # Wayland compositor, desktop tools, and X11 compatibility
 - name: xkeyboard-config
   commit: x86_64/pkg/libs/input/xkeyboard-config/2.43/outputs/misc
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: vwl
   commit: x86_64/pkg/desktop/compositor/vwl/0.1.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: foot
   commit: x86_64/pkg/apps/terminal/foot/1.25.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: wofi
   commit: x86_64/pkg/desktop/wayland/wofi/1.5.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: waybar
   commit: x86_64/pkg/desktop/wayland/waybar/0.15.0/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: swaync
   commit: x86_64/pkg/desktop/wayland/swaync/0.10.1/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: fuzzel
   commit: x86_64/pkg/desktop/wayland/fuzzel/1.13.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: swaybg
   commit: x86_64/pkg/desktop/wayland/swaybg/1.2.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: swayidle
   commit: x86_64/pkg/desktop/wayland/swayidle/1.8.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: swaylock
   commit: x86_64/pkg/desktop/wayland/swaylock/1.7.2/bundles/runtime
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: mako
   commit: x86_64/pkg/desktop/wayland/mako/1.9.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: grim
   commit: x86_64/pkg/desktop/wayland/grim/1.4.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: slurp
   commit: x86_64/pkg/desktop/wayland/slurp/1.5.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: wl-clipboard
   commit: x86_64/pkg/desktop/wayland/wl-clipboard/2.2.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: wl-mirror
   commit: x86_64/pkg/desktop/wayland/wl-mirror/0.18.3/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: wlr-randr
   commit: x86_64/pkg/desktop/wayland/wlr-randr/0.4.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: wlopm
   commit: x86_64/pkg/desktop/wayland/wlopm/1.0.0/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: ironbar
   commit: x86_64/pkg/desktop/wayland/ironbar/0.18.0-git/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: xwayland
   commit: x86_64/pkg/servers/xwayland/24.1.4/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: xauth
   commit: x86_64/pkg/apps/x11/xauth/1.1.5/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: xhost
   commit: x86_64/pkg/apps/x11/xhost/1.0.10/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: libseat
   commit: x86_64/pkg/libs/wayland/libseat/0.9.1/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: wlroots
   commit: x86_64/pkg/libs/wayland/wlroots/0.19.2/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: wayland-protocols
   commit: x86_64/pkg/libs/wayland/wayland-protocols/1.46/outputs/misc
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # graphics, Vulkan runtime, and desktop integration libraries
 - name: mesa-lib
   commit: x86_64/pkg/libs/graphics/mesa/24.2.7/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: mesa-conf
   commit: x86_64/pkg/libs/graphics/mesa/24.2.7/outputs/conf
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: mesa-vulkan-icd
   commit: x86_64/pkg/libs/graphics/mesa/24.2.7/outputs/misc
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: vulkan-loader
   commit: x86_64/pkg/libs/graphics/vulkan-loader/1.4.328.1/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: vulkan-tools
   commit: x86_64/pkg/apps/graphics/vulkan-tools/1.4.328.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: imagemagick
   commit: x86_64/pkg/apps/graphics/imagemagick/7.1.2-26/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: loupe
   commit: x86_64/pkg/apps/graphics/loupe/49.2/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: gnome-themes-extra
   commit: x86_64/pkg/desktop/themes/gnome-themes-extra/3.28/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: qt6-5compat
   commit: x86_64/pkg/libs/graphics/qt6-5compat/6.7.2/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: qt6-wayland
   commit: x86_64/pkg/libs/graphics/qt6-wayland/6.7.2/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: at-spi2-core
   commit: x86_64/pkg/libs/graphics/at-spi2-core/2.54.0/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: gtk3
   commit: x86_64/pkg/libs/graphics/gtk3/3.24.43/bundles/runtime
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: libsecret
   commit: x86_64/pkg/libs/security/libsecret/0.21.7/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: gnome-keyring
   commit: x86_64/pkg/apps/security/gnome-keyring/50.0/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: polkit-gnome
   commit: x86_64/pkg/apps/security/polkit-gnome/0.105/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: polkit
   commit: x86_64/pkg/libs/security/polkit/124/bundles/runtime
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: xdg-desktop-portal
   commit: x86_64/pkg/desktop/portals/xdg-desktop-portal/1.21.2/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: xdg-desktop-portal-wlr
   commit: x86_64/pkg/desktop/wayland/xdg-desktop-portal-wlr/0.8.2/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: libnotify
   commit: x86_64/pkg/libs/graphics/libnotify/0.8.3/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: notify-send
   commit: x86_64/pkg/libs/graphics/libnotify/0.8.3/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # browsers
 - name: chromium
   commit: x86_64/pkg/apps/web/chromium/143.0.7499.169/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # remote desktop support libraries
 - name: libvncserver
   commit: x86_64/pkg/libs/net/libvncserver/0.9.15/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: freerdp
   commit: x86_64/pkg/apps/misc/freerdp/3.27.1/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: remmina
   commit: x86_64/pkg/apps/misc/remmina/1.4.43/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # audio
 - name: pipewire
   commit: x86_64/pkg/libs/audio/pipewire/1.4.9/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: wireplumber
   commit: x86_64/pkg/libs/audio/wireplumber/0.5.12/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: alsa-utils
   commit: x86_64/pkg/libs/audio/alsa-utils/1.2.14/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: pavucontrol
   commit: x86_64/pkg/apps/multimedia/pavucontrol/6.2/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: jack2
   commit: x86_64/pkg/libs/audio/jack2/1.9.22/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: jack-example-tools
   commit: x86_64/pkg/apps/multimedia/jack-example-tools/4/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # editors
 - name: neovim
   commit: x86_64/pkg/cli/editors/neovim/0.11.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: helix
   commit: x86_64/pkg/cli/editor/helix/25.01.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: gnome-text-editor
   commit: x86_64/pkg/apps/editor/gnome-text-editor/47.4/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # file manager
 - name: nautilus
   commit: x86_64/pkg/apps/files/nautilus/47.6/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: gvfs
   commit: x86_64/pkg/desktop/files/gvfs/1.56.1/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # containers
 - name: podman
   commit: x86_64/pkg/apps/containers/podman/5.4.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: runc
   commit: x86_64/pkg/apps/containers/runc/1.2.4/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: conmon
   commit: x86_64/pkg/apps/containers/conmon/2.1.8/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: catatonit
   commit: x86_64/pkg/apps/containers/catatonit/0.2.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: fuse3
   commit: x86_64/pkg/libs/system/fuse3/3.17.4/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: fuse-overlayfs
   commit: x86_64/pkg/apps/containers/fuse-overlayfs/1.17/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: slirp4netns
   commit: x86_64/pkg/apps/containers/slirp4netns/1.3.4/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: distrobox
   commit: x86_64/pkg/apps/containers/distrobox/1.8.2.5/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: aardvark-dns
   commit: x86_64/pkg/apps/containers/aardvark-dns/1.14.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: netavark
   commit: x86_64/pkg/apps/containers/netavark/1.14.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: passt
   commit: x86_64/pkg/apps/containers/passt/2025_02_17/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # virtual machines
 - name: qemu-bin
   commit: x86_64/pkg/dev/virt/qemu/10.1.2/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: qemu-data
   commit: x86_64/pkg/dev/virt/qemu/10.1.2/outputs/misc
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: libvirt-bin
   commit: x86_64/pkg/dev/virt/libvirt/11.0.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: libvirt-conf
   commit: x86_64/pkg/dev/virt/libvirt/11.0.0/outputs/conf
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: libvirt-lib
   commit: x86_64/pkg/dev/virt/libvirt/11.0.0/outputs/lib
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: libvirt-daemons
   commit: x86_64/pkg/dev/virt/libvirt/11.0.0/outputs/misc
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: logrotate-bin
   commit: x86_64/pkg/cli/system/logrotate/3.22.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: logrotate-conf
   commit: x86_64/pkg/cli/system/logrotate/3.22.0/outputs/conf
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: virt-manager
   commit: x86_64/pkg/apps/virt/virt-manager/5.1.0/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # media
 - name: vlc
   commit: x86_64/pkg/apps/multimedia/vlc/3.0.23/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # dev tools
 - name: git
   commit: x86_64/pkg/dev/vcs/git/2.49.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: lazygit
   commit: x86_64/pkg/dev/vcs/lazygit/0.44.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: tig
   commit: x86_64/pkg/dev/vcs/tig/2.6.0/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # scripting runtimes required by installed CLI wrappers
 - name: python3
   commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: perl
   commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # cli tools
 - name: ncurses-terminfo
   commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/outputs/terminfo
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: zsh
   commit: x86_64/pkg/cli/shells/zsh/5.9/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: fish
   commit: x86_64/pkg/cli/shells/fish/4.7.1/bundles/runtime
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: tmux
   commit: x86_64/pkg/cli/system/tmux/3.6a/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: screen
   commit: x86_64/pkg/cli/system/screen/5.0.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: htop
   commit: x86_64/pkg/cli/system/htop/3.3.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: btop
   commit: x86_64/pkg/cli/system/btop/1.4.5/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: bmon
   commit: x86_64/pkg/cli/system/bmon/4.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: bat
   commit: x86_64/pkg/cli/text/bat/0.26.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: ripgrep
   commit: x86_64/pkg/cli/text/ripgrep/14.1.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: jq
   commit: x86_64/pkg/cli/json/jq/1.8.2/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: age
   commit: x86_64/pkg/cli/crypto/age/1.2.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: fd
   commit: x86_64/pkg/cli/system/fd/10.3.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: eza
   commit: x86_64/pkg/cli/system/eza/0.23.4/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: fzf
   commit: x86_64/pkg/cli/system/fzf/0.67.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: starship
   commit: x86_64/pkg/cli/system/starship/1.24.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: zoxide
   commit: x86_64/pkg/cli/system/zoxide/0.9.8/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: less
   commit: x86_64/pkg/cli/text/less/643/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: tree
   commit: x86_64/pkg/cli/system/tree/2.1.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: bottom
   commit: x86_64/pkg/cli/system/bottom/0.11.4/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: broot
   commit: x86_64/pkg/cli/system/broot/1.54.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: chezmoi
   commit: x86_64/pkg/cli/system/chezmoi/2.59.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: ncdu
   commit: x86_64/pkg/cli/system/ncdu/2.9.2/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: duf
   commit: x86_64/pkg/cli/system/duf/0.9.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: dool
   commit: x86_64/pkg/cli/system/dool/1.3.8/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: dua-cli
   commit: x86_64/pkg/cli/system/dua-cli/2.32.2/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: dust
   commit: x86_64/pkg/cli/system/dust/1.2.3/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: procs
   commit: x86_64/pkg/cli/system/procs/0.14.10/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: lsd
   commit: x86_64/pkg/cli/system/lsd/1.2.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # utilities
 - name: rsync
   commit: x86_64/pkg/cli/net/rsync/3.4.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: wget
   commit: x86_64/pkg/cli/net/wget/1.25.0/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: mosh
   commit: x86_64/pkg/cli/net/mosh/1.4.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: sshfs
   commit: x86_64/pkg/cli/fs/sshfs/3.7.6/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: openbsd-netcat
   commit: x86_64/pkg/cli/net/openbsd-netcat/1.238/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: tcpdump
   commit: x86_64/pkg/cli/net/tcpdump/4.99.6/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: unzip
   commit: x86_64/pkg/cli/archive/unzip/6.0/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: bc
   commit: x86_64/pkg/cli/calc/bc/6.7.5/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: dosfstools
   commit: x86_64/pkg/core/fs/dosfstools/4.2/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: xfsprogs
   commit: x86_64/pkg/core/fs/xfsprogs/7.0.1/bundles/full
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # multimedia
 - name: mpv
   commit: x86_64/pkg/apps/multimedia/mpv/0.40.0+20251205/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: ffmpeg
   commit: x86_64/pkg/libs/multimedia/ffmpeg/8.0.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 # fonts
 - name: fontconfig-bin
   commit: x86_64/pkg/libs/graphics/fontconfig/2.17.1/outputs/bin
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: fontconfig-conf
   commit: x86_64/pkg/libs/graphics/fontconfig/2.17.1/outputs/conf
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: noto-fonts
   commit: x86_64/pkg/fonts/noto-fonts/7.0/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: noto-fonts-emoji
   commit: x86_64/pkg/fonts/noto-fonts-emoji/2.051/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: hack-nerd
   commit: x86_64/pkg/fonts/hack-nerd/3.4.0/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: fira-code-nerd
   commit: x86_64/pkg/fonts/fira-code-nerd/3.4.0/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 - name: jetbrains-mono-nerd
   commit: x86_64/pkg/fonts/jetbrains-mono-nerd/3.4.0/bundles/dev
-  manifest_ref: 1acc2b231d5ea1177b94c3b288f794fd2f8b6536
 
 providers:
   graphics.egl: x86_64/pkg/libs/graphics/mesa/24.2.7/outputs/lib
   graphics.gbm: x86_64/pkg/libs/graphics/mesa/24.2.7/outputs/lib
   graphics.gles: x86_64/pkg/libs/graphics/mesa/24.2.7/outputs/lib
-
-exclude:
-  packages:
-  - name: kernel-fs-overlay
 
 files:
 # users and groups
