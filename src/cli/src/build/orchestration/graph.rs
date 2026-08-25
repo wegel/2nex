@@ -8,7 +8,7 @@ use crate::build::{check_if_built, compute_manifest_hash};
 use crate::manifest::types::{Dependency, ManifestSource};
 use crate::manifest::{
     compute_manifest_hash_from_source, load_manifest_from_source, repository_root_for_path,
-    ManifestData,
+    system_base_source, ManifestData, SystemBase,
 };
 use crate::refs::PackageRef;
 use crate::store::Store;
@@ -71,6 +71,7 @@ struct GraphBuilder<'a> {
 struct ManifestSummary {
     slug: String,
     dependencies: Vec<Dependency>,
+    base: Option<SystemBase>,
 }
 
 impl GraphBuilder<'_> {
@@ -86,9 +87,25 @@ impl GraphBuilder<'_> {
         println!("Processing dependencies for {}", summary.slug);
 
         let deps_need_build = self.process_dependencies(&summary.dependencies, node)?;
+        self.process_base(summary.base.as_ref(), manifest_source, node)?;
         self.maybe_mark_package_skip(node, &manifest_data, &manifest_path, deps_need_build)?;
 
         Ok(node)
+    }
+
+    fn process_base(
+        &mut self,
+        base: Option<&SystemBase>,
+        owner: &ManifestSource,
+        node: NodeIndex,
+    ) -> io::Result<()> {
+        let Some(base) = base else {
+            return Ok(());
+        };
+        let source = system_base_source(base, owner)?;
+        let base_node = self.collect(&source)?;
+        self.add_edge_if_buildable(base_node, node);
+        Ok(())
     }
 
     fn add_manifest_node(
@@ -333,6 +350,7 @@ fn summarize_manifest(manifest_data: &ManifestData) -> ManifestSummary {
         ManifestData::Package(manifest) => ManifestSummary {
             slug: manifest.package.slug.clone(),
             dependencies: manifest.dependencies.clone(),
+            base: None,
         },
         ManifestData::System(manifest) => {
             let mut dependencies = manifest.dependencies.clone();
@@ -342,6 +360,7 @@ fn summarize_manifest(manifest_data: &ManifestData) -> ManifestSummary {
             ManifestSummary {
                 slug: manifest.system.slug.clone(),
                 dependencies,
+                base: manifest.base.clone(),
             }
         }
     }
@@ -366,3 +385,7 @@ fn dependency_source(dep: &Dependency, path: PathBuf) -> io::Result<ManifestSour
         Ok(ManifestSource::Path(path))
     }
 }
+
+#[cfg(test)]
+#[path = "graph_tests.rs"]
+mod graph_tests;

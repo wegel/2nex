@@ -123,11 +123,23 @@ pub struct SystemMeta {
     pub extends: Option<PathBuf>,
 }
 
+/// A realized assembly tree that Nex layers below a child assembly.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct SystemBase {
+    /// Semantic Zub ref for the base assembly output.
+    pub commit: String,
+    /// Manifest that builds the named Zub ref, relative to its repository.
+    pub manifest: PathBuf,
+}
+
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SystemManifest {
     #[serde(default)]
     pub schema: Option<u32>,
     pub system: SystemMeta,
+    /// Base output to layer before this assembly's own packages and files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base: Option<SystemBase>,
     #[serde(default)]
     pub packages: Vec<SystemPackage>,
     /// Assembly-selected providers for abstract runtime capabilities.

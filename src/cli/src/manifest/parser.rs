@@ -122,10 +122,10 @@ pub fn detect_manifest_kind(doc: &Value) -> ManifestKind {
 }
 
 pub fn validate_system_manifest(manifest: &SystemManifest) -> io::Result<()> {
-    if manifest.packages.is_empty() {
+    if manifest.packages.is_empty() && manifest.base.is_none() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "System manifests must specify at least one entry under 'packages'",
+            "System manifests must specify a base or at least one entry under 'packages'",
         ));
     }
     if manifest.system.version.trim().is_empty() {

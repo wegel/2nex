@@ -1,16 +1,17 @@
 //! System assembly build flow and materialization helpers.
 
+mod base;
 mod build;
 mod commit;
 mod config;
 mod dependencies;
 mod env;
+mod files;
 mod flat;
 mod nex;
 mod nex_db;
 mod nex_links;
 mod nex_shim;
-mod files;
 
 pub use build::{build_system_manifest, build_system_manifest_with_dir};
 pub use commit::commit_system_rootfs;

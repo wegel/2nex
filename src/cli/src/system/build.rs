@@ -15,13 +15,14 @@ use crate::manifest::{
 use crate::outputs::calculate_output_checksum;
 use crate::BuildOpts;
 
+use super::base::{layer_base_commit, resolve_base_commit};
 use super::commit::commit_system_rootfs;
 use super::config::move_legacy_etc_to_factory;
 use super::dependencies::dependencies_from_system_packages;
 use super::env::build_system_env_vars;
+use super::files::apply_file_entries;
 use super::flat::materialize_system_packages;
 use super::nex::materialize_nex_structure;
-use super::files::apply_file_entries;
 
 #[cfg(test)]
 #[path = "build_tests.rs"]
@@ -34,6 +35,7 @@ struct SystemBuildInputs {
     original_package_commits: Vec<String>,
     build_env: crate::manifest::BuildEnvironment,
     use_absolute_paths: bool,
+    base_commit: Option<String>,
 }
 
 /// Build a system manifest using the default system build root.
@@ -101,6 +103,7 @@ fn prepare_system_build_inputs(
         &manifest.build.environment,
     )?;
     let use_absolute_paths = !build_env.execution.chroot;
+    let base_commit = resolve_base_commit(manifest.base.as_ref(), opts)?;
 
     Ok(SystemBuildInputs {
         manifest_index,
@@ -109,6 +112,7 @@ fn prepare_system_build_inputs(
         original_package_commits,
         build_env,
         use_absolute_paths,
+        base_commit,
     })
 }
 
@@ -121,6 +125,7 @@ fn build_system_once(
     reuse_rootfs: bool,
 ) -> io::Result<()> {
     prepare_system_rootfs(opts, base_dir, inputs, reuse_rootfs)?;
+    layer_base_commit(inputs.base_commit.as_deref(), opts, base_dir)?;
     materialize_system_package_set(opts, manifest, base_dir, inputs)?;
     apply_file_entries(&manifest.files, base_dir)?;
     run_system_script(manifest, base_dir, download_dir, inputs)?;
@@ -169,6 +174,7 @@ fn materialize_system_package_set(
             &inputs.original_package_commits,
             &manifest.providers,
             &opts.manifest_dirs,
+            inputs.base_commit.is_some(),
         )
     } else {
         materialize_system_packages(
@@ -177,6 +183,7 @@ fn materialize_system_package_set(
             &inputs.original_package_commits,
             &inputs.manifest_index,
             &manifest.providers,
+            inputs.base_commit.is_some(),
         )
     }
 }
@@ -322,6 +329,7 @@ fn commit_system_build(
         &opts.repo_path,
         &inputs.package_commits,
         &inputs.dependency_commits,
+        inputs.base_commit.as_deref(),
         checksum,
     )
 }

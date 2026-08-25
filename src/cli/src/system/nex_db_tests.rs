@@ -40,11 +40,31 @@ fn deployment_combines_product_and_upstream_manifest_trees() {
             temp_dir.path().join("product/pkg"),
             temp_dir.path().join("upstream/pkg"),
         ],
+        false,
     )
     .expect("manifest deployment");
 
     assert!(target.join("nex/db/pkg/apps/agent.yaml").is_file());
     assert!(target.join("nex/db/pkg/libs/runtime.yaml").is_file());
+}
+
+/// Scenario: a Nex-structured child layers a base that already carries a manifest database.
+/// Nex must replace that database with the current checkout instead of reporting collisions.
+#[test]
+fn deployment_replaces_a_base_manifest_database() {
+    let temp_dir = tempfile::TempDir::new().expect("temp dir");
+    let packages = temp_dir.path().join("source/pkg/apps");
+    let target = temp_dir.path().join("target");
+    fs::create_dir_all(&packages).expect("package dir");
+    fs::create_dir_all(target.join("nex/db/pkg/old")).expect("base database");
+    fs::write(target.join("nex/db/pkg/old/stale.yaml"), "stale\n").expect("base manifest");
+    fs::write(packages.join("agent.yaml"), manifest("agent", "apps")).expect("current manifest");
+
+    deploy_manifests_to_nex_db(&target, &[temp_dir.path().join("source/pkg")], true)
+        .expect("manifest deployment");
+
+    assert!(!target.join("nex/db/pkg/old/stale.yaml").exists());
+    assert!(target.join("nex/db/pkg/apps/agent.yaml").is_file());
 }
 
 fn manifest(slug: &str, namespace: &str) -> String {

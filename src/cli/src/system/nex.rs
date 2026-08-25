@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use crate::refs::PackageRef;
 use crate::store::{checkout_into, get_commit_id, get_commit_metadata};
 
-use super::flat::fresh_target_dir;
+use super::flat::prepare_target_dir;
 use super::nex_db::{deploy_manifests_to_nex_db, flatten_package_dependencies};
 use super::nex_links::{
     create_file_symlinks_recursive, create_target_fhs_symlinks, symlink_flattened_libs_to_usr,
@@ -31,13 +31,14 @@ pub fn materialize_nex_structure(
     package_commits: &[String],
     providers: &BTreeMap<String, String>,
     manifest_dirs: &[PathBuf],
+    preserve_target: bool,
 ) -> io::Result<()> {
-    let target_dir = fresh_target_dir(base_dir)?;
+    let target_dir = prepare_target_dir(base_dir, preserve_target)?;
     let nex_pkg_dir = target_dir.join("nex/pkg");
     let lib64_dir = target_dir.join("lib64");
     fs::create_dir_all(&nex_pkg_dir)?;
     fs::create_dir_all(&lib64_dir)?;
-    deploy_manifests_to_nex_db(&target_dir, manifest_dirs)?;
+    deploy_manifests_to_nex_db(&target_dir, manifest_dirs, preserve_target)?;
 
     let mut installed_packages = HashMap::new();
     for commit in package_commits {

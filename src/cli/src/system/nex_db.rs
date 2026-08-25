@@ -13,6 +13,7 @@ use crate::materializer::flatten_capsule_precomputed;
 pub(super) fn deploy_manifests_to_nex_db(
     target_dir: &Path,
     manifest_dirs: &[PathBuf],
+    replace_existing: bool,
 ) -> io::Result<()> {
     let dst_db_dir = target_dir.join("nex/db/pkg");
 
@@ -23,6 +24,9 @@ pub(super) fn deploy_manifests_to_nex_db(
 
     ManifestIndex::load_many(manifest_dirs)?;
     println!("Deploying manifests to /nex/db/pkg...");
+    if replace_existing && dst_db_dir.exists() {
+        fs::remove_dir_all(&dst_db_dir)?;
+    }
     fs::create_dir_all(&dst_db_dir)?;
     let mut count = 0;
     for manifest_dir in manifest_dirs {

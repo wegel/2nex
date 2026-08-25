@@ -13,6 +13,7 @@ pub fn commit_system_rootfs(
     repo_path: &str,
     package_commits: &[String],
     dependency_commits: &[String],
+    base_commit: Option<&str>,
     checksum: &str,
 ) -> io::Result<()> {
     let target_dir = Path::new(base_dir).join("target");
@@ -31,7 +32,13 @@ pub fn commit_system_rootfs(
         repo_path,
         &branch_name,
         &target_dir,
-        &system_metadata(manifest, package_commits, dependency_commits, checksum)?,
+        &system_metadata(
+            manifest,
+            package_commits,
+            dependency_commits,
+            base_commit,
+            checksum,
+        )?,
     )?;
     Ok(())
 }
@@ -40,6 +47,7 @@ fn system_metadata(
     manifest: &SystemManifest,
     package_commits: &[String],
     dependency_commits: &[String],
+    base_commit: Option<&str>,
     checksum: &str,
 ) -> io::Result<Vec<(String, String)>> {
     let mut metadata = vec![
@@ -52,6 +60,9 @@ fn system_metadata(
         ("nex.build.checksum".to_string(), checksum.to_string()),
     ];
     push_optional_metadata(manifest, &mut metadata);
+    if let Some(commit) = base_commit {
+        metadata.push(("nex.system.base".to_string(), commit.to_string()));
+    }
     push_commit_lists(&mut metadata, package_commits, dependency_commits)?;
     Ok(metadata)
 }
@@ -81,3 +92,7 @@ fn push_commit_lists(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "commit_tests.rs"]
+mod commit_tests;

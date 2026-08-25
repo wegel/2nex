@@ -107,6 +107,7 @@ fn merge_manifests(base: &SystemManifest, child: &SystemManifest) -> SystemManif
     SystemManifest {
         schema: child.schema.or(base.schema),
         system: merge_meta(&base.system, &child.system),
+        base: child.base.clone().or_else(|| base.base.clone()),
         packages: merge_packages(&base.packages, &child.packages, &excludes.packages),
         providers: merge_providers(&base.providers, &child.providers),
         dependencies: merge_deps(

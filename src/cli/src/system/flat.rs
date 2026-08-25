@@ -19,8 +19,9 @@ pub fn materialize_system_packages(
     package_commits: &[String],
     manifest_index: &ManifestIndex,
     providers: &BTreeMap<String, String>,
+    preserve_target: bool,
 ) -> io::Result<()> {
-    let target_dir = fresh_target_dir(base_dir)?;
+    let target_dir = prepare_target_dir(base_dir, preserve_target)?;
     let requests = output_requests(package_commits);
     let closure =
         resolve_runtime_deps_precomputed(repo_path, &requests, manifest_index, providers, &[])?;
@@ -42,9 +43,9 @@ pub fn materialize_system_packages(
     Ok(())
 }
 
-pub(super) fn fresh_target_dir(base_dir: &str) -> io::Result<std::path::PathBuf> {
+pub(super) fn prepare_target_dir(base_dir: &str, preserve: bool) -> io::Result<std::path::PathBuf> {
     let target_dir = Path::new(base_dir).join("target");
-    if target_dir.exists() {
+    if target_dir.exists() && !preserve {
         fs::remove_dir_all(&target_dir)?;
     }
     fs::create_dir_all(&target_dir)?;

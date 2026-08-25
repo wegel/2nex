@@ -196,6 +196,7 @@ fn format_root(
     let sections: &[&str] = if is_system {
         &[
             "system",
+            "base",
             "sources",
             "dependencies",
             "packages",
@@ -233,6 +234,7 @@ fn format_root(
             match section {
                 "package" => output.push_str(&format_package(value, original_version, unstable)?),
                 "system" => output.push_str(&format_system(value, original_version, unstable)?),
+                "base" => output.push_str(&format_base(value)?),
                 "sources" => output.push_str(&format_sources(value)?),
                 "dependencies" => output.push_str(&format_dependencies(value)?),
                 "packages" => output.push_str(&format_packages(value)?),
@@ -252,6 +254,20 @@ fn format_root(
         output.push('\n');
     }
 
+    Ok(output)
+}
+
+fn format_base(value: &Value) -> io::Result<String> {
+    let mapping = value
+        .as_mapping()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "base must be a mapping"))?;
+    let mut output = String::from("base:\n");
+    for field in ["commit", "manifest"] {
+        let key = Value::String(field.to_string());
+        if let Some(value) = mapping.get(&key) {
+            output.push_str(&format!("  {}: {}\n", field, format_scalar(value)));
+        }
+    }
     Ok(output)
 }
 

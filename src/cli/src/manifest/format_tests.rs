@@ -141,6 +141,30 @@ build:
     serde_yaml::from_str::<Value>(&formatted).expect("formatted YAML should parse");
 }
 
+/// Scenario: an assembly names a realized base above its local additions.
+/// The formatter must preserve both base fields and place them after `system`.
+#[test]
+fn formats_assembly_base_without_erasing_it() {
+    let input = r#"system:
+  name: child
+  slug: child
+  version: 1.0
+base:
+  manifest: base/base.yaml
+  commit: systems/base/1
+packages: []
+build:
+  environment: abcdef
+  script: "true"
+"#;
+
+    let formatted = format_manifest_string(input).expect("assembly should format");
+
+    assert!(formatted.contains("base:\n  commit: systems/base/1\n  manifest: base/base.yaml\n"));
+    assert!(formatted.find("system:\n") < formatted.find("base:\n"));
+    assert!(formatted.find("base:\n") < formatted.find("packages:\n"));
+}
+
 #[test]
 fn formats_output_provides_before_files() {
     let input = r#"package:
