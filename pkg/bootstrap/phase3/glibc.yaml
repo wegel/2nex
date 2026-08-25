@@ -2,11 +2,11 @@ package:
   schema: 1
   name: GNU C Library
   slug: glibc
-  namespace: bootstrap/phase1
+  namespace: bootstrap/phase3
   version: "2.39"
   description: The GNU C Library project provides the core libraries for the GNU system
   homepage: https://www.gnu.org/software/libc/
-  checksum: 5dc0e877627c7bd922858d74b9a4d4f4c87a7fb18a140c2ba1f1cebc531264a9
+  checksum: 69de67d42329b3de6ec28cdc2de9dcc22eb1638ee54302de8da6a1d43e06b705
   seed: true
 
 sources:
@@ -18,57 +18,20 @@ sources:
   sha256: 643552db030e2f2d7ffde4f558e0f5f83d3fabf34a2e0e56ebdb49750ac27b0d
 
 dependencies:
-- name: toolchain
-  commit: x86_64/pkg/bootstrap/phase0/toolchain/1.0/bundles/dev
-- name: m4
-  commit: x86_64/pkg/bootstrap/phase0/m4/1.4.19/bundles/dev
-- name: bash
-  commit: x86_64/pkg/bootstrap/phase0/bash/5.2.21/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/bootstrap/phase0/coreutils/9.5/bundles/dev
-- name: diffutils
-  commit: x86_64/pkg/bootstrap/phase0/diffutils/3.10/bundles/dev
-- name: file
-  commit: x86_64/pkg/bootstrap/phase0/file/5.45/bundles/dev
-- name: findutils
-  commit: x86_64/pkg/bootstrap/phase0/findutils/4.9.0/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/bootstrap/phase0/gawk/5.3.0/bundles/dev
-- name: grep
-  commit: x86_64/pkg/bootstrap/phase0/grep/3.11/bundles/dev
-- name: gzip
-  commit: x86_64/pkg/bootstrap/phase0/gzip/1.13/bundles/dev
-- name: make
-  commit: x86_64/pkg/bootstrap/phase0/make/4.4.1/bundles/dev
-- name: sed
-  commit: x86_64/pkg/bootstrap/phase0/sed/4.9/bundles/dev
-- name: patch
-  commit: x86_64/pkg/bootstrap/phase0/patch/2.7.6/bundles/dev
-- name: tar
-  commit: x86_64/pkg/bootstrap/phase0/tar/1.35/bundles/dev
-- name: xz
-  commit: x86_64/pkg/bootstrap/phase0/xz/5.4.6/bundles/dev
-- name: bzip2
-  commit: x86_64/pkg/bootstrap/phase0/bzip2/1.0.8/bundles/dev
-- name: bison
-  commit: x86_64/pkg/bootstrap/phase0/bison/3.8.2/bundles/dev
-- name: python3
-  commit: x86_64/pkg/bootstrap/phase0/python3/3.12.2/bundles/dev
+- name: temporary-system
+  commit: x86_64/pkg/bootstrap/phase1/temporary-system/1.0/bundles/dev
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: bison
+  commit: x86_64/pkg/bootstrap/phase2/bison/3.8.2/bundles/dev
+- name: python3
+  commit: x86_64/pkg/bootstrap/phase2/python3/3.12.2/bundles/dev
 
 build:
-  environment: eeeb4cd406953b12ddf019ae34e4f0704a1b944a
+  environment: 002d6759a3ccdb3587b39a187250574c6d1de529
   profile: [236822:4720, 938211:6148, 2105752:9924, 3506545:13741, 4672402:16490, 5842339:18943, 7011885:24727, 8760331:29917, 10516048:35176, 11679936:47696]
 
   script: |
-    # create symlinks so glibc build finds gcc
-    ln -s x86_64-nex-linux-gnu-gcc /usr/bin/gcc
-    ln -s x86_64-nex-linux-gnu-g++ /usr/bin/g++
-
-    # create stub libgcc_s for test programs (phase0 only has static libgcc)
-    echo 'INPUT(-lgcc)' > /usr/lib/libgcc_s.so
-
     tar --no-same-owner -xf /${SOURCE_glibc} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR} && patch --batch --fuzz=0 -Np1 -i /${SOURCE_fhs_patch} && mkdir build && cd build
 
@@ -77,7 +40,7 @@ build:
     echo "sbindir=/usr/bin" >> configparms
     echo "rootsbindir=/usr/bin" >> configparms
 
-    # glibc builds before phase1 gcc, so use regular ar/nm/ranlib from phase0
+    # Glibc needs the ordinary pass-2 Binutils programs here.
     unset AR NM RANLIB
     CFLAGS=
     CXXFLAGS=
@@ -104,10 +67,10 @@ build:
       x86_64-nex-linux-gnu-gcc \
         --sysroot="${OUT_DIR}" \
         -x c - \
-        -o "${WORK_DIR}/phase1-glibc-smoke"
+        -o "${WORK_DIR}/phase3-glibc-smoke"
     "${OUT_DIR}/usr/lib/ld-linux-x86-64.so.2" \
       --library-path "${OUT_DIR}/usr/lib" \
-      "${WORK_DIR}/phase1-glibc-smoke"
+      "${WORK_DIR}/phase3-glibc-smoke"
 
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 

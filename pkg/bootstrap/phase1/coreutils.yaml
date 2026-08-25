@@ -6,7 +6,7 @@ package:
   version: "9.5"
   description: A set of basic GNU tools commonly used in shell scripts
   homepage: https://www.gnu.org/software/coreutils/
-  checksum: 2d88118d8dc2dddde67f3f2965537fa26cc29ad519e67a5b893490ddda6ffb16
+  stable_checksum: false
   seed: true
 
 sources:
@@ -15,115 +15,245 @@ sources:
   sha256: cd328edeac92f6a665de9f323c93b712af1858bc2e0d88f3f7100469470a1b8a
 
 dependencies:
-- name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
-- name: glibc
-  commit: x86_64/pkg/bootstrap/phase1/glibc/2.39/bundles/dev
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/bundles/dev
+- name: toolchain
+  commit: x86_64/pkg/bootstrap/phase0/toolchain/1.0/bundles/dev
 - name: m4
-  commit: x86_64/pkg/bootstrap/phase0/m4/1.4.19/bundles/dev
-- name: bash
-  commit: x86_64/pkg/bootstrap/phase0/bash/5.2.21/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/bootstrap/phase0/coreutils/9.5/bundles/dev
-- name: diffutils
-  commit: x86_64/pkg/bootstrap/phase0/diffutils/3.10/bundles/dev
-- name: file
-  commit: x86_64/pkg/bootstrap/phase0/file/5.45/bundles/dev
-- name: findutils
-  commit: x86_64/pkg/bootstrap/phase0/findutils/4.9.0/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/bootstrap/phase0/gawk/5.3.0/bundles/dev
-- name: grep
-  commit: x86_64/pkg/bootstrap/phase0/grep/3.11/bundles/dev
-- name: gzip
-  commit: x86_64/pkg/bootstrap/phase0/gzip/1.13/bundles/dev
-- name: make
-  commit: x86_64/pkg/bootstrap/phase0/make/4.4.1/bundles/dev
-- name: sed
-  commit: x86_64/pkg/bootstrap/phase0/sed/4.9/bundles/dev
-- name: tar
-  commit: x86_64/pkg/bootstrap/phase0/tar/1.35/bundles/dev
-- name: xz
-  commit: x86_64/pkg/bootstrap/phase0/xz/5.4.6/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
 
 build:
-  environment: eeeb4cd406953b12ddf019ae34e4f0704a1b944a
-  profile: [4097:2569, 8198:8544, 16489:15964, 24760:29674, 32963:38850, 41175:46461, 45275:52824, 57599:54357, 69958:58762, 74790:60283]
+  environment: 4f2c74a7b827c73d2ca4d9caedbd9df1c6481e23
+  profile: [4113:1806, 12359:9000, 24719:14682, 41213:28318, 53543:43856, 65946:52023, 82490:59233, 98980:65885, 119602:74825, 131696:75951]
 
   script: |
-    tar --no-same-owner -xf /${SOURCE_coreutils} -C "${WORK_DIR}" --strip-components=1
+    tar --no-same-owner -xf ${SOURCE_coreutils} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-    FORCE_UNSAFE_CONFIGURE=1 ./configure --prefix=/usr \
+    FORCE_UNSAFE_CONFIGURE=1 ./configure --prefix=/usr
+    ./configure --prefix=/usr                     \
+                --host=${TARGET}                   \
+                --build=$(build-aux/config.guess) \
                 --enable-install-program=hostname \
-                --enable-no-install-program=kill,uptime \
-                --disable-nls
+                --enable-no-install-program=kill,uptime
     make
     make DESTDIR=${OUT_DIR} install
-
     rm -rf ${OUT_DIR}/usr/share/man ${OUT_DIR}/usr/share/info
-    rm -rf ${OUT_DIR}/usr/share/locale
 
-    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
-    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
-    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    # Move programs to their final expected locations.
+    # Although this is not necessary in this temporary environment, we must do so because some programs hardcode executable locations
+    # mv -v ${OUT_DIR}/usr/bin/chroot ${OUT_DIR}/usr/sbin
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
   dev:
   - bin
+  - lib
+  - locale
 
 outputs:
   bin:
     files:
     - path: /usr/bin/[
+    - path: /usr/bin/b2sum
+    - path: /usr/bin/base32
+    - path: /usr/bin/base64
     - path: /usr/bin/basename
+    - path: /usr/bin/basenc
     - path: /usr/bin/cat
+    - path: /usr/bin/chcon
     - path: /usr/bin/chgrp
     - path: /usr/bin/chmod
     - path: /usr/bin/chown
+    - path: /usr/bin/chroot
+    - path: /usr/bin/cksum
     - path: /usr/bin/comm
     - path: /usr/bin/cp
+    - path: /usr/bin/csplit
     - path: /usr/bin/cut
     - path: /usr/bin/date
     - path: /usr/bin/dd
+    - path: /usr/bin/df
+    - path: /usr/bin/dir
+    - path: /usr/bin/dircolors
     - path: /usr/bin/dirname
+    - path: /usr/bin/du
     - path: /usr/bin/echo
     - path: /usr/bin/env
+    - path: /usr/bin/expand
     - path: /usr/bin/expr
+    - path: /usr/bin/factor
     - path: /usr/bin/false
+    - path: /usr/bin/fmt
+    - path: /usr/bin/fold
+    - path: /usr/bin/groups
     - path: /usr/bin/head
+    - path: /usr/bin/hostid
     - path: /usr/bin/hostname
     - path: /usr/bin/id
     - path: /usr/bin/install
+    - path: /usr/bin/join
+    - path: /usr/bin/link
     - path: /usr/bin/ln
+    - path: /usr/bin/logname
     - path: /usr/bin/ls
+    - path: /usr/bin/md5sum
     - path: /usr/bin/mkdir
+    - path: /usr/bin/mkfifo
+    - path: /usr/bin/mknod
     - path: /usr/bin/mktemp
     - path: /usr/bin/mv
+    - path: /usr/bin/nice
+    - path: /usr/bin/nl
+    - path: /usr/bin/nohup
     - path: /usr/bin/nproc
+    - path: /usr/bin/numfmt
     - path: /usr/bin/od
+    - path: /usr/bin/paste
+    - path: /usr/bin/pathchk
+    - path: /usr/bin/pinky
+    - path: /usr/bin/pr
+    - path: /usr/bin/printenv
     - path: /usr/bin/printf
+    - path: /usr/bin/ptx
     - path: /usr/bin/pwd
     - path: /usr/bin/readlink
     - path: /usr/bin/realpath
     - path: /usr/bin/rm
     - path: /usr/bin/rmdir
+    - path: /usr/bin/runcon
     - path: /usr/bin/seq
+    - path: /usr/bin/sha1sum
+    - path: /usr/bin/sha224sum
+    - path: /usr/bin/sha256sum
+    - path: /usr/bin/sha384sum
+    - path: /usr/bin/sha512sum
+    - path: /usr/bin/shred
+    - path: /usr/bin/shuf
     - path: /usr/bin/sleep
     - path: /usr/bin/sort
     - path: /usr/bin/split
     - path: /usr/bin/stat
+    - path: /usr/bin/stdbuf
+    - path: /usr/bin/stty
+    - path: /usr/bin/sum
     - path: /usr/bin/sync
+    - path: /usr/bin/tac
     - path: /usr/bin/tail
     - path: /usr/bin/tee
     - path: /usr/bin/test
+    - path: /usr/bin/timeout
     - path: /usr/bin/touch
     - path: /usr/bin/tr
     - path: /usr/bin/true
+    - path: /usr/bin/truncate
+    - path: /usr/bin/tsort
+    - path: /usr/bin/tty
     - path: /usr/bin/uname
+    - path: /usr/bin/unexpand
     - path: /usr/bin/uniq
+    - path: /usr/bin/unlink
+    - path: /usr/bin/users
+    - path: /usr/bin/vdir
     - path: /usr/bin/wc
+    - path: /usr/bin/who
+    - path: /usr/bin/whoami
+    - path: /usr/bin/yes
+
+  lib:
+    files:
+    - path: /usr/libexec/coreutils/libstdbuf.so
+
+  locale:
+    files:
+    - path: /usr/share/locale/af/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/af/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/be/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/be/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/bg/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/bg/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ca/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/cs/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/da/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/de/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/el/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/eo/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/es/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/et/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/et/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/eu/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/eu/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/fi/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/fr/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ga/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ga/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/gl/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/hr/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/hu/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ia/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ia/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/id/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/it/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ja/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ka/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/kk/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/kk/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ko/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/lg/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/lg/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/lt/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/lt/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ms/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/nb/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/nl/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/pl/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/pt/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/pt_BR/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ro/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ru/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/sk/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/sl/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/sl/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/sr/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/sv/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ta/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ta/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/tr/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/uk/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/vi/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/zh_CN/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/zh_TW/LC_TIME/coreutils.mo

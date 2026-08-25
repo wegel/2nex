@@ -6,7 +6,7 @@ package:
   version: 5.4.6
   description: General-purpose data compression with high compression ratio
   homepage: https://tukaani.org/xz/
-  checksum: 5616fa51af104ad91da73c9514bd32cfa2236ae30328f6621164ee0ac8f924d0
+  stable_checksum: false
   seed: true
 
 sources:
@@ -15,77 +15,228 @@ sources:
   sha256: b92d4e3a438affcf13362a1305cd9d94ed47ddda22e456a42791e630a5644f5c
 
 dependencies:
-- name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
-- name: glibc
-  commit: x86_64/pkg/bootstrap/phase1/glibc/2.39/bundles/dev
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/bundles/dev
+- name: toolchain
+  commit: x86_64/pkg/bootstrap/phase0/toolchain/1.0/bundles/dev
 - name: m4
-  commit: x86_64/pkg/bootstrap/phase0/m4/1.4.19/bundles/dev
-- name: bash
-  commit: x86_64/pkg/bootstrap/phase0/bash/5.2.21/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
 - name: coreutils
-  commit: x86_64/pkg/bootstrap/phase0/coreutils/9.5/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
 - name: diffutils
-  commit: x86_64/pkg/bootstrap/phase0/diffutils/3.10/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
 - name: file
-  commit: x86_64/pkg/bootstrap/phase0/file/5.45/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/file/5.45/bundles/dev
 - name: findutils
-  commit: x86_64/pkg/bootstrap/phase0/findutils/4.9.0/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
 - name: gawk
-  commit: x86_64/pkg/bootstrap/phase0/gawk/5.3.0/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
 - name: grep
-  commit: x86_64/pkg/bootstrap/phase0/grep/3.11/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
 - name: gzip
-  commit: x86_64/pkg/bootstrap/phase0/gzip/1.13/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
 - name: make
-  commit: x86_64/pkg/bootstrap/phase0/make/4.4.1/bundles/dev
-- name: sed
-  commit: x86_64/pkg/bootstrap/phase0/sed/4.9/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
 - name: patch
-  commit: x86_64/pkg/bootstrap/phase0/patch/2.7.6/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
 - name: tar
-  commit: x86_64/pkg/bootstrap/phase0/tar/1.35/bundles/dev
-- name: xz
-  commit: x86_64/pkg/bootstrap/phase0/xz/5.4.6/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
 
 build:
-  environment: eeeb4cd406953b12ddf019ae34e4f0704a1b944a
-  profile: [8268:4145, 21211:5525, 42596:5530, 71745:5610, 95224:5675, 118207:5723, 138333:5775, 174058:5894, 207321:8116, 228431:9536]
+  environment: 4f2c74a7b827c73d2ca4d9caedbd9df1c6481e23
+  profile: [8256:2951, 25731:4198, 52221:4241, 82219:4304, 109053:4346, 136907:4408, 163155:4463, 203968:5160, 248266:5779, 271467:7902]
 
   script: |
-    tar --no-same-owner -xf /${SOURCE_xz} -C "${WORK_DIR}" --strip-components=1
+    tar --no-same-owner -xf ${SOURCE_xz} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-    ./configure --prefix=/usr --libdir=/usr/lib --disable-static --disable-nls
+    ./configure --prefix=/usr --libdir=/usr/lib \
+                --build=$(build-aux/config.guess) \
+                --host=${TARGET} \
+          --disable-static \
+          --docdir=/usr/share/doc/xz-5.4.6
     make
+    make check
+
     make DESTDIR=${OUT_DIR} install
-
     rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
-    rm -rf ${OUT_DIR}/usr/share/locale ${OUT_DIR}/usr/share/doc
-    rm -f ${OUT_DIR}/usr/lib/liblzma.la
 
-    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
-    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
 bundles:
   dev:
   - bin
+  - dev
   - lib
+  - locale
 
 outputs:
   bin:
     files:
+    - path: /usr/bin/lzcat
+    - path: /usr/bin/lzcmp
+    - path: /usr/bin/lzdiff
+    - path: /usr/bin/lzegrep
+    - path: /usr/bin/lzfgrep
+    - path: /usr/bin/lzgrep
+    - path: /usr/bin/lzless
+    - path: /usr/bin/lzma
+    - path: /usr/bin/lzmadec
+    - path: /usr/bin/lzmainfo
+    - path: /usr/bin/lzmore
+    - path: /usr/bin/unlzma
     - path: /usr/bin/unxz
     - path: /usr/bin/xz
     - path: /usr/bin/xzcat
+    - path: /usr/bin/xzcmp
+    - path: /usr/bin/xzdec
+    - path: /usr/bin/xzdiff
+    - path: /usr/bin/xzegrep
+    - path: /usr/bin/xzfgrep
+    - path: /usr/bin/xzgrep
+    - path: /usr/bin/xzless
+    - path: /usr/bin/xzmore
+
+  dev:
+    files:
+    - path: /usr/include/lzma.h
+    - path: /usr/include/lzma/base.h
+    - path: /usr/include/lzma/bcj.h
+    - path: /usr/include/lzma/block.h
+    - path: /usr/include/lzma/check.h
+    - path: /usr/include/lzma/container.h
+    - path: /usr/include/lzma/delta.h
+    - path: /usr/include/lzma/filter.h
+    - path: /usr/include/lzma/hardware.h
+    - path: /usr/include/lzma/index.h
+    - path: /usr/include/lzma/index_hash.h
+    - path: /usr/include/lzma/lzma12.h
+    - path: /usr/include/lzma/stream_flags.h
+    - path: /usr/include/lzma/version.h
+    - path: /usr/include/lzma/vli.h
+    - path: /usr/lib/liblzma.la
+    - path: /usr/lib/pkgconfig/liblzma.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/xz-5.4.6/AUTHORS
+    - path: /usr/share/doc/xz-5.4.6/COPYING
+    - path: /usr/share/doc/xz-5.4.6/COPYING.GPLv2
+    - path: /usr/share/doc/xz-5.4.6/NEWS
+    - path: /usr/share/doc/xz-5.4.6/README
+    - path: /usr/share/doc/xz-5.4.6/THANKS
+    - path: /usr/share/doc/xz-5.4.6/TODO
+    - path: /usr/share/doc/xz-5.4.6/api/annotated.html
+    - path: /usr/share/doc/xz-5.4.6/api/base_8h.html
+    - path: /usr/share/doc/xz-5.4.6/api/bc_s.png
+    - path: /usr/share/doc/xz-5.4.6/api/bc_sd.png
+    - path: /usr/share/doc/xz-5.4.6/api/bcj_8h.html
+    - path: /usr/share/doc/xz-5.4.6/api/block_8h.html
+    - path: /usr/share/doc/xz-5.4.6/api/check_8h.html
+    - path: /usr/share/doc/xz-5.4.6/api/classes.html
+    - path: /usr/share/doc/xz-5.4.6/api/closed.png
+    - path: /usr/share/doc/xz-5.4.6/api/container_8h.html
+    - path: /usr/share/doc/xz-5.4.6/api/delta_8h.html
+    - path: /usr/share/doc/xz-5.4.6/api/dir_b17a1d403082bd69a703ed987cf158fb.html
+    - path: /usr/share/doc/xz-5.4.6/api/doc.svg
+    - path: /usr/share/doc/xz-5.4.6/api/docd.svg
+    - path: /usr/share/doc/xz-5.4.6/api/doxygen.css
+    - path: /usr/share/doc/xz-5.4.6/api/doxygen.svg
+    - path: /usr/share/doc/xz-5.4.6/api/files.html
+    - path: /usr/share/doc/xz-5.4.6/api/filter_8h.html
+    - path: /usr/share/doc/xz-5.4.6/api/folderclosed.svg
+    - path: /usr/share/doc/xz-5.4.6/api/folderclosedd.svg
+    - path: /usr/share/doc/xz-5.4.6/api/folderopen.svg
+    - path: /usr/share/doc/xz-5.4.6/api/folderopend.svg
+    - path: /usr/share/doc/xz-5.4.6/api/functions.html
+    - path: /usr/share/doc/xz-5.4.6/api/functions_vars.html
+    - path: /usr/share/doc/xz-5.4.6/api/globals.html
+    - path: /usr/share/doc/xz-5.4.6/api/globals_defs.html
+    - path: /usr/share/doc/xz-5.4.6/api/globals_enum.html
+    - path: /usr/share/doc/xz-5.4.6/api/globals_eval.html
+    - path: /usr/share/doc/xz-5.4.6/api/globals_func.html
+    - path: /usr/share/doc/xz-5.4.6/api/globals_type.html
+    - path: /usr/share/doc/xz-5.4.6/api/hardware_8h.html
+    - path: /usr/share/doc/xz-5.4.6/api/index.html
+    - path: /usr/share/doc/xz-5.4.6/api/index_8h.html
+    - path: /usr/share/doc/xz-5.4.6/api/index__hash_8h.html
+    - path: /usr/share/doc/xz-5.4.6/api/lzma12_8h.html
+    - path: /usr/share/doc/xz-5.4.6/api/lzma_8h.html
+    - path: /usr/share/doc/xz-5.4.6/api/nav_f.png
+    - path: /usr/share/doc/xz-5.4.6/api/nav_fd.png
+    - path: /usr/share/doc/xz-5.4.6/api/nav_g.png
+    - path: /usr/share/doc/xz-5.4.6/api/nav_h.png
+    - path: /usr/share/doc/xz-5.4.6/api/nav_hd.png
+    - path: /usr/share/doc/xz-5.4.6/api/open.png
+    - path: /usr/share/doc/xz-5.4.6/api/splitbar.png
+    - path: /usr/share/doc/xz-5.4.6/api/splitbard.png
+    - path: /usr/share/doc/xz-5.4.6/api/stream__flags_8h.html
+    - path: /usr/share/doc/xz-5.4.6/api/structlzma__allocator.html
+    - path: /usr/share/doc/xz-5.4.6/api/structlzma__block.html
+    - path: /usr/share/doc/xz-5.4.6/api/structlzma__filter.html
+    - path: /usr/share/doc/xz-5.4.6/api/structlzma__index__iter.html
+    - path: /usr/share/doc/xz-5.4.6/api/structlzma__mt.html
+    - path: /usr/share/doc/xz-5.4.6/api/structlzma__options__bcj.html
+    - path: /usr/share/doc/xz-5.4.6/api/structlzma__options__delta.html
+    - path: /usr/share/doc/xz-5.4.6/api/structlzma__options__lzma.html
+    - path: /usr/share/doc/xz-5.4.6/api/structlzma__stream.html
+    - path: /usr/share/doc/xz-5.4.6/api/structlzma__stream__flags.html
+    - path: /usr/share/doc/xz-5.4.6/api/sync_off.png
+    - path: /usr/share/doc/xz-5.4.6/api/sync_on.png
+    - path: /usr/share/doc/xz-5.4.6/api/tab_a.png
+    - path: /usr/share/doc/xz-5.4.6/api/tab_ad.png
+    - path: /usr/share/doc/xz-5.4.6/api/tab_b.png
+    - path: /usr/share/doc/xz-5.4.6/api/tab_bd.png
+    - path: /usr/share/doc/xz-5.4.6/api/tab_h.png
+    - path: /usr/share/doc/xz-5.4.6/api/tab_hd.png
+    - path: /usr/share/doc/xz-5.4.6/api/tab_s.png
+    - path: /usr/share/doc/xz-5.4.6/api/tab_sd.png
+    - path: /usr/share/doc/xz-5.4.6/api/tabs.css
+    - path: /usr/share/doc/xz-5.4.6/api/version_8h.html
+    - path: /usr/share/doc/xz-5.4.6/api/vli_8h.html
+    - path: /usr/share/doc/xz-5.4.6/examples/00_README.txt
+    - path: /usr/share/doc/xz-5.4.6/examples/01_compress_easy.c
+    - path: /usr/share/doc/xz-5.4.6/examples/02_decompress.c
+    - path: /usr/share/doc/xz-5.4.6/examples/03_compress_custom.c
+    - path: /usr/share/doc/xz-5.4.6/examples/04_compress_easy_mt.c
+    - path: /usr/share/doc/xz-5.4.6/examples/Makefile
+    - path: /usr/share/doc/xz-5.4.6/examples_old/xz_pipe_comp.c
+    - path: /usr/share/doc/xz-5.4.6/examples_old/xz_pipe_decomp.c
+    - path: /usr/share/doc/xz-5.4.6/faq.txt
+    - path: /usr/share/doc/xz-5.4.6/history.txt
+    - path: /usr/share/doc/xz-5.4.6/lzma-file-format.txt
+    - path: /usr/share/doc/xz-5.4.6/xz-file-format.txt
 
   lib:
     files:
     - path: /usr/lib/liblzma.so
     - path: /usr/lib/liblzma.so.5
     - path: /usr/lib/liblzma.so.5.4.6
+
+  locale:
+    files:
+    - path: /usr/share/locale/ca/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/xz.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/xz.mo

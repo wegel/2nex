@@ -44,17 +44,20 @@ sources:
 dependencies: []
 
 build:
-  environment: cec6d21097655bd45c7ecf30e556ec4a77d14646
+  environment: 1754f28352f8644cab70e3b7c72836b4900c6785
   profile: [417295:36762, 1668651:68640, 3756117:215659, 6255526:220795, 8341479:224462, 10425976:228265, 12511256:233871, 15634421:242042, 18760236:248415, 20843030:289833]
 
   script: |
     unset CFLAGS CXXFLAGS LDFLAGS
 
-    # sysroot is now the output directory - binaries will expect /lib64/ld-linux-x86-64.so.2
-    # which will resolve correctly via symlinks we create
+    # Publish each installed component at the fixed bootstrap sysroot while
+    # this combined manifest builds the next component. This gives pass-1 GCC
+    # an empty target root during its own build, then exposes the target Linux
+    # headers and Glibc before libstdc++ is compiled.
     TOOLS=${OUT_DIR}/usr
 
     mkdir -p ${TOOLS}
+    ln -s nex/out/usr ${SYSROOT}/usr
 
     # binutils - installs to /usr with cross-prefixed names
     mkdir -p ${WORK_DIR}/binutils/build && cd ${WORK_DIR}/binutils/build
@@ -62,7 +65,7 @@ build:
 
     # prevent flex detection so ar/etc don't link to libfl.so
     ac_cv_prog_LEX= "${WORK_DIR}"/binutils/configure \
-      --prefix=/usr --with-sysroot=/ --disable-nls \
+      --prefix=/usr --with-sysroot=${SYSROOT} --disable-nls \
       --target=${TARGET} --enable-gprofng=no --disable-werror --enable-default-hash-style=gnu \
       --without-zstd
 
@@ -100,7 +103,7 @@ build:
         --target=${TARGET}           \
         --prefix=/usr                \
         --with-glibc-version=2.39    \
-        --with-sysroot=/             \
+        --with-sysroot=${SYSROOT}    \
         --with-newlib                \
         --without-headers            \
         --enable-default-pie         \
@@ -122,6 +125,9 @@ build:
     make
     make DESTDIR=${OUT_DIR} install
     cd ..
+
+    test "$(${TOOLS}/bin/${TARGET}-gcc -print-sysroot)" = "${SYSROOT}"
+    test ! -e ${TOOLS}/lib/gcc/${TARGET}/13.2.0/include-fixed/pthread.h
 
     cat gcc/limitx.h gcc/glimits.h gcc/limity.h > \
       $(dirname $(${TOOLS}/bin/${TARGET}-gcc -print-libgcc-file-name))/include/limits.h
@@ -208,9 +214,19 @@ build:
       strip --strip-debug ${OUT_DIR}/${F}
     done
 
-    # test compilation with sysroot
-    echo "I2luY2x1ZGUgPHN0ZGxpYi5oPgojaW5jbHVkZSA8c3RkaW8uaD4KCmludCBtYWluICh2b2lkKQp7IHByaW50ZigiSGVsbG8gd29ybGQhXG4iKTsKICByZXR1cm4gMDsKfQo=" | base64 -d > conftest.cc
-    ${TOOLS}/bin/${TARGET}-g++ -c -march=x86-64 -mtune=generic -O2 -frandom-seed=424242 --sysroot=${OUT_DIR} conftest.cc
+    # Compile and run C++ against the target Glibc and libstdc++. The
+    # pthread initializer catches a host pthread.h copied by fixincludes.
+    printf '%s\n' \
+      '#include <pthread.h>' \
+      'pthread_cond_t condition = PTHREAD_COND_INITIALIZER;' \
+      'int main() { return 0; }' \
+      > conftest.cc
+    ${TOOLS}/bin/${TARGET}-g++ \
+      -march=x86-64 -mtune=generic -O2 -frandom-seed=424242 \
+      conftest.cc -o conftest
+    ${OUT_DIR}/usr/lib/ld-linux-x86-64.so.2 \
+      --library-path ${OUT_DIR}/usr/lib \
+      ./conftest
 
     rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
 
@@ -3209,16 +3225,6 @@ outputs:
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/crtprec64.o
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/crtprec80.o
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/README
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/X11/Xw32defs.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/libopenmpt/libopenmpt_config.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/libv4l1-videodev.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/libv4lconvert.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/msgpack/sysdep.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/msgpack/vrefbuffer.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/nss/secport.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/pthread.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/slang.h
-    - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/include-fixed/winpr3/winpr/platform.h
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/install-tools/fixinc_list
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/install-tools/gsyslimits.h
     - path: /usr/lib/gcc/x86_64-nex-linux-gnu/13.2.0/install-tools/macro_list

@@ -2,11 +2,11 @@ package:
   schema: 1
   name: Python
   slug: python3
-  namespace: bootstrap/phase0
+  namespace: bootstrap/phase3
   version: 3.12.2
   description: Python is an easy to learn, powerful programming language
   homepage: https://www.python.org/
-  stable_checksum: false
+  checksum: 2b860ab06fadc4a86153af6501513f3324c777e9ee32dfdd5f4c7bf92ab92459
   seed: true
 
 sources:
@@ -15,62 +15,48 @@ sources:
   sha256: be28112dac813d2053545c14bf13a16401a21877f1a69eb6ea5d84c4a0f3d870
 
 dependencies:
-- name: toolchain
-  commit: x86_64/pkg/bootstrap/phase0/toolchain/1.0/bundles/dev
-- name: m4
-  commit: x86_64/pkg/bootstrap/phase0/m4/1.4.19/bundles/dev
-- name: bash
-  commit: x86_64/pkg/bootstrap/phase0/bash/5.2.21/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/bootstrap/phase0/coreutils/9.5/bundles/dev
-- name: diffutils
-  commit: x86_64/pkg/bootstrap/phase0/diffutils/3.10/bundles/dev
-- name: file
-  commit: x86_64/pkg/bootstrap/phase0/file/5.45/bundles/dev
-- name: findutils
-  commit: x86_64/pkg/bootstrap/phase0/findutils/4.9.0/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/bootstrap/phase0/gawk/5.3.0/bundles/dev
-- name: grep
-  commit: x86_64/pkg/bootstrap/phase0/grep/3.11/bundles/dev
-- name: gzip
-  commit: x86_64/pkg/bootstrap/phase0/gzip/1.13/bundles/dev
-- name: make
-  commit: x86_64/pkg/bootstrap/phase0/make/4.4.1/bundles/dev
-- name: sed
-  commit: x86_64/pkg/bootstrap/phase0/sed/4.9/bundles/dev
-- name: patch
-  commit: x86_64/pkg/bootstrap/phase0/patch/2.7.6/bundles/dev
-- name: tar
-  commit: x86_64/pkg/bootstrap/phase0/tar/1.35/bundles/dev
-- name: xz
-  commit: x86_64/pkg/bootstrap/phase0/xz/5.4.6/bundles/dev
-- name: bzip2
-  commit: x86_64/pkg/bootstrap/phase0/bzip2/1.0.8/bundles/dev
+- name: temporary-system
+  commit: x86_64/pkg/bootstrap/phase1/temporary-system/1.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/bootstrap/phase3/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
 - name: zlib
-  commit: x86_64/pkg/bootstrap/phase0/zlib/1.3.1/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/bootstrap/phase3/bzip2/1.0.8/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
 
 build:
-  environment: cec6d21097655bd45c7ecf30e556ec4a77d14646
-  profile: [16509:7736, 54504:14192, 114530:18655, 193058:29790, 255352:30116, 317615:30628, 379965:30970, 475833:31726, 570938:34999, 630898:36696]
+  environment: 002d6759a3ccdb3587b39a187250574c6d1de529
+  profile: [16422:11670, 54233:17996, 120724:21339, 199291:21947, 263211:36657, 329304:37351, 395510:37898, 494949:38616, 594158:45926, 655964:55940]
 
   script: |
-    tar --no-same-owner -xf ${SOURCE_python} -C "${WORK_DIR}" --strip-components=1
+    tar --no-same-owner -xf /${SOURCE_python} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
     PYTHONHASHSEED=424242
     CFLAGS=
     LDFLAGS=
 
-    ./configure --prefix=/usr   \
-          --enable-shared \
-          --without-ensurepip
+    ./configure --prefix=/usr --enable-shared --without-ensurepip
     make
     make DESTDIR=${OUT_DIR} install
+
+    LD_LIBRARY_PATH=${OUT_DIR}/usr/lib \
+      ${OUT_DIR}/usr/bin/python3 -c 'import math, cmath, termios'
+
     find ${OUT_DIR}/usr/lib/python* -name "*.a" -delete
     rm -rf ${OUT_DIR}/usr/lib/python*/test
     rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
 bundles:
@@ -2452,18 +2438,12 @@ outputs:
     - path: /usr/lib/python3.12/lib-dynload/_codecs_kr.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_codecs_tw.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_contextvars.cpython-312-x86_64-linux-gnu.so
-    - path: /usr/lib/python3.12/lib-dynload/_crypt.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_csv.cpython-312-x86_64-linux-gnu.so
-    - path: /usr/lib/python3.12/lib-dynload/_ctypes.cpython-312-x86_64-linux-gnu.so
-    - path: /usr/lib/python3.12/lib-dynload/_ctypes_test.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_curses.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_curses_panel.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_datetime.cpython-312-x86_64-linux-gnu.so
-    - path: /usr/lib/python3.12/lib-dynload/_dbm.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_decimal.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_elementtree.cpython-312-x86_64-linux-gnu.so
-    - path: /usr/lib/python3.12/lib-dynload/_gdbm.cpython-312-x86_64-linux-gnu.so
-    - path: /usr/lib/python3.12/lib-dynload/_hashlib.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_heapq.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_json.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_lsprof.cpython-312-x86_64-linux-gnu.so
@@ -2481,8 +2461,6 @@ outputs:
     - path: /usr/lib/python3.12/lib-dynload/_sha2.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_sha3.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_socket.cpython-312-x86_64-linux-gnu.so
-    - path: /usr/lib/python3.12/lib-dynload/_sqlite3.cpython-312-x86_64-linux-gnu.so
-    - path: /usr/lib/python3.12/lib-dynload/_ssl.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_statistics.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_struct.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_testbuffer.cpython-312-x86_64-linux-gnu.so
@@ -2492,7 +2470,6 @@ outputs:
     - path: /usr/lib/python3.12/lib-dynload/_testinternalcapi.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_testmultiphase.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_testsinglephase.cpython-312-x86_64-linux-gnu.so
-    - path: /usr/lib/python3.12/lib-dynload/_uuid.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_xxinterpchannels.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_xxsubinterpreters.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/_xxtestfuzz.cpython-312-x86_64-linux-gnu.so
@@ -2505,10 +2482,8 @@ outputs:
     - path: /usr/lib/python3.12/lib-dynload/grp.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/math.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/mmap.cpython-312-x86_64-linux-gnu.so
-    - path: /usr/lib/python3.12/lib-dynload/nis.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/ossaudiodev.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/pyexpat.cpython-312-x86_64-linux-gnu.so
-    - path: /usr/lib/python3.12/lib-dynload/readline.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/resource.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/select.cpython-312-x86_64-linux-gnu.so
     - path: /usr/lib/python3.12/lib-dynload/spwd.cpython-312-x86_64-linux-gnu.so

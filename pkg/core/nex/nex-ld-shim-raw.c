@@ -37,6 +37,7 @@
 #define SYS_mprotect  10
 #define SYS_munmap    11
 #define SYS_readlink  89
+#define SYS_getcwd    79
 #define SYS_execve    59
 #define SYS_exit      60
 
@@ -204,6 +205,10 @@ static inline long sys_stat(const char *path, struct stat *st) {
 
 static inline long sys_readlink(const char *path, char *buf, unsigned long bufsiz) {
     return syscall3(SYS_readlink, (long)path, (long)buf, bufsiz);
+}
+
+static inline long sys_getcwd(char *buf, unsigned long size) {
+    return syscall2(SYS_getcwd, (long)buf, size);
 }
 
 static inline long sys_execve(const char *path, char **argv, char **envp) {
@@ -743,6 +748,124 @@ static unsigned long load_elf_interp(const char *path, unsigned long *out_base) 
     return load_bias + ehdr.e_entry;
 }
 
+static int find_app_root(const char *executable, char *app_root, unsigned long size) {
+    char sentinel[PATH_MAX];
+    char dir[PATH_MAX];
+
+    str_copy(dir, executable, sizeof(dir));
+    path_dirname(dir);
+    while (1) {
+        str_copy(sentinel, dir, sizeof(sentinel));
+        str_append(sentinel, "/.nex-app-root", sizeof(sentinel));
+        if (file_exists(sentinel)) {
+            str_copy(app_root, dir, size);
+            return 1;
+        }
+        if (str_eq(dir, "/")) {
+            return 0;
+        }
+        char previous[PATH_MAX];
+        str_copy(previous, dir, sizeof(previous));
+        path_dirname(dir);
+        if (str_eq(dir, previous)) {
+            return 0;
+        }
+    }
+}
+
+static int elf_has_interp(const char *path) {
+    Elf64_Ehdr ehdr;
+    Elf64_Phdr phdrs[16];
+    int fd = sys_open(path, O_RDONLY);
+    if (fd < 0) return 0;
+    if (sys_read(fd, (char *)&ehdr, sizeof(ehdr)) != sizeof(ehdr) ||
+        ehdr.e_ident[0] != 0x7f || ehdr.e_ident[1] != 'E' ||
+        ehdr.e_ident[2] != 'L' || ehdr.e_ident[3] != 'F' ||
+        ehdr.e_phnum > 16) {
+        sys_close(fd);
+        return 0;
+    }
+    sys_close(fd);
+    fd = sys_open(path, O_RDONLY);
+    if (fd < 0) return 0;
+
+    char skip_buf[512];
+    unsigned long to_skip = ehdr.e_phoff;
+    while (to_skip > 0) {
+        unsigned long chunk = to_skip > sizeof(skip_buf) ? sizeof(skip_buf) : to_skip;
+        if (sys_read(fd, skip_buf, chunk) != (long)chunk) {
+            sys_close(fd);
+            return 0;
+        }
+        to_skip -= chunk;
+    }
+    unsigned long phdr_size = ehdr.e_phnum * sizeof(Elf64_Phdr);
+    if (sys_read(fd, (char *)phdrs, phdr_size) != (long)phdr_size) {
+        sys_close(fd);
+        return 0;
+    }
+    sys_close(fd);
+    for (int i = 0; i < ehdr.e_phnum; i++) {
+        if (phdrs[i].p_type == PT_INTERP) return 1;
+    }
+    return 0;
+}
+
+static int loader_option_takes_value(const char *argument) {
+    return str_eq(argument, "--library-path") ||
+           str_eq(argument, "--glibc-hwcaps-prepend") ||
+           str_eq(argument, "--glibc-hwcaps-mask") ||
+           str_eq(argument, "--inhibit-rpath") ||
+           str_eq(argument, "--audit") ||
+           str_eq(argument, "--preload") ||
+           str_eq(argument, "--argv0");
+}
+
+static int absolute_argument_path(const char *argument, char *path,
+                                  unsigned long size) {
+    if (argument[0] == '/') {
+        str_copy(path, argument, size);
+        return 1;
+    }
+    if (sys_getcwd(path, size) < 0) return 0;
+    str_append(path, "/", size);
+    str_append(path, argument, size);
+    path_normalize(path);
+    return 1;
+}
+
+static int resolve_direct_target(int argc, char **argv, char *resolved,
+                                 unsigned long resolved_size, char *app_root,
+                                 unsigned long app_root_size) {
+    int skip_value = 0;
+    for (int i = 1; i < argc; i++) {
+        if (skip_value) {
+            skip_value = 0;
+            continue;
+        }
+        if (loader_option_takes_value(argv[i])) {
+            skip_value = 1;
+            continue;
+        }
+        if (str_eq(argv[i], "--")) {
+            continue;
+        }
+        if (argv[i][0] == '-') {
+            continue;
+        }
+        char argument_path[PATH_MAX];
+        char candidate[PATH_MAX];
+        if (absolute_argument_path(argv[i], argument_path, sizeof(argument_path)) &&
+            resolve_symlink_chain(argument_path, candidate, sizeof(candidate)) >= 0 &&
+            file_exists(candidate) &&
+            find_app_root(candidate, app_root, app_root_size)) {
+            str_copy(resolved, candidate, resolved_size);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // main logic
 static void shim_main(int argc, char **argv, char **envp, unsigned long *auxv,
                       unsigned long *stack_bottom) {
@@ -750,8 +873,7 @@ static void shim_main(int argc, char **argv, char **envp, unsigned long *auxv,
     char app_root[PATH_MAX];
     char loader_path[PATH_MAX];
     char lib_dir[PATH_MAX];
-    char sentinel[PATH_MAX];
-    char dir[PATH_MAX];
+    int direct_invocation = 0;
 
     // find AT_EXECFN from auxv
     const char *execfn = (void*)0;
@@ -790,30 +912,13 @@ static void shim_main(int argc, char **argv, char **envp, unsigned long *auxv,
         }
     }
 
-    // find .nex-app-root by walking up
-    str_copy(dir, resolved_exe, sizeof(dir));
-    path_dirname(dir);  // start with parent directory of executable
-
-    int found = 0;
-    while (1) {
-        str_copy(sentinel, dir, sizeof(sentinel));
-        str_append(sentinel, "/.nex-app-root", sizeof(sentinel));
-
-        if (file_exists(sentinel)) {
-            str_copy(app_root, dir, sizeof(app_root));
-            found = 1;
-            break;
-        }
-
-        // at root?
-        if (str_eq(dir, "/")) {
-            break;
-        }
-
-        path_dirname(dir);
+    int has_app_root = find_app_root(resolved_exe, app_root, sizeof(app_root));
+    if (!has_app_root && !elf_has_interp(resolved_exe)) {
+        direct_invocation = resolve_direct_target(
+            argc, argv, resolved_exe, sizeof(resolved_exe), app_root,
+            sizeof(app_root));
     }
-
-    if (!found) {
+    if (!has_app_root && !direct_invocation) {
         fatal_path(".nex-app-root not found for", resolved_exe);
     }
 
@@ -908,6 +1013,14 @@ static void shim_main(int argc, char **argv, char **envp, unsigned long *auxv,
     new_envp[env_idx++] = lib_dir_env;
 
     new_envp[env_idx] = (void*)0;
+
+    // ldd and similar tools invoke PT_INTERP as a command. In that mode the
+    // kernel started this shim, not the target program, so execute the real
+    // loader from the target capsule with the original loader arguments.
+    if (direct_invocation) {
+        sys_execve(loader_path, argv, new_envp);
+        fatal_path("failed to execute loader", loader_path);
+    }
 
     // rebuild the stack with new envp
     // stack layout: argc, argv[0..argc-1], NULL, envp[0..n], NULL, auxv

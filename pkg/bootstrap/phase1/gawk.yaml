@@ -6,7 +6,7 @@ package:
   version: 5.3.0
   description: GNU awk, a pattern scanning and processing language
   homepage: https://www.gnu.org/software/gawk/
-  checksum: 4454596868f9fff1ffc6409caf9a030f2b309ba0aae7b8ee5c1419b0ef6901eb
+  stable_checksum: false
   seed: true
 
 sources:
@@ -15,68 +15,129 @@ sources:
   sha256: ca9c16d3d11d0ff8c69d79dc0b47267e1329a69b39b799895604ed447d3ca90b
 
 dependencies:
-- name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
-- name: glibc
-  commit: x86_64/pkg/bootstrap/phase1/glibc/2.39/bundles/dev
-- name: binutils
-  commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
-- name: gcc
-  commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/bundles/dev
+- name: toolchain
+  commit: x86_64/pkg/bootstrap/phase0/toolchain/1.0/bundles/dev
 - name: m4
-  commit: x86_64/pkg/bootstrap/phase0/m4/1.4.19/bundles/dev
-- name: bash
-  commit: x86_64/pkg/bootstrap/phase0/bash/5.2.21/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
 - name: coreutils
-  commit: x86_64/pkg/bootstrap/phase0/coreutils/9.5/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
 - name: diffutils
-  commit: x86_64/pkg/bootstrap/phase0/diffutils/3.10/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
 - name: file
-  commit: x86_64/pkg/bootstrap/phase0/file/5.45/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/file/5.45/bundles/dev
 - name: findutils
-  commit: x86_64/pkg/bootstrap/phase0/findutils/4.9.0/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/bootstrap/phase0/gawk/5.3.0/bundles/dev
-- name: grep
-  commit: x86_64/pkg/bootstrap/phase0/grep/3.11/bundles/dev
-- name: gzip
-  commit: x86_64/pkg/bootstrap/phase0/gzip/1.13/bundles/dev
-- name: make
-  commit: x86_64/pkg/bootstrap/phase0/make/4.4.1/bundles/dev
-- name: sed
-  commit: x86_64/pkg/bootstrap/phase0/sed/4.9/bundles/dev
-- name: tar
-  commit: x86_64/pkg/bootstrap/phase0/tar/1.35/bundles/dev
-- name: xz
-  commit: x86_64/pkg/bootstrap/phase0/xz/5.4.6/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
 
 build:
-  environment: eeeb4cd406953b12ddf019ae34e4f0704a1b944a
-  profile: [4112:1555, 8234:6674, 12371:7900, 20795:10245, 24907:10262, 33599:10663, 37906:12995, 46460:13113, 54716:13643, 59863:14174]
+  environment: 4f2c74a7b827c73d2ca4d9caedbd9df1c6481e23
+  profile: [4113:1281, 8234:6013, 12345:7231, 20688:9433, 29112:14575, 33312:14577, 41779:19638, 50087:20219, 62494:20893, 65105:21060]
 
   script: |
-    tar --no-same-owner -xf /${SOURCE_gawk} -C "${WORK_DIR}" --strip-components=1
+    tar --no-same-owner -xf ${SOURCE_gawk} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
     sed -i 's/extras//' Makefile.in
-    ./configure --prefix=/usr --disable-nls
+    ./configure --prefix=/usr   \
+              --host=${TARGET} \
+              --build=$(build-aux/config.guess)
     make
     make DESTDIR=${OUT_DIR} install
-
     rm -rf ${OUT_DIR}/usr/share/man ${OUT_DIR}/usr/share/info
-    rm -rf ${OUT_DIR}/usr/share/locale
-    rm -rf ${OUT_DIR}/usr/include
 
-    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
-    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
-    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
 
 bundles:
   dev:
   - bin
+  - dev
+  - lib
+  - locale
+  - misc
 
 outputs:
   bin:
     files:
     - path: /usr/bin/awk
     - path: /usr/bin/gawk
+    - path: /usr/bin/gawk-5.3.0
+    - path: /usr/bin/gawkbug
+    - path: /usr/libexec/awk/grcat
+    - path: /usr/libexec/awk/pwcat
+
+  dev:
+    files:
+    - path: /usr/include/gawkapi.h
+
+  lib:
+    files:
+    - path: /usr/lib/gawk/filefuncs.so
+    - path: /usr/lib/gawk/fnmatch.so
+    - path: /usr/lib/gawk/fork.so
+    - path: /usr/lib/gawk/inplace.so
+    - path: /usr/lib/gawk/intdiv.so
+    - path: /usr/lib/gawk/ordchr.so
+    - path: /usr/lib/gawk/readdir.so
+    - path: /usr/lib/gawk/readfile.so
+    - path: /usr/lib/gawk/revoutput.so
+    - path: /usr/lib/gawk/revtwoway.so
+    - path: /usr/lib/gawk/rwarray.so
+    - path: /usr/lib/gawk/time.so
+
+  locale:
+    files:
+    - path: /usr/share/locale/bg/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/gawk.mo
+
+  misc:
+    files:
+    - path: /usr/share/awk/assert.awk
+    - path: /usr/share/awk/bits2str.awk
+    - path: /usr/share/awk/cliff_rand.awk
+    - path: /usr/share/awk/ctime.awk
+    - path: /usr/share/awk/ftrans.awk
+    - path: /usr/share/awk/getopt.awk
+    - path: /usr/share/awk/gettime.awk
+    - path: /usr/share/awk/group.awk
+    - path: /usr/share/awk/have_mpfr.awk
+    - path: /usr/share/awk/inplace.awk
+    - path: /usr/share/awk/intdiv0.awk
+    - path: /usr/share/awk/isnumeric.awk
+    - path: /usr/share/awk/join.awk
+    - path: /usr/share/awk/libintl.awk
+    - path: /usr/share/awk/noassign.awk
+    - path: /usr/share/awk/ns_passwd.awk
+    - path: /usr/share/awk/ord.awk
+    - path: /usr/share/awk/passwd.awk
+    - path: /usr/share/awk/processarray.awk
+    - path: /usr/share/awk/quicksort.awk
+    - path: /usr/share/awk/readable.awk
+    - path: /usr/share/awk/readfile.awk
+    - path: /usr/share/awk/rewind.awk
+    - path: /usr/share/awk/round.awk
+    - path: /usr/share/awk/shellquote.awk
+    - path: /usr/share/awk/strtonum.awk
+    - path: /usr/share/awk/tocsv.awk
+    - path: /usr/share/awk/walkarray.awk
+    - path: /usr/share/awk/zerofile.awk

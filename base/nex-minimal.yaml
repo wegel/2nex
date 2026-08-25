@@ -5,7 +5,7 @@ system:
   version: 0.0.1
   description: Minimal nex rootfs with bash init
   nex_structure: true
-  checksum: 9f068c973179671f33bf7b03a7f65063467f03da2e6d9c2f949e2c3e44ccb122
+  checksum: 5faeec10d5f6239726e3d7a8b10918d8bc6c9e5b9d451337ce236c7ab9512527
 
 dependencies:
 - name: findutils
@@ -20,6 +20,8 @@ packages:
   commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
 - name: coreutils
   commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
+- name: util_linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/runtime
 - name: findutils
   commit: x86_64/pkg/core/userland/findutils/4.9.0/outputs/bin
 - name: sed
@@ -73,4 +75,6 @@ build:
 
     chmod +x /target/init
 
-    find /target -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+    # Package links use absolute paths inside the assembled target. Timestamp
+    # each link itself instead of following it into the build capsule.
+    find /target -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;

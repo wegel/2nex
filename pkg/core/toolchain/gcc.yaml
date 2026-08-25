@@ -6,7 +6,7 @@ package:
   version: 13.2.0
   description: The GNU Compiler Collection includes front ends for C, C++, Objective-C, Fortran, Ada, Go, and D, as well as libraries for these languages.
   homepage: https://gcc.gnu.org/
-  checksum: fe9f8fc8f8fd23eda5808a5965f387a2002048fe010318dfb0b1b7a105aed7c7
+  checksum: 4efc1225392aed4d0b9e9e144d40d8d83163989f4c1f5820119a88fccbf63b2c
   seed: true
 
 sources:
@@ -31,7 +31,7 @@ sources:
 
 dependencies:
 - name: linux-headers
-  commit: x86_64/pkg/bootstrap/phase1/linux-headers/6.4.1/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
 - name: glibc
   commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
 - name: zlib
@@ -39,35 +39,35 @@ dependencies:
 - name: libxcrypt
   commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
 - name: binutils
-  commit: x86_64/pkg/bootstrap/phase1/binutils/2.42/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
 - name: gcc
-  commit: x86_64/pkg/bootstrap/phase1/gcc/13.2.0/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
 - name: bash
-  commit: x86_64/pkg/bootstrap/phase1/bash/5.2.21/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/bash/5.2.21/bundles/dev
 - name: coreutils
-  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/coreutils/9.5/bundles/dev
 - name: diffutils
-  commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/diffutils/3.10/bundles/dev
 - name: findutils
-  commit: x86_64/pkg/bootstrap/phase1/findutils/4.9.0/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/findutils/4.9.0/bundles/dev
 - name: gawk
-  commit: x86_64/pkg/bootstrap/phase1/gawk/5.3.0/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/gawk/5.3.0/bundles/dev
 - name: grep
-  commit: x86_64/pkg/bootstrap/phase1/grep/3.11/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/grep/3.11/bundles/dev
 - name: gzip
-  commit: x86_64/pkg/bootstrap/phase1/gzip/1.13/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/gzip/1.13/bundles/dev
 - name: m4
-  commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
 - name: make
-  commit: x86_64/pkg/bootstrap/phase1/make/4.4.1/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/make/4.4.1/bundles/dev
 - name: patch
-  commit: x86_64/pkg/bootstrap/phase1/patch/2.7.6/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/patch/2.7.6/bundles/dev
 - name: sed
-  commit: x86_64/pkg/bootstrap/phase1/sed/4.9/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/sed/4.9/bundles/dev
 - name: tar
-  commit: x86_64/pkg/bootstrap/phase1/tar/1.35/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/tar/1.35/bundles/dev
 - name: xz
-  commit: x86_64/pkg/bootstrap/phase1/xz/5.4.6/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
 
 build:
   environment: 27b6e5dc7ad152c9a17c2cabfcc5ee93daa9bbf0
@@ -113,6 +113,7 @@ build:
 
     make
     make DESTDIR=${OUT_DIR} install
+    ln -sv gcc ${OUT_DIR}/usr/bin/cc
     ln -svr /usr/bin/cpp ${OUT_DIR}/usr/lib
 
     mkdir -pv ${OUT_DIR}/usr/share/gdb/auto-load/usr/lib
@@ -153,6 +154,7 @@ outputs:
       needs:
       - /usr/lib/ld-linux-x86-64.so.2
       - /usr/lib/libc.so.6
+    - path: /usr/bin/cc
     - path: /usr/bin/cpp
       needs:
       - /usr/lib/ld-linux-x86-64.so.2

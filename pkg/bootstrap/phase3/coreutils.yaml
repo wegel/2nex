@@ -2,11 +2,11 @@ package:
   schema: 1
   name: Coreutils
   slug: coreutils
-  namespace: bootstrap/phase0
+  namespace: bootstrap/phase3
   version: "9.5"
   description: A set of basic GNU tools commonly used in shell scripts
   homepage: https://www.gnu.org/software/coreutils/
-  stable_checksum: false
+  checksum: fadefa1043cc0dce0397441dd08602895a41457287b91bf004617295adf94fae
   seed: true
 
 sources:
@@ -15,29 +15,37 @@ sources:
   sha256: cd328edeac92f6a665de9f323c93b712af1858bc2e0d88f3f7100469470a1b8a
 
 dependencies:
-- name: toolchain
-  commit: x86_64/pkg/bootstrap/phase0/toolchain/1.0/bundles/dev
-- name: m4
-  commit: x86_64/pkg/bootstrap/phase0/m4/1.4.19/bundles/dev
+- name: temporary-system
+  commit: x86_64/pkg/bootstrap/phase1/temporary-system/1.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/bootstrap/phase3/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
 
 build:
-  environment: cec6d21097655bd45c7ecf30e556ec4a77d14646
-  profile: [4167:1414, 8295:3876, 16529:6089, 28862:9893, 37084:11618, 45327:13857, 53547:16901, 65875:18231, 78203:19764, 85710:20602]
+  environment: 002d6759a3ccdb3587b39a187250574c6d1de529
+  profile: [4097:2569, 8198:8544, 16489:15964, 24760:29674, 32963:38850, 41175:46461, 45275:52824, 57599:54357, 69958:58762, 74790:60283]
 
   script: |
-    tar --no-same-owner -xf ${SOURCE_coreutils} -C "${WORK_DIR}" --strip-components=1
+    tar --no-same-owner -xf /${SOURCE_coreutils} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
 
-    FORCE_UNSAFE_CONFIGURE=1 ./configure --prefix=/usr                     \
-                --host=${TARGET}                   \
-                --build=$(build-aux/config.guess) \
+    FORCE_UNSAFE_CONFIGURE=1 ./configure --prefix=/usr \
                 --enable-install-program=hostname \
-                --enable-no-install-program=kill,uptime
+                --enable-no-install-program=kill,uptime \
+                --disable-nls
     make
     make DESTDIR=${OUT_DIR} install
+
     rm -rf ${OUT_DIR}/usr/share/man ${OUT_DIR}/usr/share/info
     rm -rf ${OUT_DIR}/usr/share/locale
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
 bundles:

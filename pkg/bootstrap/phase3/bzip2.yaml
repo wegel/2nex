@@ -2,11 +2,11 @@ package:
   schema: 1
   name: Bzip2
   slug: bzip2
-  namespace: bootstrap/phase0
+  namespace: bootstrap/phase3
   version: 1.0.8
   description: A freely available, patent free, high-quality data compressor
   homepage: https://sourceware.org/bzip2/
-  stable_checksum: false
+  checksum: 73f310d877c032b17b7a65c5b1b154b579c6f35b62a9eb0d0a959ece18ab1e80
   seed: true
 
 sources:
@@ -18,43 +18,25 @@ sources:
   sha256: 35e3bbd9642af51fef2a8a83afba040d272da42d7e3a251d8e43255a7b496702
 
 dependencies:
-- name: toolchain
-  commit: x86_64/pkg/bootstrap/phase0/toolchain/1.0/bundles/dev
-- name: m4
-  commit: x86_64/pkg/bootstrap/phase0/m4/1.4.19/bundles/dev
-- name: coreutils
-  commit: x86_64/pkg/bootstrap/phase0/coreutils/9.5/bundles/dev
-- name: diffutils
-  commit: x86_64/pkg/bootstrap/phase0/diffutils/3.10/bundles/dev
-- name: file
-  commit: x86_64/pkg/bootstrap/phase0/file/5.45/bundles/dev
-- name: findutils
-  commit: x86_64/pkg/bootstrap/phase0/findutils/4.9.0/bundles/dev
-- name: gawk
-  commit: x86_64/pkg/bootstrap/phase0/gawk/5.3.0/bundles/dev
-- name: grep
-  commit: x86_64/pkg/bootstrap/phase0/grep/3.11/bundles/dev
-- name: gzip
-  commit: x86_64/pkg/bootstrap/phase0/gzip/1.13/bundles/dev
-- name: make
-  commit: x86_64/pkg/bootstrap/phase0/make/4.4.1/bundles/dev
-- name: sed
-  commit: x86_64/pkg/bootstrap/phase0/sed/4.9/bundles/dev
-- name: patch
-  commit: x86_64/pkg/bootstrap/phase0/patch/2.7.6/bundles/dev
-- name: tar
-  commit: x86_64/pkg/bootstrap/phase0/tar/1.35/bundles/dev
-- name: xz
-  commit: x86_64/pkg/bootstrap/phase0/xz/5.4.6/bundles/dev
+- name: temporary-system
+  commit: x86_64/pkg/bootstrap/phase1/temporary-system/1.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/bootstrap/phase3/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
 
 build:
-  environment: cec6d21097655bd45c7ecf30e556ec4a77d14646
-  profile: [4208:1783, 7075:1826]
+  environment: 002d6759a3ccdb3587b39a187250574c6d1de529
+  profile: [4163:1188, 8263:1856, 9573:1888]
 
   script: |
-    tar --no-same-owner -xf ${SOURCE_bzip2} -C "${WORK_DIR}" --strip-components=1
+    tar --no-same-owner -xf /${SOURCE_bzip2} -C "${WORK_DIR}" --strip-components=1
     cd ${WORK_DIR}
-    patch --batch --fuzz=0 -Np1 -i ${SOURCE_install_docs_patch}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE_install_docs_patch}
 
     sed -i "s@\(ln -s -f \)\$(PREFIX)/bin/@\1@" Makefile
     sed -i "s@(PREFIX)/man@(PREFIX)/share/man@g" Makefile
@@ -68,9 +50,13 @@ build:
     for i in ${OUT_DIR}/usr/bin/{bzcat,bunzip2}; do
       ln -sfv bzip2 $i
     done
+
     rm -fv ${OUT_DIR}/usr/lib/libbz2.a
     rm -rf ${OUT_DIR}/usr/share/info ${OUT_DIR}/usr/share/man
+    rm -rf ${OUT_DIR}/usr/share/doc
 
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
     find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
 
 bundles:
@@ -96,13 +82,6 @@ outputs:
   dev:
     files:
     - path: /usr/include/bzlib.h
-
-  doc:
-    files:
-    - path: /usr/share/doc/bzip2-1.0.8/bzip2.txt
-    - path: /usr/share/doc/bzip2-1.0.8/manual.html
-    - path: /usr/share/doc/bzip2-1.0.8/manual.pdf
-    - path: /usr/share/doc/bzip2-1.0.8/manual.ps
 
   lib:
     files:

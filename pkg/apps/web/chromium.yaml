@@ -6,7 +6,7 @@ package:
   version: 143.0.7499.169
   description: Chromium web browser
   homepage: https://www.chromium.org/
-  checksum: 77d055fafef093c2b5b97581c603c3ad956e511d2a6e60719d9ba026337997c1
+  checksum: 2212a96b2be22182fd9747aa9b8a0ae8037d36a79cf1eada21d5dbf0042421d5
 
 sources:
 - name: chromium
@@ -305,14 +305,29 @@ build:
     # arch: use GOOGLE_CHROME_BUILD to get nickel support
     sed -i 's/OFFICIAL_BUILD/GOOGLE_CHROME_BUILD/' tools/generate_shim_headers/generate_shim_headers.py
 
-    # arch: fix xml memory function incompatibility
-    sed -i \
-      -e 's/\\<xmlMalloc\\>/malloc/' \
-      -e 's/\\<xmlFree\\>/free/' \
-      -e '1i #include <cstdlib>' \
+    # arch: fix xml memory function incompatibility. Change a file only when it
+    # still needs the edit, so --reuse-rootfs does not rebuild these objects.
+    for xml_source in \
       third_party/blink/renderer/core/xml/*.cc \
       third_party/blink/renderer/core/xml/parser/xml_document_parser.cc \
-      third_party/libxml/chromium/*.cc
+      third_party/libxml/chromium/*.cc; do
+      include_count="$(grep -c '^#include <cstdlib>$' "${xml_source}" || true)"
+      first_line="$(sed -n '1p' "${xml_source}")"
+      if [ "${include_count}" -ne 1 ] \
+        || [ "${first_line}" != '#include <cstdlib>' ] \
+        || grep -q -E '\<(xmlMalloc|xmlFree)\>' "${xml_source}"; then
+        sed -i \
+          -e '1i #include <cstdlib>' \
+          -e '/^#include <cstdlib>$/d' \
+          -e 's/\\<xmlMalloc\\>/malloc/' \
+          -e 's/\\<xmlFree\\>/free/' \
+          "${xml_source}"
+      fi
+      if [ "$(grep -c '^#include <cstdlib>$' "${xml_source}" || true)" -ne 1 ]; then
+        echo "FATAL: repeated source preparation changed ${xml_source}" >&2
+        exit 1
+      fi
+    done
 
     # clang flags from env enable exceptions; chromium expects them off
     CFLAGS="${CFLAGS//-fexceptions/}"

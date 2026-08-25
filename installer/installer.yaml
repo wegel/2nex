@@ -5,7 +5,7 @@ system:
   version: 0.0.1
   description: Minimal bootable installer for nex systems
   nex_structure: true
-  checksum: ecadd15a2b06cda54a7b9799c9efc9622fc20fd172db2225c2171be080b76ab1
+  checksum: 2ccaca240de39c210a996ca9aa9ed7000290e2f11d53677d80db3db852f469cb
 
 dependencies:
 - name: glibc
@@ -144,21 +144,35 @@ files:
         echo o > /proc/sysrq-trigger 2>/dev/null || true
     }
 
+    AUTOINSTALL_TARGET=""
+    PROVISION_DIR=""
     for word in $CMDLINE; do
         case "$word" in
             installer.autoinstall=*)
-                target=${word#installer.autoinstall=}
-                echo "INSTALLER: autoinstall target $target" > /dev/kmsg
-                if nex-install --yes "$target"; then
-                    echo "INSTALLER: autoinstall complete" > /dev/kmsg
-                    poweroff_now
-                else
-                    echo "INSTALLER: autoinstall failed" > /dev/kmsg
-                    exec /bin/bash
-                fi
+                AUTOINSTALL_TARGET=${word#installer.autoinstall=}
+                ;;
+            installer.provision=*)
+                PROVISION_DIR=${word#installer.provision=}
                 ;;
         esac
     done
+
+    if [ -n "$AUTOINSTALL_TARGET" ]; then
+        echo "INSTALLER: autoinstall target $AUTOINSTALL_TARGET" > /dev/kmsg
+        if [ -n "$PROVISION_DIR" ]; then
+            echo "INSTALLER: provision tree $PROVISION_DIR" > /dev/kmsg
+            set -- --yes --provision "$PROVISION_DIR" "$AUTOINSTALL_TARGET"
+        else
+            set -- --yes "$AUTOINSTALL_TARGET"
+        fi
+        if nex-install "$@"; then
+            echo "INSTALLER: autoinstall complete" > /dev/kmsg
+            poweroff_now
+        else
+            echo "INSTALLER: autoinstall failed" > /dev/kmsg
+            exec /bin/bash
+        fi
+    fi
 
     echo "INSTALLER: starting shell" > /dev/kmsg
 

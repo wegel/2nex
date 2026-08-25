@@ -2,7 +2,7 @@ package:
   schema: 1
   name: File
   slug: file
-  namespace: bootstrap/phase0
+  namespace: bootstrap/phase1
   version: "5.45"
   description: File type identification utility
   homepage: https://www.darwinsys.com/file/
@@ -18,15 +18,17 @@ dependencies:
 - name: toolchain
   commit: x86_64/pkg/bootstrap/phase0/toolchain/1.0/bundles/dev
 - name: m4
-  commit: x86_64/pkg/bootstrap/phase0/m4/1.4.19/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
 - name: coreutils
-  commit: x86_64/pkg/bootstrap/phase0/coreutils/9.5/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
 - name: diffutils
-  commit: x86_64/pkg/bootstrap/phase0/diffutils/3.10/bundles/dev
+  commit: x86_64/pkg/bootstrap/phase1/diffutils/3.10/bundles/dev
 
 build:
-  environment: cec6d21097655bd45c7ecf30e556ec4a77d14646
-  profile: [4097:886, 8206:3000, 12325:4226, 16432:4929, 20541:7073, 24652:7162, 25365:7179]
+  environment: 4f2c74a7b827c73d2ca4d9caedbd9df1c6481e23
+  profile: [4148:910, 8295:3281, 12436:4776, 16547:5854, 20659:11145, 24821:11256, 25780:11275]
 
   script: |
     tar --no-same-owner -xf ${SOURCE_file} -C "${WORK_DIR}" --strip-components=1
@@ -37,15 +39,17 @@ build:
     ../configure --disable-bzlib      \
                  --disable-libseccomp \
                  --disable-xzlib      \
-                 --disable-zlib       \
-                 --disable-zstdlib    \
-                 --disable-lzlib
+                 --disable-zlib
     make
     popd
 
-    ./configure --prefix=/usr --host=${TARGET} --build=$(./config.guess) \
-                --disable-bzlib --disable-libseccomp --disable-xzlib --disable-zlib \
-                --disable-zstdlib --disable-lzlib
+    ./configure --prefix=/usr \
+      --host=${TARGET} \
+      --build=$(./config.guess) \
+      --disable-bzlib \
+      --disable-libseccomp \
+      --disable-xzlib \
+      --disable-zlib
     make FILE_COMPILE=$(pwd)/build/src/file
     make DESTDIR=${OUT_DIR} install
     rm -v ${OUT_DIR}/usr/lib/libmagic.la
@@ -57,7 +61,9 @@ build:
 bundles:
   dev:
   - bin
+  - dev
   - lib
+  - misc
 
 outputs:
   bin:
