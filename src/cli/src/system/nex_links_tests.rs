@@ -53,7 +53,7 @@ fn repeated_runs_choose_the_same_provider() {
 }
 
 #[test]
-fn the_dynamic_loader_is_never_flattened() {
+fn linker_scripts_use_the_real_loader_without_replacing_the_runtime_shim() {
     let temp_dir = tempfile::tempdir().expect("temp dir");
     let nex_pkg = temp_dir.path().join("nex/pkg");
     let target = temp_dir.path().join("target");
@@ -61,12 +61,56 @@ fn the_dynamic_loader_is_never_flattened() {
     fs::create_dir_all(&usr_lib).expect("capsule usr/lib");
     fs::create_dir_all(&target).expect("target dir");
     fs::write(usr_lib.join("ld-linux-x86-64.so.2"), "loader").expect("loader file");
-    symlink(std::path::Path::new("libc.so.6"), usr_lib.join("libc.so")).expect("capsule link");
+    fs::write(
+        usr_lib.join("libc.so"),
+        "GROUP ( /usr/lib/libc.so.6 AS_NEEDED ( /usr/lib/ld-linux-x86-64.so.2 ) )\n",
+    )
+    .expect("linker script");
+    fs::create_dir_all(target.join("usr/lib")).expect("public usr/lib");
+    symlink(
+        "/nex/pkg/glibc/2.39/cccc/usr/lib/libc.so",
+        target.join("usr/lib/libc.so"),
+    )
+    .expect("direct package link");
 
     symlink_flattened_libs_to_usr(&nex_pkg, &target).expect("symlink libraries");
 
+    // Scenario: the kernel must keep using Nex's runtime shim path, while GNU
+    // ld must receive the real Glibc loader when it reads libc.so.
     assert!(!target.join("usr/lib/ld-linux-x86-64.so.2").exists());
-    assert!(target.join("usr/lib/libc.so").symlink_metadata().is_ok());
+    assert_eq!(
+        fs::read_link(target.join("usr/lib/nex-linker/ld-linux-x86-64.so.2"))
+            .expect("real loader link"),
+        std::path::Path::new("../../../nex/pkg/glibc/2.39/cccc/usr/lib/ld-linux-x86-64.so.2")
+    );
+    assert_eq!(
+        fs::read_to_string(target.join("usr/lib/libc.so")).expect("public linker script"),
+        "GROUP ( /usr/lib/libc.so.6 AS_NEEDED ( /usr/lib/nex-linker/ld-linux-x86-64.so.2 ) )\n"
+    );
+    assert!(!fs::symlink_metadata(target.join("usr/lib/libc.so"))
+        .expect("public linker script metadata")
+        .file_type()
+        .is_symlink());
+}
+
+#[test]
+fn absolute_capsule_symlinks_do_not_abort_linker_script_detection() {
+    let temp_dir = tempfile::tempdir().expect("temp dir");
+    let nex_pkg = temp_dir.path().join("nex/pkg");
+    let target = temp_dir.path().join("target");
+    let usr_lib = nex_pkg.join("gcc/13.2.0/aaaa/usr/lib");
+    fs::create_dir_all(&usr_lib).expect("capsule usr/lib");
+    fs::create_dir_all(&target).expect("target dir");
+    symlink("/usr/bin/cpp", usr_lib.join("cpp")).expect("capsule cpp link");
+
+    symlink_flattened_libs_to_usr(&nex_pkg, &target).expect("symlink libraries");
+
+    // Scenario: GCC ships /usr/lib/cpp as an absolute symlink whose target
+    // exists in the assembled root, but may not exist on the build host.
+    assert_eq!(
+        fs::read_link(target.join("usr/lib/cpp")).expect("public cpp link"),
+        std::path::Path::new("../../nex/pkg/gcc/13.2.0/aaaa/usr/lib/cpp")
+    );
 }
 
 #[test]

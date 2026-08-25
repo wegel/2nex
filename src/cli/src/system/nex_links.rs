@@ -103,13 +103,26 @@ fn symlink_usr_lib_entries(
         .map(|lib_entry| lib_entry.path().to_path_buf())
         .collect();
     lib_paths.sort();
+    let loader_paths = lib_paths
+        .iter()
+        .filter(|path| {
+            path.file_name()
+                .is_some_and(|name| is_dynamic_loader_name(&name.to_string_lossy()))
+        })
+        .cloned()
+        .collect::<Vec<_>>();
     for lib_path in &lib_paths {
-        symlink_usr_lib_entry(nex_pkg_dir, usr_lib, lib_path)?;
+        symlink_usr_lib_entry(nex_pkg_dir, usr_lib, lib_path, &loader_paths)?;
     }
     Ok(())
 }
 
-fn symlink_usr_lib_entry(nex_pkg_dir: &Path, usr_lib: &Path, lib_path: &Path) -> io::Result<()> {
+fn symlink_usr_lib_entry(
+    nex_pkg_dir: &Path,
+    usr_lib: &Path,
+    lib_path: &Path,
+    loader_paths: &[PathBuf],
+) -> io::Result<()> {
     let Some(lib_name) = lib_path.file_name() else {
         return Ok(());
     };
@@ -118,6 +131,9 @@ fn symlink_usr_lib_entry(nex_pkg_dir: &Path, usr_lib: &Path, lib_path: &Path) ->
     }
 
     let target_path = usr_lib.join(lib_name);
+    if copy_linker_script(nex_pkg_dir, usr_lib, lib_path, &target_path, loader_paths)? {
+        return Ok(());
+    }
     if target_path.exists() || target_path.symlink_metadata().is_ok() {
         return Ok(());
     }
@@ -130,6 +146,63 @@ fn symlink_usr_lib_entry(nex_pkg_dir: &Path, usr_lib: &Path, lib_path: &Path) ->
 
 fn is_dynamic_loader_name(lib_name: &str) -> bool {
     lib_name.starts_with("ld-linux") || lib_name == "ld.so"
+}
+
+fn copy_linker_script(
+    nex_pkg_dir: &Path,
+    usr_lib: &Path,
+    source: &Path,
+    target: &Path,
+    loader_paths: &[PathBuf],
+) -> io::Result<bool> {
+    let metadata = fs::symlink_metadata(source)?;
+    if !metadata.is_file() || metadata.len() > 64 * 1024 {
+        return Ok(false);
+    }
+    let Ok(mut content) = fs::read_to_string(source) else {
+        return Ok(false);
+    };
+
+    let mut changed = false;
+    for loader_path in loader_paths {
+        let Some(loader_name) = loader_path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let public_path = format!("/usr/lib/{loader_name}");
+        if !content.contains(&public_path) {
+            continue;
+        }
+        let linker_path = format!("/usr/lib/nex-linker/{loader_name}");
+        content = content.replace(&public_path, &linker_path);
+        symlink_linker_loader(nex_pkg_dir, usr_lib, loader_path)?;
+        changed = true;
+    }
+
+    if changed {
+        if target.symlink_metadata().is_ok() {
+            fs::remove_file(target)?;
+        }
+        fs::write(target, content)?;
+        fs::set_permissions(target, metadata.permissions())?;
+    }
+    Ok(changed)
+}
+
+fn symlink_linker_loader(nex_pkg_dir: &Path, usr_lib: &Path, loader_path: &Path) -> io::Result<()> {
+    let linker_dir = usr_lib.join("nex-linker");
+    fs::create_dir_all(&linker_dir)?;
+    let Some(loader_name) = loader_path.file_name() else {
+        return Ok(());
+    };
+    let target = linker_dir.join(loader_name);
+    if target.symlink_metadata().is_ok() {
+        return Ok(());
+    }
+    if let Ok(rel_from_nex_pkg) = loader_path.strip_prefix(nex_pkg_dir) {
+        let source = Path::new("../../../nex/pkg").join(rel_from_nex_pkg);
+        symlink(source, target)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
