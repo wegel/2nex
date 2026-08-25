@@ -70,21 +70,11 @@ fn write_fixture(product: &Path, upstream: &Path) -> io::Result<()> {
     let runtime_revision = git(upstream, &["rev-parse", "HEAD"])?;
     write(upstream, "asm/base.yaml", base_assembly())?;
     write(
-        upstream,
-        "asm/base-overlay.yaml",
-        overlay("/etc/upstream-base"),
-    )?;
-    write(
         product,
         "pkg/product/product-agent.yaml",
         agent_manifest(&runtime_revision),
     )?;
     write(product, "asm/device.yaml", product_assembly())?;
-    write(
-        product,
-        "asm/device-overlay.yaml",
-        overlay("/etc/product-device"),
-    )?;
     format_product_assembly(product)
 }
 
@@ -242,7 +232,10 @@ fn product_assembly() -> &'static str {
   name: Product Device
   slug: product-device
   version: 1.0
-  extends: upstream/nex/asm/base.yaml
+
+base:
+  commit: systems/upstream-base/1.0
+  manifest: nex:asm/base.yaml
 
 files:
 - path: /etc/device.conf
@@ -256,8 +249,4 @@ build:
   environment: abcdef
   script: ""
 "#
-}
-
-fn overlay(path: &str) -> String {
-    format!("files:\n- path: {path}\n  mode: 420\n  content: |\n    fixture\n")
 }

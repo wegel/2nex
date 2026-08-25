@@ -51,7 +51,6 @@ fn manifest(checksum: Option<&str>) -> SystemManifest {
             checksum: checksum.map(ToOwned::to_owned),
             stable_checksum: None,
             nex_structure: false,
-            extends: None,
         },
         base: None,
         packages: Vec::new(),
@@ -64,7 +63,6 @@ fn manifest(checksum: Option<&str>) -> SystemManifest {
             script: "true".to_string(),
             profile: Vec::new(),
         },
-        exclude: None,
     }
 }
 

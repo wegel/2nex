@@ -19,7 +19,6 @@ fn child_metadata_records_the_exact_base_commit() {
             checksum: None,
             stable_checksum: None,
             nex_structure: false,
-            extends: None,
         },
         base: Some(SystemBase {
             commit: "systems/base/1".to_string(),
@@ -35,7 +34,6 @@ fn child_metadata_records_the_exact_base_commit() {
             script: String::new(),
             profile: Vec::new(),
         },
-        exclude: None,
     };
 
     let metadata = system_metadata(&manifest, &[], &[], Some("0123456789abcdef"), "checksum")

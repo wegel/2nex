@@ -6,10 +6,7 @@ use std::io;
 use std::path::Path;
 
 use crate::commands::build::BuildOpts;
-use crate::manifest::{
-    detect_manifest_kind, load_manifest, load_system_manifest_resolved, BuildEnvironment, Manifest,
-    ManifestData, ManifestKind,
-};
+use crate::manifest::{load_manifest, BuildEnvironment, Manifest, ManifestData};
 use crate::outputs::categorize_files_with_existing_outputs;
 use crate::progress::BuildProgressConfig;
 
@@ -32,7 +29,7 @@ pub fn build_single(opts: &BuildOpts) -> io::Result<()> {
     opts.ensure_manifest_write_allowed()?;
     fs::create_dir_all(".nex/tmp")?;
 
-    let manifest_data = load_manifest_data(opts)?;
+    let manifest_data = load_manifest(&opts.manifest_file)?;
     validate_refresh_metadata_flags(opts, &manifest_data)?;
     if skip_current_package(opts, &manifest_data)? {
         return Ok(());
@@ -153,19 +150,6 @@ fn publish_checked_package_outputs(plan: PackagePublish<'_>) -> io::Result<()> {
         )?;
     }
     maybe_compute_runtime_deps(plan.opts, plan.manifest)
-}
-
-fn load_manifest_data(opts: &BuildOpts) -> io::Result<ManifestData> {
-    let manifest_str = fs::read_to_string(&opts.manifest_file)?;
-    let doc: serde_yaml::Value = serde_yaml::from_str(&manifest_str)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-    if detect_manifest_kind(&doc) == ManifestKind::System {
-        let resolved = load_system_manifest_resolved(Path::new(&opts.manifest_file))?;
-        Ok(ManifestData::System(resolved))
-    } else {
-        load_manifest(&opts.manifest_file)
-    }
 }
 
 fn validate_refresh_metadata_flags(

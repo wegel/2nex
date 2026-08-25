@@ -1,7 +1,7 @@
 use std::fs;
 use std::process::Command;
 
-use super::{load_manifest, load_manifest_from_source};
+use super::{load_manifest, load_manifest_from_source, load_manifest_from_str};
 use crate::manifest::{ManifestData, ManifestSource};
 use crate::outputs::fetch_and_verify_input;
 
@@ -111,6 +111,29 @@ build:
     assert!(error
         .to_string()
         .contains("pin the assembly repository checkout"));
+}
+
+/// Scenario: an old assembly still asks Nex to merge a parent YAML manifest.
+/// Nex must reject `extends` and direct the author to a realized `base` edge.
+#[test]
+fn source_inheritance_is_rejected_instead_of_silently_ignored() {
+    let manifest = r#"system:
+  name: child
+  slug: child
+  version: 1
+  extends: base/base.yaml
+packages: []
+build:
+  environment: abcdef
+  script: "true"
+"#;
+
+    let error = match load_manifest_from_str(manifest) {
+        Ok(_) => panic!("extends must be rejected"),
+        Err(error) => error,
+    };
+
+    assert!(error.to_string().contains("top-level 'base'"));
 }
 
 fn sha256(value: &str) -> String {

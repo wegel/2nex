@@ -3,28 +3,17 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::inheritance;
 use super::repositories::repository_root_for_path;
 use super::source::RepositorySnapshot;
 use super::types::*;
 
-/// Load manifest from a ManifestSource (path or repository revision)
-/// For system manifests loaded from path, inheritance is resolved
+/// Load a manifest from a working-tree path or repository revision.
 pub fn load_manifest_from_source(source: &ManifestSource) -> io::Result<ManifestData> {
     match source {
         ManifestSource::Path(path) => {
-            // check if it's a system manifest to resolve inheritance
             let content = fs::read_to_string(path)?;
-            let doc: Value = serde_yaml::from_str(&content)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-            if detect_manifest_kind(&doc) == ManifestKind::System {
-                let resolved = load_system_manifest_resolved(path)?;
-                Ok(ManifestData::System(resolved))
-            } else {
-                let root = manifest_repository_root(path);
-                load_manifest_from_str_in_repository(&content, &root, None)
-            }
+            let root = manifest_repository_root(path);
+            load_manifest_from_str_in_repository(&content, &root, None)
         }
         ManifestSource::Repository {
             revision,
@@ -122,12 +111,6 @@ pub fn detect_manifest_kind(doc: &Value) -> ManifestKind {
 }
 
 pub fn validate_system_manifest(manifest: &SystemManifest) -> io::Result<()> {
-    if manifest.packages.is_empty() && manifest.base.is_none() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "System manifests must specify a base or at least one entry under 'packages'",
-        ));
-    }
     if manifest.system.version.trim().is_empty() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -154,18 +137,39 @@ pub fn load_manifest_from_str(manifest_str: &str) -> io::Result<ManifestData> {
             Ok(ManifestData::Package(manifest))
         }
         ManifestKind::System => {
-            if doc.get("overlays").is_some() {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "'overlays' is no longer a manifest section; move the overlay's entries into this assembly's 'files' section",
-                ));
-            }
+            reject_removed_system_fields(&doc)?;
             let sys: SystemManifest = serde_yaml::from_value(doc)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
             validate_system_manifest(&sys)?;
             Ok(ManifestData::System(sys))
         }
     }
+}
+
+fn reject_removed_system_fields(document: &Value) -> io::Result<()> {
+    if document
+        .get("system")
+        .and_then(|system| system.get("extends"))
+        .is_some()
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "'system.extends' is no longer supported; use a top-level 'base' that names the realized system ref and its manifest",
+        ));
+    }
+    if document.get("exclude").is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "'exclude' only applied to removed source inheritance; list this assembly's own packages instead",
+        ));
+    }
+    if document.get("overlays").is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "'overlays' is no longer a manifest section; move the overlay's entries into this assembly's 'files' section",
+        ));
+    }
+    Ok(())
 }
 
 pub(super) fn resolve_system_paths(manifest: &mut SystemManifest, repository_root: &Path) {
@@ -236,13 +240,6 @@ fn manifest_repository_root(manifest_path: &Path) -> PathBuf {
     repository_root_for_path(manifest_path)
         .or_else(|_| std::env::current_dir())
         .unwrap_or_else(|_| PathBuf::from("."))
-}
-
-/// Load a system manifest with inheritance resolution
-pub fn load_system_manifest_resolved(file_path: &Path) -> io::Result<SystemManifest> {
-    let resolved = inheritance::resolve_inheritance(file_path)?;
-    validate_system_manifest(&resolved)?;
-    Ok(resolved)
 }
 
 #[cfg(test)]

@@ -30,6 +30,7 @@ pub fn format_manifest_string(contents: &str) -> io::Result<String> {
     let system_key = Value::String("system".to_string());
     let package_key = Value::String("package".to_string());
     let formatted = if mapping.contains_key(&system_key) {
+        reject_legacy_system_fields(mapping)?;
         format_root(mapping, true, original_version.as_deref())?
     } else if mapping.contains_key(&package_key) {
         format_root(mapping, false, original_version.as_deref())?
@@ -40,6 +41,22 @@ pub fn format_manifest_string(contents: &str) -> io::Result<String> {
         ));
     };
     Ok(restore_section_item_comments(contents, &formatted))
+}
+
+fn reject_legacy_system_fields(mapping: &Mapping) -> io::Result<()> {
+    let system_key = Value::String("system".to_string());
+    let extends_key = Value::String("extends".to_string());
+    let has_extends = mapping
+        .get(&system_key)
+        .and_then(Value::as_mapping)
+        .is_some_and(|system| system.contains_key(&extends_key));
+    if has_extends || mapping.contains_key(Value::String("exclude".to_string())) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "source inheritance is no longer supported; use a top-level base",
+        ));
+    }
+    Ok(())
 }
 
 fn restore_section_item_comments(original: &str, formatted: &str) -> String {
@@ -201,7 +218,6 @@ fn format_root(
             "dependencies",
             "packages",
             "providers",
-            "exclude",
             "files",
             "build",
         ]
@@ -239,7 +255,6 @@ fn format_root(
                 "dependencies" => output.push_str(&format_dependencies(value)?),
                 "packages" => output.push_str(&format_packages(value)?),
                 "providers" => output.push_str(&format_providers(value)?),
-                "exclude" => output.push_str(&format_generic_section("exclude", value)?),
                 "files" => output.push_str(&format_files(value)?),
                 "build" => output.push_str(&format_build(value)?),
                 "bundles" => output.push_str(&format_bundles(value)?),
@@ -336,7 +351,6 @@ fn format_system(
         "boot_method",
         "description",
         "nex_structure",
-        "extends",
         "stable_checksum",
         "checksum",
     ];
@@ -356,23 +370,6 @@ fn format_system(
             };
             output.push_str(&format!("  {}: {}\n", field, formatted));
         }
-    }
-
-    Ok(output)
-}
-
-fn format_generic_section(name: &str, value: &Value) -> io::Result<String> {
-    let mut output = format!("{name}:\n");
-    let rendered =
-        serde_yaml::to_string(value).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-    for line in rendered.lines() {
-        if line == "---" {
-            continue;
-        }
-        output.push_str("  ");
-        output.push_str(line);
-        output.push('\n');
     }
 
     Ok(output)
@@ -1108,13 +1105,14 @@ build:
 "#;
 
         let formatted = format_manifest_string(input).unwrap();
-        assert!(formatted
-            .contains("files:\n- path: /etc/test.conf\n  symlink: /run/test.conf\n"));
+        assert!(formatted.contains("files:\n- path: /etc/test.conf\n  symlink: /run/test.conf\n"));
         assert!(formatted.contains("\ndependencies: []\n"));
     }
 
+    /// Scenario: an old manifest still asks Nex to merge another YAML source.
+    /// The formatter must reject it instead of silently erasing `extends`.
     #[test]
-    fn formats_system_extends() {
+    fn rejects_system_extends() {
         let input = r#"system:
   schema: 1
   name: child system
@@ -1130,11 +1128,9 @@ build:
   script: "true"
 "#;
 
-        let formatted = format_manifest_string(input).unwrap();
-        let system = formatted.split("\n\n").next().unwrap();
-        assert!(system.contains("  nex_structure: true\n"));
-        assert!(system.contains("  extends: asm/base.yaml\n"));
-        assert!(system.ends_with("  checksum: abc123"));
+        let error = format_manifest_string(input).expect_err("extends must not survive formatting");
+
+        assert!(error.to_string().contains("top-level base"));
     }
 
     #[test]
