@@ -1,0 +1,352 @@
+system:
+  schema: 1
+  name: Edgebox Rootfs
+  slug: edgebox-rootfs
+  version: 0.0.1
+  description: Flat appliance rootfs assembled from reusable upstream packages
+  checksum: 8e31d911f8bf7d8eaf1421b9cf40d0ddf797f904a69375adee4335b9f119186d
+
+base:
+  commit: systems/flat-systemd/0.0.1
+  manifest: assemblies/base/flat-systemd.yaml
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+
+packages:
+# kernel modules and device firmware
+- name: linux-modules
+  commit: x86_64/pkg/core/kernel/linux/6.18.24/bundles/all-modules
+- name: firmware-amd-gpu
+  commit: x86_64/pkg/core/kernel/linux-firmware/20251125/outputs/gpu-amd
+- name: firmware-realtek
+  commit: x86_64/pkg/core/kernel/linux-firmware/20251125/outputs/wifi-realtek
+# base appliance services
+- name: acpid
+  commit: x86_64/pkg/core/power/acpid/2.0.34/bundles/full
+- name: ca-certificates
+  commit: x86_64/pkg/apps/misc/ca-certificates/20251104/bundles/full
+- name: openssh
+  commit: x86_64/pkg/cli/net/openssh/9.9p1/bundles/full
+- name: bash-completion
+  commit: x86_64/pkg/cli/shells/bash-completion/2.17.0/bundles/full
+# containers and networking
+- name: bridge-utils
+  commit: x86_64/pkg/net/misc/bridge-utils/1.7.1/bundles/full
+- name: containerd
+  commit: x86_64/pkg/apps/containers/containerd/2.2.2+git5957d3334b/bundles/full
+- name: docker
+  commit: x86_64/pkg/apps/containers/docker/29.3.0+git1da6517e1a/bundles/full
+- name: docker-compose
+  commit: x86_64/pkg/apps/containers/docker-compose/5.1.0+gite8c21434/bundles/full
+- name: iproute2
+  commit: x86_64/pkg/net/misc/iproute2/6.18.0/bundles/full
+- name: nftables
+  commit: x86_64/pkg/net/firewall/nftables/1.1.1/bundles/full
+# storage, crypto, and update tools
+- name: cryptsetup
+  commit: x86_64/pkg/cli/crypto/cryptsetup/2.8.6/bundles/full
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/full
+- name: dosfstools
+  commit: x86_64/pkg/core/fs/dosfstools/4.2/outputs/bin
+- name: e2fsprogs
+  commit: x86_64/pkg/core/fs/e2fsprogs/1.47.0/bundles/full
+- name: gnupg
+  commit: x86_64/pkg/cli/crypto/gnupg/2.5.17/bundles/full
+- name: ostree
+  commit: x86_64/pkg/core/fs/ostree/2026.1/bundles/full
+# audio runtime
+- name: alsa-utils-bin
+  commit: x86_64/pkg/libs/audio/alsa-utils/1.2.14/outputs/bin
+- name: alsa-utils-lib
+  commit: x86_64/pkg/libs/audio/alsa-utils/1.2.14/outputs/lib
+- name: alsa-utils-misc
+  commit: x86_64/pkg/libs/audio/alsa-utils/1.2.14/outputs/misc
+- name: pipewire-bin
+  commit: x86_64/pkg/libs/audio/pipewire/1.4.9/outputs/bin
+- name: pipewire-conf
+  commit: x86_64/pkg/libs/audio/pipewire/1.4.9/outputs/conf
+- name: pipewire-lib
+  commit: x86_64/pkg/libs/audio/pipewire/1.4.9/outputs/lib
+- name: pipewire-misc
+  commit: x86_64/pkg/libs/audio/pipewire/1.4.9/outputs/misc
+- name: wireplumber-bin
+  commit: x86_64/pkg/libs/audio/wireplumber/0.5.12/outputs/bin
+- name: wireplumber-conf
+  commit: x86_64/pkg/libs/audio/wireplumber/0.5.12/outputs/conf
+- name: wireplumber-lib
+  commit: x86_64/pkg/libs/audio/wireplumber/0.5.12/outputs/lib
+- name: wireplumber-misc
+  commit: x86_64/pkg/libs/audio/wireplumber/0.5.12/outputs/misc
+# diagnostics and operator tools
+- name: dmidecode
+  commit: x86_64/pkg/cli/system/dmidecode/3.7/outputs/bin
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/full
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/full
+- name: i2c-tools
+  commit: x86_64/pkg/cli/system/i2c-tools/4.4/bundles/full
+- name: jq
+  commit: x86_64/pkg/cli/json/jq/1.8.2/outputs/bin
+- name: kbd-bin
+  commit: x86_64/pkg/core/userland/kbd/2.9.0/outputs/bin
+- name: kbd-misc
+  commit: x86_64/pkg/core/userland/kbd/2.9.0/outputs/misc
+- name: procps-ng
+  commit: x86_64/pkg/core/userland/procps-ng/4.0.5/bundles/full
+- name: smartmontools
+  commit: x86_64/pkg/cli/system/smartmontools/7.5/bundles/full
+- name: usbutils
+  commit: x86_64/pkg/cli/system/usbutils/019/bundles/full
+- name: vim
+  commit: x86_64/pkg/cli/editors/vim/9.2.0340/bundles/full
+# locale and interpreters required by packaged helper scripts
+- name: glibc-tools
+  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/bin
+- name: locale-en-gb
+  commit: x86_64/pkg/libs/system/glibc-locale-en-gb/2.39/bundles/full
+- name: python-bin
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/outputs/bin
+- name: python-lib
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/outputs/lib
+- name: python-misc
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/outputs/misc
+- name: tzdata
+  commit: x86_64/pkg/core/userland/tzdata/2026b/bundles/full
+
+files:
+# locale and clock policy
+- path: /etc/locale.conf
+  mode: 420
+  content: |
+    LANG=en_GB.UTF-8
+
+- path: /etc/timezone
+  mode: 420
+  content: |
+    Universal
+
+- path: /etc/localtime
+  symlink: /usr/share/zoneinfo/Universal
+  replace: true
+
+# network policy
+- path: /etc/systemd/network/80-dhcp.network
+  mode: 420
+  content: |
+    [Match]
+    Name=en*
+
+    [Network]
+    DHCP=yes
+
+- path: /etc/resolv.conf
+  symlink: /run/systemd/resolve/stub-resolv.conf
+  replace: true
+
+- path: /etc/mtab
+  symlink: /proc/self/mounts
+  replace: true
+
+# OpenSSL compatibility path; the early boot service regenerates this cache.
+- path: /etc/ssl/certs
+  symlink: /run/ssl/certs
+  replace: true
+
+- path: /usr/lib/systemd/system/update-ca-certificates.service.d/runtime-store.conf
+  mode: 420
+  content: |
+    [Service]
+    ExecStartPre=/usr/bin/mkdir -p /run/ssl
+    ExecStartPre=-/usr/bin/ln -sT /usr/lib/ssl/certs /run/ssl/certs
+    ExecStart=
+    ExecStart=/usr/bin/update-ca-certificates --output-dir /run/ssl/certs
+
+- path: /var/run
+  symlink: /run
+  replace: true
+
+# D-Bus broker compatibility alias
+- path: /usr/lib/systemd/system/dbus.service
+  symlink: dbus-broker.service
+  replace: true
+
+# System-wide audio policy. The PipeWire and WirePlumber packages retain their
+# upstream user units; this appliance assembly chooses dedicated system units.
+- path: /usr/lib/systemd/system/pipewire-system.service
+  mode: 420
+  content: |
+    [Unit]
+    Description=PipeWire multimedia service
+    After=sound.target
+
+    [Service]
+    Type=simple
+    User=pipewire
+    Group=pipewire
+    SupplementaryGroups=audio
+    RuntimeDirectory=pipewire
+    RuntimeDirectoryMode=0750
+    Environment=PIPEWIRE_RUNTIME_DIR=/run/pipewire
+    Environment=XDG_RUNTIME_DIR=/run/pipewire
+    ExecStart=/usr/bin/pipewire
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+
+- path: /usr/lib/systemd/system/wireplumber-system.service
+  mode: 420
+  content: |
+    [Unit]
+    Description=WirePlumber multimedia session manager
+    Requires=pipewire-system.service
+    After=pipewire-system.service
+
+    [Service]
+    Type=simple
+    User=pipewire
+    Group=pipewire
+    SupplementaryGroups=audio
+    Environment=PIPEWIRE_RUNTIME_DIR=/run/pipewire
+    Environment=XDG_RUNTIME_DIR=/run/pipewire
+    Environment=GIO_USE_VFS=local
+    ExecStart=/usr/bin/wireplumber
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+
+- path: /usr/lib/systemd/system/pipewire-pulse-system.service
+  mode: 420
+  content: |
+    [Unit]
+    Description=PipeWire PulseAudio service
+    Requires=pipewire-system.service wireplumber-system.service
+    After=pipewire-system.service wireplumber-system.service
+
+    [Service]
+    Type=simple
+    User=pipewire
+    Group=pipewire
+    SupplementaryGroups=audio
+    Environment=PIPEWIRE_RUNTIME_DIR=/run/pipewire
+    Environment=XDG_RUNTIME_DIR=/run/pipewire
+    ExecStart=/usr/bin/pipewire-pulse
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+
+# service enablement
+- path: /etc/systemd/system/sockets.target.wants/dbus.socket
+  symlink: /usr/lib/systemd/system/dbus.socket
+
+- path: /etc/systemd/system/multi-user.target.wants/systemd-networkd.service
+  symlink: /usr/lib/systemd/system/systemd-networkd.service
+
+- path: /etc/systemd/system/multi-user.target.wants/systemd-resolved.service
+  symlink: /usr/lib/systemd/system/systemd-resolved.service
+
+- path: /etc/systemd/system/sysinit.target.wants/systemd-timesyncd.service
+  symlink: /usr/lib/systemd/system/systemd-timesyncd.service
+
+- path: /etc/systemd/system/multi-user.target.wants/sshd-keygen.service
+  symlink: /usr/lib/systemd/system/sshd-keygen.service
+
+- path: /etc/systemd/system/multi-user.target.wants/sshd.service
+  symlink: /usr/lib/systemd/system/sshd.service
+
+- path: /etc/systemd/system/multi-user.target.wants/acpid.service
+  symlink: /usr/lib/systemd/system/acpid.service
+
+- path: /etc/systemd/system/multi-user.target.wants/containerd.service
+  symlink: /usr/lib/systemd/system/containerd.service
+
+- path: /etc/systemd/system/multi-user.target.wants/docker.service
+  symlink: /usr/lib/systemd/system/docker.service
+
+- path: /etc/systemd/system/sockets.target.wants/docker.socket
+  symlink: /usr/lib/systemd/system/docker.socket
+
+- path: /etc/systemd/system/multi-user.target.wants/pipewire-system.service
+  symlink: /usr/lib/systemd/system/pipewire-system.service
+
+- path: /etc/systemd/system/multi-user.target.wants/wireplumber-system.service
+  symlink: /usr/lib/systemd/system/wireplumber-system.service
+
+- path: /etc/systemd/system/multi-user.target.wants/pipewire-pulse-system.service
+  symlink: /usr/lib/systemd/system/pipewire-pulse-system.service
+
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+
+  script: |
+    set -eu
+
+    cat > /target/etc/passwd << 'EOF'
+    root:x:0:0:root:/root:/usr/bin/bash
+    sshd:x:74:74:Privilege-separated SSH:/var/lib/sshd:/usr/bin/nologin
+    systemd-network:x:192:192:systemd Network Management:/:/usr/bin/nologin
+    systemd-resolve:x:193:193:systemd Resolver:/:/usr/bin/nologin
+    systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/bin/nologin
+    pipewire:x:994:990:PipeWire multimedia daemon:/:/usr/bin/nologin
+    EOF
+
+    cat > /target/etc/group << 'EOF'
+    root:x:0:
+    audio:x:29:pipewire
+    sshd:x:74:
+    systemd-journal:x:190:
+    systemd-network:x:192:
+    systemd-resolve:x:193:
+    systemd-timesync:x:194:
+    pipewire:x:990:
+    docker:x:996:
+    utmp:x:22:
+    EOF
+
+    cat > /target/etc/shadow << 'EOF'
+    root:!*:19735:0:99999:7:::
+    sshd:!*:19735::::::
+    systemd-network:!*:19735::::::
+    systemd-resolve:!*:19735::::::
+    systemd-timesync:!*:19735::::::
+    pipewire:!*:19735::::::
+    EOF
+    chmod 600 /target/etc/shadow
+
+    cat > /target/usr/lib/os-release << 'EOF'
+    NAME="nex"
+    PRETTY_NAME="Nex Edgebox Rootfs"
+    ID=nex
+    VERSION_ID=0.0.1
+    VARIANT="Embedded appliance rootfs"
+    EOF
+
+    mkdir -p \
+      /target/etc/acpi/events \
+      /target/root \
+      /target/var/lib/containerd \
+      /target/var/lib/docker \
+      /target/var/lib/sshd
+    chmod 700 /target/var/lib/sshd
+
+    test -s /target/usr/lib/ssl/certs/ca-certificates.crt
+    test "$(readlink /target/etc/ssl/certs)" = /run/ssl/certs
+    test ! -e /target/etc/os-release
+    grep -Fq \
+      'ExecStart=/usr/bin/update-ca-certificates --output-dir /run/ssl/certs' \
+      /target/usr/lib/systemd/system/update-ca-certificates.service.d/runtime-store.conf
+
+    find /target -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;

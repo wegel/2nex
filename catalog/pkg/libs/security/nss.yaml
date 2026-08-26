@@ -1,0 +1,485 @@
+package:
+  schema: 1
+  name: nss
+  slug: nss
+  namespace: libs/security
+  version: "3.100"
+  description: Network Security Services libraries
+  homepage: https://developer.mozilla.org/docs/Mozilla/Projects/NSS
+  checksum: 5c507091a3a5ffb890f0e96dcb7741587b404cb2d31a91f4bf279a0b8c02086a
+
+sources:
+- name: nss
+  url: https://ftp.mozilla.org/pub/security/nss/releases/NSS_3_100_RTM/src/nss-3.100.tar.gz
+  sha256: 1e35373ce9cb5b776f678bb341b0625c437520d09ebd91d1abd622e072e38d88
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: gyp-next
+  commit: x86_64/pkg/dev/python/gyp-next/0.21.0/bundles/dev
+- name: packaging
+  commit: x86_64/pkg/dev/python/packaging/25.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: nspr
+  commit: x86_64/pkg/libs/security/nspr/4.35/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [16746:68054, 59813:80352, 132554:88160, 218494:93363, 288587:97183, 360220:99078, 435382:101428, 542038:103346, 650801:111262, 719072:125551]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    cd nss
+    mkdir -p "${WORK_DIR}/_bin"
+    cat > "${WORK_DIR}/_bin/python" <<'EOF'
+    #!/bin/sh
+    exec python3 "$@"
+    EOF
+    chmod +x "${WORK_DIR}/_bin/python"
+    export PATH="${WORK_DIR}/_bin:${PATH}"
+
+    mkdir -p "${WORK_DIR}/_bin"
+    cat > "${WORK_DIR}/_bin/gyp" <<'EOF'
+    #!/bin/sh
+    exec /usr/sbin/gyp --no-parallel "$@"
+    EOF
+    cat > "${WORK_DIR}/_bin/cc" <<'EOF'
+    #!/bin/sh
+    exec gcc "$@"
+    EOF
+    cat > "${WORK_DIR}/_bin/c++" <<'EOF'
+    #!/bin/sh
+    exec g++ "$@"
+    EOF
+    chmod +x "${WORK_DIR}/_bin/gyp"
+    chmod +x "${WORK_DIR}/_bin/cc" "${WORK_DIR}/_bin/c++"
+    export PATH="${WORK_DIR}/_bin:${PATH}"
+
+    ./build.sh -c -v --disable-tests --opt --system-nspr
+
+    distdir=$(find ../dist -maxdepth 2 -type d -name 'Release*' | head -n 1)
+    if [ -z "$distdir" ]; then
+      echo "failed to locate NSS dist directory" >&2
+      exit 1
+    fi
+
+    mkdir -p ${OUT_DIR}/usr/{lib,bin,include/nss}
+    cp -a "$distdir"/lib/* ${OUT_DIR}/usr/lib/
+    if [ -d "$distdir"/bin ]; then
+      cp -a "$distdir"/bin/* ${OUT_DIR}/usr/bin/
+    fi
+    if [ -d "$distdir"/include ]; then
+      cp -a "$distdir"/include/* ${OUT_DIR}/usr/include/nss/
+    fi
+    if [ -d ../dist/public/nss ]; then
+      cp -a ../dist/public/nss/* ${OUT_DIR}/usr/include/nss/
+    fi
+
+    find ${OUT_DIR} -name '*.chk' -delete 2>/dev/null || true
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/certutil
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnss3.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+      - /usr/lib/libplds4.so
+      - /usr/lib/libsmime3.so
+      - /usr/lib/libssl3.so
+    - path: /usr/bin/cmsutil
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnss3.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+      - /usr/lib/libsmime3.so
+    - path: /usr/bin/crlutil
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnss3.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+      - /usr/lib/libplds4.so
+    - path: /usr/bin/dbtool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+    - path: /usr/bin/hw-support
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnssutil3.so
+    - path: /usr/bin/modutil
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnss3.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+      - /usr/lib/libsmime3.so
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/nss
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnss3.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+      - /usr/lib/libsmime3.so
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/pk12util
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnss3.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+      - /usr/lib/libplds4.so
+      - /usr/lib/libsmime3.so
+    - path: /usr/bin/pwdecrypt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnss3.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+    - path: /usr/bin/shlibsign
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libplc4.so
+    - path: /usr/bin/signtool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnss3.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+      - /usr/lib/libplds4.so
+      - /usr/lib/libsmime3.so
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/signver
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnss3.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+      - /usr/lib/libsmime3.so
+    - path: /usr/bin/ssltap
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnss3.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+    - path: /usr/bin/symkeyutil
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnss3.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+    - path: /usr/bin/validation
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnss3.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+      - /usr/lib/libplds4.so
+
+  dev:
+    files:
+    - path: /usr/include/nss/base64.h
+    - path: /usr/include/nss/blapit.h
+    - path: /usr/include/nss/cert.h
+    - path: /usr/include/nss/certdb.h
+    - path: /usr/include/nss/certt.h
+    - path: /usr/include/nss/ciferfam.h
+    - path: /usr/include/nss/cmmf.h
+    - path: /usr/include/nss/cmmft.h
+    - path: /usr/include/nss/cms.h
+    - path: /usr/include/nss/cmsreclist.h
+    - path: /usr/include/nss/cmst.h
+    - path: /usr/include/nss/crmf.h
+    - path: /usr/include/nss/crmft.h
+    - path: /usr/include/nss/cryptohi.h
+    - path: /usr/include/nss/cryptoht.h
+    - path: /usr/include/nss/eccutil.h
+    - path: /usr/include/nss/ecl-exp.h
+    - path: /usr/include/nss/hasht.h
+    - path: /usr/include/nss/jar-ds.h
+    - path: /usr/include/nss/jar.h
+    - path: /usr/include/nss/jarfile.h
+    - path: /usr/include/nss/key.h
+    - path: /usr/include/nss/keyhi.h
+    - path: /usr/include/nss/keyt.h
+    - path: /usr/include/nss/keythi.h
+    - path: /usr/include/nss/kyber.h
+    - path: /usr/include/nss/lowkeyi.h
+    - path: /usr/include/nss/lowkeyti.h
+    - path: /usr/include/nss/mozpkix/Input.h
+    - path: /usr/include/nss/mozpkix/Result.h
+    - path: /usr/include/nss/mozpkix/Time.h
+    - path: /usr/include/nss/mozpkix/nss_scoped_ptrs.h
+    - path: /usr/include/nss/mozpkix/pkix.h
+    - path: /usr/include/nss/mozpkix/pkixc.h
+    - path: /usr/include/nss/mozpkix/pkixcheck.h
+    - path: /usr/include/nss/mozpkix/pkixder.h
+    - path: /usr/include/nss/mozpkix/pkixnss.h
+    - path: /usr/include/nss/mozpkix/pkixtypes.h
+    - path: /usr/include/nss/mozpkix/pkixutil.h
+    - path: /usr/include/nss/mozpkix/test/pkixtestnss.h
+    - path: /usr/include/nss/mozpkix/test/pkixtestutil.h
+    - path: /usr/include/nss/nss.h
+    - path: /usr/include/nss/nssb64t.h
+    - path: /usr/include/nss/nssb64.h
+    - path: /usr/include/nss/nssbase.h
+    - path: /usr/include/nss/nssbaset.h
+    - path: /usr/include/nss/nssck.api
+    - path: /usr/include/nss/nssckbi.h
+    - path: /usr/include/nss/nssckepv.h
+    - path: /usr/include/nss/nssckft.h
+    - path: /usr/include/nss/nssckfw.h
+    - path: /usr/include/nss/nssckfwc.h
+    - path: /usr/include/nss/nssckfwt.h
+    - path: /usr/include/nss/nssckg.h
+    - path: /usr/include/nss/nssckmdt.h
+    - path: /usr/include/nss/nssckt.h
+    - path: /usr/include/nss/nssilckt.h
+    - path: /usr/include/nss/nssilock.h
+    - path: /usr/include/nss/nsslocks.h
+    - path: /usr/include/nss/nsslowhash.h
+    - path: /usr/include/nss/nssrwlk.h
+    - path: /usr/include/nss/nssrwlkt.h
+    - path: /usr/include/nss/nssutil.h
+    - path: /usr/include/nss/ocsp.h
+    - path: /usr/include/nss/ocspt.h
+    - path: /usr/include/nss/p12t.h
+    - path: /usr/include/nss/p12.h
+    - path: /usr/include/nss/p12plcy.h
+    - path: /usr/include/nss/pk11sdr.h
+    - path: /usr/include/nss/pk11hpke.h
+    - path: /usr/include/nss/pk11pqg.h
+    - path: /usr/include/nss/pk11priv.h
+    - path: /usr/include/nss/pk11pub.h
+    - path: /usr/include/nss/pk11func.h
+    - path: /usr/include/nss/pkcs1sig.h
+    - path: /usr/include/nss/pkcs7t.h
+    - path: /usr/include/nss/pkcs11f.h
+    - path: /usr/include/nss/pkcs11n.h
+    - path: /usr/include/nss/pkcs11p.h
+    - path: /usr/include/nss/pkcs11t.h
+    - path: /usr/include/nss/pkcs11u.h
+    - path: /usr/include/nss/pkcs11.h
+    - path: /usr/include/nss/pkcs11uri.h
+    - path: /usr/include/nss/pkcs12t.h
+    - path: /usr/include/nss/pkcs12.h
+    - path: /usr/include/nss/portreg.h
+    - path: /usr/include/nss/preenc.h
+    - path: /usr/include/nss/secasn1t.h
+    - path: /usr/include/nss/secasn1.h
+    - path: /usr/include/nss/seccomon.h
+    - path: /usr/include/nss/secder.h
+    - path: /usr/include/nss/secdert.h
+    - path: /usr/include/nss/secdig.h
+    - path: /usr/include/nss/secdigt.h
+    - path: /usr/include/nss/secerr.h
+    - path: /usr/include/nss/sechash.h
+    - path: /usr/include/nss/secitem.h
+    - path: /usr/include/nss/secmime.h
+    - path: /usr/include/nss/secmod.h
+    - path: /usr/include/nss/secmodt.h
+    - path: /usr/include/nss/secoid.h
+    - path: /usr/include/nss/secoidt.h
+    - path: /usr/include/nss/secpkcs5.h
+    - path: /usr/include/nss/secpkcs7.h
+    - path: /usr/include/nss/secport.h
+    - path: /usr/include/nss/shsign.h
+    - path: /usr/include/nss/smime.h
+    - path: /usr/include/nss/ssl.h
+    - path: /usr/include/nss/sslerr.h
+    - path: /usr/include/nss/sslexp.h
+    - path: /usr/include/nss/sslproto.h
+    - path: /usr/include/nss/sslt.h
+    - path: /usr/include/nss/utilmodt.h
+    - path: /usr/include/nss/utilpars.h
+    - path: /usr/include/nss/utilparst.h
+    - path: /usr/include/nss/utilrename.h
+
+  lib:
+    files:
+    - path: /usr/lib/libfreebl3.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libfreebl3.so.TOC
+    - path: /usr/lib/libfreeblpriv3.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libfreeblpriv3.so.TOC
+    - path: /usr/lib/libnss3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+      - /usr/lib/libplds4.so
+    - path: /usr/lib/libnss3.so.TOC
+    - path: /usr/lib/libnssckbi.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libplc4.so
+      - /usr/lib/libplds4.so
+    - path: /usr/lib/libnssckbi.so.TOC
+    - path: /usr/lib/libnsssysinit.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+    - path: /usr/lib/libnsssysinit.so.TOC
+    - path: /usr/lib/libnssutil3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libplc4.so
+      - /usr/lib/libplds4.so
+    - path: /usr/lib/libnssutil3.so.TOC
+    - path: /usr/lib/libsmime3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnss3.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+      - /usr/lib/libplds4.so
+    - path: /usr/lib/libsmime3.so.TOC
+    - path: /usr/lib/libsoftokn3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+      - /usr/lib/libplds4.so
+      - /usr/lib/libsqlite3.so
+    - path: /usr/lib/libsoftokn3.so.TOC
+    - path: /usr/lib/libsqlite3.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libsqlite3.so.TOC
+    - path: /usr/lib/libssl3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnspr4.so
+      - /usr/lib/libnss3.so
+      - /usr/lib/libnssutil3.so
+      - /usr/lib/libplc4.so
+    - path: /usr/lib/libssl3.so.TOC
+
+  static:
+    files:
+    - path: /usr/lib/libmozpkix-testlib.a
+    - path: /usr/lib/libmozpkix.a
+    - path: /usr/lib/libsectool.a
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libnspr4.so: nspr
+  /usr/lib/libplc4.so: nspr
+  /usr/lib/libplds4.so: nspr
+  /usr/lib/libnss3.so: self
+  /usr/lib/libnssutil3.so: self
+  /usr/lib/libsmime3.so: self
+  /usr/lib/libsqlite3.so: self
+  /usr/lib/libssl3.so: self
+  /usr/lib/libz.so.1: zlib

@@ -1,0 +1,451 @@
+package:
+  schema: 1
+  name: OpenSSH
+  slug: openssh
+  namespace: cli/net
+  version: 9.9p1
+  description: OpenSSH SSH client and server
+  homepage: https://www.openssh.com/
+  checksum: 8ccb2ff65c7bcacbe548934891cdfe1de88b9d6799ef5a36107c3cfeaf43a803
+
+sources:
+- name: openssh
+  url: https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.9p1.tar.gz
+  sha256: b343fbcdbff87f15b1986e6e15d6d4fc9a7d36066be6b7fb507087ba8f966c02
+- name: uapi_config_patch
+  file: pkg/cli/net/openssh-uapi-config.patch
+  sha256: 9bd0c1bf54bd42a4ffdfb8e9928ed9605b39bfacbca62e585dd1af2dd7469184
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: linux-pam
+  commit: x86_64/pkg/libs/security/linux-pam/1.7.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [8266:3983, 32932:18832, 71371:18836, 113520:18898, 149817:19001, 187180:19112, 229855:19234, 286016:19388, 337996:19597, 374184:22241]
+
+  script: |
+    set -eux
+
+    tar --no-same-owner -xf /${SOURCE_openssh} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE_uapi_config_patch}
+
+    # create privilege separation directory with marker file (zub doesn't support empty dirs)
+    install -v -m700 -d ${OUT_DIR}/var/lib/sshd
+    touch ${OUT_DIR}/var/lib/sshd/.keep
+
+    ./configure \
+      --prefix=/usr \
+      --sysconfdir=/etc/ssh \
+      --with-privsep-path=/var/lib/sshd \
+      --with-default-path=/usr/bin \
+      --with-superuser-path=/usr/bin \
+      --with-pid-dir=/run \
+      --with-pam \
+      --with-ssl-dir=/usr \
+      --disable-strip
+
+    make
+    make regress/system-config-test
+    ./regress/system-config-test
+
+    install -d /etc/ssh /run/ssh /usr/lib/ssh /root/.ssh
+    install -d /etc/ssh/ssh_config.d /run/ssh/ssh_config.d /usr/lib/ssh/ssh_config.d
+    install -d /etc/ssh/sshd_config.d /run/ssh/sshd_config.d /usr/lib/ssh/sshd_config.d
+    if [ ! -e /etc/passwd ]; then
+      printf '%s\n' \
+        'root:x:0:0:root:/root:/bin/sh' \
+        'sshd:x:74:74:Privilege-separated SSH:/var/lib/sshd:/usr/bin/nologin' > /etc/passwd
+    elif ! grep -q '^sshd:' /etc/passwd; then
+      printf '%s\n' 'sshd:x:74:74:Privilege-separated SSH:/var/lib/sshd:/usr/bin/nologin' >> /etc/passwd
+    fi
+    if [ ! -e /etc/group ]; then
+      printf '%s\n' 'root:x:0:' 'sshd:x:74:' > /etc/group
+    elif ! grep -q '^sshd:' /etc/group; then
+      printf '%s\n' 'sshd:x:74:' >> /etc/group
+    fi
+
+    assert_client_value() {
+      expected="$1"
+      shift
+      ./ssh -G "$@" config-test.invalid | grep -Fx "$expected"
+    }
+
+    printf 'ConnectTimeout 11\n' > /usr/lib/ssh/ssh_config
+    assert_client_value 'connecttimeout 11'
+    printf 'ConnectTimeout 22\n' > /run/ssh/ssh_config
+    assert_client_value 'connecttimeout 22'
+    printf 'ConnectTimeout 33\n' > /etc/ssh/ssh_config
+    assert_client_value 'connecttimeout 33'
+    : > /etc/ssh/ssh_config
+    assert_client_value 'connecttimeout none'
+    rm /etc/ssh/ssh_config
+    ln -s /dev/null /etc/ssh/ssh_config
+    assert_client_value 'connecttimeout none'
+
+    printf 'ConnectTimeout 44\n' > /root/.ssh/config
+    assert_client_value 'connecttimeout 44'
+    printf 'ConnectTimeout 55\n' > "${WORK_DIR}/explicit-ssh-config"
+    assert_client_value 'connecttimeout 55' -F "${WORK_DIR}/explicit-ssh-config"
+    printf 'ConnectTimeout 66\n' > "${WORK_DIR}/included-ssh-config"
+    printf 'Include %s\n' "${WORK_DIR}/included-ssh-config" > "${WORK_DIR}/explicit-ssh-include"
+    assert_client_value 'connecttimeout 66' -F "${WORK_DIR}/explicit-ssh-include"
+    rm /root/.ssh/config /etc/ssh/ssh_config /run/ssh/ssh_config
+
+    printf 'ConnectTimeout 77\n' > "${WORK_DIR}/included-system-ssh-config"
+    printf 'Include %s\n' "${WORK_DIR}/included-system-ssh-config" > /usr/lib/ssh/ssh_config
+    assert_client_value 'connecttimeout 77'
+
+    printf 'ConnectTimeout 11\n' > /usr/lib/ssh/ssh_config
+    printf 'ServerAliveInterval 10\n' > /usr/lib/ssh/ssh_config.d/10-early.conf
+    printf 'ServerAliveInterval 90\n' > /usr/lib/ssh/ssh_config.d/90-late.conf
+    assert_client_value 'serveraliveinterval 90'
+    printf 'ServerAliveInterval 91\n' > /run/ssh/ssh_config.d/90-late.conf
+    assert_client_value 'serveraliveinterval 91'
+    : > /etc/ssh/ssh_config.d/90-late.conf
+    assert_client_value 'serveraliveinterval 10'
+    rm /etc/ssh/ssh_config.d/90-late.conf
+    ln -s /dev/null /etc/ssh/ssh_config.d/90-late.conf
+    assert_client_value 'serveraliveinterval 10'
+
+    # ssh-keysign refuses to sign unless EnableSSHKeysign is set, and it must
+    # read that option from the same tiers and drop-ins the client uses.
+    # Without any host key it always exits nonzero, so the two cases differ by
+    # which failure it reports.
+    rm -f /etc/ssh/ssh_config /run/ssh/ssh_config /usr/lib/ssh/ssh_config
+    rm -f /etc/ssh/ssh_config.d/*.conf /run/ssh/ssh_config.d/*.conf \
+      /usr/lib/ssh/ssh_config.d/*.conf
+
+    keysign_failure() {
+      if ./ssh-keysign < /dev/null > /dev/null 2>"${WORK_DIR}/keysign.log"; then
+        printf 'ssh-keysign unexpectedly succeeded\n' >&2
+        exit 1
+      fi
+      cat "${WORK_DIR}/keysign.log"
+    }
+
+    assert_keysign_sees_option() {
+      if keysign_failure | grep -q 'ssh-keysign not enabled'; then
+        printf 'ssh-keysign missed EnableSSHKeysign from %s\n' "$1" >&2
+        exit 1
+      fi
+    }
+
+    keysign_failure | grep -q 'ssh-keysign not enabled'
+    printf 'EnableSSHKeysign yes\n' > /usr/lib/ssh/ssh_config
+    assert_keysign_sees_option /usr/lib/ssh/ssh_config
+    rm /usr/lib/ssh/ssh_config
+    printf 'EnableSSHKeysign yes\n' > /run/ssh/ssh_config
+    assert_keysign_sees_option /run/ssh/ssh_config
+    rm /run/ssh/ssh_config
+    printf 'EnableSSHKeysign yes\n' > /usr/lib/ssh/ssh_config.d/10-keysign.conf
+    assert_keysign_sees_option /usr/lib/ssh/ssh_config.d/10-keysign.conf
+    rm /usr/lib/ssh/ssh_config.d/10-keysign.conf
+    keysign_failure | grep -q 'ssh-keysign not enabled'
+
+    ./ssh-keygen -q -t ed25519 -N '' -f "${WORK_DIR}/test-host-key"
+    install -d -m700 /var/lib/sshd
+
+    assert_server_value() {
+      expected="$1"
+      shift
+      ./sshd -T -h "${WORK_DIR}/test-host-key" "$@" | grep -Fx "$expected"
+    }
+
+    printf 'MaxAuthTries 2\n' > /usr/lib/ssh/sshd_config
+    assert_server_value 'maxauthtries 2'
+    assert_server_value 'modulifile /usr/share/ssh/moduli'
+    printf 'MaxAuthTries 3\n' > /run/ssh/sshd_config
+    assert_server_value 'maxauthtries 3'
+    printf 'MaxAuthTries 4\n' > /etc/ssh/sshd_config
+    assert_server_value 'maxauthtries 4'
+    : > /etc/ssh/sshd_config
+    assert_server_value 'maxauthtries 6'
+    rm /etc/ssh/sshd_config
+    ln -s /dev/null /etc/ssh/sshd_config
+    assert_server_value 'maxauthtries 6'
+    rm /etc/ssh/sshd_config /run/ssh/sshd_config
+
+    printf 'MaxAuthTries 9\n' > "${WORK_DIR}/included-system-sshd-config"
+    printf 'Include %s\n' "${WORK_DIR}/included-system-sshd-config" > /usr/lib/ssh/sshd_config
+    assert_server_value 'maxauthtries 9'
+
+    printf 'MaxAuthTries 2\n' > /usr/lib/ssh/sshd_config
+    printf 'MaxAuthTries 3\n' > /usr/lib/ssh/sshd_config.d/10-early.conf
+    printf 'MaxAuthTries 4\n' > /usr/lib/ssh/sshd_config.d/90-late.conf
+    assert_server_value 'maxauthtries 4'
+    printf 'MaxAuthTries 5\n' > /run/ssh/sshd_config.d/90-late.conf
+    assert_server_value 'maxauthtries 5'
+    : > /etc/ssh/sshd_config.d/90-late.conf
+    assert_server_value 'maxauthtries 3'
+    rm /etc/ssh/sshd_config.d/90-late.conf
+    ln -s /dev/null /etc/ssh/sshd_config.d/90-late.conf
+    assert_server_value 'maxauthtries 3'
+
+    printf 'MaxAuthTries 7\n' > "${WORK_DIR}/explicit-sshd-config"
+    assert_server_value 'maxauthtries 7' -f "${WORK_DIR}/explicit-sshd-config"
+    printf 'MaxAuthTries 8\n' > "${WORK_DIR}/included-sshd-config"
+    printf 'Include %s\n' "${WORK_DIR}/included-sshd-config" > "${WORK_DIR}/explicit-sshd-include"
+    assert_server_value 'maxauthtries 8' -f "${WORK_DIR}/explicit-sshd-include"
+
+    rm -f /etc/ssh/sshd_config /run/ssh/sshd_config
+    rm -f /etc/ssh/sshd_config.d/*.conf /run/ssh/sshd_config.d/*.conf /usr/lib/ssh/sshd_config.d/*.conf
+    printf '%s\n' \
+      'Port 40222' \
+      'ListenAddress 127.0.0.1' \
+      'UsePAM no' \
+      "SshdSessionPath ${WORK_DIR}/sshd-session" > /usr/lib/ssh/sshd_config
+
+    sshd_pid=
+    trap 'if [ -n "${sshd_pid}" ]; then kill "${sshd_pid}" 2>/dev/null || true; fi' EXIT
+    "${WORK_DIR}/sshd" -D -e -h "${WORK_DIR}/test-host-key" > "${WORK_DIR}/sshd-reload.log" 2>&1 &
+    sshd_pid=$!
+    initial_ready=
+    for attempt in $(seq 1 100); do
+      if grep -Fq 'Server listening on 127.0.0.1 port 40222.' "${WORK_DIR}/sshd-reload.log"; then
+        initial_ready=yes
+        break
+      fi
+      kill -0 "${sshd_pid}"
+      sleep 0.05
+    done
+    test "${initial_ready}" = yes
+
+    printf '%s\n' \
+      'Port 40223' \
+      'ListenAddress 127.0.0.1' \
+      'UsePAM no' \
+      "SshdSessionPath ${WORK_DIR}/sshd-session" > /etc/ssh/sshd_config
+    kill -HUP "${sshd_pid}"
+    reload_ready=
+    for attempt in $(seq 1 100); do
+      if grep -Fq 'Server listening on 127.0.0.1 port 40223.' "${WORK_DIR}/sshd-reload.log"; then
+        reload_ready=yes
+        break
+      fi
+      kill -0 "${sshd_pid}"
+      sleep 0.05
+    done
+    test "${reload_ready}" = yes
+    grep -F 'Received SIGHUP; restarting.' "${WORK_DIR}/sshd-reload.log"
+    kill "${sshd_pid}"
+    wait "${sshd_pid}" || true
+    sshd_pid=
+    trap - EXIT
+
+    make DESTDIR="${OUT_DIR}" install
+
+    # move sshd from /usr/sbin to /usr/bin
+    mv ${OUT_DIR}/usr/sbin/sshd ${OUT_DIR}/usr/bin/sshd
+    rmdir ${OUT_DIR}/usr/sbin
+
+    # install systemd service files
+    install -v -m644 -D contrib/sshd.pam.generic ${OUT_DIR}/usr/lib/pam.d/sshd
+
+    # create systemd unit file for sshd
+    mkdir -p ${OUT_DIR}/usr/lib/systemd/system
+    cat > ${OUT_DIR}/usr/lib/systemd/system/sshd.service << 'EOF'
+    [Unit]
+    Description=OpenSSH Daemon
+    After=network.target
+
+    [Service]
+    ExecStartPre=/usr/bin/install -d -m700 -o root -g root /var/lib/sshd
+    ExecStart=/usr/bin/sshd -D
+    ExecReload=/bin/kill -HUP $MAINPID
+    KillMode=process
+    Restart=on-failure
+    RestartPreventExitStatus=255
+    Type=notify
+    RuntimeDirectory=sshd
+    RuntimeDirectoryMode=0755
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+
+    # create host key generation service
+    cat > ${OUT_DIR}/usr/lib/systemd/system/sshd-keygen.service << 'EOF'
+    [Unit]
+    Description=Generate SSH host keys
+    ConditionPathExists=|!/etc/ssh/ssh_host_rsa_key
+    ConditionPathExists=|!/etc/ssh/ssh_host_ecdsa_key
+    ConditionPathExists=|!/etc/ssh/ssh_host_ed25519_key
+    Before=sshd.service
+
+    [Service]
+    Type=oneshot
+    ExecStart=/usr/bin/install -d -m0755 -o root -g root /etc/ssh
+    ExecStart=/usr/bin/ssh-keygen -A
+    RemainAfterExit=yes
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - conf
+  - lib
+
+  full:
+  - bin
+  - conf
+  - lib
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/scp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/sftp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/ssh
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/ssh-add
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/bin/ssh-agent
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/bin/ssh-keygen
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/bin/ssh-keyscan
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/sshd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/libexec/sftp-server
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/libexec/ssh-keysign
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/libexec/ssh-pkcs11-helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/libexec/ssh-sk-helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/libexec/sshd-session
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libz.so.1
+
+  conf:
+    files:
+    - path: /usr/lib/ssh/ssh_config
+    - path: /usr/lib/ssh/sshd_config
+    - path: /usr/share/ssh/moduli
+
+  lib:
+    files:
+    - path: /usr/lib/pam.d/sshd
+    - path: /usr/lib/systemd/system/sshd-keygen.service
+    - path: /usr/lib/systemd/system/sshd.service
+    - path: /var/lib/sshd/.keep
+
+  man:
+    files:
+    - path: /usr/share/man/cat1/scp.1
+    - path: /usr/share/man/cat1/sftp.1
+    - path: /usr/share/man/cat1/ssh-add.1
+    - path: /usr/share/man/cat1/ssh-agent.1
+    - path: /usr/share/man/cat1/ssh-keygen.1
+    - path: /usr/share/man/cat1/ssh-keyscan.1
+    - path: /usr/share/man/cat1/ssh.1
+    - path: /usr/share/man/cat5/moduli.5
+    - path: /usr/share/man/cat5/ssh_config.5
+    - path: /usr/share/man/cat5/sshd_config.5
+    - path: /usr/share/man/cat8/sftp-server.8
+    - path: /usr/share/man/cat8/ssh-keysign.8
+    - path: /usr/share/man/cat8/ssh-pkcs11-helper.8
+    - path: /usr/share/man/cat8/ssh-sk-helper.8
+    - path: /usr/share/man/cat8/sshd.8
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libpam.so.0: linux-pam
+  /usr/lib/libcrypto.so.3: openssl
+  /usr/lib/libz.so.1: zlib

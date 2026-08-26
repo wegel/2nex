@@ -1,0 +1,60 @@
+package:
+  schema: 1
+  name: Wireless Regulatory Database
+  slug: wireless-regdb
+  namespace: core/kernel
+  version: 2024.10.07
+  description: Regulatory database for cfg80211
+  homepage: https://wireless.wiki.kernel.org/en/developers/regulatory
+  checksum: ad8b6756d961040d796e95188c02a5d6f0a950ec259f94269d0bd0caafbf85cf
+
+sources:
+- name: regdb
+  url: https://kernel.org/pub/software/network/wireless-regdb/wireless-regdb-2024.10.07.tar.xz
+  sha256: f76f2bd79a653e9f9dd50548d99d03a4a4eb157da056dfd5892f403ec28fb3d5
+
+dependencies:
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [32:34]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf /${SOURCE_regdb} -C "${WORK_DIR}"
+    cd "${WORK_DIR}/wireless-regdb-2024.10.07"
+
+    mkdir -p ${OUT_DIR}/usr/lib/firmware
+    install -Dm644 regulatory.db ${OUT_DIR}/usr/lib/firmware/regulatory.db
+    install -Dm644 regulatory.db.p7s ${OUT_DIR}/usr/lib/firmware/regulatory.db.p7s
+
+    # deterministic timestamps
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  runtime:
+  - regdb
+
+outputs:
+  regdb:
+    files:
+    - path: /usr/lib/firmware/regulatory.db
+    - path: /usr/lib/firmware/regulatory.db.p7s

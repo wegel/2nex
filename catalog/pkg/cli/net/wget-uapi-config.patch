@@ -1,0 +1,55 @@
+Subject: select Wget system configuration from UAPI directories
+Source: Nex downstream patch for Wget 1.25.0
+Upstream: not submitted; needs agreement on Unix vendor and transient paths
+
+Keep explicit command-line and environment paths unchanged. When neither is
+present, select the first complete system file from /etc, /run, or /usr/lib.
+An empty higher file deliberately masks a lower default.
+
+--- a/src/init.c
++++ b/src/init.c
+@@ -741,0 +742,17 @@
++static const char *
++wgetrc_system_file_name (file_stats_t *flstats)
++{
++  static const char *paths[] = {
++    "/etc/wgetrc",
++    "/run/wgetrc",
++    "/usr/lib/wgetrc"
++  };
++  size_t i;
++
++  for (i = 0; i < countof (paths); i++)
++    if (file_exists_p (paths[i], flstats))
++      return paths[i];
++
++  return NULL;
++}
++
+@@ -747,0 +765 @@
++  const char *system_wgetrc = NULL;
+@@ -756,0 +775 @@
++      system_wgetrc = env_sysrc;
+@@ -769,4 +788,4 @@
+-  /* Otherwise, if SYSTEM_WGETRC is defined, use it.  */
+-#ifdef SYSTEM_WGETRC
+-  else if (file_exists_p (SYSTEM_WGETRC, &flstats))
+-    ok &= run_wgetrc (SYSTEM_WGETRC, &flstats);
++  /* Otherwise, use the first system file in administrator, transient,
++     and vendor order.  */
++  else if ((system_wgetrc = wgetrc_system_file_name (&flstats)) != NULL)
++    ok &= run_wgetrc (system_wgetrc, &flstats);
+@@ -780 +799 @@
+-or specify a different file using --config.\n"), SYSTEM_WGETRC);
++or specify a different file using --config.\n"), system_wgetrc);
+@@ -783 +801,0 @@
+-#endif
+@@ -788 +806 @@
+-  /* #### We should canonicalize `file' and SYSTEM_WGETRC with
++  /* #### We should canonicalize `file' and system_wgetrc with
+@@ -790,2 +808 @@
+-#ifdef SYSTEM_WGETRC
+-  if (!strcmp (opt.wgetrcfile, SYSTEM_WGETRC))
++  if (system_wgetrc && !strcmp (opt.wgetrcfile, system_wgetrc))
+@@ -798 +814,0 @@
+-#endif

@@ -1,0 +1,448 @@
+package:
+  schema: 1
+  name: Bash
+  slug: bash
+  namespace: cli/shells
+  version: 5.2.21
+  description: The GNU Bourne Again shell
+  homepage: https://www.gnu.org/software/bash/
+  checksum: c915999d79d69cd1513c8445e3aae06df56fb80811fa8c3c77b6a71a70c64458
+  seed: true
+
+sources:
+- name: bash
+  url: https://ftp.gnu.org/gnu/bash/bash-5.2.21.tar.gz
+  sha256: c8e31bdc59b69aaffc5b36509905ba3e5cbb12747091d27b4b977f078560d5b8
+- name: patch
+  url: https://www.linuxfromscratch.org/patches/lfs/12.1/bash-5.2.21-upstream_fixes-1.patch
+  sha256: 461ef75965a7fc75e2de86816dde160d8440e721595ed20513b1d8ede7c89bdc
+- name: uapi-profile
+  file: pkg/cli/shells/bash-uapi-profile.patch
+  sha256: da179def354a99a6c9ed49b343f511a3fc0c0fc7bded1599b1ccaa6898984a2a
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: texinfo
+  commit: x86_64/pkg/cli/text/texinfo/7.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase3/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase3/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase3/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase3/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase3/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/bootstrap/phase3/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase3/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/bootstrap/phase3/patch/2.7.6/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase3/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase3/tar/1.35/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4124:1478, 12353:8360, 25642:14739, 43460:14870, 56703:15008, 69663:15039, 82109:15129, 103838:18446, 124970:19993, 136743:20398]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_bash} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i /./${SOURCE_patch}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_profile}"
+
+    ./configure --prefix=/usr             \
+            --without-bash-malloc     \
+            --with-installed-readline \
+            bash_cv_strtold_broken=no \
+            --docdir=/usr/share/doc/bash-5.2.21
+
+    make
+    make DESTDIR=${OUT_DIR} install
+    ln -sv bash ${OUT_DIR}/usr/bin/sh
+
+    smoke_root="${WORK_DIR}/uapi-smoke-root"
+    mkdir -p \
+      "${smoke_root}/etc" \
+      "${smoke_root}/root" \
+      "${smoke_root}/run" \
+      "${smoke_root}/usr/bin" \
+      "${smoke_root}/usr/lib"
+    ln -s usr/lib "${smoke_root}/lib64"
+    cp "${OUT_DIR}/usr/bin/bash" "${smoke_root}/usr/bin/bash"
+    cp -L \
+      /usr/lib/ld-linux-x86-64.so.2 \
+      /usr/lib/libc.so.6 \
+      /usr/lib/libncursesw.so.6 \
+      "${smoke_root}/usr/lib/"
+
+    cat > "${WORK_DIR}/uapi-chroot.c" << 'EOF'
+    #include <stdio.h>
+    #include <unistd.h>
+
+    int main(int argc, char **argv) {
+      if (argc < 3 || chroot(argv[1]) != 0 || chdir("/") != 0) {
+        perror("uapi-chroot");
+        return 1;
+      }
+      execv(argv[2], &argv[2]);
+      perror("execv");
+      return 1;
+    }
+    EOF
+    gcc -O2 -o "${WORK_DIR}/uapi-chroot" "${WORK_DIR}/uapi-chroot.c"
+
+    printf 'uapi_test_tier=vendor\n' > "${smoke_root}/usr/lib/profile"
+    HOME=/root "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+      /usr/bin/bash --login -c \
+      'test "$uapi_test_tier" = vendor'
+
+    printf 'uapi_test_tier=transient\n' > "${smoke_root}/run/profile"
+    HOME=/root "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+      /usr/bin/bash --login -c \
+      'test "$uapi_test_tier" = transient'
+
+    printf 'uapi_test_tier=administrator\n' > "${smoke_root}/etc/profile"
+    HOME=/root "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+      /usr/bin/bash --login -c \
+      'test "$uapi_test_tier" = administrator'
+
+    : > "${smoke_root}/etc/profile"
+    HOME=/root "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+      /usr/bin/bash --login -c \
+      'test -z "${uapi_test_tier+x}"'
+
+    # Bash links its bundled Readline, so the system inputrc must follow the
+    # same three tiers here as it does for the packaged Readline library.
+    # `bind -v` prints the resulting variable, which names the tier that won.
+    rm -f "${smoke_root}/etc/profile" "${smoke_root}/run/profile" \
+      "${smoke_root}/usr/lib/profile"
+
+    assert_inputrc_tier() {
+      expected="$1"
+      actual=$(HOME=/root "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+        /usr/bin/bash -i -c 'bind -v' 2>/dev/null \
+        | sed -n 's/^set completion-prefix-display-length //p')
+      if [ "${actual}" != "${expected}" ]; then
+        printf 'bash inputrc smoke: expected %s, got %s\n' \
+          "${expected}" "${actual}" >&2
+        exit 1
+      fi
+    }
+
+    printf 'set completion-prefix-display-length 31\n' \
+      > "${smoke_root}/usr/lib/inputrc"
+    assert_inputrc_tier 31
+
+    printf 'set completion-prefix-display-length 32\n' \
+      > "${smoke_root}/run/inputrc"
+    assert_inputrc_tier 32
+
+    printf 'set completion-prefix-display-length 33\n' \
+      > "${smoke_root}/etc/inputrc"
+    assert_inputrc_tier 33
+
+    # An empty administrator file is read successfully and masks both lower
+    # files, leaving the compiled default of 0.
+    : > "${smoke_root}/etc/inputrc"
+    assert_inputrc_tier 0
+
+    rm -f "${smoke_root}/etc/inputrc" "${smoke_root}/run/inputrc" \
+      "${smoke_root}/usr/lib/inputrc"
+    assert_inputrc_tier 0
+
+    printf 'bash UAPI smoke: profile and inputrc honoured all tiers\n'
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - locale
+
+  full:
+  - bin
+  - dev
+  - doc
+  - info
+  - lib
+  - locale
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/bash
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+    - path: /usr/bin/bashbug
+    - path: /usr/bin/sh
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+
+  dev:
+    files:
+    - path: /usr/include/bash/alias.h
+    - path: /usr/include/bash/array.h
+    - path: /usr/include/bash/arrayfunc.h
+    - path: /usr/include/bash/assoc.h
+    - path: /usr/include/bash/bashansi.h
+    - path: /usr/include/bash/bashintl.h
+    - path: /usr/include/bash/bashjmp.h
+    - path: /usr/include/bash/bashtypes.h
+    - path: /usr/include/bash/builtins.h
+    - path: /usr/include/bash/builtins/bashgetopt.h
+    - path: /usr/include/bash/builtins/builtext.h
+    - path: /usr/include/bash/builtins/common.h
+    - path: /usr/include/bash/builtins/getopt.h
+    - path: /usr/include/bash/command.h
+    - path: /usr/include/bash/config-bot.h
+    - path: /usr/include/bash/config-top.h
+    - path: /usr/include/bash/config.h
+    - path: /usr/include/bash/conftypes.h
+    - path: /usr/include/bash/dispose_cmd.h
+    - path: /usr/include/bash/error.h
+    - path: /usr/include/bash/execute_cmd.h
+    - path: /usr/include/bash/externs.h
+    - path: /usr/include/bash/general.h
+    - path: /usr/include/bash/hashlib.h
+    - path: /usr/include/bash/include/ansi_stdlib.h
+    - path: /usr/include/bash/include/chartypes.h
+    - path: /usr/include/bash/include/filecntl.h
+    - path: /usr/include/bash/include/gettext.h
+    - path: /usr/include/bash/include/maxpath.h
+    - path: /usr/include/bash/include/memalloc.h
+    - path: /usr/include/bash/include/ocache.h
+    - path: /usr/include/bash/include/posixdir.h
+    - path: /usr/include/bash/include/posixjmp.h
+    - path: /usr/include/bash/include/posixstat.h
+    - path: /usr/include/bash/include/posixtime.h
+    - path: /usr/include/bash/include/posixwait.h
+    - path: /usr/include/bash/include/shmbchar.h
+    - path: /usr/include/bash/include/shmbutil.h
+    - path: /usr/include/bash/include/shtty.h
+    - path: /usr/include/bash/include/stat-time.h
+    - path: /usr/include/bash/include/stdc.h
+    - path: /usr/include/bash/include/systimes.h
+    - path: /usr/include/bash/include/typemax.h
+    - path: /usr/include/bash/include/unionwait.h
+    - path: /usr/include/bash/jobs.h
+    - path: /usr/include/bash/make_cmd.h
+    - path: /usr/include/bash/pathnames.h
+    - path: /usr/include/bash/quit.h
+    - path: /usr/include/bash/shell.h
+    - path: /usr/include/bash/sig.h
+    - path: /usr/include/bash/siglist.h
+    - path: /usr/include/bash/signames.h
+    - path: /usr/include/bash/subst.h
+    - path: /usr/include/bash/syntax.h
+    - path: /usr/include/bash/unwind_prot.h
+    - path: /usr/include/bash/variables.h
+    - path: /usr/include/bash/version.h
+    - path: /usr/include/bash/xmalloc.h
+    - path: /usr/include/bash/y.tab.h
+    - path: /usr/lib/pkgconfig/bash.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/bash-5.2.21/CHANGES
+    - path: /usr/share/doc/bash-5.2.21/COMPAT
+    - path: /usr/share/doc/bash-5.2.21/FAQ
+    - path: /usr/share/doc/bash-5.2.21/INTRO
+    - path: /usr/share/doc/bash-5.2.21/NEWS
+    - path: /usr/share/doc/bash-5.2.21/POSIX
+    - path: /usr/share/doc/bash-5.2.21/RBASH
+    - path: /usr/share/doc/bash-5.2.21/README
+    - path: /usr/share/doc/bash-5.2.21/bash.html
+    - path: /usr/share/doc/bash-5.2.21/bashref.html
+
+  info:
+    files:
+    - path: /usr/share/info/bash.info
+    - path: /usr/share/info/dir
+
+  lib:
+    files:
+    - path: /usr/lib/bash/Makefile.inc
+    - path: /usr/lib/bash/Makefile.sample
+    - path: /usr/lib/bash/accept
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/basename
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/csv
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/cut
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/dirname
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/dsv
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/fdflags
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/finfo
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/getconf
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/head
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/id
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/ln
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/loadables.h
+    - path: /usr/lib/bash/logname
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/mkdir
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/mkfifo
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/mktemp
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/mypid
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/pathchk
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/print
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/printenv
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/push
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/realpath
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/rm
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/rmdir
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/seq
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/setpgid
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/sleep
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/stat
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/strftime
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/sync
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/tee
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/truefalse
+    - path: /usr/lib/bash/tty
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/uname
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/unlink
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/bash/whoami
+      needs:
+      - /usr/lib/libc.so.6
+
+  locale:
+    files:
+    - path: /usr/share/locale/af/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/bg/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/en@boldquot/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/en@quot/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/et/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ga/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/lt/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/sl/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/bash.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/bash.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/bash.1
+    - path: /usr/share/man/man1/bashbug.1
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libncursesw.so.6: ncurses

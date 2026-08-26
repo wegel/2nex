@@ -1,0 +1,59 @@
+package:
+  schema: 1
+  name: GNU C Library en_GB locale
+  slug: glibc-locale-en-gb
+  namespace: libs/system
+  version: "2.39"
+  description: Compiled GNU C Library locale data for en_GB.UTF-8
+  homepage: https://www.gnu.org/software/libc/
+  checksum: 99afaf4389f092d5a88e8b09d894b1b11baa8f4289ec77282c9686e03da07ff6
+
+sources: []
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/full
+- name: glibc-localedata
+  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/misc
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [32:702]
+
+  script: |
+    set -eu
+
+    install -d "${OUT_DIR}/usr/lib/locale/en_GB.UTF-8"
+    localedef --no-archive \
+      --inputfile=en_GB \
+      --charmap=UTF-8 \
+      "${OUT_DIR}/usr/lib/locale/en_GB.UTF-8"
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  full:
+  - locale
+
+outputs:
+  locale:
+    files:
+    - path: /usr/lib/locale/en_GB.UTF-8/LC_ADDRESS
+    - path: /usr/lib/locale/en_GB.UTF-8/LC_COLLATE
+    - path: /usr/lib/locale/en_GB.UTF-8/LC_CTYPE
+    - path: /usr/lib/locale/en_GB.UTF-8/LC_IDENTIFICATION
+    - path: /usr/lib/locale/en_GB.UTF-8/LC_MEASUREMENT
+    - path: /usr/lib/locale/en_GB.UTF-8/LC_MESSAGES/SYS_LC_MESSAGES
+    - path: /usr/lib/locale/en_GB.UTF-8/LC_MONETARY
+    - path: /usr/lib/locale/en_GB.UTF-8/LC_NAME
+    - path: /usr/lib/locale/en_GB.UTF-8/LC_NUMERIC
+    - path: /usr/lib/locale/en_GB.UTF-8/LC_PAPER
+    - path: /usr/lib/locale/en_GB.UTF-8/LC_TELEPHONE
+    - path: /usr/lib/locale/en_GB.UTF-8/LC_TIME

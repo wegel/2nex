@@ -1,0 +1,119 @@
+package:
+  schema: 1
+  name: SSHFS
+  slug: sshfs
+  namespace: cli/fs
+  version: 3.7.6
+  description: Mount remote filesystems over SFTP using FUSE
+  homepage: https://github.com/libfuse/sshfs
+  checksum: 0722f55e56ec97ccbc2a3bdb27f00881475396adfe5fee125b52e42ec0a07355
+
+sources:
+- name: sshfs
+  url: https://github.com/libfuse/sshfs/releases/download/sshfs-3.7.6/sshfs-3.7.6.tar.xz
+  sha256: 6a1bcb31450a077e9cb1b7ff158c71de34db697c3c0da6cb362502131e495893
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: docutils
+  commit: x86_64/pkg/dev/python/docutils/0.21.2/bundles/dev
+- name: fuse3
+  commit: x86_64/pkg/libs/system/fuse3/3.17.4/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: openssh
+  commit: x86_64/pkg/cli/net/openssh/9.9p1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [1759:20316]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "/./${SOURCE_sshfs}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --sbindir=bin \
+      --buildtype=release
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - man
+
+  full:
+  - bin
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/mount.fuse.sshfs
+      needs:
+      - /usr/bin/ssh
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfuse3.so.4
+      - /usr/lib/libglib-2.0.so.0
+    - path: /usr/bin/mount.sshfs
+      needs:
+      - /usr/bin/ssh
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfuse3.so.4
+      - /usr/lib/libglib-2.0.so.0
+    - path: /usr/bin/sshfs
+      needs:
+      - /usr/bin/ssh
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfuse3.so.4
+      - /usr/lib/libglib-2.0.so.0
+
+  man:
+    files:
+    - path: /usr/share/man/man1/sshfs.1
+
+resolution:
+  /usr/lib/libfuse3.so.4: fuse3
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/bin/ssh: openssh

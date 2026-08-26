@@ -1,0 +1,172 @@
+package:
+  schema: 1
+  name: swayidle
+  slug: swayidle
+  namespace: desktop/wayland
+  version: 1.8.0
+  description: Idle management daemon for Wayland
+  homepage: https://github.com/swaywm/swayidle
+  checksum: 2450baf65802423118887ffbd7d782ff17570c605bd2fc73fd1a4d4c44be1e0c
+
+sources:
+- name: swayidle
+  url: https://github.com/swaywm/swayidle/releases/download/1.8.0/swayidle-1.8.0.tar.gz
+  sha256: 16b3e76a117f2f0ff2ee5fbebf38849595cdd705db1cd5f6aceaed00d71b3aa1
+- name: uapi_config_patch
+  file: pkg/desktop/wayland/swayidle-uapi-config.patch
+  sha256: db5274029c0b2e196015ff960ebec395f0e7d37bb3197ea882adae1965dcf277
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: wayland
+  commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
+- name: wayland-protocols
+  commit: x86_64/pkg/libs/wayland/wayland-protocols/1.46/bundles/dev
+- name: scdoc
+  commit: x86_64/pkg/dev/tools/scdoc/1.11.4/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [2574:857]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_swayidle} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config_patch}"
+
+    export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
+
+    meson setup build \
+      --prefix=/usr \
+      --sysconfdir=/etc \
+      --buildtype=release \
+      --pkg-config-path=/usr/lib/pkgconfig:/usr/share/pkgconfig
+
+    ninja -C build
+    DESTDIR=${OUT_DIR} ninja -C build install
+
+    # get_config_path tries the user files, then the admin, runtime, and
+    # vendor tiers in that order. Plant a config in all three system paths and
+    # remove the winning one at each step to prove the loader still reads the
+    # next tier down rather than stopping at the first miss.
+    admin_conf=/etc/swayidle/config
+    runtime_conf=/run/swayidle/config
+    vendor_conf=/usr/lib/swayidle/config
+    mkdir -p /etc/swayidle /run/swayidle /usr/lib/swayidle
+    rm -f "${admin_conf}" "${runtime_conf}" "${vendor_conf}"
+
+    probe_home="${WORK_DIR}/swayidle-uapi-home"
+    mkdir -p "${probe_home}"
+    probe_out="${WORK_DIR}/swayidle-uapi-probe.out"
+
+    run_probe() {
+        env -u WAYLAND_DISPLAY -u XDG_CONFIG_HOME HOME="${probe_home}" \
+            LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+            "${OUT_DIR}/usr/bin/swayidle" -d \
+            > "${probe_out}" 2>&1 || true
+    }
+
+    expect_loaded() {
+        run_probe
+        if ! grep -qF "Loaded config at $1" "${probe_out}"; then
+            printf 'swayidle UAPI smoke: expected config at %s, log:\n' "$1" >&2
+            cat "${probe_out}" >&2
+            exit 1
+        fi
+    }
+
+    : > "${admin_conf}"
+    : > "${runtime_conf}"
+    : > "${vendor_conf}"
+    expect_loaded "${admin_conf}"
+
+    rm -f "${admin_conf}"
+    expect_loaded "${runtime_conf}"
+
+    rm -f "${runtime_conf}"
+    expect_loaded "${vendor_conf}"
+
+    rm -f "${vendor_conf}"
+    rm -rf "${probe_home}" "${probe_out}"
+
+    printf 'swayidle UAPI smoke: config loader read all three tiers in order\n'
+
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/swayidle
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/swayidle
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-server.so.0
+
+  man:
+    files:
+    - path: /usr/share/man/man1/swayidle.1
+
+  misc:
+    files:
+    - path: /usr/share/bash-completion/completions/swayidle
+    - path: /usr/share/fish/vendor_completions.d/swayidle.fish
+    - path: /usr/share/zsh/site-functions/_swayidle
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libwayland-client.so.0: wayland
+  /usr/lib/libwayland-server.so.0: wayland

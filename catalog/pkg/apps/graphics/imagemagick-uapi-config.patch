@@ -1,0 +1,16 @@
+From: Package maintainers
+Subject: [PATCH] configure: search the transient Linux configuration path
+Source: downstream
+Upstream: not submitted; needs agreement on the Linux transient path
+
+ImageMagick already loads installed package data before administrator data.
+Add the matching /run directory between those tiers so temporary machine
+configuration can refine package defaults without writing to /etc.
+
+--- a/MagickCore/configure.c
++++ b/MagickCore/configure.c
+@@ -806,0 +807,4 @@
++#if defined(MAGICKCORE_POSIX_SUPPORT)
++  (void) AppendValueToLinkedList(paths,ConstantString("/run/"
++    MAGICKCORE_CONFIGURE_RELATIVE_PATH "/"));
++#endif

@@ -1,0 +1,19 @@
+From: Nex package maintainers
+Subject: [PATCH] gcc: give generated Ada constants a stable timestamp
+Source: https://gist.githubusercontent.com/wegel/c8e0a7cfb7412176e9750fa2a5393b54/raw/0824a3699ec6911f2e80187499932b5b65c4080e/gcc9-reproducible-builds.patch
+Upstream: not submitted; this patch preserves the existing Nex reproducible-build setup
+
+Avoid leaking the build time through the generated s-oscons.ads file.
+
+Index: gcc/ada/gcc-interface/Makefile.in
+===================================================================
+--- gcc/ada/gcc-interface/Makefile.in	(revision 268977)
++++ gcc/ada/gcc-interface/Makefile.in	(working copy)
+@@ -2407,6 +2407,7 @@ $(RTSDIR)/s-oscons.ads: ../stamp-gnatlib
+ 	    $(OSCONS_CPP) ; \
+ 	    $(OSCONS_EXTRACT) ; \
+ 	    ../bldtools/oscons/xoscons s-oscons)
++	touch -r $(fsrcpfx)ada/gsocket.h $@
+ 
+ gnatlib: ../stamp-gnatlib1-$(RTSDIR) ../stamp-gnatlib2-$(RTSDIR) $(RTSDIR)/s-oscons.ads
+ 	test -f $(RTSDIR)/s-oscons.ads || exit 1

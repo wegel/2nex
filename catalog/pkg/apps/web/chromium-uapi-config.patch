@@ -1,0 +1,283 @@
+From: Nex package maintainers
+Subject: [PATCH] policy: read the platform policy files from all three UAPI tiers
+Source: no upstream commit; written for Nex against Chromium 143.0.7499.169
+Upstream: not submitted. Chromium compiles one system directory for enterprise
+ policy, so a distribution cannot ship a default that a boot or an
+ administrator may replace. The change below adds the
+ generic <prefix>/lib, /run, and /etc order, keeps every existing path as the
+ highest priority one, and names no Nex path, so any Linux system that follows
+ the UAPI configuration files specification can use it.
+
+The enterprise policy loader read only policy::kPolicyPath, which for an
+unbranded build is /etc/chromium/policies, and merged the JSON files in its
+managed and recommended subdirectories. A package could therefore not ship a
+default policy below /usr, and a boot-time tool had nowhere to put a temporary
+one.
+
+Give ConfigDirPolicyLoader a list of directories and read them lowest priority
+first, so a policy in a later directory replaces the same policy from an
+earlier one and the administrator directory still wins. Every directory in the
+list gets its own pair of watchers and takes part in LastModificationTime, so a
+change in any tier still triggers a reload. The single-directory constructor
+stays, so existing callers and tests are unaffected, and the browser connector
+passes the vendor and transient paths ahead of the administrator directory that
+the path service supplies, which keeps test overrides of DIR_POLICY_FILES
+working.
+
+The native messaging host directory has the same single-directory shape, but
+it is left alone here: reaching LaunchContext::FindManifest needs an extension
+that opens a native messaging port, so that change could not carry a test in
+the same commit.
+
+diff -urN a/chrome/browser/policy/chrome_browser_policy_connector.cc b/chrome/browser/policy/chrome_browser_policy_connector.cc
+--- a/chrome/browser/policy/chrome_browser_policy_connector.cc
++++ b/chrome/browser/policy/chrome_browser_policy_connector.cc
+@@ -7,6 +7,7 @@
+ #include <memory>
+ #include <string>
+ #include <utility>
++#include <vector>
+
+ #include "base/check_is_test.h"
+ #include "base/command_line.h"
+@@ -59,6 +60,7 @@
+ #include "components/policy/core/common/android/android_combined_policy_provider.h"
+ #elif BUILDFLAG(IS_POSIX)
+ #include "components/policy/core/common/config_dir_policy_loader.h"
++#include "components/policy/core/common/policy_paths.h"
+ #endif
+
+ #if !BUILDFLAG(IS_CHROMEOS)
+@@ -345,10 +347,16 @@
+ #elif BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_ANDROID) && !BUILDFLAG(IS_CHROMEOS)
+   base::FilePath config_dir_path;
+   if (base::PathService::Get(chrome::DIR_POLICY_FILES, &config_dir_path)) {
++    // Lowest priority first: the policy the installed package ships, then
++    // policy that one boot owns, then the administrator directory, which the
++    // path service supplies so that a test override still applies.
++    std::vector<base::FilePath> config_dirs = {
++        base::FilePath(policy::kVendorPolicyPath),
++        base::FilePath(policy::kTransientPolicyPath), config_dir_path};
+     auto loader = std::make_unique<ConfigDirPolicyLoader>(
+         base::ThreadPool::CreateSequencedTaskRunner(
+             {base::MayBlock(), base::TaskPriority::BEST_EFFORT}),
+-        config_dir_path, POLICY_SCOPE_MACHINE);
++        std::move(config_dirs), POLICY_SCOPE_MACHINE);
+     return std::make_unique<AsyncPolicyProvider>(GetSchemaRegistry(),
+                                                  std::move(loader));
+   } else {
+diff -urN a/components/policy/core/common/config_dir_policy_loader.cc b/components/policy/core/common/config_dir_policy_loader.cc
+--- a/components/policy/core/common/config_dir_policy_loader.cc
++++ b/components/policy/core/common/config_dir_policy_loader.cc
+@@ -8,8 +8,11 @@
+
+ #include <algorithm>
+ #include <array>
++#include <memory>
+ #include <set>
+ #include <string>
++#include <utility>
++#include <vector>
+
+ #include "base/containers/adapters.h"
+ #include "base/containers/contains.h"
+@@ -42,9 +45,17 @@
+     scoped_refptr<base::SequencedTaskRunner> task_runner,
+     const base::FilePath& config_dir,
+     PolicyScope scope)
++    : ConfigDirPolicyLoader(task_runner,
++                            std::vector<base::FilePath>{config_dir},
++                            scope) {}
++
++ConfigDirPolicyLoader::ConfigDirPolicyLoader(
++    scoped_refptr<base::SequencedTaskRunner> task_runner,
++    std::vector<base::FilePath> config_dirs,
++    PolicyScope scope)
+     : AsyncPolicyLoader(task_runner, /*periodic_updates=*/true),
+       task_runner_(task_runner),
+-      config_dir_(config_dir),
++      config_dirs_(std::move(config_dirs)),
+       scope_(scope) {}
+
+ ConfigDirPolicyLoader::~ConfigDirPolicyLoader() = default;
+@@ -53,20 +64,29 @@
+   DCHECK(task_runner_->RunsTasksInCurrentSequence());
+   base::FilePathWatcher::Callback callback = base::BindRepeating(
+       &ConfigDirPolicyLoader::OnFileUpdated, base::Unretained(this));
+-  mandatory_watcher_.Watch(config_dir_.Append(kMandatoryConfigDir),
+-                           base::FilePathWatcher::Type::kNonRecursive,
+-                           callback);
+-  recommended_watcher_.Watch(config_dir_.Append(kRecommendedConfigDir),
+-                             base::FilePathWatcher::Type::kNonRecursive,
+-                             callback);
++  // Every tier is watched, so a file added to any of them is picked up
++  // without a restart.
++  for (const base::FilePath& config_dir : config_dirs_) {
++    for (const base::FilePath::CharType* suffix :
++         {kMandatoryConfigDir, kRecommendedConfigDir}) {
++      auto watcher = std::make_unique<base::FilePathWatcher>();
++      watcher->Watch(config_dir.Append(suffix),
++                     base::FilePathWatcher::Type::kNonRecursive, callback);
++      watchers_.push_back(std::move(watcher));
++    }
++  }
+ }
+
+ PolicyBundle ConfigDirPolicyLoader::Load() {
+   PolicyBundle bundle;
+-  LoadFromPath(config_dir_.Append(kMandatoryConfigDir), POLICY_LEVEL_MANDATORY,
+-               &bundle);
+-  LoadFromPath(config_dir_.Append(kRecommendedConfigDir),
+-               POLICY_LEVEL_RECOMMENDED, &bundle);
++  // config_dirs_ runs lowest priority first, and a later directory's policy
++  // replaces the same policy from an earlier one.
++  for (const base::FilePath& config_dir : config_dirs_) {
++    LoadFromPath(config_dir.Append(kMandatoryConfigDir),
++                 POLICY_LEVEL_MANDATORY, &bundle);
++    LoadFromPath(config_dir.Append(kRecommendedConfigDir),
++                 POLICY_LEVEL_RECOMMENDED, &bundle);
++  }
+   return bundle;
+ }
+
+@@ -80,21 +100,24 @@
+   base::Time last_modification = base::Time();
+   base::File::Info info;
+
+-  for (size_t i = 0; i < std::size(kConfigDirSuffixes); ++i) {
+-    base::FilePath path(config_dir_.Append(kConfigDirSuffixes[i]));
+-
+-    // Skip if the file doesn't exist, or it isn't a directory.
+-    if (!base::GetFileInfo(path, &info) || !info.is_directory)
+-      continue;
+-
+-    // Enumerate the files and find the most recent modification timestamp.
+-    base::FileEnumerator file_enumerator(path, false,
+-                                         base::FileEnumerator::FILES);
+-    for (base::FilePath config_file = file_enumerator.Next();
+-         !config_file.empty();
+-         config_file = file_enumerator.Next()) {
+-      if (base::GetFileInfo(config_file, &info) && !info.is_directory)
+-        last_modification = std::max(last_modification, info.last_modified);
++  // A change in any tier must trigger a reload, so every tier is scanned.
++  for (const base::FilePath& config_dir : config_dirs_) {
++    for (size_t i = 0; i < std::size(kConfigDirSuffixes); ++i) {
++      base::FilePath path(config_dir.Append(kConfigDirSuffixes[i]));
++
++      // Skip if the file doesn't exist, or it isn't a directory.
++      if (!base::GetFileInfo(path, &info) || !info.is_directory)
++        continue;
++
++      // Enumerate the files and find the most recent modification timestamp.
++      base::FileEnumerator file_enumerator(path, false,
++                                           base::FileEnumerator::FILES);
++      for (base::FilePath config_file = file_enumerator.Next();
++           !config_file.empty();
++           config_file = file_enumerator.Next()) {
++        if (base::GetFileInfo(config_file, &info) && !info.is_directory)
++          last_modification = std::max(last_modification, info.last_modified);
++      }
+     }
+   }
+
+diff -urN a/components/policy/core/common/config_dir_policy_loader.h b/components/policy/core/common/config_dir_policy_loader.h
+--- a/components/policy/core/common/config_dir_policy_loader.h
++++ b/components/policy/core/common/config_dir_policy_loader.h
+@@ -5,6 +5,9 @@
+ #ifndef COMPONENTS_POLICY_CORE_COMMON_CONFIG_DIR_POLICY_LOADER_H_
+ #define COMPONENTS_POLICY_CORE_COMMON_CONFIG_DIR_POLICY_LOADER_H_
+
++#include <memory>
++#include <vector>
++
+ #include "base/files/file_path.h"
+ #include "base/files/file_path_watcher.h"
+ #include "base/task/sequenced_task_runner.h"
+@@ -18,16 +21,21 @@
+
+ namespace policy {
+
+-// A policy loader implementation backed by a set of files in a given
+-// directory. The files should contain JSON-formatted policy settings. They are
+-// merged together and the result is returned in a PolicyBundle.
++// A policy loader implementation backed by a set of files in one or more
++// directories. The files should contain JSON-formatted policy settings. They
++// are merged together and the result is returned in a PolicyBundle.
+ // The files are consulted in lexicographic file name order, so the
+ // last value read takes precedence in case of policy key collisions.
++// When several directories are given they are read lowest priority first, so
++// a policy in a later directory replaces the same policy from an earlier one.
+ class POLICY_EXPORT ConfigDirPolicyLoader : public AsyncPolicyLoader {
+  public:
+   ConfigDirPolicyLoader(scoped_refptr<base::SequencedTaskRunner> task_runner,
+                         const base::FilePath& config_dir,
+                         PolicyScope scope);
++  ConfigDirPolicyLoader(scoped_refptr<base::SequencedTaskRunner> task_runner,
++                        std::vector<base::FilePath> config_dirs,
++                        PolicyScope scope);
+   ConfigDirPolicyLoader(const ConfigDirPolicyLoader&) = delete;
+   ConfigDirPolicyLoader& operator=(const ConfigDirPolicyLoader&) = delete;
+   ~ConfigDirPolicyLoader() override;
+@@ -56,16 +64,15 @@
+   // Task runner for running background jobs.
+   const scoped_refptr<base::SequencedTaskRunner> task_runner_;
+
+-  // The directory containing the policy files.
+-  const base::FilePath config_dir_;
++  // The directories containing the policy files, lowest priority first.
++  const std::vector<base::FilePath> config_dirs_;
+
+   // Policies loaded by this provider will have this scope.
+   const PolicyScope scope_;
+
+   // Watchers for events on the mandatory and recommended subdirectories of
+-  // |config_dir_|.
+-  base::FilePathWatcher mandatory_watcher_;
+-  base::FilePathWatcher recommended_watcher_;
++  // every entry of |config_dirs_|.
++  std::vector<std::unique_ptr<base::FilePathWatcher>> watchers_;
+ };
+
+ }  // namespace policy
+diff -urN a/components/policy/core/common/policy_paths.cc b/components/policy/core/common/policy_paths.cc
+--- a/components/policy/core/common/policy_paths.cc
++++ b/components/policy/core/common/policy_paths.cc
+@@ -12,13 +12,22 @@
+ // Directory for system-wide read-only policy files that allow sys-admins to set
+ // policies for the browser.
+ // Intentionally not using base::FilePath to minimize dependencies.
++// The three tiers hold the same subdirectory below different roots: the
++// package default below /usr/lib, policy that one boot owns below /run, and
++// lasting administrator policy below /etc.
+ #if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC)
+ #if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+ const char kPolicyPath[] = "/etc/opt/chrome/policies";
++const char kTransientPolicyPath[] = "/run/opt/chrome/policies";
++const char kVendorPolicyPath[] = "/usr/lib/opt/chrome/policies";
+ #elif BUILDFLAG(GOOGLE_CHROME_FOR_TESTING_BRANDING)
+ const char kPolicyPath[] = "/etc/opt/chrome_for_testing/policies";
++const char kTransientPolicyPath[] = "/run/opt/chrome_for_testing/policies";
++const char kVendorPolicyPath[] = "/usr/lib/opt/chrome_for_testing/policies";
+ #else
+ const char kPolicyPath[] = "/etc/chromium/policies";
++const char kTransientPolicyPath[] = "/run/chromium/policies";
++const char kVendorPolicyPath[] = "/usr/lib/chromium/policies";
+ #endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
+ #endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC)
+
+diff -urN a/components/policy/core/common/policy_paths.h b/components/policy/core/common/policy_paths.h
+--- a/components/policy/core/common/policy_paths.h
++++ b/components/policy/core/common/policy_paths.h
+@@ -10,7 +10,12 @@
+ namespace policy {
+
+ #if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC)
++// The lasting administrator policy directory.
+ extern const char kPolicyPath[];
++// Policy that one boot owns, which a boot-time tool may write.
++extern const char kTransientPolicyPath[];
++// The immutable policy directory that the installed package may ship.
++extern const char kVendorPolicyPath[];
+ #endif
+
+ }  // namespace policy

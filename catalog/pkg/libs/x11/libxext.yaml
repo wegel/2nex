@@ -1,0 +1,221 @@
+package:
+  schema: 1
+  name: libxext
+  slug: libxext
+  namespace: libs/x11
+  version: 1.3.6
+  description: X11 libxext library
+  homepage: https://xorg.freedesktop.org/
+  checksum: 603338d36cace1e1fd913985088036d5517883e339db583ad329b01d6ee22ca9
+
+sources:
+- name: libxext
+  url: https://xorg.freedesktop.org/archive/individual/lib/libXext-1.3.6.tar.xz
+  sha256: edb59fa23994e405fdc5b400afdf5820ae6160b94f35e3dc3da4457a16e89753
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: xorgproto
+  commit: x86_64/pkg/libs/x11/xorgproto/2024.1/bundles/dev
+- name: util-macros
+  commit: x86_64/pkg/libs/x11/util-macros/1.20.2/bundles/dev
+- name: libx11
+  commit: x86_64/pkg/libs/x11/libx11/1.8.10/bundles/dev
+- name: libxcb
+  commit: x86_64/pkg/libs/x11/libxcb/1.17.0/bundles/dev
+- name: libxau
+  commit: x86_64/pkg/libs/x11/libxau/1.0.12/bundles/dev
+- name: libxdmcp
+  commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4116:8083, 8218:19999, 12871:23615, 14304:24796]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --disable-static
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - doc
+  - lib
+  - man
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/X11/extensions/MITMisc.h
+    - path: /usr/include/X11/extensions/XEVI.h
+    - path: /usr/include/X11/extensions/XLbx.h
+    - path: /usr/include/X11/extensions/XShm.h
+    - path: /usr/include/X11/extensions/Xag.h
+    - path: /usr/include/X11/extensions/Xcup.h
+    - path: /usr/include/X11/extensions/Xdbe.h
+    - path: /usr/include/X11/extensions/Xext.h
+    - path: /usr/include/X11/extensions/Xge.h
+    - path: /usr/include/X11/extensions/dpms.h
+    - path: /usr/include/X11/extensions/extutil.h
+    - path: /usr/include/X11/extensions/multibuf.h
+    - path: /usr/include/X11/extensions/security.h
+    - path: /usr/include/X11/extensions/shape.h
+    - path: /usr/include/X11/extensions/sync.h
+    - path: /usr/include/X11/extensions/xtestext1.h
+    - path: /usr/lib/libXext.la
+    - path: /usr/lib/pkgconfig/xext.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/libXext/dbelib.xml
+    - path: /usr/share/doc/libXext/dpmslib.xml
+    - path: /usr/share/doc/libXext/shapelib.xml
+    - path: /usr/share/doc/libXext/synclib.xml
+    - path: /usr/share/doc/libXext/xtest1.xml
+
+  lib:
+    files:
+    - path: /usr/lib/libXext.so
+      needs:
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libXau.so.6
+      - /usr/lib/libXdmcp.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxcb.so.1
+    - path: /usr/lib/libXext.so.6
+      needs:
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libXau.so.6
+      - /usr/lib/libXdmcp.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxcb.so.1
+    - path: /usr/lib/libXext.so.6.4.0
+      needs:
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libXau.so.6
+      - /usr/lib/libXdmcp.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxcb.so.1
+
+  man:
+    files:
+    - path: /usr/share/man/man3/DBE.3
+    - path: /usr/share/man/man3/DPMSCapable.3
+    - path: /usr/share/man/man3/DPMSDisable.3
+    - path: /usr/share/man/man3/DPMSEnable.3
+    - path: /usr/share/man/man3/DPMSForceLevel.3
+    - path: /usr/share/man/man3/DPMSGetTimeouts.3
+    - path: /usr/share/man/man3/DPMSGetVersion.3
+    - path: /usr/share/man/man3/DPMSInfo.3
+    - path: /usr/share/man/man3/DPMSQueryExtension.3
+    - path: /usr/share/man/man3/DPMSSetTimeouts.3
+    - path: /usr/share/man/man3/XShape.3
+    - path: /usr/share/man/man3/XShapeCombineMask.3
+    - path: /usr/share/man/man3/XShapeCombineRectangles.3
+    - path: /usr/share/man/man3/XShapeCombineRegion.3
+    - path: /usr/share/man/man3/XShapeCombineShape.3
+    - path: /usr/share/man/man3/XShapeGetRectangles.3
+    - path: /usr/share/man/man3/XShapeInputSelected.3
+    - path: /usr/share/man/man3/XShapeOffsetShape.3
+    - path: /usr/share/man/man3/XShapeQueryExtension.3
+    - path: /usr/share/man/man3/XShapeQueryExtents.3
+    - path: /usr/share/man/man3/XShapeQueryVersion.3
+    - path: /usr/share/man/man3/XShapeSelectInput.3
+    - path: /usr/share/man/man3/XShm.3
+    - path: /usr/share/man/man3/XShmAttach.3
+    - path: /usr/share/man/man3/XShmCreateImage.3
+    - path: /usr/share/man/man3/XShmCreatePixmap.3
+    - path: /usr/share/man/man3/XShmDetach.3
+    - path: /usr/share/man/man3/XShmGetEventBase.3
+    - path: /usr/share/man/man3/XShmGetImage.3
+    - path: /usr/share/man/man3/XShmPixmapFormat.3
+    - path: /usr/share/man/man3/XShmPutImage.3
+    - path: /usr/share/man/man3/XShmQueryExtension.3
+    - path: /usr/share/man/man3/XShmQueryVersion.3
+    - path: /usr/share/man/man3/XcupGetReservedColormapEntries.3
+    - path: /usr/share/man/man3/XcupQueryVersion.3
+    - path: /usr/share/man/man3/XcupStoreColors.3
+    - path: /usr/share/man/man3/XdbeAllocateBackBufferName.3
+    - path: /usr/share/man/man3/XdbeBeginIdiom.3
+    - path: /usr/share/man/man3/XdbeDeallocateBackBufferName.3
+    - path: /usr/share/man/man3/XdbeEndIdiom.3
+    - path: /usr/share/man/man3/XdbeFreeVisualInfo.3
+    - path: /usr/share/man/man3/XdbeGetBackBufferAttributes.3
+    - path: /usr/share/man/man3/XdbeGetVisualInfo.3
+    - path: /usr/share/man/man3/XdbeQueryExtension.3
+    - path: /usr/share/man/man3/XdbeSwapBuffers.3
+    - path: /usr/share/man/man3/Xevi.3
+    - path: /usr/share/man/man3/XeviGetVisualInfo.3
+    - path: /usr/share/man/man3/XeviQueryExtension.3
+    - path: /usr/share/man/man3/XeviQueryVersion.3
+    - path: /usr/share/man/man3/Xmbuf.3
+    - path: /usr/share/man/man3/XmbufChangeBufferAttributes.3
+    - path: /usr/share/man/man3/XmbufChangeWindowAttributes.3
+    - path: /usr/share/man/man3/XmbufCreateBuffers.3
+    - path: /usr/share/man/man3/XmbufCreateStereoWindow.3
+    - path: /usr/share/man/man3/XmbufDestroyBuffers.3
+    - path: /usr/share/man/man3/XmbufDisplayBuffers.3
+    - path: /usr/share/man/man3/XmbufGetBufferAttributes.3
+    - path: /usr/share/man/man3/XmbufGetScreenInfo.3
+    - path: /usr/share/man/man3/XmbufGetVersion.3
+    - path: /usr/share/man/man3/XmbufGetWindowAttributes.3
+    - path: /usr/share/man/man3/XmbufQueryExtension.3
+
+resolution:
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libX11.so.6: libx11
+  /usr/lib/libXau.so.6: libxau
+  /usr/lib/libxcb.so.1: libxcb
+  /usr/lib/libXdmcp.so.6: libxdmcp

@@ -1,0 +1,90 @@
+From: Nex package maintainers
+Subject: read system gitconfig and gitattributes from UAPI directories
+Source: Nex downstream patch for Git 2.49.0
+Upstream: not submitted; needs agreement on Unix vendor and transient paths
+
+Keep GIT_CONFIG_SYSTEM, GIT_CONFIG_NOSYSTEM, and GIT_ATTR_NOSYSTEM unchanged,
+and keep "git config --system" writing to /etc/gitconfig (or the
+GIT_CONFIG_SYSTEM override). For reads, when GIT_CONFIG_SYSTEM is unset,
+select the first complete system file from /etc, /run, or /usr/lib, and do
+the same walk for gitattributes. An empty higher file deliberately masks a
+lower default.
+
+--- a/config.c
++++ b/config.c
+@@ -2023,12 +2023,45 @@
+ 	return !git_env_bool("GIT_CONFIG_NOSYSTEM", 0);
+ }
+
++/*
++ * git_system_config() names the single file that "git config --system"
++ * writes to, and it must keep naming /etc/gitconfig (or the
++ * GIT_CONFIG_SYSTEM override) so that write target stays predictable.
++ * Reads honor a second, lower-priority tier so a vendor default under
++ * /usr/lib and a runtime override under /run can supply settings when
++ * /etc/gitconfig is silent. The first complete file found wins; an
++ * empty file at a higher tier still counts as complete and masks the
++ * tiers below it.
++ */
++static char *git_system_config_for_read(void)
++{
++	static const char *const tiers[] = {
++		"/etc/gitconfig",
++		"/run/gitconfig",
++		"/usr/lib/gitconfig",
++	};
++	char *override = xstrdup_or_null(getenv("GIT_CONFIG_SYSTEM"));
++	size_t i;
++
++	if (override) {
++		normalize_path_copy(override, override);
++		return override;
++	}
++
++	for (i = 0; i < ARRAY_SIZE(tiers); i++) {
++		if (!access(tiers[i], R_OK))
++			return xstrdup(tiers[i]);
++	}
++
++	return xstrdup(tiers[0]);
++}
++
+ static int do_git_config_sequence(const struct config_options *opts,
+ 				  const struct repository *repo,
+ 				  config_fn_t fn, void *data)
+ {
+ 	int ret = 0;
+-	char *system_config = git_system_config();
++	char *system_config = git_system_config_for_read();
+ 	char *xdg_config = NULL;
+ 	char *user_config = NULL;
+ 	char *repo_config;
+--- a/attr.c
++++ b/attr.c
+@@ -873,9 +873,25 @@
+
+ const char *git_attr_system_file(void)
+ {
++	static const char *const tiers[] = {
++		"/etc/gitattributes",
++		"/run/gitattributes",
++		"/usr/lib/gitattributes",
++	};
+ 	static const char *system_wide;
+-	if (!system_wide)
+-		system_wide = system_path(ETC_GITATTRIBUTES);
++	size_t i;
++
++	if (system_wide)
++		return system_wide;
++
++	for (i = 0; i < ARRAY_SIZE(tiers); i++) {
++		if (!access(tiers[i], R_OK)) {
++			system_wide = tiers[i];
++			return system_wide;
++		}
++	}
++
++	system_wide = tiers[0];
+ 	return system_wide;
+ }

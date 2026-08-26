@@ -1,0 +1,59 @@
+package:
+  schema: 1
+  name: Findutils
+  slug: findutils
+  namespace: bootstrap/phase3
+  version: 4.9.0
+  description: The GNU versions of find utilities (find and xargs)
+  homepage: https://www.gnu.org/software/findutils/
+  checksum: bdca51f1c9bd66aec040323257df954fc2a78a484dd21b8f36e4c1916aa2c011
+  seed: true
+
+sources:
+- name: findutils
+  url: https://ftp.gnu.org/gnu/findutils/findutils-4.9.0.tar.xz
+  sha256: a2bfb8c09d436770edc59f50fa483e785b161a3b7b9d547573cb08065fd462fe
+
+dependencies:
+- name: temporary-system
+  commit: x86_64/pkg/bootstrap/phase1/temporary-system/1.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/bootstrap/phase3/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+
+build:
+  environment: 002d6759a3ccdb3587b39a187250574c6d1de529
+  profile: [4123:3149, 8270:9481, 12384:12378, 16536:15208, 24747:28658, 28873:33293, 32973:37684, 41207:39318, 49444:41845, 53686:42046]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_findutils} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --localstatedir=/var/lib/locate --disable-nls
+    make
+    make DESTDIR=${OUT_DIR} install
+
+    rm -rf ${OUT_DIR}/usr/share/man ${OUT_DIR}/usr/share/info
+    rm -rf ${OUT_DIR}/usr/share/locale
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/find
+    - path: /usr/bin/locate
+    - path: /usr/bin/updatedb
+    - path: /usr/bin/xargs
+    - path: /usr/libexec/frcode

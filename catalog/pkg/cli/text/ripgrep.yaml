@@ -1,0 +1,103 @@
+package:
+  schema: 1
+  name: ripgrep
+  slug: ripgrep
+  namespace: cli/text
+  version: 14.1.1
+  description: Line-oriented search tool that recursively searches directories for a regex pattern
+  homepage: https://github.com/BurntSushi/ripgrep
+  checksum: 6092a4c0d43cf0d86624d084d5c268ebfd207aed3e25628bfa105b08195666eb
+
+sources:
+- name: ripgrep
+  url: https://github.com/BurntSushi/ripgrep/archive/refs/tags/14.1.1.tar.gz
+  sha256: 4dad02a2f9c8c3c8d89434e47337aa654cb0e2aa50e806589132f186bf5c2b66
+- name: vendor
+  sha256: 06b3bce35356f26d18971e9f36b3ebd35b6b0fc6a58105dacdb5caf11be2abde
+  cargo_lock: https://raw.githubusercontent.com/BurntSushi/ripgrep/14.1.1/Cargo.lock
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: rust-bin
+  commit: x86_64/pkg/dev/lang/rust-bin/1.91.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [1324:105314]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_ripgrep} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    # extract vendor tarball
+    tar --no-same-owner -xf /./${SOURCE_vendor} -C "${WORK_DIR}"
+
+    export CARGO_HOME="${WORK_DIR}/.cargo"
+    mkdir -p "${CARGO_HOME}"
+
+    # configure cargo to use vendored deps
+    cat > "${CARGO_HOME}/config.toml" << EOF
+    [source.crates-io]
+    replace-with = "vendored-sources"
+
+    [source.vendored-sources]
+    directory = "vendor"
+    EOF
+
+    # setup compiler
+    mkdir -p /usr/local/bin
+    ln -sf /usr/bin/gcc /usr/local/bin/cc
+    ln -sf /usr/bin/ld.bfd /usr/local/bin/ld
+    export PATH="/usr/local/bin:${PATH}"
+    export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc
+    export RUSTFLAGS="-C codegen-units=1 -C embed-bitcode=yes -C debuginfo=0"
+
+    cargo build --release --offline --target x86_64-unknown-linux-gnu
+
+    mkdir -p ${OUT_DIR}/usr/bin
+    install -m 755 target/x86_64-unknown-linux-gnu/release/rg ${OUT_DIR}/usr/bin/rg
+
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/rg
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/rg
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

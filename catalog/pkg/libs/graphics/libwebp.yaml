@@ -1,0 +1,255 @@
+package:
+  schema: 1
+  name: libwebp
+  slug: libwebp
+  namespace: libs/graphics
+  version: 1.6.0
+  description: WebP image format library
+  homepage: https://developers.google.com/speed/webp
+  checksum: 08ec2b3d0ebea5bf4bd472201a03e15babbc94a80aecf6f0e4d87bcc6b44d6cb
+
+sources:
+- name: libwebp
+  url: https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz
+  sha256: e4ab7009bf0629fd11982d4c2aa83964cf244cffba7347ecd39019a9e38c4564
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: libjpeg-turbo
+  commit: x86_64/pkg/libs/graphics/libjpeg-turbo/3.1.2/bundles/dev
+- name: libtiff
+  commit: x86_64/pkg/libs/graphics/libtiff/4.7.1/bundles/dev
+- name: libpng
+  commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/dev
+- name: libarchive
+  commit: x86_64/pkg/libs/archive/libarchive/3.8.4/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4157:7964, 8295:13782, 12450:16939, 16589:19626, 20763:21649, 24883:25168, 25498:25779]
+
+  script: |
+    # disable LTO due to linking issues with libwebp extras
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
+    tar --no-same-owner -xzf /${SOURCE_libwebp} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    cmake -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DBUILD_SHARED_LIBS=ON \
+      -DWEBP_BUILD_EXTRAS=OFF \
+      -DWEBP_LINK_STATIC=OFF
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/cwebp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libsharpyuv.so.0
+      - /usr/lib/libtiff.so.6
+      - /usr/lib/libwebp.so.7
+      - /usr/lib/libwebpdemux.so.2
+    - path: /usr/bin/dwebp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libwebp.so.7
+      - /usr/lib/libwebpdemux.so.2
+    - path: /usr/bin/img2webp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libjpeg.so.8
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libsharpyuv.so.0
+      - /usr/lib/libtiff.so.6
+      - /usr/lib/libwebp.so.7
+      - /usr/lib/libwebpdemux.so.2
+      - /usr/lib/libwebpmux.so.3
+    - path: /usr/bin/webpinfo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libwebp.so.7
+    - path: /usr/bin/webpmux
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libwebp.so.7
+      - /usr/lib/libwebpmux.so.3
+
+  dev:
+    files:
+    - path: /usr/include/webp/decode.h
+    - path: /usr/include/webp/demux.h
+    - path: /usr/include/webp/encode.h
+    - path: /usr/include/webp/mux.h
+    - path: /usr/include/webp/mux_types.h
+    - path: /usr/include/webp/sharpyuv/sharpyuv.h
+    - path: /usr/include/webp/sharpyuv/sharpyuv_csp.h
+    - path: /usr/include/webp/types.h
+    - path: /usr/lib/pkgconfig/libsharpyuv.pc
+    - path: /usr/lib/pkgconfig/libwebp.pc
+    - path: /usr/lib/pkgconfig/libwebpdecoder.pc
+    - path: /usr/lib/pkgconfig/libwebpdemux.pc
+    - path: /usr/lib/pkgconfig/libwebpmux.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libsharpyuv.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libsharpyuv.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libsharpyuv.so.0.1.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libwebp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libsharpyuv.so.0
+    - path: /usr/lib/libwebp.so.7
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libsharpyuv.so.0
+    - path: /usr/lib/libwebp.so.7.2.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libsharpyuv.so.0
+    - path: /usr/lib/libwebpdecoder.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libwebpdecoder.so.3
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libwebpdecoder.so.3.2.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libwebpdemux.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libwebp.so.7
+    - path: /usr/lib/libwebpdemux.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libwebp.so.7
+    - path: /usr/lib/libwebpdemux.so.2.0.17
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libwebp.so.7
+    - path: /usr/lib/libwebpmux.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwebp.so.7
+    - path: /usr/lib/libwebpmux.so.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwebp.so.7
+    - path: /usr/lib/libwebpmux.so.3.1.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwebp.so.7
+
+  man:
+    files:
+    - path: /usr/share/man/man1/cwebp.1
+    - path: /usr/share/man/man1/dwebp.1
+    - path: /usr/share/man/man1/img2webp.1
+    - path: /usr/share/man/man1/vwebp.1
+    - path: /usr/share/man/man1/webpinfo.1
+    - path: /usr/share/man/man1/webpmux.1
+
+  misc:
+    files:
+    - path: /usr/share/WebP/cmake/WebPConfig.cmake
+    - path: /usr/share/WebP/cmake/WebPConfigVersion.cmake
+    - path: /usr/share/WebP/cmake/WebPTargets-release.cmake
+    - path: /usr/share/WebP/cmake/WebPTargets.cmake
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libjpeg.so.8: libjpeg-turbo
+  /usr/lib/libpng16.so.16: libpng
+  /usr/lib/libtiff.so.6: libtiff
+  /usr/lib/libsharpyuv.so.0: self
+  /usr/lib/libwebp.so.7: self
+  /usr/lib/libwebpdemux.so.2: self
+  /usr/lib/libwebpmux.so.3: self

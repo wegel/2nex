@@ -1,0 +1,58 @@
+From: Nex package maintainers
+Subject: [PATCH] config: read the system client options from all three UAPI tiers
+Source: no upstream commit; written for Nex against Looking Glass B7
+Upstream: not submitted. The client hard-codes one system-wide options file, so
+ a distribution cannot ship a default that a boot or an administrator may
+ override. The change below adds the generic /usr/lib, /run, and /etc order and
+ names no Nex path, so any Linux system that follows the UAPI configuration
+ files specification can use it.
+
+config_load() read exactly one system-wide file, /etc/looking-glass-client.ini,
+before it read the user's own files. A package could not ship a default set of
+client options below /usr, and a boot-time tool that knows the host's
+shared-memory device or window geometry had nowhere to put a temporary file.
+
+Read the package file below /usr/lib first, then the temporary file below /run,
+then the administrator file below /etc, and overlay each onto the previous
+ones. That matches what the client already does for its user files: option_load
+replaces only the options a file names, so a higher tier overrides the options
+it sets and leaves the rest alone. A missing file at any tier is skipped
+exactly as the single /etc file already was, and the user files, the command
+line, and app:configFile still come afterwards and still win.
+
+diff -urN a/client/src/config.c b/client/src/config.c
+--- a/client/src/config.c
++++ b/client/src/config.c
+@@ -564,14 +564,29 @@
+   option_register(options);
+ }
+ 
++// The system-wide option files, lowest priority first: the immutable package
++// default, then temporary policy that one boot owns, then lasting
++// administrator policy. Each file is overlaid onto the previous ones, so a
++// later file overrides only the options it names.
++static const char * globalConfigFiles[] =
++{
++  "/usr/lib/looking-glass-client.ini",
++  "/run/looking-glass-client.ini",
++  "/etc/looking-glass-client.ini"
++};
++
+ bool config_load(int argc, char * argv[])
+ {
+   // load any global options first
+   struct stat st;
+-  if (stat("/etc/looking-glass-client.ini", &st) >= 0 && S_ISREG(st.st_mode))
++  for(size_t i = 0; i < sizeof(globalConfigFiles) / sizeof(*globalConfigFiles); ++i)
+   {
+-    DEBUG_INFO("Loading config from: /etc/looking-glass-client.ini");
+-    if (!option_load("/etc/looking-glass-client.ini"))
++    const char * file = globalConfigFiles[i];
++    if (stat(file, &st) < 0 || !S_ISREG(st.st_mode))
++      continue;
++
++    DEBUG_INFO("Loading config from: %s", file);
++    if (!option_load(file))
+       return false;
+   }
+ 

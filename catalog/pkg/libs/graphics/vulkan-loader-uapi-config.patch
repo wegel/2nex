@@ -1,0 +1,533 @@
+Subject: search /run, mask implicit basenames, and fix settings path parsing
+Source: downstream patch for Vulkan-Loader vulkan-sdk-1.4.328.1
+Upstream: not submitted; needs agreement on adding a /run tier, merging the
+default driver/layer/settings search by basename, and the
+check_if_settings_path_exists() segment-parsing fix
+
+read_data_files_in_search_paths() built the default driver and layer search
+path from the user and XDG directories, the additive VK_ADD_DRIVER_FILES /
+VK_ADD_LAYER_PATH entries, then SYSCONFDIR (compiled as /etc) and the XDG
+data directories (falling back to /usr/local/share and /usr/share). It never
+searched /run. add_data_files() then opened every JSON file in every
+directory named by that search path with no basename deduplication at all,
+so a driver or layer manifest installed under both /etc/vulkan/icd.d and
+/usr/share/vulkan/icd.d with the same basename loaded twice instead of the
+higher tier replacing the lower one; duplicate directory removal in
+read_data_files_in_search_paths only drops repeated directory strings, it
+never shadows a same-named file across distinct directories. Separately,
+get_unix_settings_path() selected the single vk_loader_settings.json by
+trying the user and XDG paths, then SYSCONFDIR, then the XDG data
+directories, also with no /run tier, and check_if_settings_path_exists()'s
+own colon-splitting parser had a pre-existing off-by-one: after finding the
+first PATH_SEPARATOR in a multi-entry base string, it resumed the next
+segment at the separator's own index instead of one past it, so every
+segment after the first was checked with a leading stray separator
+character glued onto its front and could never match a real path. With the
+ordinary two-entry XDG_DATA_DIRS fallback of "/usr/local/share:/usr/share",
+that bug made the second, real vendor entry ("/usr/share") permanently
+unreachable.
+
+Add a compiled-in NEX_RUNSTATEDIR of "/run" and search it between SYSCONFDIR
+and the XDG data directories in both readers, so the default driver, layer,
+and settings search covers /etc, then /run, then /usr/share, after the
+unchanged upstream user and XDG priority.
+
+Fix check_if_settings_path_exists() to advance to stop + 1 (one past the
+separator) when starting the next segment, and to skip a zero-length
+segment produced by a leading, trailing, or repeated separator, instead of
+folding the separator into the next segment's path. This is a correctness
+fix to the reader this patch is repairing, not a separate change: every
+multi-entry base string this function walks, including the ordinary
+XDG_DATA_DIRS fallback, was affected.
+
+Give add_data_files() a new mask_duplicate_basenames parameter. When set,
+a file is skipped if a file with the same basename is already present in
+out_files, checked by scanning out_files itself rather than a separate
+allocated table, so there is no extra allocation that can fail
+independently of out_files's own allocation (which add_if_manifest_file
+already reports through the ordinary VkResult error path). A directory
+read (readdir) failure while masking is active fails the whole search
+(VK_ERROR_INITIALIZATION_FAILED) instead of risking an unmasked
+lower-priority duplicate from a directory whose remaining entries were
+never seen.
+
+read_data_files_in_search_paths() now builds an additional, independent
+additive_search_path buffer on COMMON_UNIX_PLATFORMS when no override is
+active, holding only VK_ADD_DRIVER_FILES / VK_ADD_LAYER_PATH. It is always
+searched first and with mask_duplicate_basenames=false, so two additive
+entries that share a basename both load, preserving every duplicate exactly
+as upstream did; because both land in out_files first, either one still
+masks a same-named file from the implicit tiers scanned next in search_path.
+search_path itself is searched with a new mask_search_path flag, which the
+COMMON_UNIX_PLATFORMS branch sets to true exactly when there is no override
+path active, giving the compiled-in tiers Nex's basename-shadowing priority.
+
+This additive/implicit split, and the masking it enables, applies only to
+COMMON_UNIX_PLATFORMS. read_data_files_in_search_paths() never gave Windows
+an implicit system tier to mask against in the first place -- the registry
+search that supplies Windows's driver and layer manifests happens separately,
+in loader_windows.c -- so the _WIN32 branch is left exactly as upstream had
+it: additional_env and package_path share one single search_path buffer,
+sized and copied together with no split, no additive_search_path, and
+mask_search_path staying false. loader_windows.c's own registry-backed
+add_data_files call also keeps mask_duplicate_basenames as false. An explicit
+override list -- VK_DRIVER_FILES, VK_ICD_FILENAMES, VK_LAYER_PATH, or a
+caller-supplied override -- still builds and searches a single unmasked
+search_path exactly as upstream did, on every platform, with no additive
+buffer at all.
+
+diff -urN a/loader/loader.c b/loader/loader.c
+--- a/loader/loader.c
++++ b/loader/loader.c
+@@ -3337,10 +3337,38 @@
+     return copy_str_to_start_of_string_list(inst, out_files, file_name, name_len);
+ }
+
++// Return a pointer to the last path component of path, or path itself if it has no directory part.
++static const char *loader_data_file_basename(const char *path) {
++    const char *last_sep = strrchr(path, DIRECTORY_SYMBOL);
++    return (NULL != last_sep) ? last_sep + 1 : path;
++}
++
++// Return true if any file already recorded in out_files has the same basename as basename. Scanning the
++// already-accumulated out_files list (instead of keeping a separate claim table) means there is no extra
++// allocation that can fail independently of out_files's own allocation, which add_if_manifest_file already
++// reports through the ordinary VkResult error path.
++static bool loader_out_files_has_basename(const struct loader_string_list *out_files, const char *basename) {
++    for (uint32_t i = 0; i < out_files->count; i++) {
++        if (strcmp(loader_data_file_basename(out_files->list[i]), basename) == 0) {
++            return true;
++        }
++    }
++    return false;
++}
++
+ // Add any files found in the search_path.  If any path in the search path points to a specific JSON, attempt to
+ // only open that one JSON.  Otherwise, if the path is a folder, search the folder for JSON files.
++//
++// mask_duplicate_basenames applies Nex's default-search tier priority: a file whose basename already appears in
++// out_files (because it was added earlier in this call, or by an earlier, unmasked call over an additive search
++// path sharing the same out_files) is skipped instead of merged. Callers must only set this for the implicit,
++// compiled-in system tiers. An additive caller list (VK_ADD_DRIVER_FILES, VK_ADD_LAYER_PATH) and an explicit
++// override list (VK_DRIVER_FILES, VK_ICD_FILENAMES, VK_LAYER_PATH, or an application override) must keep
++// upstream's behavior of loading every matching file with no basename deduplication, so callers pass false for
++// those searches; an additive list may still mask a same-named implicit file, because its entries land in
++// out_files first and a later masked call will see them there.
+ VkResult add_data_files(const struct loader_instance *inst, char *search_path, struct loader_string_list *out_files,
+-                        bool use_first_found_manifest) {
++                        bool use_first_found_manifest, bool mask_duplicate_basenames) {
+     VkResult vk_result = VK_SUCCESS;
+     char full_path[2048];
+ #if !defined(_WIN32)
+@@ -3379,6 +3407,10 @@
+             loader_get_fullpath(cur_file, name, sizeof(full_path), full_path);
+             name = full_path;
+
++            if (mask_duplicate_basenames && loader_out_files_has_basename(out_files, loader_data_file_basename(name))) {
++                continue;
++            }
++
+             VkResult local_res;
+             local_res = add_if_manifest_file(inst, name, out_files);
+
+@@ -3400,6 +3432,14 @@
+ #if !defined(WIN32)  // Windows doesn't use readdir, don't check errors on functions which aren't called
+                 if (errno != 0) {
+                     loader_log(inst, VULKAN_LOADER_ERROR_BIT, 0, "readdir failed with %d: %s", errno, strerror(errno));
++                    if (mask_duplicate_basenames) {
++                        // A partial directory read could have missed a higher-priority file. Fail the whole search
++                        // instead of letting a lower-priority same-basename file from another directory go
++                        // unmasked because this directory's remaining entries were never seen.
++                        vk_result = VK_ERROR_INITIALIZATION_FAILED;
++                        loader_closedir(inst, dir_stream);
++                        goto out;
++                    }
+                     break;
+                 }
+ #endif
+@@ -3408,6 +3448,11 @@
+                 }
+
+                 name = &(dir_entry->d_name[0]);
++
++                if (mask_duplicate_basenames && loader_out_files_has_basename(out_files, name)) {
++                    continue;
++                }
++
+                 loader_get_fullpath(name, cur_file, sizeof(full_path), full_path);
+                 name = full_path;
+
+@@ -3437,6 +3482,63 @@
+     return vk_result;
+ }
+
++// Remove duplicate path entries from a PATH_SEPARATOR-delimited search path in place, updating *path_size to the
++// new length. Shared by every search_path buffer this file builds (override, additive, implicit).
++static void loader_dedup_search_path(char *path, size_t *path_size) {
++    char path_sep_str[2] = {PATH_SEPARATOR, '\0'};
++    size_t updated_size = *path_size;
++    for (size_t first = 0; first < updated_size;) {
++        // If this is an empty path, erase it
++        if (path[first] == PATH_SEPARATOR) {
++            memmove(&path[first], &path[first + 1], updated_size - first + 1);
++            updated_size -= 1;
++            continue;
++        }
++
++        size_t first_end = first + 1;
++        first_end += strcspn(&path[first_end], path_sep_str);
++        for (size_t second = first_end + 1; second < updated_size;) {
++            size_t second_end = second + 1;
++            second_end += strcspn(&path[second_end], path_sep_str);
++            if (first_end - first == second_end - second && !strncmp(&path[first], &path[second], second_end - second)) {
++                // Found duplicate. Include PATH_SEPARATOR in second_end, then erase it from path.
++                if (path[second_end] == PATH_SEPARATOR) {
++                    second_end++;
++                }
++                memmove(&path[second], &path[second_end], updated_size - second_end + 1);
++                updated_size -= second_end - second;
++            } else {
++                second = second_end + 1;
++            }
++        }
++        first = first_end + 1;
++    }
++    *path_size = updated_size;
++}
++
++// Log each PATH_SEPARATOR-delimited entry of search_path with "      " indentation, matching the format used
++// under the "In following locations:" header.
++static void loader_log_search_locations(const struct loader_instance *inst, uint32_t log_flags, char *search_path,
++                                        size_t search_path_size) {
++    if (search_path_size == 0) {
++        return;
++    }
++    char *tmp_search_path = loader_instance_heap_alloc(inst, search_path_size + 1, VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
++    if (NULL == tmp_search_path) {
++        return;
++    }
++    loader_strncpy(tmp_search_path, search_path_size + 1, search_path, search_path_size);
++    tmp_search_path[search_path_size] = '\0';
++    char *cur_file;
++    char *next_file = tmp_search_path;
++    while (NULL != next_file && *next_file != '\0') {
++        cur_file = next_file;
++        next_file = loader_get_next_path(cur_file);
++        loader_log(inst, log_flags, 0, "      %s", cur_file);
++    }
++    loader_instance_heap_free(inst, tmp_search_path);
++}
++
+ // Look for data files in the provided paths, but first check the environment override to determine if we should use that
+ // instead.
+ VkResult read_data_files_in_search_paths(const struct loader_instance *inst, enum loader_data_files_type manifest_type,
+@@ -3447,8 +3549,22 @@
+     char *additional_env = NULL;
+     size_t search_path_size = 0;
+     char *search_path = NULL;
++    // additive_search_path holds only the additive caller list (VK_ADD_DRIVER_FILES / VK_ADD_LAYER_PATH). It is
++    // built and searched only on COMMON_UNIX_PLATFORMS, separately from search_path, so its entries stay unmasked
++    // and keep their own duplicate basenames, while still being able to mask a same-named file from the implicit
++    // system tiers that search_path holds when there is no override active. Windows has no implicit system tier
++    // in this function at all (the registry search happens separately in loader_windows.c), so it keeps its
++    // original, single, always-unmasked search_path combining additional_env and package_path exactly as
++    // upstream did; additive_search_path is never built on Windows.
++    char *additive_search_path = NULL;
++    size_t additive_search_path_size = 0;
+     char *cur_path_ptr = NULL;
+     bool use_first_found_manifest = false;
++    // mask_search_path applies Nex's basename-shadowing priority to search_path. It is only ever true on
++    // COMMON_UNIX_PLATFORMS with no override active; Windows's single combined buffer has no implicit tier to
++    // mask against and must stay fully unmasked, matching upstream and matching loader_windows.c's own
++    // registry-backed add_data_files call.
++    bool mask_search_path = false;
+ #if COMMON_UNIX_PLATFORMS
+     const char *relative_location = NULL;  // Only used on unix platforms
+     size_t rel_size = 0;                   // unused in windows, dont declare so no compiler warnings are generated
+@@ -3585,10 +3701,12 @@
+         // Local folder and null terminator
+         search_path_size += strlen(override_path) + 2;
+     } else {
+-        // Add the size of any additional search paths defined in the additive environment variable
++#if defined(_WIN32)
++        // Windows keeps its original single, unmasked search_path combining additional_env and package_path: it
++        // has no implicit system tier in this function to separate that from (the registry search happens
++        // elsewhere, in loader_windows.c), so there is nothing to split and nothing to mask here.
+         if (NULL != additional_env) {
+             search_path_size += determine_data_file_path_size(additional_env, 0) + 2;
+-#if defined(_WIN32)
+         }
+         if (NULL != package_path) {
+             search_path_size += determine_data_file_path_size(package_path, 0) + 2;
+@@ -3597,7 +3715,36 @@
+             goto out;
+         }
+ #elif COMMON_UNIX_PLATFORMS
++        // Build the additive search path (VK_ADD_DRIVER_FILES / VK_ADD_LAYER_PATH) as its own buffer, ahead of
++        // and separate from the implicit system tiers below.
++        size_t additive_needed = 2;
++        if (NULL != additional_env) {
++            additive_needed += determine_data_file_path_size(additional_env, 0) + 2;
+         }
++        if (additive_needed > 2) {
++            additive_search_path = loader_instance_heap_calloc(inst, additive_needed, VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
++            if (NULL == additive_search_path) {
++                loader_log(inst, VULKAN_LOADER_ERROR_BIT, 0,
++                           "read_data_files_in_search_paths: Failed to allocate space for additive search path of length %d",
++                           (uint32_t)additive_needed);
++                vk_result = VK_ERROR_OUT_OF_HOST_MEMORY;
++                goto out;
++            }
++            cur_path_ptr = additive_search_path;
++            if (NULL != additional_env) {
++                copy_data_file_info(additional_env, NULL, 0, &cur_path_ptr);
++            }
++            // Remove the last path separator
++            --cur_path_ptr;
++            assert(cur_path_ptr - additive_search_path < (ptrdiff_t)additive_needed);
++            *cur_path_ptr = '\0';
++
++            additive_search_path_size = strlen(additive_search_path);
++            loader_dedup_search_path(additive_search_path, &additive_search_path_size);
++        }
++
++        // The implicit system tiers below are masked exactly when there is no explicit override active.
++        mask_search_path = true;
+
+         // Add the general search folders (with the appropriate relative folder added)
+         rel_size = strlen(relative_location);
+@@ -3614,6 +3761,8 @@
+ #if defined(EXTRASYSCONFDIR)
+             search_path_size += determine_data_file_path_size(EXTRASYSCONFDIR, rel_size);
+ #endif
++            // Nex system tier between the administrator SYSCONFDIR path and the vendor XDG data path.
++            search_path_size += determine_data_file_path_size(NEX_RUNSTATEDIR, rel_size);
+             // Only add the home folders if defined
+             if (NULL != home_data_dir) {
+                 search_path_size += determine_data_file_path_size(home_data_dir, rel_size);
+@@ -3643,12 +3792,13 @@
+         loader_strncpy(cur_path_ptr, search_path_size, override_path, override_path_len);
+         cur_path_ptr += override_path_len;
+     } else {
+-        // Add any additional search paths defined in the additive environment variable
++#if defined(_WIN32)
++        // Add any additional search paths defined in the additive environment variable. Unlike the
++        // COMMON_UNIX_PLATFORMS branch below, upstream never trims the trailing PATH_SEPARATOR or explicitly
++        // null-terminates this buffer here; it relies on the calloc'd tail already being zero. Preserved exactly.
+         if (NULL != additional_env) {
+             copy_data_file_info(additional_env, NULL, 0, &cur_path_ptr);
+         }
+-
+-#if defined(_WIN32)
+         if (NULL != package_path) {
+             copy_data_file_info(package_path, NULL, 0, &cur_path_ptr);
+         }
+@@ -3687,6 +3837,7 @@
+ #if defined(EXTRASYSCONFDIR)
+             copy_data_file_info(EXTRASYSCONFDIR, relative_location, rel_size, &cur_path_ptr);
+ #endif
++            copy_data_file_info(NEX_RUNSTATEDIR, relative_location, rel_size, &cur_path_ptr);
+
+             // Only add the home folders if not NULL
+             if (NULL != home_data_dir) {
+@@ -3707,66 +3858,38 @@
+
+     // Remove duplicate paths, or it would result in duplicate extensions, duplicate devices, etc.
+     // This uses minimal memory, but is O(N^2) on the number of paths. Expect only a few paths.
+-    char path_sep_str[2] = {PATH_SEPARATOR, '\0'};
+-    size_t search_path_updated_size = strlen(search_path);
+-    for (size_t first = 0; first < search_path_updated_size;) {
+-        // If this is an empty path, erase it
+-        if (search_path[first] == PATH_SEPARATOR) {
+-            memmove(&search_path[first], &search_path[first + 1], search_path_updated_size - first + 1);
+-            search_path_updated_size -= 1;
+-            continue;
+-        }
+-
+-        size_t first_end = first + 1;
+-        first_end += strcspn(&search_path[first_end], path_sep_str);
+-        for (size_t second = first_end + 1; second < search_path_updated_size;) {
+-            size_t second_end = second + 1;
+-            second_end += strcspn(&search_path[second_end], path_sep_str);
+-            if (first_end - first == second_end - second &&
+-                !strncmp(&search_path[first], &search_path[second], second_end - second)) {
+-                // Found duplicate. Include PATH_SEPARATOR in second_end, then erase it from search_path.
+-                if (search_path[second_end] == PATH_SEPARATOR) {
+-                    second_end++;
+-                }
+-                memmove(&search_path[second], &search_path[second_end], search_path_updated_size - second_end + 1);
+-                search_path_updated_size -= second_end - second;
+-            } else {
+-                second = second_end + 1;
+-            }
+-        }
+-        first = first_end + 1;
+-    }
+-    search_path_size = search_path_updated_size;
++    search_path_size = strlen(search_path);
++    loader_dedup_search_path(search_path, &search_path_size);
+
+     // Print out the paths being searched if debugging is enabled
+     uint32_t log_flags = 0;
+-    if (search_path_size > 0) {
+-        char *tmp_search_path = loader_instance_heap_alloc(inst, search_path_size + 1, VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
+-        if (NULL != tmp_search_path) {
+-            loader_strncpy(tmp_search_path, search_path_size + 1, search_path, search_path_size);
+-            tmp_search_path[search_path_size] = '\0';
+-            if (manifest_type == LOADER_DATA_FILE_MANIFEST_DRIVER) {
+-                log_flags = VULKAN_LOADER_DRIVER_BIT;
+-                loader_log(inst, VULKAN_LOADER_DRIVER_BIT, 0, "Searching for driver manifest files");
+-            } else {
+-                log_flags = VULKAN_LOADER_LAYER_BIT;
+-                loader_log(inst, VULKAN_LOADER_LAYER_BIT, 0, "Searching for %s layer manifest files",
+-                           manifest_type == LOADER_DATA_FILE_MANIFEST_EXPLICIT_LAYER ? "explicit" : "implicit");
+-            }
+-            loader_log(inst, log_flags, 0, "   In following locations:");
+-            char *cur_file;
+-            char *next_file = tmp_search_path;
+-            while (NULL != next_file && *next_file != '\0') {
+-                cur_file = next_file;
+-                next_file = loader_get_next_path(cur_file);
+-                loader_log(inst, log_flags, 0, "      %s", cur_file);
+-            }
+-            loader_instance_heap_free(inst, tmp_search_path);
++    if (additive_search_path_size > 0 || search_path_size > 0) {
++        if (manifest_type == LOADER_DATA_FILE_MANIFEST_DRIVER) {
++            log_flags = VULKAN_LOADER_DRIVER_BIT;
++            loader_log(inst, VULKAN_LOADER_DRIVER_BIT, 0, "Searching for driver manifest files");
++        } else {
++            log_flags = VULKAN_LOADER_LAYER_BIT;
++            loader_log(inst, VULKAN_LOADER_LAYER_BIT, 0, "Searching for %s layer manifest files",
++                       manifest_type == LOADER_DATA_FILE_MANIFEST_EXPLICIT_LAYER ? "explicit" : "implicit");
++        }
++        loader_log(inst, log_flags, 0, "   In following locations:");
++        loader_log_search_locations(inst, log_flags, additive_search_path, additive_search_path_size);
++        loader_log_search_locations(inst, log_flags, search_path, search_path_size);
++    }
++
++    // Now, parse the paths and add any manifest files found in them. The additive search path is unmasked, so
++    // every entry loads even when two additive entries share a basename; each additive entry lands in out_files
++    // first, so it still masks a same-named file from the implicit tiers scanned next. search_path is masked by
++    // mask_search_path, which is only ever true on COMMON_UNIX_PLATFORMS with no override active: VK_DRIVER_FILES,
++    // VK_ICD_FILENAMES, VK_LAYER_PATH, an application override, and Windows's combined buffer all keep upstream's
++    // unmasked, ordered, duplicate-loading behavior.
++    if (NULL != additive_search_path) {
++        vk_result = add_data_files(inst, additive_search_path, out_files, false, false);
++        if (vk_result != VK_SUCCESS) {
++            goto out;
+         }
+     }
+-
+-    // Now, parse the paths and add any manifest files found in them.
+-    vk_result = add_data_files(inst, search_path, out_files, use_first_found_manifest);
++    vk_result = add_data_files(inst, search_path, out_files, use_first_found_manifest, mask_search_path);
+
+     if (log_flags != 0 && out_files->count > 0) {
+         loader_log(inst, log_flags, 0, "   Found the following files:");
+@@ -3803,6 +3926,7 @@
+ #endif
+
+     loader_instance_heap_free(inst, search_path);
++    loader_instance_heap_free(inst, additive_search_path);
+
+     return vk_result;
+ }
+diff -urN a/loader/loader.h b/loader/loader.h
+--- a/loader/loader.h
++++ b/loader/loader.h
+@@ -229,7 +229,7 @@
+ VkResult add_if_manifest_file(const struct loader_instance *inst, const char *file_name, struct loader_string_list *out_files);
+ VkResult prepend_if_manifest_file(const struct loader_instance *inst, const char *file_name, struct loader_string_list *out_files);
+ VkResult add_data_files(const struct loader_instance *inst, char *search_path, struct loader_string_list *out_files,
+-                        bool use_first_found_manifest);
++                        bool use_first_found_manifest, bool mask_duplicate_basenames);
+
+ loader_api_version loader_make_version(uint32_t version);
+ loader_api_version loader_combine_version(uint32_t major, uint32_t minor, uint32_t patch);
+diff -urN a/loader/loader_windows.c b/loader/loader_windows.c
+--- a/loader/loader_windows.c
++++ b/loader/loader_windows.c
+@@ -788,7 +788,7 @@
+     }
+
+     // Now, parse the paths and add any manifest files found in them.
+-    vk_result = add_data_files(inst, search_path, out_files, false);
++    vk_result = add_data_files(inst, search_path, out_files, false, false);
+
+ out:
+
+diff -urN a/loader/settings.c b/loader/settings.c
+--- a/loader/settings.c
++++ b/loader/settings.c
+@@ -434,20 +434,23 @@
+     size_t base_len = strlen(base);
+     size_t suffix_len = strlen(suffix);
+
++    // Walk each PATH_SEPARATOR-delimited segment of base. start always points at the first byte of the next
++    // segment to check: it begins at 0, and after checking a segment, advances to stop + 1 to skip over the
++    // separator itself. A run of consecutive separators (or a leading/trailing one) produces a zero-length
++    // segment, which is skipped without being checked.
+     uint32_t start = 0;
+-    uint32_t stop = 0;
+-    while (base[start] != '\0' && start < base_len && stop < base_len) {
+-        start = stop;
+-        stop = start + 1;
+-        while (base[stop] != PATH_SEPARATOR && base[stop] != '\0' && stop < base_len) {
++    while (start < base_len) {
++        if (base[start] == PATH_SEPARATOR) {
++            start++;
++            continue;
++        }
++
++        uint32_t stop = start;
++        while (stop < base_len && base[stop] != PATH_SEPARATOR) {
+             stop++;
+         }
+
+         size_t segment_len = (stop - start);
+-        if (segment_len <= 1) {
+-            // segment is *just* a PATH_SEPARATOR, skip it
+-            continue;
+-        }
+         size_t path_len = segment_len + suffix_len + 1;
+         *settings_file_path = loader_instance_heap_calloc(inst, path_len, VK_SYSTEM_ALLOCATION_SCOPE_COMMAND);
+         if (NULL == *settings_file_path) {
+@@ -461,6 +464,8 @@
+         }
+         loader_instance_heap_free(inst, *settings_file_path);
+         *settings_file_path = NULL;
++
++        start = stop + 1;
+     }
+
+     return VK_ERROR_INITIALIZATION_FAILED;
+@@ -537,6 +542,14 @@
+         return res;
+     }
+ #endif
++
++    // Nex runtime tier, between the administrator SYSCONFDIR path and the vendor xdg_data_dirs fallback.
++    res = check_if_settings_path_exists(inst, NEX_RUNSTATEDIR, "/vulkan/loader_settings.d/" VK_LOADER_SETTINGS_FILENAME,
++                                        settings_file_path);
++    if (res == VK_SUCCESS) {
++        return res;
++    }
++
+     res = check_if_settings_path_exists(inst, xdg_data_dirs, "/vulkan/loader_settings.d/" VK_LOADER_SETTINGS_FILENAME,
+                                         settings_file_path);
+     if (res == VK_SUCCESS) {
+diff -urN a/loader/vk_loader_platform.h b/loader/vk_loader_platform.h
+--- a/loader/vk_loader_platform.h
++++ b/loader/vk_loader_platform.h
+@@ -150,6 +150,11 @@
+ #define PATH_SEPARATOR ':'
+ #define DIRECTORY_SYMBOL '/'
+
++// Nex system tier between the administrator (SYSCONFDIR) and vendor
++// (XDG data dirs) manifest and settings roots. Upstream never scans this
++// runtime tier.
++#define NEX_RUNSTATEDIR "/run"
++
+ #define VULKAN_DIR "vulkan/"
+ #define VULKAN_ICDCONF_DIR "icd.d"
+ #define VULKAN_ICD_DIR "icd"

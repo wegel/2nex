@@ -1,0 +1,620 @@
+package:
+  schema: 1
+  name: CA Certificates
+  slug: ca-certificates
+  namespace: apps/misc
+  version: "20251104"
+  description: Certificate Authority certificates for SSL/TLS
+  homepage: https://curl.se/docs/caextract.html
+  checksum: b36aa5a04f0b4bf1e6fc67b6bd207c5ed1c5f344135ee0e16700478c53dd825e
+
+sources:
+- name: cacert
+  url: https://curl.se/ca/cacert-2025-11-04.pem
+  sha256: 8ac40bdd3d3e151a6b4078d2b2029796e8f843e3f86fbf2adbc4dd9f05e79def
+- name: update_ca_certificates
+  file: pkg/apps/misc/update-ca-certificates
+  sha256: 2319b6db70a7afb27f29da7a5cd2238bef958e5c0b564c21b5a1a01977064ab3
+- name: update_ca_certificates_service
+  file: pkg/apps/misc/update-ca-certificates.service
+  sha256: e7be9ecf5d07358afb3f80925c1fdab6fbc324d8a80f1a588dd3b9e9f7cb3490
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: p11-kit
+  commit: x86_64/pkg/libs/crypto/p11-kit/0.25.5/bundles/runtime
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [110:410]
+
+  script: |
+    set -eu
+
+    install -Dm644 "${SOURCE_cacert}" \
+      "${OUT_DIR}/usr/share/pki/trust/anchors/ca-certificates.crt"
+    install -Dm755 "/${SOURCE_update_ca_certificates}" \
+      "${OUT_DIR}/usr/bin/update-ca-certificates"
+    install -Dm644 "/${SOURCE_update_ca_certificates_service}" \
+      "${OUT_DIR}/usr/lib/systemd/system/update-ca-certificates.service"
+    mkdir -p "${OUT_DIR}/usr/lib/systemd/system/sysinit.target.wants"
+    ln -s ../update-ca-certificates.service \
+      "${OUT_DIR}/usr/lib/systemd/system/sysinit.target.wants/update-ca-certificates.service"
+
+    mkdir -p /usr/share/pki/trust/anchors
+    cp "${SOURCE_cacert}" \
+      /usr/share/pki/trust/anchors/ca-certificates.crt
+
+    "${OUT_DIR}/usr/bin/update-ca-certificates" \
+      --output-dir "${OUT_DIR}/usr/lib/ssl/certs"
+
+    vendor_count=$(sed -n '/BEGIN CERTIFICATE/p' "${SOURCE_cacert}" | wc -l)
+    extracted_count=$(sed -n '/BEGIN CERTIFICATE/p' \
+      "${OUT_DIR}/usr/lib/ssl/certs/ca-certificates.crt" | wc -l)
+    test "${vendor_count}" -eq "${extracted_count}"
+    test "$(find "${OUT_DIR}/usr/lib/ssl/certs" -type l | wc -l)" -gt 0
+
+    mkdir -p /etc/pki/trust/anchors /run/pki/trust/anchors
+    openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+      -subj /CN=EP012-admin-anchor \
+      -keyout "${WORK_DIR}/admin.key" \
+      -out /etc/pki/trust/anchors/admin.pem >/dev/null 2>&1
+    openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+      -subj /CN=EP012-transient-anchor \
+      -keyout "${WORK_DIR}/transient.key" \
+      -out /run/pki/trust/anchors/transient.pem >/dev/null 2>&1
+    "${OUT_DIR}/usr/bin/update-ca-certificates" \
+      --output-dir "${WORK_DIR}/layered-certs"
+    layered_count=$(sed -n '/BEGIN CERTIFICATE/p' \
+      "${WORK_DIR}/layered-certs/ca-certificates.crt" | wc -l)
+    test "${layered_count}" -eq "$((vendor_count + 2))"
+    openssl verify \
+      -CAfile "${WORK_DIR}/layered-certs/ca-certificates.crt" \
+      /etc/pki/trust/anchors/admin.pem \
+      /run/pki/trust/anchors/transient.pem
+
+    csplit -s -n 3 -f "${WORK_DIR}/vendor-" "${SOURCE_cacert}" \
+      '/-----BEGIN CERTIFICATE-----/' '{*}'
+    mkdir -p /etc/pki/trust/blocklist
+    cp "${WORK_DIR}/vendor-001" /etc/pki/trust/blocklist/vendor.pem
+    "${OUT_DIR}/usr/bin/update-ca-certificates" \
+      --output-dir "${WORK_DIR}/masked-certs"
+    masked_count=$(sed -n '/BEGIN CERTIFICATE/p' \
+      "${WORK_DIR}/masked-certs/ca-certificates.crt" | wc -l)
+    test "${masked_count}" -eq "$((vendor_count + 1))"
+
+    chmod u+w \
+      "${WORK_DIR}/layered-certs" \
+      "${WORK_DIR}/masked-certs"
+    rm -rf \
+      "${WORK_DIR}/layered-certs" \
+      "${WORK_DIR}/masked-certs"
+    rm -f \
+      "${WORK_DIR}/admin.key" \
+      "${WORK_DIR}/transient.key" \
+      "${WORK_DIR}"/vendor-* \
+      /etc/pki/trust/anchors/admin.pem \
+      /etc/pki/trust/blocklist/vendor.pem \
+      /run/pki/trust/anchors/transient.pem \
+      /usr/share/pki/trust/anchors/ca-certificates.crt
+    rmdir \
+      /etc/pki/trust/anchors \
+      /etc/pki/trust/blocklist \
+      /etc/pki/trust \
+      /etc/pki \
+      /run/pki/trust/anchors \
+      /run/pki/trust \
+      /run/pki \
+      /usr/share/pki/trust/anchors \
+      /usr/share/pki/trust \
+      /usr/share/pki
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+  - certs
+  - systemd
+
+  full:
+  - bin
+  - certs
+  - systemd
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/update-ca-certificates
+      needs:
+      - /usr/bin/chmod
+      - /usr/bin/mkdir
+      - /usr/bin/mktemp
+      - /usr/bin/mv
+      - /usr/bin/rm
+      - /usr/bin/sh
+      - /usr/bin/trust
+      - /usr/lib/pkcs11/p11-kit-trust.so
+      - /usr/share/p11-kit/modules/p11-kit-trust.module
+
+  certs:
+    files:
+    - path: /usr/lib/ssl/certs/0b1b94ef.0
+    - path: /usr/lib/ssl/certs/0f5dc4f3.0
+    - path: /usr/lib/ssl/certs/0f6fa695.0
+    - path: /usr/lib/ssl/certs/0b9bc432.0
+    - path: /usr/lib/ssl/certs/0d69c7e1.0
+    - path: /usr/lib/ssl/certs/0a775a30.0
+    - path: /usr/lib/ssl/certs/0bf05006.0
+    - path: /usr/lib/ssl/certs/1b0f7e5c.0
+    - path: /usr/lib/ssl/certs/1e1eab7c.0
+    - path: /usr/lib/ssl/certs/1e8e7201.0
+    - path: /usr/lib/ssl/certs/1e08bfd1.0
+    - path: /usr/lib/ssl/certs/1e09d511.0
+    - path: /usr/lib/ssl/certs/1e44ef15.0
+    - path: /usr/lib/ssl/certs/1f58a078.0
+    - path: /usr/lib/ssl/certs/1d3472b9.0
+    - path: /usr/lib/ssl/certs/1ec40989.0
+    - path: /usr/lib/ssl/certs/1ae85e5e.0
+    - path: /usr/lib/ssl/certs/1cef98f5.0
+    - path: /usr/lib/ssl/certs/1df5a75f.0
+    - path: /usr/lib/ssl/certs/002c0b4f.0
+    - path: /usr/lib/ssl/certs/2d9dafe4.0
+    - path: /usr/lib/ssl/certs/2d21b73c.0
+    - path: /usr/lib/ssl/certs/2c63f966.0
+    - path: /usr/lib/ssl/certs/2b349938.0
+    - path: /usr/lib/ssl/certs/2cc2056d.0
+    - path: /usr/lib/ssl/certs/2ccbdda3.0
+    - path: /usr/lib/ssl/certs/2add47b6.0
+    - path: /usr/lib/ssl/certs/2ae6433e.0
+    - path: /usr/lib/ssl/certs/3c9a4d3b.0
+    - path: /usr/lib/ssl/certs/3e359ba6.0
+    - path: /usr/lib/ssl/certs/3c860d51.0
+    - path: /usr/lib/ssl/certs/3c899c73.0
+    - path: /usr/lib/ssl/certs/3fb36b73.0
+    - path: /usr/lib/ssl/certs/3bde41ac.0
+    - path: /usr/lib/ssl/certs/3afde786.0
+    - path: /usr/lib/ssl/certs/04f60c28.0
+    - path: /usr/lib/ssl/certs/4f316efb.0
+    - path: /usr/lib/ssl/certs/4b718d9b.0
+    - path: /usr/lib/ssl/certs/4c3982f2.0
+    - path: /usr/lib/ssl/certs/4fd49c6c.0
+    - path: /usr/lib/ssl/certs/4be590e0.0
+    - path: /usr/lib/ssl/certs/4bfab552.0
+    - path: /usr/lib/ssl/certs/5a3f0ff8.0
+    - path: /usr/lib/ssl/certs/5f9a69fa.0
+    - path: /usr/lib/ssl/certs/5f15c80c.0
+    - path: /usr/lib/ssl/certs/5f47b495.0
+    - path: /usr/lib/ssl/certs/5d139d02.0
+    - path: /usr/lib/ssl/certs/5f618aec.0
+    - path: /usr/lib/ssl/certs/5acf816d.0
+    - path: /usr/lib/ssl/certs/5cd81ad7.0
+    - path: /usr/lib/ssl/certs/5fdd185d.0
+    - path: /usr/lib/ssl/certs/6b03dec0.0
+    - path: /usr/lib/ssl/certs/6a9bdba3.0
+    - path: /usr/lib/ssl/certs/6d41d539.0
+    - path: /usr/lib/ssl/certs/6c85d883.0
+    - path: /usr/lib/ssl/certs/6b99d060.0
+    - path: /usr/lib/ssl/certs/6b483515.0
+    - path: /usr/lib/ssl/certs/6fa5da56.0
+    - path: /usr/lib/ssl/certs/06dc52d5.0
+    - path: /usr/lib/ssl/certs/7f3d5d1d.0
+    - path: /usr/lib/ssl/certs/7a3adc42.0
+    - path: /usr/lib/ssl/certs/7a7c655d.0
+    - path: /usr/lib/ssl/certs/7e067d03.0
+    - path: /usr/lib/ssl/certs/7a780d93.0
+    - path: /usr/lib/ssl/certs/7a819ef2.0
+    - path: /usr/lib/ssl/certs/7fa05551.0
+    - path: /usr/lib/ssl/certs/8f6cd7bb.0
+    - path: /usr/lib/ssl/certs/8d10a21f.0
+    - path: /usr/lib/ssl/certs/8d81b251.0
+    - path: /usr/lib/ssl/certs/8d86cdd1.0
+    - path: /usr/lib/ssl/certs/8d89cda1.0
+    - path: /usr/lib/ssl/certs/8d6437c3.0
+    - path: /usr/lib/ssl/certs/8f103249.0
+    - path: /usr/lib/ssl/certs/8cb5ee0f.0
+    - path: /usr/lib/ssl/certs/9d04f354.0
+    - path: /usr/lib/ssl/certs/9c8dfbd4.0
+    - path: /usr/lib/ssl/certs/9b46e03d.0
+    - path: /usr/lib/ssl/certs/9e654b62.0
+    - path: /usr/lib/ssl/certs/9f727ac7.0
+    - path: /usr/lib/ssl/certs/9b5697b0.0
+    - path: /usr/lib/ssl/certs/9d6523ce.0
+    - path: /usr/lib/ssl/certs/9aef356c.0
+    - path: /usr/lib/ssl/certs/9ef4a08a.0
+    - path: /usr/lib/ssl/certs/9bf03295.0
+    - path: /usr/lib/ssl/certs/14bc7599.0
+    - path: /usr/lib/ssl/certs/30e1580d.0
+    - path: /usr/lib/ssl/certs/33ee480d.0
+    - path: /usr/lib/ssl/certs/34d996fb.0
+    - path: /usr/lib/ssl/certs/41a3f684.0
+    - path: /usr/lib/ssl/certs/47b283f6.0
+    - path: /usr/lib/ssl/certs/48a195d8.0
+    - path: /usr/lib/ssl/certs/48bec511.0
+    - path: /usr/lib/ssl/certs/52b525c7.0
+    - path: /usr/lib/ssl/certs/53a1b57a.0
+    - path: /usr/lib/ssl/certs/60afe812.0
+    - path: /usr/lib/ssl/certs/062cdee6.0
+    - path: /usr/lib/ssl/certs/63a2c897.0
+    - path: /usr/lib/ssl/certs/064e0aa9.0
+    - path: /usr/lib/ssl/certs/68dd7389.0
+    - path: /usr/lib/ssl/certs/073bfcc5.0
+    - path: /usr/lib/ssl/certs/75d1b2ed.0
+    - path: /usr/lib/ssl/certs/76faf6c0.0
+    - path: /usr/lib/ssl/certs/81f2d2b1.0
+    - path: /usr/lib/ssl/certs/81b9768f.0
+    - path: /usr/lib/ssl/certs/83e9984f.0
+    - path: /usr/lib/ssl/certs/85cde254.0
+    - path: /usr/lib/ssl/certs/89c02a45.0
+    - path: /usr/lib/ssl/certs/90c5a3c8.0
+    - path: /usr/lib/ssl/certs/93bc0acc.0
+    - path: /usr/lib/ssl/certs/95aff9e3.0
+    - path: /usr/lib/ssl/certs/98aaf404.0
+    - path: /usr/lib/ssl/certs/99e1b953.0
+    - path: /usr/lib/ssl/certs/106f3e4d.0
+    - path: /usr/lib/ssl/certs/128f4b91.0
+    - path: /usr/lib/ssl/certs/228f89db.0
+    - path: /usr/lib/ssl/certs/244b5494.0
+    - path: /usr/lib/ssl/certs/304d27c3.0
+    - path: /usr/lib/ssl/certs/399e7759.0
+    - path: /usr/lib/ssl/certs/406c9bb1.0
+    - path: /usr/lib/ssl/certs/455f1b52.0
+    - path: /usr/lib/ssl/certs/583d0756.0
+    - path: /usr/lib/ssl/certs/583ac115.0
+    - path: /usr/lib/ssl/certs/595e996b.0
+    - path: /usr/lib/ssl/certs/626dceaf.0
+    - path: /usr/lib/ssl/certs/749e9e03.0
+    - path: /usr/lib/ssl/certs/773e07ad.0
+    - path: /usr/lib/ssl/certs/865fbdf9.0
+    - path: /usr/lib/ssl/certs/869fbf79.0
+    - path: /usr/lib/ssl/certs/878d9bca.0
+    - path: /usr/lib/ssl/certs/882de061.0
+    - path: /usr/lib/ssl/certs/930ac5d2.0
+    - path: /usr/lib/ssl/certs/985c1f52.0
+    - path: /usr/lib/ssl/certs/988a38cb.0
+    - path: /usr/lib/ssl/certs/1001acf7.0
+    - path: /usr/lib/ssl/certs/01419da9.0
+    - path: /usr/lib/ssl/certs/2923b3f9.0
+    - path: /usr/lib/ssl/certs/3428dc64.0
+    - path: /usr/lib/ssl/certs/4042bcee.0
+    - path: /usr/lib/ssl/certs/5443e9e3.0
+    - path: /usr/lib/ssl/certs/5860aaa6.0
+    - path: /usr/lib/ssl/certs/5931b5bc.0
+    - path: /usr/lib/ssl/certs/6187b673.0
+    - path: /usr/lib/ssl/certs/6805c744.0
+    - path: /usr/lib/ssl/certs/7719f463.0
+    - path: /usr/lib/ssl/certs/7892ad52.0
+    - path: /usr/lib/ssl/certs/8160b96c.0
+    - path: /usr/lib/ssl/certs/8312c4c1.0
+    - path: /usr/lib/ssl/certs/8508e720.0
+    - path: /usr/lib/ssl/certs/8794b4e3.0
+    - path: /usr/lib/ssl/certs/9282e51c.0
+    - path: /usr/lib/ssl/certs/9479c8c3.0
+    - path: /usr/lib/ssl/certs/9482e63a.0
+    - path: /usr/lib/ssl/certs/9576d26b.0
+    - path: /usr/lib/ssl/certs/9591a472.0
+    - path: /usr/lib/ssl/certs/31188b5e.0
+    - path: /usr/lib/ssl/certs/32888f65.0
+    - path: /usr/lib/ssl/certs/40547a79.0
+    - path: /usr/lib/ssl/certs/068570d1.0
+    - path: /usr/lib/ssl/certs/69105f4f.0
+    - path: /usr/lib/ssl/certs/82223c44.0
+    - path: /usr/lib/ssl/certs/86212b19.0
+    - path: /usr/lib/ssl/certs/88950faa.0
+    - path: /usr/lib/ssl/certs/93851c9e.0
+    - path: /usr/lib/ssl/certs/0179095f.0
+    - path: /usr/lib/ssl/certs/252252d2.0
+    - path: /usr/lib/ssl/certs/302904dd.0
+    - path: /usr/lib/ssl/certs/607986c7.0
+    - path: /usr/lib/ssl/certs/616816f6.0
+    - path: /usr/lib/ssl/certs/02265526.0
+    - path: /usr/lib/ssl/certs/3513523f.0
+    - path: /usr/lib/ssl/certs/8761519c.0
+    - path: /usr/lib/ssl/certs/9046744a.0
+    - path: /usr/lib/ssl/certs/9339512a.0
+    - path: /usr/lib/ssl/certs/09789157.0
+    - path: /usr/lib/ssl/certs/9846683b.0
+    - path: /usr/lib/ssl/certs/10531352.0
+    - path: /usr/lib/ssl/certs/35105088.0
+    - path: /usr/lib/ssl/certs/40193066.0
+    - path: /usr/lib/ssl/certs/54657681.0
+    - path: /usr/lib/ssl/certs/ACCVRAIZ1.pem
+    - path: /usr/lib/ssl/certs/AC_RAIZ_FNMT-RCM.pem
+    - path: /usr/lib/ssl/certs/AC_RAIZ_FNMT-RCM_SERVIDORES_SEGUROS.pem
+    - path: /usr/lib/ssl/certs/ANF_Secure_Server_Root_CA.pem
+    - path: /usr/lib/ssl/certs/Actalis_Authentication_Root_CA.pem
+    - path: /usr/lib/ssl/certs/AffirmTrust_Commercial.pem
+    - path: /usr/lib/ssl/certs/AffirmTrust_Networking.pem
+    - path: /usr/lib/ssl/certs/AffirmTrust_Premium.pem
+    - path: /usr/lib/ssl/certs/AffirmTrust_Premium_ECC.pem
+    - path: /usr/lib/ssl/certs/Amazon_Root_CA_1.pem
+    - path: /usr/lib/ssl/certs/Amazon_Root_CA_2.pem
+    - path: /usr/lib/ssl/certs/Amazon_Root_CA_3.pem
+    - path: /usr/lib/ssl/certs/Amazon_Root_CA_4.pem
+    - path: /usr/lib/ssl/certs/Atos_TrustedRoot_2011.pem
+    - path: /usr/lib/ssl/certs/Atos_TrustedRoot_Root_CA_ECC_TLS_2021.pem
+    - path: /usr/lib/ssl/certs/Atos_TrustedRoot_Root_CA_RSA_TLS_2021.pem
+    - path: /usr/lib/ssl/certs/Autoridad_de_Certificacion_Firmaprofesional_CIF_A62634068.pem
+    - path: /usr/lib/ssl/certs/BJCA_Global_Root_CA1.pem
+    - path: /usr/lib/ssl/certs/BJCA_Global_Root_CA2.pem
+    - path: /usr/lib/ssl/certs/Buypass_Class_2_Root_CA.pem
+    - path: /usr/lib/ssl/certs/Buypass_Class_3_Root_CA.pem
+    - path: /usr/lib/ssl/certs/CA_Disig_Root_R2.pem
+    - path: /usr/lib/ssl/certs/CFCA_EV_ROOT.pem
+    - path: /usr/lib/ssl/certs/COMODO_Certification_Authority.pem
+    - path: /usr/lib/ssl/certs/COMODO_ECC_Certification_Authority.pem
+    - path: /usr/lib/ssl/certs/COMODO_RSA_Certification_Authority.pem
+    - path: /usr/lib/ssl/certs/Certainly_Root_E1.pem
+    - path: /usr/lib/ssl/certs/Certainly_Root_R1.pem
+    - path: /usr/lib/ssl/certs/Certigna.pem
+    - path: /usr/lib/ssl/certs/Certigna_Root_CA.pem
+    - path: /usr/lib/ssl/certs/Certum_EC-384_CA.pem
+    - path: /usr/lib/ssl/certs/Certum_Trusted_Network_CA.pem
+    - path: /usr/lib/ssl/certs/Certum_Trusted_Network_CA_2.pem
+    - path: /usr/lib/ssl/certs/Certum_Trusted_Root_CA.pem
+    - path: /usr/lib/ssl/certs/CommScope_Public_Trust_ECC_Root-01.pem
+    - path: /usr/lib/ssl/certs/CommScope_Public_Trust_ECC_Root-02.pem
+    - path: /usr/lib/ssl/certs/CommScope_Public_Trust_RSA_Root-01.pem
+    - path: /usr/lib/ssl/certs/CommScope_Public_Trust_RSA_Root-02.pem
+    - path: /usr/lib/ssl/certs/D-TRUST_BR_Root_CA_1_2020.pem
+    - path: /usr/lib/ssl/certs/D-TRUST_BR_Root_CA_2_2023.pem
+    - path: /usr/lib/ssl/certs/D-TRUST_EV_Root_CA_1_2020.pem
+    - path: /usr/lib/ssl/certs/D-TRUST_EV_Root_CA_2_2023.pem
+    - path: /usr/lib/ssl/certs/D-TRUST_Root_Class_3_CA_2_2009.pem
+    - path: /usr/lib/ssl/certs/D-TRUST_Root_Class_3_CA_2_EV_2009.pem
+    - path: /usr/lib/ssl/certs/DigiCert_Assured_ID_Root_CA.pem
+    - path: /usr/lib/ssl/certs/DigiCert_Assured_ID_Root_G2.pem
+    - path: /usr/lib/ssl/certs/DigiCert_Assured_ID_Root_G3.pem
+    - path: /usr/lib/ssl/certs/DigiCert_Global_Root_CA.pem
+    - path: /usr/lib/ssl/certs/DigiCert_Global_Root_G2.pem
+    - path: /usr/lib/ssl/certs/DigiCert_Global_Root_G3.pem
+    - path: /usr/lib/ssl/certs/DigiCert_High_Assurance_EV_Root_CA.pem
+    - path: /usr/lib/ssl/certs/DigiCert_TLS_ECC_P384_Root_G5.pem
+    - path: /usr/lib/ssl/certs/DigiCert_TLS_RSA4096_Root_G5.pem
+    - path: /usr/lib/ssl/certs/DigiCert_Trusted_Root_G4.pem
+    - path: /usr/lib/ssl/certs/Entrust_Root_Certification_Authority.pem
+    - path: /usr/lib/ssl/certs/Entrust_Root_Certification_Authority_-_EC1.pem
+    - path: /usr/lib/ssl/certs/Entrust_Root_Certification_Authority_-_G2.pem
+    - path: /usr/lib/ssl/certs/FIRMAPROFESIONAL_CA_ROOT-A_WEB.pem
+    - path: /usr/lib/ssl/certs/GDCA_TrustAUTH_R5_ROOT.pem
+    - path: /usr/lib/ssl/certs/GLOBALTRUST_2020.pem
+    - path: /usr/lib/ssl/certs/GTS_Root_R1.pem
+    - path: /usr/lib/ssl/certs/GTS_Root_R2.pem
+    - path: /usr/lib/ssl/certs/GTS_Root_R3.pem
+    - path: /usr/lib/ssl/certs/GTS_Root_R4.pem
+    - path: /usr/lib/ssl/certs/GlobalSign.1.pem
+    - path: /usr/lib/ssl/certs/GlobalSign.2.pem
+    - path: /usr/lib/ssl/certs/GlobalSign.3.pem
+    - path: /usr/lib/ssl/certs/GlobalSign.pem
+    - path: /usr/lib/ssl/certs/GlobalSign_Root_E46.pem
+    - path: /usr/lib/ssl/certs/GlobalSign_Root_R46.pem
+    - path: /usr/lib/ssl/certs/Go_Daddy_Root_Certificate_Authority_-_G2.pem
+    - path: /usr/lib/ssl/certs/HARICA_TLS_ECC_Root_CA_2021.pem
+    - path: /usr/lib/ssl/certs/HARICA_TLS_RSA_Root_CA_2021.pem
+    - path: /usr/lib/ssl/certs/Hellenic_Academic_and_Research_Institutions_ECC_RootCA_2015.pem
+    - path: /usr/lib/ssl/certs/Hellenic_Academic_and_Research_Institutions_RootCA_2015.pem
+    - path: /usr/lib/ssl/certs/HiPKI_Root_CA_-_G1.pem
+    - path: /usr/lib/ssl/certs/Hongkong_Post_Root_CA_3.pem
+    - path: /usr/lib/ssl/certs/ISRG_Root_X1.pem
+    - path: /usr/lib/ssl/certs/ISRG_Root_X2.pem
+    - path: /usr/lib/ssl/certs/IdenTrust_Commercial_Root_CA_1.pem
+    - path: /usr/lib/ssl/certs/IdenTrust_Public_Sector_Root_CA_1.pem
+    - path: /usr/lib/ssl/certs/Izenpe.com.pem
+    - path: /usr/lib/ssl/certs/Microsec_e-Szigno_Root_CA_2009.pem
+    - path: /usr/lib/ssl/certs/Microsoft_ECC_Root_Certificate_Authority_2017.pem
+    - path: /usr/lib/ssl/certs/Microsoft_RSA_Root_Certificate_Authority_2017.pem
+    - path: /usr/lib/ssl/certs/NAVER_Global_Root_Certification_Authority.pem
+    - path: /usr/lib/ssl/certs/NetLock_Arany__Class_Gold__F__tan__s__tv__ny.pem
+    - path: /usr/lib/ssl/certs/OISTE_Server_Root_ECC_G1.pem
+    - path: /usr/lib/ssl/certs/OISTE_Server_Root_RSA_G1.pem
+    - path: /usr/lib/ssl/certs/OISTE_WISeKey_Global_Root_GB_CA.pem
+    - path: /usr/lib/ssl/certs/OISTE_WISeKey_Global_Root_GC_CA.pem
+    - path: /usr/lib/ssl/certs/QuoVadis_Root_CA_1_G3.pem
+    - path: /usr/lib/ssl/certs/QuoVadis_Root_CA_2_G3.pem
+    - path: /usr/lib/ssl/certs/QuoVadis_Root_CA_2.pem
+    - path: /usr/lib/ssl/certs/QuoVadis_Root_CA_3_G3.pem
+    - path: /usr/lib/ssl/certs/QuoVadis_Root_CA_3.pem
+    - path: /usr/lib/ssl/certs/SSL.com_EV_Root_Certification_Authority_ECC.pem
+    - path: /usr/lib/ssl/certs/SSL.com_EV_Root_Certification_Authority_RSA_R2.pem
+    - path: /usr/lib/ssl/certs/SSL.com_Root_Certification_Authority_ECC.pem
+    - path: /usr/lib/ssl/certs/SSL.com_Root_Certification_Authority_RSA.pem
+    - path: /usr/lib/ssl/certs/SSL.com_TLS_ECC_Root_CA_2022.pem
+    - path: /usr/lib/ssl/certs/SSL.com_TLS_RSA_Root_CA_2022.pem
+    - path: /usr/lib/ssl/certs/SZAFIR_ROOT_CA2.pem
+    - path: /usr/lib/ssl/certs/Sectigo_Public_Server_Authentication_Root_E46.pem
+    - path: /usr/lib/ssl/certs/Sectigo_Public_Server_Authentication_Root_R46.pem
+    - path: /usr/lib/ssl/certs/SecureSign_Root_CA12.pem
+    - path: /usr/lib/ssl/certs/SecureSign_Root_CA14.pem
+    - path: /usr/lib/ssl/certs/SecureSign_Root_CA15.pem
+    - path: /usr/lib/ssl/certs/SecureTrust_CA.pem
+    - path: /usr/lib/ssl/certs/Secure_Global_CA.pem
+    - path: /usr/lib/ssl/certs/Security_Communication_ECC_RootCA1.pem
+    - path: /usr/lib/ssl/certs/Security_Communication_RootCA2.pem
+    - path: /usr/lib/ssl/certs/Starfield_Root_Certificate_Authority_-_G2.pem
+    - path: /usr/lib/ssl/certs/Starfield_Services_Root_Certificate_Authority_-_G2.pem
+    - path: /usr/lib/ssl/certs/SwissSign_Gold_CA_-_G2.pem
+    - path: /usr/lib/ssl/certs/SwissSign_RSA_TLS_Root_CA_2022_-_1.pem
+    - path: /usr/lib/ssl/certs/T-TeleSec_GlobalRoot_Class_2.pem
+    - path: /usr/lib/ssl/certs/T-TeleSec_GlobalRoot_Class_3.pem
+    - path: /usr/lib/ssl/certs/TUBITAK_Kamu_SM_SSL_Kok_Sertifikasi_-_Surum_1.pem
+    - path: /usr/lib/ssl/certs/TWCA_CYBER_Root_CA.pem
+    - path: /usr/lib/ssl/certs/TWCA_Global_Root_CA.pem
+    - path: /usr/lib/ssl/certs/TWCA_Root_Certification_Authority.pem
+    - path: /usr/lib/ssl/certs/Telekom_Security_TLS_ECC_Root_2020.pem
+    - path: /usr/lib/ssl/certs/Telekom_Security_TLS_RSA_Root_2023.pem
+    - path: /usr/lib/ssl/certs/TeliaSonera_Root_CA_v1.pem
+    - path: /usr/lib/ssl/certs/Telia_Root_CA_v2.pem
+    - path: /usr/lib/ssl/certs/TrustAsia_Global_Root_CA_G3.pem
+    - path: /usr/lib/ssl/certs/TrustAsia_Global_Root_CA_G4.pem
+    - path: /usr/lib/ssl/certs/TrustAsia_TLS_ECC_Root_CA.pem
+    - path: /usr/lib/ssl/certs/TrustAsia_TLS_RSA_Root_CA.pem
+    - path: /usr/lib/ssl/certs/Trustwave_Global_Certification_Authority.pem
+    - path: /usr/lib/ssl/certs/Trustwave_Global_ECC_P256_Certification_Authority.pem
+    - path: /usr/lib/ssl/certs/Trustwave_Global_ECC_P384_Certification_Authority.pem
+    - path: /usr/lib/ssl/certs/TunTrust_Root_CA.pem
+    - path: /usr/lib/ssl/certs/UCA_Extended_Validation_Root.pem
+    - path: /usr/lib/ssl/certs/UCA_Global_G2_Root.pem
+    - path: /usr/lib/ssl/certs/USERTrust_ECC_Certification_Authority.pem
+    - path: /usr/lib/ssl/certs/USERTrust_RSA_Certification_Authority.pem
+    - path: /usr/lib/ssl/certs/a2c66da8.0
+    - path: /usr/lib/ssl/certs/a9d40e02.0
+    - path: /usr/lib/ssl/certs/a09a51ae.0
+    - path: /usr/lib/ssl/certs/a81e292b.0
+    - path: /usr/lib/ssl/certs/a89d74c2.0
+    - path: /usr/lib/ssl/certs/a94d09e5.0
+    - path: /usr/lib/ssl/certs/a716d4ed.0
+    - path: /usr/lib/ssl/certs/a3418fda.0
+    - path: /usr/lib/ssl/certs/ab59055e.0
+    - path: /usr/lib/ssl/certs/b0d5255e.0
+    - path: /usr/lib/ssl/certs/b0e59380.0
+    - path: /usr/lib/ssl/certs/b0ed035a.0
+    - path: /usr/lib/ssl/certs/b3fb433b.0
+    - path: /usr/lib/ssl/certs/b7a5b843.0
+    - path: /usr/lib/ssl/certs/b7b40cb7.0
+    - path: /usr/lib/ssl/certs/b7db1890.0
+    - path: /usr/lib/ssl/certs/b8d25de6.0
+    - path: /usr/lib/ssl/certs/b30d5fda.0
+    - path: /usr/lib/ssl/certs/b74d2bd5.0
+    - path: /usr/lib/ssl/certs/b81b93f0.0
+    - path: /usr/lib/ssl/certs/b92fd57f.0
+    - path: /usr/lib/ssl/certs/b872f2b4.0
+    - path: /usr/lib/ssl/certs/b936d1c6.0
+    - path: /usr/lib/ssl/certs/b1159c4c.0
+    - path: /usr/lib/ssl/certs/b66938e9.0
+    - path: /usr/lib/ssl/certs/b433981b.0
+    - path: /usr/lib/ssl/certs/b727005e.0
+    - path: /usr/lib/ssl/certs/ba8887ce.0
+    - path: /usr/lib/ssl/certs/bc3f2570.0
+    - path: /usr/lib/ssl/certs/bd43e1dd.0
+    - path: /usr/lib/ssl/certs/bdacca6f.0
+    - path: /usr/lib/ssl/certs/bf53fb88.0
+    - path: /usr/lib/ssl/certs/bf64f35b.0
+    - path: /usr/lib/ssl/certs/c01eb047.0
+    - path: /usr/lib/ssl/certs/c7f1359b.0
+    - path: /usr/lib/ssl/certs/c28a8a30.0
+    - path: /usr/lib/ssl/certs/c44cc0c0.0
+    - path: /usr/lib/ssl/certs/c90bc37d.0
+    - path: /usr/lib/ssl/certs/c559d742.0
+    - path: /usr/lib/ssl/certs/c491639e.0
+    - path: /usr/lib/ssl/certs/ca-certificates.crt
+    - path: /usr/lib/ssl/certs/ca6e4ad9.0
+    - path: /usr/lib/ssl/certs/cb1c3204.0
+    - path: /usr/lib/ssl/certs/cbb3f32b.0
+    - path: /usr/lib/ssl/certs/cbf06781.0
+    - path: /usr/lib/ssl/certs/cc450945.0
+    - path: /usr/lib/ssl/certs/ccc52f49.0
+    - path: /usr/lib/ssl/certs/cd8c0d63.0
+    - path: /usr/lib/ssl/certs/cd58d51e.0
+    - path: /usr/lib/ssl/certs/ce5e74ef.0
+    - path: /usr/lib/ssl/certs/certSIGN_ROOT_CA.pem
+    - path: /usr/lib/ssl/certs/certSIGN_ROOT_CA_G2.pem
+    - path: /usr/lib/ssl/certs/cf701eeb.0
+    - path: /usr/lib/ssl/certs/d4c339cb.0
+    - path: /usr/lib/ssl/certs/d4dae3dd.0
+    - path: /usr/lib/ssl/certs/d7e8dc79.0
+    - path: /usr/lib/ssl/certs/d16a5865.0
+    - path: /usr/lib/ssl/certs/d18e9066.0
+    - path: /usr/lib/ssl/certs/d39b0a2c.0
+    - path: /usr/lib/ssl/certs/d41b5e2a.0
+    - path: /usr/lib/ssl/certs/d52c538d.0
+    - path: /usr/lib/ssl/certs/d96b65e2.0
+    - path: /usr/lib/ssl/certs/d887a5bb.0
+    - path: /usr/lib/ssl/certs/d06393bb.0
+    - path: /usr/lib/ssl/certs/d7746a63.0
+    - path: /usr/lib/ssl/certs/d59297b8.0
+    - path: /usr/lib/ssl/certs/d6325660.0
+    - path: /usr/lib/ssl/certs/da0cfd1d.0
+    - path: /usr/lib/ssl/certs/da7377f6.0
+    - path: /usr/lib/ssl/certs/dbc54cab.0
+    - path: /usr/lib/ssl/certs/dbff3a01.0
+    - path: /usr/lib/ssl/certs/dc4d6a89.0
+    - path: /usr/lib/ssl/certs/dc99f41e.0
+    - path: /usr/lib/ssl/certs/dd8e9d41.0
+    - path: /usr/lib/ssl/certs/ddcda989.0
+    - path: /usr/lib/ssl/certs/de6d66f3.0
+    - path: /usr/lib/ssl/certs/dfc0fe80.0
+    - path: /usr/lib/ssl/certs/e-Szigno_Root_CA_2017.pem
+    - path: /usr/lib/ssl/certs/e7c037b4.0
+    - path: /usr/lib/ssl/certs/e7dd1bc4.0
+    - path: /usr/lib/ssl/certs/e8de2f56.0
+    - path: /usr/lib/ssl/certs/e18bfb83.0
+    - path: /usr/lib/ssl/certs/e36a6752.0
+    - path: /usr/lib/ssl/certs/e73d606e.0
+    - path: /usr/lib/ssl/certs/e113c810.0
+    - path: /usr/lib/ssl/certs/e442e424.0
+    - path: /usr/lib/ssl/certs/e868b802.0
+    - path: /usr/lib/ssl/certs/e13665f9.0
+    - path: /usr/lib/ssl/certs/e35234b1.0
+    - path: /usr/lib/ssl/certs/e48193cf.0
+    - path: /usr/lib/ssl/certs/e071171e.0
+    - path: /usr/lib/ssl/certs/e8651083.0
+    - path: /usr/lib/ssl/certs/ePKI_Root_Certification_Authority.pem
+    - path: /usr/lib/ssl/certs/ecccd8db.0
+    - path: /usr/lib/ssl/certs/ed39abd0.0
+    - path: /usr/lib/ssl/certs/ed858448.0
+    - path: /usr/lib/ssl/certs/edcbddb5.0
+    - path: /usr/lib/ssl/certs/ee37c333.0
+    - path: /usr/lib/ssl/certs/ee532fd5.0
+    - path: /usr/lib/ssl/certs/eed8c118.0
+    - path: /usr/lib/ssl/certs/ef954a4e.0
+    - path: /usr/lib/ssl/certs/emSign_ECC_Root_CA_-_C3.pem
+    - path: /usr/lib/ssl/certs/emSign_ECC_Root_CA_-_G3.pem
+    - path: /usr/lib/ssl/certs/emSign_Root_CA_-_C1.pem
+    - path: /usr/lib/ssl/certs/emSign_Root_CA_-_G1.pem
+    - path: /usr/lib/ssl/certs/f0c70a8d.0
+    - path: /usr/lib/ssl/certs/f8fc53da.0
+    - path: /usr/lib/ssl/certs/f013ecaf.0
+    - path: /usr/lib/ssl/certs/f30dd6ad.0
+    - path: /usr/lib/ssl/certs/f39fc864.0
+    - path: /usr/lib/ssl/certs/f51bb24c.0
+    - path: /usr/lib/ssl/certs/f249de83.0
+    - path: /usr/lib/ssl/certs/f058632f.0
+    - path: /usr/lib/ssl/certs/f459871d.0
+    - path: /usr/lib/ssl/certs/fa5da96b.0
+    - path: /usr/lib/ssl/certs/fb5fa911.0
+    - path: /usr/lib/ssl/certs/fb717492.0
+    - path: /usr/lib/ssl/certs/fc5a8f99.0
+    - path: /usr/lib/ssl/certs/fd08c599.0
+    - path: /usr/lib/ssl/certs/fd64f3fc.0
+    - path: /usr/lib/ssl/certs/fde84897.0
+    - path: /usr/lib/ssl/certs/fe8a2cd8.0
+    - path: /usr/lib/ssl/certs/feffd413.0
+    - path: /usr/lib/ssl/certs/ff34af3f.0
+    - path: /usr/lib/ssl/certs/ffa7f1eb.0
+    - path: /usr/lib/ssl/certs/ffdd40f9.0
+    - path: /usr/lib/ssl/certs/vTrus_ECC_Root_CA.pem
+    - path: /usr/lib/ssl/certs/vTrus_Root_CA.pem
+    - path: /usr/share/pki/trust/anchors/ca-certificates.crt
+
+  systemd:
+    files:
+    - path: /usr/lib/systemd/system/sysinit.target.wants/update-ca-certificates.service
+    - path: /usr/lib/systemd/system/update-ca-certificates.service
+
+resolution:
+  /usr/bin/sh: bash
+  /usr/bin/chmod: coreutils
+  /usr/bin/mkdir: coreutils
+  /usr/bin/mktemp: coreutils
+  /usr/bin/mv: coreutils
+  /usr/bin/rm: coreutils
+  /usr/bin/trust: p11-kit
+  /usr/lib/pkcs11/p11-kit-trust.so: p11-kit
+  /usr/share/p11-kit/modules/p11-kit-trust.module: p11-kit

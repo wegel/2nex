@@ -1,0 +1,143 @@
+From: Package maintainers <packages@localhost>
+Subject: [PATCH] layer the netconfig and reserved-port databases
+Source: downstream
+Upstream: not submitted; suitable for upstream review
+
+Read each complete database from the administrator, transient, and vendor
+paths. An existing empty file remains a whole-file mask.
+
+diff --git a/src/getnetconfig.c b/src/getnetconfig.c
+index 4b96a03..86fe183 100644
+--- a/src/getnetconfig.c
++++ b/src/getnetconfig.c
+@@ -43,8 +43,8 @@
+ #include "rpc_com.h"
+ 
+ /*
+- * The five library routines in this file provide application access to the
+- * system network configuration database, /etc/netconfig.  In addition to the
++ * The five library routines in this file provide application access to the
++ * system network configuration database.  In addition to the
+  * netconfig database and the routines for accessing it, the environment
+  * variable NETPATH and its corresponding routines in getnetpath.c may also be
+  * used to specify the network transport to be used.
+@@ -124,5 +124,24 @@ extern pthread_mutex_t nc_db_lock;
+ #define MAXNETCONFIGLINE    1000
+ 
++static FILE *
++open_netconfig(void)
++{
++    static const char * const paths[] = {
++        NETCONFIG,
++        "/run/netconfig",
++        "/usr/lib/netconfig",
++    };
++    size_t i;
++
++    for (i = 0; i < sizeof(paths) / sizeof(paths[0]); i++) {
++        FILE *file = fopen(paths[i], "r");
++
++        if (file != NULL || errno != ENOENT)
++            return file;
++    }
++    return NULL;
++}
++
+ static int *
+ __nc_error()
+ {
+@@ -161,11 +180,11 @@ __nc_error()
+ #define nc_error        (*(__nc_error()))
+ /*
+- * A call to setnetconfig() establishes a /etc/netconfig "session".  A session
++ * A call to setnetconfig() establishes a netconfig database "session".  A session
+  * "handle" is returned on a successful call.  At the start of a session (after
+- * a call to setnetconfig()) searches through the /etc/netconfig database will
++ * a call to setnetconfig()) searches through the selected database will
+  * proceed from the start of the file.  The session handle must be passed to
+- * getnetconfig() to parse the file.  Each call to getnetconfig() using the
+- * current handle will process one subsequent entry in /etc/netconfig.
++ * getnetconfig() to parse the file.  Each call to getnetconfig() using the
++ * current handle will process one subsequent entry in that database.
+  * setnetconfig() must be called before the first call to getnetconfig().
+  * (Handles are used to allow for nested calls to setnetpath()).
+  *
+@@ -194,7 +213,7 @@ setnetconfig()
+      */
+     mutex_lock(&nc_db_lock);
+     ni.ref++;
+-    if ((nc_file != NULL) || (nc_file = fopen(NETCONFIG, "r")) != NULL) {
++    if ((nc_file != NULL) || (nc_file = open_netconfig()) != NULL) {
+ 	nc_vars->valid = NC_VALID;
+ 	nc_vars->flag = 0;
+ 	nc_vars->nc_configs = ni.head;
+@@ -430,9 +449,9 @@ getnetconfigent(const char *netid)
+ 
+     if (strcmp(netid, "unix") == 0) {
+ 	fprintf(stderr, "The local transport is called \"unix\" ");
+-	fprintf(stderr, "in /etc/netconfig.\n");
++	fprintf(stderr, "in the netconfig database.\n");
+ 	fprintf(stderr, "Please change this to \"local\" manually ");
+-	fprintf(stderr, "or run mergemaster(8).\n");
++	fprintf(stderr, "if this entry is locally maintained.\n");
+     }
+ 
+     /*
+@@ -460,7 +479,7 @@ getnetconfigent(const char *netid)
+     }
+     mutex_unlock(&nc_db_lock);
+ 
+-    if ((file = fopen(NETCONFIG, "r")) == NULL) {
++    if ((file = open_netconfig()) == NULL) {
+ 	nc_error = NC_NONETCONFIG;
+ 	return (NULL);
+     }
+diff --git a/src/bindresvport.c b/src/bindresvport.c
+index f5c79bc..a834d98 100644
+--- a/src/bindresvport.c
++++ b/src/bindresvport.c
+@@ -72,7 +72,7 @@ bindresvport(sd, sin)
+ #define NPORTS  (ENDPORT - STARTPORT + 1)
+ 
+ /*
+- * Read the file /etc/bindresvport.blacklist, so that we don't bind
++ * Read the selected bindresvport.blacklist database, so that we don't bind
+  * to these ports.
+  */
+ 
+@@ -80,6 +80,26 @@ static int blacklist_read;
+ static int *list;
+ static int list_size = 0;
+ 
++static FILE *
++open_blacklist(void)
++{
++  static const char * const paths[] = {
++    "/etc/bindresvport.blacklist",
++    "/run/bindresvport.blacklist",
++    "/usr/lib/bindresvport.blacklist",
++  };
++  size_t i;
++
++  for (i = 0; i < sizeof(paths) / sizeof(paths[0]); i++)
++    {
++      FILE *file = fopen(paths[i], "r");
++
++      if (file != NULL || errno != ENOENT)
++        return file;
++    }
++  return NULL;
++}
++
+ static void
+ load_blacklist (void)
+ {
+@@ -90,7 +110,7 @@ load_blacklist (void)
+ 
+   blacklist_read = 1;
+ 
+-  fp = fopen ("/etc/bindresvport.blacklist", "r");
++  fp = open_blacklist();
+   if (NULL == fp)
+     return;
+ 

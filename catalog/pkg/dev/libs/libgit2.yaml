@@ -1,0 +1,245 @@
+package:
+  schema: 1
+  name: libgit2
+  slug: libgit2
+  namespace: dev/libs
+  version: 1.9.1
+  description: A portable, pure C implementation of the Git core methods
+  homepage: https://libgit2.org
+  checksum: 9c699cd19b94537cdb127a2cfe74108e2f3e3af4c438e2577644b9d7201c03da
+
+sources:
+- name: libgit2
+  url: https://github.com/libgit2/libgit2/archive/refs/tags/v1.9.1.tar.gz
+  sha256: 14cab3014b2b7ad75970ff4548e83615f74d719afe00aa479b4a889c1e13fc00
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: libarchive
+  commit: x86_64/pkg/libs/archive/libarchive/3.8.4/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4127:31358, 8251:53615, 12368:65336, 16500:74272, 20651:78334, 24809:86636, 28908:93442, 31534:97652]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_libgit2} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    mkdir build && cd build
+    cmake .. \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DUSE_SSH=OFF \
+      -DUSE_HTTPS=OpenSSL \
+      -DREGEX_BACKEND=pcre2 \
+      -DBUILD_SHARED_LIBS=ON \
+      -DBUILD_TESTS=OFF
+
+    make -j${MAKEFLAGS#-j}
+    make DESTDIR=${OUT_DIR} install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/git2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libpcre2-8.so.0
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+
+  dev:
+    files:
+    - path: /usr/include/git2/annotated_commit.h
+    - path: /usr/include/git2/apply.h
+    - path: /usr/include/git2/attr.h
+    - path: /usr/include/git2/blame.h
+    - path: /usr/include/git2/blob.h
+    - path: /usr/include/git2/branch.h
+    - path: /usr/include/git2/buffer.h
+    - path: /usr/include/git2/cert.h
+    - path: /usr/include/git2/checkout.h
+    - path: /usr/include/git2/cherrypick.h
+    - path: /usr/include/git2/clone.h
+    - path: /usr/include/git2/commit.h
+    - path: /usr/include/git2/common.h
+    - path: /usr/include/git2/config.h
+    - path: /usr/include/git2/cred_helpers.h
+    - path: /usr/include/git2/credential.h
+    - path: /usr/include/git2/credential_helpers.h
+    - path: /usr/include/git2/deprecated.h
+    - path: /usr/include/git2/describe.h
+    - path: /usr/include/git2/diff.h
+    - path: /usr/include/git2/email.h
+    - path: /usr/include/git2/errors.h
+    - path: /usr/include/git2/experimental.h
+    - path: /usr/include/git2/filter.h
+    - path: /usr/include/git2/global.h
+    - path: /usr/include/git2/graph.h
+    - path: /usr/include/git2.h
+    - path: /usr/include/git2/ignore.h
+    - path: /usr/include/git2/index.h
+    - path: /usr/include/git2/indexer.h
+    - path: /usr/include/git2/mailmap.h
+    - path: /usr/include/git2/merge.h
+    - path: /usr/include/git2/message.h
+    - path: /usr/include/git2/net.h
+    - path: /usr/include/git2/notes.h
+    - path: /usr/include/git2/object.h
+    - path: /usr/include/git2/odb.h
+    - path: /usr/include/git2/odb_backend.h
+    - path: /usr/include/git2/oid.h
+    - path: /usr/include/git2/oidarray.h
+    - path: /usr/include/git2/pack.h
+    - path: /usr/include/git2/patch.h
+    - path: /usr/include/git2/pathspec.h
+    - path: /usr/include/git2/proxy.h
+    - path: /usr/include/git2/rebase.h
+    - path: /usr/include/git2/refdb.h
+    - path: /usr/include/git2/reflog.h
+    - path: /usr/include/git2/refs.h
+    - path: /usr/include/git2/refspec.h
+    - path: /usr/include/git2/remote.h
+    - path: /usr/include/git2/repository.h
+    - path: /usr/include/git2/reset.h
+    - path: /usr/include/git2/revert.h
+    - path: /usr/include/git2/revparse.h
+    - path: /usr/include/git2/revwalk.h
+    - path: /usr/include/git2/signature.h
+    - path: /usr/include/git2/stash.h
+    - path: /usr/include/git2/status.h
+    - path: /usr/include/git2/stdint.h
+    - path: /usr/include/git2/strarray.h
+    - path: /usr/include/git2/submodule.h
+    - path: /usr/include/git2/sys/alloc.h
+    - path: /usr/include/git2/sys/commit.h
+    - path: /usr/include/git2/sys/commit_graph.h
+    - path: /usr/include/git2/sys/config.h
+    - path: /usr/include/git2/sys/cred.h
+    - path: /usr/include/git2/sys/credential.h
+    - path: /usr/include/git2/sys/diff.h
+    - path: /usr/include/git2/sys/email.h
+    - path: /usr/include/git2/sys/errors.h
+    - path: /usr/include/git2/sys/filter.h
+    - path: /usr/include/git2/sys/hashsig.h
+    - path: /usr/include/git2/sys/index.h
+    - path: /usr/include/git2/sys/mempack.h
+    - path: /usr/include/git2/sys/merge.h
+    - path: /usr/include/git2/sys/midx.h
+    - path: /usr/include/git2/sys/odb_backend.h
+    - path: /usr/include/git2/sys/openssl.h
+    - path: /usr/include/git2/sys/path.h
+    - path: /usr/include/git2/sys/refdb_backend.h
+    - path: /usr/include/git2/sys/refs.h
+    - path: /usr/include/git2/sys/remote.h
+    - path: /usr/include/git2/sys/repository.h
+    - path: /usr/include/git2/sys/stream.h
+    - path: /usr/include/git2/sys/transport.h
+    - path: /usr/include/git2/tag.h
+    - path: /usr/include/git2/trace.h
+    - path: /usr/include/git2/transaction.h
+    - path: /usr/include/git2/transport.h
+    - path: /usr/include/git2/tree.h
+    - path: /usr/include/git2/types.h
+    - path: /usr/include/git2/version.h
+    - path: /usr/include/git2/worktree.h
+    - path: /usr/lib/pkgconfig/libgit2.pc
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/libgit2/libgit2Targets-release.cmake
+    - path: /usr/lib/cmake/libgit2/libgit2Targets.cmake
+    - path: /usr/lib/cmake/libgit2/libgit2Config.cmake
+    - path: /usr/lib/cmake/libgit2/libgit2ConfigVersion.cmake
+    - path: /usr/lib/libgit2.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpcre2-8.so.0
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libgit2.so.1.9
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpcre2-8.so.0
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libgit2.so.1.9.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libpcre2-8.so.0
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libcrypto.so.3: openssl3
+  /usr/lib/libssl.so.3: openssl3
+  /usr/lib/libpcre2-8.so.0: pcre2
+  /usr/lib/libz.so.1: zlib

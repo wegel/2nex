@@ -1,0 +1,312 @@
+package:
+  schema: 1
+  name: Bison
+  slug: bison
+  namespace: core/toolchain
+  version: 3.8.2
+  description: The GNU general-purpose parser generator
+  homepage: https://www.gnu.org/software/bison/
+  checksum: 697cb9838dbd5a048a5d5edc5d5a947c636a9ea2f169e35fe31dc08a97b9b596
+  seed: true
+
+sources:
+- name: bison
+  url: https://ftp.gnu.org/gnu/bison/bison-3.8.2.tar.xz
+  sha256: 9bba0214ccf7f1079c5d59210045227bcf619519840ebfa80cd3849cff5a5bf2
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+- name: texinfo
+  commit: x86_64/pkg/cli/text/texinfo/7.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase3/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase3/coreutils/9.5/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/bootstrap/phase3/diffutils/3.10/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase3/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase3/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase3/grep/3.11/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase3/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase3/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase3/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+- name: bison
+  commit: x86_64/pkg/bootstrap/phase3/bison/3.8.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4105:2509, 8209:10508, 12340:15165, 16440:17561, 20551:19984, 28771:22892, 32893:23089, 41201:24961, 49963:25182, 51074:25355]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    ./configure --prefix=/usr --docdir=/usr/share/doc/bison-3.8.2
+    make
+    make DESTDIR=${OUT_DIR} install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - locale
+  - static
+
+  full:
+  - bin
+  - dev
+  - doc
+  - info
+  - locale
+  - man
+  - static
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/bison
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/yacc
+
+  dev:
+    files:
+    - path: /usr/share/aclocal/bison-i18n.m4
+    - path: /usr/share/bison/README.md
+    - path: /usr/share/bison/bison-default.css
+    - path: /usr/share/bison/m4sugar/foreach.m4
+    - path: /usr/share/bison/m4sugar/m4sugar.m4
+    - path: /usr/share/bison/skeletons/bison.m4
+    - path: /usr/share/bison/skeletons/c++-skel.m4
+    - path: /usr/share/bison/skeletons/c++.m4
+    - path: /usr/share/bison/skeletons/c-like.m4
+    - path: /usr/share/bison/skeletons/c-skel.m4
+    - path: /usr/share/bison/skeletons/c.m4
+    - path: /usr/share/bison/skeletons/d-skel.m4
+    - path: /usr/share/bison/skeletons/d.m4
+    - path: /usr/share/bison/skeletons/glr.c
+    - path: /usr/share/bison/skeletons/glr.cc
+    - path: /usr/share/bison/skeletons/glr2.cc
+    - path: /usr/share/bison/skeletons/java-skel.m4
+    - path: /usr/share/bison/skeletons/java.m4
+    - path: /usr/share/bison/skeletons/lalr1.cc
+    - path: /usr/share/bison/skeletons/lalr1.d
+    - path: /usr/share/bison/skeletons/lalr1.java
+    - path: /usr/share/bison/skeletons/location.cc
+    - path: /usr/share/bison/skeletons/stack.hh
+    - path: /usr/share/bison/skeletons/traceon.m4
+    - path: /usr/share/bison/skeletons/variant.hh
+    - path: /usr/share/bison/skeletons/yacc.c
+    - path: /usr/share/bison/xslt/bison.xsl
+    - path: /usr/share/bison/xslt/xml2text.xsl
+    - path: /usr/share/bison/xslt/xml2xhtml.xsl
+    - path: /usr/share/bison/xslt/xml2dot.xsl
+
+  doc:
+    files:
+    - path: /usr/share/doc/bison-3.8.2/AUTHORS
+    - path: /usr/share/doc/bison-3.8.2/COPYING
+    - path: /usr/share/doc/bison-3.8.2/NEWS
+    - path: /usr/share/doc/bison-3.8.2/README
+    - path: /usr/share/doc/bison-3.8.2/THANKS
+    - path: /usr/share/doc/bison-3.8.2/TODO
+    - path: /usr/share/doc/bison-3.8.2/examples/README.md
+    - path: /usr/share/doc/bison-3.8.2/examples/c++/Makefile
+    - path: /usr/share/doc/bison-3.8.2/examples/c++/README.md
+    - path: /usr/share/doc/bison-3.8.2/examples/c++/calc++/Makefile
+    - path: /usr/share/doc/bison-3.8.2/examples/c++/calc++/README.md
+    - path: /usr/share/doc/bison-3.8.2/examples/c++/calc++/calc++.cc
+    - path: /usr/share/doc/bison-3.8.2/examples/c++/calc++/driver.cc
+    - path: /usr/share/doc/bison-3.8.2/examples/c++/calc++/driver.hh
+    - path: /usr/share/doc/bison-3.8.2/examples/c++/calc++/parser.yy
+    - path: /usr/share/doc/bison-3.8.2/examples/c++/calc++/scanner.ll
+    - path: /usr/share/doc/bison-3.8.2/examples/c++/simple.yy
+    - path: /usr/share/doc/bison-3.8.2/examples/c++/variant-11.yy
+    - path: /usr/share/doc/bison-3.8.2/examples/c++/variant.yy
+    - path: /usr/share/doc/bison-3.8.2/examples/c/README.md
+    - path: /usr/share/doc/bison-3.8.2/examples/c/bistromathic/Makefile
+    - path: /usr/share/doc/bison-3.8.2/examples/c/bistromathic/README.md
+    - path: /usr/share/doc/bison-3.8.2/examples/c/bistromathic/parse.y
+    - path: /usr/share/doc/bison-3.8.2/examples/c/calc/Makefile
+    - path: /usr/share/doc/bison-3.8.2/examples/c/calc/README.md
+    - path: /usr/share/doc/bison-3.8.2/examples/c/calc/calc.y
+    - path: /usr/share/doc/bison-3.8.2/examples/c/glr/Makefile
+    - path: /usr/share/doc/bison-3.8.2/examples/c/glr/README.md
+    - path: /usr/share/doc/bison-3.8.2/examples/c/glr/c++-types.y
+    - path: /usr/share/doc/bison-3.8.2/examples/c/lexcalc/Makefile
+    - path: /usr/share/doc/bison-3.8.2/examples/c/lexcalc/README.md
+    - path: /usr/share/doc/bison-3.8.2/examples/c/lexcalc/parse.y
+    - path: /usr/share/doc/bison-3.8.2/examples/c/lexcalc/scan.l
+    - path: /usr/share/doc/bison-3.8.2/examples/c/mfcalc/Makefile
+    - path: /usr/share/doc/bison-3.8.2/examples/c/mfcalc/calc.h
+    - path: /usr/share/doc/bison-3.8.2/examples/c/mfcalc/mfcalc.y
+    - path: /usr/share/doc/bison-3.8.2/examples/c/pushcalc/Makefile
+    - path: /usr/share/doc/bison-3.8.2/examples/c/pushcalc/README.md
+    - path: /usr/share/doc/bison-3.8.2/examples/c/pushcalc/calc.y
+    - path: /usr/share/doc/bison-3.8.2/examples/c/reccalc/Makefile
+    - path: /usr/share/doc/bison-3.8.2/examples/c/reccalc/README.md
+    - path: /usr/share/doc/bison-3.8.2/examples/c/reccalc/parse.y
+    - path: /usr/share/doc/bison-3.8.2/examples/c/reccalc/scan.l
+    - path: /usr/share/doc/bison-3.8.2/examples/c/rpcalc/Makefile
+    - path: /usr/share/doc/bison-3.8.2/examples/c/rpcalc/rpcalc.y
+    - path: /usr/share/doc/bison-3.8.2/examples/d/README.md
+    - path: /usr/share/doc/bison-3.8.2/examples/d/calc/Makefile
+    - path: /usr/share/doc/bison-3.8.2/examples/d/calc/calc.y
+    - path: /usr/share/doc/bison-3.8.2/examples/d/simple/Makefile
+    - path: /usr/share/doc/bison-3.8.2/examples/d/simple/calc.y
+    - path: /usr/share/doc/bison-3.8.2/examples/java/README.md
+    - path: /usr/share/doc/bison-3.8.2/examples/java/calc/Calc.y
+    - path: /usr/share/doc/bison-3.8.2/examples/java/calc/Makefile
+    - path: /usr/share/doc/bison-3.8.2/examples/java/simple/Calc.y
+    - path: /usr/share/doc/bison-3.8.2/examples/java/simple/Makefile
+
+  info:
+    files:
+    - path: /usr/share/info/bison.info
+    - path: /usr/share/info/dir
+
+  locale:
+    files:
+    - path: /usr/share/locale/af/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/ast/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/be/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/bg/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/bg/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/bg/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/et/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/et/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/et/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/eu/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/ga/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/ga/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/ga/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/ia/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/ky/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/lt/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/lv/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/rw/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/sl/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/sl/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/sq/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/ta/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/th/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/bison.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/bison-gnulib.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/bison-runtime.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/bison.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/bison.1
+    - path: /usr/share/man/man1/yacc.1
+
+  static:
+    files:
+    - path: /usr/lib/liby.a
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

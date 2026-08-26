@@ -1,0 +1,251 @@
+package:
+  schema: 1
+  name: nftables
+  slug: nftables
+  namespace: net/firewall
+  version: 1.1.1
+  description: Netfilter tables userspace utilities
+  homepage: https://www.netfilter.org/projects/nftables/
+  checksum: ed4cd32130e0dc86cc2aedc09d7a455d3646f312770e401f399c0f9153e701c0
+
+sources:
+- name: nftables
+  url: https://www.netfilter.org/projects/nftables/files/nftables-1.1.1.tar.xz
+  sha256: 6358830f3a64f31e39b0ad421d7dadcd240b72343ded48d8ef13b8faf204865a
+- name: uapi_osf
+  file: pkg/net/firewall/nftables-uapi-osf.patch
+  sha256: 1f77d1396bfe3b0bcfd1910d9e341cc42617480f4e04dba0f510f9615637a13f
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/full
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: libmnl
+  commit: x86_64/pkg/libs/net/libmnl/1.0.5/bundles/dev
+- name: libnftnl
+  commit: x86_64/pkg/libs/net/libnftnl/1.3.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: readline
+  commit: x86_64/pkg/libs/system/readline/8.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: flex
+  commit: x86_64/pkg/core/toolchain/flex/2.6.4/bundles/dev
+- name: bison
+  commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: jansson
+  commit: x86_64/pkg/libs/system/jansson/2.14.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4111:852, 8281:4569, 9129:4731]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_nftables} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch -Np1 --batch --fuzz=0 < "/${SOURCE_uapi_osf}"
+
+    ./configure \
+      --prefix=/usr \
+      --sbindir=/usr/bin \
+      --sysconfdir=/etc \
+      --disable-static \
+      --disable-man-doc \
+      --with-cli=readline \
+      --with-json
+
+    make
+    make DESTDIR=${OUT_DIR} install
+    install -Dm644 doc/libnftables-json.5 "${OUT_DIR}/usr/share/man/man5/libnftables-json.5"
+    install -Dm644 doc/libnftables.3 "${OUT_DIR}/usr/share/man/man3/libnftables.3"
+    install -Dm644 doc/nft.8 "${OUT_DIR}/usr/share/man/man8/nft.8"
+
+    install -Dm644 "${OUT_DIR}/etc/nftables/osf/pf.os" \
+      "${OUT_DIR}/usr/lib/nftables/osf/pf.os"
+    rm "${OUT_DIR}/etc/nftables/osf/pf.os"
+    rmdir "${OUT_DIR}/etc/nftables/osf" "${OUT_DIR}/etc/nftables" "${OUT_DIR}/etc"
+
+    printf '%s\n' \
+      'table inet uapi_osf_test {' \
+      '  chain input {' \
+      '    type filter hook input priority filter;' \
+      '    osf name "Linux" accept' \
+      '  }' \
+      '}' > "${WORK_DIR}/uapi-osf-test.nft"
+
+    run_osf_test() {
+      expected_path=$1
+      expected_record=$2
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+        /usr/bin/unshare --net \
+        "${OUT_DIR}/usr/bin/nft" --debug mnl --check \
+        --file "${WORK_DIR}/uapi-osf-test.nft" \
+        > "${WORK_DIR}/uapi-osf-test.log" 2>&1
+      grep -Fq "Opening OS signature file '${expected_path}'" \
+        "${WORK_DIR}/uapi-osf-test.log"
+      if [ -n "${expected_record}" ]; then
+        grep -Fq "${expected_record}" "${WORK_DIR}/uapi-osf-test.log"
+      elif grep -Fq "Loading '" "${WORK_DIR}/uapi-osf-test.log"; then
+        exit 1
+      fi
+    }
+
+    mkdir -p /etc/nftables/osf /run/nftables/osf /usr/lib/nftables/osf
+    rm -f /etc/nftables/osf/pf.os /run/nftables/osf/pf.os
+    install -m644 files/osf/pf.os /usr/lib/nftables/osf/pf.os
+    run_osf_test /usr/lib/nftables/osf/pf.os '45046:64:0:44:M*:'
+    printf '45046:64:0:44:M*:\t\tUAPIRUN:1::Run tier\n' \
+      > /run/nftables/osf/pf.os
+    run_osf_test /run/nftables/osf/pf.os UAPIRUN
+    printf '45046:64:0:44:M*:\t\tUAPIETC:1::Administrator tier\n' \
+      > /etc/nftables/osf/pf.os
+    run_osf_test /etc/nftables/osf/pf.os UAPIETC
+    : > /etc/nftables/osf/pf.os
+    run_osf_test /etc/nftables/osf/pf.os ''
+    rm -f /etc/nftables/osf/pf.os /run/nftables/osf/pf.os
+    run_osf_test /usr/lib/nftables/osf/pf.os '45046:64:0:44:M*:'
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.la' -delete
+    find "${OUT_DIR}" -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+  full:
+  - bin
+  - conf
+  - doc
+  - lib
+  - man
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/nft
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnftables.so.1
+      - /usr/lib/libreadline.so.8
+
+  conf:
+    files:
+    - path: /usr/lib/nftables/osf/pf.os
+
+  dev:
+    files:
+    - path: /usr/include/nftables/libnftables.h
+    - path: /usr/lib/pkgconfig/libnftables.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/nftables/examples/ct_helpers.nft
+    - path: /usr/share/doc/nftables/examples/load_balancing.nft
+    - path: /usr/share/doc/nftables/examples/secmark.nft
+    - path: /usr/share/doc/nftables/examples/sets_and_maps.nft
+
+  lib:
+    files:
+    - path: /usr/lib/libnftables.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libjansson.so.4
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libreadline.so.8
+    - path: /usr/lib/libnftables.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libjansson.so.4
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libreadline.so.8
+    - path: /usr/lib/libnftables.so.1.1.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libjansson.so.4
+      - /usr/lib/libmnl.so.0
+      - /usr/lib/libnftnl.so.11
+      - /usr/lib/libreadline.so.8
+
+  man:
+    files:
+    - path: /usr/share/man/man3/libnftables.3
+    - path: /usr/share/man/man5/libnftables-json.5
+    - path: /usr/share/man/man8/nft.8
+
+  misc:
+    files:
+    - path: /usr/share/nftables/all-in-one.nft
+    - path: /usr/share/nftables/arp-filter.nft
+    - path: /usr/share/nftables/bridge-filter.nft
+    - path: /usr/share/nftables/inet-filter.nft
+    - path: /usr/share/nftables/inet-nat.nft
+    - path: /usr/share/nftables/ipv4-filter.nft
+    - path: /usr/share/nftables/ipv4-mangle.nft
+    - path: /usr/share/nftables/ipv4-nat.nft
+    - path: /usr/share/nftables/ipv4-raw.nft
+    - path: /usr/share/nftables/ipv6-filter.nft
+    - path: /usr/share/nftables/ipv6-mangle.nft
+    - path: /usr/share/nftables/ipv6-nat.nft
+    - path: /usr/share/nftables/ipv6-raw.nft
+    - path: /usr/share/nftables/netdev-ingress.nft
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libgmp.so.10: gmp
+  /usr/lib/libjansson.so.4: jansson
+  /usr/lib/libmnl.so.0: libmnl
+  /usr/lib/libnftnl.so.11: libnftnl
+  /usr/lib/libreadline.so.8: readline
+  /usr/lib/libnftables.so.1: self

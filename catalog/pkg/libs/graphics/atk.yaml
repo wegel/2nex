@@ -1,0 +1,159 @@
+package:
+  schema: 1
+  name: atk
+  slug: atk
+  namespace: libs/graphics
+  version: 2.38.0
+  description: Accessibility Toolkit
+  homepage: https://wiki.gnome.org/Accessibility
+  checksum: 59031a7acf74c5189cc3c86354692cf96a2e21639edab6887914b5f73c224bd2
+
+sources:
+- name: atk
+  url: https://download.gnome.org/sources/atk/2.38/atk-2.38.0.tar.xz
+  sha256: ac4de2a4ef4bd5665052952fe169657e65e895c5057dffb3c2a810f6191a0c36
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: gobject-introspection
+  commit: x86_64/pkg/dev/tools/gobject-introspection/1.84.0/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4127:1503, 8282:8700, 8832:9101]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --buildtype=release \
+      -Dintrospection=true \
+      -Ddocs=false
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/atk-1.0/atk/atk-autocleanups.h
+    - path: /usr/include/atk-1.0/atk/atk-enum-types.h
+    - path: /usr/include/atk-1.0/atk/atk.h
+    - path: /usr/include/atk-1.0/atk/atkaction.h
+    - path: /usr/include/atk-1.0/atk/atkcomponent.h
+    - path: /usr/include/atk-1.0/atk/atkdocument.h
+    - path: /usr/include/atk-1.0/atk/atkeditabletext.h
+    - path: /usr/include/atk-1.0/atk/atkgobjectaccessible.h
+    - path: /usr/include/atk-1.0/atk/atkhyperlink.h
+    - path: /usr/include/atk-1.0/atk/atkhyperlinkimpl.h
+    - path: /usr/include/atk-1.0/atk/atkhypertext.h
+    - path: /usr/include/atk-1.0/atk/atkimage.h
+    - path: /usr/include/atk-1.0/atk/atkmisc.h
+    - path: /usr/include/atk-1.0/atk/atknoopobject.h
+    - path: /usr/include/atk-1.0/atk/atknoopobjectfactory.h
+    - path: /usr/include/atk-1.0/atk/atkobject.h
+    - path: /usr/include/atk-1.0/atk/atkobjectfactory.h
+    - path: /usr/include/atk-1.0/atk/atkplug.h
+    - path: /usr/include/atk-1.0/atk/atkrange.h
+    - path: /usr/include/atk-1.0/atk/atkregistry.h
+    - path: /usr/include/atk-1.0/atk/atkrelation.h
+    - path: /usr/include/atk-1.0/atk/atkrelationset.h
+    - path: /usr/include/atk-1.0/atk/atkrelationtype.h
+    - path: /usr/include/atk-1.0/atk/atkselection.h
+    - path: /usr/include/atk-1.0/atk/atksocket.h
+    - path: /usr/include/atk-1.0/atk/atkstate.h
+    - path: /usr/include/atk-1.0/atk/atkstateset.h
+    - path: /usr/include/atk-1.0/atk/atkstreamablecontent.h
+    - path: /usr/include/atk-1.0/atk/atktable.h
+    - path: /usr/include/atk-1.0/atk/atktablecell.h
+    - path: /usr/include/atk-1.0/atk/atktext.h
+    - path: /usr/include/atk-1.0/atk/atkutil.h
+    - path: /usr/include/atk-1.0/atk/atkvalue.h
+    - path: /usr/include/atk-1.0/atk/atkversion.h
+    - path: /usr/include/atk-1.0/atk/atkwindow.h
+    - path: /usr/lib/pkgconfig/atk.pc
+
+  lib:
+    files:
+    - path: /usr/lib/girepository-1.0/Atk-1.0.typelib
+    - path: /usr/lib/libatk-1.0.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+    - path: /usr/lib/libatk-1.0.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+    - path: /usr/lib/libatk-1.0.so.0.23809.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+
+  misc:
+    files:
+    - path: /usr/share/gir-1.0/Atk-1.0.gir
+
+resolution:
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/libc.so.6: glibc

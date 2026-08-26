@@ -1,0 +1,45 @@
+From: Nex package maintainers
+Subject: [PATCH] main: read the system procs.toml from all three UAPI paths
+Source: no upstream commit; written for Nex against procs 0.14.10
+Upstream: not submitted. get_config() checks a fixed list of paths ending in
+ /etc/procs/procs.toml, so a distribution cannot ship a default that a boot
+ or an administrator may replace.
+
+get_config() builds cfg_path by trying, in order, --load-config, the user's
+~/.procs.toml, the platform preference dir, the XDG config dir, then
+/etc/procs/procs.toml, and using the first one that exists. There is no
+vendor or runtime tier, so a distribution cannot ship a default configuration
+below /usr, and a running system cannot install a temporary override below
+/run: only a persistent /etc file works.
+
+After the existing /etc/procs/procs.toml check, try /run/procs/procs.toml,
+then /usr/lib/procs/procs.toml, keeping the same first-match-wins order so an
+administrator file still overrides a runtime file, which still overrides a
+vendor file, which still overrides the built-in CONFIG_DEFAULT. --load-config
+and the user files still take priority over all three system tiers, and
+--use-config still ignores files entirely.
+
+diff -urN a/src/main.rs b/src/main.rs
+--- a/src/main.rs
++++ b/src/main.rs
+@@ -48,13 +48,19 @@
+         .filter(|path| path.exists());
+     let etc_path = PathBuf::from("/etc/procs/procs.toml");
+     let etc_cfg_path = etc_path.exists().then_some(etc_path);
++    let run_path = PathBuf::from("/run/procs/procs.toml");
++    let run_cfg_path = run_path.exists().then_some(run_path);
++    let usr_path = PathBuf::from("/usr/lib/procs/procs.toml");
++    let usr_cfg_path = usr_path.exists().then_some(usr_path);
+     let cfg_path = opt
+         .load_config
+         .clone()
+         .or(dot_cfg_path)
+         .or(app_cfg_path)
+         .or(xdg_cfg_path)
+-        .or(etc_cfg_path);
++        .or(etc_cfg_path)
++        .or(run_cfg_path)
++        .or(usr_cfg_path);
+
+     let config: Config = if let Some(path) = cfg_path {
+         let mut f = fs::File::open(&path).context(format!("failed to open file ({path:?})"))?;

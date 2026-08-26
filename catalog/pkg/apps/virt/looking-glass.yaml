@@ -1,0 +1,263 @@
+package:
+  schema: 1
+  name: looking-glass
+  slug: looking-glass
+  namespace: apps/virt
+  version: B7
+  description: Low-latency KVM guest display client
+  homepage: https://looking-glass.io/
+  checksum: 95785a82d3a91769f804fedb5d6eeff945afee55e0453ad11922c9f90a736293
+
+sources:
+- name: looking_glass
+  url: https://looking-glass.io/artifact/stable/source
+  sha256: 09e506660ccc1b9691d06caa70179b52ffb4393299895cff3c2f0e74fcd69985
+- name: uapi_config
+  file: pkg/apps/virt/looking-glass-uapi-config.patch
+  sha256: f455e2b1de6d419d081d6704ff05bb1162befb6ce57c9898cb7dc5edc466bca4
+
+dependencies:
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: fontconfig
+  commit: x86_64/pkg/libs/graphics/fontconfig/2.17.1/bundles/dev
+- name: freetype
+  commit: x86_64/pkg/libs/graphics/freetype/2.14.1/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: libpng
+  commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: libglvnd
+  commit: x86_64/pkg/libs/graphics/libglvnd/1.7.0/bundles/dev
+- name: mesa
+  commit: x86_64/pkg/libs/graphics/mesa/24.2.7/bundles/dev
+- name: libdrm
+  commit: x86_64/pkg/libs/graphics/libdrm/2.4.123/bundles/dev
+- name: wayland
+  commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: libxkbcommon
+  commit: x86_64/pkg/libs/input/libxkbcommon/1.7.0/bundles/dev
+- name: pipewire
+  commit: x86_64/pkg/libs/audio/pipewire/1.4.9/bundles/dev
+- name: libsamplerate
+  commit: x86_64/pkg/libs/audio/libsamplerate/0.2.2/bundles/dev
+- name: nettle
+  commit: x86_64/pkg/libs/crypto/nettle/3.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: spice-protocol
+  commit: x86_64/pkg/dev/virt/spice-protocol/0.14.5/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4148:593, 8306:716, 12445:4533, 16544:4833, 18555:5894]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "/${SOURCE_looking_glass}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    cd "${WORK_DIR}/client"
+
+    export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
+    export CFLAGS="${CFLAGS//-flto=auto/}"
+    export CXXFLAGS="${CXXFLAGS//-flto=auto/}"
+    export LDFLAGS="${LDFLAGS//-flto=auto/}"
+
+    cmake -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DOPTIMIZE_FOR_NATIVE=OFF \
+      -DENABLE_BACKTRACE=OFF \
+      -DENABLE_X11=OFF \
+      -DENABLE_WAYLAND=ON \
+      -DENABLE_LIBDECOR=OFF \
+      -DENABLE_PIPEWIRE=ON \
+      -DENABLE_PULSEAUDIO=OFF \
+      -DENABLE_EGL=ON \
+      -DENABLE_OPENGL=OFF
+
+    cmake --build build
+    DESTDIR="${OUT_DIR}" cmake --install build
+
+    # The system-wide client options file carries machine policy, so the client
+    # must overlay /usr/lib, then /run, then /etc. Each tier names a different
+    # window title, and --help prints the title the loaded files produced.
+    admin_ini=/etc/looking-glass-client.ini
+    runtime_ini=/run/looking-glass-client.ini
+    vendor_ini=/usr/lib/looking-glass-client.ini
+
+    mkdir -p /etc /run /usr/lib
+    rm -f "${admin_ini}" "${runtime_ini}" "${vendor_ini}"
+
+    probe_home="${WORK_DIR}/lg-uapi-home"
+    probe_out="${WORK_DIR}/lg-uapi-probe.out"
+    mkdir -p "${probe_home}/config" "${probe_home}/run"
+    chmod 0755 "${WORK_DIR}"
+    chmod -R 0777 "${probe_home}"
+
+    # The client refuses to start as root, and the build runs as root inside a
+    # namespace that maps no other id, so neither setuid nor a nested user
+    # namespace can drop privileges here. Interpose getuid and geteuid instead:
+    # that satisfies the client's own guard and leaves every configuration
+    # reader untouched.
+    cat > "${WORK_DIR}/lg-fake-uid.c" <<'FAKEUID'
+    #include <sys/types.h>
+    #include <unistd.h>
+
+    uid_t getuid(void) { return 65534; }
+    uid_t geteuid(void) { return 65534; }
+    FAKEUID
+
+    gcc -shared -fPIC -o "${WORK_DIR}/lg-fake-uid.so" "${WORK_DIR}/lg-fake-uid.c"
+
+    write_ini() {
+        printf '[win]\ntitle=%s\n' "$2" > "$1"
+        chmod 0644 "$1"
+    }
+
+    probe_title() {
+        HOME="${probe_home}" XDG_CONFIG_HOME="${probe_home}/config" \
+            XDG_RUNTIME_DIR="${probe_home}/run" \
+            LD_PRELOAD="${WORK_DIR}/lg-fake-uid.so" \
+            "${OUT_DIR}/usr/bin/looking-glass-client" --help \
+            > "${probe_out}" 2>&1 || true
+    }
+
+    expect_title() {
+        probe_title
+        if ! grep -q -- "$1" "${probe_out}"; then
+            printf 'looking-glass UAPI smoke: expected title %s\n' "$1" >&2
+            tail -30 "${probe_out}" >&2
+            exit 1
+        fi
+        shift
+        for absent in "$@"; do
+            if grep -q -- "${absent}" "${probe_out}"; then
+                printf 'looking-glass UAPI smoke: %s should not be in effect\n' \
+                    "${absent}" >&2
+                exit 1
+            fi
+        done
+    }
+
+    # The compiled default is the upstream window title, which no tier uses.
+    expect_title 'Looking Glass (client)' NEXTIER_vendor NEXTIER_runtime NEXTIER_admin
+
+    write_ini "${vendor_ini}" NEXTIER_vendor
+    expect_title NEXTIER_vendor NEXTIER_runtime NEXTIER_admin
+
+    write_ini "${runtime_ini}" NEXTIER_runtime
+    expect_title NEXTIER_runtime NEXTIER_vendor NEXTIER_admin
+
+    write_ini "${admin_ini}" NEXTIER_admin
+    expect_title NEXTIER_admin NEXTIER_vendor NEXTIER_runtime
+
+    # Removing a tier uncovers the one below it, which proves every tier is
+    # read on each run rather than resolved once.
+    rm -f "${admin_ini}"
+    expect_title NEXTIER_runtime NEXTIER_admin
+
+    rm -f "${runtime_ini}"
+    expect_title NEXTIER_vendor NEXTIER_admin NEXTIER_runtime
+
+    rm -f "${vendor_ini}"
+    expect_title 'Looking Glass (client)' NEXTIER_vendor NEXTIER_runtime NEXTIER_admin
+
+    rm -rf "${probe_home}" "${probe_out}" "${WORK_DIR}/lg-fake-uid.so" \
+        "${WORK_DIR}/lg-fake-uid.c"
+
+    printf 'looking-glass UAPI smoke: all three option tiers and their order behaved\n'
+
+    strip --strip-unneeded "${OUT_DIR}/usr/bin/looking-glass-client"
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  runtime:
+  - bin
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/looking-glass-client
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libEGL.so.1
+      - /usr/lib/libGL.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libhogweed.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libmvec.so.1
+      - /usr/lib/libnettle.so.8
+      - /usr/lib/libpipewire-0.3.so.0
+      - /usr/lib/libsamplerate.so.0
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libwayland-egl.so.1
+      - /usr/lib/libxkbcommon.so.0
+
+  misc:
+    files:
+    - path: /usr/share/applications/looking-glass-client.desktop
+    - path: /usr/share/icons/hicolor/scalable/apps/looking-glass.svg
+
+resolution:
+  /usr/lib/libfontconfig.so.1: fontconfig
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libmvec.so.1: glibc
+  /usr/lib/libgmp.so.10: gmp
+  /usr/lib/libGL.so.1: libglvnd
+  /usr/lib/libsamplerate.so.0: libsamplerate
+  /usr/lib/libxkbcommon.so.0: libxkbcommon
+  /usr/lib/libhogweed.so.6: nettle
+  /usr/lib/libnettle.so.8: nettle
+  /usr/lib/libpipewire-0.3.so.0: pipewire
+  /usr/lib/libwayland-client.so.0: wayland
+  /usr/lib/libwayland-cursor.so.0: wayland
+  /usr/lib/libwayland-egl.so.1: wayland
+  /usr/lib/libEGL.so.1:
+    capability: graphics.egl
+    fallback: mesa

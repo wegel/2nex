@@ -1,0 +1,105 @@
+package:
+  schema: 1
+  name: Diffutils
+  slug: diffutils
+  namespace: bootstrap/phase1
+  version: "3.10"
+  description: A package of several programs related to finding differences between files
+  homepage: https://www.gnu.org/software/diffutils/
+  stable_checksum: false
+  seed: true
+
+sources:
+- name: diffutils
+  url: https://ftp.gnu.org/gnu/diffutils/diffutils-3.10.tar.xz
+  sha256: 90e5e93cc724e4ebe12ede80df1634063c7a855692685919bfe60b556c9bd09e
+
+dependencies:
+- name: toolchain
+  commit: x86_64/pkg/bootstrap/phase0/toolchain/1.0/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase1/m4/1.4.19/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/bootstrap/phase1/ncurses/6.4-20230520/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase1/coreutils/9.5/bundles/dev
+
+build:
+  environment: 4f2c74a7b827c73d2ca4d9caedbd9df1c6481e23
+  profile: [4109:2573, 8206:5324, 12317:7923, 16466:9445, 20585:11177, 24709:12536, 28832:18886, 32946:19856, 37050:19951, 38275:20070]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_diffutils} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr   \
+      --host=${TARGET} \
+      --build=$(./build-aux/config.guess)
+    make
+    make DESTDIR=$OUT_DIR install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - locale
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/cmp
+    - path: /usr/bin/diff
+    - path: /usr/bin/diff3
+    - path: /usr/bin/sdiff
+
+  info:
+    files:
+    - path: /usr/share/info/diffutils.info
+    - path: /usr/share/info/dir
+
+  locale:
+    files:
+    - path: /usr/share/locale/bg/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/ga/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/he/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/lv/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/diffutils.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/diffutils.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/cmp.1
+    - path: /usr/share/man/man1/diff.1
+    - path: /usr/share/man/man1/diff3.1
+    - path: /usr/share/man/man1/sdiff.1

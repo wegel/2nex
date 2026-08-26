@@ -1,0 +1,204 @@
+Subject: merge EGL vendor configuration from UAPI directories
+Source: Nex downstream patch for libglvnd v1.7.0
+Upstream: not submitted; needs agreement on adding a /run tier upstream
+
+Add /run/glvnd/egl_vendor.d to the compiled-in default EGL vendor config
+directory list, between the existing /etc and /usr/share tiers, and merge
+the three default tiers by JSON basename. libEGL previously scanned each
+default directory independently, so a vendor file installed under both
+/etc/glvnd/egl_vendor.d and /usr/share/glvnd/egl_vendor.d with the same
+basename loaded twice instead of the higher tier replacing the lower one.
+Collect the highest-priority file for each basename across /etc, /run, and
+/usr/share, then load the retained files in bytewise basename order. An
+empty file or a symlink to /dev/null in a higher tier still claims the
+basename, so it masks a same-named file in a lower tier even though it
+fails to parse once loaded.
+
+Leave the __EGL_VENDOR_LIBRARY_FILENAMES and __EGL_VENDOR_LIBRARY_DIRS
+environment overrides on their upstream, unmerged behavior: the former
+remains an exclusive list of exact JSON files, and the latter remains an
+exclusive, ordered directory list scanned one directory at a time with no
+basename deduplication across directories.
+
+--- a/src/EGL/meson.build
++++ b/src/EGL/meson.build
+@@ -39,7 +39,7 @@
+   egl_vendor_config_dirs += ':/boot/system/non-packaged/add-ons/opengl/egl_vendor.d'
+   egl_vendor_config_dirs += ':/boot/system/add-ons/opengl/egl_vendor.d'
+ else
+-  egl_vendor_config_dirs = '@0@/glvnd/egl_vendor.d:@1@/glvnd/egl_vendor.d'.format(
++  egl_vendor_config_dirs = '@0@/glvnd/egl_vendor.d:/run/glvnd/egl_vendor.d:@1@/glvnd/egl_vendor.d'.format(
+     join_paths(get_option('prefix'),get_option('sysconfdir')),
+     join_paths(get_option('prefix'),get_option('datadir')))
+ endif
+--- a/src/EGL/libeglvendor.c
++++ b/src/EGL/libeglvendor.c
+@@ -1,6 +1,7 @@
+ #include "libeglvendor.h"
+
+ #include <stdio.h>
++#include <stdint.h>
+ #include <stdlib.h>
+ #include <sys/types.h>
+ #include <sys/stat.h>
+@@ -26,6 +27,7 @@
+ static __EGLvendorInfo *LoadVendor(const char *filename, const char *jsonPath);
+
+ static void LoadVendorsFromConfigDir(const char *dirName);
++static void LoadVendorsFromConfigDirs(char * const *dirNames);
+ static __EGLvendorInfo *LoadVendorFromConfigFile(const char *filename);
+ static cJSON *ReadJSONFile(const char *filename);
+
+@@ -58,15 +60,27 @@
+     if (getuid() == geteuid() && getgid() == getegid()) {
+         env = getenv("__EGL_VENDOR_LIBRARY_DIRS");
+     }
+-    if (env == NULL) {
+-        env = DEFAULT_EGL_VENDOR_CONFIG_DIRS;
++    if (env != NULL) {
++        // An explicit override is an exclusive, ordered directory list. Keep
++        // upstream's per-directory behavior: every matching file in every
++        // listed directory is loaded, with no cross-directory merging.
++        tokens = SplitString(env, NULL, ":");
++        if (tokens != NULL) {
++            for (i=0; tokens[i] != NULL; i++) {
++                LoadVendorsFromConfigDir(tokens[i]);
++            }
++            free(tokens);
++        }
++        return;
+     }
+
+-    tokens = SplitString(env, NULL, ":");
++    // No override was given, so fall back to the compiled-in default
++    // directories. Those directories form a priority-ordered set of tiers,
++    // so merge them by JSON basename: a file in a higher-priority tier
++    // masks a same-named file in a lower one instead of both loading.
++    tokens = SplitString(DEFAULT_EGL_VENDOR_CONFIG_DIRS, NULL, ":");
+     if (tokens != NULL) {
+-        for (i=0; tokens[i] != NULL; i++) {
+-            LoadVendorsFromConfigDir(tokens[i]);
+-        }
++        LoadVendorsFromConfigDirs(tokens);
+         free(tokens);
+     }
+ }
+@@ -129,6 +143,118 @@
+     free(entries);
+ }
+
++// One retained candidate for a merged default-directory scan: the JSON
++// basename and the full path of the highest-priority file with that name.
++struct VendorConfigEntry
++{
++    char *baseName;
++    char *path;
++};
++
++static int VendorConfigEntryExists(struct VendorConfigEntry *entries, size_t count,
++        const char *baseName)
++{
++    size_t i;
++    for (i=0; i<count; i++) {
++        if (strcmp(entries[i].baseName, baseName) == 0) {
++            return 1;
++        }
++    }
++    return 0;
++}
++
++static int CompareVendorConfigEntries(const void *a, const void *b)
++{
++    const struct VendorConfigEntry *ea = (const struct VendorConfigEntry *) a;
++    const struct VendorConfigEntry *eb = (const struct VendorConfigEntry *) b;
++    return strcmp(ea->baseName, eb->baseName);
++}
++
++void LoadVendorsFromConfigDirs(char * const *dirNames)
++{
++    struct VendorConfigEntry *entries = NULL;
++    size_t entryCount = 0;
++    size_t entryAlloc = 0;
++    size_t d;
++    size_t i;
++
++    for (d=0; dirNames[d] != NULL; d++) {
++        const char *dirName = dirNames[d];
++        struct dirent **dirEntries = NULL;
++        size_t dirnameLen;
++        const char *pathSep;
++        int count;
++
++        count = scandir(dirName, &dirEntries, ScandirFilter, CompareFilenames);
++        if (count <= 0) {
++            continue;
++        }
++
++        dirnameLen = strlen(dirName);
++        if (dirnameLen > 0 && dirName[dirnameLen - 1] != '/') {
++            pathSep = "/";
++        } else {
++            pathSep = "";
++        }
++
++        for (i=0; i<(size_t) count; i++) {
++            // A file whose basename was already claimed by a
++            // higher-priority directory is masked: skip it, whether or not
++            // the higher-priority file will itself parse successfully.
++            if (!VendorConfigEntryExists(entries, entryCount, dirEntries[i]->d_name)) {
++                char *path = NULL;
++                if (glvnd_asprintf(&path, "%s%s%s", dirName, pathSep, dirEntries[i]->d_name) > 0) {
++                    if (entryCount == entryAlloc) {
++                        size_t newAlloc = (entryAlloc > 0) ? entryAlloc * 2 : 8;
++                        struct VendorConfigEntry *newEntries = NULL;
++                        if (entryAlloc <= SIZE_MAX / 2 &&
++                                newAlloc <= SIZE_MAX / sizeof(*newEntries)) {
++                            newEntries = (struct VendorConfigEntry *)
++                                realloc(entries, newAlloc * sizeof(*newEntries));
++                        }
++                        if (newEntries == NULL) {
++                            fprintf(stderr, "ERROR: Could not allocate vendor config entry list\n");
++                            free(path);
++                            path = NULL;
++                        } else {
++                            entries = newEntries;
++                            entryAlloc = newAlloc;
++                        }
++                    }
++                    if (path != NULL) {
++                        char *baseName = strdup(dirEntries[i]->d_name);
++                        if (baseName == NULL) {
++                            fprintf(stderr, "ERROR: Could not allocate vendor config basename\n");
++                            free(path);
++                        } else {
++                            entries[entryCount].baseName = baseName;
++                            entries[entryCount].path = path;
++                            entryCount++;
++                        }
++                    }
++                } else {
++                    fprintf(stderr, "ERROR: Could not allocate vendor library path name\n");
++                }
++            }
++            free(dirEntries[i]);
++        }
++        free(dirEntries);
++    }
++
++    // Load the retained files in bytewise basename order, independent of
++    // which directory each one came from.
++    if (entryCount > 1) {
++        qsort(entries, entryCount, sizeof(struct VendorConfigEntry), CompareVendorConfigEntries);
++    }
++
++    for (i=0; i<entryCount; i++) {
++        LoadVendorFromConfigFile(entries[i].path);
++        free(entries[i].baseName);
++        free(entries[i].path);
++    }
++    free(entries);
++}
++
+ void __eglInitVendors(void)
+ {
+     glvnd_list_init(&__eglVendorList);

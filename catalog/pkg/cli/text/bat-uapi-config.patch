@@ -1,0 +1,43 @@
+From: Nex package maintainers
+Subject: [PATCH] config: read the system bat config from all three UAPI paths
+Source: no upstream commit; written for Nex against bat 0.26.1
+Upstream: not submitted. get_args_from_config_file() reads a single fixed
+ path from system_config_file() (/etc/bat/config), so a distribution cannot
+ ship a default that a boot or an administrator may replace.
+
+get_args_from_config_file() concatenates the system config file, then the
+user config file, in that order; get_args_from_str() applies later flags
+over earlier ones, so a later line in the concatenated text wins. There is
+no vendor or runtime tier, so a distribution cannot ship a default
+configuration below /usr, and a running system cannot install a temporary
+override below /run: only a persistent /etc file works.
+
+Before the existing system_config_file() (/etc/bat/config) read, read
+/usr/lib/bat/config, then /run/bat/config, keeping the same
+concatenate-in-order behavior so an administrator file still overrides a
+runtime file, which still overrides a vendor file. The user config file
+(BAT_CONFIG_PATH or XDG) still overrides all three system tiers, and
+BAT_OPTS is untouched.
+
+diff -urN a/src/bin/bat/config.rs b/src/bin/bat/config.rs
+--- a/src/bin/bat/config.rs
++++ b/src/bin/bat/config.rs
+@@ -104,9 +104,15 @@
+ pub fn get_args_from_config_file() -> Result<Vec<OsString>, shell_words::ParseError> {
+     let mut config = String::new();
+
+-    if let Ok(c) = fs::read_to_string(system_config_file()) {
+-        config.push_str(&c);
+-        config.push('\n');
++    for tier_path in [
++        PathBuf::from("/usr/lib/bat/config"),
++        PathBuf::from("/run/bat/config"),
++        system_config_file(),
++    ] {
++        if let Ok(c) = fs::read_to_string(tier_path) {
++            config.push_str(&c);
++            config.push('\n');
++        }
+     }
+
+     if let Ok(c) = fs::read_to_string(config_file()) {

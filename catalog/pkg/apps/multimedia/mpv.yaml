@@ -1,0 +1,378 @@
+package:
+  schema: 1
+  name: mpv
+  slug: mpv
+  namespace: apps/multimedia
+  version: 0.40.0+20251205
+  description: Command line media player
+  homepage: https://mpv.io/
+  checksum: f985c9d3f58f80a24478223ee31e7f0a1ef6410a3aa239df1e8773671d61762b
+
+sources:
+- name: mpv
+  url: https://github.com/mpv-player/mpv/archive/dbd7a905b6ed47dd8f0acd09a1f4cc9a08e854a6.tar.gz
+  sha256: 2ca8f002293c48999c6392d96b805c80d7c7ddce1afd4308f73c59fbb084569c
+- name: uapi_config
+  file: pkg/apps/multimedia/mpv-uapi-config.patch
+  sha256: 7fd95855715de1c606d7a8f6241470940af9e31e3ab72a85e426d1df8eeb5f6b
+
+dependencies:
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: ffmpeg
+  commit: x86_64/pkg/libs/multimedia/ffmpeg/8.0.1/bundles/dev
+- name: libass
+  commit: x86_64/pkg/libs/text/libass/0.17.4/bundles/dev
+- name: alsa-lib
+  commit: x86_64/pkg/libs/audio/alsa-lib/1.2.14/bundles/dev
+- name: pipewire
+  commit: x86_64/pkg/libs/audio/pipewire/1.4.9/bundles/dev
+- name: wayland
+  commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
+- name: wayland-protocols
+  commit: x86_64/pkg/libs/wayland/wayland-protocols/1.46/bundles/dev
+- name: mesa
+  commit: x86_64/pkg/libs/graphics/mesa/24.2.7/bundles/dev
+- name: libxkbcommon
+  commit: x86_64/pkg/libs/input/libxkbcommon/1.7.0/bundles/dev
+- name: luajit
+  commit: x86_64/pkg/dev/lang/luajit/2.1-20241113/bundles/dev
+- name: freetype
+  commit: x86_64/pkg/libs/graphics/freetype/2.14.1/bundles/dev
+- name: libpng
+  commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+- name: fribidi
+  commit: x86_64/pkg/libs/text/fribidi/1.0.15/bundles/dev
+- name: harfbuzz
+  commit: x86_64/pkg/libs/text/harfbuzz/10.1.0/bundles/dev
+- name: fontconfig
+  commit: x86_64/pkg/libs/graphics/fontconfig/2.17.1/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: libplacebo
+  commit: x86_64/pkg/libs/graphics/libplacebo/7.351.0/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4125:1208, 8271:1208, 12379:1451, 16552:1495, 20657:1788, 24761:1996, 28878:2240, 33000:17718, 34920:17834]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_mpv} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      -Dlibmpv=true \
+      -Dlua=luajit \
+      -Dwayland=enabled \
+      -Dpipewire=enabled \
+      -Dalsa=enabled \
+      -Dpulse=disabled \
+      -Djack=disabled \
+      -Dx11=disabled \
+      -Dmanpage-build=disabled \
+      -Dtests=false
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # mpv.conf carries distribution policy, so the player must read
+    # /usr/lib/mpv, then /run/mpv, then /etc/mpv, with a later tier overriding
+    # an earlier one. Each tier sets a different volume, and a Lua probe prints
+    # the volume that the loaded files actually produced.
+    admin_dir=/etc/mpv
+    runtime_dir=/run/mpv
+    vendor_dir=/usr/lib/mpv
+
+    mkdir -p "${admin_dir}" "${runtime_dir}" "${vendor_dir}"
+    rm -f "${admin_dir}/mpv.conf" "${runtime_dir}/mpv.conf" "${vendor_dir}/mpv.conf"
+
+    probe_home="${WORK_DIR}/mpv-uapi-home"
+    mkdir -p "${probe_home}"
+    printf 'mp.msg.info("NEX_VOLUME " .. mp.get_property("volume"))\n' \
+        > "${WORK_DIR}/mpv-uapi-probe.lua"
+    printf 'mp.commandv("quit")\n' >> "${WORK_DIR}/mpv-uapi-probe.lua"
+
+    write_conf() {
+        printf 'volume=%s\n' "$2" > "$1/mpv.conf"
+    }
+
+    probe_out="${WORK_DIR}/mpv-uapi-probe.out"
+
+    # The build environment has no sed or grep, so parse the probe output with
+    # shell built-ins only.
+    probe_volume() {
+        HOME="${probe_home}" XDG_CONFIG_HOME="${probe_home}/config" \
+            LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+            "${OUT_DIR}/usr/bin/mpv" --idle=yes \
+            --vo=null --ao=null --msg-level=all=info \
+            --script="${WORK_DIR}/mpv-uapi-probe.lua" \
+            > "${probe_out}" 2>&1 || true
+
+        while read -r line; do
+            case "${line}" in
+            *NEX_VOLUME*)
+                line=${line#*NEX_VOLUME }
+                printf '%s\n' "${line%%.*}"
+                return 0
+                ;;
+            esac
+        done < "${probe_out}"
+    }
+
+    expect_volume() {
+        actual=$(probe_volume)
+        if [ "${actual}" != "$1" ]; then
+            printf 'mpv UAPI smoke: expected volume %s, got %s\n' \
+                "$1" "${actual}" >&2
+            tail -30 "${probe_out}" >&2
+            exit 1
+        fi
+    }
+
+    # With no system mpv.conf the compiled default stands. Every tier value
+    # below differs from it, so a tier that is silently ignored cannot pass.
+    default_volume=$(probe_volume)
+    if [ -z "${default_volume}" ]; then
+        printf 'mpv UAPI smoke: probe printed no volume\n' >&2
+        tail -30 "${probe_out}" >&2
+        exit 1
+    fi
+    for taken in 61 62 63; do
+        if [ "${default_volume}" = "${taken}" ]; then
+            printf 'mpv UAPI smoke: default volume %s collides with a tier value\n' \
+                "${default_volume}" >&2
+            exit 1
+        fi
+    done
+
+    write_conf "${vendor_dir}" 61
+    expect_volume 61
+
+    write_conf "${runtime_dir}" 62
+    expect_volume 62
+
+    write_conf "${admin_dir}" 63
+    expect_volume 63
+
+    # Removing the administrator file uncovers the transient one, and removing
+    # that uncovers the package default, which proves the lower tiers were
+    # still being read rather than shadowed once and forgotten.
+    rm -f "${admin_dir}/mpv.conf"
+    expect_volume 62
+
+    rm -f "${runtime_dir}/mpv.conf"
+    expect_volume 61
+
+    rm -f "${vendor_dir}/mpv.conf"
+    expect_volume "${default_volume}"
+
+    rm -rf "${probe_home}" "${WORK_DIR}/mpv-uapi-probe.lua" "${probe_out}"
+
+    printf 'mpv UAPI smoke: all three config tiers and their order behaved\n'
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/mpv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libass.so.9
+      - /usr/lib/libavcodec.so.62
+      - /usr/lib/libavdevice.so.62
+      - /usr/lib/libavfilter.so.11
+      - /usr/lib/libavformat.so.62
+      - /usr/lib/libavutil.so.60
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libluajit-5.1.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+      - /usr/lib/libplacebo.so.351
+      - /usr/lib/libswresample.so.6
+      - /usr/lib/libswscale.so.9
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libxkbcommon.so.0
+      - /usr/lib/libz.so.1
+
+  dev:
+    files:
+    - path: /usr/include/mpv/client.h
+    - path: /usr/include/mpv/render.h
+    - path: /usr/include/mpv/render_gl.h
+    - path: /usr/include/mpv/stream_cb.h
+    - path: /usr/lib/pkgconfig/mpv.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/mpv/encoding-profiles.conf
+    - path: /usr/share/doc/mpv/input.conf
+    - path: /usr/share/doc/mpv/mplayer-input.conf
+    - path: /usr/share/doc/mpv/mpv.conf
+    - path: /usr/share/doc/mpv/restore-old-bindings.conf
+    - path: /usr/share/doc/mpv/restore-osc-bindings.conf
+
+  lib:
+    files:
+    - path: /usr/lib/libmpv.so
+      needs:
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libass.so.9
+      - /usr/lib/libavcodec.so.62
+      - /usr/lib/libavdevice.so.62
+      - /usr/lib/libavfilter.so.11
+      - /usr/lib/libavformat.so.62
+      - /usr/lib/libavutil.so.60
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libluajit-5.1.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+      - /usr/lib/libplacebo.so.351
+      - /usr/lib/libswresample.so.6
+      - /usr/lib/libswscale.so.9
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libxkbcommon.so.0
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libmpv.so.2
+      needs:
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libass.so.9
+      - /usr/lib/libavcodec.so.62
+      - /usr/lib/libavdevice.so.62
+      - /usr/lib/libavfilter.so.11
+      - /usr/lib/libavformat.so.62
+      - /usr/lib/libavutil.so.60
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libluajit-5.1.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+      - /usr/lib/libplacebo.so.351
+      - /usr/lib/libswresample.so.6
+      - /usr/lib/libswscale.so.9
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libxkbcommon.so.0
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libmpv.so.2.5.0
+      needs:
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libass.so.9
+      - /usr/lib/libavcodec.so.62
+      - /usr/lib/libavdevice.so.62
+      - /usr/lib/libavfilter.so.11
+      - /usr/lib/libavformat.so.62
+      - /usr/lib/libavutil.so.60
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libluajit-5.1.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpipewire-0.3.so.0
+      - /usr/lib/libplacebo.so.351
+      - /usr/lib/libswresample.so.6
+      - /usr/lib/libswscale.so.9
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libxkbcommon.so.0
+      - /usr/lib/libz.so.1
+
+  misc:
+    files:
+    - path: /usr/share/applications/mpv.desktop
+    - path: /usr/share/bash-completion/completions/mpv
+    - path: /usr/share/fish/vendor_completions.d/mpv.fish
+    - path: /usr/share/icons/hicolor/16x16/apps/mpv.png
+    - path: /usr/share/icons/hicolor/32x32/apps/mpv.png
+    - path: /usr/share/icons/hicolor/64x64/apps/mpv.png
+    - path: /usr/share/icons/hicolor/128x128/apps/mpv.png
+    - path: /usr/share/icons/hicolor/scalable/apps/mpv.svg
+    - path: /usr/share/icons/hicolor/symbolic/apps/mpv-symbolic.svg
+    - path: /usr/share/metainfo/mpv.metainfo.xml
+    - path: /usr/share/zsh/site-functions/_mpv
+
+resolution:
+  /usr/lib/libasound.so.2: alsa-lib
+  /usr/lib/libavcodec.so.62: ffmpeg
+  /usr/lib/libavdevice.so.62: ffmpeg
+  /usr/lib/libavfilter.so.11: ffmpeg
+  /usr/lib/libavformat.so.62: ffmpeg
+  /usr/lib/libavutil.so.60: ffmpeg
+  /usr/lib/libswresample.so.6: ffmpeg
+  /usr/lib/libswscale.so.9: ffmpeg
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libass.so.9: libass
+  /usr/lib/libplacebo.so.351: libplacebo
+  /usr/lib/libxkbcommon.so.0: libxkbcommon
+  /usr/lib/libluajit-5.1.so.2: luajit
+  /usr/lib/libpipewire-0.3.so.0: pipewire
+  /usr/lib/libwayland-client.so.0: wayland
+  /usr/lib/libwayland-cursor.so.0: wayland
+  /usr/lib/libz.so.1: zlib

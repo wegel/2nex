@@ -1,0 +1,116 @@
+package:
+  schema: 1
+  name: strip-nondeterminism
+  slug: strip-nondeterminism
+  namespace: dev/tools
+  version: 1.15.1
+  description: Removes nondeterministic metadata from build artifacts
+  homepage: https://salsa.debian.org/reproducible-builds/strip-nondeterminism
+  checksum: 68251c9ab6ac557575fc0b17fcf0627c418f83a9e71b285fe5fc44b2923972a4
+
+sources:
+- name: strip_nondeterminism
+  url: https://deb.debian.org/debian/pool/main/s/strip-nondeterminism/strip-nondeterminism_1.15.1.orig.tar.bz2
+  sha256: b8046b0faf182aff8de68abf8318d2b913637f4c23961cf61c47402af132a237
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: archive-zip
+  commit: x86_64/pkg/dev/perl/archive-zip/1.68/bundles/dev
+- name: archive-cpio
+  commit: x86_64/pkg/dev/perl/archive-cpio/0.10/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4146:276, 4496:298]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_strip_nondeterminism} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    perl Makefile.PL
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    rm -f "${OUT_DIR}/usr/bin/dh_strip_nondeterminism"
+    rm -f "${OUT_DIR}/usr/share/man/man1/dh_strip_nondeterminism.1"
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - lib
+
+  full:
+  - bin
+  - lib
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/strip-nondeterminism
+      needs:
+      - /usr/bin/file
+      - /usr/bin/perl
+      - /usr/lib/perl5/5.38/site_perl/Archive/Cpio.pm
+      - /usr/lib/perl5/5.38/site_perl/Archive/Zip.pm
+      - /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism.pm
+
+  lib:
+    files:
+    - path: /usr/lib/perl5/5.38/core_perl/perllocal.pod
+    - path: /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism.pm
+    - path: /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/Common.pm
+    - path: /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/ar.pm
+    - path: /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/bflt.pm
+    - path: /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/cpio.pm
+    - path: /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/gettext.pm
+    - path: /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/gzip.pm
+    - path: /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/jar.pm
+    - path: /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/javadoc.pm
+    - path: /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/jmod.pm
+    - path: /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/png.pm
+    - path: /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/pyzip.pm
+    - path: /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/uimage.pm
+    - path: /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism/handlers/zip.pm
+    - path: /usr/lib/perl5/5.38/site_perl/auto/File/StripNondeterminism/.packlist
+
+  man:
+    files:
+    - path: /usr/share/man/man1/strip-nondeterminism.1
+    - path: /usr/share/man/man3/File::StripNondeterminism::handlers::ar.3
+    - path: /usr/share/man/man3/File::StripNondeterminism::handlers::bflt.3
+    - path: /usr/share/man/man3/File::StripNondeterminism::handlers::cpio.3
+    - path: /usr/share/man/man3/File::StripNondeterminism::handlers::gettext.3
+    - path: /usr/share/man/man3/File::StripNondeterminism::handlers::gzip.3
+    - path: /usr/share/man/man3/File::StripNondeterminism::handlers::jar.3
+    - path: /usr/share/man/man3/File::StripNondeterminism::handlers::javadoc.3
+    - path: /usr/share/man/man3/File::StripNondeterminism::handlers::jmod.3
+    - path: /usr/share/man/man3/File::StripNondeterminism::handlers::png.3
+    - path: /usr/share/man/man3/File::StripNondeterminism::handlers::pyzip.3
+    - path: /usr/share/man/man3/File::StripNondeterminism::handlers::uimage.3
+    - path: /usr/share/man/man3/File::StripNondeterminism::handlers::zip.3
+
+resolution:
+  /usr/lib/perl5/5.38/site_perl/Archive/Cpio.pm: archive-cpio
+  /usr/lib/perl5/5.38/site_perl/Archive/Zip.pm: archive-zip
+  /usr/bin/file: file
+  /usr/bin/perl: perl
+  /usr/lib/perl5/5.38/site_perl/File/StripNondeterminism.pm: self

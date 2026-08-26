@@ -1,0 +1,142 @@
+package:
+  schema: 1
+  name: libpng
+  slug: libpng
+  namespace: libs/graphics
+  version: 1.6.51
+  description: PNG reference library
+  homepage: http://www.libpng.org/pub/png/libpng.html
+  checksum: 1b86c2d6aa950a89d2dba9e5a2c9cd4826add3ecc153965c3ca90fa6e99bb527
+
+sources:
+- name: libpng
+  url: https://downloads.sourceforge.net/project/libpng/libpng16/1.6.51/libpng-1.6.51.tar.xz
+  sha256: a050a892d3b4a7bb010c3a95c7301e49656d72a64f1fc709a90b8aded192bed2
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4102:9311, 8312:12740, 12556:13088, 17094:13531, 21235:14112, 25554:14295, 29956:14369, 34257:14458, 38729:14512, 42899:21961]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --disable-static
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/libpng-config
+    - path: /usr/bin/libpng16-config
+    - path: /usr/bin/png-fix-itxt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/pngfix
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libz.so.1
+
+  dev:
+    files:
+    - path: /usr/include/libpng16/png.h
+    - path: /usr/include/libpng16/pngconf.h
+    - path: /usr/include/libpng16/pnglibconf.h
+    - path: /usr/include/png.h
+    - path: /usr/include/pngconf.h
+    - path: /usr/include/pnglibconf.h
+    - path: /usr/lib/libpng.la
+    - path: /usr/lib/libpng16.la
+    - path: /usr/lib/pkgconfig/libpng.pc
+    - path: /usr/lib/pkgconfig/libpng16.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libpng.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libpng16.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libpng16.so.16
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libpng16.so.16.51.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
+
+  man:
+    files:
+    - path: /usr/share/man/man3/libpng.3
+    - path: /usr/share/man/man3/libpngpf.3
+    - path: /usr/share/man/man5/png.5
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libpng16.so.16: self
+  /usr/lib/libz.so.1: zlib

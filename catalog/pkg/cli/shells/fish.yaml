@@ -1,0 +1,1614 @@
+package:
+  schema: 1
+  name: fish
+  slug: fish
+  namespace: cli/shells
+  version: 4.7.1
+  description: Friendly interactive shell
+  homepage: https://fishshell.com/
+  checksum: cf8110474db59ebf93fe1d4f15da274c982c8ed8693c29ad17d4608d3d3953c8
+
+sources:
+- name: fish
+  url: https://github.com/fish-shell/fish-shell/releases/download/4.7.1/fish-4.7.1.tar.xz
+  sha256: 6f4d5b438a6338e3f5dcda19a28261e2ece7a9b7ff97686685e6abdc31dbb7df
+- name: uapi-config
+  file: pkg/cli/shells/fish-uapi-config.patch
+  sha256: 548ad3d155b803e9f6e0c316d56958c03f63971a9c02f3f1adb37c32f48425f4
+- name: vendor
+  sha256: 6fb72646877fd9df079151759f3a97ceaf9b6624721bd85d46fd7c7adbe3a768
+  cargo_lock: https://raw.githubusercontent.com/fish-shell/fish-shell/4.7.1/Cargo.lock
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: rust-bin
+  commit: x86_64/pkg/dev/lang/rust-bin/1.91.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: gettext
+  commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4097:6961, 4499:53463]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_fish} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    tar --no-same-owner -xf /./${SOURCE_vendor} -C "${WORK_DIR}"
+
+    export CARGO_HOME="${WORK_DIR}/.cargo"
+    mkdir -p "${CARGO_HOME}"
+
+    cat > "${CARGO_HOME}/config.toml" << EOF
+    [source.crates-io]
+    replace-with = "vendored-sources"
+
+    [source.vendored-sources]
+    directory = "vendor"
+
+    [source."git+https://github.com/fish-shell/rust-pcre2?tag=0.2.9-utf32"]
+    git = "https://github.com/fish-shell/rust-pcre2"
+    tag = "0.2.9-utf32"
+    replace-with = "vendored-sources"
+    EOF
+
+    rm -rf vendor/pcre2-sys-0.2.9
+    cp -a vendor/pcre2-0.2.9/pcre2-sys vendor/pcre2-sys-0.2.9
+    printf '{"files":{},"package":null}' > vendor/pcre2-sys-0.2.9/.cargo-checksum.json
+
+    mkdir -p /usr/local/bin
+    ln -sf /usr/bin/gcc /usr/local/bin/cc
+    ln -sf /usr/bin/ld.bfd /usr/local/bin/ld
+    export PATH="/usr/local/bin:${PATH}"
+    export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/share/pkgconfig"
+    export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc
+    export RUSTFLAGS="-C codegen-units=1 -C embed-bitcode=yes -C debuginfo=0"
+    export CFLAGS="${CFLAGS//-flto=auto/}"
+    export CXXFLAGS="${CXXFLAGS//-flto=auto/}"
+    export LDFLAGS="${LDFLAGS//-flto=auto/}"
+
+    cmake -S . -B build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DCMAKE_INSTALL_SYSCONFDIR=/etc \
+      -DRust_CARGO=/usr/bin/cargo \
+      -DRust_COMPILER=/usr/bin/rustc \
+      -DRust_CARGO_TARGET=x86_64-unknown-linux-gnu \
+      -DCARGO_FLAGS=--offline \
+      -DWITH_MESSAGE_LOCALIZATION=ON \
+      -DFISH_USE_SYSTEM_PCRE2=OFF
+
+    cmake --build build
+    DESTDIR="${OUT_DIR}" cmake --install build
+
+    rm "${OUT_DIR}/etc/fish/config.fish"
+    rmdir \
+      "${OUT_DIR}/etc/fish/completions" \
+      "${OUT_DIR}/etc/fish/conf.d" \
+      "${OUT_DIR}/etc/fish/functions" \
+      "${OUT_DIR}/etc/fish" \
+      "${OUT_DIR}/etc"
+
+    smoke_name=99-uapi-config-smoke.fish
+    smoke_vendor="${OUT_DIR}/usr/share/fish/vendor_conf.d/${smoke_name}"
+    smoke_run="/run/fish/conf.d/${smoke_name}"
+    smoke_admin="/etc/fish/conf.d/${smoke_name}"
+    smoke_user="${WORK_DIR}/smoke-user/fish/conf.d/${smoke_name}"
+    cleanup_smoke() {
+      rm -f "${smoke_vendor}" "${smoke_run}" "${smoke_admin}" "${smoke_user}"
+    }
+    trap cleanup_smoke EXIT
+
+    mkdir -p \
+      "${OUT_DIR}/usr/share/fish/vendor_conf.d" \
+      /run/fish/conf.d \
+      /etc/fish/conf.d \
+      "${WORK_DIR}/smoke-user/fish/conf.d"
+
+    printf 'set -g uapi_test_tier vendor\n' > "${smoke_vendor}"
+    XDG_CONFIG_HOME="${WORK_DIR}/smoke-user" \
+      XDG_DATA_DIRS="${OUT_DIR}/usr/share" \
+      "${OUT_DIR}/usr/bin/fish" -c 'test "$uapi_test_tier" = vendor'
+
+    printf 'set -g uapi_test_tier transient\n' > "${smoke_run}"
+    XDG_CONFIG_HOME="${WORK_DIR}/smoke-user" \
+      XDG_DATA_DIRS="${OUT_DIR}/usr/share" \
+      "${OUT_DIR}/usr/bin/fish" -c 'test "$uapi_test_tier" = transient'
+
+    printf 'set -g uapi_test_tier administrator\n' > "${smoke_admin}"
+    XDG_CONFIG_HOME="${WORK_DIR}/smoke-user" \
+      XDG_DATA_DIRS="${OUT_DIR}/usr/share" \
+      "${OUT_DIR}/usr/bin/fish" -c 'test "$uapi_test_tier" = administrator'
+
+    printf 'set -g uapi_test_tier user\n' > "${smoke_user}"
+    XDG_CONFIG_HOME="${WORK_DIR}/smoke-user" \
+      XDG_DATA_DIRS="${OUT_DIR}/usr/share" \
+      "${OUT_DIR}/usr/bin/fish" -c 'test "$uapi_test_tier" = user'
+
+    rm "${smoke_user}"
+    : > "${smoke_admin}"
+    XDG_CONFIG_HOME="${WORK_DIR}/smoke-user" \
+      XDG_DATA_DIRS="${OUT_DIR}/usr/share" \
+      "${OUT_DIR}/usr/bin/fish" -c 'not set -q uapi_test_tier'
+
+    cleanup_smoke
+    trap - EXIT
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - doc
+  - misc
+
+  runtime:
+  - bin
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/fish
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/bin/fish_indent
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/bin/fish_key_reader
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+
+  dev:
+    files:
+    - path: /usr/share/pkgconfig/fish.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/fish/CHANGELOG.rst
+
+  misc:
+    files:
+    - path: /usr/share/fish/__fish_build_paths.fish
+    - path: /usr/share/fish/completions/!.fish
+    - path: /usr/share/fish/completions/..fish
+    - path: /usr/share/fish/completions/7z.fish
+    - path: /usr/share/fish/completions/7za.fish
+    - path: /usr/share/fish/completions/7zr.fish
+    - path: /usr/share/fish/completions/VBoxHeadless.fish
+    - path: /usr/share/fish/completions/VBoxSDL.fish
+    - path: /usr/share/fish/completions/[.fish
+    - path: /usr/share/fish/completions/a2disconf.fish
+    - path: /usr/share/fish/completions/a2dismod.fish
+    - path: /usr/share/fish/completions/a2dissite.fish
+    - path: /usr/share/fish/completions/a2enconf.fish
+    - path: /usr/share/fish/completions/a2enmod.fish
+    - path: /usr/share/fish/completions/a2ensite.fish
+    - path: /usr/share/fish/completions/abbr.fish
+    - path: /usr/share/fish/completions/abook.fish
+    - path: /usr/share/fish/completions/acat.fish
+    - path: /usr/share/fish/completions/accept.fish
+    - path: /usr/share/fish/completions/ack.fish
+    - path: /usr/share/fish/completions/acpi.fish
+    - path: /usr/share/fish/completions/actionlint.fish
+    - path: /usr/share/fish/completions/adb.fish
+    - path: /usr/share/fish/completions/adduser.fish
+    - path: /usr/share/fish/completions/adiff.fish
+    - path: /usr/share/fish/completions/age-keygen.fish
+    - path: /usr/share/fish/completions/age.fish
+    - path: /usr/share/fish/completions/airmon-ng.fish
+    - path: /usr/share/fish/completions/alias.fish
+    - path: /usr/share/fish/completions/als.fish
+    - path: /usr/share/fish/completions/alsactl.fish
+    - path: /usr/share/fish/completions/alsamixer.fish
+    - path: /usr/share/fish/completions/alternatives.fish
+    - path: /usr/share/fish/completions/amixer.fish
+    - path: /usr/share/fish/completions/and.fish
+    - path: /usr/share/fish/completions/animate.fish
+    - path: /usr/share/fish/completions/ansible-galaxy.fish
+    - path: /usr/share/fish/completions/ansible-playbook.fish
+    - path: /usr/share/fish/completions/ansible-vault.fish
+    - path: /usr/share/fish/completions/ansible.fish
+    - path: /usr/share/fish/completions/ant.fish
+    - path: /usr/share/fish/completions/apack.fish
+    - path: /usr/share/fish/completions/apk.fish
+    - path: /usr/share/fish/completions/apkanalyzer.fish
+    - path: /usr/share/fish/completions/apm.fish
+    - path: /usr/share/fish/completions/apropos.fish
+    - path: /usr/share/fish/completions/apt-build.fish
+    - path: /usr/share/fish/completions/apt-cache.fish
+    - path: /usr/share/fish/completions/apt-cdrom.fish
+    - path: /usr/share/fish/completions/apt-config.fish
+    - path: /usr/share/fish/completions/apt-extracttemplates.fish
+    - path: /usr/share/fish/completions/apt-file.fish
+    - path: /usr/share/fish/completions/apt-ftparchive.fish
+    - path: /usr/share/fish/completions/apt-get.fish
+    - path: /usr/share/fish/completions/apt-key.fish
+    - path: /usr/share/fish/completions/apt-listbugs.fish
+    - path: /usr/share/fish/completions/apt-listchanges.fish
+    - path: /usr/share/fish/completions/apt-mark.fish
+    - path: /usr/share/fish/completions/apt-move.fish
+    - path: /usr/share/fish/completions/apt-proxy-import.fish
+    - path: /usr/share/fish/completions/apt-rdepends.fish
+    - path: /usr/share/fish/completions/apt-setup.fish
+    - path: /usr/share/fish/completions/apt-show-source.fish
+    - path: /usr/share/fish/completions/apt-show-versions.fish
+    - path: /usr/share/fish/completions/apt-sortpkgs.fish
+    - path: /usr/share/fish/completions/apt-spy.fish
+    - path: /usr/share/fish/completions/apt-src.fish
+    - path: /usr/share/fish/completions/apt-zip-inst.fish
+    - path: /usr/share/fish/completions/apt-zip-list.fish
+    - path: /usr/share/fish/completions/apt.fish
+    - path: /usr/share/fish/completions/aptitude.fish
+    - path: /usr/share/fish/completions/aqua.fish
+    - path: /usr/share/fish/completions/ar.fish
+    - path: /usr/share/fish/completions/arc.fish
+    - path: /usr/share/fish/completions/archlinux-java.fish
+    - path: /usr/share/fish/completions/arepack.fish
+    - path: /usr/share/fish/completions/argocd.fish
+    - path: /usr/share/fish/completions/argparse.fish
+    - path: /usr/share/fish/completions/ark.fish
+    - path: /usr/share/fish/completions/arp-scan.fish
+    - path: /usr/share/fish/completions/arp.fish
+    - path: /usr/share/fish/completions/arping.fish
+    - path: /usr/share/fish/completions/as.fish
+    - path: /usr/share/fish/completions/asciidoctor.fish
+    - path: /usr/share/fish/completions/asciinema.fish
+    - path: /usr/share/fish/completions/asd.fish
+    - path: /usr/share/fish/completions/asp.fish
+    - path: /usr/share/fish/completions/at.fish
+    - path: /usr/share/fish/completions/atd.fish
+    - path: /usr/share/fish/completions/atom.fish
+    - path: /usr/share/fish/completions/atool.fish
+    - path: /usr/share/fish/completions/atq.fish
+    - path: /usr/share/fish/completions/atrm.fish
+    - path: /usr/share/fish/completions/attrib.fish
+    - path: /usr/share/fish/completions/attributes.fish
+    - path: /usr/share/fish/completions/aunpack.fish
+    - path: /usr/share/fish/completions/aura.fish
+    - path: /usr/share/fish/completions/avifdec.fish
+    - path: /usr/share/fish/completions/avifenc.fish
+    - path: /usr/share/fish/completions/awk.fish
+    - path: /usr/share/fish/completions/aws.fish
+    - path: /usr/share/fish/completions/az.fish
+    - path: /usr/share/fish/completions/badblocks.fish
+    - path: /usr/share/fish/completions/base64.fish
+    - path: /usr/share/fish/completions/basename.fish
+    - path: /usr/share/fish/completions/batsh.fish
+    - path: /usr/share/fish/completions/bb-wrapper.fish
+    - path: /usr/share/fish/completions/bc.fish
+    - path: /usr/share/fish/completions/bd.fish
+    - path: /usr/share/fish/completions/begin.fish
+    - path: /usr/share/fish/completions/bg.fish
+    - path: /usr/share/fish/completions/bind.fish
+    - path: /usr/share/fish/completions/bison.fish
+    - path: /usr/share/fish/completions/black.fish
+    - path: /usr/share/fish/completions/blender.fish
+    - path: /usr/share/fish/completions/block.fish
+    - path: /usr/share/fish/completions/bluetoothctl.fish
+    - path: /usr/share/fish/completions/bootctl.fish
+    - path: /usr/share/fish/completions/bosh.fish
+    - path: /usr/share/fish/completions/bower.fish
+    - path: /usr/share/fish/completions/break.fish
+    - path: /usr/share/fish/completions/brew.fish
+    - path: /usr/share/fish/completions/brightnessctl.fish
+    - path: /usr/share/fish/completions/bru.fish
+    - path: /usr/share/fish/completions/btdownloadcurses.py.fish
+    - path: /usr/share/fish/completions/btdownloadheadless.py.fish
+    - path: /usr/share/fish/completions/btrbk.fish
+    - path: /usr/share/fish/completions/btrfs.fish
+    - path: /usr/share/fish/completions/builtin.fish
+    - path: /usr/share/fish/completions/bundle.fish
+    - path: /usr/share/fish/completions/bunzip2.fish
+    - path: /usr/share/fish/completions/busctl.fish
+    - path: /usr/share/fish/completions/bws.fish
+    - path: /usr/share/fish/completions/bzcat.fish
+    - path: /usr/share/fish/completions/bzip2recover.fish
+    - path: /usr/share/fish/completions/bzip2.fish
+    - path: /usr/share/fish/completions/bzr.fish
+    - path: /usr/share/fish/completions/cabal-dev.fish
+    - path: /usr/share/fish/completions/cabal.fish
+    - path: /usr/share/fish/completions/caddy.fish
+    - path: /usr/share/fish/completions/caffeinate.fish
+    - path: /usr/share/fish/completions/calendar.fish
+    - path: /usr/share/fish/completions/camcontrol.fish
+    - path: /usr/share/fish/completions/cancel.fish
+    - path: /usr/share/fish/completions/canto.fish
+    - path: /usr/share/fish/completions/cargo.fish
+    - path: /usr/share/fish/completions/cascadia.fish
+    - path: /usr/share/fish/completions/castnow.fish
+    - path: /usr/share/fish/completions/cat.fish
+    - path: /usr/share/fish/completions/cd.fish
+    - path: /usr/share/fish/completions/cdh.fish
+    - path: /usr/share/fish/completions/cdrecord.fish
+    - path: /usr/share/fish/completions/cf.fish
+    - path: /usr/share/fish/completions/checkinstall.fish
+    - path: /usr/share/fish/completions/chgrp.fish
+    - path: /usr/share/fish/completions/chmod.fish
+    - path: /usr/share/fish/completions/choice.fish
+    - path: /usr/share/fish/completions/choose.fish
+    - path: /usr/share/fish/completions/chown.fish
+    - path: /usr/share/fish/completions/chronyc.fish
+    - path: /usr/share/fish/completions/chsh.fish
+    - path: /usr/share/fish/completions/cilium.fish
+    - path: /usr/share/fish/completions/cjpm.fish
+    - path: /usr/share/fish/completions/cjxl.fish
+    - path: /usr/share/fish/completions/clang++.fish
+    - path: /usr/share/fish/completions/clang.fish
+    - path: /usr/share/fish/completions/clasp.fish
+    - path: /usr/share/fish/completions/claude.fish
+    - path: /usr/share/fish/completions/clean.fish
+    - path: /usr/share/fish/completions/cleanmgr.fish
+    - path: /usr/share/fish/completions/climate.fish
+    - path: /usr/share/fish/completions/clj.fish
+    - path: /usr/share/fish/completions/clojure.fish
+    - path: /usr/share/fish/completions/cmark.fish
+    - path: /usr/share/fish/completions/cmd.fish
+    - path: /usr/share/fish/completions/cmdkey.fish
+    - path: /usr/share/fish/completions/cobra-cli.fish
+    - path: /usr/share/fish/completions/code-exploration.fish
+    - path: /usr/share/fish/completions/code-insiders.fish
+    - path: /usr/share/fish/completions/code.fish
+    - path: /usr/share/fish/completions/color.fish
+    - path: /usr/share/fish/completions/colordiff.fish
+    - path: /usr/share/fish/completions/colorsvn.fish
+    - path: /usr/share/fish/completions/combine.fish
+    - path: /usr/share/fish/completions/command.fish
+    - path: /usr/share/fish/completions/commandline.fish
+    - path: /usr/share/fish/completions/comp.fish
+    - path: /usr/share/fish/completions/compare.fish
+    - path: /usr/share/fish/completions/complete.fish
+    - path: /usr/share/fish/completions/composer.fish
+    - path: /usr/share/fish/completions/composer.phar.fish
+    - path: /usr/share/fish/completions/composite.fish
+    - path: /usr/share/fish/completions/conda.fish
+    - path: /usr/share/fish/completions/configure.fish
+    - path: /usr/share/fish/completions/conjure.fish
+    - path: /usr/share/fish/completions/connmanctl.fish
+    - path: /usr/share/fish/completions/container.fish
+    - path: /usr/share/fish/completions/contains.fish
+    - path: /usr/share/fish/completions/continue.fish
+    - path: /usr/share/fish/completions/convert.fish
+    - path: /usr/share/fish/completions/coredumpctl.fish
+    - path: /usr/share/fish/completions/cowsay.fish
+    - path: /usr/share/fish/completions/cowthink.fish
+    - path: /usr/share/fish/completions/cp.fish
+    - path: /usr/share/fish/completions/cpan.fish
+    - path: /usr/share/fish/completions/cpupower.fish
+    - path: /usr/share/fish/completions/crc.fish
+    - path: /usr/share/fish/completions/create_ap.fish
+    - path: /usr/share/fish/completions/createdb.fish
+    - path: /usr/share/fish/completions/cryptsetup.fish
+    - path: /usr/share/fish/completions/csc.fish
+    - path: /usr/share/fish/completions/csh.fish
+    - path: /usr/share/fish/completions/csharp.fish
+    - path: /usr/share/fish/completions/csi.fish
+    - path: /usr/share/fish/completions/csvlens.fish
+    - path: /usr/share/fish/completions/cue.fish
+    - path: /usr/share/fish/completions/cupsaccept.fish
+    - path: /usr/share/fish/completions/cupsdisable.fish
+    - path: /usr/share/fish/completions/cupsenable.fish
+    - path: /usr/share/fish/completions/cupsreject.fish
+    - path: /usr/share/fish/completions/curl.fish
+    - path: /usr/share/fish/completions/cut.fish
+    - path: /usr/share/fish/completions/cvs.fish
+    - path: /usr/share/fish/completions/cwebp.fish
+    - path: /usr/share/fish/completions/cygpath.fish
+    - path: /usr/share/fish/completions/cygport.fish
+    - path: /usr/share/fish/completions/cygstart.fish
+    - path: /usr/share/fish/completions/dagger.fish
+    - path: /usr/share/fish/completions/darcs.fish
+    - path: /usr/share/fish/completions/dart.fish
+    - path: /usr/share/fish/completions/date.fish
+    - path: /usr/share/fish/completions/dconf.fish
+    - path: /usr/share/fish/completions/dd.fish
+    - path: /usr/share/fish/completions/defaults.fish
+    - path: /usr/share/fish/completions/delta.fish
+    - path: /usr/share/fish/completions/deno.fish
+    - path: /usr/share/fish/completions/devspace.fish
+    - path: /usr/share/fish/completions/df.fish
+    - path: /usr/share/fish/completions/dhclient.fish
+    - path: /usr/share/fish/completions/dhcpcd.fish
+    - path: /usr/share/fish/completions/diff.fish
+    - path: /usr/share/fish/completions/dig.fish
+    - path: /usr/share/fish/completions/direnv.fish
+    - path: /usr/share/fish/completions/diskutil.fish
+    - path: /usr/share/fish/completions/disown.fish
+    - path: /usr/share/fish/completions/display.fish
+    - path: /usr/share/fish/completions/distrobox.fish
+    - path: /usr/share/fish/completions/dive.fish
+    - path: /usr/share/fish/completions/djview.fish
+    - path: /usr/share/fish/completions/djview4.fish
+    - path: /usr/share/fish/completions/djxl.fish
+    - path: /usr/share/fish/completions/dlocate.fish
+    - path: /usr/share/fish/completions/dm-tool.fish
+    - path: /usr/share/fish/completions/dmesg.fish
+    - path: /usr/share/fish/completions/dmidecode.fish
+    - path: /usr/share/fish/completions/dnf.fish
+    - path: /usr/share/fish/completions/doas.fish
+    - path: /usr/share/fish/completions/docker.fish
+    - path: /usr/share/fish/completions/doctl.fish
+    - path: /usr/share/fish/completions/dolphin.fish
+    - path: /usr/share/fish/completions/dotnet.fish
+    - path: /usr/share/fish/completions/downgrade.fish
+    - path: /usr/share/fish/completions/dpkg-reconfigure.fish
+    - path: /usr/share/fish/completions/dpkg.fish
+    - path: /usr/share/fish/completions/dput.fish
+    - path: /usr/share/fish/completions/dropdb.fish
+    - path: /usr/share/fish/completions/dscacheutil.fish
+    - path: /usr/share/fish/completions/du.fish
+    - path: /usr/share/fish/completions/dua.fish
+    - path: /usr/share/fish/completions/duf.fish
+    - path: /usr/share/fish/completions/dumpcap.fish
+    - path: /usr/share/fish/completions/duply.fish
+    - path: /usr/share/fish/completions/dvipdf.fish
+    - path: /usr/share/fish/completions/dvipdfm.fish
+    - path: /usr/share/fish/completions/ebuild.fish
+    - path: /usr/share/fish/completions/echo.fish
+    - path: /usr/share/fish/completions/efibootmgr.fish
+    - path: /usr/share/fish/completions/efivar.fish
+    - path: /usr/share/fish/completions/eg.fish
+    - path: /usr/share/fish/completions/egrep.fish
+    - path: /usr/share/fish/completions/eix-sync.fish
+    - path: /usr/share/fish/completions/eix.fish
+    - path: /usr/share/fish/completions/elatex.fish
+    - path: /usr/share/fish/completions/elixir.fish
+    - path: /usr/share/fish/completions/elm.fish
+    - path: /usr/share/fish/completions/elvish.fish
+    - path: /usr/share/fish/completions/emacs.fish
+    - path: /usr/share/fish/completions/emaint.fish
+    - path: /usr/share/fish/completions/emerge.fish
+    - path: /usr/share/fish/completions/emit.fish
+    - path: /usr/share/fish/completions/encfs.fish
+    - path: /usr/share/fish/completions/entr.fish
+    - path: /usr/share/fish/completions/env.fish
+    - path: /usr/share/fish/completions/eopkg.fish
+    - path: /usr/share/fish/completions/epkginfo.fish
+    - path: /usr/share/fish/completions/equery.fish
+    - path: /usr/share/fish/completions/es.fish
+    - path: /usr/share/fish/completions/eselect.fish
+    - path: /usr/share/fish/completions/etex.fish
+    - path: /usr/share/fish/completions/ethtool.fish
+    - path: /usr/share/fish/completions/eval.fish
+    - path: /usr/share/fish/completions/evince.fish
+    - path: /usr/share/fish/completions/exec.fish
+    - path: /usr/share/fish/completions/exercism.fish
+    - path: /usr/share/fish/completions/exif.fish
+    - path: /usr/share/fish/completions/exit.fish
+    - path: /usr/share/fish/completions/expand.fish
+    - path: /usr/share/fish/completions/expect.fish
+    - path: /usr/share/fish/completions/ezjail-admin.fish
+    - path: /usr/share/fish/completions/fab.fish
+    - path: /usr/share/fish/completions/fail2ban-client.fish
+    - path: /usr/share/fish/completions/fastboot.fish
+    - path: /usr/share/fish/completions/feh.fish
+    - path: /usr/share/fish/completions/ffmpeg.fish
+    - path: /usr/share/fish/completions/ffplay.fish
+    - path: /usr/share/fish/completions/ffprobe.fish
+    - path: /usr/share/fish/completions/fg.fish
+    - path: /usr/share/fish/completions/fgrep.fish
+    - path: /usr/share/fish/completions/figlet.fish
+    - path: /usr/share/fish/completions/file.fish
+    - path: /usr/share/fish/completions/find.fish
+    - path: /usr/share/fish/completions/findstr.fish
+    - path: /usr/share/fish/completions/firefox-developer-edition.fish
+    - path: /usr/share/fish/completions/firefox.fish
+    - path: /usr/share/fish/completions/firejail.fish
+    - path: /usr/share/fish/completions/firewall-cmd.fish
+    - path: /usr/share/fish/completions/fish-lsp.fish
+    - path: /usr/share/fish/completions/fish.fish
+    - path: /usr/share/fish/completions/fish_add_path.fish
+    - path: /usr/share/fish/completions/fish_config.fish
+    - path: /usr/share/fish/completions/fish_delta.fish
+    - path: /usr/share/fish/completions/fish_indent.fish
+    - path: /usr/share/fish/completions/fish_key_reader.fish
+    - path: /usr/share/fish/completions/fish_opt.fish
+    - path: /usr/share/fish/completions/flac.fish
+    - path: /usr/share/fish/completions/flatpak.fish
+    - path: /usr/share/fish/completions/flux.fish
+    - path: /usr/share/fish/completions/fluxbox-remote.fish
+    - path: /usr/share/fish/completions/folderify.fish
+    - path: /usr/share/fish/completions/for.fish
+    - path: /usr/share/fish/completions/forfiles.fish
+    - path: /usr/share/fish/completions/fortune.fish
+    - path: /usr/share/fish/completions/fossil.fish
+    - path: /usr/share/fish/completions/fsharpc.fish
+    - path: /usr/share/fish/completions/fsharpi.fish
+    - path: /usr/share/fish/completions/ftp.fish
+    - path: /usr/share/fish/completions/funced.fish
+    - path: /usr/share/fish/completions/funcsave.fish
+    - path: /usr/share/fish/completions/function.fish
+    - path: /usr/share/fish/completions/functions.fish
+    - path: /usr/share/fish/completions/fuser.fish
+    - path: /usr/share/fish/completions/fusermount.fish
+    - path: /usr/share/fish/completions/fzf.fish
+    - path: /usr/share/fish/completions/g++.fish
+    - path: /usr/share/fish/completions/gacutil.fish
+    - path: /usr/share/fish/completions/gapplication.fish
+    - path: /usr/share/fish/completions/gcc.fish
+    - path: /usr/share/fish/completions/gcloud.fish
+    - path: /usr/share/fish/completions/gdb.fish
+    - path: /usr/share/fish/completions/gdbserver.fish
+    - path: /usr/share/fish/completions/gdbus.fish
+    - path: /usr/share/fish/completions/gem.fish
+    - path: /usr/share/fish/completions/gendarme.fish
+    - path: /usr/share/fish/completions/gh.fish
+    - path: /usr/share/fish/completions/gimp.fish
+    - path: /usr/share/fish/completions/gio.fish
+    - path: /usr/share/fish/completions/git-lfs.fish
+    - path: /usr/share/fish/completions/git-sizer.fish
+    - path: /usr/share/fish/completions/git-subtree.fish
+    - path: /usr/share/fish/completions/git.fish
+    - path: /usr/share/fish/completions/gitk.fish
+    - path: /usr/share/fish/completions/glow.fish
+    - path: /usr/share/fish/completions/gnome-extensions.fish
+    - path: /usr/share/fish/completions/go.fish
+    - path: /usr/share/fish/completions/godoc.fish
+    - path: /usr/share/fish/completions/gofmt.fish
+    - path: /usr/share/fish/completions/goimports.fish
+    - path: /usr/share/fish/completions/gojq.fish
+    - path: /usr/share/fish/completions/golint.fish
+    - path: /usr/share/fish/completions/gorename.fish
+    - path: /usr/share/fish/completions/gpasswd.fish
+    - path: /usr/share/fish/completions/gpg.fish
+    - path: /usr/share/fish/completions/gpg1.fish
+    - path: /usr/share/fish/completions/gpg2.fish
+    - path: /usr/share/fish/completions/gphoto2.fish
+    - path: /usr/share/fish/completions/gping.fish
+    - path: /usr/share/fish/completions/gprof.fish
+    - path: /usr/share/fish/completions/gradle.fish
+    - path: /usr/share/fish/completions/gradlew.fish
+    - path: /usr/share/fish/completions/grep.fish
+    - path: /usr/share/fish/completions/gresource.fish
+    - path: /usr/share/fish/completions/groupadd.fish
+    - path: /usr/share/fish/completions/groups.fish
+    - path: /usr/share/fish/completions/grub-file.fish
+    - path: /usr/share/fish/completions/grub-install.fish
+    - path: /usr/share/fish/completions/grub-mkrescue.fish
+    - path: /usr/share/fish/completions/grunt.fish
+    - path: /usr/share/fish/completions/gsettings.fish
+    - path: /usr/share/fish/completions/gsutil.fish
+    - path: /usr/share/fish/completions/guild.fish
+    - path: /usr/share/fish/completions/guile.fish
+    - path: /usr/share/fish/completions/gunzip.fish
+    - path: /usr/share/fish/completions/gv.fish
+    - path: /usr/share/fish/completions/gvim.fish
+    - path: /usr/share/fish/completions/gvimdiff.fish
+    - path: /usr/share/fish/completions/gw.fish
+    - path: /usr/share/fish/completions/gzip.fish
+    - path: /usr/share/fish/completions/hashcat.fish
+    - path: /usr/share/fish/completions/head.fish
+    - path: /usr/share/fish/completions/helm.fish
+    - path: /usr/share/fish/completions/help.fish
+    - path: /usr/share/fish/completions/heroku.fish
+    - path: /usr/share/fish/completions/hg.fish
+    - path: /usr/share/fish/completions/hikari.fish
+    - path: /usr/share/fish/completions/history.fish
+    - path: /usr/share/fish/completions/hjson.fish
+    - path: /usr/share/fish/completions/hledger.fish
+    - path: /usr/share/fish/completions/homectl.fish
+    - path: /usr/share/fish/completions/horcrux.fish
+    - path: /usr/share/fish/completions/hostnamectl.fish
+    - path: /usr/share/fish/completions/htop.fish
+    - path: /usr/share/fish/completions/hubble.fish
+    - path: /usr/share/fish/completions/hugo.fish
+    - path: /usr/share/fish/completions/hwinfo.fish
+    - path: /usr/share/fish/completions/i3-msg.fish
+    - path: /usr/share/fish/completions/ibmcloud.fish
+    - path: /usr/share/fish/completions/ibus.fish
+    - path: /usr/share/fish/completions/icdiff.fish
+    - path: /usr/share/fish/completions/iconutil.fish
+    - path: /usr/share/fish/completions/iconv.fish
+    - path: /usr/share/fish/completions/id.fish
+    - path: /usr/share/fish/completions/identify.fish
+    - path: /usr/share/fish/completions/iex.fish
+    - path: /usr/share/fish/completions/if.fish
+    - path: /usr/share/fish/completions/ifconfig.fish
+    - path: /usr/share/fish/completions/ifdata.fish
+    - path: /usr/share/fish/completions/ifdown.fish
+    - path: /usr/share/fish/completions/iftop.fish
+    - path: /usr/share/fish/completions/ifup.fish
+    - path: /usr/share/fish/completions/ijq.fish
+    - path: /usr/share/fish/completions/ikdasm.fish
+    - path: /usr/share/fish/completions/ilasm.fish
+    - path: /usr/share/fish/completions/import.fish
+    - path: /usr/share/fish/completions/imv.fish
+    - path: /usr/share/fish/completions/invoke-rc.d.fish
+    - path: /usr/share/fish/completions/ip.fish
+    - path: /usr/share/fish/completions/ipset.fish
+    - path: /usr/share/fish/completions/iptables.fish
+    - path: /usr/share/fish/completions/irb.fish
+    - path: /usr/share/fish/completions/isatty.fish
+    - path: /usr/share/fish/completions/istioctl.fish
+    - path: /usr/share/fish/completions/iw.fish
+    - path: /usr/share/fish/completions/iwctl.fish
+    - path: /usr/share/fish/completions/j.fish
+    - path: /usr/share/fish/completions/java_home.fish
+    - path: /usr/share/fish/completions/jbake.fish
+    - path: /usr/share/fish/completions/jest.fish
+    - path: /usr/share/fish/completions/jhipster.fish
+    - path: /usr/share/fish/completions/jj.fish
+    - path: /usr/share/fish/completions/jnv.fish
+    - path: /usr/share/fish/completions/jobs.fish
+    - path: /usr/share/fish/completions/john.fish
+    - path: /usr/share/fish/completions/journalctl.fish
+    - path: /usr/share/fish/completions/jq.fish
+    - path: /usr/share/fish/completions/julia.fish
+    - path: /usr/share/fish/completions/just.fish
+    - path: /usr/share/fish/completions/jv.fish
+    - path: /usr/share/fish/completions/k3d.fish
+    - path: /usr/share/fish/completions/k9s.fish
+    - path: /usr/share/fish/completions/kak.fish
+    - path: /usr/share/fish/completions/kb.fish
+    - path: /usr/share/fish/completions/kcmshell5.fish
+    - path: /usr/share/fish/completions/kdeconnect-cli.fish
+    - path: /usr/share/fish/completions/keepassxc-cli.fish
+    - path: /usr/share/fish/completions/keybase.fish
+    - path: /usr/share/fish/completions/kill.fish
+    - path: /usr/share/fish/completions/killall.fish
+    - path: /usr/share/fish/completions/kind.fish
+    - path: /usr/share/fish/completions/kitchen.fish
+    - path: /usr/share/fish/completions/kldload.fish
+    - path: /usr/share/fish/completions/kldunload.fish
+    - path: /usr/share/fish/completions/kmutil.fish
+    - path: /usr/share/fish/completions/konsole.fish
+    - path: /usr/share/fish/completions/kops.fish
+    - path: /usr/share/fish/completions/krita.fish
+    - path: /usr/share/fish/completions/ksh.fish
+    - path: /usr/share/fish/completions/kubebuilder.fish
+    - path: /usr/share/fish/completions/kubectl.fish
+    - path: /usr/share/fish/completions/kustomize.fish
+    - path: /usr/share/fish/completions/latex.fish
+    - path: /usr/share/fish/completions/latexmk.fish
+    - path: /usr/share/fish/completions/launchctl.fish
+    - path: /usr/share/fish/completions/lazygit.fish
+    - path: /usr/share/fish/completions/ldapsearch.fish
+    - path: /usr/share/fish/completions/lein.fish
+    - path: /usr/share/fish/completions/less.fish
+    - path: /usr/share/fish/completions/light.fish
+    - path: /usr/share/fish/completions/lightdm.fish
+    - path: /usr/share/fish/completions/llm.fish
+    - path: /usr/share/fish/completions/ln.fish
+    - path: /usr/share/fish/completions/loadkeys.fish
+    - path: /usr/share/fish/completions/localectl.fish
+    - path: /usr/share/fish/completions/locate.fish
+    - path: /usr/share/fish/completions/loginctl.fish
+    - path: /usr/share/fish/completions/logkeys.fish
+    - path: /usr/share/fish/completions/losetup.fish
+    - path: /usr/share/fish/completions/lp.fish
+    - path: /usr/share/fish/completions/lpadmin.fish
+    - path: /usr/share/fish/completions/lpinfo.fish
+    - path: /usr/share/fish/completions/lpmove.fish
+    - path: /usr/share/fish/completions/lpoptions.fish
+    - path: /usr/share/fish/completions/lppasswd.fish
+    - path: /usr/share/fish/completions/lpq.fish
+    - path: /usr/share/fish/completions/lpr.fish
+    - path: /usr/share/fish/completions/lprm.fish
+    - path: /usr/share/fish/completions/lpstat.fish
+    - path: /usr/share/fish/completions/ls.fish
+    - path: /usr/share/fish/completions/lsb_release.fish
+    - path: /usr/share/fish/completions/lsblk.fish
+    - path: /usr/share/fish/completions/lscpu.fish
+    - path: /usr/share/fish/completions/lsof.fish
+    - path: /usr/share/fish/completions/lsusb.fish
+    - path: /usr/share/fish/completions/lua.fish
+    - path: /usr/share/fish/completions/lualatex.fish
+    - path: /usr/share/fish/completions/lunchy.fish
+    - path: /usr/share/fish/completions/lxc.fish
+    - path: /usr/share/fish/completions/lxpanel.fish
+    - path: /usr/share/fish/completions/lz4c.fish
+    - path: /usr/share/fish/completions/lz4cat.fish
+    - path: /usr/share/fish/completions/lz4.fish
+    - path: /usr/share/fish/completions/m4.fish
+    - path: /usr/share/fish/completions/machinectl.fish
+    - path: /usr/share/fish/completions/magento.fish
+    - path: /usr/share/fish/completions/magick.fish
+    - path: /usr/share/fish/completions/make.fish
+    - path: /usr/share/fish/completions/makedepend.fish
+    - path: /usr/share/fish/completions/makensis.fish
+    - path: /usr/share/fish/completions/makepkg.fish
+    - path: /usr/share/fish/completions/man.fish
+    - path: /usr/share/fish/completions/mariner.fish
+    - path: /usr/share/fish/completions/math.fish
+    - path: /usr/share/fish/completions/matlab.fish
+    - path: /usr/share/fish/completions/mc.fish
+    - path: /usr/share/fish/completions/md-to-clip.fish
+    - path: /usr/share/fish/completions/md5sum.fish
+    - path: /usr/share/fish/completions/mdadm.fish
+    - path: /usr/share/fish/completions/mdbook.fish
+    - path: /usr/share/fish/completions/mddiagnose.fish
+    - path: /usr/share/fish/completions/mdfind.fish
+    - path: /usr/share/fish/completions/mdimport.fish
+    - path: /usr/share/fish/completions/mdls.fish
+    - path: /usr/share/fish/completions/mdutil.fish
+    - path: /usr/share/fish/completions/meson.fish
+    - path: /usr/share/fish/completions/micro.fish
+    - path: /usr/share/fish/completions/minikube.fish
+    - path: /usr/share/fish/completions/mix.fish
+    - path: /usr/share/fish/completions/mkbundle.fish
+    - path: /usr/share/fish/completions/mkdir.fish
+    - path: /usr/share/fish/completions/mkdocs.fish
+    - path: /usr/share/fish/completions/mkdosfs.fish
+    - path: /usr/share/fish/completions/mkfs.fat.fish
+    - path: /usr/share/fish/completions/mkfs.vfat.fish
+    - path: /usr/share/fish/completions/mkinitcpio.fish
+    - path: /usr/share/fish/completions/mkpasswd.fish
+    - path: /usr/share/fish/completions/mksquashfs.fish
+    - path: /usr/share/fish/completions/mktemp.fish
+    - path: /usr/share/fish/completions/mkvextract.fish
+    - path: /usr/share/fish/completions/mocha.fish
+    - path: /usr/share/fish/completions/mocp.fish
+    - path: /usr/share/fish/completions/modinfo.fish
+    - path: /usr/share/fish/completions/modprobe.fish
+    - path: /usr/share/fish/completions/mogrify.fish
+    - path: /usr/share/fish/completions/mono.fish
+    - path: /usr/share/fish/completions/monodis.fish
+    - path: /usr/share/fish/completions/monop.fish
+    - path: /usr/share/fish/completions/montage.fish
+    - path: /usr/share/fish/completions/mosh.fish
+    - path: /usr/share/fish/completions/mount.fish
+    - path: /usr/share/fish/completions/mpc.fish
+    - path: /usr/share/fish/completions/mplayer.fish
+    - path: /usr/share/fish/completions/mpv.fish
+    - path: /usr/share/fish/completions/msfconsole.fish
+    - path: /usr/share/fish/completions/msfdb.fish
+    - path: /usr/share/fish/completions/msfvenom.fish
+    - path: /usr/share/fish/completions/msgfmt.fish
+    - path: /usr/share/fish/completions/mtr.fish
+    - path: /usr/share/fish/completions/mupdf.fish
+    - path: /usr/share/fish/completions/mutt.fish
+    - path: /usr/share/fish/completions/mv.fish
+    - path: /usr/share/fish/completions/mvn.fish
+    - path: /usr/share/fish/completions/mycli.fish
+    - path: /usr/share/fish/completions/mysql.fish
+    - path: /usr/share/fish/completions/mysqldump.fish
+    - path: /usr/share/fish/completions/namei.fish
+    - path: /usr/share/fish/completions/native2ascii.fish
+    - path: /usr/share/fish/completions/navi.fish
+    - path: /usr/share/fish/completions/nc.fish
+    - path: /usr/share/fish/completions/nc.openbsd.fish
+    - path: /usr/share/fish/completions/nc.traditional.fish
+    - path: /usr/share/fish/completions/ncat.fish
+    - path: /usr/share/fish/completions/ncdu.fish
+    - path: /usr/share/fish/completions/netcat.fish
+    - path: /usr/share/fish/completions/netctl-auto.fish
+    - path: /usr/share/fish/completions/netctl.fish
+    - path: /usr/share/fish/completions/nethack.fish
+    - path: /usr/share/fish/completions/networkctl.fish
+    - path: /usr/share/fish/completions/nextd.fish
+    - path: /usr/share/fish/completions/ng.fish
+    - path: /usr/share/fish/completions/ngrok.fish
+    - path: /usr/share/fish/completions/nice.fish
+    - path: /usr/share/fish/completions/ninja.fish
+    - path: /usr/share/fish/completions/nl.fish
+    - path: /usr/share/fish/completions/nm.fish
+    - path: /usr/share/fish/completions/nmap.fish
+    - path: /usr/share/fish/completions/nmcli.fish
+    - path: /usr/share/fish/completions/node.fish
+    - path: /usr/share/fish/completions/nodeenv.fish
+    - path: /usr/share/fish/completions/not.fish
+    - path: /usr/share/fish/completions/notify-send.fish
+    - path: /usr/share/fish/completions/npm.fish
+    - path: /usr/share/fish/completions/nu.fish
+    - path: /usr/share/fish/completions/nvim.fish
+    - path: /usr/share/fish/completions/nvme.fish
+    - path: /usr/share/fish/completions/nvram.fish
+    - path: /usr/share/fish/completions/objdump.fish
+    - path: /usr/share/fish/completions/obnam.fish
+    - path: /usr/share/fish/completions/oc.fish
+    - path: /usr/share/fish/completions/octave.fish
+    - path: /usr/share/fish/completions/oggenc.fish
+    - path: /usr/share/fish/completions/oksh.fish
+    - path: /usr/share/fish/completions/okular.fish
+    - path: /usr/share/fish/completions/ollama.fish
+    - path: /usr/share/fish/completions/omega.fish
+    - path: /usr/share/fish/completions/op.fish
+    - path: /usr/share/fish/completions/opam.fish
+    - path: /usr/share/fish/completions/open.fish
+    - path: /usr/share/fish/completions/openocd.fish
+    - path: /usr/share/fish/completions/openssl.fish
+    - path: /usr/share/fish/completions/opkg.fish
+    - path: /usr/share/fish/completions/optimus-manager.fish
+    - path: /usr/share/fish/completions/optipng.fish
+    - path: /usr/share/fish/completions/or.fish
+    - path: /usr/share/fish/completions/otool.fish
+    - path: /usr/share/fish/completions/ouch.fish
+    - path: /usr/share/fish/completions/p4.fish
+    - path: /usr/share/fish/completions/pabcnetcclear.fish
+    - path: /usr/share/fish/completions/pacaur.fish
+    - path: /usr/share/fish/completions/pacman-color.fish
+    - path: /usr/share/fish/completions/pacman-key.fish
+    - path: /usr/share/fish/completions/pacman.fish
+    - path: /usr/share/fish/completions/pacmatic.fish
+    - path: /usr/share/fish/completions/pacmd.fish
+    - path: /usr/share/fish/completions/pactl.fish
+    - path: /usr/share/fish/completions/pactree.fish
+    - path: /usr/share/fish/completions/pandoc.fish
+    - path: /usr/share/fish/completions/passwd.fish
+    - path: /usr/share/fish/completions/patch.fish
+    - path: /usr/share/fish/completions/path.fish
+    - path: /usr/share/fish/completions/patool.fish
+    - path: /usr/share/fish/completions/pbget.fish
+    - path: /usr/share/fish/completions/pbpaste.fish
+    - path: /usr/share/fish/completions/pdfelatex.fish
+    - path: /usr/share/fish/completions/pdfetex.fish
+    - path: /usr/share/fish/completions/pdflatex.fish
+    - path: /usr/share/fish/completions/pdftex.fish
+    - path: /usr/share/fish/completions/pdftotext.fish
+    - path: /usr/share/fish/completions/perl.fish
+    - path: /usr/share/fish/completions/pfctl.fish
+    - path: /usr/share/fish/completions/pftp.fish
+    - path: /usr/share/fish/completions/pg_dump.fish
+    - path: /usr/share/fish/completions/pg_dumpall.fish
+    - path: /usr/share/fish/completions/pg_restore.fish
+    - path: /usr/share/fish/completions/pgrep.fish
+    - path: /usr/share/fish/completions/phpunit.fish
+    - path: /usr/share/fish/completions/pidof.fish
+    - path: /usr/share/fish/completions/pine.fish
+    - path: /usr/share/fish/completions/ping.fish
+    - path: /usr/share/fish/completions/pinky.fish
+    - path: /usr/share/fish/completions/pip.fish
+    - path: /usr/share/fish/completions/pip2.fish
+    - path: /usr/share/fish/completions/pip3.fish
+    - path: /usr/share/fish/completions/pipenv.fish
+    - path: /usr/share/fish/completions/pix.fish
+    - path: /usr/share/fish/completions/pkg-config.fish
+    - path: /usr/share/fish/completions/pkg.fish
+    - path: /usr/share/fish/completions/pkg_add.fish
+    - path: /usr/share/fish/completions/pkg_delete.fish
+    - path: /usr/share/fish/completions/pkg_info.fish
+    - path: /usr/share/fish/completions/pkgadd.fish
+    - path: /usr/share/fish/completions/pkgfile.fish
+    - path: /usr/share/fish/completions/pkginfo.fish
+    - path: /usr/share/fish/completions/pkgmk.fish
+    - path: /usr/share/fish/completions/pkgrm.fish
+    - path: /usr/share/fish/completions/pkill.fish
+    - path: /usr/share/fish/completions/plutil.fish
+    - path: /usr/share/fish/completions/pnpm.fish
+    - path: /usr/share/fish/completions/poff.fish
+    - path: /usr/share/fish/completions/pon.fish
+    - path: /usr/share/fish/completions/port.fish
+    - path: /usr/share/fish/completions/portmaster.fish
+    - path: /usr/share/fish/completions/ports.fish
+    - path: /usr/share/fish/completions/poweroff.fish
+    - path: /usr/share/fish/completions/powerpill.fish
+    - path: /usr/share/fish/completions/powershell.fish
+    - path: /usr/share/fish/completions/pre-commit.fish
+    - path: /usr/share/fish/completions/prevd.fish
+    - path: /usr/share/fish/completions/prime-run.fish
+    - path: /usr/share/fish/completions/protontricks-launch.fish
+    - path: /usr/share/fish/completions/protontricks.fish
+    - path: /usr/share/fish/completions/proxychains.fish
+    - path: /usr/share/fish/completions/prt-get.fish
+    - path: /usr/share/fish/completions/ps.fish
+    - path: /usr/share/fish/completions/ps2pdf.fish
+    - path: /usr/share/fish/completions/ps2pdf12.fish
+    - path: /usr/share/fish/completions/ps2pdf13.fish
+    - path: /usr/share/fish/completions/ps2pdf14.fish
+    - path: /usr/share/fish/completions/ps2pdfwr.fish
+    - path: /usr/share/fish/completions/psql.fish
+    - path: /usr/share/fish/completions/pstack.fish
+    - path: /usr/share/fish/completions/pstree.fish
+    - path: /usr/share/fish/completions/psub.fish
+    - path: /usr/share/fish/completions/pulumi.fish
+    - path: /usr/share/fish/completions/pushd.fish
+    - path: /usr/share/fish/completions/pv.fish
+    - path: /usr/share/fish/completions/pwd.fish
+    - path: /usr/share/fish/completions/pydf.fish
+    - path: /usr/share/fish/completions/pyenv.fish
+    - path: /usr/share/fish/completions/pygmentize.fish
+    - path: /usr/share/fish/completions/python.fish
+    - path: /usr/share/fish/completions/python2.fish
+    - path: /usr/share/fish/completions/python3.fish
+    - path: /usr/share/fish/completions/pzstd.fish
+    - path: /usr/share/fish/completions/qdbus.fish
+    - path: /usr/share/fish/completions/qjs.fish
+    - path: /usr/share/fish/completions/qjsc.fish
+    - path: /usr/share/fish/completions/qmk.fish
+    - path: /usr/share/fish/completions/qshell.fish
+    - path: /usr/share/fish/completions/qubes-gpg-client.fish
+    - path: /usr/share/fish/completions/quilt.fish
+    - path: /usr/share/fish/completions/rakudo.fish
+    - path: /usr/share/fish/completions/random.fish
+    - path: /usr/share/fish/completions/ranger.fish
+    - path: /usr/share/fish/completions/rbenv.fish
+    - path: /usr/share/fish/completions/rc-service.fish
+    - path: /usr/share/fish/completions/rc-status.fish
+    - path: /usr/share/fish/completions/rc-update.fish
+    - path: /usr/share/fish/completions/rc.fish
+    - path: /usr/share/fish/completions/rcctl.fish
+    - path: /usr/share/fish/completions/rclone.fish
+    - path: /usr/share/fish/completions/read.fish
+    - path: /usr/share/fish/completions/readelf.fish
+    - path: /usr/share/fish/completions/readlink.fish
+    - path: /usr/share/fish/completions/realpath.fish
+    - path: /usr/share/fish/completions/reflector.fish
+    - path: /usr/share/fish/completions/reg.fish
+    - path: /usr/share/fish/completions/reject.fish
+    - path: /usr/share/fish/completions/rejmerge.fish
+    - path: /usr/share/fish/completions/rename.fish
+    - path: /usr/share/fish/completions/renice.fish
+    - path: /usr/share/fish/completions/resolvectl.fish
+    - path: /usr/share/fish/completions/return.fish
+    - path: /usr/share/fish/completions/reuse.fish
+    - path: /usr/share/fish/completions/rfkill.fish
+    - path: /usr/share/fish/completions/rgrep.fish
+    - path: /usr/share/fish/completions/rm.fish
+    - path: /usr/share/fish/completions/rmdir.fish
+    - path: /usr/share/fish/completions/rmmod.fish
+    - path: /usr/share/fish/completions/root.fish
+    - path: /usr/share/fish/completions/roswell.fish
+    - path: /usr/share/fish/completions/rpm-ostree.fish
+    - path: /usr/share/fish/completions/rpm.fish
+    - path: /usr/share/fish/completions/rst2s5.fish
+    - path: /usr/share/fish/completions/rst2man.fish
+    - path: /usr/share/fish/completions/rst2latex.fish
+    - path: /usr/share/fish/completions/rst2odt.fish
+    - path: /usr/share/fish/completions/rst2xetex.fish
+    - path: /usr/share/fish/completions/rst2xml.fish
+    - path: /usr/share/fish/completions/rst2pseudoxml.fish
+    - path: /usr/share/fish/completions/rst2html.fish
+    - path: /usr/share/fish/completions/rst2html4.fish
+    - path: /usr/share/fish/completions/rst2html5.fish
+    - path: /usr/share/fish/completions/rstpep2html.fish
+    - path: /usr/share/fish/completions/rsync.fish
+    - path: /usr/share/fish/completions/ruby-build.fish
+    - path: /usr/share/fish/completions/ruby.fish
+    - path: /usr/share/fish/completions/ruff.fish
+    - path: /usr/share/fish/completions/run0.fish
+    - path: /usr/share/fish/completions/rustc.fish
+    - path: /usr/share/fish/completions/rustup.fish
+    - path: /usr/share/fish/completions/s3cmd.fish
+    - path: /usr/share/fish/completions/sad.fish
+    - path: /usr/share/fish/completions/sass-convert.fish
+    - path: /usr/share/fish/completions/sass.fish
+    - path: /usr/share/fish/completions/sbcl.fish
+    - path: /usr/share/fish/completions/sbt.fish
+    - path: /usr/share/fish/completions/scanimage.fish
+    - path: /usr/share/fish/completions/schtasks.fish
+    - path: /usr/share/fish/completions/scons.fish
+    - path: /usr/share/fish/completions/scp.fish
+    - path: /usr/share/fish/completions/screen.fish
+    - path: /usr/share/fish/completions/scrot.fish
+    - path: /usr/share/fish/completions/scrypt.fish
+    - path: /usr/share/fish/completions/scss.fish
+    - path: /usr/share/fish/completions/sed.fish
+    - path: /usr/share/fish/completions/seq.fish
+    - path: /usr/share/fish/completions/serve.fish
+    - path: /usr/share/fish/completions/service.fish
+    - path: /usr/share/fish/completions/set.fish
+    - path: /usr/share/fish/completions/set_color.fish
+    - path: /usr/share/fish/completions/setfacl.fish
+    - path: /usr/share/fish/completions/setsid.fish
+    - path: /usr/share/fish/completions/setx.fish
+    - path: /usr/share/fish/completions/setxkbmap.fish
+    - path: /usr/share/fish/completions/sfdx.fish
+    - path: /usr/share/fish/completions/sftp.fish
+    - path: /usr/share/fish/completions/sha1sum.fish
+    - path: /usr/share/fish/completions/sha224sum.fish
+    - path: /usr/share/fish/completions/sha256sum.fish
+    - path: /usr/share/fish/completions/sha384sum.fish
+    - path: /usr/share/fish/completions/sha512sum.fish
+    - path: /usr/share/fish/completions/shortcuts.fish
+    - path: /usr/share/fish/completions/signify.fish
+    - path: /usr/share/fish/completions/smerge.fish
+    - path: /usr/share/fish/completions/snap.fish
+    - path: /usr/share/fish/completions/sops.fish
+    - path: /usr/share/fish/completions/sort.fish
+    - path: /usr/share/fish/completions/source.fish
+    - path: /usr/share/fish/completions/spago.fish
+    - path: /usr/share/fish/completions/speedtest-cli.fish
+    - path: /usr/share/fish/completions/speedtest.fish
+    - path: /usr/share/fish/completions/sphinx-apidoc.fish
+    - path: /usr/share/fish/completions/sphinx-autogen.fish
+    - path: /usr/share/fish/completions/sphinx-build.fish
+    - path: /usr/share/fish/completions/sphinx-quickstart.fish
+    - path: /usr/share/fish/completions/sqlsharp.fish
+    - path: /usr/share/fish/completions/src.fish
+    - path: /usr/share/fish/completions/ssh-copy-id.fish
+    - path: /usr/share/fish/completions/ssh-keygen.fish
+    - path: /usr/share/fish/completions/ssh.fish
+    - path: /usr/share/fish/completions/sshfs.fish
+    - path: /usr/share/fish/completions/stack.fish
+    - path: /usr/share/fish/completions/stackit.fish
+    - path: /usr/share/fish/completions/starship.fish
+    - path: /usr/share/fish/completions/stat.fish
+    - path: /usr/share/fish/completions/status.fish
+    - path: /usr/share/fish/completions/stow.fish
+    - path: /usr/share/fish/completions/strace.fish
+    - path: /usr/share/fish/completions/stream.fish
+    - path: /usr/share/fish/completions/string.fish
+    - path: /usr/share/fish/completions/su.fish
+    - path: /usr/share/fish/completions/subl.fish
+    - path: /usr/share/fish/completions/sudo-rs.fish
+    - path: /usr/share/fish/completions/sudo.fish
+    - path: /usr/share/fish/completions/sv.fish
+    - path: /usr/share/fish/completions/svn.fish
+    - path: /usr/share/fish/completions/sylpheed.fish
+    - path: /usr/share/fish/completions/synclient.fish
+    - path: /usr/share/fish/completions/sysbench.fish
+    - path: /usr/share/fish/completions/sysctl.fish
+    - path: /usr/share/fish/completions/systemctl.fish
+    - path: /usr/share/fish/completions/systemd-analyze.fish
+    - path: /usr/share/fish/completions/systemd-cryptenroll.fish
+    - path: /usr/share/fish/completions/systemd-nspawn.fish
+    - path: /usr/share/fish/completions/t-rec.fish
+    - path: /usr/share/fish/completions/tail.fish
+    - path: /usr/share/fish/completions/tailscale.fish
+    - path: /usr/share/fish/completions/tar.fish
+    - path: /usr/share/fish/completions/tcpdump.fish
+    - path: /usr/share/fish/completions/tcsh.fish
+    - path: /usr/share/fish/completions/tee.fish
+    - path: /usr/share/fish/completions/telnet.fish
+    - path: /usr/share/fish/completions/termite.fish
+    - path: /usr/share/fish/completions/terraform.fish
+    - path: /usr/share/fish/completions/test-spice.fish
+    - path: /usr/share/fish/completions/test.fish
+    - path: /usr/share/fish/completions/tex-fmt.fish
+    - path: /usr/share/fish/completions/tex.fish
+    - path: /usr/share/fish/completions/tflint.fish
+    - path: /usr/share/fish/completions/tig.fish
+    - path: /usr/share/fish/completions/time.fish
+    - path: /usr/share/fish/completions/timedatectl.fish
+    - path: /usr/share/fish/completions/timeout.fish
+    - path: /usr/share/fish/completions/tmutil.fish
+    - path: /usr/share/fish/completions/tmux.fish
+    - path: /usr/share/fish/completions/tmuxinator.fish
+    - path: /usr/share/fish/completions/tmuxp.fish
+    - path: /usr/share/fish/completions/tofu.fish
+    - path: /usr/share/fish/completions/tokei.fish
+    - path: /usr/share/fish/completions/toot.fish
+    - path: /usr/share/fish/completions/top.fish
+    - path: /usr/share/fish/completions/topgrade.fish
+    - path: /usr/share/fish/completions/totem.fish
+    - path: /usr/share/fish/completions/touch.fish
+    - path: /usr/share/fish/completions/tox.fish
+    - path: /usr/share/fish/completions/tr.fish
+    - path: /usr/share/fish/completions/tracepath.fish
+    - path: /usr/share/fish/completions/traceroute.fish
+    - path: /usr/share/fish/completions/transmission-remote.fish
+    - path: /usr/share/fish/completions/trap.fish
+    - path: /usr/share/fish/completions/trash-empty.fish
+    - path: /usr/share/fish/completions/trash-list.fish
+    - path: /usr/share/fish/completions/trash-put.fish
+    - path: /usr/share/fish/completions/trash-restore.fish
+    - path: /usr/share/fish/completions/trash.fish
+    - path: /usr/share/fish/completions/travis.fish
+    - path: /usr/share/fish/completions/tree.fish
+    - path: /usr/share/fish/completions/tsc.fish
+    - path: /usr/share/fish/completions/tshark.fish
+    - path: /usr/share/fish/completions/ttx.fish
+    - path: /usr/share/fish/completions/tuned-adm.fish
+    - path: /usr/share/fish/completions/type.fish
+    - path: /usr/share/fish/completions/typst.fish
+    - path: /usr/share/fish/completions/udevadm.fish
+    - path: /usr/share/fish/completions/udevil.fish
+    - path: /usr/share/fish/completions/udisksctl.fish
+    - path: /usr/share/fish/completions/ulimit.fish
+    - path: /usr/share/fish/completions/umask.fish
+    - path: /usr/share/fish/completions/umount.fish
+    - path: /usr/share/fish/completions/uname.fish
+    - path: /usr/share/fish/completions/unbuffer.fish
+    - path: /usr/share/fish/completions/unexpand.fish
+    - path: /usr/share/fish/completions/uniq.fish
+    - path: /usr/share/fish/completions/unlz4.fish
+    - path: /usr/share/fish/completions/unrar.fish
+    - path: /usr/share/fish/completions/unzip.fish
+    - path: /usr/share/fish/completions/unzstd.fish
+    - path: /usr/share/fish/completions/update-eix-remote.fish
+    - path: /usr/share/fish/completions/update-eix.fish
+    - path: /usr/share/fish/completions/usbip.fish
+    - path: /usr/share/fish/completions/useradd.fish
+    - path: /usr/share/fish/completions/userdbctl.fish
+    - path: /usr/share/fish/completions/userdel.fish
+    - path: /usr/share/fish/completions/usermod.fish
+    - path: /usr/share/fish/completions/uv.fish
+    - path: /usr/share/fish/completions/uvx.fish
+    - path: /usr/share/fish/completions/vagrant.fish
+    - path: /usr/share/fish/completions/valgrind.fish
+    - path: /usr/share/fish/completions/validate-spice.fish
+    - path: /usr/share/fish/completions/vared.fish
+    - path: /usr/share/fish/completions/vbc.fish
+    - path: /usr/share/fish/completions/vi.fish
+    - path: /usr/share/fish/completions/vim-addons.fish
+    - path: /usr/share/fish/completions/vim.fish
+    - path: /usr/share/fish/completions/vimdiff.fish
+    - path: /usr/share/fish/completions/vips.fish
+    - path: /usr/share/fish/completions/virsh.fish
+    - path: /usr/share/fish/completions/vmctl.fish
+    - path: /usr/share/fish/completions/volta.fish
+    - path: /usr/share/fish/completions/w.fish
+    - path: /usr/share/fish/completions/wait.fish
+    - path: /usr/share/fish/completions/wajig.fish
+    - path: /usr/share/fish/completions/warp-cli.fish
+    - path: /usr/share/fish/completions/watch.fish
+    - path: /usr/share/fish/completions/watchexec.fish
+    - path: /usr/share/fish/completions/waydroid.fish
+    - path: /usr/share/fish/completions/wc.fish
+    - path: /usr/share/fish/completions/web-ext.fish
+    - path: /usr/share/fish/completions/wesnoth.fish
+    - path: /usr/share/fish/completions/wg-quick.fish
+    - path: /usr/share/fish/completions/wg.fish
+    - path: /usr/share/fish/completions/wget.fish
+    - path: /usr/share/fish/completions/whatis.fish
+    - path: /usr/share/fish/completions/which.fish
+    - path: /usr/share/fish/completions/while.fish
+    - path: /usr/share/fish/completions/who.fish
+    - path: /usr/share/fish/completions/wicd-cli.fish
+    - path: /usr/share/fish/completions/wicd-client.fish
+    - path: /usr/share/fish/completions/wicd-gtk.fish
+    - path: /usr/share/fish/completions/windscribe.fish
+    - path: /usr/share/fish/completions/wine.fish
+    - path: /usr/share/fish/completions/wineboot.fish
+    - path: /usr/share/fish/completions/winemaker.fish
+    - path: /usr/share/fish/completions/winetricks.fish
+    - path: /usr/share/fish/completions/wireshark.fish
+    - path: /usr/share/fish/completions/wish.fish
+    - path: /usr/share/fish/completions/wlr-randr.fish
+    - path: /usr/share/fish/completions/wpa_cli.fish
+    - path: /usr/share/fish/completions/wpctl.fish
+    - path: /usr/share/fish/completions/wslpath.fish
+    - path: /usr/share/fish/completions/wvdial.fish
+    - path: /usr/share/fish/completions/xargs.fish
+    - path: /usr/share/fish/completions/xbps-alternatives.fish
+    - path: /usr/share/fish/completions/xbps-checkvers.fish
+    - path: /usr/share/fish/completions/xbps-create.fish
+    - path: /usr/share/fish/completions/xbps-dgraph.fish
+    - path: /usr/share/fish/completions/xbps-digest.fish
+    - path: /usr/share/fish/completions/xbps-fbulk.fish
+    - path: /usr/share/fish/completions/xbps-fetch.fish
+    - path: /usr/share/fish/completions/xbps-install.fish
+    - path: /usr/share/fish/completions/xbps-pkgdb.fish
+    - path: /usr/share/fish/completions/xbps-query.fish
+    - path: /usr/share/fish/completions/xbps-reconfigure.fish
+    - path: /usr/share/fish/completions/xbps-remove.fish
+    - path: /usr/share/fish/completions/xbps-rindex.fish
+    - path: /usr/share/fish/completions/xbps-uchroot.fish
+    - path: /usr/share/fish/completions/xbps-uhelper.fish
+    - path: /usr/share/fish/completions/xclip.fish
+    - path: /usr/share/fish/completions/xcodes.fish
+    - path: /usr/share/fish/completions/xdg-mime.fish
+    - path: /usr/share/fish/completions/xdvi.fish
+    - path: /usr/share/fish/completions/xed.fish
+    - path: /usr/share/fish/completions/xelatex.fish
+    - path: /usr/share/fish/completions/xgettext.fish
+    - path: /usr/share/fish/completions/xinput.fish
+    - path: /usr/share/fish/completions/xmms.fish
+    - path: /usr/share/fish/completions/xonsh.fish
+    - path: /usr/share/fish/completions/xpdf.fish
+    - path: /usr/share/fish/completions/xplayer.fish
+    - path: /usr/share/fish/completions/xprop.fish
+    - path: /usr/share/fish/completions/xrandr.fish
+    - path: /usr/share/fish/completions/xrdb.fish
+    - path: /usr/share/fish/completions/xreader.fish
+    - path: /usr/share/fish/completions/xsel.fish
+    - path: /usr/share/fish/completions/xsp.fish
+    - path: /usr/share/fish/completions/xsv.fish
+    - path: /usr/share/fish/completions/xterm.fish
+    - path: /usr/share/fish/completions/xviewer.fish
+    - path: /usr/share/fish/completions/xxd.fish
+    - path: /usr/share/fish/completions/xxh32sum.fish
+    - path: /usr/share/fish/completions/xxh64sum.fish
+    - path: /usr/share/fish/completions/xxh128sum.fish
+    - path: /usr/share/fish/completions/xxhsum.fish
+    - path: /usr/share/fish/completions/xz.fish
+    - path: /usr/share/fish/completions/yadm.fish
+    - path: /usr/share/fish/completions/yajsv.fish
+    - path: /usr/share/fish/completions/yaourt.fish
+    - path: /usr/share/fish/completions/yarn.fish
+    - path: /usr/share/fish/completions/yash.fish
+    - path: /usr/share/fish/completions/yast2.fish
+    - path: /usr/share/fish/completions/ykman.fish
+    - path: /usr/share/fish/completions/yo.fish
+    - path: /usr/share/fish/completions/yum.fish
+    - path: /usr/share/fish/completions/zabbix_agent2.fish
+    - path: /usr/share/fish/completions/zabbix_agentd.fish
+    - path: /usr/share/fish/completions/zabbix_get.fish
+    - path: /usr/share/fish/completions/zabbix_js.fish
+    - path: /usr/share/fish/completions/zabbix_proxy.fish
+    - path: /usr/share/fish/completions/zabbix_sender.fish
+    - path: /usr/share/fish/completions/zabbix_server.fish
+    - path: /usr/share/fish/completions/zabbix_web_service.fish
+    - path: /usr/share/fish/completions/zcat.fish
+    - path: /usr/share/fish/completions/zed-preview.fish
+    - path: /usr/share/fish/completions/zed.fish
+    - path: /usr/share/fish/completions/zef.fish
+    - path: /usr/share/fish/completions/zfs.fish
+    - path: /usr/share/fish/completions/zig.fish
+    - path: /usr/share/fish/completions/zip.fish
+    - path: /usr/share/fish/completions/zopfli.fish
+    - path: /usr/share/fish/completions/zopflipng.fish
+    - path: /usr/share/fish/completions/zpaq.fish
+    - path: /usr/share/fish/completions/zpool.fish
+    - path: /usr/share/fish/completions/zstd.fish
+    - path: /usr/share/fish/completions/zstdcat.fish
+    - path: /usr/share/fish/completions/zstdgrep.fish
+    - path: /usr/share/fish/completions/zstdless.fish
+    - path: /usr/share/fish/completions/zstdmt.fish
+    - path: /usr/share/fish/completions/zypper.fish
+    - path: /usr/share/fish/config.fish
+    - path: /usr/share/fish/functions/N_.fish
+    - path: /usr/share/fish/functions/__fish_any_arg_in.fish
+    - path: /usr/share/fish/functions/__fish_anyeditor.fish
+    - path: /usr/share/fish/functions/__fish_anypager.fish
+    - path: /usr/share/fish/functions/__fish_anypython.fish
+    - path: /usr/share/fish/functions/__fish_append.fish
+    - path: /usr/share/fish/functions/__fish_apropos.fish
+    - path: /usr/share/fish/functions/__fish_argcomplete_complete.fish
+    - path: /usr/share/fish/functions/__fish_backup_config_files.fish
+    - path: /usr/share/fish/functions/__fish_cache_put.fish
+    - path: /usr/share/fish/functions/__fish_cache_sourced_completions.fish
+    - path: /usr/share/fish/functions/__fish_cached.fish
+    - path: /usr/share/fish/functions/__fish_cancel_commandline.fish
+    - path: /usr/share/fish/functions/__fish_canonicalize_builtin.fish
+    - path: /usr/share/fish/functions/__fish_change_key_bindings.fish
+    - path: /usr/share/fish/functions/__fish_cmd__complete_args.fish
+    - path: /usr/share/fish/functions/__fish_commandline_is_singlequoted.fish
+    - path: /usr/share/fish/functions/__fish_complete_atool_archive_contents.fish
+    - path: /usr/share/fish/functions/__fish_complete_bittorrent.fish
+    - path: /usr/share/fish/functions/__fish_complete_blockdevice.fish
+    - path: /usr/share/fish/functions/__fish_complete_cd.fish
+    - path: /usr/share/fish/functions/__fish_complete_clang.fish
+    - path: /usr/share/fish/functions/__fish_complete_command.fish
+    - path: /usr/share/fish/functions/__fish_complete_convert_options.fish
+    - path: /usr/share/fish/functions/__fish_complete_directories.fish
+    - path: /usr/share/fish/functions/__fish_complete_docutils.fish
+    - path: /usr/share/fish/functions/__fish_complete_freedesktop_icons.fish
+    - path: /usr/share/fish/functions/__fish_complete_ftp.fish
+    - path: /usr/share/fish/functions/__fish_complete_gpg.fish
+    - path: /usr/share/fish/functions/__fish_complete_gpg_key_id.fish
+    - path: /usr/share/fish/functions/__fish_complete_gpg_user_id.fish
+    - path: /usr/share/fish/functions/__fish_complete_group_ids.fish
+    - path: /usr/share/fish/functions/__fish_complete_groups.fish
+    - path: /usr/share/fish/functions/__fish_complete_job_pids.fish
+    - path: /usr/share/fish/functions/__fish_complete_list.fish
+    - path: /usr/share/fish/functions/__fish_complete_lpr.fish
+    - path: /usr/share/fish/functions/__fish_complete_lpr_option.fish
+    - path: /usr/share/fish/functions/__fish_complete_magick.fish
+    - path: /usr/share/fish/functions/__fish_complete_man.fish
+    - path: /usr/share/fish/functions/__fish_complete_mount_opts.fish
+    - path: /usr/share/fish/functions/__fish_complete_mysql.fish
+    - path: /usr/share/fish/functions/__fish_complete_netcat.fish
+    - path: /usr/share/fish/functions/__fish_complete_path.fish
+    - path: /usr/share/fish/functions/__fish_complete_pg_database.fish
+    - path: /usr/share/fish/functions/__fish_complete_pg_user.fish
+    - path: /usr/share/fish/functions/__fish_complete_pgrep.fish
+    - path: /usr/share/fish/functions/__fish_complete_pids.fish
+    - path: /usr/share/fish/functions/__fish_complete_ppp_peer.fish
+    - path: /usr/share/fish/functions/__fish_complete_proc.fish
+    - path: /usr/share/fish/functions/__fish_complete_ssh.fish
+    - path: /usr/share/fish/functions/__fish_complete_subcommand.fish
+    - path: /usr/share/fish/functions/__fish_complete_sudo.fish
+    - path: /usr/share/fish/functions/__fish_complete_suffix.fish
+    - path: /usr/share/fish/functions/__fish_complete_user_at_hosts.fish
+    - path: /usr/share/fish/functions/__fish_complete_user_ids.fish
+    - path: /usr/share/fish/functions/__fish_complete_users.fish
+    - path: /usr/share/fish/functions/__fish_complete_wireshark.fish
+    - path: /usr/share/fish/functions/__fish_complete_zfs_mountpoint_properties.fish
+    - path: /usr/share/fish/functions/__fish_complete_zfs_pools.fish
+    - path: /usr/share/fish/functions/__fish_complete_zfs_ro_properties.fish
+    - path: /usr/share/fish/functions/__fish_complete_zfs_rw_properties.fish
+    - path: /usr/share/fish/functions/__fish_complete_zfs_write_once_properties.fish
+    - path: /usr/share/fish/functions/__fish_concat_completions.fish
+    - path: /usr/share/fish/functions/__fish_config_files.fish
+    - path: /usr/share/fish/functions/__fish_config_interactive.fish
+    - path: /usr/share/fish/functions/__fish_config_with_file.fish
+    - path: /usr/share/fish/functions/__fish_contains_opt.fish
+    - path: /usr/share/fish/functions/__fish_crux_packages.fish
+    - path: /usr/share/fish/functions/__fish_cursor_konsole.fish
+    - path: /usr/share/fish/functions/__fish_cursor_xterm.fish
+    - path: /usr/share/fish/functions/__fish_cygwin_noacl.fish
+    - path: /usr/share/fish/functions/__fish_data_with_directory.fish
+    - path: /usr/share/fish/functions/__fish_describe_command.fish
+    - path: /usr/share/fish/functions/__fish_echo.fish
+    - path: /usr/share/fish/functions/__fish_edit_command_if_at_cursor.fish
+    - path: /usr/share/fish/functions/__fish_first_token.fish
+    - path: /usr/share/fish/functions/__fish_git_prompt.fish
+    - path: /usr/share/fish/functions/__fish_gnu_complete.fish
+    - path: /usr/share/fish/functions/__fish_hg_prompt.fish
+    - path: /usr/share/fish/functions/__fish_indent.fish
+    - path: /usr/share/fish/functions/__fish_is_cygwin.fish
+    - path: /usr/share/fish/functions/__fish_is_first_arg.fish
+    - path: /usr/share/fish/functions/__fish_is_first_token.fish
+    - path: /usr/share/fish/functions/__fish_is_git_repository.fish
+    - path: /usr/share/fish/functions/__fish_is_nth_token.fish
+    - path: /usr/share/fish/functions/__fish_is_switch.fish
+    - path: /usr/share/fish/functions/__fish_is_token_n.fish
+    - path: /usr/share/fish/functions/__fish_is_zfs_feature_enabled.fish
+    - path: /usr/share/fish/functions/__fish_list_current_token.fish
+    - path: /usr/share/fish/functions/__fish_locale_vars.fish
+    - path: /usr/share/fish/functions/__fish_macos_set_env.fish
+    - path: /usr/share/fish/functions/__fish_make_cache_dir.fish
+    - path: /usr/share/fish/functions/__fish_make_completion_signals.fish
+    - path: /usr/share/fish/functions/__fish_man1_pages.fish
+    - path: /usr/share/fish/functions/__fish_man_page.fish
+    - path: /usr/share/fish/functions/__fish_md5.fish
+    - path: /usr/share/fish/functions/__fish_migrate.fish
+    - path: /usr/share/fish/functions/__fish_mktemp_relative.fish
+    - path: /usr/share/fish/functions/__fish_move_last.fish
+    - path: /usr/share/fish/functions/__fish_no_arguments.fish
+    - path: /usr/share/fish/functions/__fish_not_contain_opt.fish
+    - path: /usr/share/fish/functions/__fish_npm_helper.fish
+    - path: /usr/share/fish/functions/__fish_nth_token.fish
+    - path: /usr/share/fish/functions/__fish_number_of_cmd_args_wo_opts.fish
+    - path: /usr/share/fish/functions/__fish_paginate.fish
+    - path: /usr/share/fish/functions/__fish_parent_directories.fish
+    - path: /usr/share/fish/functions/__fish_paste.fish
+    - path: /usr/share/fish/functions/__fish_per_os_bind.fish
+    - path: /usr/share/fish/functions/__fish_posix_quote.fish
+    - path: /usr/share/fish/functions/__fish_posix_shell.fish
+    - path: /usr/share/fish/functions/__fish_prepend_sudo.fish
+    - path: /usr/share/fish/functions/__fish_prev_arg_in.fish
+    - path: /usr/share/fish/functions/__fish_preview_current_file.fish
+    - path: /usr/share/fish/functions/__fish_print_VBox_vms.fish
+    - path: /usr/share/fish/functions/__fish_print_addresses.fish
+    - path: /usr/share/fish/functions/__fish_print_apt_packages.fish
+    - path: /usr/share/fish/functions/__fish_print_cmd_args.fish
+    - path: /usr/share/fish/functions/__fish_print_cmd_args_without_options.fish
+    - path: /usr/share/fish/functions/__fish_print_commands.fish
+    - path: /usr/share/fish/functions/__fish_print_debian_apache_confs.fish
+    - path: /usr/share/fish/functions/__fish_print_debian_apache_mods.fish
+    - path: /usr/share/fish/functions/__fish_print_debian_apache_sites.fish
+    - path: /usr/share/fish/functions/__fish_print_encodings.fish
+    - path: /usr/share/fish/functions/__fish_print_eopkg_packages.fish
+    - path: /usr/share/fish/functions/__fish_print_filesystems.fish
+    - path: /usr/share/fish/functions/__fish_print_gpg_algo.fish
+    - path: /usr/share/fish/functions/__fish_print_groups.fish
+    - path: /usr/share/fish/functions/__fish_print_help.fish
+    - path: /usr/share/fish/functions/__fish_print_hostnames.fish
+    - path: /usr/share/fish/functions/__fish_print_interfaces.fish
+    - path: /usr/share/fish/functions/__fish_print_lpr_options.fish
+    - path: /usr/share/fish/functions/__fish_print_lpr_printers.fish
+    - path: /usr/share/fish/functions/__fish_print_modules.fish
+    - path: /usr/share/fish/functions/__fish_print_mounted.fish
+    - path: /usr/share/fish/functions/__fish_print_opkg_packages.fish
+    - path: /usr/share/fish/functions/__fish_print_packages.fish
+    - path: /usr/share/fish/functions/__fish_print_pacman_packages.fish
+    - path: /usr/share/fish/functions/__fish_print_pacman_repos.fish
+    - path: /usr/share/fish/functions/__fish_print_pipestatus.fish
+    - path: /usr/share/fish/functions/__fish_print_pkg_add_packages.fish
+    - path: /usr/share/fish/functions/__fish_print_pkg_packages.fish
+    - path: /usr/share/fish/functions/__fish_print_port_packages.fish
+    - path: /usr/share/fish/functions/__fish_print_portage_available_pkgs.fish
+    - path: /usr/share/fish/functions/__fish_print_portage_installed_pkgs.fish
+    - path: /usr/share/fish/functions/__fish_print_portage_packages.fish
+    - path: /usr/share/fish/functions/__fish_print_portage_repository_paths.fish
+    - path: /usr/share/fish/functions/__fish_print_rpm_packages.fish
+    - path: /usr/share/fish/functions/__fish_print_service_names.fish
+    - path: /usr/share/fish/functions/__fish_print_svn_rev.fish
+    - path: /usr/share/fish/functions/__fish_print_users.fish
+    - path: /usr/share/fish/functions/__fish_print_windows_drives.fish
+    - path: /usr/share/fish/functions/__fish_print_windows_users.fish
+    - path: /usr/share/fish/functions/__fish_print_xbps_packages.fish
+    - path: /usr/share/fish/functions/__fish_print_xdg_applications_directories.fish
+    - path: /usr/share/fish/functions/__fish_print_xdg_mimetypes.fish
+    - path: /usr/share/fish/functions/__fish_print_xwindows.fish
+    - path: /usr/share/fish/functions/__fish_print_zfs_snapshots.fish
+    - path: /usr/share/fish/functions/__fish_protontricks_complete_appid.fish
+    - path: /usr/share/fish/functions/__fish_ps.fish
+    - path: /usr/share/fish/functions/__fish_pwd.fish
+    - path: /usr/share/fish/functions/__fish_reg__complete_keys.fish
+    - path: /usr/share/fish/functions/__fish_seen_argument.fish
+    - path: /usr/share/fish/functions/__fish_seen_subcommand_from.fish
+    - path: /usr/share/fish/functions/__fish_set_locale.fish
+    - path: /usr/share/fish/functions/__fish_shared_key_bindings.fish
+    - path: /usr/share/fish/functions/__fish_should_complete_switches.fish
+    - path: /usr/share/fish/functions/__fish_svn_prompt.fish
+    - path: /usr/share/fish/functions/__fish_systemctl.fish
+    - path: /usr/share/fish/functions/__fish_systemctl_services.fish
+    - path: /usr/share/fish/functions/__fish_systemd_machine_images.fish
+    - path: /usr/share/fish/functions/__fish_systemd_machines.fish
+    - path: /usr/share/fish/functions/__fish_theme_cat.fish
+    - path: /usr/share/fish/functions/__fish_theme_dir.fish
+    - path: /usr/share/fish/functions/__fish_theme_export_for_webconfig.fish
+    - path: /usr/share/fish/functions/__fish_theme_for_each.fish
+    - path: /usr/share/fish/functions/__fish_theme_freeze.fish
+    - path: /usr/share/fish/functions/__fish_theme_names.fish
+    - path: /usr/share/fish/functions/__fish_theme_paths.fish
+    - path: /usr/share/fish/functions/__fish_theme_variable_filter.fish
+    - path: /usr/share/fish/functions/__fish_theme_variables.fish
+    - path: /usr/share/fish/functions/__fish_toggle_comment_commandline.fish
+    - path: /usr/share/fish/functions/__fish_tokenizer_state.fish
+    - path: /usr/share/fish/functions/__fish_tried_to_embed_manpages.fish
+    - path: /usr/share/fish/functions/__fish_uname.fish
+    - path: /usr/share/fish/functions/__fish_unexpand_tilde.fish
+    - path: /usr/share/fish/functions/__fish_use_subcommand.fish
+    - path: /usr/share/fish/functions/__fish_vcs_prompt.fish
+    - path: /usr/share/fish/functions/__fish_webconfig_update_color_hook.fish
+    - path: /usr/share/fish/functions/__fish_whatis.fish
+    - path: /usr/share/fish/functions/__fish_whatis_current_token.fish
+    - path: /usr/share/fish/functions/__fish_with_status.fish
+    - path: /usr/share/fish/functions/__fish_without_manpager.fish
+    - path: /usr/share/fish/functions/__ssh_history_completions.fish
+    - path: /usr/share/fish/functions/__terlar_git_prompt.fish
+    - path: /usr/share/fish/functions/_validate_int.fish
+    - path: /usr/share/fish/functions/abbr.fish
+    - path: /usr/share/fish/functions/alias.fish
+    - path: /usr/share/fish/functions/cd.fish
+    - path: /usr/share/fish/functions/cdh.fish
+    - path: /usr/share/fish/functions/contains_seq.fish
+    - path: /usr/share/fish/functions/diff.fish
+    - path: /usr/share/fish/functions/dirh.fish
+    - path: /usr/share/fish/functions/dirs.fish
+    - path: /usr/share/fish/functions/down-or-search.fish
+    - path: /usr/share/fish/functions/edit_command_buffer.fish
+    - path: /usr/share/fish/functions/export.fish
+    - path: /usr/share/fish/functions/fish_add_path.fish
+    - path: /usr/share/fish/functions/fish_breakpoint_prompt.fish
+    - path: /usr/share/fish/functions/fish_clipboard_copy.fish
+    - path: /usr/share/fish/functions/fish_clipboard_paste.fish
+    - path: /usr/share/fish/functions/fish_command_not_found.fish
+    - path: /usr/share/fish/functions/fish_commandline_append.fish
+    - path: /usr/share/fish/functions/fish_commandline_prepend.fish
+    - path: /usr/share/fish/functions/fish_config.fish
+    - path: /usr/share/fish/functions/fish_default_key_bindings.fish
+    - path: /usr/share/fish/functions/fish_default_mode_prompt.fish
+    - path: /usr/share/fish/functions/fish_delta.fish
+    - path: /usr/share/fish/functions/fish_fossil_prompt.fish
+    - path: /usr/share/fish/functions/fish_git_prompt.fish
+    - path: /usr/share/fish/functions/fish_greeting.fish
+    - path: /usr/share/fish/functions/fish_hg_prompt.fish
+    - path: /usr/share/fish/functions/fish_hybrid_key_bindings.fish
+    - path: /usr/share/fish/functions/fish_in_macos_terminal.fish
+    - path: /usr/share/fish/functions/fish_is_root_user.fish
+    - path: /usr/share/fish/functions/fish_jj_prompt.fish
+    - path: /usr/share/fish/functions/fish_job_summary.fish
+    - path: /usr/share/fish/functions/fish_mode_prompt.fish
+    - path: /usr/share/fish/functions/fish_opt.fish
+    - path: /usr/share/fish/functions/fish_print_git_action.fish
+    - path: /usr/share/fish/functions/fish_print_hg_root.fish
+    - path: /usr/share/fish/functions/fish_prompt.fish
+    - path: /usr/share/fish/functions/fish_status_to_signal.fish
+    - path: /usr/share/fish/functions/fish_svn_prompt.fish
+    - path: /usr/share/fish/functions/fish_title.fish
+    - path: /usr/share/fish/functions/fish_update_completions.fish
+    - path: /usr/share/fish/functions/fish_vcs_prompt.fish
+    - path: /usr/share/fish/functions/fish_vi_cursor.fish
+    - path: /usr/share/fish/functions/fish_vi_key_bindings.fish
+    - path: /usr/share/fish/functions/funced.fish
+    - path: /usr/share/fish/functions/funcsave.fish
+    - path: /usr/share/fish/functions/grep.fish
+    - path: /usr/share/fish/functions/help.fish
+    - path: /usr/share/fish/functions/history.fish
+    - path: /usr/share/fish/functions/isatty.fish
+    - path: /usr/share/fish/functions/la.fish
+    - path: /usr/share/fish/functions/ll.fish
+    - path: /usr/share/fish/functions/ls.fish
+    - path: /usr/share/fish/functions/man.fish
+    - path: /usr/share/fish/functions/nextd-or-forward-token.fish
+    - path: /usr/share/fish/functions/nextd.fish
+    - path: /usr/share/fish/functions/open.fish
+    - path: /usr/share/fish/functions/popd.fish
+    - path: /usr/share/fish/functions/prevd-or-backward-token.fish
+    - path: /usr/share/fish/functions/prevd.fish
+    - path: /usr/share/fish/functions/prompt_hostname.fish
+    - path: /usr/share/fish/functions/prompt_login.fish
+    - path: /usr/share/fish/functions/prompt_pwd.fish
+    - path: /usr/share/fish/functions/psub.fish
+    - path: /usr/share/fish/functions/pushd.fish
+    - path: /usr/share/fish/functions/realpath.fish
+    - path: /usr/share/fish/functions/seq.fish
+    - path: /usr/share/fish/functions/setenv.fish
+    - path: /usr/share/fish/functions/suspend.fish
+    - path: /usr/share/fish/functions/trap.fish
+    - path: /usr/share/fish/functions/umask.fish
+    - path: /usr/share/fish/functions/up-or-search.fish
+    - path: /usr/share/fish/functions/vared.fish
+    - path: /usr/share/fish/prompts/acidhub.fish
+    - path: /usr/share/fish/prompts/arrow.fish
+    - path: /usr/share/fish/prompts/astronaut.fish
+    - path: /usr/share/fish/prompts/default.fish
+    - path: /usr/share/fish/prompts/disco.fish
+    - path: /usr/share/fish/prompts/informative.fish
+    - path: /usr/share/fish/prompts/informative_vcs.fish
+    - path: /usr/share/fish/prompts/minimalist.fish
+    - path: /usr/share/fish/prompts/nim.fish
+    - path: /usr/share/fish/prompts/pythonista.fish
+    - path: /usr/share/fish/prompts/scales.fish
+    - path: /usr/share/fish/prompts/simple.fish
+    - path: /usr/share/fish/prompts/terlar.fish
+    - path: /usr/share/fish/themes/ayu-mirage.theme
+    - path: /usr/share/fish/themes/ayu.theme
+    - path: /usr/share/fish/themes/base16-default.theme
+    - path: /usr/share/fish/themes/base16-eighties.theme
+    - path: /usr/share/fish/themes/bay-cruise.theme
+    - path: /usr/share/fish/themes/catppuccin-frappe.theme
+    - path: /usr/share/fish/themes/catppuccin-macchiato.theme
+    - path: /usr/share/fish/themes/catppuccin-mocha.theme
+    - path: /usr/share/fish/themes/coolbeans.theme
+    - path: /usr/share/fish/themes/default-rgb.theme
+    - path: /usr/share/fish/themes/default.theme
+    - path: /usr/share/fish/themes/dracula.theme
+    - path: /usr/share/fish/themes/fairground.theme
+    - path: /usr/share/fish/themes/just-a-touch.theme
+    - path: /usr/share/fish/themes/lava.theme
+    - path: /usr/share/fish/themes/mono-lace.theme
+    - path: /usr/share/fish/themes/mono-smoke.theme
+    - path: /usr/share/fish/themes/none.theme
+    - path: /usr/share/fish/themes/nord.theme
+    - path: /usr/share/fish/themes/old-school.theme
+    - path: /usr/share/fish/themes/seaweed.theme
+    - path: /usr/share/fish/themes/snow-day.theme
+    - path: /usr/share/fish/themes/solarized.theme
+    - path: /usr/share/fish/themes/tomorrow-night-bright.theme
+    - path: /usr/share/fish/themes/tomorrow.theme
+    - path: /usr/share/fish/tools/create_manpage_completions.py
+    - path: /usr/share/fish/tools/web_config/favicon.png
+    - path: /usr/share/fish/tools/web_config/fishconfig.css
+    - path: /usr/share/fish/tools/web_config/fishconfig_print.css
+    - path: /usr/share/fish/tools/web_config/index.html
+    - path: /usr/share/fish/tools/web_config/js/alpine.js
+    - path: /usr/share/fish/tools/web_config/js/colorutils.js
+    - path: /usr/share/fish/tools/web_config/js/main.js
+    - path: /usr/share/fish/tools/web_config/webconfig.py
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc

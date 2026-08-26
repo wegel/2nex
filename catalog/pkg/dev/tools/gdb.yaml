@@ -1,0 +1,255 @@
+package:
+  schema: 1
+  name: GDB
+  slug: gdb
+  namespace: dev/tools
+  version: "17.2"
+  description: GNU debugger
+  homepage: https://www.gnu.org/software/gdb/
+  checksum: 52a9ba4090dd1b8bb0e557f8a4034522b409de7a073850db642165ba0a012cb7
+
+sources:
+- name: gdb
+  url: https://ftp.gnu.org/gnu/gdb/gdb-17.2.tar.xz
+  sha256: 1c036c0d72e4b3d1fb5c94c88632add6f9d76f4d7c4d2ea793c12a9f19a3228c
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: m4
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+- name: bison
+  commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
+- name: flex
+  commit: x86_64/pkg/core/toolchain/flex/2.6.4/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: texinfo
+  commit: x86_64/pkg/cli/text/texinfo/7.1/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: readline
+  commit: x86_64/pkg/libs/system/readline/8.2/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: mpfr
+  commit: x86_64/pkg/libs/system/mpfr/4.2.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [8323:2849, 24801:3883, 54748:5973, 92955:10509, 122772:10570, 153222:10656, 182825:11198, 228038:19631, 274442:42724, 300370:73418]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_gdb} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    mkdir -p build
+    cd build
+
+    ../configure                  \
+      --prefix=/usr               \
+      --build=$(../config.guess)  \
+      --host=${TARGET}            \
+      --disable-binutils          \
+      --disable-gas               \
+      --disable-gold              \
+      --disable-gprof             \
+      --disable-ld                \
+      --disable-nls               \
+      --disable-sim               \
+      --disable-source-highlight  \
+      --disable-werror            \
+      --with-system-readline      \
+      --with-system-zlib          \
+      --with-expat                \
+      --with-gmp=/usr             \
+      --with-mpfr=/usr            \
+      --with-lzma                 \
+      --with-python=no            \
+      --with-guile=no             \
+      --without-debuginfod        \
+      --without-babeltrace        \
+      --without-libunwind         \
+      --without-xxhash            \
+      MAKEINFO=true
+
+    make MAKEINFO=true
+    make DESTDIR="${OUT_DIR}" MAKEINFO=true install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - info
+  - lib
+  - man
+  - misc
+  - static
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/gcore
+    - path: /usr/bin/gdb
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libexpat.so.1
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libmpfr.so.6
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/libreadline.so.8
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/gdb-add-index
+    - path: /usr/bin/gdbserver
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/gstack
+
+  dev:
+    files:
+    - path: /usr/include/ansidecl.h
+    - path: /usr/include/bfd.h
+    - path: /usr/include/bfdlink.h
+    - path: /usr/include/ctf-api.h
+    - path: /usr/include/ctf.h
+    - path: /usr/include/diagnostics.h
+    - path: /usr/include/dis-asm.h
+    - path: /usr/include/gdb/jit-reader.h
+    - path: /usr/include/plugin-api.h
+    - path: /usr/include/sframe-api.h
+    - path: /usr/include/sframe.h
+    - path: /usr/include/symcat.h
+    - path: /usr/lib/libbfd.la
+    - path: /usr/lib/libctf-nobfd.la
+    - path: /usr/lib/libctf.la
+    - path: /usr/lib/libopcodes.la
+    - path: /usr/lib/libsframe.la
+
+  info:
+    files:
+    - path: /usr/share/info/annotate.info
+    - path: /usr/share/info/bfd.info
+    - path: /usr/share/info/ctf-spec.info
+    - path: /usr/share/info/dir
+    - path: /usr/share/info/gdb.info
+    - path: /usr/share/info/gdb.info-1
+    - path: /usr/share/info/gdb.info-2
+    - path: /usr/share/info/gdb.info-3
+    - path: /usr/share/info/gdb.info-4
+    - path: /usr/share/info/gdb.info-5
+    - path: /usr/share/info/gdb.info-6
+    - path: /usr/share/info/gdb.info-7
+    - path: /usr/share/info/gdb.info-8
+    - path: /usr/share/info/gdb.info-9
+    - path: /usr/share/info/sframe-spec.info
+    - path: /usr/share/info/stabs.info
+
+  lib:
+    files:
+    - path: /usr/lib/libinproctrace.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man1/gcore.1
+    - path: /usr/share/man/man1/gdb-add-index.1
+    - path: /usr/share/man/man1/gdb.1
+    - path: /usr/share/man/man1/gdbserver.1
+    - path: /usr/share/man/man1/gstack.1
+    - path: /usr/share/man/man5/gdbinit.5
+
+  misc:
+    files:
+    - path: /usr/share/gdb/syscalls/aarch64-linux.xml
+    - path: /usr/share/gdb/syscalls/amd64-linux.xml
+    - path: /usr/share/gdb/syscalls/arm-linux.xml
+    - path: /usr/share/gdb/syscalls/freebsd.xml
+    - path: /usr/share/gdb/syscalls/gdb-syscalls.dtd
+    - path: /usr/share/gdb/syscalls/i386-linux.xml
+    - path: /usr/share/gdb/syscalls/loongarch-linux.xml
+    - path: /usr/share/gdb/syscalls/mips-n32-linux.xml
+    - path: /usr/share/gdb/syscalls/mips-n64-linux.xml
+    - path: /usr/share/gdb/syscalls/mips-o32-linux.xml
+    - path: /usr/share/gdb/syscalls/netbsd.xml
+    - path: /usr/share/gdb/syscalls/ppc-linux.xml
+    - path: /usr/share/gdb/syscalls/ppc64-linux.xml
+    - path: /usr/share/gdb/syscalls/s390x-linux.xml
+    - path: /usr/share/gdb/syscalls/s390-linux.xml
+    - path: /usr/share/gdb/syscalls/sparc-linux.xml
+    - path: /usr/share/gdb/syscalls/sparc64-linux.xml
+    - path: /usr/share/gdb/system-gdbinit/elinos.py
+    - path: /usr/share/gdb/system-gdbinit/wrs-linux.py
+
+  static:
+    files:
+    - path: /usr/lib/libbfd.a
+    - path: /usr/lib/libctf-nobfd.a
+    - path: /usr/lib/libctf.a
+    - path: /usr/lib/libopcodes.a
+    - path: /usr/lib/libsframe.a
+
+resolution:
+  /usr/lib/libexpat.so.1: expat
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libgmp.so.10: gmp
+  /usr/lib/libmpfr.so.6: mpfr
+  /usr/lib/libncursesw.so.6: ncurses
+  /usr/lib/libreadline.so.8: readline
+  /usr/lib/liblzma.so.5: xz
+  /usr/lib/libz.so.1: zlib

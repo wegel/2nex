@@ -1,0 +1,257 @@
+package:
+  schema: 1
+  name: Gawk
+  slug: gawk
+  namespace: cli/text
+  version: 5.3.0
+  description: GNU awk, a pattern scanning and processing language
+  homepage: https://www.gnu.org/software/gawk/
+  checksum: 7d7102fb93799fb2f19c0a30f0170bb1e38b700827c886dde26454cc225225fe
+  seed: true
+
+sources:
+- name: gawk
+  url: https://ftp.gnu.org/gnu/gawk/gawk-5.3.0.tar.xz
+  sha256: ca9c16d3d11d0ff8c69d79dc0b47267e1329a69b39b799895604ed447d3ca90b
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+- name: texinfo
+  commit: x86_64/pkg/cli/text/texinfo/7.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase3/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase3/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase3/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase3/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase3/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase3/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase3/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase3/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4102:1457, 8212:5614, 16488:9146, 24966:9544, 33243:9582, 42097:9605, 50594:12456, 63637:12588, 75980:13297, 80801:13821]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_gawk} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    sed -i 's/extras//' Makefile.in
+    ./configure --prefix=/usr
+
+    make
+    make DESTDIR=${OUT_DIR} install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - locale
+  - misc
+
+  full:
+  - bin
+  - dev
+  - info
+  - lib
+  - locale
+  - man
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/awk
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/bin/gawk
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/bin/gawk-5.3.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/bin/gawkbug
+    - path: /usr/libexec/awk/grcat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/libexec/awk/pwcat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  dev:
+    files:
+    - path: /usr/include/gawkapi.h
+
+  info:
+    files:
+    - path: /usr/share/info/dir
+    - path: /usr/share/info/gawk.info
+    - path: /usr/share/info/gawk_api-figure1.png
+    - path: /usr/share/info/gawk_api-figure2.png
+    - path: /usr/share/info/gawk_api-figure3.png
+    - path: /usr/share/info/gawk_array-elements.png
+    - path: /usr/share/info/gawk_general-program.png
+    - path: /usr/share/info/gawk_process-flow.png
+    - path: /usr/share/info/gawk_statist.jpg
+    - path: /usr/share/info/gawkinet.info
+    - path: /usr/share/info/gawkworkflow.info
+    - path: /usr/share/info/pm-gawk.info
+
+  lib:
+    files:
+    - path: /usr/lib/gawk/filefuncs.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/fnmatch.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/fork.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/inplace.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/intdiv.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/ordchr.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/readdir.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/readfile.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/revoutput.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/revtwoway.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/rwarray.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/gawk/time.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+
+  locale:
+    files:
+    - path: /usr/share/locale/bg/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/gawk.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/gawk.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/gawk.1
+    - path: /usr/share/man/man1/gawkbug.1
+    - path: /usr/share/man/man1/pm-gawk.1
+    - path: /usr/share/man/man3/filefuncs.3am
+    - path: /usr/share/man/man3/fnmatch.3am
+    - path: /usr/share/man/man3/fork.3am
+    - path: /usr/share/man/man3/inplace.3am
+    - path: /usr/share/man/man3/ordchr.3am
+    - path: /usr/share/man/man3/readdir.3am
+    - path: /usr/share/man/man3/readfile.3am
+    - path: /usr/share/man/man3/revoutput.3am
+    - path: /usr/share/man/man3/revtwoway.3am
+    - path: /usr/share/man/man3/rwarray.3am
+    - path: /usr/share/man/man3/time.3am
+
+  misc:
+    files:
+    - path: /usr/share/awk/assert.awk
+    - path: /usr/share/awk/bits2str.awk
+    - path: /usr/share/awk/cliff_rand.awk
+    - path: /usr/share/awk/ctime.awk
+    - path: /usr/share/awk/ftrans.awk
+    - path: /usr/share/awk/getopt.awk
+    - path: /usr/share/awk/gettime.awk
+    - path: /usr/share/awk/group.awk
+    - path: /usr/share/awk/have_mpfr.awk
+    - path: /usr/share/awk/inplace.awk
+    - path: /usr/share/awk/intdiv0.awk
+    - path: /usr/share/awk/isnumeric.awk
+    - path: /usr/share/awk/join.awk
+    - path: /usr/share/awk/libintl.awk
+    - path: /usr/share/awk/noassign.awk
+    - path: /usr/share/awk/ns_passwd.awk
+    - path: /usr/share/awk/ord.awk
+    - path: /usr/share/awk/passwd.awk
+    - path: /usr/share/awk/processarray.awk
+    - path: /usr/share/awk/quicksort.awk
+    - path: /usr/share/awk/readable.awk
+    - path: /usr/share/awk/readfile.awk
+    - path: /usr/share/awk/rewind.awk
+    - path: /usr/share/awk/round.awk
+    - path: /usr/share/awk/shellquote.awk
+    - path: /usr/share/awk/strtonum.awk
+    - path: /usr/share/awk/tocsv.awk
+    - path: /usr/share/awk/walkarray.awk
+    - path: /usr/share/awk/zerofile.awk
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc

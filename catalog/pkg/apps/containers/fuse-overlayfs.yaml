@@ -1,0 +1,105 @@
+package:
+  schema: 1
+  name: fuse-overlayfs
+  slug: fuse-overlayfs
+  namespace: apps/containers
+  version: "1.17"
+  description: FUSE overlay filesystem implementation for rootless containers
+  homepage: https://github.com/containers/fuse-overlayfs
+  checksum: 2383c29bb51f1c489a2358d37ef192afee1137860544f5b267e1c8f942ca1d07
+
+sources:
+- name: fuse_overlayfs
+  url: https://github.com/containers/fuse-overlayfs/archive/refs/tags/v1.17.tar.gz
+  sha256: cefffecfbb001b2784f19af344f27eae07b31a4faa38d345b738af96b2bec59e
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: autoconf
+  commit: x86_64/pkg/core/toolchain/autoconf/2.72/bundles/dev
+- name: automake
+  commit: x86_64/pkg/core/toolchain/automake/1.16.5/bundles/dev
+- name: libtool
+  commit: x86_64/pkg/core/toolchain/libtool/2.4.7/bundles/dev
+- name: m4
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: fuse3
+  commit: x86_64/pkg/libs/system/fuse3/3.17.4/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4130:34332, 8255:42282, 10159:54454]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "/./${SOURCE_fuse_overlayfs}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    ./autogen.sh
+    ./configure \
+      --prefix=/usr
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - man
+
+  full:
+  - bin
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/fuse-overlayfs
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfuse3.so.4
+      - /usr/lib/libgcc_s.so.1
+
+  man:
+    files:
+    - path: /usr/share/man/man1/fuse-overlayfs.1
+
+resolution:
+  /usr/lib/libfuse3.so.4: fuse3
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

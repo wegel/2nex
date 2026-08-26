@@ -1,0 +1,1623 @@
+package:
+  schema: 1
+  name: zsh
+  slug: zsh
+  namespace: cli/shells
+  version: "5.9"
+  description: A very advanced and programmable command interpreter (shell) for UNIX
+  homepage: https://www.zsh.org/
+  checksum: 314848d5f5efe69116afdb4e37a493fbf2213a32118db42c76537e3d14ece68c
+
+sources:
+- name: zsh
+  url: https://www.zsh.org/pub/old/zsh-5.9.tar.xz
+  sha256: 9b8d1ecedd5b5e81fbf1918e876752a7dd948e05c1a0dba10ab863842d45acd5
+- name: uapi_config
+  file: pkg/cli/shells/zsh-uapi-config.patch
+  sha256: c322d216a5efaa14a0953bc6da9ac7993040be10aaacf0b4c623f483467938b0
+
+dependencies:
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4111:3315, 12352:16080, 20587:18709, 33009:19699, 45351:20002, 53603:20190, 66112:22540, 82857:28062, 95447:35218, 105175:39581]
+
+  script: |
+    tar --no-same-owner -xJf /${SOURCE_zsh} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    ./configure \
+      --prefix=/usr \
+      --enable-etcdir=/etc \
+      --enable-pcre \
+      --enable-cap \
+      --enable-multibyte \
+      --with-tcsetpgrp \
+      --enable-zsh-secure-free
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+    # The global startup files carry machine policy, so the shell must read
+    # /usr/lib/zsh/zshenv, then /run/zsh/zshenv, then /etc/zshenv, with a
+    # later file overriding the value an earlier one set. Each tier plants a
+    # different NEXUAPI and the probe prints what a plain "zsh -c" run saw.
+    # zshenv is sourced on every zsh invocation, so no -i or -l is needed.
+    mkdir -p /etc /run/zsh /usr/lib/zsh
+    vendor_zshenv=/usr/lib/zsh/zshenv
+    runtime_zshenv=/run/zsh/zshenv
+    admin_zshenv=/etc/zshenv
+
+    rm -f "${vendor_zshenv}" "${runtime_zshenv}" "${admin_zshenv}"
+
+    probe_home="${WORK_DIR}/zsh-uapi-home"
+    mkdir -p "${probe_home}"
+
+    probe_nexuapi() {
+        HOME="${probe_home}" "${OUT_DIR}/usr/bin/zsh" -c 'print -r -- $NEXUAPI'
+    }
+
+    expect_nexuapi() {
+        actual=$(probe_nexuapi)
+        if [ "${actual}" != "$1" ]; then
+            printf 'zsh UAPI smoke: expected NEXUAPI %s, got %s\n' \
+                "$1" "${actual}" >&2
+            exit 1
+        fi
+    }
+
+    default_nexuapi=$(probe_nexuapi)
+    if [ -n "${default_nexuapi}" ]; then
+        printf 'zsh UAPI smoke: expected empty NEXUAPI with no tiers, got %s\n' \
+            "${default_nexuapi}" >&2
+        exit 1
+    fi
+
+    printf 'NEXUAPI=vendor\n' > "${vendor_zshenv}"
+    expect_nexuapi vendor
+
+    printf 'NEXUAPI=runtime\n' > "${runtime_zshenv}"
+    expect_nexuapi runtime
+
+    printf 'NEXUAPI=admin\n' > "${admin_zshenv}"
+    expect_nexuapi admin
+
+    # Removing a tier uncovers the one below it, which proves every file is
+    # sourced on each run rather than resolved once.
+    rm -f "${admin_zshenv}"
+    expect_nexuapi runtime
+
+    rm -f "${vendor_zshenv}" "${runtime_zshenv}"
+
+    printf 'zsh UAPI smoke: the config loader read all three tiers in order\n'
+
+bundles:
+  dev:
+  - bin
+  - lib
+  - man
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/zsh
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libncursesw.so.6
+    - path: /usr/bin/zsh-5.9
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libncursesw.so.6
+
+  lib:
+    files:
+    - path: /usr/lib/zsh/5.9/zsh/attr.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/cap.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap.so.2
+    - path: /usr/lib/zsh/5.9/zsh/clone.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/compctl.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/complete.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/complist.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+    - path: /usr/lib/zsh/5.9/zsh/computil.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/curses.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+    - path: /usr/lib/zsh/5.9/zsh/datetime.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/deltochar.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/example.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/files.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/langinfo.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/mapfile.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/mathfunc.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/zsh/5.9/zsh/nearcolor.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/zsh/5.9/zsh/net/socket.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/net/tcp.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/newuser.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/param/private.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/parameter.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/regex.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/rlimits.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/sched.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/stat.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/system.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/zsh/5.9/zsh/termcap.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+    - path: /usr/lib/zsh/5.9/zsh/terminfo.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+    - path: /usr/lib/zsh/5.9/zsh/watch.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/zftp.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/zle.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+    - path: /usr/lib/zsh/5.9/zsh/zleparameter.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/zprof.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/zpty.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/zselect.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/zsh/5.9/zsh/zutil.so
+      needs:
+      - /usr/lib/libc.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man1/zsh.1
+    - path: /usr/share/man/man1/zshall.1
+    - path: /usr/share/man/man1/zshbuiltins.1
+    - path: /usr/share/man/man1/zshcalsys.1
+    - path: /usr/share/man/man1/zshcompctl.1
+    - path: /usr/share/man/man1/zshcompsys.1
+    - path: /usr/share/man/man1/zshcompwid.1
+    - path: /usr/share/man/man1/zshcontrib.1
+    - path: /usr/share/man/man1/zshexpn.1
+    - path: /usr/share/man/man1/zshmisc.1
+    - path: /usr/share/man/man1/zshmodules.1
+    - path: /usr/share/man/man1/zshoptions.1
+    - path: /usr/share/man/man1/zshparam.1
+    - path: /usr/share/man/man1/zshroadmap.1
+    - path: /usr/share/man/man1/zshtcpsys.1
+    - path: /usr/share/man/man1/zshzftpsys.1
+    - path: /usr/share/man/man1/zshzle.1
+
+  misc:
+    files:
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_adjust
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_bydir_detect
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_check_com
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_detect_bzr
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_detect_cdv
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_detect_cvs
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_detect_darcs
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_detect_fossil
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_detect_git
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_detect_hg
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_detect_mtn
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_detect_p4
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_detect_svk
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_detect_svn
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_detect_tla
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_formats
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_get_cmd
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_get_data_bzr
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_get_data_cdv
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_get_data_cvs
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_get_data_darcs
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_get_data_fossil
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_get_data_git
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_get_data_hg
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_get_data_mtn
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_get_data_p4
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_get_data_svk
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_get_data_svn
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_get_data_tla
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_hexdump
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_hook
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_maxexports
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_nvcsformats
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_patch2subject
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_quilt
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_reposub
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_set
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_set-branch-format
+    - path: /usr/share/zsh/5.9/functions/VCS_INFO_set-patch-format
+    - path: /usr/share/zsh/5.9/functions/_SUSEconfig
+    - path: /usr/share/zsh/5.9/functions/__arguments
+    - path: /usr/share/zsh/5.9/functions/_a2ps
+    - path: /usr/share/zsh/5.9/functions/_a2utils
+    - path: /usr/share/zsh/5.9/functions/_aap
+    - path: /usr/share/zsh/5.9/functions/_abcde
+    - path: /usr/share/zsh/5.9/functions/_absolute_command_paths
+    - path: /usr/share/zsh/5.9/functions/_ack
+    - path: /usr/share/zsh/5.9/functions/_acpi
+    - path: /usr/share/zsh/5.9/functions/_acpitool
+    - path: /usr/share/zsh/5.9/functions/_acroread
+    - path: /usr/share/zsh/5.9/functions/_adb
+    - path: /usr/share/zsh/5.9/functions/_add-zle-hook-widget
+    - path: /usr/share/zsh/5.9/functions/_add-zsh-hook
+    - path: /usr/share/zsh/5.9/functions/_alias
+    - path: /usr/share/zsh/5.9/functions/_aliases
+    - path: /usr/share/zsh/5.9/functions/_all_labels
+    - path: /usr/share/zsh/5.9/functions/_all_matches
+    - path: /usr/share/zsh/5.9/functions/_alsa-utils
+    - path: /usr/share/zsh/5.9/functions/_alternative
+    - path: /usr/share/zsh/5.9/functions/_analyseplugin
+    - path: /usr/share/zsh/5.9/functions/_ansible
+    - path: /usr/share/zsh/5.9/functions/_ant
+    - path: /usr/share/zsh/5.9/functions/_antiword
+    - path: /usr/share/zsh/5.9/functions/_apachectl
+    - path: /usr/share/zsh/5.9/functions/_apm
+    - path: /usr/share/zsh/5.9/functions/_approximate
+    - path: /usr/share/zsh/5.9/functions/_apt
+    - path: /usr/share/zsh/5.9/functions/_apt-file
+    - path: /usr/share/zsh/5.9/functions/_apt-move
+    - path: /usr/share/zsh/5.9/functions/_apt-show-versions
+    - path: /usr/share/zsh/5.9/functions/_aptitude
+    - path: /usr/share/zsh/5.9/functions/_arch_archives
+    - path: /usr/share/zsh/5.9/functions/_arch_namespace
+    - path: /usr/share/zsh/5.9/functions/_arg_compile
+    - path: /usr/share/zsh/5.9/functions/_arguments
+    - path: /usr/share/zsh/5.9/functions/_arp
+    - path: /usr/share/zsh/5.9/functions/_arping
+    - path: /usr/share/zsh/5.9/functions/_arrays
+    - path: /usr/share/zsh/5.9/functions/_asciidoctor
+    - path: /usr/share/zsh/5.9/functions/_asciinema
+    - path: /usr/share/zsh/5.9/functions/_assign
+    - path: /usr/share/zsh/5.9/functions/_at
+    - path: /usr/share/zsh/5.9/functions/_attr
+    - path: /usr/share/zsh/5.9/functions/_augeas
+    - path: /usr/share/zsh/5.9/functions/_auto-apt
+    - path: /usr/share/zsh/5.9/functions/_autocd
+    - path: /usr/share/zsh/5.9/functions/_avahi
+    - path: /usr/share/zsh/5.9/functions/_awk
+    - path: /usr/share/zsh/5.9/functions/_axi-cache
+    - path: /usr/share/zsh/5.9/functions/_base64
+    - path: /usr/share/zsh/5.9/functions/_basename
+    - path: /usr/share/zsh/5.9/functions/_basenc
+    - path: /usr/share/zsh/5.9/functions/_bash
+    - path: /usr/share/zsh/5.9/functions/_bash_completions
+    - path: /usr/share/zsh/5.9/functions/_baudrates
+    - path: /usr/share/zsh/5.9/functions/_baz
+    - path: /usr/share/zsh/5.9/functions/_be_name
+    - path: /usr/share/zsh/5.9/functions/_beadm
+    - path: /usr/share/zsh/5.9/functions/_beep
+    - path: /usr/share/zsh/5.9/functions/_bibtex
+    - path: /usr/share/zsh/5.9/functions/_bind_addresses
+    - path: /usr/share/zsh/5.9/functions/_bindkey
+    - path: /usr/share/zsh/5.9/functions/_bison
+    - path: /usr/share/zsh/5.9/functions/_bittorrent
+    - path: /usr/share/zsh/5.9/functions/_bogofilter
+    - path: /usr/share/zsh/5.9/functions/_bpf_filters
+    - path: /usr/share/zsh/5.9/functions/_bpython
+    - path: /usr/share/zsh/5.9/functions/_brace_parameter
+    - path: /usr/share/zsh/5.9/functions/_brctl
+    - path: /usr/share/zsh/5.9/functions/_bsd_disks
+    - path: /usr/share/zsh/5.9/functions/_bsd_pkg
+    - path: /usr/share/zsh/5.9/functions/_bsdconfig
+    - path: /usr/share/zsh/5.9/functions/_bsdinstall
+    - path: /usr/share/zsh/5.9/functions/_btrfs
+    - path: /usr/share/zsh/5.9/functions/_bts
+    - path: /usr/share/zsh/5.9/functions/_bug
+    - path: /usr/share/zsh/5.9/functions/_builtin
+    - path: /usr/share/zsh/5.9/functions/_bzip2
+    - path: /usr/share/zsh/5.9/functions/_bzr
+    - path: /usr/share/zsh/5.9/functions/_cabal
+    - path: /usr/share/zsh/5.9/functions/_cache_invalid
+    - path: /usr/share/zsh/5.9/functions/_caffeinate
+    - path: /usr/share/zsh/5.9/functions/_cal
+    - path: /usr/share/zsh/5.9/functions/_calendar
+    - path: /usr/share/zsh/5.9/functions/_call_function
+    - path: /usr/share/zsh/5.9/functions/_call_program
+    - path: /usr/share/zsh/5.9/functions/_canonical_paths
+    - path: /usr/share/zsh/5.9/functions/_capabilities
+    - path: /usr/share/zsh/5.9/functions/_cat
+    - path: /usr/share/zsh/5.9/functions/_ccal
+    - path: /usr/share/zsh/5.9/functions/_cd
+    - path: /usr/share/zsh/5.9/functions/_cdbs-edit-patch
+    - path: /usr/share/zsh/5.9/functions/_cdcd
+    - path: /usr/share/zsh/5.9/functions/_cdr
+    - path: /usr/share/zsh/5.9/functions/_cdrdao
+    - path: /usr/share/zsh/5.9/functions/_cdrecord
+    - path: /usr/share/zsh/5.9/functions/_chattr
+    - path: /usr/share/zsh/5.9/functions/_chcon
+    - path: /usr/share/zsh/5.9/functions/_chflags
+    - path: /usr/share/zsh/5.9/functions/_chkconfig
+    - path: /usr/share/zsh/5.9/functions/_chmod
+    - path: /usr/share/zsh/5.9/functions/_choom
+    - path: /usr/share/zsh/5.9/functions/_chown
+    - path: /usr/share/zsh/5.9/functions/_chroot
+    - path: /usr/share/zsh/5.9/functions/_chrt
+    - path: /usr/share/zsh/5.9/functions/_chsh
+    - path: /usr/share/zsh/5.9/functions/_cksum
+    - path: /usr/share/zsh/5.9/functions/_clay
+    - path: /usr/share/zsh/5.9/functions/_cmdambivalent
+    - path: /usr/share/zsh/5.9/functions/_cmdstring
+    - path: /usr/share/zsh/5.9/functions/_cmp
+    - path: /usr/share/zsh/5.9/functions/_code
+    - path: /usr/share/zsh/5.9/functions/_column
+    - path: /usr/share/zsh/5.9/functions/_combination
+    - path: /usr/share/zsh/5.9/functions/_comm
+    - path: /usr/share/zsh/5.9/functions/_command
+    - path: /usr/share/zsh/5.9/functions/_command_names
+    - path: /usr/share/zsh/5.9/functions/_comp_locale
+    - path: /usr/share/zsh/5.9/functions/_compadd
+    - path: /usr/share/zsh/5.9/functions/_compdef
+    - path: /usr/share/zsh/5.9/functions/_complete
+    - path: /usr/share/zsh/5.9/functions/_complete_debug
+    - path: /usr/share/zsh/5.9/functions/_complete_help
+    - path: /usr/share/zsh/5.9/functions/_complete_help_generic
+    - path: /usr/share/zsh/5.9/functions/_complete_tag
+    - path: /usr/share/zsh/5.9/functions/_completers
+    - path: /usr/share/zsh/5.9/functions/_composer
+    - path: /usr/share/zsh/5.9/functions/_compress
+    - path: /usr/share/zsh/5.9/functions/_condition
+    - path: /usr/share/zsh/5.9/functions/_configure
+    - path: /usr/share/zsh/5.9/functions/_coreadm
+    - path: /usr/share/zsh/5.9/functions/_correct
+    - path: /usr/share/zsh/5.9/functions/_correct_filename
+    - path: /usr/share/zsh/5.9/functions/_correct_word
+    - path: /usr/share/zsh/5.9/functions/_cowsay
+    - path: /usr/share/zsh/5.9/functions/_cp
+    - path: /usr/share/zsh/5.9/functions/_cpio
+    - path: /usr/share/zsh/5.9/functions/_cplay
+    - path: /usr/share/zsh/5.9/functions/_cpupower
+    - path: /usr/share/zsh/5.9/functions/_crontab
+    - path: /usr/share/zsh/5.9/functions/_cryptsetup
+    - path: /usr/share/zsh/5.9/functions/_cscope
+    - path: /usr/share/zsh/5.9/functions/_csplit
+    - path: /usr/share/zsh/5.9/functions/_cssh
+    - path: /usr/share/zsh/5.9/functions/_csup
+    - path: /usr/share/zsh/5.9/functions/_ctags
+    - path: /usr/share/zsh/5.9/functions/_ctags_tags
+    - path: /usr/share/zsh/5.9/functions/_cu
+    - path: /usr/share/zsh/5.9/functions/_curl
+    - path: /usr/share/zsh/5.9/functions/_cut
+    - path: /usr/share/zsh/5.9/functions/_cvs
+    - path: /usr/share/zsh/5.9/functions/_cvsup
+    - path: /usr/share/zsh/5.9/functions/_cygcheck
+    - path: /usr/share/zsh/5.9/functions/_cygpath
+    - path: /usr/share/zsh/5.9/functions/_cygrunsrv
+    - path: /usr/share/zsh/5.9/functions/_cygserver
+    - path: /usr/share/zsh/5.9/functions/_cygstart
+    - path: /usr/share/zsh/5.9/functions/_dak
+    - path: /usr/share/zsh/5.9/functions/_darcs
+    - path: /usr/share/zsh/5.9/functions/_date
+    - path: /usr/share/zsh/5.9/functions/_date_formats
+    - path: /usr/share/zsh/5.9/functions/_dates
+    - path: /usr/share/zsh/5.9/functions/_dbus
+    - path: /usr/share/zsh/5.9/functions/_dchroot
+    - path: /usr/share/zsh/5.9/functions/_dchroot-dsa
+    - path: /usr/share/zsh/5.9/functions/_dconf
+    - path: /usr/share/zsh/5.9/functions/_dcop
+    - path: /usr/share/zsh/5.9/functions/_dcut
+    - path: /usr/share/zsh/5.9/functions/_dd
+    - path: /usr/share/zsh/5.9/functions/_deb_architectures
+    - path: /usr/share/zsh/5.9/functions/_deb_codenames
+    - path: /usr/share/zsh/5.9/functions/_deb_files
+    - path: /usr/share/zsh/5.9/functions/_deb_packages
+    - path: /usr/share/zsh/5.9/functions/_debbugs_bugnumber
+    - path: /usr/share/zsh/5.9/functions/_debchange
+    - path: /usr/share/zsh/5.9/functions/_debcheckout
+    - path: /usr/share/zsh/5.9/functions/_debdiff
+    - path: /usr/share/zsh/5.9/functions/_debfoster
+    - path: /usr/share/zsh/5.9/functions/_deborphan
+    - path: /usr/share/zsh/5.9/functions/_debsign
+    - path: /usr/share/zsh/5.9/functions/_debsnap
+    - path: /usr/share/zsh/5.9/functions/_debuild
+    - path: /usr/share/zsh/5.9/functions/_default
+    - path: /usr/share/zsh/5.9/functions/_defaults
+    - path: /usr/share/zsh/5.9/functions/_delimiters
+    - path: /usr/share/zsh/5.9/functions/_describe
+    - path: /usr/share/zsh/5.9/functions/_description
+    - path: /usr/share/zsh/5.9/functions/_devtodo
+    - path: /usr/share/zsh/5.9/functions/_df
+    - path: /usr/share/zsh/5.9/functions/_dhclient
+    - path: /usr/share/zsh/5.9/functions/_dhcpinfo
+    - path: /usr/share/zsh/5.9/functions/_dict
+    - path: /usr/share/zsh/5.9/functions/_dict_words
+    - path: /usr/share/zsh/5.9/functions/_diff
+    - path: /usr/share/zsh/5.9/functions/_diff3
+    - path: /usr/share/zsh/5.9/functions/_diff_options
+    - path: /usr/share/zsh/5.9/functions/_diffstat
+    - path: /usr/share/zsh/5.9/functions/_dig
+    - path: /usr/share/zsh/5.9/functions/_dir_list
+    - path: /usr/share/zsh/5.9/functions/_directories
+    - path: /usr/share/zsh/5.9/functions/_directory_stack
+    - path: /usr/share/zsh/5.9/functions/_dirs
+    - path: /usr/share/zsh/5.9/functions/_disable
+    - path: /usr/share/zsh/5.9/functions/_dispatch
+    - path: /usr/share/zsh/5.9/functions/_django
+    - path: /usr/share/zsh/5.9/functions/_dkms
+    - path: /usr/share/zsh/5.9/functions/_dladm
+    - path: /usr/share/zsh/5.9/functions/_dlocate
+    - path: /usr/share/zsh/5.9/functions/_dmesg
+    - path: /usr/share/zsh/5.9/functions/_dmidecode
+    - path: /usr/share/zsh/5.9/functions/_dnf
+    - path: /usr/share/zsh/5.9/functions/_dns_types
+    - path: /usr/share/zsh/5.9/functions/_doas
+    - path: /usr/share/zsh/5.9/functions/_domains
+    - path: /usr/share/zsh/5.9/functions/_dos2unix
+    - path: /usr/share/zsh/5.9/functions/_dpatch-edit-patch
+    - path: /usr/share/zsh/5.9/functions/_dpkg
+    - path: /usr/share/zsh/5.9/functions/_dpkg-buildpackage
+    - path: /usr/share/zsh/5.9/functions/_dpkg-cross
+    - path: /usr/share/zsh/5.9/functions/_dpkg-repack
+    - path: /usr/share/zsh/5.9/functions/_dpkg_source
+    - path: /usr/share/zsh/5.9/functions/_dput
+    - path: /usr/share/zsh/5.9/functions/_drill
+    - path: /usr/share/zsh/5.9/functions/_dropbox
+    - path: /usr/share/zsh/5.9/functions/_dscverify
+    - path: /usr/share/zsh/5.9/functions/_dsh
+    - path: /usr/share/zsh/5.9/functions/_dtrace
+    - path: /usr/share/zsh/5.9/functions/_dtruss
+    - path: /usr/share/zsh/5.9/functions/_du
+    - path: /usr/share/zsh/5.9/functions/_dumpadm
+    - path: /usr/share/zsh/5.9/functions/_dumper
+    - path: /usr/share/zsh/5.9/functions/_dupload
+    - path: /usr/share/zsh/5.9/functions/_dvi
+    - path: /usr/share/zsh/5.9/functions/_dynamic_directory_name
+    - path: /usr/share/zsh/5.9/functions/_e2label
+    - path: /usr/share/zsh/5.9/functions/_ecasound
+    - path: /usr/share/zsh/5.9/functions/_echotc
+    - path: /usr/share/zsh/5.9/functions/_echoti
+    - path: /usr/share/zsh/5.9/functions/_ed
+    - path: /usr/share/zsh/5.9/functions/_elfdump
+    - path: /usr/share/zsh/5.9/functions/_elinks
+    - path: /usr/share/zsh/5.9/functions/_email_addresses
+    - path: /usr/share/zsh/5.9/functions/_emulate
+    - path: /usr/share/zsh/5.9/functions/_enable
+    - path: /usr/share/zsh/5.9/functions/_enscript
+    - path: /usr/share/zsh/5.9/functions/_entr
+    - path: /usr/share/zsh/5.9/functions/_env
+    - path: /usr/share/zsh/5.9/functions/_eog
+    - path: /usr/share/zsh/5.9/functions/_equal
+    - path: /usr/share/zsh/5.9/functions/_espeak
+    - path: /usr/share/zsh/5.9/functions/_etags
+    - path: /usr/share/zsh/5.9/functions/_ethtool
+    - path: /usr/share/zsh/5.9/functions/_evince
+    - path: /usr/share/zsh/5.9/functions/_exec
+    - path: /usr/share/zsh/5.9/functions/_expand
+    - path: /usr/share/zsh/5.9/functions/_expand_alias
+    - path: /usr/share/zsh/5.9/functions/_expand_word
+    - path: /usr/share/zsh/5.9/functions/_extensions
+    - path: /usr/share/zsh/5.9/functions/_external_pwds
+    - path: /usr/share/zsh/5.9/functions/_fakeroot
+    - path: /usr/share/zsh/5.9/functions/_fbsd_architectures
+    - path: /usr/share/zsh/5.9/functions/_fbsd_device_types
+    - path: /usr/share/zsh/5.9/functions/_fc
+    - path: /usr/share/zsh/5.9/functions/_feh
+    - path: /usr/share/zsh/5.9/functions/_fetch
+    - path: /usr/share/zsh/5.9/functions/_fetchmail
+    - path: /usr/share/zsh/5.9/functions/_ffmpeg
+    - path: /usr/share/zsh/5.9/functions/_figlet
+    - path: /usr/share/zsh/5.9/functions/_file_descriptors
+    - path: /usr/share/zsh/5.9/functions/_file_flags
+    - path: /usr/share/zsh/5.9/functions/_file_modes
+    - path: /usr/share/zsh/5.9/functions/_file_systems
+    - path: /usr/share/zsh/5.9/functions/_files
+    - path: /usr/share/zsh/5.9/functions/_find
+    - path: /usr/share/zsh/5.9/functions/_find_net_interfaces
+    - path: /usr/share/zsh/5.9/functions/_findmnt
+    - path: /usr/share/zsh/5.9/functions/_finger
+    - path: /usr/share/zsh/5.9/functions/_fink
+    - path: /usr/share/zsh/5.9/functions/_first
+    - path: /usr/share/zsh/5.9/functions/_flac
+    - path: /usr/share/zsh/5.9/functions/_flex
+    - path: /usr/share/zsh/5.9/functions/_floppy
+    - path: /usr/share/zsh/5.9/functions/_flowadm
+    - path: /usr/share/zsh/5.9/functions/_fmadm
+    - path: /usr/share/zsh/5.9/functions/_fmt
+    - path: /usr/share/zsh/5.9/functions/_fold
+    - path: /usr/share/zsh/5.9/functions/_fortune
+    - path: /usr/share/zsh/5.9/functions/_free
+    - path: /usr/share/zsh/5.9/functions/_freebsd-update
+    - path: /usr/share/zsh/5.9/functions/_fs_usage
+    - path: /usr/share/zsh/5.9/functions/_fsh
+    - path: /usr/share/zsh/5.9/functions/_fstat
+    - path: /usr/share/zsh/5.9/functions/_functions
+    - path: /usr/share/zsh/5.9/functions/_fuse_arguments
+    - path: /usr/share/zsh/5.9/functions/_fuse_values
+    - path: /usr/share/zsh/5.9/functions/_fuser
+    - path: /usr/share/zsh/5.9/functions/_fusermount
+    - path: /usr/share/zsh/5.9/functions/_fw_update
+    - path: /usr/share/zsh/5.9/functions/_gcc
+    - path: /usr/share/zsh/5.9/functions/_gcore
+    - path: /usr/share/zsh/5.9/functions/_gdb
+    - path: /usr/share/zsh/5.9/functions/_geany
+    - path: /usr/share/zsh/5.9/functions/_gem
+    - path: /usr/share/zsh/5.9/functions/_generic
+    - path: /usr/share/zsh/5.9/functions/_genisoimage
+    - path: /usr/share/zsh/5.9/functions/_getclip
+    - path: /usr/share/zsh/5.9/functions/_getconf
+    - path: /usr/share/zsh/5.9/functions/_getent
+    - path: /usr/share/zsh/5.9/functions/_getfacl
+    - path: /usr/share/zsh/5.9/functions/_getmail
+    - path: /usr/share/zsh/5.9/functions/_getopt
+    - path: /usr/share/zsh/5.9/functions/_ghostscript
+    - path: /usr/share/zsh/5.9/functions/_git
+    - path: /usr/share/zsh/5.9/functions/_git-buildpackage
+    - path: /usr/share/zsh/5.9/functions/_global
+    - path: /usr/share/zsh/5.9/functions/_global_tags
+    - path: /usr/share/zsh/5.9/functions/_globflags
+    - path: /usr/share/zsh/5.9/functions/_globqual_delims
+    - path: /usr/share/zsh/5.9/functions/_globquals
+    - path: /usr/share/zsh/5.9/functions/_gnome-gv
+    - path: /usr/share/zsh/5.9/functions/_gnu_generic
+    - path: /usr/share/zsh/5.9/functions/_gnupod
+    - path: /usr/share/zsh/5.9/functions/_gnutls
+    - path: /usr/share/zsh/5.9/functions/_go
+    - path: /usr/share/zsh/5.9/functions/_gpasswd
+    - path: /usr/share/zsh/5.9/functions/_gpg
+    - path: /usr/share/zsh/5.9/functions/_gphoto2
+    - path: /usr/share/zsh/5.9/functions/_gprof
+    - path: /usr/share/zsh/5.9/functions/_gqview
+    - path: /usr/share/zsh/5.9/functions/_gradle
+    - path: /usr/share/zsh/5.9/functions/_graphicsmagick
+    - path: /usr/share/zsh/5.9/functions/_grep
+    - path: /usr/share/zsh/5.9/functions/_grep-excuses
+    - path: /usr/share/zsh/5.9/functions/_groff
+    - path: /usr/share/zsh/5.9/functions/_groups
+    - path: /usr/share/zsh/5.9/functions/_growisofs
+    - path: /usr/share/zsh/5.9/functions/_gsettings
+    - path: /usr/share/zsh/5.9/functions/_gstat
+    - path: /usr/share/zsh/5.9/functions/_guard
+    - path: /usr/share/zsh/5.9/functions/_guilt
+    - path: /usr/share/zsh/5.9/functions/_gv
+    - path: /usr/share/zsh/5.9/functions/_gzip
+    - path: /usr/share/zsh/5.9/functions/_hash
+    - path: /usr/share/zsh/5.9/functions/_have_glob_qual
+    - path: /usr/share/zsh/5.9/functions/_hdiutil
+    - path: /usr/share/zsh/5.9/functions/_head
+    - path: /usr/share/zsh/5.9/functions/_hexdump
+    - path: /usr/share/zsh/5.9/functions/_history
+    - path: /usr/share/zsh/5.9/functions/_history_complete_word
+    - path: /usr/share/zsh/5.9/functions/_history_modifiers
+    - path: /usr/share/zsh/5.9/functions/_host
+    - path: /usr/share/zsh/5.9/functions/_hostname
+    - path: /usr/share/zsh/5.9/functions/_hosts
+    - path: /usr/share/zsh/5.9/functions/_htop
+    - path: /usr/share/zsh/5.9/functions/_hwinfo
+    - path: /usr/share/zsh/5.9/functions/_iconv
+    - path: /usr/share/zsh/5.9/functions/_iconvconfig
+    - path: /usr/share/zsh/5.9/functions/_id
+    - path: /usr/share/zsh/5.9/functions/_ifconfig
+    - path: /usr/share/zsh/5.9/functions/_iftop
+    - path: /usr/share/zsh/5.9/functions/_ignored
+    - path: /usr/share/zsh/5.9/functions/_imagemagick
+    - path: /usr/share/zsh/5.9/functions/_in_vared
+    - path: /usr/share/zsh/5.9/functions/_inetadm
+    - path: /usr/share/zsh/5.9/functions/_init_d
+    - path: /usr/share/zsh/5.9/functions/_initctl
+    - path: /usr/share/zsh/5.9/functions/_install
+    - path: /usr/share/zsh/5.9/functions/_invoke-rc.d
+    - path: /usr/share/zsh/5.9/functions/_ionice
+    - path: /usr/share/zsh/5.9/functions/_iostat
+    - path: /usr/share/zsh/5.9/functions/_ip
+    - path: /usr/share/zsh/5.9/functions/_ipadm
+    - path: /usr/share/zsh/5.9/functions/_ipfw
+    - path: /usr/share/zsh/5.9/functions/_ipsec
+    - path: /usr/share/zsh/5.9/functions/_ipset
+    - path: /usr/share/zsh/5.9/functions/_iptables
+    - path: /usr/share/zsh/5.9/functions/_irssi
+    - path: /usr/share/zsh/5.9/functions/_ispell
+    - path: /usr/share/zsh/5.9/functions/_iwconfig
+    - path: /usr/share/zsh/5.9/functions/_jail
+    - path: /usr/share/zsh/5.9/functions/_jails
+    - path: /usr/share/zsh/5.9/functions/_java
+    - path: /usr/share/zsh/5.9/functions/_java_class
+    - path: /usr/share/zsh/5.9/functions/_jexec
+    - path: /usr/share/zsh/5.9/functions/_jls
+    - path: /usr/share/zsh/5.9/functions/_jobs
+    - path: /usr/share/zsh/5.9/functions/_jobs_bg
+    - path: /usr/share/zsh/5.9/functions/_jobs_builtin
+    - path: /usr/share/zsh/5.9/functions/_jobs_fg
+    - path: /usr/share/zsh/5.9/functions/_joe
+    - path: /usr/share/zsh/5.9/functions/_join
+    - path: /usr/share/zsh/5.9/functions/_jot
+    - path: /usr/share/zsh/5.9/functions/_jq
+    - path: /usr/share/zsh/5.9/functions/_kdeconnect
+    - path: /usr/share/zsh/5.9/functions/_kdump
+    - path: /usr/share/zsh/5.9/functions/_kfmclient
+    - path: /usr/share/zsh/5.9/functions/_kill
+    - path: /usr/share/zsh/5.9/functions/_killall
+    - path: /usr/share/zsh/5.9/functions/_kld
+    - path: /usr/share/zsh/5.9/functions/_knock
+    - path: /usr/share/zsh/5.9/functions/_kpartx
+    - path: /usr/share/zsh/5.9/functions/_ktrace
+    - path: /usr/share/zsh/5.9/functions/_ktrace_points
+    - path: /usr/share/zsh/5.9/functions/_kvno
+    - path: /usr/share/zsh/5.9/functions/_last
+    - path: /usr/share/zsh/5.9/functions/_ld_debug
+    - path: /usr/share/zsh/5.9/functions/_ldap
+    - path: /usr/share/zsh/5.9/functions/_ldconfig
+    - path: /usr/share/zsh/5.9/functions/_ldd
+    - path: /usr/share/zsh/5.9/functions/_less
+    - path: /usr/share/zsh/5.9/functions/_lha
+    - path: /usr/share/zsh/5.9/functions/_libvirt
+    - path: /usr/share/zsh/5.9/functions/_lighttpd
+    - path: /usr/share/zsh/5.9/functions/_limit
+    - path: /usr/share/zsh/5.9/functions/_limits
+    - path: /usr/share/zsh/5.9/functions/_links
+    - path: /usr/share/zsh/5.9/functions/_lintian
+    - path: /usr/share/zsh/5.9/functions/_list
+    - path: /usr/share/zsh/5.9/functions/_list_files
+    - path: /usr/share/zsh/5.9/functions/_lldb
+    - path: /usr/share/zsh/5.9/functions/_ln
+    - path: /usr/share/zsh/5.9/functions/_loadkeys
+    - path: /usr/share/zsh/5.9/functions/_locale
+    - path: /usr/share/zsh/5.9/functions/_localedef
+    - path: /usr/share/zsh/5.9/functions/_locales
+    - path: /usr/share/zsh/5.9/functions/_locate
+    - path: /usr/share/zsh/5.9/functions/_logger
+    - path: /usr/share/zsh/5.9/functions/_logical_volumes
+    - path: /usr/share/zsh/5.9/functions/_login_classes
+    - path: /usr/share/zsh/5.9/functions/_look
+    - path: /usr/share/zsh/5.9/functions/_losetup
+    - path: /usr/share/zsh/5.9/functions/_lp
+    - path: /usr/share/zsh/5.9/functions/_ls
+    - path: /usr/share/zsh/5.9/functions/_lsattr
+    - path: /usr/share/zsh/5.9/functions/_lsblk
+    - path: /usr/share/zsh/5.9/functions/_lscfg
+    - path: /usr/share/zsh/5.9/functions/_lsdev
+    - path: /usr/share/zsh/5.9/functions/_lslv
+    - path: /usr/share/zsh/5.9/functions/_lsns
+    - path: /usr/share/zsh/5.9/functions/_lsof
+    - path: /usr/share/zsh/5.9/functions/_lspv
+    - path: /usr/share/zsh/5.9/functions/_lsusb
+    - path: /usr/share/zsh/5.9/functions/_lsvg
+    - path: /usr/share/zsh/5.9/functions/_ltrace
+    - path: /usr/share/zsh/5.9/functions/_lua
+    - path: /usr/share/zsh/5.9/functions/_luarocks
+    - path: /usr/share/zsh/5.9/functions/_lynx
+    - path: /usr/share/zsh/5.9/functions/_lz4
+    - path: /usr/share/zsh/5.9/functions/_lzop
+    - path: /usr/share/zsh/5.9/functions/_mac_applications
+    - path: /usr/share/zsh/5.9/functions/_mac_files_for_application
+    - path: /usr/share/zsh/5.9/functions/_madison
+    - path: /usr/share/zsh/5.9/functions/_mail
+    - path: /usr/share/zsh/5.9/functions/_mailboxes
+    - path: /usr/share/zsh/5.9/functions/_main_complete
+    - path: /usr/share/zsh/5.9/functions/_make
+    - path: /usr/share/zsh/5.9/functions/_make-kpkg
+    - path: /usr/share/zsh/5.9/functions/_man
+    - path: /usr/share/zsh/5.9/functions/_mat
+    - path: /usr/share/zsh/5.9/functions/_mat2
+    - path: /usr/share/zsh/5.9/functions/_match
+    - path: /usr/share/zsh/5.9/functions/_math
+    - path: /usr/share/zsh/5.9/functions/_math_params
+    - path: /usr/share/zsh/5.9/functions/_matlab
+    - path: /usr/share/zsh/5.9/functions/_md5sum
+    - path: /usr/share/zsh/5.9/functions/_mdadm
+    - path: /usr/share/zsh/5.9/functions/_mdfind
+    - path: /usr/share/zsh/5.9/functions/_mdls
+    - path: /usr/share/zsh/5.9/functions/_mdutil
+    - path: /usr/share/zsh/5.9/functions/_members
+    - path: /usr/share/zsh/5.9/functions/_mencal
+    - path: /usr/share/zsh/5.9/functions/_menu
+    - path: /usr/share/zsh/5.9/functions/_mere
+    - path: /usr/share/zsh/5.9/functions/_mergechanges
+    - path: /usr/share/zsh/5.9/functions/_message
+    - path: /usr/share/zsh/5.9/functions/_mh
+    - path: /usr/share/zsh/5.9/functions/_mii-tool
+    - path: /usr/share/zsh/5.9/functions/_mime_types
+    - path: /usr/share/zsh/5.9/functions/_mixerctl
+    - path: /usr/share/zsh/5.9/functions/_mkdir
+    - path: /usr/share/zsh/5.9/functions/_mkfifo
+    - path: /usr/share/zsh/5.9/functions/_mknod
+    - path: /usr/share/zsh/5.9/functions/_mkshortcut
+    - path: /usr/share/zsh/5.9/functions/_mktemp
+    - path: /usr/share/zsh/5.9/functions/_mkzsh
+    - path: /usr/share/zsh/5.9/functions/_module
+    - path: /usr/share/zsh/5.9/functions/_module-assistant
+    - path: /usr/share/zsh/5.9/functions/_module_math_func
+    - path: /usr/share/zsh/5.9/functions/_modutils
+    - path: /usr/share/zsh/5.9/functions/_mondo
+    - path: /usr/share/zsh/5.9/functions/_monotone
+    - path: /usr/share/zsh/5.9/functions/_moosic
+    - path: /usr/share/zsh/5.9/functions/_mosh
+    - path: /usr/share/zsh/5.9/functions/_most_recent_file
+    - path: /usr/share/zsh/5.9/functions/_mount
+    - path: /usr/share/zsh/5.9/functions/_mozilla
+    - path: /usr/share/zsh/5.9/functions/_mpc
+    - path: /usr/share/zsh/5.9/functions/_mplayer
+    - path: /usr/share/zsh/5.9/functions/_mt
+    - path: /usr/share/zsh/5.9/functions/_mtools
+    - path: /usr/share/zsh/5.9/functions/_mtr
+    - path: /usr/share/zsh/5.9/functions/_multi_parts
+    - path: /usr/share/zsh/5.9/functions/_mupdf
+    - path: /usr/share/zsh/5.9/functions/_mutt
+    - path: /usr/share/zsh/5.9/functions/_mv
+    - path: /usr/share/zsh/5.9/functions/_my_accounts
+    - path: /usr/share/zsh/5.9/functions/_myrepos
+    - path: /usr/share/zsh/5.9/functions/_mysql_utils
+    - path: /usr/share/zsh/5.9/functions/_mysqldiff
+    - path: /usr/share/zsh/5.9/functions/_nautilus
+    - path: /usr/share/zsh/5.9/functions/_nbsd_architectures
+    - path: /usr/share/zsh/5.9/functions/_ncftp
+    - path: /usr/share/zsh/5.9/functions/_nedit
+    - path: /usr/share/zsh/5.9/functions/_net_interfaces
+    - path: /usr/share/zsh/5.9/functions/_netcat
+    - path: /usr/share/zsh/5.9/functions/_netscape
+    - path: /usr/share/zsh/5.9/functions/_netstat
+    - path: /usr/share/zsh/5.9/functions/_networkmanager
+    - path: /usr/share/zsh/5.9/functions/_networksetup
+    - path: /usr/share/zsh/5.9/functions/_newsgroups
+    - path: /usr/share/zsh/5.9/functions/_next_label
+    - path: /usr/share/zsh/5.9/functions/_next_tags
+    - path: /usr/share/zsh/5.9/functions/_nginx
+    - path: /usr/share/zsh/5.9/functions/_ngrep
+    - path: /usr/share/zsh/5.9/functions/_nice
+    - path: /usr/share/zsh/5.9/functions/_nkf
+    - path: /usr/share/zsh/5.9/functions/_nl
+    - path: /usr/share/zsh/5.9/functions/_nm
+    - path: /usr/share/zsh/5.9/functions/_nmap
+    - path: /usr/share/zsh/5.9/functions/_normal
+    - path: /usr/share/zsh/5.9/functions/_nothing
+    - path: /usr/share/zsh/5.9/functions/_npm
+    - path: /usr/share/zsh/5.9/functions/_nsenter
+    - path: /usr/share/zsh/5.9/functions/_nslookup
+    - path: /usr/share/zsh/5.9/functions/_numbers
+    - path: /usr/share/zsh/5.9/functions/_numfmt
+    - path: /usr/share/zsh/5.9/functions/_nvram
+    - path: /usr/share/zsh/5.9/functions/_objdump
+    - path: /usr/share/zsh/5.9/functions/_object_classes
+    - path: /usr/share/zsh/5.9/functions/_object_files
+    - path: /usr/share/zsh/5.9/functions/_obsd_architectures
+    - path: /usr/share/zsh/5.9/functions/_od
+    - path: /usr/share/zsh/5.9/functions/_okular
+    - path: /usr/share/zsh/5.9/functions/_oldlist
+    - path: /usr/share/zsh/5.9/functions/_open
+    - path: /usr/share/zsh/5.9/functions/_openstack
+    - path: /usr/share/zsh/5.9/functions/_opkg
+    - path: /usr/share/zsh/5.9/functions/_options
+    - path: /usr/share/zsh/5.9/functions/_options_set
+    - path: /usr/share/zsh/5.9/functions/_options_unset
+    - path: /usr/share/zsh/5.9/functions/_opustools
+    - path: /usr/share/zsh/5.9/functions/_osascript
+    - path: /usr/share/zsh/5.9/functions/_osc
+    - path: /usr/share/zsh/5.9/functions/_other_accounts
+    - path: /usr/share/zsh/5.9/functions/_otool
+    - path: /usr/share/zsh/5.9/functions/_pack
+    - path: /usr/share/zsh/5.9/functions/_pandoc
+    - path: /usr/share/zsh/5.9/functions/_parameter
+    - path: /usr/share/zsh/5.9/functions/_parameters
+    - path: /usr/share/zsh/5.9/functions/_paste
+    - path: /usr/share/zsh/5.9/functions/_patch
+    - path: /usr/share/zsh/5.9/functions/_patchutils
+    - path: /usr/share/zsh/5.9/functions/_path_commands
+    - path: /usr/share/zsh/5.9/functions/_path_files
+    - path: /usr/share/zsh/5.9/functions/_pax
+    - path: /usr/share/zsh/5.9/functions/_pbcopy
+    - path: /usr/share/zsh/5.9/functions/_pbm
+    - path: /usr/share/zsh/5.9/functions/_pbuilder
+    - path: /usr/share/zsh/5.9/functions/_pdf
+    - path: /usr/share/zsh/5.9/functions/_pdftk
+    - path: /usr/share/zsh/5.9/functions/_perf
+    - path: /usr/share/zsh/5.9/functions/_perforce
+    - path: /usr/share/zsh/5.9/functions/_perl
+    - path: /usr/share/zsh/5.9/functions/_perl_basepods
+    - path: /usr/share/zsh/5.9/functions/_perl_modules
+    - path: /usr/share/zsh/5.9/functions/_perldoc
+    - path: /usr/share/zsh/5.9/functions/_pfctl
+    - path: /usr/share/zsh/5.9/functions/_pfexec
+    - path: /usr/share/zsh/5.9/functions/_pgids
+    - path: /usr/share/zsh/5.9/functions/_pgrep
+    - path: /usr/share/zsh/5.9/functions/_php
+    - path: /usr/share/zsh/5.9/functions/_physical_volumes
+    - path: /usr/share/zsh/5.9/functions/_pick_variant
+    - path: /usr/share/zsh/5.9/functions/_picocom
+    - path: /usr/share/zsh/5.9/functions/_pidof
+    - path: /usr/share/zsh/5.9/functions/_pids
+    - path: /usr/share/zsh/5.9/functions/_pine
+    - path: /usr/share/zsh/5.9/functions/_ping
+    - path: /usr/share/zsh/5.9/functions/_pip
+    - path: /usr/share/zsh/5.9/functions/_piuparts
+    - path: /usr/share/zsh/5.9/functions/_pkg-config
+    - path: /usr/share/zsh/5.9/functions/_pkg5
+    - path: /usr/share/zsh/5.9/functions/_pkg_instance
+    - path: /usr/share/zsh/5.9/functions/_pkgadd
+    - path: /usr/share/zsh/5.9/functions/_pkgin
+    - path: /usr/share/zsh/5.9/functions/_pkginfo
+    - path: /usr/share/zsh/5.9/functions/_pkgrm
+    - path: /usr/share/zsh/5.9/functions/_pkgtool
+    - path: /usr/share/zsh/5.9/functions/_plutil
+    - path: /usr/share/zsh/5.9/functions/_pmap
+    - path: /usr/share/zsh/5.9/functions/_pon
+    - path: /usr/share/zsh/5.9/functions/_portaudit
+    - path: /usr/share/zsh/5.9/functions/_portlint
+    - path: /usr/share/zsh/5.9/functions/_portmaster
+    - path: /usr/share/zsh/5.9/functions/_ports
+    - path: /usr/share/zsh/5.9/functions/_portsnap
+    - path: /usr/share/zsh/5.9/functions/_postfix
+    - path: /usr/share/zsh/5.9/functions/_postgresql
+    - path: /usr/share/zsh/5.9/functions/_postscript
+    - path: /usr/share/zsh/5.9/functions/_powerd
+    - path: /usr/share/zsh/5.9/functions/_pr
+    - path: /usr/share/zsh/5.9/functions/_precommand
+    - path: /usr/share/zsh/5.9/functions/_prefix
+    - path: /usr/share/zsh/5.9/functions/_print
+    - path: /usr/share/zsh/5.9/functions/_printenv
+    - path: /usr/share/zsh/5.9/functions/_printers
+    - path: /usr/share/zsh/5.9/functions/_process_names
+    - path: /usr/share/zsh/5.9/functions/_procstat
+    - path: /usr/share/zsh/5.9/functions/_prompt
+    - path: /usr/share/zsh/5.9/functions/_prove
+    - path: /usr/share/zsh/5.9/functions/_prstat
+    - path: /usr/share/zsh/5.9/functions/_ps
+    - path: /usr/share/zsh/5.9/functions/_ps1234
+    - path: /usr/share/zsh/5.9/functions/_pscp
+    - path: /usr/share/zsh/5.9/functions/_pspdf
+    - path: /usr/share/zsh/5.9/functions/_psutils
+    - path: /usr/share/zsh/5.9/functions/_ptree
+    - path: /usr/share/zsh/5.9/functions/_ptx
+    - path: /usr/share/zsh/5.9/functions/_pump
+    - path: /usr/share/zsh/5.9/functions/_putclip
+    - path: /usr/share/zsh/5.9/functions/_pv
+    - path: /usr/share/zsh/5.9/functions/_pwgen
+    - path: /usr/share/zsh/5.9/functions/_pydoc
+    - path: /usr/share/zsh/5.9/functions/_python
+    - path: /usr/share/zsh/5.9/functions/_python_modules
+    - path: /usr/share/zsh/5.9/functions/_qdbus
+    - path: /usr/share/zsh/5.9/functions/_qemu
+    - path: /usr/share/zsh/5.9/functions/_qiv
+    - path: /usr/share/zsh/5.9/functions/_qtplay
+    - path: /usr/share/zsh/5.9/functions/_quilt
+    - path: /usr/share/zsh/5.9/functions/_rake
+    - path: /usr/share/zsh/5.9/functions/_ranlib
+    - path: /usr/share/zsh/5.9/functions/_rar
+    - path: /usr/share/zsh/5.9/functions/_rcctl
+    - path: /usr/share/zsh/5.9/functions/_rclone
+    - path: /usr/share/zsh/5.9/functions/_rcs
+    - path: /usr/share/zsh/5.9/functions/_rdesktop
+    - path: /usr/share/zsh/5.9/functions/_read
+    - path: /usr/share/zsh/5.9/functions/_read_comp
+    - path: /usr/share/zsh/5.9/functions/_readelf
+    - path: /usr/share/zsh/5.9/functions/_readlink
+    - path: /usr/share/zsh/5.9/functions/_readshortcut
+    - path: /usr/share/zsh/5.9/functions/_rebootin
+    - path: /usr/share/zsh/5.9/functions/_redirect
+    - path: /usr/share/zsh/5.9/functions/_regex_arguments
+    - path: /usr/share/zsh/5.9/functions/_regex_words
+    - path: /usr/share/zsh/5.9/functions/_remote_files
+    - path: /usr/share/zsh/5.9/functions/_renice
+    - path: /usr/share/zsh/5.9/functions/_reprepro
+    - path: /usr/share/zsh/5.9/functions/_requested
+    - path: /usr/share/zsh/5.9/functions/_retrieve_cache
+    - path: /usr/share/zsh/5.9/functions/_retrieve_mac_apps
+    - path: /usr/share/zsh/5.9/functions/_ri
+    - path: /usr/share/zsh/5.9/functions/_rlogin
+    - path: /usr/share/zsh/5.9/functions/_rm
+    - path: /usr/share/zsh/5.9/functions/_rmdir
+    - path: /usr/share/zsh/5.9/functions/_route
+    - path: /usr/share/zsh/5.9/functions/_routing_domains
+    - path: /usr/share/zsh/5.9/functions/_routing_tables
+    - path: /usr/share/zsh/5.9/functions/_rpm
+    - path: /usr/share/zsh/5.9/functions/_rrdtool
+    - path: /usr/share/zsh/5.9/functions/_rsync
+    - path: /usr/share/zsh/5.9/functions/_rubber
+    - path: /usr/share/zsh/5.9/functions/_ruby
+    - path: /usr/share/zsh/5.9/functions/_run-help
+    - path: /usr/share/zsh/5.9/functions/_runit
+    - path: /usr/share/zsh/5.9/functions/_samba
+    - path: /usr/share/zsh/5.9/functions/_savecore
+    - path: /usr/share/zsh/5.9/functions/_say
+    - path: /usr/share/zsh/5.9/functions/_sbuild
+    - path: /usr/share/zsh/5.9/functions/_sc_usage
+    - path: /usr/share/zsh/5.9/functions/_sccs
+    - path: /usr/share/zsh/5.9/functions/_sched
+    - path: /usr/share/zsh/5.9/functions/_schedtool
+    - path: /usr/share/zsh/5.9/functions/_schroot
+    - path: /usr/share/zsh/5.9/functions/_scl
+    - path: /usr/share/zsh/5.9/functions/_scons
+    - path: /usr/share/zsh/5.9/functions/_screen
+    - path: /usr/share/zsh/5.9/functions/_script
+    - path: /usr/share/zsh/5.9/functions/_scselect
+    - path: /usr/share/zsh/5.9/functions/_scutil
+    - path: /usr/share/zsh/5.9/functions/_seafile
+    - path: /usr/share/zsh/5.9/functions/_sed
+    - path: /usr/share/zsh/5.9/functions/_selinux_contexts
+    - path: /usr/share/zsh/5.9/functions/_selinux_roles
+    - path: /usr/share/zsh/5.9/functions/_selinux_types
+    - path: /usr/share/zsh/5.9/functions/_selinux_users
+    - path: /usr/share/zsh/5.9/functions/_sep_parts
+    - path: /usr/share/zsh/5.9/functions/_seq
+    - path: /usr/share/zsh/5.9/functions/_sequence
+    - path: /usr/share/zsh/5.9/functions/_service
+    - path: /usr/share/zsh/5.9/functions/_services
+    - path: /usr/share/zsh/5.9/functions/_set
+    - path: /usr/share/zsh/5.9/functions/_set_command
+    - path: /usr/share/zsh/5.9/functions/_setfacl
+    - path: /usr/share/zsh/5.9/functions/_setopt
+    - path: /usr/share/zsh/5.9/functions/_setpriv
+    - path: /usr/share/zsh/5.9/functions/_setsid
+    - path: /usr/share/zsh/5.9/functions/_setup
+    - path: /usr/share/zsh/5.9/functions/_setxkbmap
+    - path: /usr/share/zsh/5.9/functions/_sh
+    - path: /usr/share/zsh/5.9/functions/_shasum
+    - path: /usr/share/zsh/5.9/functions/_showmount
+    - path: /usr/share/zsh/5.9/functions/_shred
+    - path: /usr/share/zsh/5.9/functions/_shuf
+    - path: /usr/share/zsh/5.9/functions/_shutdown
+    - path: /usr/share/zsh/5.9/functions/_signals
+    - path: /usr/share/zsh/5.9/functions/_signify
+    - path: /usr/share/zsh/5.9/functions/_sisu
+    - path: /usr/share/zsh/5.9/functions/_slabtop
+    - path: /usr/share/zsh/5.9/functions/_slrn
+    - path: /usr/share/zsh/5.9/functions/_smartmontools
+    - path: /usr/share/zsh/5.9/functions/_smit
+    - path: /usr/share/zsh/5.9/functions/_snoop
+    - path: /usr/share/zsh/5.9/functions/_socket
+    - path: /usr/share/zsh/5.9/functions/_sockstat
+    - path: /usr/share/zsh/5.9/functions/_softwareupdate
+    - path: /usr/share/zsh/5.9/functions/_sort
+    - path: /usr/share/zsh/5.9/functions/_source
+    - path: /usr/share/zsh/5.9/functions/_spamassassin
+    - path: /usr/share/zsh/5.9/functions/_split
+    - path: /usr/share/zsh/5.9/functions/_sqlite
+    - path: /usr/share/zsh/5.9/functions/_sqsh
+    - path: /usr/share/zsh/5.9/functions/_ss
+    - path: /usr/share/zsh/5.9/functions/_ssh
+    - path: /usr/share/zsh/5.9/functions/_ssh_hosts
+    - path: /usr/share/zsh/5.9/functions/_sshfs
+    - path: /usr/share/zsh/5.9/functions/_stat
+    - path: /usr/share/zsh/5.9/functions/_stdbuf
+    - path: /usr/share/zsh/5.9/functions/_stgit
+    - path: /usr/share/zsh/5.9/functions/_store_cache
+    - path: /usr/share/zsh/5.9/functions/_stow
+    - path: /usr/share/zsh/5.9/functions/_strace
+    - path: /usr/share/zsh/5.9/functions/_strftime
+    - path: /usr/share/zsh/5.9/functions/_strings
+    - path: /usr/share/zsh/5.9/functions/_strip
+    - path: /usr/share/zsh/5.9/functions/_stty
+    - path: /usr/share/zsh/5.9/functions/_su
+    - path: /usr/share/zsh/5.9/functions/_sub_commands
+    - path: /usr/share/zsh/5.9/functions/_sublimetext
+    - path: /usr/share/zsh/5.9/functions/_subscript
+    - path: /usr/share/zsh/5.9/functions/_subversion
+    - path: /usr/share/zsh/5.9/functions/_sudo
+    - path: /usr/share/zsh/5.9/functions/_suffix_alias_files
+    - path: /usr/share/zsh/5.9/functions/_surfraw
+    - path: /usr/share/zsh/5.9/functions/_svcadm
+    - path: /usr/share/zsh/5.9/functions/_svccfg
+    - path: /usr/share/zsh/5.9/functions/_svcprop
+    - path: /usr/share/zsh/5.9/functions/_svcs
+    - path: /usr/share/zsh/5.9/functions/_svcs_fmri
+    - path: /usr/share/zsh/5.9/functions/_svn-buildpackage
+    - path: /usr/share/zsh/5.9/functions/_sw_vers
+    - path: /usr/share/zsh/5.9/functions/_swaks
+    - path: /usr/share/zsh/5.9/functions/_swanctl
+    - path: /usr/share/zsh/5.9/functions/_swift
+    - path: /usr/share/zsh/5.9/functions/_sys_calls
+    - path: /usr/share/zsh/5.9/functions/_sysclean
+    - path: /usr/share/zsh/5.9/functions/_sysctl
+    - path: /usr/share/zsh/5.9/functions/_sysmerge
+    - path: /usr/share/zsh/5.9/functions/_syspatch
+    - path: /usr/share/zsh/5.9/functions/_sysrc
+    - path: /usr/share/zsh/5.9/functions/_sysstat
+    - path: /usr/share/zsh/5.9/functions/_systat
+    - path: /usr/share/zsh/5.9/functions/_system_profiler
+    - path: /usr/share/zsh/5.9/functions/_sysupgrade
+    - path: /usr/share/zsh/5.9/functions/_tac
+    - path: /usr/share/zsh/5.9/functions/_tags
+    - path: /usr/share/zsh/5.9/functions/_tail
+    - path: /usr/share/zsh/5.9/functions/_tar
+    - path: /usr/share/zsh/5.9/functions/_tar_archive
+    - path: /usr/share/zsh/5.9/functions/_tardy
+    - path: /usr/share/zsh/5.9/functions/_tcpdump
+    - path: /usr/share/zsh/5.9/functions/_tcpsys
+    - path: /usr/share/zsh/5.9/functions/_tcptraceroute
+    - path: /usr/share/zsh/5.9/functions/_tee
+    - path: /usr/share/zsh/5.9/functions/_telnet
+    - path: /usr/share/zsh/5.9/functions/_terminals
+    - path: /usr/share/zsh/5.9/functions/_tex
+    - path: /usr/share/zsh/5.9/functions/_texi
+    - path: /usr/share/zsh/5.9/functions/_texinfo
+    - path: /usr/share/zsh/5.9/functions/_tidy
+    - path: /usr/share/zsh/5.9/functions/_tiff
+    - path: /usr/share/zsh/5.9/functions/_tilde
+    - path: /usr/share/zsh/5.9/functions/_tilde_files
+    - path: /usr/share/zsh/5.9/functions/_time_zone
+    - path: /usr/share/zsh/5.9/functions/_timeout
+    - path: /usr/share/zsh/5.9/functions/_tin
+    - path: /usr/share/zsh/5.9/functions/_tla
+    - path: /usr/share/zsh/5.9/functions/_tload
+    - path: /usr/share/zsh/5.9/functions/_tmux
+    - path: /usr/share/zsh/5.9/functions/_todo.sh
+    - path: /usr/share/zsh/5.9/functions/_toilet
+    - path: /usr/share/zsh/5.9/functions/_toolchain-source
+    - path: /usr/share/zsh/5.9/functions/_top
+    - path: /usr/share/zsh/5.9/functions/_topgit
+    - path: /usr/share/zsh/5.9/functions/_totd
+    - path: /usr/share/zsh/5.9/functions/_touch
+    - path: /usr/share/zsh/5.9/functions/_tpb
+    - path: /usr/share/zsh/5.9/functions/_tput
+    - path: /usr/share/zsh/5.9/functions/_tr
+    - path: /usr/share/zsh/5.9/functions/_tracepath
+    - path: /usr/share/zsh/5.9/functions/_transmission
+    - path: /usr/share/zsh/5.9/functions/_trap
+    - path: /usr/share/zsh/5.9/functions/_trash
+    - path: /usr/share/zsh/5.9/functions/_tree
+    - path: /usr/share/zsh/5.9/functions/_truncate
+    - path: /usr/share/zsh/5.9/functions/_truss
+    - path: /usr/share/zsh/5.9/functions/_tty
+    - path: /usr/share/zsh/5.9/functions/_ttyctl
+    - path: /usr/share/zsh/5.9/functions/_ttys
+    - path: /usr/share/zsh/5.9/functions/_tune2fs
+    - path: /usr/share/zsh/5.9/functions/_twidge
+    - path: /usr/share/zsh/5.9/functions/_twisted
+    - path: /usr/share/zsh/5.9/functions/_typeset
+    - path: /usr/share/zsh/5.9/functions/_ulimit
+    - path: /usr/share/zsh/5.9/functions/_uml
+    - path: /usr/share/zsh/5.9/functions/_umountable
+    - path: /usr/share/zsh/5.9/functions/_unace
+    - path: /usr/share/zsh/5.9/functions/_uname
+    - path: /usr/share/zsh/5.9/functions/_unexpand
+    - path: /usr/share/zsh/5.9/functions/_unhash
+    - path: /usr/share/zsh/5.9/functions/_uniq
+    - path: /usr/share/zsh/5.9/functions/_unison
+    - path: /usr/share/zsh/5.9/functions/_units
+    - path: /usr/share/zsh/5.9/functions/_unshare
+    - path: /usr/share/zsh/5.9/functions/_update-alternatives
+    - path: /usr/share/zsh/5.9/functions/_update-rc.d
+    - path: /usr/share/zsh/5.9/functions/_uptime
+    - path: /usr/share/zsh/5.9/functions/_urls
+    - path: /usr/share/zsh/5.9/functions/_urpmi
+    - path: /usr/share/zsh/5.9/functions/_urxvt
+    - path: /usr/share/zsh/5.9/functions/_usbconfig
+    - path: /usr/share/zsh/5.9/functions/_uscan
+    - path: /usr/share/zsh/5.9/functions/_user_admin
+    - path: /usr/share/zsh/5.9/functions/_user_at_host
+    - path: /usr/share/zsh/5.9/functions/_user_expand
+    - path: /usr/share/zsh/5.9/functions/_user_math_func
+    - path: /usr/share/zsh/5.9/functions/_users
+    - path: /usr/share/zsh/5.9/functions/_users_on
+    - path: /usr/share/zsh/5.9/functions/_valgrind
+    - path: /usr/share/zsh/5.9/functions/_value
+    - path: /usr/share/zsh/5.9/functions/_values
+    - path: /usr/share/zsh/5.9/functions/_vared
+    - path: /usr/share/zsh/5.9/functions/_vars
+    - path: /usr/share/zsh/5.9/functions/_vcs_info
+    - path: /usr/share/zsh/5.9/functions/_vcs_info_hooks
+    - path: /usr/share/zsh/5.9/functions/_vi
+    - path: /usr/share/zsh/5.9/functions/_vim
+    - path: /usr/share/zsh/5.9/functions/_vim-addons
+    - path: /usr/share/zsh/5.9/functions/_visudo
+    - path: /usr/share/zsh/5.9/functions/_vmctl
+    - path: /usr/share/zsh/5.9/functions/_vmstat
+    - path: /usr/share/zsh/5.9/functions/_vnc
+    - path: /usr/share/zsh/5.9/functions/_volume_groups
+    - path: /usr/share/zsh/5.9/functions/_vorbis
+    - path: /usr/share/zsh/5.9/functions/_vpnc
+    - path: /usr/share/zsh/5.9/functions/_vserver
+    - path: /usr/share/zsh/5.9/functions/_w
+    - path: /usr/share/zsh/5.9/functions/_w3m
+    - path: /usr/share/zsh/5.9/functions/_wait
+    - path: /usr/share/zsh/5.9/functions/_wajig
+    - path: /usr/share/zsh/5.9/functions/_wakeup_capable_devices
+    - path: /usr/share/zsh/5.9/functions/_wanna-build
+    - path: /usr/share/zsh/5.9/functions/_wanted
+    - path: /usr/share/zsh/5.9/functions/_watch
+    - path: /usr/share/zsh/5.9/functions/_watch-snoop
+    - path: /usr/share/zsh/5.9/functions/_wc
+    - path: /usr/share/zsh/5.9/functions/_webbrowser
+    - path: /usr/share/zsh/5.9/functions/_wget
+    - path: /usr/share/zsh/5.9/functions/_whereis
+    - path: /usr/share/zsh/5.9/functions/_which
+    - path: /usr/share/zsh/5.9/functions/_who
+    - path: /usr/share/zsh/5.9/functions/_whois
+    - path: /usr/share/zsh/5.9/functions/_widgets
+    - path: /usr/share/zsh/5.9/functions/_wiggle
+    - path: /usr/share/zsh/5.9/functions/_wipefs
+    - path: /usr/share/zsh/5.9/functions/_wpa_cli
+    - path: /usr/share/zsh/5.9/functions/_x_arguments
+    - path: /usr/share/zsh/5.9/functions/_x_borderwidth
+    - path: /usr/share/zsh/5.9/functions/_x_color
+    - path: /usr/share/zsh/5.9/functions/_x_colormapid
+    - path: /usr/share/zsh/5.9/functions/_x_cursor
+    - path: /usr/share/zsh/5.9/functions/_x_display
+    - path: /usr/share/zsh/5.9/functions/_x_extension
+    - path: /usr/share/zsh/5.9/functions/_x_font
+    - path: /usr/share/zsh/5.9/functions/_x_geometry
+    - path: /usr/share/zsh/5.9/functions/_x_keysym
+    - path: /usr/share/zsh/5.9/functions/_x_locale
+    - path: /usr/share/zsh/5.9/functions/_x_modifier
+    - path: /usr/share/zsh/5.9/functions/_x_name
+    - path: /usr/share/zsh/5.9/functions/_x_resource
+    - path: /usr/share/zsh/5.9/functions/_x_selection_timeout
+    - path: /usr/share/zsh/5.9/functions/_x_title
+    - path: /usr/share/zsh/5.9/functions/_x_utils
+    - path: /usr/share/zsh/5.9/functions/_x_visual
+    - path: /usr/share/zsh/5.9/functions/_x_window
+    - path: /usr/share/zsh/5.9/functions/_xargs
+    - path: /usr/share/zsh/5.9/functions/_xauth
+    - path: /usr/share/zsh/5.9/functions/_xautolock
+    - path: /usr/share/zsh/5.9/functions/_xclip
+    - path: /usr/share/zsh/5.9/functions/_xcode-select
+    - path: /usr/share/zsh/5.9/functions/_xdvi
+    - path: /usr/share/zsh/5.9/functions/_xfig
+    - path: /usr/share/zsh/5.9/functions/_xft_fonts
+    - path: /usr/share/zsh/5.9/functions/_xinput
+    - path: /usr/share/zsh/5.9/functions/_xloadimage
+    - path: /usr/share/zsh/5.9/functions/_xmlsoft
+    - path: /usr/share/zsh/5.9/functions/_xmlstarlet
+    - path: /usr/share/zsh/5.9/functions/_xmms2
+    - path: /usr/share/zsh/5.9/functions/_xmodmap
+    - path: /usr/share/zsh/5.9/functions/_xournal
+    - path: /usr/share/zsh/5.9/functions/_xpdf
+    - path: /usr/share/zsh/5.9/functions/_xrandr
+    - path: /usr/share/zsh/5.9/functions/_xscreensaver
+    - path: /usr/share/zsh/5.9/functions/_xset
+    - path: /usr/share/zsh/5.9/functions/_xt_arguments
+    - path: /usr/share/zsh/5.9/functions/_xt_session_id
+    - path: /usr/share/zsh/5.9/functions/_xterm
+    - path: /usr/share/zsh/5.9/functions/_xv
+    - path: /usr/share/zsh/5.9/functions/_xwit
+    - path: /usr/share/zsh/5.9/functions/_xxd
+    - path: /usr/share/zsh/5.9/functions/_xz
+    - path: /usr/share/zsh/5.9/functions/_yafc
+    - path: /usr/share/zsh/5.9/functions/_yast
+    - path: /usr/share/zsh/5.9/functions/_yodl
+    - path: /usr/share/zsh/5.9/functions/_yp
+    - path: /usr/share/zsh/5.9/functions/_yum
+    - path: /usr/share/zsh/5.9/functions/_zargs
+    - path: /usr/share/zsh/5.9/functions/_zattr
+    - path: /usr/share/zsh/5.9/functions/_zcalc
+    - path: /usr/share/zsh/5.9/functions/_zcalc_line
+    - path: /usr/share/zsh/5.9/functions/_zcat
+    - path: /usr/share/zsh/5.9/functions/_zcompile
+    - path: /usr/share/zsh/5.9/functions/_zdump
+    - path: /usr/share/zsh/5.9/functions/_zeal
+    - path: /usr/share/zsh/5.9/functions/_zed
+    - path: /usr/share/zsh/5.9/functions/_zfs
+    - path: /usr/share/zsh/5.9/functions/_zfs_dataset
+    - path: /usr/share/zsh/5.9/functions/_zfs_pool
+    - path: /usr/share/zsh/5.9/functions/_zftp
+    - path: /usr/share/zsh/5.9/functions/_zip
+    - path: /usr/share/zsh/5.9/functions/_zle
+    - path: /usr/share/zsh/5.9/functions/_zlogin
+    - path: /usr/share/zsh/5.9/functions/_zmodload
+    - path: /usr/share/zsh/5.9/functions/_zmv
+    - path: /usr/share/zsh/5.9/functions/_zoneadm
+    - path: /usr/share/zsh/5.9/functions/_zones
+    - path: /usr/share/zsh/5.9/functions/_zparseopts
+    - path: /usr/share/zsh/5.9/functions/_zpty
+    - path: /usr/share/zsh/5.9/functions/_zsh
+    - path: /usr/share/zsh/5.9/functions/_zsh-mime-handler
+    - path: /usr/share/zsh/5.9/functions/_zsocket
+    - path: /usr/share/zsh/5.9/functions/_zstyle
+    - path: /usr/share/zsh/5.9/functions/_ztodo
+    - path: /usr/share/zsh/5.9/functions/_zypper
+    - path: /usr/share/zsh/5.9/functions/add-zle-hook-widget
+    - path: /usr/share/zsh/5.9/functions/add-zsh-hook
+    - path: /usr/share/zsh/5.9/functions/after
+    - path: /usr/share/zsh/5.9/functions/age
+    - path: /usr/share/zsh/5.9/functions/allopt
+    - path: /usr/share/zsh/5.9/functions/backward-kill-word-match
+    - path: /usr/share/zsh/5.9/functions/backward-word-match
+    - path: /usr/share/zsh/5.9/functions/bashcompinit
+    - path: /usr/share/zsh/5.9/functions/before
+    - path: /usr/share/zsh/5.9/functions/bracketed-paste-magic
+    - path: /usr/share/zsh/5.9/functions/bracketed-paste-url-magic
+    - path: /usr/share/zsh/5.9/functions/calendar
+    - path: /usr/share/zsh/5.9/functions/calendar_add
+    - path: /usr/share/zsh/5.9/functions/calendar_edit
+    - path: /usr/share/zsh/5.9/functions/calendar_lockfiles
+    - path: /usr/share/zsh/5.9/functions/calendar_parse
+    - path: /usr/share/zsh/5.9/functions/calendar_read
+    - path: /usr/share/zsh/5.9/functions/calendar_scandate
+    - path: /usr/share/zsh/5.9/functions/calendar_show
+    - path: /usr/share/zsh/5.9/functions/calendar_showdate
+    - path: /usr/share/zsh/5.9/functions/calendar_sort
+    - path: /usr/share/zsh/5.9/functions/capitalize-word-match
+    - path: /usr/share/zsh/5.9/functions/catch
+    - path: /usr/share/zsh/5.9/functions/cdr
+    - path: /usr/share/zsh/5.9/functions/checkmail
+    - path: /usr/share/zsh/5.9/functions/chpwd_recent_add
+    - path: /usr/share/zsh/5.9/functions/chpwd_recent_dirs
+    - path: /usr/share/zsh/5.9/functions/chpwd_recent_filehandler
+    - path: /usr/share/zsh/5.9/functions/colors
+    - path: /usr/share/zsh/5.9/functions/compaudit
+    - path: /usr/share/zsh/5.9/functions/compdump
+    - path: /usr/share/zsh/5.9/functions/compinit
+    - path: /usr/share/zsh/5.9/functions/compinstall
+    - path: /usr/share/zsh/5.9/functions/copy-earlier-word
+    - path: /usr/share/zsh/5.9/functions/cycle-completion-positions
+    - path: /usr/share/zsh/5.9/functions/define-composed-chars
+    - path: /usr/share/zsh/5.9/functions/delete-whole-word-match
+    - path: /usr/share/zsh/5.9/functions/down-case-word-match
+    - path: /usr/share/zsh/5.9/functions/down-line-or-beginning-search
+    - path: /usr/share/zsh/5.9/functions/edit-command-line
+    - path: /usr/share/zsh/5.9/functions/expand-absolute-path
+    - path: /usr/share/zsh/5.9/functions/forward-word-match
+    - path: /usr/share/zsh/5.9/functions/getjobs
+    - path: /usr/share/zsh/5.9/functions/harden
+    - path: /usr/share/zsh/5.9/functions/history-beginning-search-menu
+    - path: /usr/share/zsh/5.9/functions/history-pattern-search
+    - path: /usr/share/zsh/5.9/functions/history-search-end
+    - path: /usr/share/zsh/5.9/functions/incarg
+    - path: /usr/share/zsh/5.9/functions/incremental-complete-word
+    - path: /usr/share/zsh/5.9/functions/insert-composed-char
+    - path: /usr/share/zsh/5.9/functions/insert-files
+    - path: /usr/share/zsh/5.9/functions/insert-unicode-char
+    - path: /usr/share/zsh/5.9/functions/is-at-least
+    - path: /usr/share/zsh/5.9/functions/keeper
+    - path: /usr/share/zsh/5.9/functions/keymap+widget
+    - path: /usr/share/zsh/5.9/functions/kill-word-match
+    - path: /usr/share/zsh/5.9/functions/match-word-context
+    - path: /usr/share/zsh/5.9/functions/match-words-by-style
+    - path: /usr/share/zsh/5.9/functions/mere
+    - path: /usr/share/zsh/5.9/functions/modify-current-argument
+    - path: /usr/share/zsh/5.9/functions/move-line-in-buffer
+    - path: /usr/share/zsh/5.9/functions/narrow-to-region
+    - path: /usr/share/zsh/5.9/functions/narrow-to-region-invisible
+    - path: /usr/share/zsh/5.9/functions/nslookup
+    - path: /usr/share/zsh/5.9/functions/pick-web-browser
+    - path: /usr/share/zsh/5.9/functions/predict-on
+    - path: /usr/share/zsh/5.9/functions/prompt_adam1_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_adam2_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_bart_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_bigfade_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_clint_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_default_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_elite2_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_elite_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_fade_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_fire_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_off_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_oliver_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_pws_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_redhat_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_restore_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_special_chars
+    - path: /usr/share/zsh/5.9/functions/prompt_suse_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_walters_setup
+    - path: /usr/share/zsh/5.9/functions/prompt_zefram_setup
+    - path: /usr/share/zsh/5.9/functions/promptinit
+    - path: /usr/share/zsh/5.9/functions/promptnl
+    - path: /usr/share/zsh/5.9/functions/quote-and-complete-word
+    - path: /usr/share/zsh/5.9/functions/read-from-minibuffer
+    - path: /usr/share/zsh/5.9/functions/regexp-replace
+    - path: /usr/share/zsh/5.9/functions/relative
+    - path: /usr/share/zsh/5.9/functions/replace-argument
+    - path: /usr/share/zsh/5.9/functions/replace-string
+    - path: /usr/share/zsh/5.9/functions/replace-string-again
+    - path: /usr/share/zsh/5.9/functions/run-help
+    - path: /usr/share/zsh/5.9/functions/run-help-btrfs
+    - path: /usr/share/zsh/5.9/functions/run-help-git
+    - path: /usr/share/zsh/5.9/functions/run-help-ip
+    - path: /usr/share/zsh/5.9/functions/run-help-openssl
+    - path: /usr/share/zsh/5.9/functions/run-help-p4
+    - path: /usr/share/zsh/5.9/functions/run-help-sudo
+    - path: /usr/share/zsh/5.9/functions/run-help-svk
+    - path: /usr/share/zsh/5.9/functions/run-help-svn
+    - path: /usr/share/zsh/5.9/functions/select-bracketed
+    - path: /usr/share/zsh/5.9/functions/select-quoted
+    - path: /usr/share/zsh/5.9/functions/select-word-match
+    - path: /usr/share/zsh/5.9/functions/select-word-style
+    - path: /usr/share/zsh/5.9/functions/send-invisible
+    - path: /usr/share/zsh/5.9/functions/smart-insert-last-word
+    - path: /usr/share/zsh/5.9/functions/split-shell-arguments
+    - path: /usr/share/zsh/5.9/functions/sticky-note
+    - path: /usr/share/zsh/5.9/functions/surround
+    - path: /usr/share/zsh/5.9/functions/tcp_alias
+    - path: /usr/share/zsh/5.9/functions/tcp_close
+    - path: /usr/share/zsh/5.9/functions/tcp_command
+    - path: /usr/share/zsh/5.9/functions/tcp_expect
+    - path: /usr/share/zsh/5.9/functions/tcp_fd_handler
+    - path: /usr/share/zsh/5.9/functions/tcp_log
+    - path: /usr/share/zsh/5.9/functions/tcp_open
+    - path: /usr/share/zsh/5.9/functions/tcp_output
+    - path: /usr/share/zsh/5.9/functions/tcp_point
+    - path: /usr/share/zsh/5.9/functions/tcp_proxy
+    - path: /usr/share/zsh/5.9/functions/tcp_read
+    - path: /usr/share/zsh/5.9/functions/tcp_rename
+    - path: /usr/share/zsh/5.9/functions/tcp_send
+    - path: /usr/share/zsh/5.9/functions/tcp_sess
+    - path: /usr/share/zsh/5.9/functions/tcp_shoot
+    - path: /usr/share/zsh/5.9/functions/tcp_spam
+    - path: /usr/share/zsh/5.9/functions/tcp_talk
+    - path: /usr/share/zsh/5.9/functions/tcp_wait
+    - path: /usr/share/zsh/5.9/functions/test-repo-git-rebase-apply
+    - path: /usr/share/zsh/5.9/functions/test-repo-git-rebase-merge
+    - path: /usr/share/zsh/5.9/functions/tetris
+    - path: /usr/share/zsh/5.9/functions/tetriscurses
+    - path: /usr/share/zsh/5.9/functions/throw
+    - path: /usr/share/zsh/5.9/functions/transpose-lines
+    - path: /usr/share/zsh/5.9/functions/transpose-words-match
+    - path: /usr/share/zsh/5.9/functions/up-case-word-match
+    - path: /usr/share/zsh/5.9/functions/up-line-or-beginning-search
+    - path: /usr/share/zsh/5.9/functions/url-quote-magic
+    - path: /usr/share/zsh/5.9/functions/vcs_info
+    - path: /usr/share/zsh/5.9/functions/vcs_info_hookadd
+    - path: /usr/share/zsh/5.9/functions/vcs_info_hookdel
+    - path: /usr/share/zsh/5.9/functions/vcs_info_lastmsg
+    - path: /usr/share/zsh/5.9/functions/vcs_info_printsys
+    - path: /usr/share/zsh/5.9/functions/vcs_info_setsys
+    - path: /usr/share/zsh/5.9/functions/vi-pipe
+    - path: /usr/share/zsh/5.9/functions/which-command
+    - path: /usr/share/zsh/5.9/functions/xtermctl
+    - path: /usr/share/zsh/5.9/functions/zargs
+    - path: /usr/share/zsh/5.9/functions/zcalc
+    - path: /usr/share/zsh/5.9/functions/zcalc-auto-insert
+    - path: /usr/share/zsh/5.9/functions/zed
+    - path: /usr/share/zsh/5.9/functions/zed-set-file-name
+    - path: /usr/share/zsh/5.9/functions/zfanon
+    - path: /usr/share/zsh/5.9/functions/zfautocheck
+    - path: /usr/share/zsh/5.9/functions/zfcd
+    - path: /usr/share/zsh/5.9/functions/zfcd_match
+    - path: /usr/share/zsh/5.9/functions/zfcget
+    - path: /usr/share/zsh/5.9/functions/zfclose
+    - path: /usr/share/zsh/5.9/functions/zfcput
+    - path: /usr/share/zsh/5.9/functions/zfdir
+    - path: /usr/share/zsh/5.9/functions/zffcache
+    - path: /usr/share/zsh/5.9/functions/zfgcp
+    - path: /usr/share/zsh/5.9/functions/zfget
+    - path: /usr/share/zsh/5.9/functions/zfget_match
+    - path: /usr/share/zsh/5.9/functions/zfgoto
+    - path: /usr/share/zsh/5.9/functions/zfhere
+    - path: /usr/share/zsh/5.9/functions/zfinit
+    - path: /usr/share/zsh/5.9/functions/zfls
+    - path: /usr/share/zsh/5.9/functions/zfmark
+    - path: /usr/share/zsh/5.9/functions/zfopen
+    - path: /usr/share/zsh/5.9/functions/zfparams
+    - path: /usr/share/zsh/5.9/functions/zfpcp
+    - path: /usr/share/zsh/5.9/functions/zfput
+    - path: /usr/share/zsh/5.9/functions/zfrglob
+    - path: /usr/share/zsh/5.9/functions/zfrtime
+    - path: /usr/share/zsh/5.9/functions/zfsession
+    - path: /usr/share/zsh/5.9/functions/zfstat
+    - path: /usr/share/zsh/5.9/functions/zftp_chpwd
+    - path: /usr/share/zsh/5.9/functions/zftp_progress
+    - path: /usr/share/zsh/5.9/functions/zftransfer
+    - path: /usr/share/zsh/5.9/functions/zftype
+    - path: /usr/share/zsh/5.9/functions/zfuget
+    - path: /usr/share/zsh/5.9/functions/zfuput
+    - path: /usr/share/zsh/5.9/functions/zkbd
+    - path: /usr/share/zsh/5.9/functions/zmathfunc
+    - path: /usr/share/zsh/5.9/functions/zmathfuncdef
+    - path: /usr/share/zsh/5.9/functions/zmv
+    - path: /usr/share/zsh/5.9/functions/zrecompile
+    - path: /usr/share/zsh/5.9/functions/zsh-mime-contexts
+    - path: /usr/share/zsh/5.9/functions/zsh-mime-handler
+    - path: /usr/share/zsh/5.9/functions/zsh-mime-setup
+    - path: /usr/share/zsh/5.9/functions/zsh-newuser-install
+    - path: /usr/share/zsh/5.9/functions/zsh_directory_name_cdr
+    - path: /usr/share/zsh/5.9/functions/zsh_directory_name_generic
+    - path: /usr/share/zsh/5.9/functions/zstyle+
+    - path: /usr/share/zsh/5.9/functions/ztodo
+    - path: /usr/share/zsh/5.9/help/alias
+    - path: /usr/share/zsh/5.9/help/autoload
+    - path: /usr/share/zsh/5.9/help/bg
+    - path: /usr/share/zsh/5.9/help/bindkey
+    - path: /usr/share/zsh/5.9/help/break
+    - path: /usr/share/zsh/5.9/help/builtin
+    - path: /usr/share/zsh/5.9/help/bye
+    - path: /usr/share/zsh/5.9/help/cap
+    - path: /usr/share/zsh/5.9/help/cd
+    - path: /usr/share/zsh/5.9/help/chdir
+    - path: /usr/share/zsh/5.9/help/clone
+    - path: /usr/share/zsh/5.9/help/colon
+    - path: /usr/share/zsh/5.9/help/command
+    - path: /usr/share/zsh/5.9/help/comparguments
+    - path: /usr/share/zsh/5.9/help/compcall
+    - path: /usr/share/zsh/5.9/help/compctl
+    - path: /usr/share/zsh/5.9/help/compdescribe
+    - path: /usr/share/zsh/5.9/help/compfiles
+    - path: /usr/share/zsh/5.9/help/compgroups
+    - path: /usr/share/zsh/5.9/help/compquote
+    - path: /usr/share/zsh/5.9/help/comptags
+    - path: /usr/share/zsh/5.9/help/comptry
+    - path: /usr/share/zsh/5.9/help/compvalues
+    - path: /usr/share/zsh/5.9/help/continue
+    - path: /usr/share/zsh/5.9/help/declare
+    - path: /usr/share/zsh/5.9/help/dirs
+    - path: /usr/share/zsh/5.9/help/disable
+    - path: /usr/share/zsh/5.9/help/disown
+    - path: /usr/share/zsh/5.9/help/dot
+    - path: /usr/share/zsh/5.9/help/echo
+    - path: /usr/share/zsh/5.9/help/echotc
+    - path: /usr/share/zsh/5.9/help/echoti
+    - path: /usr/share/zsh/5.9/help/emulate
+    - path: /usr/share/zsh/5.9/help/enable
+    - path: /usr/share/zsh/5.9/help/eval
+    - path: /usr/share/zsh/5.9/help/exec
+    - path: /usr/share/zsh/5.9/help/exit
+    - path: /usr/share/zsh/5.9/help/export
+    - path: /usr/share/zsh/5.9/help/false
+    - path: /usr/share/zsh/5.9/help/fc
+    - path: /usr/share/zsh/5.9/help/fg
+    - path: /usr/share/zsh/5.9/help/float
+    - path: /usr/share/zsh/5.9/help/functions
+    - path: /usr/share/zsh/5.9/help/getcap
+    - path: /usr/share/zsh/5.9/help/getln
+    - path: /usr/share/zsh/5.9/help/getopts
+    - path: /usr/share/zsh/5.9/help/hash
+    - path: /usr/share/zsh/5.9/help/history
+    - path: /usr/share/zsh/5.9/help/integer
+    - path: /usr/share/zsh/5.9/help/jobs
+    - path: /usr/share/zsh/5.9/help/kill
+    - path: /usr/share/zsh/5.9/help/let
+    - path: /usr/share/zsh/5.9/help/limit
+    - path: /usr/share/zsh/5.9/help/local
+    - path: /usr/share/zsh/5.9/help/logout
+    - path: /usr/share/zsh/5.9/help/noglob
+    - path: /usr/share/zsh/5.9/help/popd
+    - path: /usr/share/zsh/5.9/help/print
+    - path: /usr/share/zsh/5.9/help/printf
+    - path: /usr/share/zsh/5.9/help/pushd
+    - path: /usr/share/zsh/5.9/help/pushln
+    - path: /usr/share/zsh/5.9/help/pwd
+    - path: /usr/share/zsh/5.9/help/r
+    - path: /usr/share/zsh/5.9/help/read
+    - path: /usr/share/zsh/5.9/help/readonly
+    - path: /usr/share/zsh/5.9/help/rehash
+    - path: /usr/share/zsh/5.9/help/return
+    - path: /usr/share/zsh/5.9/help/sched
+    - path: /usr/share/zsh/5.9/help/set
+    - path: /usr/share/zsh/5.9/help/setcap
+    - path: /usr/share/zsh/5.9/help/setopt
+    - path: /usr/share/zsh/5.9/help/shift
+    - path: /usr/share/zsh/5.9/help/source
+    - path: /usr/share/zsh/5.9/help/stat
+    - path: /usr/share/zsh/5.9/help/suspend
+    - path: /usr/share/zsh/5.9/help/test
+    - path: /usr/share/zsh/5.9/help/times
+    - path: /usr/share/zsh/5.9/help/trap
+    - path: /usr/share/zsh/5.9/help/true
+    - path: /usr/share/zsh/5.9/help/ttyctl
+    - path: /usr/share/zsh/5.9/help/type
+    - path: /usr/share/zsh/5.9/help/typeset
+    - path: /usr/share/zsh/5.9/help/ulimit
+    - path: /usr/share/zsh/5.9/help/umask
+    - path: /usr/share/zsh/5.9/help/unalias
+    - path: /usr/share/zsh/5.9/help/unfunction
+    - path: /usr/share/zsh/5.9/help/unhash
+    - path: /usr/share/zsh/5.9/help/unlimit
+    - path: /usr/share/zsh/5.9/help/unset
+    - path: /usr/share/zsh/5.9/help/unsetopt
+    - path: /usr/share/zsh/5.9/help/vared
+    - path: /usr/share/zsh/5.9/help/wait
+    - path: /usr/share/zsh/5.9/help/whence
+    - path: /usr/share/zsh/5.9/help/where
+    - path: /usr/share/zsh/5.9/help/which
+    - path: /usr/share/zsh/5.9/help/zcompile
+    - path: /usr/share/zsh/5.9/help/zformat
+    - path: /usr/share/zsh/5.9/help/zftp
+    - path: /usr/share/zsh/5.9/help/zle
+    - path: /usr/share/zsh/5.9/help/zmodload
+    - path: /usr/share/zsh/5.9/help/zparseopts
+    - path: /usr/share/zsh/5.9/help/zprof
+    - path: /usr/share/zsh/5.9/help/zpty
+    - path: /usr/share/zsh/5.9/help/zregexparse
+    - path: /usr/share/zsh/5.9/help/zsocket
+    - path: /usr/share/zsh/5.9/help/zstyle
+    - path: /usr/share/zsh/5.9/help/ztcp
+    - path: /usr/share/zsh/5.9/scripts/newuser
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libcap.so.2: libcap
+  /usr/lib/libncursesw.so.6: ncurses

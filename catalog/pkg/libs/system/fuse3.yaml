@@ -1,0 +1,160 @@
+package:
+  schema: 1
+  name: fuse3
+  slug: fuse3
+  namespace: libs/system
+  version: 3.17.4
+  description: Filesystem in Userspace library and helpers
+  homepage: https://github.com/libfuse/libfuse
+  checksum: 12b6910018bda451150ec388abc7fae4a979a24793825a73ae3d0b2b1aa264b5
+
+sources:
+- name: fuse3
+  url: https://github.com/libfuse/libfuse/releases/download/fuse-3.17.4/fuse-3.17.4.tar.gz
+  sha256: df9e40ae927b73dc702d0bce7925c0c618af47ad0b13204fbf2be66e54d8528b
+- name: uapi_config_patch
+  file: pkg/libs/system/fuse3-uapi-config.patch
+  sha256: b121fdbf54b6f42a379e962f6877c6a6d28920d81f8becf96837a78687f7cf6a
+- name: uapi_smoke
+  file: pkg/libs/system/fuse3-uapi-smoke.c
+  sha256: a3ca9da8ea592b3075e48df3eeb8a7736c810e6a5890267f573e17389442bb87
+- name: uapi_check
+  file: pkg/libs/system/fuse3-uapi-check.sh
+  sha256: 0641c6217cc8cdf9ec0ce32b42c312d7503809664dc22a67446bfd567d0c5e53
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4138:2708, 5280:2803]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf /${SOURCE_fuse3} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config_patch}"
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --sbindir=bin \
+      --buildtype=release \
+      -Dexamples=false \
+      -Dtests=false \
+      -Dutils=true \
+      -Duseroot=false \
+      -Dinitscriptdir= \
+      -Dudevrulesdir=
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # Exercise the newly built, installed fusermount3 through its real
+    # _FUSE_COMMFD startup protocol instead of reimplementing its config
+    # search and precedence; see the check script for detail.
+    sh "/${SOURCE_uapi_check}" \
+      "${OUT_DIR}" \
+      "${WORK_DIR}" \
+      "/${SOURCE_uapi_smoke}"
+
+    install -Dm644 \
+      "${OUT_DIR}/etc/fuse.conf" \
+      "${OUT_DIR}/usr/share/doc/fuse3/examples/fuse.conf"
+    rm "${OUT_DIR}/etc/fuse.conf"
+    rmdir "${OUT_DIR}/etc"
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - doc
+  - lib
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/fusermount3
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/mount.fuse3
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfuse3.so.4
+
+  dev:
+    files:
+    - path: /usr/include/fuse3/cuse_lowlevel.h
+    - path: /usr/include/fuse3/fuse.h
+    - path: /usr/include/fuse3/fuse_common.h
+    - path: /usr/include/fuse3/fuse_log.h
+    - path: /usr/include/fuse3/fuse_lowlevel.h
+    - path: /usr/include/fuse3/fuse_opt.h
+    - path: /usr/include/fuse3/libfuse_config.h
+    - path: /usr/lib/pkgconfig/fuse3.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/fuse3/examples/fuse.conf
+
+  lib:
+    files:
+    - path: /usr/lib/libfuse3.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libfuse3.so.3.17.4
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libfuse3.so.4
+      needs:
+      - /usr/lib/libc.so.6
+
+  misc:
+    files:
+    - path: /usr/share/man/man1/fusermount3.1
+    - path: /usr/share/man/man8/mount.fuse3.8
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libfuse3.so.4: self

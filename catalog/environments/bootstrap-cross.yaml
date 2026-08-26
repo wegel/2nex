@@ -1,0 +1,35 @@
+name: bootstrap-cross
+description: Host environment for cross-compiling the temporary target system
+
+execution:
+  chroot: false
+
+paths:
+  work: nex/work
+  out: nex/out
+  inputs: inputs
+
+env:
+  HOME: /homeless/deterministic
+  LC_ALL: C
+  TZ: UTC
+  LANG: en_US.UTF-8
+  SOURCE_DATE_EPOCH: "1704067200"
+  GLIBC_TUNABLES: glibc.cpu.hwcaps=-RNDRAND
+  MAKEFLAGS: "-j{num_cpus}"
+  PATH: /usr/bin:/tmp/bootstrap/usr/bin
+  TARGET: x86_64-nex-linux-gnu
+  WORK_DIR: /tmp/bootstrap/nex/work
+  OUT_DIR: /tmp/bootstrap/nex/out
+  SYSROOT: /tmp/bootstrap
+  PKG_CONFIG_PATH: ""
+  PKG_CONFIG_LIBDIR: /tmp/bootstrap/usr/lib/pkgconfig:/tmp/bootstrap/usr/share/pkgconfig
+  PKG_CONFIG_SYSROOT_DIR: /tmp/bootstrap
+  CFLAGS: "-march=x86-64 -mtune=generic -O2 -frandom-seed=424242 --sysroot=/tmp/bootstrap"
+  CXXFLAGS: "-march=x86-64 -mtune=generic -O2 -frandom-seed=424242 --sysroot=/tmp/bootstrap"
+  LDFLAGS: "-L/tmp/bootstrap/usr/lib -Wl,-O1,--sort-common,--as-needed,-z,now --sysroot=/tmp/bootstrap"
+
+preamble: |
+  mount -t tmpfs tmpfs /tmp
+  mkdir /tmp/bootstrap
+  mount --bind {build_dir} /tmp/bootstrap

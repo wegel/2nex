@@ -1,0 +1,56 @@
+package:
+  schema: 1
+  name: noto-fonts-emoji
+  slug: noto-fonts-emoji
+  namespace: fonts
+  version: "2.051"
+  description: Google Noto Color Emoji font
+  homepage: https://github.com/googlefonts/noto-emoji
+  checksum: 73237cffe09e911da08a38cb845454ded10d91ff8bfa168566e2b0e9c4343852
+
+sources:
+- name: noto-emoji
+  url: https://github.com/googlefonts/noto-emoji/archive/refs/tags/v2.051.tar.gz
+  sha256: 04f3d1e5605edebebac00a7a0becb390a4a3ead015066905b27935b30c18e745
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [32:1678]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_noto_emoji} -C ${WORK_DIR} --strip-components=1
+
+    mkdir -p ${OUT_DIR}/usr/share/fonts/noto
+
+    cp ${WORK_DIR}/fonts/NotoColorEmoji.ttf ${OUT_DIR}/usr/share/fonts/noto/
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - fonts
+
+outputs:
+  fonts:
+    files:
+    - path: /usr/share/fonts/noto/NotoColorEmoji.ttf

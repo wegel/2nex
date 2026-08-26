@@ -1,0 +1,31 @@
+From: Nex package maintainers
+Subject: [PATCH] main: read the system ncdu.conf from all three UAPI paths
+Source: no upstream commit; written for Nex against ncdu 2.9.2
+Upstream: not submitted. ncdu reads one system file at /etc/ncdu.conf, so a
+ distribution cannot ship a default that a boot or an administrator may
+ replace. The change below adds the generic /usr/lib, /run, and /etc order,
+ keeps the existing user file after those, and names no Nex path.
+
+At startup ncdu reads /etc/ncdu.conf and then an XDG or ~/.config/ncdu/config
+user file. There is no vendor or runtime tier, so a distribution cannot ship
+a default configuration below /usr, and a running system cannot install a
+temporary override below /run: only a persistent /etc file works.
+
+Read /usr/lib/ncdu/ncdu.conf, then /run/ncdu.conf, then the existing
+/etc/ncdu.conf, before the user file. Each file that exists overlays the
+options read so far, so an administrator file still overrides a runtime
+file, which still overrides a vendor file, which still overrides nothing.
+--ignore-config continues to skip every one of these files.
+
+diff -urN a/src/main.zig b/src/main.zig
+--- a/src/main.zig
++++ b/src/main.zig
+@@ -485,6 +485,8 @@
+     };
+ 
+     if (loadConf) {
++        tryReadArgsFile("/usr/lib/ncdu/ncdu.conf");
++        tryReadArgsFile("/run/ncdu.conf");
+         tryReadArgsFile("/etc/ncdu.conf");
+ 
+         if (std.posix.getenvZ("XDG_CONFIG_HOME")) |p| {

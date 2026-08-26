@@ -1,0 +1,219 @@
+package:
+  schema: 1
+  name: Logrotate
+  slug: logrotate
+  namespace: cli/system
+  version: 3.22.0
+  description: Rotates, compresses, and removes system log files
+  homepage: https://github.com/logrotate/logrotate
+  checksum: ac3b8e243fd2b635ec26ec32455a8d32a91dbae9509c3e6f91c2988745cc676e
+
+sources:
+- name: logrotate
+  url: https://github.com/logrotate/logrotate/releases/download/3.22.0/logrotate-3.22.0.tar.xz
+  sha256: 42b4080ee99c9fb6a7d12d8e787637d057a635194e25971997eebbe8d5e57618
+- name: uapi_config
+  file: pkg/cli/system/logrotate-uapi-config.patch
+  sha256: d99c03ae392baa51a205e34a69b3a362d247f5d52c41069559dc380e3aa08d5f
+
+dependencies:
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: popt
+  commit: x86_64/pkg/libs/system/popt/1.19/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4151:1936, 6699:1965]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_logrotate}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    ./configure \
+      --prefix=/usr \
+      --sbindir=/usr/bin \
+      --with-acl=yes \
+      --with-selinux=no \
+      --with-compress-command=/usr/bin/gzip \
+      --with-uncompress-command=/usr/bin/gunzip \
+      --with-state-file-path=/var/lib/logrotate.status
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    install -Dm644 COPYING "${OUT_DIR}/usr/share/doc/logrotate/COPYING"
+    install -Dm644 ChangeLog.md "${OUT_DIR}/usr/share/doc/logrotate/ChangeLog.md"
+    install -Dm644 README.md "${OUT_DIR}/usr/share/doc/logrotate/README.md"
+    install -d "${OUT_DIR}/usr/lib"
+    printf '%s\n' 'include /etc/logrotate.d' > "${OUT_DIR}/usr/lib/logrotate.conf"
+
+    test_root=/tmp/logrotate-uapi-test
+    rm -rf "${test_root}"
+    mkdir -p \
+      "${test_root}" \
+      /etc/logrotate.d \
+      /run/logrotate.d \
+      /usr/lib/logrotate.d
+
+    check_system_config() {
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+        "${OUT_DIR}/usr/bin/logrotate" --debug --state /dev/null
+    }
+
+    printf '%s\n' 'include /nonexistent/vendor-logrotate-config' > /usr/lib/logrotate.conf
+    : > /run/logrotate.conf
+    check_system_config
+    printf '%s\n' 'include /nonexistent/administrator-logrotate-config' > /etc/logrotate.conf
+    if check_system_config; then
+      printf '%s\n' 'logrotate ignored the administrator main file' >&2
+      exit 1
+    fi
+    : > /etc/logrotate.conf
+    check_system_config
+    rm /etc/logrotate.conf /run/logrotate.conf
+    if check_system_config; then
+      printf '%s\n' 'logrotate accepted the invalid vendor main file' >&2
+      exit 1
+    fi
+
+    : > "${test_root}/explicit.conf"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${OUT_DIR}/usr/bin/logrotate" --debug --state /dev/null \
+        "${test_root}/explicit.conf"
+    printf '%s\n' 'include /etc/logrotate.d' > /usr/lib/logrotate.conf
+
+    write_rule() {
+      rule_path=$1
+      log_path=$2
+      printf '%s\n' \
+        "${log_path} {" \
+        '    size 1' \
+        '    rotate 1' \
+        '    copytruncate' \
+        '}' > "${rule_path}"
+    }
+    rotate_system_logs() {
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+        "${OUT_DIR}/usr/bin/logrotate" --force --state /dev/null
+    }
+
+    vendor_log="${test_root}/vendor.log"
+    transient_log="${test_root}/transient.log"
+    administrator_log="${test_root}/administrator.log"
+    rule_name=layer-test
+
+    write_rule "/usr/lib/logrotate.d/${rule_name}" "${vendor_log}"
+    printf '%s\n' vendor > "${vendor_log}"
+    rotate_system_logs
+    test -f "${vendor_log}.1"
+    test ! -s "${vendor_log}"
+
+    write_rule "/run/logrotate.d/${rule_name}" "${transient_log}"
+    printf '%s\n' vendor > "${vendor_log}"
+    printf '%s\n' transient > "${transient_log}"
+    rotate_system_logs
+    test -s "${vendor_log}"
+    test -f "${transient_log}.1"
+    test ! -s "${transient_log}"
+
+    write_rule "/etc/logrotate.d/${rule_name}" "${administrator_log}"
+    printf '%s\n' transient > "${transient_log}"
+    printf '%s\n' administrator > "${administrator_log}"
+    rotate_system_logs
+    test -s "${transient_log}"
+    test -f "${administrator_log}.1"
+    test ! -s "${administrator_log}"
+
+    : > "/etc/logrotate.d/${rule_name}"
+    printf '%s\n' vendor > "${vendor_log}"
+    rotate_system_logs
+    test -s "${vendor_log}"
+
+    rm -rf "${test_root}"
+    rm \
+      "/etc/logrotate.d/${rule_name}" \
+      "/run/logrotate.d/${rule_name}" \
+      "/usr/lib/logrotate.d/${rule_name}" \
+      /usr/lib/logrotate.conf
+    rmdir /etc/logrotate.d /run/logrotate.d /usr/lib/logrotate.d
+
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${OUT_DIR}/usr/bin/logrotate" --version
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  full:
+  - bin
+  - conf
+  - doc
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/logrotate
+      needs:
+      - /usr/bin/gunzip
+      - /usr/bin/gzip
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpopt.so.0
+
+  conf:
+    files:
+    - path: /usr/lib/logrotate.conf
+
+  doc:
+    files:
+    - path: /usr/share/doc/logrotate/COPYING
+    - path: /usr/share/doc/logrotate/ChangeLog.md
+    - path: /usr/share/doc/logrotate/README.md
+
+  man:
+    files:
+    - path: /usr/share/man/man5/logrotate.conf.5
+    - path: /usr/share/man/man8/logrotate.8
+
+resolution:
+  /usr/lib/libacl.so.1: acl
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/bin/gunzip: gzip
+  /usr/bin/gzip: gzip
+  /usr/lib/libpopt.so.0: popt

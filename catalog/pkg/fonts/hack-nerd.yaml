@@ -1,0 +1,68 @@
+package:
+  schema: 1
+  name: hack-nerd
+  slug: hack-nerd
+  namespace: fonts
+  version: 3.4.0
+  description: Hack font patched with Nerd Fonts icons
+  homepage: https://github.com/ryanoasis/nerd-fonts
+  checksum: 2c891ea8cbcc110ed8c3ac4552310c3751e4b389164f76dd1d3caecfd2d45d4b
+
+sources:
+- name: fonts
+  url: https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/Hack.tar.xz
+  sha256: 1d00a1435638084174516975840854368a45ac30bb0bad2c0c49db713b5925f0
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [32:226]
+
+  script: |
+    mkdir -p ${WORK_DIR}/all
+    tar --no-same-owner -xf ${SOURCE_fonts} -C ${WORK_DIR}/all
+
+    mkdir -p ${OUT_DIR}/usr/share/fonts/TTF
+    find ${WORK_DIR}/all -name '*.ttf' ! -name '*Windows*' \
+      -exec cp {} ${OUT_DIR}/usr/share/fonts/TTF/ \;
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - fonts
+
+outputs:
+  fonts:
+    files:
+    - path: /usr/share/fonts/TTF/HackNerdFont-Bold.ttf
+    - path: /usr/share/fonts/TTF/HackNerdFont-BoldItalic.ttf
+    - path: /usr/share/fonts/TTF/HackNerdFont-Italic.ttf
+    - path: /usr/share/fonts/TTF/HackNerdFont-Regular.ttf
+    - path: /usr/share/fonts/TTF/HackNerdFontMono-Bold.ttf
+    - path: /usr/share/fonts/TTF/HackNerdFontMono-BoldItalic.ttf
+    - path: /usr/share/fonts/TTF/HackNerdFontMono-Italic.ttf
+    - path: /usr/share/fonts/TTF/HackNerdFontMono-Regular.ttf
+    - path: /usr/share/fonts/TTF/HackNerdFontPropo-Bold.ttf
+    - path: /usr/share/fonts/TTF/HackNerdFontPropo-BoldItalic.ttf
+    - path: /usr/share/fonts/TTF/HackNerdFontPropo-Italic.ttf
+    - path: /usr/share/fonts/TTF/HackNerdFontPropo-Regular.ttf

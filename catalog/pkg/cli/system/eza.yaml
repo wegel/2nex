@@ -1,0 +1,118 @@
+package:
+  schema: 1
+  name: eza
+  slug: eza
+  namespace: cli/system
+  version: 0.23.4
+  description: A modern replacement for ls
+  homepage: https://github.com/eza-community/eza
+  checksum: 5761b90664d84f791923af7ed63748208a93d9d117713960778390b458717522
+
+sources:
+- name: eza
+  url: https://github.com/eza-community/eza/archive/refs/tags/v0.23.4.tar.gz
+  sha256: 9fbcad518b8a2095206ac385329ca62d216bf9fdc652dde2d082fcb37c309635
+- name: vendor
+  sha256: 824190c451a04ed0849b19ea912f208770c4a525c8f3da740f4f7e969818bffa
+  cargo_lock: https://raw.githubusercontent.com/eza-community/eza/v0.23.4/Cargo.lock
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: rust-bin
+  commit: x86_64/pkg/dev/lang/rust-bin/1.91.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: libgit2
+  commit: x86_64/pkg/dev/libs/libgit2/1.9.1/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4130:270833, 4130:271160]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_eza} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    tar --no-same-owner -xf /./${SOURCE_vendor} -C "${WORK_DIR}"
+
+    export CARGO_HOME="${WORK_DIR}/.cargo"
+    mkdir -p "${CARGO_HOME}"
+
+    cat > "${CARGO_HOME}/config.toml" << EOF
+    [source.crates-io]
+    replace-with = "vendored-sources"
+
+    [source.vendored-sources]
+    directory = "vendor"
+    EOF
+
+    mkdir -p /usr/local/bin
+    ln -sf /usr/bin/gcc /usr/local/bin/cc
+    ln -sf /usr/bin/ld.bfd /usr/local/bin/ld
+    export PATH="/usr/local/bin:${PATH}"
+    export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc
+    export RUSTFLAGS="-C codegen-units=1 -C embed-bitcode=yes -C debuginfo=0"
+    export PKG_CONFIG_PATH="/usr/lib/pkgconfig"
+    export LIBGIT2_NO_VENDOR=1
+    export LIBGIT2_SYS_USE_PKG_CONFIG=1
+
+    cargo build --release --offline --target x86_64-unknown-linux-gnu
+
+    mkdir -p ${OUT_DIR}/usr/bin
+    install -m 755 target/x86_64-unknown-linux-gnu/release/eza ${OUT_DIR}/usr/bin/eza
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/eza
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgit2.so.1.9
+      - /usr/lib/libm.so.6
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libgit2.so.1.9: libgit2

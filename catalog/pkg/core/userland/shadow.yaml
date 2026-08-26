@@ -1,0 +1,972 @@
+package:
+  schema: 1
+  name: Shadow
+  slug: shadow
+  namespace: core/userland
+  version: 4.15.1
+  description: Shadow password file utilities
+  homepage: https://github.com/shadow-maint/shadow
+  checksum: 6f3e519979057cb91f8b2d688944cfd2a1b12b8a878d52be41fdcc31226ec678
+
+sources:
+- name: shadow
+  url: https://github.com/shadow-maint/shadow/releases/download/4.15.1/shadow-4.15.1.tar.xz
+  sha256: bb5f70639a0581f9d626f227ce45b31ac137daa7c451c0f672ce14f2731a96ee
+- name: 0001-Disable-replaced-tools-their-man-pages-and-PAM-integ.patch
+  url: https://gitlab.archlinux.org/archlinux/packaging/packages/shadow/-/raw/e8ce898b2b59739cea8e8e5a94cf9e2993f26a0a/0001-Disable-replaced-tools-their-man-pages-and-PAM-integ.patch
+  sha256: 93077d921967eb3e8c0af6b0bd016e75da35fccd4d2bca7d455aa1e24289b3ab
+- name: 0002-Adapt-login.defs-for-PAM-and-util-linux.patch
+  url: https://gitlab.archlinux.org/archlinux/packaging/packages/shadow/-/raw/e8ce898b2b59739cea8e8e5a94cf9e2993f26a0a/0002-Adapt-login.defs-for-PAM-and-util-linux.patch
+  sha256: 3bb214e05f428aa2e0ee0561c86a109b892fb7c97b1484714296d0efb81cc974
+- name: 0003-Add-Arch-Linux-defaults-for-login.defs.patch
+  url: https://gitlab.archlinux.org/archlinux/packaging/packages/shadow/-/raw/e8ce898b2b59739cea8e8e5a94cf9e2993f26a0a/0003-Add-Arch-Linux-defaults-for-login.defs.patch
+  sha256: 11549cd64a218332dfa712853bb4618c58f8c1c09d7fbc90e2323e0c7bae3bf2
+- name: uapi_config
+  file: pkg/core/userland/shadow-uapi-config.patch
+  sha256: 20162f51721adef6946c1c38dbb4e454cbee8c0e8b59aaf891c3afd0945335c8
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: libxcrypt
+  commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
+- name: linux-pam
+  commit: x86_64/pkg/libs/security/linux-pam/1.7.1/bundles/dev
+- name: libeconf
+  commit: x86_64/pkg/libs/system/libeconf/0.8.4/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4153:995, 8281:3163, 12392:4633, 16581:5082, 24891:6822, 29033:6905, 33175:6979, 41584:7048, 49811:7102, 51968:7501]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf ${SOURCE_shadow} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE1}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE2}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE3}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    sed -i "s/groups\$(EXEEXT) //" src/Makefile.in
+    find man -name Makefile.in -exec sed -i "s/groups\.1 / /"   {} \;
+    find man -name Makefile.in -exec sed -i "s/getspnam\.3 / /" {} \;
+    find man -name Makefile.in -exec sed -i "s/passwd\.5 / /"   {} \;
+
+    sed -e "s:#ENCRYPT_METHOD DES:ENCRYPT_METHOD YESCRYPT:" \
+      -e "s:/var/spool/mail:/var/mail:"                   \
+      -e "/PATH=/{s@/sbin:@@;s@/bin:@@}"                  \
+      -i etc/login.defs
+
+    mkdir -p ${OUT_DIR}/usr/bin && touch ${OUT_DIR}/usr/bin/passwd
+    ln -s ${OUT_DIR}/usr/bin ${OUT_DIR}/usr/sbin
+
+    export CFLAGS="$CFLAGS -DEXTRA_CHECK_HOME_DIR"
+    ./configure \
+      --bindir=/usr/bin \
+      --disable-account-tools-setuid \
+      --enable-vendordir=/usr/lib \
+      --libdir=/usr/lib \
+      --mandir=/usr/share/man \
+      --prefix=/usr \
+      --sbindir=/usr/bin \
+      --sysconfdir=/etc \
+      --without-fcaps \
+      --with-group-name-max-length=32 \
+      --with-yescrypt \
+      --without-bcrypt \
+      --without-libbsd \
+      --without-nscd \
+      --without-selinux \
+      --with-libpam
+
+    sed -i -e "s/ -shared / -Wl,-O1,--as-needed\0/g" libtool
+    make DESTDIR="${OUT_DIR}" install
+    make DESTDIR="${OUT_DIR}" -C man install
+
+    install -Dm644 \
+      "${OUT_DIR}/etc/login.defs" \
+      "${OUT_DIR}/usr/lib/login.defs"
+    rm "${OUT_DIR}/etc/login.defs"
+    mkdir -p "${OUT_DIR}/usr/lib"
+    mv "${OUT_DIR}/etc/pam.d" "${OUT_DIR}/usr/lib/pam.d"
+
+    prepare_smoke_root() {
+      smoke_root="$1"
+      mkdir -p \
+        "${smoke_root}/etc" \
+        "${smoke_root}/run" \
+        "${smoke_root}/usr/lib"
+      printf 'root:x:0:0:root:/root:/usr/bin/bash\n' > "${smoke_root}/etc/passwd"
+      printf 'root:x:0:\n' > "${smoke_root}/etc/group"
+      printf 'root:*:19723:0:99999:7:::\n' > "${smoke_root}/etc/shadow"
+      printf 'root:*::\n' > "${smoke_root}/etc/gshadow"
+    }
+
+    write_smoke_login_defs() {
+      defs_path="$1"
+      uid_min="$2"
+      mkdir -p "$(dirname "${defs_path}")"
+      printf '%s\n' \
+        "UID_MIN ${uid_min}" \
+        'UID_MAX 60000' \
+        'GID_MIN 1000' \
+        'GID_MAX 60000' \
+        'CREATE_HOME no' \
+        'USERGROUPS_ENAB no' \
+        'SUB_UID_COUNT 0' \
+        'SUB_GID_COUNT 0' \
+        > "${defs_path}"
+    }
+
+    assert_smoke_uid() {
+      smoke_root="$1"
+      account_name="$2"
+      expected_uid="$3"
+      "${OUT_DIR}/usr/bin/useradd" \
+        --prefix "${smoke_root}" \
+        --no-create-home \
+        --no-user-group \
+        --gid 0 \
+        "${account_name}"
+      actual_uid="$(awk -F: -v name="${account_name}" '$1 == name { print $3 }' "${smoke_root}/etc/passwd")"
+      test "${actual_uid}" = "${expected_uid}"
+    }
+
+    vendor_smoke="${WORK_DIR}/uapi-vendor-smoke"
+    prepare_smoke_root "${vendor_smoke}"
+    write_smoke_login_defs "${vendor_smoke}/usr/lib/login.defs" 2100
+    assert_smoke_uid "${vendor_smoke}" vendor-user 2100
+
+    run_smoke="${WORK_DIR}/uapi-run-smoke"
+    prepare_smoke_root "${run_smoke}"
+    write_smoke_login_defs "${run_smoke}/usr/lib/login.defs" 2100
+    write_smoke_login_defs "${run_smoke}/run/login.defs" 2200
+    assert_smoke_uid "${run_smoke}" run-user 2200
+
+    admin_smoke="${WORK_DIR}/uapi-admin-smoke"
+    prepare_smoke_root "${admin_smoke}"
+    write_smoke_login_defs "${admin_smoke}/usr/lib/login.defs" 2100
+    write_smoke_login_defs "${admin_smoke}/run/login.defs" 2200
+    write_smoke_login_defs "${admin_smoke}/etc/login.defs" 2300
+    assert_smoke_uid "${admin_smoke}" admin-user 2300
+
+    dropin_smoke="${WORK_DIR}/uapi-dropin-smoke"
+    prepare_smoke_root "${dropin_smoke}"
+    write_smoke_login_defs "${dropin_smoke}/usr/lib/login.defs" 2100
+    write_smoke_login_defs "${dropin_smoke}/etc/login.defs.d/90-local.defs" 2400
+    assert_smoke_uid "${dropin_smoke}" dropin-user 2400
+
+    # chsh reads the list of valid login shells through the same libeconf
+    # hierarchy, so a shell registered only below /run must count. Even for
+    # root chsh warns when the requested shell is not listed, so the presence
+    # of that warning names whether the selected file was read. Keep a shells
+    # file present throughout: with no file in any tier chsh reports a parse
+    # failure instead, which is a different code path.
+    mkdir -p /etc /run /usr/lib
+    rm -f /usr/lib/shells /run/shells /etc/shells
+    uapi_shell="${WORK_DIR}/uapi-login-shell"
+    printf '#!/bin/sh\nexit 0\n' > "${uapi_shell}"
+    chmod 0755 "${uapi_shell}"
+    printf 'root:x:0:0:root:/root:/usr/bin/bash\n' > /etc/passwd
+    printf 'root:x:0:\n' > /etc/group
+
+    # chsh always initialises PAM, so give it a permissive service file from
+    # the linux-pam build dependency; without one it aborts before it ever
+    # consults the shells list.
+    mkdir -p /etc/pam.d
+    for phase in auth account password session; do
+      printf '%s required /usr/lib/security/pam_permit.so\n' "${phase}"
+    done > /etc/pam.d/chsh
+
+    chsh_warns() {
+      "${OUT_DIR}/usr/bin/chsh" -s "${uapi_shell}" root \
+        > "${WORK_DIR}/chsh.log" 2>&1 || true
+      grep -q 'is an invalid shell' "${WORK_DIR}/chsh.log"
+    }
+
+    assert_shell_rejected() {
+      if ! chsh_warns; then
+        printf 'chsh accepted an unlisted shell with %s in place: %s\n' \
+          "$1" "$(cat "${WORK_DIR}/chsh.log")" >&2
+        exit 1
+      fi
+    }
+
+    assert_shell_listed() {
+      if chsh_warns; then
+        printf 'chsh did not read the shells list from %s: %s\n' \
+          "$1" "$(cat "${WORK_DIR}/chsh.log")" >&2
+        exit 1
+      fi
+    }
+
+    printf '/bin/false\n' > /usr/lib/shells
+    assert_shell_rejected /usr/lib/shells
+    printf '%s\n' "${uapi_shell}" > /usr/lib/shells
+    assert_shell_listed /usr/lib/shells
+
+    printf '/bin/false\n' > /usr/lib/shells
+    printf '%s\n' "${uapi_shell}" > /run/shells
+    assert_shell_listed /run/shells
+
+    rm /run/shells
+    printf '%s\n' "${uapi_shell}" > /etc/shells
+    assert_shell_listed /etc/shells
+    rm -f /etc/shells /usr/lib/shells /etc/passwd /etc/group /etc/pam.d/chsh
+
+    printf 'shadow UAPI smoke: login.defs and the chsh shells list honoured all tiers\n'
+
+    rm ${OUT_DIR}/usr/sbin
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - static
+
+  full:
+  - bin
+  - dev
+  - lib
+  - locale
+  - man
+  - man
+  - static
+
+  runtime:
+  - bin
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/chage
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/chfn
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libpam_misc.so.0
+    - path: /usr/bin/chgpasswd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/chpasswd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libeconf.so.0
+      - /usr/lib/libpam.so.0
+    - path: /usr/bin/chsh
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libpam_misc.so.0
+    - path: /usr/bin/expiry
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/faillog
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/getsubids
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsubid.so.4
+    - path: /usr/bin/gpasswd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/groupadd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/groupdel
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/groupmems
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libpam_misc.so.0
+    - path: /usr/bin/groupmod
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/grpck
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/grpconv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/grpunconv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/login
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libpam_misc.so.0
+    - path: /usr/bin/logoutd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/newgidmap
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/newgrp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/newuidmap
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/newusers
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+      - /usr/lib/libpam.so.0
+    - path: /usr/bin/nologin
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/passwd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libeconf.so.0
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libpam_misc.so.0
+    - path: /usr/bin/pwck
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/pwconv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/pwunconv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/sg
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/su
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libpam_misc.so.0
+    - path: /usr/bin/useradd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libattr.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/userdel
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/usermod
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libattr.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/vigr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/bin/vipw
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+
+  dev:
+    files:
+    - path: /usr/include/shadow/subid.h
+    - path: /usr/lib/libsubid.la
+
+  lib:
+    files:
+    - path: /usr/lib/libsubid.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libsubid.so.4
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libsubid.so.4.0.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/login.defs
+    - path: /usr/lib/pam.d/chfn
+    - path: /usr/lib/pam.d/chpasswd
+    - path: /usr/lib/pam.d/chsh
+    - path: /usr/lib/pam.d/groupmems
+    - path: /usr/lib/pam.d/login
+    - path: /usr/lib/pam.d/newusers
+    - path: /usr/lib/pam.d/passwd
+    - path: /usr/lib/pam.d/su
+
+  locale:
+    files:
+    - path: /usr/share/locale/bs/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/dz/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/eu/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/he/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/kk/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/km/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/ne/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/nn/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/sq/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/tl/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/shadow.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/shadow.mo
+
+  man:
+    files:
+    - path: /usr/share/man/cs/man1/expiry.1
+    - path: /usr/share/man/cs/man1/gpasswd.1
+    - path: /usr/share/man/cs/man1/su.1
+    - path: /usr/share/man/cs/man5/faillog.5
+    - path: /usr/share/man/cs/man5/gshadow.5
+    - path: /usr/share/man/cs/man5/shadow.5
+    - path: /usr/share/man/cs/man8/faillog.8
+    - path: /usr/share/man/cs/man8/groupadd.8
+    - path: /usr/share/man/cs/man8/groupdel.8
+    - path: /usr/share/man/cs/man8/groupmod.8
+    - path: /usr/share/man/cs/man8/grpck.8
+    - path: /usr/share/man/cs/man8/nologin.8
+    - path: /usr/share/man/cs/man8/vipw.8
+    - path: /usr/share/man/da/man1/chfn.1
+    - path: /usr/share/man/da/man1/newgrp.1
+    - path: /usr/share/man/da/man1/sg.1
+    - path: /usr/share/man/da/man5/gshadow.5
+    - path: /usr/share/man/da/man8/groupdel.8
+    - path: /usr/share/man/da/man8/logoutd.8
+    - path: /usr/share/man/da/man8/nologin.8
+    - path: /usr/share/man/da/man8/vigr.8
+    - path: /usr/share/man/da/man8/vipw.8
+    - path: /usr/share/man/de/man1/chage.1
+    - path: /usr/share/man/de/man1/chfn.1
+    - path: /usr/share/man/de/man1/chsh.1
+    - path: /usr/share/man/de/man1/expiry.1
+    - path: /usr/share/man/de/man1/gpasswd.1
+    - path: /usr/share/man/de/man1/login.1
+    - path: /usr/share/man/de/man1/newgrp.1
+    - path: /usr/share/man/de/man1/passwd.1
+    - path: /usr/share/man/de/man1/sg.1
+    - path: /usr/share/man/de/man1/su.1
+    - path: /usr/share/man/de/man3/shadow.3
+    - path: /usr/share/man/de/man5/faillog.5
+    - path: /usr/share/man/de/man5/gshadow.5
+    - path: /usr/share/man/de/man5/login.defs.5
+    - path: /usr/share/man/de/man5/shadow.5
+    - path: /usr/share/man/de/man5/suauth.5
+    - path: /usr/share/man/de/man8/chgpasswd.8
+    - path: /usr/share/man/de/man8/chpasswd.8
+    - path: /usr/share/man/de/man8/faillog.8
+    - path: /usr/share/man/de/man8/groupadd.8
+    - path: /usr/share/man/de/man8/groupdel.8
+    - path: /usr/share/man/de/man8/groupmems.8
+    - path: /usr/share/man/de/man8/groupmod.8
+    - path: /usr/share/man/de/man8/grpck.8
+    - path: /usr/share/man/de/man8/grpconv.8
+    - path: /usr/share/man/de/man8/grpunconv.8
+    - path: /usr/share/man/de/man8/logoutd.8
+    - path: /usr/share/man/de/man8/newusers.8
+    - path: /usr/share/man/de/man8/nologin.8
+    - path: /usr/share/man/de/man8/pwck.8
+    - path: /usr/share/man/de/man8/pwconv.8
+    - path: /usr/share/man/de/man8/pwunconv.8
+    - path: /usr/share/man/de/man8/useradd.8
+    - path: /usr/share/man/de/man8/userdel.8
+    - path: /usr/share/man/de/man8/usermod.8
+    - path: /usr/share/man/de/man8/vigr.8
+    - path: /usr/share/man/de/man8/vipw.8
+    - path: /usr/share/man/fi/man1/chfn.1
+    - path: /usr/share/man/fi/man1/chsh.1
+    - path: /usr/share/man/fi/man1/su.1
+    - path: /usr/share/man/fr/man1/chage.1
+    - path: /usr/share/man/fr/man1/chfn.1
+    - path: /usr/share/man/fr/man1/chsh.1
+    - path: /usr/share/man/fr/man1/expiry.1
+    - path: /usr/share/man/fr/man1/gpasswd.1
+    - path: /usr/share/man/fr/man1/login.1
+    - path: /usr/share/man/fr/man1/newgidmap.1
+    - path: /usr/share/man/fr/man1/newgrp.1
+    - path: /usr/share/man/fr/man1/newuidmap.1
+    - path: /usr/share/man/fr/man1/passwd.1
+    - path: /usr/share/man/fr/man1/sg.1
+    - path: /usr/share/man/fr/man1/su.1
+    - path: /usr/share/man/fr/man3/shadow.3
+    - path: /usr/share/man/fr/man5/faillog.5
+    - path: /usr/share/man/fr/man5/gshadow.5
+    - path: /usr/share/man/fr/man5/login.defs.5
+    - path: /usr/share/man/fr/man5/shadow.5
+    - path: /usr/share/man/fr/man5/suauth.5
+    - path: /usr/share/man/fr/man5/subgid.5
+    - path: /usr/share/man/fr/man5/subuid.5
+    - path: /usr/share/man/fr/man8/chgpasswd.8
+    - path: /usr/share/man/fr/man8/chpasswd.8
+    - path: /usr/share/man/fr/man8/faillog.8
+    - path: /usr/share/man/fr/man8/groupadd.8
+    - path: /usr/share/man/fr/man8/groupdel.8
+    - path: /usr/share/man/fr/man8/groupmems.8
+    - path: /usr/share/man/fr/man8/groupmod.8
+    - path: /usr/share/man/fr/man8/grpck.8
+    - path: /usr/share/man/fr/man8/grpconv.8
+    - path: /usr/share/man/fr/man8/grpunconv.8
+    - path: /usr/share/man/fr/man8/logoutd.8
+    - path: /usr/share/man/fr/man8/newusers.8
+    - path: /usr/share/man/fr/man8/nologin.8
+    - path: /usr/share/man/fr/man8/pwck.8
+    - path: /usr/share/man/fr/man8/pwconv.8
+    - path: /usr/share/man/fr/man8/pwunconv.8
+    - path: /usr/share/man/fr/man8/useradd.8
+    - path: /usr/share/man/fr/man8/userdel.8
+    - path: /usr/share/man/fr/man8/usermod.8
+    - path: /usr/share/man/fr/man8/vigr.8
+    - path: /usr/share/man/fr/man8/vipw.8
+    - path: /usr/share/man/hu/man1/chsh.1
+    - path: /usr/share/man/hu/man1/gpasswd.1
+    - path: /usr/share/man/hu/man1/login.1
+    - path: /usr/share/man/hu/man1/newgrp.1
+    - path: /usr/share/man/hu/man1/passwd.1
+    - path: /usr/share/man/hu/man1/sg.1
+    - path: /usr/share/man/hu/man1/su.1
+    - path: /usr/share/man/id/man1/chsh.1
+    - path: /usr/share/man/id/man1/login.1
+    - path: /usr/share/man/id/man8/useradd.8
+    - path: /usr/share/man/it/man1/chage.1
+    - path: /usr/share/man/it/man1/chfn.1
+    - path: /usr/share/man/it/man1/chsh.1
+    - path: /usr/share/man/it/man1/expiry.1
+    - path: /usr/share/man/it/man1/gpasswd.1
+    - path: /usr/share/man/it/man1/login.1
+    - path: /usr/share/man/it/man1/newgrp.1
+    - path: /usr/share/man/it/man1/passwd.1
+    - path: /usr/share/man/it/man1/sg.1
+    - path: /usr/share/man/it/man1/su.1
+    - path: /usr/share/man/it/man3/shadow.3
+    - path: /usr/share/man/it/man5/faillog.5
+    - path: /usr/share/man/it/man5/gshadow.5
+    - path: /usr/share/man/it/man5/login.defs.5
+    - path: /usr/share/man/it/man5/shadow.5
+    - path: /usr/share/man/it/man5/suauth.5
+    - path: /usr/share/man/it/man8/chgpasswd.8
+    - path: /usr/share/man/it/man8/chpasswd.8
+    - path: /usr/share/man/it/man8/faillog.8
+    - path: /usr/share/man/it/man8/groupadd.8
+    - path: /usr/share/man/it/man8/groupdel.8
+    - path: /usr/share/man/it/man8/groupmems.8
+    - path: /usr/share/man/it/man8/groupmod.8
+    - path: /usr/share/man/it/man8/grpck.8
+    - path: /usr/share/man/it/man8/grpconv.8
+    - path: /usr/share/man/it/man8/grpunconv.8
+    - path: /usr/share/man/it/man8/logoutd.8
+    - path: /usr/share/man/it/man8/newusers.8
+    - path: /usr/share/man/it/man8/nologin.8
+    - path: /usr/share/man/it/man8/pwck.8
+    - path: /usr/share/man/it/man8/pwconv.8
+    - path: /usr/share/man/it/man8/pwunconv.8
+    - path: /usr/share/man/it/man8/useradd.8
+    - path: /usr/share/man/it/man8/userdel.8
+    - path: /usr/share/man/it/man8/usermod.8
+    - path: /usr/share/man/it/man8/vigr.8
+    - path: /usr/share/man/it/man8/vipw.8
+    - path: /usr/share/man/ja/man1/chage.1
+    - path: /usr/share/man/ja/man1/chfn.1
+    - path: /usr/share/man/ja/man1/chsh.1
+    - path: /usr/share/man/ja/man1/expiry.1
+    - path: /usr/share/man/ja/man1/gpasswd.1
+    - path: /usr/share/man/ja/man1/login.1
+    - path: /usr/share/man/ja/man1/newgrp.1
+    - path: /usr/share/man/ja/man1/passwd.1
+    - path: /usr/share/man/ja/man1/sg.1
+    - path: /usr/share/man/ja/man1/su.1
+    - path: /usr/share/man/ja/man5/faillog.5
+    - path: /usr/share/man/ja/man5/login.defs.5
+    - path: /usr/share/man/ja/man5/shadow.5
+    - path: /usr/share/man/ja/man5/suauth.5
+    - path: /usr/share/man/ja/man8/chpasswd.8
+    - path: /usr/share/man/ja/man8/faillog.8
+    - path: /usr/share/man/ja/man8/groupadd.8
+    - path: /usr/share/man/ja/man8/groupdel.8
+    - path: /usr/share/man/ja/man8/groupmod.8
+    - path: /usr/share/man/ja/man8/grpck.8
+    - path: /usr/share/man/ja/man8/grpconv.8
+    - path: /usr/share/man/ja/man8/grpunconv.8
+    - path: /usr/share/man/ja/man8/logoutd.8
+    - path: /usr/share/man/ja/man8/newusers.8
+    - path: /usr/share/man/ja/man8/pwck.8
+    - path: /usr/share/man/ja/man8/pwconv.8
+    - path: /usr/share/man/ja/man8/pwunconv.8
+    - path: /usr/share/man/ja/man8/useradd.8
+    - path: /usr/share/man/ja/man8/userdel.8
+    - path: /usr/share/man/ja/man8/usermod.8
+    - path: /usr/share/man/ja/man8/vigr.8
+    - path: /usr/share/man/ja/man8/vipw.8
+    - path: /usr/share/man/ko/man1/chfn.1
+    - path: /usr/share/man/ko/man1/chsh.1
+    - path: /usr/share/man/ko/man1/login.1
+    - path: /usr/share/man/ko/man1/su.1
+    - path: /usr/share/man/ko/man8/vigr.8
+    - path: /usr/share/man/ko/man8/vipw.8
+    - path: /usr/share/man/man1/chage.1
+    - path: /usr/share/man/man1/chfn.1
+    - path: /usr/share/man/man1/chsh.1
+    - path: /usr/share/man/man1/expiry.1
+    - path: /usr/share/man/man1/getsubids.1
+    - path: /usr/share/man/man1/gpasswd.1
+    - path: /usr/share/man/man1/login.1
+    - path: /usr/share/man/man1/newgidmap.1
+    - path: /usr/share/man/man1/newgrp.1
+    - path: /usr/share/man/man1/newuidmap.1
+    - path: /usr/share/man/man1/passwd.1
+    - path: /usr/share/man/man1/sg.1
+    - path: /usr/share/man/man1/su.1
+    - path: /usr/share/man/man3/shadow.3
+    - path: /usr/share/man/man5/faillog.5
+    - path: /usr/share/man/man5/gshadow.5
+    - path: /usr/share/man/man5/login.defs.5
+    - path: /usr/share/man/man5/shadow.5
+    - path: /usr/share/man/man5/suauth.5
+    - path: /usr/share/man/man5/subgid.5
+    - path: /usr/share/man/man5/subuid.5
+    - path: /usr/share/man/man8/chgpasswd.8
+    - path: /usr/share/man/man8/chpasswd.8
+    - path: /usr/share/man/man8/faillog.8
+    - path: /usr/share/man/man8/groupadd.8
+    - path: /usr/share/man/man8/groupdel.8
+    - path: /usr/share/man/man8/groupmems.8
+    - path: /usr/share/man/man8/groupmod.8
+    - path: /usr/share/man/man8/grpck.8
+    - path: /usr/share/man/man8/grpconv.8
+    - path: /usr/share/man/man8/grpunconv.8
+    - path: /usr/share/man/man8/logoutd.8
+    - path: /usr/share/man/man8/newusers.8
+    - path: /usr/share/man/man8/nologin.8
+    - path: /usr/share/man/man8/pwck.8
+    - path: /usr/share/man/man8/pwconv.8
+    - path: /usr/share/man/man8/pwunconv.8
+    - path: /usr/share/man/man8/useradd.8
+    - path: /usr/share/man/man8/userdel.8
+    - path: /usr/share/man/man8/usermod.8
+    - path: /usr/share/man/man8/vigr.8
+    - path: /usr/share/man/man8/vipw.8
+    - path: /usr/share/man/pl/man1/chage.1
+    - path: /usr/share/man/pl/man1/chsh.1
+    - path: /usr/share/man/pl/man1/expiry.1
+    - path: /usr/share/man/pl/man1/newgrp.1
+    - path: /usr/share/man/pl/man1/sg.1
+    - path: /usr/share/man/pl/man3/shadow.3
+    - path: /usr/share/man/pl/man5/faillog.5
+    - path: /usr/share/man/pl/man8/faillog.8
+    - path: /usr/share/man/pl/man8/groupadd.8
+    - path: /usr/share/man/pl/man8/groupdel.8
+    - path: /usr/share/man/pl/man8/groupmems.8
+    - path: /usr/share/man/pl/man8/groupmod.8
+    - path: /usr/share/man/pl/man8/grpck.8
+    - path: /usr/share/man/pl/man8/logoutd.8
+    - path: /usr/share/man/pl/man8/userdel.8
+    - path: /usr/share/man/pl/man8/usermod.8
+    - path: /usr/share/man/pl/man8/vigr.8
+    - path: /usr/share/man/pl/man8/vipw.8
+    - path: /usr/share/man/pt_BR/man1/gpasswd.1
+    - path: /usr/share/man/pt_BR/man5/shadow.5
+    - path: /usr/share/man/pt_BR/man8/groupadd.8
+    - path: /usr/share/man/pt_BR/man8/groupdel.8
+    - path: /usr/share/man/pt_BR/man8/groupmod.8
+    - path: /usr/share/man/ru/man1/chage.1
+    - path: /usr/share/man/ru/man1/chfn.1
+    - path: /usr/share/man/ru/man1/chsh.1
+    - path: /usr/share/man/ru/man1/expiry.1
+    - path: /usr/share/man/ru/man1/gpasswd.1
+    - path: /usr/share/man/ru/man1/login.1
+    - path: /usr/share/man/ru/man1/newgrp.1
+    - path: /usr/share/man/ru/man1/passwd.1
+    - path: /usr/share/man/ru/man1/sg.1
+    - path: /usr/share/man/ru/man1/su.1
+    - path: /usr/share/man/ru/man3/shadow.3
+    - path: /usr/share/man/ru/man5/faillog.5
+    - path: /usr/share/man/ru/man5/gshadow.5
+    - path: /usr/share/man/ru/man5/login.defs.5
+    - path: /usr/share/man/ru/man5/shadow.5
+    - path: /usr/share/man/ru/man5/suauth.5
+    - path: /usr/share/man/ru/man8/chgpasswd.8
+    - path: /usr/share/man/ru/man8/chpasswd.8
+    - path: /usr/share/man/ru/man8/faillog.8
+    - path: /usr/share/man/ru/man8/groupadd.8
+    - path: /usr/share/man/ru/man8/groupdel.8
+    - path: /usr/share/man/ru/man8/groupmems.8
+    - path: /usr/share/man/ru/man8/groupmod.8
+    - path: /usr/share/man/ru/man8/grpck.8
+    - path: /usr/share/man/ru/man8/grpconv.8
+    - path: /usr/share/man/ru/man8/grpunconv.8
+    - path: /usr/share/man/ru/man8/logoutd.8
+    - path: /usr/share/man/ru/man8/newusers.8
+    - path: /usr/share/man/ru/man8/nologin.8
+    - path: /usr/share/man/ru/man8/pwck.8
+    - path: /usr/share/man/ru/man8/pwconv.8
+    - path: /usr/share/man/ru/man8/pwunconv.8
+    - path: /usr/share/man/ru/man8/useradd.8
+    - path: /usr/share/man/ru/man8/userdel.8
+    - path: /usr/share/man/ru/man8/usermod.8
+    - path: /usr/share/man/ru/man8/vigr.8
+    - path: /usr/share/man/ru/man8/vipw.8
+    - path: /usr/share/man/sv/man1/chage.1
+    - path: /usr/share/man/sv/man1/chsh.1
+    - path: /usr/share/man/sv/man1/expiry.1
+    - path: /usr/share/man/sv/man1/newgrp.1
+    - path: /usr/share/man/sv/man1/passwd.1
+    - path: /usr/share/man/sv/man1/sg.1
+    - path: /usr/share/man/sv/man3/shadow.3
+    - path: /usr/share/man/sv/man5/faillog.5
+    - path: /usr/share/man/sv/man5/gshadow.5
+    - path: /usr/share/man/sv/man5/suauth.5
+    - path: /usr/share/man/sv/man8/faillog.8
+    - path: /usr/share/man/sv/man8/groupadd.8
+    - path: /usr/share/man/sv/man8/groupdel.8
+    - path: /usr/share/man/sv/man8/groupmems.8
+    - path: /usr/share/man/sv/man8/groupmod.8
+    - path: /usr/share/man/sv/man8/grpck.8
+    - path: /usr/share/man/sv/man8/logoutd.8
+    - path: /usr/share/man/sv/man8/nologin.8
+    - path: /usr/share/man/sv/man8/pwck.8
+    - path: /usr/share/man/sv/man8/userdel.8
+    - path: /usr/share/man/sv/man8/vigr.8
+    - path: /usr/share/man/sv/man8/vipw.8
+    - path: /usr/share/man/tr/man1/chage.1
+    - path: /usr/share/man/tr/man1/chfn.1
+    - path: /usr/share/man/tr/man1/login.1
+    - path: /usr/share/man/tr/man1/passwd.1
+    - path: /usr/share/man/tr/man1/su.1
+    - path: /usr/share/man/tr/man5/shadow.5
+    - path: /usr/share/man/tr/man8/groupadd.8
+    - path: /usr/share/man/tr/man8/groupdel.8
+    - path: /usr/share/man/tr/man8/groupmod.8
+    - path: /usr/share/man/tr/man8/useradd.8
+    - path: /usr/share/man/tr/man8/userdel.8
+    - path: /usr/share/man/tr/man8/usermod.8
+    - path: /usr/share/man/uk/man1/chage.1
+    - path: /usr/share/man/uk/man1/chfn.1
+    - path: /usr/share/man/uk/man1/chsh.1
+    - path: /usr/share/man/uk/man1/expiry.1
+    - path: /usr/share/man/uk/man1/gpasswd.1
+    - path: /usr/share/man/uk/man1/login.1
+    - path: /usr/share/man/uk/man1/newgrp.1
+    - path: /usr/share/man/uk/man1/passwd.1
+    - path: /usr/share/man/uk/man1/sg.1
+    - path: /usr/share/man/uk/man1/su.1
+    - path: /usr/share/man/uk/man3/shadow.3
+    - path: /usr/share/man/uk/man5/faillog.5
+    - path: /usr/share/man/uk/man5/gshadow.5
+    - path: /usr/share/man/uk/man5/login.defs.5
+    - path: /usr/share/man/uk/man5/shadow.5
+    - path: /usr/share/man/uk/man5/suauth.5
+    - path: /usr/share/man/uk/man8/chgpasswd.8
+    - path: /usr/share/man/uk/man8/chpasswd.8
+    - path: /usr/share/man/uk/man8/faillog.8
+    - path: /usr/share/man/uk/man8/groupadd.8
+    - path: /usr/share/man/uk/man8/groupdel.8
+    - path: /usr/share/man/uk/man8/groupmems.8
+    - path: /usr/share/man/uk/man8/groupmod.8
+    - path: /usr/share/man/uk/man8/grpck.8
+    - path: /usr/share/man/uk/man8/grpconv.8
+    - path: /usr/share/man/uk/man8/grpunconv.8
+    - path: /usr/share/man/uk/man8/logoutd.8
+    - path: /usr/share/man/uk/man8/newusers.8
+    - path: /usr/share/man/uk/man8/nologin.8
+    - path: /usr/share/man/uk/man8/pwck.8
+    - path: /usr/share/man/uk/man8/pwconv.8
+    - path: /usr/share/man/uk/man8/pwunconv.8
+    - path: /usr/share/man/uk/man8/useradd.8
+    - path: /usr/share/man/uk/man8/userdel.8
+    - path: /usr/share/man/uk/man8/usermod.8
+    - path: /usr/share/man/uk/man8/vigr.8
+    - path: /usr/share/man/uk/man8/vipw.8
+    - path: /usr/share/man/zh_CN/man1/chage.1
+    - path: /usr/share/man/zh_CN/man1/chfn.1
+    - path: /usr/share/man/zh_CN/man1/chsh.1
+    - path: /usr/share/man/zh_CN/man1/expiry.1
+    - path: /usr/share/man/zh_CN/man1/gpasswd.1
+    - path: /usr/share/man/zh_CN/man1/login.1
+    - path: /usr/share/man/zh_CN/man1/newgrp.1
+    - path: /usr/share/man/zh_CN/man1/passwd.1
+    - path: /usr/share/man/zh_CN/man1/sg.1
+    - path: /usr/share/man/zh_CN/man1/su.1
+    - path: /usr/share/man/zh_CN/man3/shadow.3
+    - path: /usr/share/man/zh_CN/man5/faillog.5
+    - path: /usr/share/man/zh_CN/man5/gshadow.5
+    - path: /usr/share/man/zh_CN/man5/login.defs.5
+    - path: /usr/share/man/zh_CN/man5/shadow.5
+    - path: /usr/share/man/zh_CN/man5/suauth.5
+    - path: /usr/share/man/zh_CN/man8/chgpasswd.8
+    - path: /usr/share/man/zh_CN/man8/chpasswd.8
+    - path: /usr/share/man/zh_CN/man8/faillog.8
+    - path: /usr/share/man/zh_CN/man8/groupadd.8
+    - path: /usr/share/man/zh_CN/man8/groupdel.8
+    - path: /usr/share/man/zh_CN/man8/groupmems.8
+    - path: /usr/share/man/zh_CN/man8/groupmod.8
+    - path: /usr/share/man/zh_CN/man8/grpck.8
+    - path: /usr/share/man/zh_CN/man8/grpconv.8
+    - path: /usr/share/man/zh_CN/man8/grpunconv.8
+    - path: /usr/share/man/zh_CN/man8/logoutd.8
+    - path: /usr/share/man/zh_CN/man8/newusers.8
+    - path: /usr/share/man/zh_CN/man8/nologin.8
+    - path: /usr/share/man/zh_CN/man8/pwck.8
+    - path: /usr/share/man/zh_CN/man8/pwconv.8
+    - path: /usr/share/man/zh_CN/man8/pwunconv.8
+    - path: /usr/share/man/zh_CN/man8/useradd.8
+    - path: /usr/share/man/zh_CN/man8/userdel.8
+    - path: /usr/share/man/zh_CN/man8/usermod.8
+    - path: /usr/share/man/zh_CN/man8/vigr.8
+    - path: /usr/share/man/zh_CN/man8/vipw.8
+    - path: /usr/share/man/zh_TW/man1/chfn.1
+    - path: /usr/share/man/zh_TW/man1/chsh.1
+    - path: /usr/share/man/zh_TW/man1/newgrp.1
+    - path: /usr/share/man/zh_TW/man1/su.1
+    - path: /usr/share/man/zh_TW/man8/chpasswd.8
+    - path: /usr/share/man/zh_TW/man8/groupadd.8
+    - path: /usr/share/man/zh_TW/man8/groupdel.8
+    - path: /usr/share/man/zh_TW/man8/groupmod.8
+    - path: /usr/share/man/zh_TW/man8/useradd.8
+    - path: /usr/share/man/zh_TW/man8/userdel.8
+    - path: /usr/share/man/zh_TW/man8/usermod.8
+
+  static:
+    files:
+    - path: /usr/lib/libsubid.a
+
+resolution:
+  /usr/lib/libacl.so.1: acl
+  /usr/lib/libattr.so.1: attr
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libeconf.so.0: libeconf
+  /usr/lib/libcrypt.so.2: libxcrypt
+  /usr/lib/libpam.so.0: linux-pam
+  /usr/lib/libpam_misc.so.0: linux-pam
+  /usr/lib/libsubid.so.4: self

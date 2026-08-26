@@ -1,0 +1,182 @@
+package:
+  schema: 1
+  name: File
+  slug: file
+  namespace: dev/tools
+  version: "5.45"
+  description: File type identification utility
+  homepage: https://www.darwinsys.com/file/
+  checksum: 2997be9d6638d95527c89d6eb223c0c35c056410a54db407431960b6112da560
+
+sources:
+- name: file
+  url: https://astron.com/pub/file/file-5.45.tar.gz
+  sha256: fc97f51029bb0e2c9f4e3bffefdaf678f0e039ee872b9de5c002a6d09c784d82
+- name: uapi_config
+  file: pkg/dev/tools/file-uapi-config.patch
+  sha256: a0ccdcda9249f1b1923766a36dee51a1e54e9385c563438ced629f15a728351e
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4161:975, 8271:4468, 12455:6561, 16579:6677, 20811:6817, 24954:6915, 29076:7038, 32673:7123]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_file} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+    ./configure --prefix=/usr
+    make
+    make check
+    make DESTDIR="${OUT_DIR}" install
+
+    mkdir -p /etc /run /usr/share/misc
+    printf '0\tstring\tNEXADMIN\tNex UAPI admin magic\n' > /etc/magic
+    printf '0\tstring\tNEXRUN\tNex UAPI run magic\n' > /run/magic
+    printf '0\tstring\tNEXVENDOR\tNex UAPI vendor magic\n' > /usr/share/misc/magic
+    probe_home="${WORK_DIR}/file-uapi-home"
+    mkdir -p "${probe_home}"
+    printf 'NEXADMIN' > "${WORK_DIR}/sample-admin"
+    printf 'NEXRUN' > "${WORK_DIR}/sample-run"
+    printf 'NEXVENDOR' > "${WORK_DIR}/sample-vendor"
+    run_file() {
+      env -u MAGIC HOME="${probe_home}" \
+        LD_LIBRARY_PATH="${OUT_DIR}/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+        "${OUT_DIR}/usr/bin/file" -b "$1"
+    }
+    expect_type() {
+      actual="$(run_file "$1")"
+      if [ "${actual}" != "$2" ]; then
+        printf 'file UAPI smoke: expected %s, got %s\n' "$2" "${actual}" >&2
+        exit 1
+      fi
+    }
+    expect_type "${WORK_DIR}/sample-admin" 'Nex UAPI admin magic'
+    expect_type "${WORK_DIR}/sample-run" 'Nex UAPI run magic'
+    expect_type "${WORK_DIR}/sample-vendor" 'Nex UAPI vendor magic'
+    rm -f /etc/magic
+    expect_type "${WORK_DIR}/sample-run" 'Nex UAPI run magic'
+    expect_type "${WORK_DIR}/sample-vendor" 'Nex UAPI vendor magic'
+    rm -f /run/magic
+    expect_type "${WORK_DIR}/sample-vendor" 'Nex UAPI vendor magic'
+    printf 'file UAPI smoke: magic loader read all three tiers in order\n'
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - misc
+
+  full:
+  - bin
+  - dev
+  - lib
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/file
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libmagic.so.1
+
+  dev:
+    files:
+    - path: /usr/include/magic.h
+    - path: /usr/lib/libmagic.la
+    - path: /usr/lib/pkgconfig/libmagic.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libmagic.so
+      needs:
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libmagic.so.1
+      needs:
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libmagic.so.1.0.0
+      needs:
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
+
+  man:
+    files:
+    - path: /usr/share/man/man1/file.1
+    - path: /usr/share/man/man3/libmagic.3
+    - path: /usr/share/man/man4/magic.4
+
+  misc:
+    files:
+    - path: /usr/share/misc/magic.mgc
+
+resolution:
+  /usr/lib/libbz2.so.1.0: bzip2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libmagic.so.1: self
+  /usr/lib/liblzma.so.5: xz
+  /usr/lib/libz.so.1: zlib

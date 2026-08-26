@@ -1,0 +1,67 @@
+From: Package maintainers <packages@localhost>
+Subject: [PATCH] fix settings.ini layered load order
+Source: downstream
+Upstream: not submitted; suitable for upstream review
+
+gtk_settings_init() loads every settings.ini it finds with the same
+GTK_SETTINGS_SOURCE_DEFAULT source, so the last file read overwrites every
+property an earlier file set and load order alone decides priority.
+
+Two ordering mistakes follow from that. First, the compiled sysconfdir file
+(_gtk_get_sysconfdir(), "/etc" on this build since Meson defaults sysconfdir
+to "/etc" whenever prefix is "/usr") is loaded before the
+g_get_system_config_dirs() walk, so any directory in that walk overrides the
+administrator's compiled-sysconfdir file. Second, the walk itself reads
+XDG_CONFIG_DIRS forward from index zero, but XDG_CONFIG_DIRS lists its
+highest-priority directory first. The shipped desktop exports
+XDG_CONFIG_DIRS=/etc/xdg:/run/xdg:/usr/share/xdg, so the forward walk lets
+/usr/share/xdg/gtk-4.0/settings.ini (vendor) load last and override
+/run/xdg/gtk-4.0/settings.ini (runtime) and /etc/xdg/gtk-4.0/settings.ini
+(administrator), inverting Nex's vendor below runtime below administrator
+priority.
+
+Walk XDG_CONFIG_DIRS backwards so its highest-priority directory loads last,
+and load the compiled sysconfdir file after that walk so the administrator's
+compiled-sysconfdir file still beats every XDG_CONFIG_DIRS entry, including
+the administrator's own /etc/xdg entry. This mirrors the direct GTK3
+precedent in gtk3-uapi-multipress.patch. The vendor-prefix read
+(_gtk_get_data_prefix()/share) and the user-config read
+(g_get_user_config_dir()) already load first and last respectively and keep
+their existing positions.
+
+diff -urN a/gtk/gtksettings.c b/gtk/gtksettings.c
+--- a/gtk/gtksettings.c
++++ b/gtk/gtksettings.c
+@@ -282,18 +282,28 @@
+   gtk_settings_load_from_key_file (settings, path, GTK_SETTINGS_SOURCE_DEFAULT);
+   g_free (path);
+
+-  path = g_build_filename (_gtk_get_sysconfdir (), "gtk-4.0", "settings.ini", NULL);
+-  gtk_settings_load_from_key_file (settings, path, GTK_SETTINGS_SOURCE_DEFAULT);
+-  g_free (path);
+-
++  /*
++   * Every file here is loaded with the same source, so a later file overwrites
++   * an earlier one and load order alone decides priority. XDG_CONFIG_DIRS
++   * lists its highest-priority directory first, so walk it backwards, and load
++   * the compiled sysconfdir file afterwards so the administrator's
++   * compiled-sysconfdir file stays above both the vendor prefix and the
++   * directory list, including that list's own administrator entry.
++   */
+   config_dirs = g_get_system_config_dirs ();
+   for (i = 0; config_dirs[i] != NULL; i++)
++    ;
++  while (i-- > 0)
+     {
+       path = g_build_filename (config_dirs[i], "gtk-4.0", "settings.ini", NULL);
+       gtk_settings_load_from_key_file (settings, path, GTK_SETTINGS_SOURCE_DEFAULT);
+       g_free (path);
+     }
+
++  path = g_build_filename (_gtk_get_sysconfdir (), "gtk-4.0", "settings.ini", NULL);
++  gtk_settings_load_from_key_file (settings, path, GTK_SETTINGS_SOURCE_DEFAULT);
++  g_free (path);
++
+   path = g_build_filename (g_get_user_config_dir (), "gtk-4.0", "settings.ini", NULL);
+   gtk_settings_load_from_key_file (settings, path, GTK_SETTINGS_SOURCE_DEFAULT);
+   g_free (path);

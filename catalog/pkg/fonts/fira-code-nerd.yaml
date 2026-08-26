@@ -1,0 +1,74 @@
+package:
+  schema: 1
+  name: fira-code-nerd
+  slug: fira-code-nerd
+  namespace: fonts
+  version: 3.4.0
+  description: Fira Code font patched with Nerd Fonts icons
+  homepage: https://github.com/ryanoasis/nerd-fonts
+  checksum: e86015d4a9f21f9d9909ae7807c50659226ccd3ab7fc12e0da946a0698d011e2
+
+sources:
+- name: fonts
+  url: https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/FiraCode.tar.xz
+  sha256: d83fb093e0e05a531cd6f19886a6ceb884a4fa5ea3b53cf099fc1f30c5b3e47d
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [32:317]
+
+  script: |
+    mkdir -p ${WORK_DIR}/all
+    tar --no-same-owner -xf ${SOURCE_fonts} -C ${WORK_DIR}/all
+
+    mkdir -p ${OUT_DIR}/usr/share/fonts/TTF
+    find ${WORK_DIR}/all -name '*.ttf' ! -name '*Windows*' \
+      -exec cp {} ${OUT_DIR}/usr/share/fonts/TTF/ \;
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - fonts
+
+outputs:
+  fonts:
+    files:
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFont-Bold.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFont-Light.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFont-Medium.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFont-Regular.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFont-Retina.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFont-SemiBold.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFontMono-Bold.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFontMono-Light.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFontMono-Medium.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFontMono-Regular.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFontMono-Retina.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFontMono-SemiBold.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFontPropo-Bold.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFontPropo-Light.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFontPropo-Medium.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFontPropo-Regular.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFontPropo-Retina.ttf
+    - path: /usr/share/fonts/TTF/FiraCodeNerdFontPropo-SemiBold.ttf

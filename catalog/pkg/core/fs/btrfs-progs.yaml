@@ -1,0 +1,236 @@
+package:
+  schema: 1
+  name: Btrfs Progs
+  slug: btrfs-progs
+  namespace: core/fs
+  version: "6.10"
+  description: Userspace utilities for the btrfs filesystem
+  homepage: https://btrfs.wiki.kernel.org
+  checksum: f516c2ee97179ee4a8b1c85b49c627e6082d8a39de11ec7bba531b753045a201
+
+sources:
+- name: btrfs_progs
+  url: https://www.kernel.org/pub/linux/kernel/people/kdave/btrfs-progs/btrfs-progs-v6.10.tar.xz
+  sha256: 3382a84e3fcfe1ffdea07a61ab3f4e86665d38fa35f1f34548d5df867423e0df
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: util_linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: lzo
+  commit: x86_64/pkg/cli/archive/lzo/2.10/bundles/dev
+- name: e2fsprogs
+  commit: x86_64/pkg/core/fs/e2fsprogs/1.47.0/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4105:41977, 8222:69790, 11469:81326]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_btrfs_progs} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    # Configure
+    ./configure --prefix=/usr --disable-documentation --disable-python
+
+    # Build
+    make
+
+    # Install
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - static
+
+  full:
+  - bin
+  - dev
+  - lib
+  - static
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/btrfs
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/liblzo2.so.2
+      - /usr/lib/libudev.so.1
+      - /usr/lib/libuuid.so.1
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/btrfs-convert
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libudev.so.1
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/btrfs-find-root
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libudev.so.1
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/btrfs-image
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libudev.so.1
+      - /usr/lib/libuuid.so.1
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/btrfs-map-logical
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libudev.so.1
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/btrfs-select-super
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libudev.so.1
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/btrfsck
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/liblzo2.so.2
+      - /usr/lib/libudev.so.1
+      - /usr/lib/libuuid.so.1
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/btrfstune
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libudev.so.1
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/fsck.btrfs
+    - path: /usr/bin/mkfs.btrfs
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libudev.so.1
+      - /usr/lib/libuuid.so.1
+
+  dev:
+    files:
+    - path: /usr/include/btrfs/ctree.h
+    - path: /usr/include/btrfs/ioctl.h
+    - path: /usr/include/btrfs/kerncompat.h
+    - path: /usr/include/btrfs/list.h
+    - path: /usr/include/btrfs/rbtree.h
+    - path: /usr/include/btrfs/rbtree_types.h
+    - path: /usr/include/btrfs/send-stream.h
+    - path: /usr/include/btrfs/send-utils.h
+    - path: /usr/include/btrfs/send.h
+    - path: /usr/include/btrfs/version.h
+    - path: /usr/include/btrfsutil.h
+    - path: /usr/lib/pkgconfig/libbtrfsutil.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libbtrfs.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libbtrfs.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libbtrfs.so.0.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libbtrfs.so.0.1.3
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libbtrfsutil.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libbtrfsutil.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libbtrfsutil.so.1.3
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libbtrfsutil.so.1.3.2
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/udev/rules.d/64-btrfs-dm.rules
+    - path: /usr/lib/udev/rules.d/64-btrfs-zoned.rules
+
+  static:
+    files:
+    - path: /usr/lib/libbtrfs.a
+    - path: /usr/lib/libbtrfsutil.a
+
+resolution:
+  /usr/lib/libcom_err.so.2: e2fsprogs
+  /usr/lib/libext2fs.so.2: e2fsprogs
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/liblzo2.so.2: lzo
+  /usr/lib/libudev.so.1: systemd
+  /usr/lib/libblkid.so.1: util_linux
+  /usr/lib/libuuid.so.1: util_linux
+  /usr/lib/libz.so.1: zlib
+  /usr/lib/libzstd.so.1: zstd

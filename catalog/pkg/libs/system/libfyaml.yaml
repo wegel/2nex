@@ -1,0 +1,164 @@
+package:
+  schema: 1
+  name: libfyaml
+  slug: libfyaml
+  namespace: libs/system
+  version: "0.9"
+  description: Fully featured YAML 1.2 processor
+  homepage: https://github.com/pantoniou/libfyaml
+  checksum: 304ecd1377b123dbc6643e31235197d91d0a494a3ea44da9e59bbf814ee0f38d
+
+sources:
+- name: libfyaml
+  url: https://github.com/pantoniou/libfyaml/archive/refs/tags/v0.9.tar.gz
+  sha256: 927306fc85c7566904751766d36178650766b34e59ce56882eaa5b60f791668c
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: autoconf
+  commit: x86_64/pkg/core/toolchain/autoconf/2.72/bundles/dev
+- name: automake
+  commit: x86_64/pkg/core/toolchain/automake/1.16.5/bundles/dev
+- name: libtool
+  commit: x86_64/pkg/core/toolchain/libtool/2.4.7/bundles/full
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: m4
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4105:7871, 8231:11302, 12387:18435, 13759:24074]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_libfyaml} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./bootstrap.sh
+    ./configure \
+      --prefix=/usr \
+      --disable-static
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/fy-compose
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfyaml.so.0
+    - path: /usr/bin/fy-dump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfyaml.so.0
+    - path: /usr/bin/fy-filter
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfyaml.so.0
+    - path: /usr/bin/fy-join
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfyaml.so.0
+    - path: /usr/bin/fy-testsuite
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfyaml.so.0
+    - path: /usr/bin/fy-tool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfyaml.so.0
+    - path: /usr/bin/fy-ypath
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfyaml.so.0
+
+  dev:
+    files:
+    - path: /usr/include/libfyaml.h
+    - path: /usr/lib/libfyaml.la
+    - path: /usr/lib/pkgconfig/libfyaml.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libfyaml.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libfyaml.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libfyaml.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man1/fy-compose.1
+    - path: /usr/share/man/man1/fy-dump.1
+    - path: /usr/share/man/man1/fy-filter.1
+    - path: /usr/share/man/man1/fy-join.1
+    - path: /usr/share/man/man1/fy-testsuite.1
+    - path: /usr/share/man/man1/fy-tool.1
+    - path: /usr/share/man/man1/fy-ypath.1
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libfyaml.so.0: self

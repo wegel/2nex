@@ -1,0 +1,145 @@
+package:
+  schema: 1
+  name: Initramfs
+  slug: initramfs
+  namespace: core/kernel
+  version: 1.0.0
+  description: Minimal initramfs for early userspace boot
+  homepage: https://www.kernel.org/doc/html/latest/driver-api/early-userspace/
+  checksum: 06040b593caa0095eafba10846825e14758099883b3d1ad2610331ec882ec893
+
+sources:
+- name: init
+  file: pkg/core/kernel/initramfs-init.sh
+  sha256: e35a8694795ba39fab91d46dbb00729862321311e6c28406bce3a97d40c08c6e
+- name: populate_etc
+  file: pkg/core/kernel/initramfs-populate-etc.sh
+  sha256: dd2be8ab6f630585d8ff87edc5b0cf7a5ffea331b1493a064c0c3a36578d4015
+- name: gen_init_cpio
+  file: pkg/core/kernel/gen_init_cpio.c
+  sha256: 309cab96d2b43133a0758f165fbcf9cc1b671623555ef8dadd9983095c462345
+- name: gen_initramfs
+  file: pkg/core/kernel/gen_initramfs.sh
+  sha256: a3cf8ccffd72d8087904aece0cde4883c13912a6f4eb958c185fa9eda65bedf0
+
+dependencies:
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: busybox
+  commit: x86_64/pkg/core/embedded/busybox/1.36.1/outputs/bin
+- name: util_linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: cpio
+  commit: x86_64/pkg/cli/archive/cpio/2.15/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [1068:276]
+
+  script: |
+    set -eu
+
+    INITRAMFS="${WORK_DIR}/initramfs"
+    mkdir -p "${INITRAMFS}"/{bin,sbin,etc,proc,sys,dev,mnt/root,run,tmp,lib64,usr}
+
+    # build gen_init_cpio from kernel tools
+    mkdir -p "${WORK_DIR}/usr"
+    cp "/${SOURCE_gen_initramfs}" "${WORK_DIR}/usr/gen_initramfs.sh"
+    chmod +x "${WORK_DIR}/usr/gen_initramfs.sh"
+    gcc -O2 -Wall -Wextra -o "${WORK_DIR}/usr/gen_init_cpio" "/${SOURCE_gen_init_cpio}"
+
+    # lib symlinks for dynamic linker
+    ln -s lib64 "${INITRAMFS}/lib"
+    ln -s ../lib64 "${INITRAMFS}/usr/lib"
+
+    # copy binaries
+    cp /usr/bin/busybox "${INITRAMFS}/bin/busybox"
+    cp /usr/bin/blkid "${INITRAMFS}/sbin/blkid"
+
+    # copy required libraries (explicit list for determinism)
+    # busybox needs: ld-linux, libc, libm, libresolv
+    # blkid needs: ld-linux, libc, libblkid
+    cp /usr/lib/ld-linux-x86-64.so.2 "${INITRAMFS}/lib64/"
+    cp /usr/lib/libc.so.6 "${INITRAMFS}/lib64/"
+    cp /usr/lib/libm.so.6 "${INITRAMFS}/lib64/"
+    cp /usr/lib/libresolv.so.2 "${INITRAMFS}/lib64/"
+    cp /usr/lib/libblkid.so.1 "${INITRAMFS}/lib64/"
+
+    # create essential busybox symlinks
+    for cmd in ash sh cat chmod cp cut dd df echo grep kill ln ls mkdir mknod mount \
+               mv ps pwd rm rmdir sed sleep sync tar touch tr umount \
+               basename dirname readlink sha256sum; do
+        ln -sf busybox "${INITRAMFS}/bin/$cmd"
+    done
+    for cmd in init switch_root pivot_root findfs; do
+        ln -sf ../bin/busybox "${INITRAMFS}/sbin/$cmd"
+    done
+
+    # copy init script
+    cp "/${SOURCE_init}" "${INITRAMFS}/init"
+    chmod +x "${INITRAMFS}/init"
+    cp "/${SOURCE_populate_etc}" "${INITRAMFS}/bin/nex-populate-etc"
+    chmod +x "${INITRAMFS}/bin/nex-populate-etc"
+
+    # minimal etc files
+    echo "root:x:0:0:root:/root:/bin/sh" > "${INITRAMFS}/etc/passwd"
+    echo "root:x:0:" > "${INITRAMFS}/etc/group"
+
+    # set permissions first
+    chmod -R u=rwX,go=rX "${INITRAMFS}"
+    chmod +x \
+      "${INITRAMFS}/bin/busybox" \
+      "${INITRAMFS}/bin/nex-populate-etc" \
+      "${INITRAMFS}/sbin/blkid" \
+      "${INITRAMFS}/init"
+
+    # touch LAST to normalize all timestamps (including symlinks with -h)
+    find "${INITRAMFS}" -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;
+
+    # device nodes for early console access
+    DEVNODES_LIST="${WORK_DIR}/devnodes.list"
+    printf '%s\n' \
+      'nod /dev/console 600 0 0 c 5 1' \
+      'nod /dev/null 666 0 0 c 1 3' \
+      > "${DEVNODES_LIST}"
+
+    # create deterministic cpio archive (newc format for kernel)
+    mkdir -p "${OUT_DIR}/boot"
+    (cd "${WORK_DIR}" && ./usr/gen_initramfs.sh -o "${OUT_DIR}/boot/initramfs.cpio" -d "2024-01-01T00:00:00+00:00" -u squash -g squash "${DEVNODES_LIST}" "${INITRAMFS}")
+
+    touch -d "2024-01-01T00:00:00+00:00" "${OUT_DIR}/boot/initramfs.cpio"
+
+bundles:
+  full:
+  - boot
+
+outputs:
+  boot:
+    files:
+    - path: /boot/initramfs.cpio

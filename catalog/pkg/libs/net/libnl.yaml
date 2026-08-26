@@ -1,0 +1,780 @@
+package:
+  schema: 1
+  name: libnl
+  slug: libnl
+  namespace: libs/net
+  version: 3.11.0
+  description: Library for applications dealing with netlink sockets
+  homepage: https://github.com/thom311/libnl
+  checksum: 8f4f682f99ed34326397ea95a798e672bc3b7b97ba1005850d86c8cf8926b7ec
+
+sources:
+- name: libnl
+  url: https://github.com/thom311/libnl/releases/download/libnl3_11_0/libnl-3.11.0.tar.gz
+  sha256: 2a56e1edefa3e68a7c00879496736fdbf62fc94ed3232c0baba127ecfa76874d
+- name: databases_config
+  file: pkg/libs/net/libnl-uapi-databases.patch
+  sha256: 2a520e037b0fb0a9fe064a18981ab051024f4990e4d47af40261850b0c10a5ca
+- name: databases_smoke
+  file: pkg/libs/net/libnl-databases-smoke.c
+  sha256: 8d313f73538c0ac4eed0444a31a142007841d2dd49eb1e1f5398156727b8cea4
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: bison
+  commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
+- name: flex
+  commit: x86_64/pkg/core/toolchain/flex/2.6.4/bundles/dev
+- name: m4
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4104:871, 12413:2214, 20671:2216, 33084:2594, 41696:5815, 54451:7188, 62844:8722, 79393:9343, 96017:9970, 103311:10445]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_libnl}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_databases_config}"
+
+    ./configure --prefix=/usr --sysconfdir=/etc --disable-static
+
+    make
+
+    make DESTDIR="${OUT_DIR}" install
+
+    mkdir -p "${OUT_DIR}/usr/lib/libnl"
+    mv "${OUT_DIR}/etc/libnl/classid" "${OUT_DIR}/usr/lib/libnl/classid"
+    mv "${OUT_DIR}/etc/libnl/pktloc" "${OUT_DIR}/usr/lib/libnl/pktloc"
+    rmdir "${OUT_DIR}/etc/libnl" "${OUT_DIR}/etc"
+
+    if [ -e /etc/libnl ] || [ -e /run/libnl ] || [ -e /usr/lib/libnl ]; then
+      echo 'libnl smoke-test paths already exist' >&2
+      exit 1
+    fi
+    mkdir -p /etc /run /usr/lib/libnl
+    cp "${OUT_DIR}/usr/lib/libnl/classid" /usr/lib/libnl/classid
+    cp "${OUT_DIR}/usr/lib/libnl/pktloc" /usr/lib/libnl/pktloc
+    printf '\n1:1 vendor-class\n' >> /usr/lib/libnl/classid
+    touch -d "2024-01-01T00:00:00+00:00" \
+      /usr/lib/libnl/classid /usr/lib/libnl/pktloc
+
+    databases_smoke="${WORK_DIR}/libnl-databases-smoke"
+    gcc \
+      -I"${OUT_DIR}/usr/include/libnl3" \
+      -L"${OUT_DIR}/usr/lib" \
+      "/${SOURCE_databases_smoke}" \
+      -lnl-route-3 -lnl-3 \
+      -o "${databases_smoke}"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${databases_smoke}" "${WORK_DIR}/libnl-explicit"
+
+    rm /usr/lib/libnl/classid /usr/lib/libnl/pktloc
+    rmdir /usr/lib/libnl
+    rmdir /etc /run 2>/dev/null || true
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - conf
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/genl-ctrl-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-genl-3.so.200
+    - path: /usr/bin/idiag-socket-details
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-idiag-3.so.200
+    - path: /usr/bin/nf-ct-add
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-nf-3.so.200
+    - path: /usr/bin/nf-ct-events
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+    - path: /usr/bin/nf-ct-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-nf-3.so.200
+    - path: /usr/bin/nf-exp-add
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-nf-3.so.200
+    - path: /usr/bin/nf-exp-delete
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-nf-3.so.200
+    - path: /usr/bin/nf-exp-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-nf-3.so.200
+    - path: /usr/bin/nf-log
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-nf-3.so.200
+    - path: /usr/bin/nf-monitor
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+    - path: /usr/bin/nf-queue
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-nf-3.so.200
+    - path: /usr/bin/nl-addr-add
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-addr-delete
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-addr-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-class-add
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-class-delete
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-class-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-classid-lookup
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-cls-add
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-cls-delete
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-cls-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-fib-lookup
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-link-enslave
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-link-ifindex2name
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-link-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-link-name2ifindex
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-link-release
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-link-set
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-link-stats
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-list-caches
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+    - path: /usr/bin/nl-list-sockets
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+    - path: /usr/bin/nl-monitor
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+    - path: /usr/bin/nl-neigh-add
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-neigh-delete
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-neigh-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-neightbl-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-nh-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+    - path: /usr/bin/nl-pktloc-lookup
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-qdisc-add
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-qdisc-delete
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-qdisc-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-route-add
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-route-delete
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-route-get
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+    - path: /usr/bin/nl-route-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+    - path: /usr/bin/nl-rule-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+    - path: /usr/bin/nl-tctree-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/bin/nl-util-addr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-cli-3.so.200
+
+  conf:
+    files:
+    - path: /usr/lib/libnl/classid
+    - path: /usr/lib/libnl/pktloc
+
+  dev:
+    files:
+    - path: /usr/include/libnl3/netlink/addr.h
+    - path: /usr/include/libnl3/netlink/attr.h
+    - path: /usr/include/libnl3/netlink/cache-api.h
+    - path: /usr/include/libnl3/netlink/cache.h
+    - path: /usr/include/libnl3/netlink/cli/addr.h
+    - path: /usr/include/libnl3/netlink/cli/class.h
+    - path: /usr/include/libnl3/netlink/cli/cls.h
+    - path: /usr/include/libnl3/netlink/cli/ct.h
+    - path: /usr/include/libnl3/netlink/cli/exp.h
+    - path: /usr/include/libnl3/netlink/cli/link.h
+    - path: /usr/include/libnl3/netlink/cli/mdb.h
+    - path: /usr/include/libnl3/netlink/cli/neigh.h
+    - path: /usr/include/libnl3/netlink/cli/nh.h
+    - path: /usr/include/libnl3/netlink/cli/qdisc.h
+    - path: /usr/include/libnl3/netlink/cli/route.h
+    - path: /usr/include/libnl3/netlink/cli/rule.h
+    - path: /usr/include/libnl3/netlink/cli/tc.h
+    - path: /usr/include/libnl3/netlink/cli/utils.h
+    - path: /usr/include/libnl3/netlink/data.h
+    - path: /usr/include/libnl3/netlink/errno.h
+    - path: /usr/include/libnl3/netlink/fib_lookup/lookup.h
+    - path: /usr/include/libnl3/netlink/fib_lookup/request.h
+    - path: /usr/include/libnl3/netlink/genl/ctrl.h
+    - path: /usr/include/libnl3/netlink/genl/family.h
+    - path: /usr/include/libnl3/netlink/genl/genl.h
+    - path: /usr/include/libnl3/netlink/genl/mngt.h
+    - path: /usr/include/libnl3/netlink/handlers.h
+    - path: /usr/include/libnl3/netlink/hash.h
+    - path: /usr/include/libnl3/netlink/hashtable.h
+    - path: /usr/include/libnl3/netlink/idiag/idiagnl.h
+    - path: /usr/include/libnl3/netlink/idiag/meminfo.h
+    - path: /usr/include/libnl3/netlink/idiag/msg.h
+    - path: /usr/include/libnl3/netlink/idiag/req.h
+    - path: /usr/include/libnl3/netlink/idiag/vegasinfo.h
+    - path: /usr/include/libnl3/netlink/list.h
+    - path: /usr/include/libnl3/netlink/msg.h
+    - path: /usr/include/libnl3/netlink/netfilter/ct.h
+    - path: /usr/include/libnl3/netlink/netfilter/exp.h
+    - path: /usr/include/libnl3/netlink/netfilter/log.h
+    - path: /usr/include/libnl3/netlink/netfilter/log_msg.h
+    - path: /usr/include/libnl3/netlink/netfilter/netfilter.h
+    - path: /usr/include/libnl3/netlink/netfilter/nfnl.h
+    - path: /usr/include/libnl3/netlink/netfilter/queue.h
+    - path: /usr/include/libnl3/netlink/netfilter/queue_msg.h
+    - path: /usr/include/libnl3/netlink/netlink-compat.h
+    - path: /usr/include/libnl3/netlink/netlink-kernel.h
+    - path: /usr/include/libnl3/netlink/netlink.h
+    - path: /usr/include/libnl3/netlink/object-api.h
+    - path: /usr/include/libnl3/netlink/object.h
+    - path: /usr/include/libnl3/netlink/route/act/gact.h
+    - path: /usr/include/libnl3/netlink/route/act/mirred.h
+    - path: /usr/include/libnl3/netlink/route/act/nat.h
+    - path: /usr/include/libnl3/netlink/route/act/skbedit.h
+    - path: /usr/include/libnl3/netlink/route/act/vlan.h
+    - path: /usr/include/libnl3/netlink/route/action.h
+    - path: /usr/include/libnl3/netlink/route/addr.h
+    - path: /usr/include/libnl3/netlink/route/class.h
+    - path: /usr/include/libnl3/netlink/route/classifier.h
+    - path: /usr/include/libnl3/netlink/route/cls/basic.h
+    - path: /usr/include/libnl3/netlink/route/cls/cgroup.h
+    - path: /usr/include/libnl3/netlink/route/cls/ematch.h
+    - path: /usr/include/libnl3/netlink/route/cls/ematch/cmp.h
+    - path: /usr/include/libnl3/netlink/route/cls/ematch/meta.h
+    - path: /usr/include/libnl3/netlink/route/cls/ematch/nbyte.h
+    - path: /usr/include/libnl3/netlink/route/cls/ematch/text.h
+    - path: /usr/include/libnl3/netlink/route/cls/flower.h
+    - path: /usr/include/libnl3/netlink/route/cls/fw.h
+    - path: /usr/include/libnl3/netlink/route/cls/matchall.h
+    - path: /usr/include/libnl3/netlink/route/cls/police.h
+    - path: /usr/include/libnl3/netlink/route/cls/u32.h
+    - path: /usr/include/libnl3/netlink/route/link.h
+    - path: /usr/include/libnl3/netlink/route/link/api.h
+    - path: /usr/include/libnl3/netlink/route/link/bonding.h
+    - path: /usr/include/libnl3/netlink/route/link/bridge.h
+    - path: /usr/include/libnl3/netlink/route/link/bridge_info.h
+    - path: /usr/include/libnl3/netlink/route/link/can.h
+    - path: /usr/include/libnl3/netlink/route/link/geneve.h
+    - path: /usr/include/libnl3/netlink/route/link/inet.h
+    - path: /usr/include/libnl3/netlink/route/link/inet6.h
+    - path: /usr/include/libnl3/netlink/route/link/info-api.h
+    - path: /usr/include/libnl3/netlink/route/link/ip6tnl.h
+    - path: /usr/include/libnl3/netlink/route/link/ip6gre.h
+    - path: /usr/include/libnl3/netlink/route/link/ip6vti.h
+    - path: /usr/include/libnl3/netlink/route/link/ipgre.h
+    - path: /usr/include/libnl3/netlink/route/link/ipip.h
+    - path: /usr/include/libnl3/netlink/route/link/ipvlan.h
+    - path: /usr/include/libnl3/netlink/route/link/ipvti.h
+    - path: /usr/include/libnl3/netlink/route/link/macsec.h
+    - path: /usr/include/libnl3/netlink/route/link/macvlan.h
+    - path: /usr/include/libnl3/netlink/route/link/macvtap.h
+    - path: /usr/include/libnl3/netlink/route/link/ppp.h
+    - path: /usr/include/libnl3/netlink/route/link/sit.h
+    - path: /usr/include/libnl3/netlink/route/link/sriov.h
+    - path: /usr/include/libnl3/netlink/route/link/team.h
+    - path: /usr/include/libnl3/netlink/route/link/veth.h
+    - path: /usr/include/libnl3/netlink/route/link/vlan.h
+    - path: /usr/include/libnl3/netlink/route/link/vrf.h
+    - path: /usr/include/libnl3/netlink/route/link/vxlan.h
+    - path: /usr/include/libnl3/netlink/route/link/xfrmi.h
+    - path: /usr/include/libnl3/netlink/route/mdb.h
+    - path: /usr/include/libnl3/netlink/route/neighbour.h
+    - path: /usr/include/libnl3/netlink/route/neightbl.h
+    - path: /usr/include/libnl3/netlink/route/netconf.h
+    - path: /usr/include/libnl3/netlink/route/nexthop.h
+    - path: /usr/include/libnl3/netlink/route/nh.h
+    - path: /usr/include/libnl3/netlink/route/pktloc.h
+    - path: /usr/include/libnl3/netlink/route/qdisc.h
+    - path: /usr/include/libnl3/netlink/route/qdisc/cbq.h
+    - path: /usr/include/libnl3/netlink/route/qdisc/dsmark.h
+    - path: /usr/include/libnl3/netlink/route/qdisc/fifo.h
+    - path: /usr/include/libnl3/netlink/route/qdisc/fq_codel.h
+    - path: /usr/include/libnl3/netlink/route/qdisc/hfsc.h
+    - path: /usr/include/libnl3/netlink/route/qdisc/htb.h
+    - path: /usr/include/libnl3/netlink/route/qdisc/mqprio.h
+    - path: /usr/include/libnl3/netlink/route/qdisc/netem.h
+    - path: /usr/include/libnl3/netlink/route/qdisc/plug.h
+    - path: /usr/include/libnl3/netlink/route/qdisc/prio.h
+    - path: /usr/include/libnl3/netlink/route/qdisc/red.h
+    - path: /usr/include/libnl3/netlink/route/qdisc/sfq.h
+    - path: /usr/include/libnl3/netlink/route/qdisc/tbf.h
+    - path: /usr/include/libnl3/netlink/route/route.h
+    - path: /usr/include/libnl3/netlink/route/rtnl.h
+    - path: /usr/include/libnl3/netlink/route/rule.h
+    - path: /usr/include/libnl3/netlink/route/tc-api.h
+    - path: /usr/include/libnl3/netlink/route/tc.h
+    - path: /usr/include/libnl3/netlink/socket.h
+    - path: /usr/include/libnl3/netlink/types.h
+    - path: /usr/include/libnl3/netlink/utils.h
+    - path: /usr/include/libnl3/netlink/version.h
+    - path: /usr/include/libnl3/netlink/xfrm/ae.h
+    - path: /usr/include/libnl3/netlink/xfrm/lifetime.h
+    - path: /usr/include/libnl3/netlink/xfrm/sa.h
+    - path: /usr/include/libnl3/netlink/xfrm/selector.h
+    - path: /usr/include/libnl3/netlink/xfrm/sp.h
+    - path: /usr/include/libnl3/netlink/xfrm/template.h
+    - path: /usr/lib/libnl-3.la
+    - path: /usr/lib/libnl-cli-3.la
+    - path: /usr/lib/libnl-genl-3.la
+    - path: /usr/lib/libnl-idiag-3.la
+    - path: /usr/lib/libnl-nf-3.la
+    - path: /usr/lib/libnl-route-3.la
+    - path: /usr/lib/libnl-xfrm-3.la
+    - path: /usr/lib/libnl/cli/cls/basic.la
+    - path: /usr/lib/libnl/cli/cls/cgroup.la
+    - path: /usr/lib/libnl/cli/qdisc/bfifo.la
+    - path: /usr/lib/libnl/cli/qdisc/blackhole.la
+    - path: /usr/lib/libnl/cli/qdisc/fq_codel.la
+    - path: /usr/lib/libnl/cli/qdisc/hfsc.la
+    - path: /usr/lib/libnl/cli/qdisc/htb.la
+    - path: /usr/lib/libnl/cli/qdisc/ingress.la
+    - path: /usr/lib/libnl/cli/qdisc/pfifo.la
+    - path: /usr/lib/libnl/cli/qdisc/plug.la
+    - path: /usr/lib/pkgconfig/libnl-3.0.pc
+    - path: /usr/lib/pkgconfig/libnl-cli-3.0.pc
+    - path: /usr/lib/pkgconfig/libnl-genl-3.0.pc
+    - path: /usr/lib/pkgconfig/libnl-idiag-3.0.pc
+    - path: /usr/lib/pkgconfig/libnl-nf-3.0.pc
+    - path: /usr/lib/pkgconfig/libnl-route-3.0.pc
+    - path: /usr/lib/pkgconfig/libnl-xfrm-3.0.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libnl-3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libnl-3.so.200
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libnl-3.so.200.26.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libnl-cli-3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-genl-3.so.200
+      - /usr/lib/libnl-nf-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/lib/libnl-cli-3.so.200
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-genl-3.so.200
+      - /usr/lib/libnl-nf-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/lib/libnl-cli-3.so.200.26.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-genl-3.so.200
+      - /usr/lib/libnl-nf-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/lib/libnl-genl-3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libnl-3.so.200
+    - path: /usr/lib/libnl-genl-3.so.200
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libnl-3.so.200
+    - path: /usr/lib/libnl-genl-3.so.200.26.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libnl-3.so.200
+    - path: /usr/lib/libnl-idiag-3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+    - path: /usr/lib/libnl-idiag-3.so.200
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+    - path: /usr/lib/libnl-idiag-3.so.200.26.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+    - path: /usr/lib/libnl-nf-3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/lib/libnl-nf-3.so.200
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/lib/libnl-nf-3.so.200.26.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libnl-route-3.so.200
+    - path: /usr/lib/libnl-route-3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libnl-3.so.200
+    - path: /usr/lib/libnl-route-3.so.200
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libnl-3.so.200
+    - path: /usr/lib/libnl-route-3.so.200.26.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libnl-3.so.200
+    - path: /usr/lib/libnl-xfrm-3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libnl-3.so.200
+    - path: /usr/lib/libnl-xfrm-3.so.200
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libnl-3.so.200
+    - path: /usr/lib/libnl-xfrm-3.so.200.26.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libnl-3.so.200
+    - path: /usr/lib/libnl/cli/cls/basic.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnl/cli/cls/cgroup.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnl/cli/qdisc/bfifo.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnl/cli/qdisc/blackhole.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnl/cli/qdisc/fq_codel.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnl/cli/qdisc/hfsc.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnl/cli/qdisc/htb.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnl/cli/qdisc/ingress.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnl/cli/qdisc/pfifo.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libnl/cli/qdisc/plug.so
+      needs:
+      - /usr/lib/libc.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man8/genl-ctrl-list.8
+    - path: /usr/share/man/man8/nl-classid-lookup.8
+    - path: /usr/share/man/man8/nl-pktloc-lookup.8
+    - path: /usr/share/man/man8/nl-qdisc-add.8
+    - path: /usr/share/man/man8/nl-qdisc-delete.8
+    - path: /usr/share/man/man8/nl-qdisc-list.8
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libnl-3.so.200: self
+  /usr/lib/libnl-cli-3.so.200: self
+  /usr/lib/libnl-genl-3.so.200: self
+  /usr/lib/libnl-idiag-3.so.200: self
+  /usr/lib/libnl-nf-3.so.200: self
+  /usr/lib/libnl-route-3.so.200: self

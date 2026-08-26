@@ -1,0 +1,190 @@
+package:
+  schema: 1
+  name: Check
+  slug: check
+  namespace: dev/util
+  version: 0.15.2
+  description: A unit testing framework for C.
+  homepage: https://libcheck.github.io/check
+  checksum: d5aaa61baff132a3cbd2174b93d2d6e56f4f50887aa9792e8c858d86bdd15845
+
+sources:
+- name: check
+  url: https://github.com/libcheck/check/releases/download/0.15.2/check-0.15.2.tar.gz
+  sha256: a8de4e0bacfb4d76dd1c618ded263523b53b85d92a146d8835eb1a52932fa20a
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: texinfo
+  commit: x86_64/pkg/cli/text/texinfo/7.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4125:1057, 8240:2704, 17244:4138, 30624:4593, 40020:4594, 49426:4603, 57692:4665, 70212:4692, 87598:5393, 93319:5528]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --disable-static
+    make
+    make DESTDIR=$OUT_DIR install
+    make docdir=${OUT_DIR}/usr/share/doc/check-0.15.2 install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - misc
+
+  full:
+  - bin
+  - dev
+  - doc
+  - info
+  - lib
+  - man
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/checkmk
+
+  dev:
+    files:
+    - path: /usr/include/check.h
+    - path: /usr/include/check_stdint.h
+    - path: /usr/lib/libcheck.la
+    - path: /usr/lib/pkgconfig/check.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/check-0.15.2/COPYING.LESSER
+    - path: /usr/share/doc/check-0.15.2/ChangeLog
+    - path: /usr/share/doc/check-0.15.2/NEWS
+    - path: /usr/share/doc/check-0.15.2/README
+    - path: /usr/share/doc/check-0.15.2/example/Makefile.am
+    - path: /usr/share/doc/check-0.15.2/example/README
+    - path: /usr/share/doc/check-0.15.2/example/configure.ac
+    - path: /usr/share/doc/check-0.15.2/example/src/Makefile.am
+    - path: /usr/share/doc/check-0.15.2/example/src/main.c
+    - path: /usr/share/doc/check-0.15.2/example/src/money.1.c
+    - path: /usr/share/doc/check-0.15.2/example/src/money.1.h
+    - path: /usr/share/doc/check-0.15.2/example/src/money.2.h
+    - path: /usr/share/doc/check-0.15.2/example/src/money.3.c
+    - path: /usr/share/doc/check-0.15.2/example/src/money.4.c
+    - path: /usr/share/doc/check-0.15.2/example/src/money.5.c
+    - path: /usr/share/doc/check-0.15.2/example/src/money.6.c
+    - path: /usr/share/doc/check-0.15.2/example/src/money.c
+    - path: /usr/share/doc/check-0.15.2/example/src/money.h
+    - path: /usr/share/doc/check-0.15.2/example/tests/Makefile.am
+    - path: /usr/share/doc/check-0.15.2/example/tests/check_money.1.c
+    - path: /usr/share/doc/check-0.15.2/example/tests/check_money.2.c
+    - path: /usr/share/doc/check-0.15.2/example/tests/check_money.3.c
+    - path: /usr/share/doc/check-0.15.2/example/tests/check_money.6.c
+    - path: /usr/share/doc/check-0.15.2/example/tests/check_money.7.c
+    - path: /usr/share/doc/check-0.15.2/example/tests/check_money.c
+    - path: /usr/share/doc/check/COPYING.LESSER
+    - path: /usr/share/doc/check/ChangeLog
+    - path: /usr/share/doc/check/NEWS
+    - path: /usr/share/doc/check/README
+    - path: /usr/share/doc/check/example/Makefile.am
+    - path: /usr/share/doc/check/example/README
+    - path: /usr/share/doc/check/example/configure.ac
+    - path: /usr/share/doc/check/example/src/Makefile.am
+    - path: /usr/share/doc/check/example/src/main.c
+    - path: /usr/share/doc/check/example/src/money.1.c
+    - path: /usr/share/doc/check/example/src/money.1.h
+    - path: /usr/share/doc/check/example/src/money.2.h
+    - path: /usr/share/doc/check/example/src/money.3.c
+    - path: /usr/share/doc/check/example/src/money.4.c
+    - path: /usr/share/doc/check/example/src/money.5.c
+    - path: /usr/share/doc/check/example/src/money.6.c
+    - path: /usr/share/doc/check/example/src/money.c
+    - path: /usr/share/doc/check/example/src/money.h
+    - path: /usr/share/doc/check/example/tests/Makefile.am
+    - path: /usr/share/doc/check/example/tests/check_money.1.c
+    - path: /usr/share/doc/check/example/tests/check_money.2.c
+    - path: /usr/share/doc/check/example/tests/check_money.3.c
+    - path: /usr/share/doc/check/example/tests/check_money.6.c
+    - path: /usr/share/doc/check/example/tests/check_money.7.c
+    - path: /usr/share/doc/check/example/tests/check_money.c
+
+  info:
+    files:
+    - path: /usr/share/info/check.info
+    - path: /usr/share/info/dir
+
+  lib:
+    files:
+    - path: /usr/lib/libcheck.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libcheck.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libcheck.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man1/checkmk.1
+
+  misc:
+    files:
+    - path: /usr/share/aclocal/check.m4
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc

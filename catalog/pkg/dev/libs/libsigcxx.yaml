@@ -1,0 +1,150 @@
+package:
+  schema: 1
+  name: libsigc++
+  slug: libsigcxx
+  namespace: dev/libs
+  version: 3.6.0
+  description: Type-safe callback framework for C++
+  homepage: https://libsigcplusplus.github.io/libsigcplusplus/
+  checksum: 0fefc45c0cda93a4159b2fbadd83a9ee3c6abce80946a8c26bf1e232f89c4382
+
+sources:
+- name: libsigcxx
+  url: https://download.gnome.org/sources/libsigc++/3.6/libsigc++-3.6.0.tar.xz
+  sha256: c3d23b37dfd6e39f2e09f091b77b1541fbfa17c4f0b6bf5c89baef7229080e17
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4122:7796, 7176:9288]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --buildtype=release \
+      -Dmaintainer-mode=false \
+      -Dbuild-documentation=false \
+      -Dbuild-examples=false \
+      -Dbuild-tests=false \
+      -Dbenchmark=false
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/sigc++-3.0/sigc++/adaptors/adaptor_base.h
+    - path: /usr/include/sigc++-3.0/sigc++/adaptors/adaptor_trait.h
+    - path: /usr/include/sigc++-3.0/sigc++/adaptors/adaptors.h
+    - path: /usr/include/sigc++-3.0/sigc++/adaptors/adapts.h
+    - path: /usr/include/sigc++-3.0/sigc++/adaptors/bind.h
+    - path: /usr/include/sigc++-3.0/sigc++/adaptors/bind_return.h
+    - path: /usr/include/sigc++-3.0/sigc++/adaptors/bound_argument.h
+    - path: /usr/include/sigc++-3.0/sigc++/adaptors/compose.h
+    - path: /usr/include/sigc++-3.0/sigc++/adaptors/exception_catch.h
+    - path: /usr/include/sigc++-3.0/sigc++/adaptors/hide.h
+    - path: /usr/include/sigc++-3.0/sigc++/adaptors/retype.h
+    - path: /usr/include/sigc++-3.0/sigc++/adaptors/retype_return.h
+    - path: /usr/include/sigc++-3.0/sigc++/adaptors/track_obj.h
+    - path: /usr/include/sigc++-3.0/sigc++/adaptors/tuple_visitor_visit_each.h
+    - path: /usr/include/sigc++-3.0/sigc++/bind.h
+    - path: /usr/include/sigc++-3.0/sigc++/bind_return.h
+    - path: /usr/include/sigc++-3.0/sigc++/connection.h
+    - path: /usr/include/sigc++-3.0/sigc++/functors/functor_trait.h
+    - path: /usr/include/sigc++-3.0/sigc++/functors/functors.h
+    - path: /usr/include/sigc++-3.0/sigc++/functors/mem_fun.h
+    - path: /usr/include/sigc++-3.0/sigc++/functors/ptr_fun.h
+    - path: /usr/include/sigc++-3.0/sigc++/functors/slot.h
+    - path: /usr/include/sigc++-3.0/sigc++/functors/slot_base.h
+    - path: /usr/include/sigc++-3.0/sigc++/limit_reference.h
+    - path: /usr/include/sigc++-3.0/sigc++/member_method_trait.h
+    - path: /usr/include/sigc++-3.0/sigc++/reference_wrapper.h
+    - path: /usr/include/sigc++-3.0/sigc++/retype_return.h
+    - path: /usr/include/sigc++-3.0/sigc++/scoped_connection.h
+    - path: /usr/include/sigc++-3.0/sigc++/sigc++.h
+    - path: /usr/include/sigc++-3.0/sigc++/signal.h
+    - path: /usr/include/sigc++-3.0/sigc++/signal_base.h
+    - path: /usr/include/sigc++-3.0/sigc++/slot.h
+    - path: /usr/include/sigc++-3.0/sigc++/trackable.h
+    - path: /usr/include/sigc++-3.0/sigc++/tuple-utils/tuple_cdr.h
+    - path: /usr/include/sigc++-3.0/sigc++/tuple-utils/tuple_end.h
+    - path: /usr/include/sigc++-3.0/sigc++/tuple-utils/tuple_for_each.h
+    - path: /usr/include/sigc++-3.0/sigc++/tuple-utils/tuple_start.h
+    - path: /usr/include/sigc++-3.0/sigc++/tuple-utils/tuple_transform_each.h
+    - path: /usr/include/sigc++-3.0/sigc++/type_traits.h
+    - path: /usr/include/sigc++-3.0/sigc++/visit_each.h
+    - path: /usr/include/sigc++-3.0/sigc++/weak_raw_ptr.h
+    - path: /usr/lib/pkgconfig/sigc++-3.0.pc
+    - path: /usr/lib/sigc++-3.0/include/sigc++config.h
+
+  lib:
+    files:
+    - path: /usr/lib/libsigc-3.0.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libsigc-3.0.so.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libsigc-3.0.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

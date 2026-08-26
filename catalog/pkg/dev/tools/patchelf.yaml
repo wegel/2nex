@@ -1,0 +1,104 @@
+package:
+  schema: 1
+  name: patchelf
+  slug: patchelf
+  namespace: dev/tools
+  version: 0.18.0
+  description: utility to modify the dynamic linker and RPATH of ELF executables
+  homepage: https://github.com/NixOS/patchelf
+  checksum: 52d99fde5c44e400f4fcf8df1c7c8d98afa7feba8252f0bcbbae4d93b19d9dd5
+
+sources:
+- name: patchelf
+  url: https://github.com/NixOS/patchelf/releases/download/0.18.0/patchelf-0.18.0.tar.gz
+  sha256: 64de10e4c6b8b8379db7e87f58030f336ea747c0515f381132e810dbf84a86e7
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4107:3891, 4425:3906]
+
+  script: |
+    tar --no-same-owner -xzf /${SOURCE_patchelf} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    # patchelf is C++, needs libstdc++
+    export LDFLAGS="${LDFLAGS} -lstdc++"
+
+    ./configure --prefix=/usr
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/patchelf
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+
+  doc:
+    files:
+    - path: /usr/share/doc/patchelf/README.md
+
+  man:
+    files:
+    - path: /usr/share/man/man1/patchelf.1
+
+  misc:
+    files:
+    - path: /usr/share/zsh/site-functions/_patchelf
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

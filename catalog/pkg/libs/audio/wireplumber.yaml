@@ -1,0 +1,581 @@
+package:
+  schema: 1
+  name: wireplumber
+  slug: wireplumber
+  namespace: libs/audio
+  version: 0.5.12
+  description: Session manager for PipeWire
+  homepage: https://pipewire.pages.freedesktop.org/wireplumber/
+  checksum: 3f149b178bcb364575441bf2cb7377303f121d313f732b04269dc35a1b3fa28c
+
+sources:
+- name: wireplumber
+  url: https://gitlab.freedesktop.org/pipewire/wireplumber/-/archive/0.5.12/wireplumber-0.5.12.tar.gz
+  sha256: 0ce5cd48087bc5b559d7e1a947e9e0adb2a9b6f1dabd984af801f30fbba5e19c
+- name: lua
+  url: https://www.lua.org/ftp/lua-5.4.4.tar.gz
+  sha256: 164c7849653b80ae67bec4b7473b884bf5cc8d2dca05653475ec2ed27b9ebf61
+- name: lua-wrap
+  url: https://wrapdb.mesonbuild.com/v2/lua_5.4.4-1/get_patch
+  sha256: e61cd965c629d6543176f41a9f1cb9050edfd1566cf00ce768ff211086e40bdc
+- name: uapi_config
+  file: pkg/libs/audio/wireplumber-uapi-config.patch
+  sha256: fa72d510dfb5028465a38de235704751dfbb63c54915bc0b6d48f87126f64e20
+- name: uapi_smoke
+  file: pkg/libs/audio/wireplumber-uapi-smoke.c
+  sha256: f5b41cd1648d75cd97c24e8d8f3397ea6e0cd0ac591cac9fa83541b76ac10893
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: pipewire
+  commit: x86_64/pkg/libs/audio/pipewire/1.4.9/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4119:887, 8239:1126, 12403:2034, 16533:2688, 20653:12060, 24788:12061, 28900:12075, 33047:12075, 34199:12446]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xzf /${SOURCE_wireplumber} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    # provide lua source and meson wrap patch for subproject (no network in build)
+    mkdir -p subprojects/packagecache
+    cp /${SOURCE_lua} subprojects/packagecache/lua-5.4.4.tar.gz
+    cp /${SOURCE_lua_wrap} subprojects/packagecache/lua_5.4.4-1_patch.zip
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    meson setup build \
+      --prefix=/usr \
+      --sysconfdir=/etc \
+      --buildtype=release \
+      -Dsystem-lua=false \
+      -Ddoc=disabled \
+      -Dintrospection=disabled \
+      -Dtests=false
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    mkdir -p /usr/share/wireplumber/wireplumber.conf.d \
+      /run/wireplumber/wireplumber.conf.d \
+      /etc/wireplumber/wireplumber.conf.d
+    cp "${OUT_DIR}/usr/share/wireplumber/wireplumber.conf" /usr/share/wireplumber/wireplumber.conf
+
+    # Reject /usr/etc: BUILD_SYSCONFDIR must compile to /etc, not $prefix/etc.
+    if strings "${OUT_DIR}/usr/lib/libwireplumber-0.5.so.0.512.0" | grep -q '/usr/etc'; then
+      echo "wireplumber uapi smoke: library still names a /usr/etc path" >&2
+      exit 1
+    fi
+
+    smoke_bin="${WORK_DIR}/wireplumber-uapi-smoke"
+    gcc -I"${OUT_DIR}/usr/include/wireplumber-0.5" \
+      $(pkg-config --cflags glib-2.0 gobject-2.0 gio-2.0) \
+      "/${SOURCE_uapi_smoke}" \
+      -o "${smoke_bin}" \
+      -L"${OUT_DIR}/usr/lib" -lwireplumber-0.5 \
+      $(pkg-config --libs glib-2.0 gobject-2.0 gio-2.0)
+
+    uapi_smoke() {
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" "${smoke_bin}" "$@"
+    }
+
+    # The main wireplumber.conf must select /etc, then /run, then /usr/share.
+    printf 'wireplumber.uapi-smoke-main = { tier = "etc" }\n' \
+      > /etc/wireplumber/wireplumber.conf
+    printf 'wireplumber.uapi-smoke-main = { tier = "run" }\n' \
+      > /run/wireplumber/wireplumber.conf
+    printf 'wireplumber.uapi-smoke-main = { tier = "vendor" }\n' \
+      > /usr/share/wireplumber/wireplumber.conf
+
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-main 'tier = "etc"' || {
+      echo "wireplumber uapi smoke: main config did not select /etc first" >&2
+      exit 1
+    }
+
+    rm /etc/wireplumber/wireplumber.conf
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-main 'tier = "run"' || {
+      echo "wireplumber uapi smoke: main config did not fall back to /run" >&2
+      exit 1
+    }
+
+    rm /run/wireplumber/wireplumber.conf
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-main 'tier = "vendor"' || {
+      echo "wireplumber uapi smoke: main config did not fall back to /usr/share" >&2
+      exit 1
+    }
+
+    # Distinct drop-in basenames from every tier must all load together,
+    # proving /run is actually scanned and not silently skipped.
+    printf 'wireplumber.uapi-smoke-vendor = { present = true }\n' \
+      > /usr/share/wireplumber/wireplumber.conf.d/05-uapi-smoke-vendor.conf
+    printf 'wireplumber.uapi-smoke-run = { present = true }\n' \
+      > /run/wireplumber/wireplumber.conf.d/06-uapi-smoke-run.conf
+    printf 'wireplumber.uapi-smoke-etc = { present = true }\n' \
+      > /etc/wireplumber/wireplumber.conf.d/07-uapi-smoke-etc.conf
+
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-vendor 'present = true' || {
+      echo "wireplumber uapi smoke: the vendor drop-in did not load" >&2
+      exit 1
+    }
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-run 'present = true' || {
+      echo "wireplumber uapi smoke: the /run drop-in did not load" >&2
+      exit 1
+    }
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-etc 'present = true' || {
+      echo "wireplumber uapi smoke: the /etc drop-in did not load" >&2
+      exit 1
+    }
+
+    rm /usr/share/wireplumber/wireplumber.conf.d/05-uapi-smoke-vendor.conf \
+      /run/wireplumber/wireplumber.conf.d/06-uapi-smoke-run.conf \
+      /etc/wireplumber/wireplumber.conf.d/07-uapi-smoke-etc.conf
+
+    # A same-basename drop-in must be fully replaced by the highest tier
+    # present, not merged with the lower tiers. Each fragment sets its own
+    # tier-unique key (not a shared key with a different value) so a broken
+    # iterator that loaded more than one of the three files, or that let a
+    # shadowed lower-tier file's keys leak through, fails the require/forbid
+    # check below even though every fragment writes the same section name.
+    printf 'wireplumber.uapi-smoke-frag = { vendor.only = true }\n' \
+      > /usr/share/wireplumber/wireplumber.conf.d/10-uapi-smoke.conf
+    printf 'wireplumber.uapi-smoke-frag = { run.only = true }\n' \
+      > /run/wireplumber/wireplumber.conf.d/10-uapi-smoke.conf
+    printf 'wireplumber.uapi-smoke-frag = { etc.only = true }\n' \
+      > /etc/wireplumber/wireplumber.conf.d/10-uapi-smoke.conf
+
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-frag \
+      'etc.only = true' 'run.only' 'vendor.only' || {
+      echo "wireplumber uapi smoke: the /etc drop-in did not fully shadow the collision" >&2
+      exit 1
+    }
+
+    rm /etc/wireplumber/wireplumber.conf.d/10-uapi-smoke.conf
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-frag \
+      'run.only = true' 'etc.only' 'vendor.only' || {
+      echo "wireplumber uapi smoke: /run did not win, unshadowed, after the /etc drop-in was removed" >&2
+      exit 1
+    }
+
+    rm /run/wireplumber/wireplumber.conf.d/10-uapi-smoke.conf
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-frag \
+      'vendor.only = true' 'etc.only' 'run.only' || {
+      echo "wireplumber uapi smoke: the vendor file did not win, unshadowed, once /run and /etc were removed" >&2
+      exit 1
+    }
+
+    rm /usr/share/wireplumber/wireplumber.conf.d/10-uapi-smoke.conf
+    uapi_smoke wireplumber.conf wireplumber.uapi-smoke-frag - || {
+      echo "wireplumber uapi smoke: a removed drop-in still appears in the loaded config" >&2
+      exit 1
+    }
+
+    rm -rf /usr/share/wireplumber/wireplumber.conf.d /run/wireplumber /etc/wireplumber \
+      /usr/share/wireplumber/wireplumber.conf
+    rmdir /usr/share/wireplumber
+
+    echo "wireplumber UAPI smoke: config loader searched /etc, /run, and /usr/share"
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - conf
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/wireplumber
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpipewire-0.3.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/bin/wpctl
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/bin/wpexec
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+
+  conf:
+    files:
+    - path: /usr/share/wireplumber/wireplumber.conf
+    - path: /usr/share/wireplumber/wireplumber.conf.d/alsa-vm.conf
+
+  dev:
+    files:
+    - path: /usr/include/wireplumber-0.5/wp/base-dirs.h
+    - path: /usr/include/wireplumber-0.5/wp/client.h
+    - path: /usr/include/wireplumber-0.5/wp/component-loader.h
+    - path: /usr/include/wireplumber-0.5/wp/conf.h
+    - path: /usr/include/wireplumber-0.5/wp/core.h
+    - path: /usr/include/wireplumber-0.5/wp/defs.h
+    - path: /usr/include/wireplumber-0.5/wp/device.h
+    - path: /usr/include/wireplumber-0.5/wp/error.h
+    - path: /usr/include/wireplumber-0.5/wp/event-dispatcher.h
+    - path: /usr/include/wireplumber-0.5/wp/event-hook.h
+    - path: /usr/include/wireplumber-0.5/wp/event.h
+    - path: /usr/include/wireplumber-0.5/wp/factory.h
+    - path: /usr/include/wireplumber-0.5/wp/global-proxy.h
+    - path: /usr/include/wireplumber-0.5/wp/iterator.h
+    - path: /usr/include/wireplumber-0.5/wp/json-utils.h
+    - path: /usr/include/wireplumber-0.5/wp/link.h
+    - path: /usr/include/wireplumber-0.5/wp/log.h
+    - path: /usr/include/wireplumber-0.5/wp/metadata.h
+    - path: /usr/include/wireplumber-0.5/wp/module.h
+    - path: /usr/include/wireplumber-0.5/wp/node.h
+    - path: /usr/include/wireplumber-0.5/wp/object-interest.h
+    - path: /usr/include/wireplumber-0.5/wp/object-manager.h
+    - path: /usr/include/wireplumber-0.5/wp/object.h
+    - path: /usr/include/wireplumber-0.5/wp/plugin.h
+    - path: /usr/include/wireplumber-0.5/wp/port.h
+    - path: /usr/include/wireplumber-0.5/wp/proc-utils.h
+    - path: /usr/include/wireplumber-0.5/wp/properties.h
+    - path: /usr/include/wireplumber-0.5/wp/proxy-interfaces.h
+    - path: /usr/include/wireplumber-0.5/wp/proxy.h
+    - path: /usr/include/wireplumber-0.5/wp/session-item.h
+    - path: /usr/include/wireplumber-0.5/wp/settings.h
+    - path: /usr/include/wireplumber-0.5/wp/si-factory.h
+    - path: /usr/include/wireplumber-0.5/wp/si-interfaces.h
+    - path: /usr/include/wireplumber-0.5/wp/spa-json.h
+    - path: /usr/include/wireplumber-0.5/wp/spa-pod.h
+    - path: /usr/include/wireplumber-0.5/wp/spa-type.h
+    - path: /usr/include/wireplumber-0.5/wp/state.h
+    - path: /usr/include/wireplumber-0.5/wp/transition.h
+    - path: /usr/include/wireplumber-0.5/wp/wp.h
+    - path: /usr/include/wireplumber-0.5/wp/wpenums.h
+    - path: /usr/include/wireplumber-0.5/wp/wpversion.h
+    - path: /usr/lib/pkgconfig/wireplumber-0.5.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/wireplumber/examples/wireplumber.conf.d/access.conf
+    - path: /usr/share/doc/wireplumber/examples/wireplumber.conf.d/alsa.conf
+    - path: /usr/share/doc/wireplumber/examples/wireplumber.conf.d/bluetooth.conf
+    - path: /usr/share/doc/wireplumber/examples/wireplumber.conf.d/device.conf
+    - path: /usr/share/doc/wireplumber/examples/wireplumber.conf.d/libcamera.conf
+    - path: /usr/share/doc/wireplumber/examples/wireplumber.conf.d/linking.conf
+    - path: /usr/share/doc/wireplumber/examples/wireplumber.conf.d/log.conf
+    - path: /usr/share/doc/wireplumber/examples/wireplumber.conf.d/media-role-nodes.conf
+    - path: /usr/share/doc/wireplumber/examples/wireplumber.conf.d/profile.conf
+    - path: /usr/share/doc/wireplumber/examples/wireplumber.conf.d/smart-equalizer.conf
+    - path: /usr/share/doc/wireplumber/examples/wireplumber.conf.d/stream.conf
+    - path: /usr/share/doc/wireplumber/examples/wireplumber.conf.d/v4l2.conf
+
+  lib:
+    files:
+    - path: /usr/lib/libwireplumber-0.5.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/libwireplumber-0.5.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/libwireplumber-0.5.so.0.512.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpipewire-0.3.so.0
+    - path: /usr/lib/systemd/user/wireplumber.service
+    - path: /usr/lib/systemd/user/wireplumber@.service
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-dbus-connection.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-default-nodes-api.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-file-monitor-api.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-log-settings.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-logind.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libsystemd.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-lua-scripting.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-mixer-api.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-modem-manager.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-mpris.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpipewire-0.3.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-notifications-api.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-portal-permissionstore.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-reserve-device.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-settings.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-si-audio-adapter.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-si-node.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-si-standard-link.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/lib/wireplumber-0.5/libwireplumber-module-standard-event-source.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libwireplumber-0.5.so.0
+    - path: /usr/share/wireplumber/scripts/lib/audio-group-utils.lua
+    - path: /usr/share/wireplumber/scripts/lib/common-utils.lua
+    - path: /usr/share/wireplumber/scripts/lib/device-info-cache.lua
+    - path: /usr/share/wireplumber/scripts/lib/filter-utils.lua
+    - path: /usr/share/wireplumber/scripts/lib/linking-utils.lua
+    - path: /usr/share/wireplumber/scripts/lib/monitor-utils.lua
+    - path: /usr/share/wireplumber/scripts/lib/node-utils.lua
+
+  misc:
+    files:
+    - path: /usr/share/wireplumber/scripts/client/access-default.lua
+    - path: /usr/share/wireplumber/scripts/client/access-portal.lua
+    - path: /usr/share/wireplumber/scripts/client/access-snap.lua
+    - path: /usr/share/wireplumber/scripts/default-nodes/apply-default-node.lua
+    - path: /usr/share/wireplumber/scripts/default-nodes/find-best-default-node.lua
+    - path: /usr/share/wireplumber/scripts/default-nodes/find-selected-default-node.lua
+    - path: /usr/share/wireplumber/scripts/default-nodes/rescan.lua
+    - path: /usr/share/wireplumber/scripts/default-nodes/state-default-nodes.lua
+    - path: /usr/share/wireplumber/scripts/device/apply-profile.lua
+    - path: /usr/share/wireplumber/scripts/device/apply-routes.lua
+    - path: /usr/share/wireplumber/scripts/device/automute-alsa-routes.lua
+    - path: /usr/share/wireplumber/scripts/device/autoswitch-bluetooth-profile.lua
+    - path: /usr/share/wireplumber/scripts/device/find-best-profile.lua
+    - path: /usr/share/wireplumber/scripts/device/find-best-routes.lua
+    - path: /usr/share/wireplumber/scripts/device/find-preferred-profile.lua
+    - path: /usr/share/wireplumber/scripts/device/find-voice-call-profile.lua
+    - path: /usr/share/wireplumber/scripts/device/select-profile.lua
+    - path: /usr/share/wireplumber/scripts/device/select-routes.lua
+    - path: /usr/share/wireplumber/scripts/device/state-profile.lua
+    - path: /usr/share/wireplumber/scripts/device/state-routes.lua
+    - path: /usr/share/wireplumber/scripts/fallback-sink.lua
+    - path: /usr/share/wireplumber/scripts/linking/find-audio-group-target.lua
+    - path: /usr/share/wireplumber/scripts/linking/find-best-target.lua
+    - path: /usr/share/wireplumber/scripts/linking/find-default-target.lua
+    - path: /usr/share/wireplumber/scripts/linking/find-defined-target.lua
+    - path: /usr/share/wireplumber/scripts/linking/find-filter-target.lua
+    - path: /usr/share/wireplumber/scripts/linking/find-media-role-target.lua
+    - path: /usr/share/wireplumber/scripts/linking/find-user-target.lua.example
+    - path: /usr/share/wireplumber/scripts/linking/get-filter-from-target.lua
+    - path: /usr/share/wireplumber/scripts/linking/link-target.lua
+    - path: /usr/share/wireplumber/scripts/linking/mpris-pause.lua
+    - path: /usr/share/wireplumber/scripts/linking/prepare-link.lua
+    - path: /usr/share/wireplumber/scripts/linking/rescan-media-role-links.lua
+    - path: /usr/share/wireplumber/scripts/linking/rescan.lua
+    - path: /usr/share/wireplumber/scripts/metadata.lua
+    - path: /usr/share/wireplumber/scripts/monitors/alsa-midi.lua
+    - path: /usr/share/wireplumber/scripts/monitors/alsa.lua
+    - path: /usr/share/wireplumber/scripts/monitors/bluez-midi.lua
+    - path: /usr/share/wireplumber/scripts/monitors/bluez.lua
+    - path: /usr/share/wireplumber/scripts/monitors/libcamera/create-device.lua
+    - path: /usr/share/wireplumber/scripts/monitors/libcamera/create-node.lua
+    - path: /usr/share/wireplumber/scripts/monitors/libcamera/enumerate-device.lua
+    - path: /usr/share/wireplumber/scripts/monitors/libcamera/name-device.lua
+    - path: /usr/share/wireplumber/scripts/monitors/libcamera/name-node.lua
+    - path: /usr/share/wireplumber/scripts/monitors/v4l2/create-device.lua
+    - path: /usr/share/wireplumber/scripts/monitors/v4l2/create-node.lua
+    - path: /usr/share/wireplumber/scripts/monitors/v4l2/enumerate-device.lua
+    - path: /usr/share/wireplumber/scripts/monitors/v4l2/name-device.lua
+    - path: /usr/share/wireplumber/scripts/monitors/v4l2/name-node.lua
+    - path: /usr/share/wireplumber/scripts/node/audio-group.lua
+    - path: /usr/share/wireplumber/scripts/node/create-item.lua
+    - path: /usr/share/wireplumber/scripts/node/filter-forward-format.lua
+    - path: /usr/share/wireplumber/scripts/node/software-dsp.lua
+    - path: /usr/share/wireplumber/scripts/node/state-stream.lua
+    - path: /usr/share/wireplumber/scripts/node/suspend-node.lua
+    - path: /usr/share/wireplumber/scripts/session-services.lua
+    - path: /usr/share/wireplumber/scripts/sm-objects.lua
+    - path: /usr/share/zsh/site-functions/_wpctl
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libgio-2.0.so.0: glib2
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgmodule-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libpipewire-0.3.so.0: pipewire
+  /usr/lib/libwireplumber-0.5.so.0: self
+  /usr/lib/libsystemd.so.0: systemd

@@ -1,0 +1,223 @@
+package:
+  schema: 1
+  name: libtirpc
+  slug: libtirpc
+  namespace: libs/net
+  version: 1.3.7
+  description: Transport-Independent RPC library
+  homepage: https://sourceforge.net/projects/libtirpc/
+  checksum: e43d62377e0b39ed40174b82fad1245fc8204b925d1e8a6e63d4541fc1e3fa24
+
+sources:
+- name: libtirpc
+  url: https://downloads.sourceforge.net/libtirpc/libtirpc-1.3.7.tar.bz2
+  sha256: b47d3ac19d3549e54a05d0019a6c400674da716123858cfdb6d3bdd70a66c702
+- name: databases_config
+  file: pkg/libs/net/libtirpc-uapi-databases.patch
+  sha256: 5526e500da94426b70f0b87f3a96abcb0517c374b260899a1f8f806df232178d
+- name: databases_smoke
+  file: pkg/libs/net/libtirpc-databases-smoke.c
+  sha256: f5bb19c1f90e89f454da70c8d365f772ab1778676848e420936d6d1345307601
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4096:1068, 8219:2303, 12353:3154, 13172:3225]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "/${SOURCE_libtirpc}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_databases_config}"
+
+    ./configure --prefix=/usr \
+      --sysconfdir=/usr/lib \
+      --disable-static \
+      --disable-gssapi
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    if [ -e /etc/netconfig ] || [ -e /etc/bindresvport.blacklist ] || \
+       [ -e /run/netconfig ] || [ -e /run/bindresvport.blacklist ] || \
+       [ -e /usr/lib/netconfig ] || [ -e /usr/lib/bindresvport.blacklist ]; then
+      echo 'libtirpc smoke-test paths already exist' >&2
+      exit 1
+    fi
+    mkdir -p /etc /run
+    cp "${OUT_DIR}/usr/lib/netconfig" /usr/lib/netconfig
+    cp "${OUT_DIR}/usr/lib/bindresvport.blacklist" \
+      /usr/lib/bindresvport.blacklist
+    printf 'vendor-net tpi_clts v inet udp - -\n' >> /usr/lib/netconfig
+    printf '700\n' >> /usr/lib/bindresvport.blacklist
+
+    databases_smoke="${WORK_DIR}/libtirpc-databases-smoke"
+    gcc \
+      -I"${OUT_DIR}/usr/include/tirpc" \
+      -L"${OUT_DIR}/usr/lib" \
+      "/${SOURCE_databases_smoke}" \
+      -ltirpc \
+      -o "${databases_smoke}"
+
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      unshare --net "${databases_smoke}" vendor-net blocked
+
+    printf 'runtime-net tpi_clts v inet udp - -\n' > /run/netconfig
+    printf '700\n' > /run/bindresvport.blacklist
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      unshare --net "${databases_smoke}" runtime-net blocked
+
+    printf 'admin-net tpi_clts v inet udp - -\n' > /etc/netconfig
+    printf '700\n' > /etc/bindresvport.blacklist
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      unshare --net "${databases_smoke}" admin-net blocked
+
+    : > /etc/netconfig
+    : > /etc/bindresvport.blacklist
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      unshare --net "${databases_smoke}" none allowed
+
+    rm /etc/netconfig /etc/bindresvport.blacklist \
+      /run/netconfig /run/bindresvport.blacklist
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      unshare --net "${databases_smoke}" vendor-net blocked
+
+    rm /usr/lib/netconfig /usr/lib/bindresvport.blacklist
+    rmdir /etc /run 2>/dev/null || true
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - conf
+  - dev
+  - lib
+
+outputs:
+  conf:
+    files:
+    - path: /usr/lib/bindresvport.blacklist
+    - path: /usr/lib/netconfig
+
+  dev:
+    files:
+    - path: /usr/include/tirpc/netconfig.h
+    - path: /usr/include/tirpc/rpc/auth.h
+    - path: /usr/include/tirpc/rpc/auth_des.h
+    - path: /usr/include/tirpc/rpc/auth_unix.h
+    - path: /usr/include/tirpc/rpc/clnt.h
+    - path: /usr/include/tirpc/rpc/clnt_soc.h
+    - path: /usr/include/tirpc/rpc/clnt_stat.h
+    - path: /usr/include/tirpc/rpc/des.h
+    - path: /usr/include/tirpc/rpc/des_crypt.h
+    - path: /usr/include/tirpc/rpc/key_prot.h
+    - path: /usr/include/tirpc/rpc/nettype.h
+    - path: /usr/include/tirpc/rpc/pmap_clnt.h
+    - path: /usr/include/tirpc/rpc/pmap_prot.h
+    - path: /usr/include/tirpc/rpc/pmap_rmt.h
+    - path: /usr/include/tirpc/rpc/raw.h
+    - path: /usr/include/tirpc/rpc/rpc.h
+    - path: /usr/include/tirpc/rpc/rpc_com.h
+    - path: /usr/include/tirpc/rpc/rpc_msg.h
+    - path: /usr/include/tirpc/rpc/rpcb_clnt.h
+    - path: /usr/include/tirpc/rpc/rpcb_prot.h
+    - path: /usr/include/tirpc/rpc/rpcb_prot.x
+    - path: /usr/include/tirpc/rpc/rpcent.h
+    - path: /usr/include/tirpc/rpc/svc.h
+    - path: /usr/include/tirpc/rpc/svc_auth.h
+    - path: /usr/include/tirpc/rpc/svc_dg.h
+    - path: /usr/include/tirpc/rpc/svc_mt.h
+    - path: /usr/include/tirpc/rpc/svc_soc.h
+    - path: /usr/include/tirpc/rpc/types.h
+    - path: /usr/include/tirpc/rpc/xdr.h
+    - path: /usr/include/tirpc/rpcsvc/crypt.h
+    - path: /usr/include/tirpc/rpcsvc/crypt.x
+    - path: /usr/lib/libtirpc.la
+    - path: /usr/lib/pkgconfig/libtirpc.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libtirpc.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libtirpc.so.3
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libtirpc.so.3.0.0
+      needs:
+      - /usr/lib/libc.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man3/bindresvport.3t
+    - path: /usr/share/man/man3/des_crypt.3t
+    - path: /usr/share/man/man3/getnetconfig.3t
+    - path: /usr/share/man/man3/getnetpath.3t
+    - path: /usr/share/man/man3/getrpcent.3t
+    - path: /usr/share/man/man3/getrpcport.3t
+    - path: /usr/share/man/man3/rpc.3t
+    - path: /usr/share/man/man3/rpc_clnt_auth.3t
+    - path: /usr/share/man/man3/rpc_clnt_calls.3t
+    - path: /usr/share/man/man3/rpc_clnt_create.3t
+    - path: /usr/share/man/man3/rpc_secure.3t
+    - path: /usr/share/man/man3/rpc_soc.3t
+    - path: /usr/share/man/man3/rpc_svc_calls.3t
+    - path: /usr/share/man/man3/rpc_svc_create.3t
+    - path: /usr/share/man/man3/rpc_svc_err.3t
+    - path: /usr/share/man/man3/rpc_svc_reg.3t
+    - path: /usr/share/man/man3/rpc_xdr.3t
+    - path: /usr/share/man/man3/rpcbind.3t
+    - path: /usr/share/man/man3/rtime.3t
+    - path: /usr/share/man/man5/netconfig.5
+
+resolution:
+  /usr/lib/libc.so.6: glibc

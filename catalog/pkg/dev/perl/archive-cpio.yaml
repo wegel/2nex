@@ -1,0 +1,80 @@
+package:
+  schema: 1
+  name: Archive::Cpio
+  slug: archive-cpio
+  namespace: dev/perl
+  version: "0.10"
+  description: Perl module for CPIO archives
+  homepage: https://metacpan.org/pod/Archive::Cpio
+  checksum: 632cf46a88df4a0ba4c668d4392efe46b02fb46069633ab730d8b4ef81bc7f5c
+
+sources:
+- name: archive_cpio
+  url: https://cpan.metacpan.org/authors/id/P/PI/PIXEL/Archive-Cpio-0.10.tar.gz
+  sha256: 246fb31669764e78336b2191134122e07c44f2d82dc4f37d552ab28f8668bed3
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [1607:271]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_archive_cpio} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    perl Makefile.PL
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - lib
+
+  full:
+  - bin
+  - lib
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/cpio-filter
+      needs:
+      - /usr/bin/perl
+
+  lib:
+    files:
+    - path: /usr/lib/perl5/5.38/core_perl/perllocal.pod
+    - path: /usr/lib/perl5/5.38/site_perl/Archive/Cpio.pm
+    - path: /usr/lib/perl5/5.38/site_perl/Archive/Cpio/Common.pm
+    - path: /usr/lib/perl5/5.38/site_perl/Archive/Cpio/File.pm
+    - path: /usr/lib/perl5/5.38/site_perl/Archive/Cpio/FileHandle_with_pushback.pm
+    - path: /usr/lib/perl5/5.38/site_perl/Archive/Cpio/NewAscii.pm
+    - path: /usr/lib/perl5/5.38/site_perl/Archive/Cpio/ODC.pm
+    - path: /usr/lib/perl5/5.38/site_perl/Archive/Cpio/OldBinary.pm
+    - path: /usr/lib/perl5/5.38/site_perl/auto/Archive/Cpio/.packlist
+
+  man:
+    files:
+    - path: /usr/share/man/man1/cpio-filter.1
+    - path: /usr/share/man/man3/Archive::Cpio.3
+
+resolution:
+  /usr/bin/perl: perl

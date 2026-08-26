@@ -1,0 +1,115 @@
+package:
+  schema: 1
+  name: MPFR
+  slug: mpfr
+  namespace: libs/system
+  version: 4.2.1
+  description: Multiple Precision Floating-Point Reliable Library
+  homepage: https://www.mpfr.org/
+  checksum: c0b164dd9cbbd42c10f3d390924eed1dc6559d4ca5cc6c2c91e3f1bd6c728963
+  seed: true
+
+sources:
+- name: mpfr
+  url: https://ftp.gnu.org/gnu/mpfr/mpfr-4.2.1.tar.xz
+  sha256: 277807353a6726978996945af13e52829e3abd7a9a5b7fb2793894e18f1fcbb2
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase3/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase3/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase3/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase3/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase3/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase3/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase3/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase3/tar/1.35/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [39337:3501, 142554:3598, 323384:3828, 536594:4085, 716555:4292, 892346:4509, 1072611:4728, 1337364:9282, 1604938:11096, 1780472:28694]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_mpfr} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr        \
+              --enable-thread-safe \
+              --docdir=/usr/share/doc/mpfr-4.2.1
+
+    make
+    make check
+    make DESTDIR="${OUT_DIR}" install
+    rm -rf ${OUT_DIR}/usr/share/info
+    rm -rf ${OUT_DIR}/usr/share/doc
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+  - static
+
+  full:
+  - dev
+  - lib
+  - static
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/mpf2mpfr.h
+    - path: /usr/include/mpfr.h
+    - path: /usr/lib/libmpfr.la
+    - path: /usr/lib/pkgconfig/mpfr.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libmpfr.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+    - path: /usr/lib/libmpfr.so.6
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+    - path: /usr/lib/libmpfr.so.6.2.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+
+  static:
+    files:
+    - path: /usr/lib/libmpfr.a
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libgmp.so.10: gmp

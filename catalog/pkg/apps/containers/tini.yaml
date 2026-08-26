@@ -1,0 +1,68 @@
+package:
+  schema: 1
+  name: Tini
+  slug: tini
+  namespace: apps/containers
+  version: 0.19.0+git369448a167
+  description: Minimal init process that reaps children and forwards signals in containers
+  homepage: https://github.com/krallin/tini
+  checksum: 0f289f2b36adc62f6e7b27524866f2c9e5aa0afb502acba2c971631196598c21
+
+sources:
+- name: tini
+  url: https://github.com/krallin/tini/archive/369448a167e8b3da4ca5bca0b3307500c3371828.tar.gz
+  sha256: 040e349402743ace8f8f61354fffae788eb850b34af840f3939e1eaeaa89c292
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [577:398]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_tini}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    sed -i 's/set(tini_VERSION_GIT "")/set(tini_VERSION_GIT " - git.369448a")/' CMakeLists.txt
+
+    cmake -S . -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_C_COMPILER=gcc
+    cmake --build build --target tini-static
+    install -Dm755 build/tini-static "${OUT_DIR}/usr/bin/tini"
+
+    strip --strip-unneeded "${OUT_DIR}/usr/bin/tini"
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  full:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/tini

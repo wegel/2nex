@@ -1,0 +1,98 @@
+package:
+  schema: 1
+  name: Duktape
+  slug: duktape
+  namespace: dev/libs
+  version: 2.7.0
+  description: Embeddable JavaScript engine
+  homepage: https://duktape.org/
+  checksum: 5c942a58cf1b57dda8d96ed2bf1beb496aed7289a31511eb62b64a7c395b963f
+
+sources:
+- name: duktape
+  url: https://duktape.org/duktape-2.7.0.tar.xz
+  sha256: 90f8d2fa8b5567c6899830ddef2c03f3c27960b11aca222fa17aa7ac613c2890
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [1631:22061]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_duktape} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    export CC=gcc
+
+    make -f Makefile.sharedlibrary \
+      INSTALL_PREFIX=/usr \
+      LIBDIR=/lib
+
+    make -f Makefile.sharedlibrary install \
+      INSTALL_PREFIX=/usr \
+      LIBDIR=/lib \
+      DESTDIR="${OUT_DIR}"
+
+    rm -f \
+      "${OUT_DIR}/usr/lib/libduktaped.so" \
+      "${OUT_DIR}/usr/lib/libduktaped.so.207" \
+      "${OUT_DIR}/usr/lib/libduktaped.so.207.20700"
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/duk_config.h
+    - path: /usr/include/duktape.h
+    - path: /usr/lib/pkgconfig/duktape.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libduktape.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libduktape.so.207
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libduktape.so.207.20700
+      needs:
+      - /usr/lib/libc.so.6
+
+resolution:
+  /usr/lib/libc.so.6: glibc

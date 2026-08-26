@@ -1,0 +1,76 @@
+system:
+  schema: 1
+  name: Flat Podman System
+  slug: flat-podman
+  version: 0.0.1
+  description: Flat rootfs with systemd and container support
+  checksum: 9953ab1b36451eb0540480f31f9b337fcd33e069469def6e5b58c28262ae4c81
+
+base:
+  commit: systems/flat-systemd/0.0.1
+  manifest: assemblies/base/flat-systemd.yaml
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+
+packages:
+# containers
+- name: podman
+  commit: x86_64/pkg/apps/containers/podman/5.4.1/outputs/bin
+- name: runc
+  commit: x86_64/pkg/apps/containers/runc/1.2.4/outputs/bin
+- name: conmon
+  commit: x86_64/pkg/apps/containers/conmon/2.1.8/outputs/bin
+- name: catatonit
+  commit: x86_64/pkg/apps/containers/catatonit/0.2.1/outputs/bin
+- name: aardvark-dns
+  commit: x86_64/pkg/apps/containers/aardvark-dns/1.14.0/outputs/bin
+- name: netavark
+  commit: x86_64/pkg/apps/containers/netavark/1.14.1/outputs/bin
+- name: passt
+  commit: x86_64/pkg/apps/containers/passt/2025_02_17/outputs/bin
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+
+  script: |
+    # Immutable container defaults. Podman's readers load these below
+    # administrator files in /etc and temporary files in /run.
+    mkdir -p /target/usr/share/containers
+    cat > /target/usr/share/containers/containers.conf << 'EOF'
+    [engine]
+    runtime = "runc"
+    EOF
+
+    cat > /target/usr/share/containers/registries.conf << 'EOF'
+    unqualified-search-registries = ["docker.io"]
+    EOF
+
+    cat > /target/usr/share/containers/policy.json << 'EOF'
+    {
+      "default": [{ "type": "insecureAcceptAnything" }]
+    }
+    EOF
+
+    # subuid/subgid for rootless containers
+    cat >> /target/etc/subuid << 'EOF'
+    root:100000:65536
+    EOF
+    cat >> /target/etc/subgid << 'EOF'
+    root:100000:65536
+    EOF
+
+    test ! -e /target/etc/containers/containers.conf
+    test ! -e /target/etc/containers/registries.conf
+    test ! -e /target/etc/containers/policy.json
+    test ! -e /target/etc/environment
+
+    # Do not follow package symlinks while normalizing timestamps. In
+    # particular, Systemd's environment.d adapter can point at an absent
+    # administrator-owned /etc/environment file.
+    find /target -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;

@@ -1,0 +1,118 @@
+From: Nex package maintainers
+Subject: fips_enabled, hwf.deny, and random.conf readers walk the three UAPI tiers
+Source: Nex downstream patch for libgcrypt 1.12.1
+Upstream: not submitted; needs agreement on a machine-generated transient tier
+
+libgcrypt hardwires three fixed-path readers of "/etc/gcrypt/" on Unix:
+get_fips_force_file() in src/fips.c (checked with access(F_OK) from
+check_fips_system_setting(), which also honors the LIBGCRYPT_FORCE_FIPS_MODE
+environment variable as an unrelated, path-independent force flag),
+get_hwf_deny_file() in src/hwfeatures.c (read with fopen() from
+parse_hwf_deny_file(), called once from _gcry_detect_hw_features() before any
+other thread runs), and get_random_conf_file() in random/random.c (read with
+fopen() from _gcry_random_read_conf(), called from rndoldlinux.c and
+rndjent.c). None of the three has a path override; only the FIPS force flag
+above is unrelated to the file path. A full source sweep for other "/etc"
+readers turns up only the legacy rndunix.c generator, which polls external
+commands rather than reading files and is not compiled into this build
+because glibc's getentropy() wins default random module selection in
+configure.ac.
+
+Each of the three get_*_file() helpers now walks /etc/gcrypt/<name>, then
+/run/gcrypt/<name>, then /usr/lib/gcrypt/<name>, and returns the first path
+that stat() reports as a regular file. A present higher-tier file masks a
+lower one even if it is empty or only restates the compiled default, because
+the walk stops at the first regular file, not the first file with content.
+When no tier exists, every helper still returns the original
+"/etc/gcrypt/<name>" path, so the original no-file behavior (access() or
+fopen() failing on that exact path) is unchanged.
+
+--- a/src/fips.c
++++ b/src/fips.c
+@@ -24,6 +24,7 @@
+ #include <errno.h>
+ #include <unistd.h>
+ #include <string.h>
++#include <sys/stat.h>
+ #ifdef ENABLE_HMAC_BINARY_CHECK
+ # include <dlfcn.h>
+ # include <elf.h>
+@@ -137,7 +138,18 @@
+     }
+   return fname;
+ #else
+-  return "/etc/gcrypt/" FIPS_FORCE_FILE;
++  static const char *const tiers[] = {
++    "/etc/gcrypt/" FIPS_FORCE_FILE,
++    "/run/gcrypt/" FIPS_FORCE_FILE,
++    "/usr/lib/gcrypt/" FIPS_FORCE_FILE,
++  };
++  struct stat sb;
++  unsigned int i;
++
++  for (i = 0; i < sizeof (tiers) / sizeof (tiers[0]); i++)
++    if (stat (tiers[i], &sb) == 0 && S_ISREG (sb.st_mode))
++      return tiers[i];
++  return tiers[0];
+ #endif
+ }
+
+--- a/src/hwfeatures.c
++++ b/src/hwfeatures.c
+@@ -25,6 +25,7 @@
+ #include <string.h>
+ #include <stdarg.h>
+ #include <unistd.h>
++#include <sys/stat.h>
+ #ifdef HAVE_SYSLOG
+ # include <syslog.h>
+ #endif /*HAVE_SYSLOG*/
+@@ -153,7 +154,18 @@
+     }
+   return fname;
+ #else
+-  return "/etc/gcrypt/" HWF_DENY_FILE;
++  static const char *const tiers[] = {
++    "/etc/gcrypt/" HWF_DENY_FILE,
++    "/run/gcrypt/" HWF_DENY_FILE,
++    "/usr/lib/gcrypt/" HWF_DENY_FILE,
++  };
++  struct stat sb;
++  unsigned int i;
++
++  for (i = 0; i < sizeof (tiers) / sizeof (tiers[0]); i++)
++    if (stat (tiers[i], &sb) == 0 && S_ISREG (sb.st_mode))
++      return tiers[i];
++  return tiers[0];
+ #endif
+ }
+
+--- a/random/random.c
++++ b/random/random.c
+@@ -28,6 +28,7 @@
+ #include <errno.h>
+ #include <time.h>
+ #include <sys/types.h>
++#include <sys/stat.h>
+ #include <unistd.h>
+ #ifdef HAVE_SYSLOG
+ # include <syslog.h>
+@@ -105,7 +106,18 @@
+     }
+   return fname;
+ #else
+-  return "/etc/gcrypt/" RANDOM_CONF_FILE;
++  static const char *const tiers[] = {
++    "/etc/gcrypt/" RANDOM_CONF_FILE,
++    "/run/gcrypt/" RANDOM_CONF_FILE,
++    "/usr/lib/gcrypt/" RANDOM_CONF_FILE,
++  };
++  struct stat sb;
++  unsigned int i;
++
++  for (i = 0; i < sizeof (tiers) / sizeof (tiers[0]); i++)
++    if (stat (tiers[i], &sb) == 0 && S_ISREG (sb.st_mode))
++      return tiers[i];
++  return tiers[0];
+ #endif
+ }

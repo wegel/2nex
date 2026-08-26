@@ -1,0 +1,586 @@
+package:
+  schema: 1
+  name: Meson
+  slug: meson
+  namespace: core/toolchain
+  version: 1.6.1
+  description: Meson is an open source build system meant to be both extremely fast, and as user friendly as possible.
+  homepage: https://mesonbuild.com
+  checksum: 22db01cf81b7ab06c2a4cca79f0d7cc2589e3922783d4a5cf88ce08c3b498548
+
+sources:
+- name: meson
+  url: https://github.com/mesonbuild/meson/releases/download/1.6.1/meson-1.6.1.tar.gz
+  sha256: 1eca49eb6c26d58bbee67fd3337d8ef557c0804e30a6d16bfdf269db997464de
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: setuptools
+  commit: x86_64/pkg/dev/python/setuptools/70.0.0/bundles/dev
+- name: wheel
+  commit: x86_64/pkg/dev/python/wheel/0.43.0/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [1647:6435]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    pip3 wheel -w dist --no-cache-dir --no-build-isolation --no-deps $PWD
+    pip3 install --no-index --root=${OUT_DIR} --find-links dist meson
+    cat > ${OUT_DIR}/usr/bin/meson <<'PY'
+    #!/usr/bin/python3.12
+    import os
+    import re
+    import sys
+
+    prefix = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    site_packages = os.path.join(prefix, "lib", "python3.12", "site-packages")
+    sys.path.insert(0, site_packages)
+
+    from mesonbuild.mesonmain import main
+
+    if __name__ == "__main__":
+        sys.argv[0] = re.sub(r"(-script\.pyw|\.exe)?$", "", sys.argv[0])
+        sys.exit(main())
+    PY
+    chmod 755 ${OUT_DIR}/usr/bin/meson
+    install -vDm644 data/shell-completions/bash/meson ${OUT_DIR}/usr/share/bash-completion/completions/meson
+    install -vDm644 data/shell-completions/zsh/_meson ${OUT_DIR}/usr/share/zsh/site-functions/_meson
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - lib
+
+  full:
+  - bin
+  - lib
+  - man
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/meson
+
+  lib:
+    files:
+    - path: /usr/lib/python3.12/site-packages/meson-1.6.1.dist-info/COPYING
+    - path: /usr/lib/python3.12/site-packages/meson-1.6.1.dist-info/INSTALLER
+    - path: /usr/lib/python3.12/site-packages/meson-1.6.1.dist-info/METADATA
+    - path: /usr/lib/python3.12/site-packages/meson-1.6.1.dist-info/RECORD
+    - path: /usr/lib/python3.12/site-packages/meson-1.6.1.dist-info/REQUESTED
+    - path: /usr/lib/python3.12/site-packages/meson-1.6.1.dist-info/WHEEL
+    - path: /usr/lib/python3.12/site-packages/meson-1.6.1.dist-info/entry_points.txt
+    - path: /usr/lib/python3.12/site-packages/meson-1.6.1.dist-info/top_level.txt
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/_pathlib.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/_typing.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/arglist.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/build.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/coredata.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/depfile.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/envconfig.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/environment.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/machinefile.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/mcompile.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/mconf.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/mdevenv.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/mdist.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/mesondata.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/mesonlib.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/mesonmain.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/mformat.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/minit.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/minstall.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/mintro.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/mlog.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/mparser.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/msetup.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/msubprojects.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/mtest.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/munstable_coredata.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/optinterpreter.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/options.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/programs.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/__pycache__/rewriter.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/_pathlib.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/_typing.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/arglist.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/ast/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/ast/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/ast/__pycache__/interpreter.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/ast/__pycache__/introspection.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/ast/__pycache__/postprocess.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/ast/__pycache__/printer.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/ast/__pycache__/visitor.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/ast/interpreter.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/ast/introspection.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/ast/postprocess.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/ast/printer.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/ast/visitor.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/__pycache__/backends.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/__pycache__/ninjabackend.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/__pycache__/nonebackend.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/__pycache__/vs2010backend.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/__pycache__/vs2012backend.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/__pycache__/vs2013backend.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/__pycache__/vs2015backend.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/__pycache__/vs2017backend.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/__pycache__/vs2019backend.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/__pycache__/vs2022backend.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/__pycache__/xcodebackend.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/backends.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/ninjabackend.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/nonebackend.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/vs2010backend.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/vs2012backend.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/vs2013backend.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/vs2015backend.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/vs2017backend.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/vs2019backend.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/vs2022backend.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/backend/xcodebackend.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/build.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cargo/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cargo/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cargo/__pycache__/builder.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cargo/__pycache__/cfg.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cargo/__pycache__/interpreter.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cargo/__pycache__/manifest.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cargo/__pycache__/version.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cargo/builder.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cargo/cfg.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cargo/interpreter.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cargo/manifest.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cargo/version.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/__pycache__/common.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/__pycache__/executor.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/__pycache__/fileapi.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/__pycache__/generator.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/__pycache__/interpreter.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/__pycache__/toolchain.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/__pycache__/traceparser.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/__pycache__/tracetargets.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/common.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/data/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/data/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/data/preload.cmake
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/executor.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/fileapi.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/generator.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/interpreter.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/toolchain.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/traceparser.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/cmake/tracetargets.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/asm.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/c.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/c_function_attributes.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/compilers.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/cpp.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/cs.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/cuda.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/cython.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/d.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/detect.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/fortran.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/java.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/objc.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/objcpp.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/rust.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/swift.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/__pycache__/vala.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/asm.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/c.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/c_function_attributes.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/compilers.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/cpp.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/cs.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/cuda.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/cython.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/d.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/detect.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/fortran.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/java.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/apple.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/arm.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/ccrx.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/clang.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/clike.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/compcert.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/elbrus.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/emscripten.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/gnu.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/intel.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/islinker.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/metrowerks.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/pgi.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/ti.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/visualstudio.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/__pycache__/xc16.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/apple.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/arm.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/ccrx.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/clang.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/clike.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/compcert.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/elbrus.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/emscripten.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/gnu.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/intel.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/islinker.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/metrowerks.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/pgi.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/ti.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/visualstudio.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/mixins/xc16.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/objc.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/objcpp.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/rust.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/swift.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/compilers/vala.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/coredata.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/base.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/boost.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/cmake.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/coarrays.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/configtool.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/cuda.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/detect.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/dev.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/dub.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/factory.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/framework.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/hdf5.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/misc.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/mpi.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/pkgconfig.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/platform.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/python.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/qt.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/scalapack.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/__pycache__/ui.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/base.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/boost.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/cmake.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/coarrays.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/configtool.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/cuda.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/data/CMakeLists.txt
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/data/CMakeListsLLVM.txt
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/data/CMakePathInfo.txt
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/data/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/data/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/detect.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/dev.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/dub.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/factory.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/framework.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/hdf5.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/misc.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/mpi.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/pkgconfig.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/platform.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/python.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/qt.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/scalapack.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/dependencies/ui.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/depfile.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/envconfig.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/environment.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/__pycache__/compiler.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/__pycache__/dependencyfallbacks.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/__pycache__/interpreter.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/__pycache__/interpreterobjects.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/__pycache__/kwargs.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/__pycache__/mesonmain.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/__pycache__/type_checking.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/compiler.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/dependencyfallbacks.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/interpreter.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/interpreterobjects.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/kwargs.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/mesonmain.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/primitives/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/primitives/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/primitives/__pycache__/array.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/primitives/__pycache__/boolean.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/primitives/__pycache__/dict.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/primitives/__pycache__/integer.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/primitives/__pycache__/range.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/primitives/__pycache__/string.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/primitives/array.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/primitives/boolean.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/primitives/dict.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/primitives/integer.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/primitives/range.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/primitives/string.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreter/type_checking.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/__pycache__/_unholder.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/__pycache__/baseobjects.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/__pycache__/decorators.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/__pycache__/disabler.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/__pycache__/exceptions.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/__pycache__/helpers.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/__pycache__/interpreterbase.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/__pycache__/operator.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/_unholder.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/baseobjects.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/decorators.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/disabler.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/exceptions.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/helpers.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/interpreterbase.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/interpreterbase/operator.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/linkers/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/linkers/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/linkers/__pycache__/base.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/linkers/__pycache__/detect.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/linkers/__pycache__/linkers.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/linkers/base.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/linkers/detect.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/linkers/linkers.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/machinefile.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/mcompile.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/mconf.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/mdevenv.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/mdist.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/mesondata.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/mesonlib.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/mesonmain.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/mformat.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/minit.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/minstall.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/mintro.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/mlog.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/_qt.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/cmake.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/cuda.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/dlang.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/external_project.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/fs.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/gnome.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/hotdoc.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/i18n.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/icestorm.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/java.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/keyval.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/modtest.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/pkgconfig.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/python.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/python3.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/qt4.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/qt5.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/qt6.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/rust.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/simd.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/sourceset.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/wayland.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/__pycache__/windows.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/_qt.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/cmake.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/cuda.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/dlang.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/external_project.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/fs.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/gnome.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/hotdoc.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/i18n.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/icestorm.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/java.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/keyval.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/modtest.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/pkgconfig.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/python.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/python3.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/qt4.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/qt5.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/qt6.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/rust.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/simd.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/sourceset.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/wayland.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/modules/windows.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/mparser.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/msetup.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/msubprojects.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/mtest.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/munstable_coredata.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/optinterpreter.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/options.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/programs.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/rewriter.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/clangformat.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/clangtidy.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/cleantrees.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/cmake_run_ctgt.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/copy.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/coverage.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/delwithsuffix.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/depfixer.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/depscan.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/dirchanger.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/env2mfile.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/externalproject.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/gettext.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/gtkdochelper.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/hotdochelper.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/itstool.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/meson_exe.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/msgfmthelper.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/pycompile.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/python_info.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/regen_checker.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/reprotest.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/run_tool.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/scanbuild.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/symbolextractor.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/tags.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/test_loaded_modules.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/uninstall.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/vcstagger.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/__pycache__/yasm.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/clangformat.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/clangtidy.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/cleantrees.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/cmake_run_ctgt.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/cmd_or_ps.ps1
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/copy.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/coverage.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/delwithsuffix.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/depfixer.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/depscan.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/dirchanger.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/env2mfile.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/externalproject.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/gettext.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/gtkdochelper.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/hotdochelper.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/itstool.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/meson_exe.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/msgfmthelper.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/pycompile.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/python_info.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/regen_checker.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/reprotest.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/run_tool.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/scanbuild.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/symbolextractor.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/tags.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/test_loaded_modules.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/uninstall.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/vcstagger.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/scripts/yasm.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/cpptemplates.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/cstemplates.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/ctemplates.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/cudatemplates.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/dlangtemplates.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/fortrantemplates.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/javatemplates.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/mesontemplates.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/objcpptemplates.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/objctemplates.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/rusttemplates.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/samplefactory.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/sampleimpl.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/__pycache__/valatemplates.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/cpptemplates.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/cstemplates.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/ctemplates.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/cudatemplates.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/dlangtemplates.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/fortrantemplates.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/javatemplates.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/mesontemplates.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/objcpptemplates.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/objctemplates.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/rusttemplates.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/samplefactory.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/sampleimpl.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/templates/valatemplates.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/utils/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/utils/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/utils/__pycache__/core.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/utils/__pycache__/platform.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/utils/__pycache__/posix.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/utils/__pycache__/universal.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/utils/__pycache__/vsenv.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/utils/__pycache__/win32.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/utils/core.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/utils/platform.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/utils/posix.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/utils/universal.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/utils/vsenv.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/utils/win32.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/wrap/__init__.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/wrap/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/wrap/__pycache__/wrap.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/wrap/__pycache__/wraptool.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/wrap/wrap.py
+    - path: /usr/lib/python3.12/site-packages/mesonbuild/wrap/wraptool.py
+
+  man:
+    files:
+    - path: /usr/share/man/man1/meson.1
+
+  misc:
+    files:
+    - path: /usr/share/bash-completion/completions/meson
+    - path: /usr/share/polkit-1/actions/com.mesonbuild.install.policy
+    - path: /usr/share/zsh/site-functions/_meson

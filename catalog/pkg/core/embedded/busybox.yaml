@@ -1,0 +1,528 @@
+package:
+  schema: 1
+  name: BusyBox
+  slug: busybox
+  namespace: core/embedded
+  version: 1.36.1
+  description: The Swiss Army Knife of Embedded Linux
+  homepage: https://busybox.net/
+  checksum: 8c343b156d0f6cc541908367518124ec6426a3382ca2208af2bfa56c116ef455
+
+sources:
+- name: busybox
+  url: https://busybox.net/downloads/busybox-1.36.1.tar.bz2
+  sha256: b8cc24c9574d809e7279c3be349795c5d5ceb6fdf19ca709f80cde50e47de314
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [8276:28316, 20707:29545, 41359:31625, 66183:35509, 90995:37482, 111642:38686, 132272:40355, 165319:48473, 198394:79557, 218008:107839]
+
+  script: |
+    set -eu
+
+    # doesn't build correctly with LTO
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
+    tar --no-same-owner -xf "${SOURCE_busybox}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    make defconfig
+
+    # put everything in /bin and /sbin (not /usr/*) so we can relocate cleanly
+    sed -i 's/# CONFIG_INSTALL_NO_USR is not set/CONFIG_INSTALL_NO_USR=y/' .config
+
+    yes "" | make oldconfig || true
+
+    make -j$(nproc)
+    make CONFIG_PREFIX="${OUT_DIR}" install
+
+    # usrmerge: relocate /bin and /sbin to /usr/bin
+    mkdir -p "${OUT_DIR}/usr/bin"
+    # move /bin contents (symlinks here point to 'busybox', so they stay valid)
+    mv "${OUT_DIR}/bin/"* "${OUT_DIR}/usr/bin/"
+    rmdir "${OUT_DIR}/bin"
+    # move /sbin contents and fix symlinks (they point to ../bin/busybox)
+    for f in "${OUT_DIR}/sbin/"*; do
+        name=$(basename "$f")
+        rm "$f"
+        ln -s busybox "${OUT_DIR}/usr/bin/$name"
+    done
+    rmdir "${OUT_DIR}/sbin"
+    # remove linuxrc (points to bin/busybox which no longer exists)
+    rm -f "${OUT_DIR}/linuxrc"
+
+    # create essential directories (for initramfs use)
+    mkdir -p "${OUT_DIR}"/{etc,proc,sys,dev,tmp,run}
+    chmod 1777 "${OUT_DIR}/tmp"
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  bin:
+  - bin
+
+  full:
+  - bin
+  - symlinks
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/busybox
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libresolv.so.2
+
+  symlinks:
+    files:
+    - path: /usr/bin/[
+    - path: /usr/bin/[[
+    - path: /usr/bin/acpid
+    - path: /usr/bin/add-shell
+    - path: /usr/bin/addgroup
+    - path: /usr/bin/adduser
+    - path: /usr/bin/adjtimex
+    - path: /usr/bin/arch
+    - path: /usr/bin/arp
+    - path: /usr/bin/arping
+    - path: /usr/bin/ascii
+    - path: /usr/bin/ash
+    - path: /usr/bin/awk
+    - path: /usr/bin/base32
+    - path: /usr/bin/base64
+    - path: /usr/bin/basename
+    - path: /usr/bin/bc
+    - path: /usr/bin/beep
+    - path: /usr/bin/blkdiscard
+    - path: /usr/bin/blkid
+    - path: /usr/bin/blockdev
+    - path: /usr/bin/bootchartd
+    - path: /usr/bin/brctl
+    - path: /usr/bin/bunzip2
+    - path: /usr/bin/bzcat
+    - path: /usr/bin/bzip2
+    - path: /usr/bin/cal
+    - path: /usr/bin/cat
+    - path: /usr/bin/chat
+    - path: /usr/bin/chattr
+    - path: /usr/bin/chgrp
+    - path: /usr/bin/chmod
+    - path: /usr/bin/chown
+    - path: /usr/bin/chpasswd
+    - path: /usr/bin/chpst
+    - path: /usr/bin/chroot
+    - path: /usr/bin/chrt
+    - path: /usr/bin/chvt
+    - path: /usr/bin/cksum
+    - path: /usr/bin/clear
+    - path: /usr/bin/cmp
+    - path: /usr/bin/comm
+    - path: /usr/bin/conspy
+    - path: /usr/bin/cp
+    - path: /usr/bin/cpio
+    - path: /usr/bin/crc32
+    - path: /usr/bin/crond
+    - path: /usr/bin/crontab
+    - path: /usr/bin/cryptpw
+    - path: /usr/bin/cttyhack
+    - path: /usr/bin/cut
+    - path: /usr/bin/date
+    - path: /usr/bin/dc
+    - path: /usr/bin/dd
+    - path: /usr/bin/deallocvt
+    - path: /usr/bin/delgroup
+    - path: /usr/bin/deluser
+    - path: /usr/bin/depmod
+    - path: /usr/bin/devmem
+    - path: /usr/bin/df
+    - path: /usr/bin/dhcprelay
+    - path: /usr/bin/diff
+    - path: /usr/bin/dirname
+    - path: /usr/bin/dmesg
+    - path: /usr/bin/dnsd
+    - path: /usr/bin/dnsdomainname
+    - path: /usr/bin/dos2unix
+    - path: /usr/bin/dpkg
+    - path: /usr/bin/dpkg-deb
+    - path: /usr/bin/du
+    - path: /usr/bin/dumpkmap
+    - path: /usr/bin/dumpleases
+    - path: /usr/bin/echo
+    - path: /usr/bin/ed
+    - path: /usr/bin/egrep
+    - path: /usr/bin/eject
+    - path: /usr/bin/env
+    - path: /usr/bin/envdir
+    - path: /usr/bin/envuidgid
+    - path: /usr/bin/ether-wake
+    - path: /usr/bin/expand
+    - path: /usr/bin/expr
+    - path: /usr/bin/factor
+    - path: /usr/bin/fakeidentd
+    - path: /usr/bin/fallocate
+    - path: /usr/bin/false
+    - path: /usr/bin/fatattr
+    - path: /usr/bin/fbset
+    - path: /usr/bin/fbsplash
+    - path: /usr/bin/fdflush
+    - path: /usr/bin/fdformat
+    - path: /usr/bin/fdisk
+    - path: /usr/bin/fgconsole
+    - path: /usr/bin/fgrep
+    - path: /usr/bin/find
+    - path: /usr/bin/findfs
+    - path: /usr/bin/flock
+    - path: /usr/bin/fold
+    - path: /usr/bin/free
+    - path: /usr/bin/freeramdisk
+    - path: /usr/bin/fsck
+    - path: /usr/bin/fsck.minix
+    - path: /usr/bin/fsfreeze
+    - path: /usr/bin/fstrim
+    - path: /usr/bin/fsync
+    - path: /usr/bin/ftpd
+    - path: /usr/bin/ftpget
+    - path: /usr/bin/ftpput
+    - path: /usr/bin/fuser
+    - path: /usr/bin/getopt
+    - path: /usr/bin/getty
+    - path: /usr/bin/grep
+    - path: /usr/bin/groups
+    - path: /usr/bin/gunzip
+    - path: /usr/bin/gzip
+    - path: /usr/bin/halt
+    - path: /usr/bin/hd
+    - path: /usr/bin/hdparm
+    - path: /usr/bin/head
+    - path: /usr/bin/hexdump
+    - path: /usr/bin/hexedit
+    - path: /usr/bin/hostid
+    - path: /usr/bin/hostname
+    - path: /usr/bin/httpd
+    - path: /usr/bin/hush
+    - path: /usr/bin/hwclock
+    - path: /usr/bin/i2cdetect
+    - path: /usr/bin/i2cdump
+    - path: /usr/bin/i2cget
+    - path: /usr/bin/i2cset
+    - path: /usr/bin/i2ctransfer
+    - path: /usr/bin/id
+    - path: /usr/bin/ifconfig
+    - path: /usr/bin/ifdown
+    - path: /usr/bin/ifenslave
+    - path: /usr/bin/ifplugd
+    - path: /usr/bin/ifup
+    - path: /usr/bin/inetd
+    - path: /usr/bin/init
+    - path: /usr/bin/insmod
+    - path: /usr/bin/install
+    - path: /usr/bin/ionice
+    - path: /usr/bin/iostat
+    - path: /usr/bin/ip
+    - path: /usr/bin/ipaddr
+    - path: /usr/bin/ipcalc
+    - path: /usr/bin/ipcrm
+    - path: /usr/bin/ipcs
+    - path: /usr/bin/iplink
+    - path: /usr/bin/ipneigh
+    - path: /usr/bin/iproute
+    - path: /usr/bin/iprule
+    - path: /usr/bin/iptunnel
+    - path: /usr/bin/kbd_mode
+    - path: /usr/bin/kill
+    - path: /usr/bin/killall
+    - path: /usr/bin/killall5
+    - path: /usr/bin/klogd
+    - path: /usr/bin/last
+    - path: /usr/bin/less
+    - path: /usr/bin/link
+    - path: /usr/bin/linux32
+    - path: /usr/bin/linux64
+    - path: /usr/bin/ln
+    - path: /usr/bin/loadfont
+    - path: /usr/bin/loadkmap
+    - path: /usr/bin/logger
+    - path: /usr/bin/login
+    - path: /usr/bin/logname
+    - path: /usr/bin/logread
+    - path: /usr/bin/losetup
+    - path: /usr/bin/lpd
+    - path: /usr/bin/lpq
+    - path: /usr/bin/lpr
+    - path: /usr/bin/ls
+    - path: /usr/bin/lsattr
+    - path: /usr/bin/lsmod
+    - path: /usr/bin/lsof
+    - path: /usr/bin/lspci
+    - path: /usr/bin/lsscsi
+    - path: /usr/bin/lsusb
+    - path: /usr/bin/lzcat
+    - path: /usr/bin/lzma
+    - path: /usr/bin/lzop
+    - path: /usr/bin/makedevs
+    - path: /usr/bin/makemime
+    - path: /usr/bin/man
+    - path: /usr/bin/md5sum
+    - path: /usr/bin/mdev
+    - path: /usr/bin/mesg
+    - path: /usr/bin/microcom
+    - path: /usr/bin/mim
+    - path: /usr/bin/mkdir
+    - path: /usr/bin/mkdosfs
+    - path: /usr/bin/mke2fs
+    - path: /usr/bin/mkfifo
+    - path: /usr/bin/mkfs.ext2
+    - path: /usr/bin/mkfs.minix
+    - path: /usr/bin/mkfs.vfat
+    - path: /usr/bin/mknod
+    - path: /usr/bin/mkpasswd
+    - path: /usr/bin/mkswap
+    - path: /usr/bin/mktemp
+    - path: /usr/bin/modinfo
+    - path: /usr/bin/modprobe
+    - path: /usr/bin/more
+    - path: /usr/bin/mount
+    - path: /usr/bin/mountpoint
+    - path: /usr/bin/mpstat
+    - path: /usr/bin/mt
+    - path: /usr/bin/mv
+    - path: /usr/bin/nameif
+    - path: /usr/bin/nanddump
+    - path: /usr/bin/nandwrite
+    - path: /usr/bin/nbd-client
+    - path: /usr/bin/nc
+    - path: /usr/bin/netstat
+    - path: /usr/bin/nice
+    - path: /usr/bin/nl
+    - path: /usr/bin/nmeter
+    - path: /usr/bin/nohup
+    - path: /usr/bin/nologin
+    - path: /usr/bin/nproc
+    - path: /usr/bin/nsenter
+    - path: /usr/bin/nslookup
+    - path: /usr/bin/ntpd
+    - path: /usr/bin/od
+    - path: /usr/bin/openvt
+    - path: /usr/bin/partprobe
+    - path: /usr/bin/passwd
+    - path: /usr/bin/paste
+    - path: /usr/bin/patch
+    - path: /usr/bin/pgrep
+    - path: /usr/bin/pidof
+    - path: /usr/bin/ping
+    - path: /usr/bin/ping6
+    - path: /usr/bin/pipe_progress
+    - path: /usr/bin/pivot_root
+    - path: /usr/bin/pkill
+    - path: /usr/bin/pmap
+    - path: /usr/bin/popmaildir
+    - path: /usr/bin/poweroff
+    - path: /usr/bin/powertop
+    - path: /usr/bin/printenv
+    - path: /usr/bin/printf
+    - path: /usr/bin/ps
+    - path: /usr/bin/pscan
+    - path: /usr/bin/pstree
+    - path: /usr/bin/pwd
+    - path: /usr/bin/pwdx
+    - path: /usr/bin/raidautorun
+    - path: /usr/bin/rdate
+    - path: /usr/bin/rdev
+    - path: /usr/bin/readahead
+    - path: /usr/bin/readlink
+    - path: /usr/bin/readprofile
+    - path: /usr/bin/realpath
+    - path: /usr/bin/reboot
+    - path: /usr/bin/reformime
+    - path: /usr/bin/remove-shell
+    - path: /usr/bin/renice
+    - path: /usr/bin/reset
+    - path: /usr/bin/resize
+    - path: /usr/bin/resume
+    - path: /usr/bin/rev
+    - path: /usr/bin/rm
+    - path: /usr/bin/rmdir
+    - path: /usr/bin/rmmod
+    - path: /usr/bin/route
+    - path: /usr/bin/rpm
+    - path: /usr/bin/rpm2cpio
+    - path: /usr/bin/rtcwake
+    - path: /usr/bin/run-init
+    - path: /usr/bin/run-parts
+    - path: /usr/bin/runlevel
+    - path: /usr/bin/runsv
+    - path: /usr/bin/runsvdir
+    - path: /usr/bin/rx
+    - path: /usr/bin/script
+    - path: /usr/bin/scriptreplay
+    - path: /usr/bin/sed
+    - path: /usr/bin/seedrng
+    - path: /usr/bin/sendmail
+    - path: /usr/bin/seq
+    - path: /usr/bin/setarch
+    - path: /usr/bin/setconsole
+    - path: /usr/bin/setfattr
+    - path: /usr/bin/setfont
+    - path: /usr/bin/setkeycodes
+    - path: /usr/bin/setlogcons
+    - path: /usr/bin/setpriv
+    - path: /usr/bin/setserial
+    - path: /usr/bin/setsid
+    - path: /usr/bin/setuidgid
+    - path: /usr/bin/sh
+    - path: /usr/bin/sha1sum
+    - path: /usr/bin/sha3sum
+    - path: /usr/bin/sha256sum
+    - path: /usr/bin/sha512sum
+    - path: /usr/bin/showkey
+    - path: /usr/bin/shred
+    - path: /usr/bin/shuf
+    - path: /usr/bin/slattach
+    - path: /usr/bin/sleep
+    - path: /usr/bin/smemcap
+    - path: /usr/bin/softlimit
+    - path: /usr/bin/sort
+    - path: /usr/bin/split
+    - path: /usr/bin/ssl_client
+    - path: /usr/bin/start-stop-daemon
+    - path: /usr/bin/stat
+    - path: /usr/bin/strings
+    - path: /usr/bin/stty
+    - path: /usr/bin/su
+    - path: /usr/bin/sulogin
+    - path: /usr/bin/sum
+    - path: /usr/bin/sv
+    - path: /usr/bin/svc
+    - path: /usr/bin/svlogd
+    - path: /usr/bin/svok
+    - path: /usr/bin/swapoff
+    - path: /usr/bin/swapon
+    - path: /usr/bin/switch_root
+    - path: /usr/bin/sync
+    - path: /usr/bin/sysctl
+    - path: /usr/bin/syslogd
+    - path: /usr/bin/tac
+    - path: /usr/bin/tail
+    - path: /usr/bin/tar
+    - path: /usr/bin/taskset
+    - path: /usr/bin/tc
+    - path: /usr/bin/tcpsvd
+    - path: /usr/bin/tee
+    - path: /usr/bin/telnet
+    - path: /usr/bin/telnetd
+    - path: /usr/bin/test
+    - path: /usr/bin/tftp
+    - path: /usr/bin/tftpd
+    - path: /usr/bin/time
+    - path: /usr/bin/timeout
+    - path: /usr/bin/top
+    - path: /usr/bin/touch
+    - path: /usr/bin/tr
+    - path: /usr/bin/traceroute
+    - path: /usr/bin/traceroute6
+    - path: /usr/bin/tree
+    - path: /usr/bin/true
+    - path: /usr/bin/truncate
+    - path: /usr/bin/ts
+    - path: /usr/bin/tsort
+    - path: /usr/bin/tty
+    - path: /usr/bin/ttysize
+    - path: /usr/bin/tunctl
+    - path: /usr/bin/ubiattach
+    - path: /usr/bin/ubidetach
+    - path: /usr/bin/ubimkvol
+    - path: /usr/bin/ubirename
+    - path: /usr/bin/ubirmvol
+    - path: /usr/bin/ubirsvol
+    - path: /usr/bin/ubiupdatevol
+    - path: /usr/bin/udhcpc
+    - path: /usr/bin/udhcpc6
+    - path: /usr/bin/udhcpd
+    - path: /usr/bin/udpsvd
+    - path: /usr/bin/uevent
+    - path: /usr/bin/umount
+    - path: /usr/bin/uname
+    - path: /usr/bin/unexpand
+    - path: /usr/bin/uniq
+    - path: /usr/bin/unix2dos
+    - path: /usr/bin/unlink
+    - path: /usr/bin/unlzma
+    - path: /usr/bin/unshare
+    - path: /usr/bin/unxz
+    - path: /usr/bin/unzip
+    - path: /usr/bin/uptime
+    - path: /usr/bin/users
+    - path: /usr/bin/usleep
+    - path: /usr/bin/uudecode
+    - path: /usr/bin/uuencode
+    - path: /usr/bin/vconfig
+    - path: /usr/bin/vi
+    - path: /usr/bin/vlock
+    - path: /usr/bin/volname
+    - path: /usr/bin/w
+    - path: /usr/bin/wall
+    - path: /usr/bin/watch
+    - path: /usr/bin/watchdog
+    - path: /usr/bin/wc
+    - path: /usr/bin/wget
+    - path: /usr/bin/which
+    - path: /usr/bin/who
+    - path: /usr/bin/whoami
+    - path: /usr/bin/whois
+    - path: /usr/bin/xargs
+    - path: /usr/bin/xxd
+    - path: /usr/bin/xz
+    - path: /usr/bin/xzcat
+    - path: /usr/bin/yes
+    - path: /usr/bin/zcat
+    - path: /usr/bin/zcip
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libresolv.so.2: glibc

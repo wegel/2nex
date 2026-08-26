@@ -1,0 +1,235 @@
+package:
+  schema: 1
+  name: libmd
+  slug: libmd
+  namespace: libs/crypto
+  version: 1.2.0
+  description: Message digest functions from BSD systems
+  homepage: https://libbsd.freedesktop.org/wiki/Software/libmd/
+  checksum: 0d50fc9b769a0f1252141505d664d7ce40cb1049ef1046cb9433fe829bc652ea
+
+sources:
+- name: libmd
+  url: https://libbsd.freedesktop.org/releases/libmd-1.2.0.tar.xz
+  sha256: ac15ffb8430502fbaccdec66c5a82ee0eab0b0f36220df56710feadfeb13d0a0
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4122:9158, 8254:13757, 12387:18724, 16125:23678]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_libmd} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --disable-static
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+  - man
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/md2.h
+    - path: /usr/include/md4.h
+    - path: /usr/include/md5.h
+    - path: /usr/include/ripemd.h
+    - path: /usr/include/rmd160.h
+    - path: /usr/include/sha.h
+    - path: /usr/include/sha1.h
+    - path: /usr/include/sha2.h
+    - path: /usr/include/sha3.h
+    - path: /usr/include/sha256.h
+    - path: /usr/include/sha512.h
+    - path: /usr/lib/libmd.la
+    - path: /usr/lib/pkgconfig/libmd.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libmd.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libmd.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libmd.so.0.2.0
+      needs:
+      - /usr/lib/libc.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man3/MD2Data.3
+    - path: /usr/share/man/man3/MD2File.3
+    - path: /usr/share/man/man3/MD2FileChunk.3
+    - path: /usr/share/man/man3/MD2Final.3
+    - path: /usr/share/man/man3/MD2End.3
+    - path: /usr/share/man/man3/MD2Init.3
+    - path: /usr/share/man/man3/MD2Update.3
+    - path: /usr/share/man/man3/MD2Transform.3
+    - path: /usr/share/man/man3/MD4Pad.3
+    - path: /usr/share/man/man3/MD4Data.3
+    - path: /usr/share/man/man3/MD4File.3
+    - path: /usr/share/man/man3/MD4FileChunk.3
+    - path: /usr/share/man/man3/MD4Final.3
+    - path: /usr/share/man/man3/MD4End.3
+    - path: /usr/share/man/man3/MD4Init.3
+    - path: /usr/share/man/man3/MD4Update.3
+    - path: /usr/share/man/man3/MD4Transform.3
+    - path: /usr/share/man/man3/MD5Pad.3
+    - path: /usr/share/man/man3/MD5Data.3
+    - path: /usr/share/man/man3/MD5File.3
+    - path: /usr/share/man/man3/MD5FileChunk.3
+    - path: /usr/share/man/man3/MD5Final.3
+    - path: /usr/share/man/man3/MD5End.3
+    - path: /usr/share/man/man3/MD5Init.3
+    - path: /usr/share/man/man3/MD5Update.3
+    - path: /usr/share/man/man3/MD5Transform.3
+    - path: /usr/share/man/man3/RMD160Pad.3
+    - path: /usr/share/man/man3/RMD160Data.3
+    - path: /usr/share/man/man3/RMD160File.3
+    - path: /usr/share/man/man3/RMD160FileChunk.3
+    - path: /usr/share/man/man3/RMD160Final.3
+    - path: /usr/share/man/man3/RMD160End.3
+    - path: /usr/share/man/man3/RMD160Init.3
+    - path: /usr/share/man/man3/RMD160Update.3
+    - path: /usr/share/man/man3/RMD160Transform.3
+    - path: /usr/share/man/man3/SHA1Pad.3
+    - path: /usr/share/man/man3/SHA1Data.3
+    - path: /usr/share/man/man3/SHA1File.3
+    - path: /usr/share/man/man3/SHA1FileChunk.3
+    - path: /usr/share/man/man3/SHA1Final.3
+    - path: /usr/share/man/man3/SHA1End.3
+    - path: /usr/share/man/man3/SHA1Init.3
+    - path: /usr/share/man/man3/SHA1Update.3
+    - path: /usr/share/man/man3/SHA1Transform.3
+    - path: /usr/share/man/man3/SHA3_224_Final.3
+    - path: /usr/share/man/man3/SHA3_224_Init.3
+    - path: /usr/share/man/man3/SHA3_224_Update.3
+    - path: /usr/share/man/man3/SHA3_256_Final.3
+    - path: /usr/share/man/man3/SHA3_256_Init.3
+    - path: /usr/share/man/man3/SHA3_256_Update.3
+    - path: /usr/share/man/man3/SHA3_384_Final.3
+    - path: /usr/share/man/man3/SHA3_384_Init.3
+    - path: /usr/share/man/man3/SHA3_384_Update.3
+    - path: /usr/share/man/man3/SHA3_512_Final.3
+    - path: /usr/share/man/man3/SHA3_512_Init.3
+    - path: /usr/share/man/man3/SHA3_512_Update.3
+    - path: /usr/share/man/man3/SHA3_Selftest.3
+    - path: /usr/share/man/man3/SHA224Pad.3
+    - path: /usr/share/man/man3/SHA224Data.3
+    - path: /usr/share/man/man3/SHA224File.3
+    - path: /usr/share/man/man3/SHA224FileChunk.3
+    - path: /usr/share/man/man3/SHA224Final.3
+    - path: /usr/share/man/man3/SHA224End.3
+    - path: /usr/share/man/man3/SHA224Init.3
+    - path: /usr/share/man/man3/SHA224Update.3
+    - path: /usr/share/man/man3/SHA224Transform.3
+    - path: /usr/share/man/man3/SHA256Pad.3
+    - path: /usr/share/man/man3/SHA256Data.3
+    - path: /usr/share/man/man3/SHA256File.3
+    - path: /usr/share/man/man3/SHA256FileChunk.3
+    - path: /usr/share/man/man3/SHA256Final.3
+    - path: /usr/share/man/man3/SHA256End.3
+    - path: /usr/share/man/man3/SHA256Init.3
+    - path: /usr/share/man/man3/SHA256Update.3
+    - path: /usr/share/man/man3/SHA256Transform.3
+    - path: /usr/share/man/man3/SHA384Pad.3
+    - path: /usr/share/man/man3/SHA384Data.3
+    - path: /usr/share/man/man3/SHA384File.3
+    - path: /usr/share/man/man3/SHA384FileChunk.3
+    - path: /usr/share/man/man3/SHA384Final.3
+    - path: /usr/share/man/man3/SHA384End.3
+    - path: /usr/share/man/man3/SHA384Init.3
+    - path: /usr/share/man/man3/SHA384Update.3
+    - path: /usr/share/man/man3/SHA384Transform.3
+    - path: /usr/share/man/man3/SHA512_256Pad.3
+    - path: /usr/share/man/man3/SHA512_256Data.3
+    - path: /usr/share/man/man3/SHA512_256File.3
+    - path: /usr/share/man/man3/SHA512_256FileChunk.3
+    - path: /usr/share/man/man3/SHA512_256Final.3
+    - path: /usr/share/man/man3/SHA512_256End.3
+    - path: /usr/share/man/man3/SHA512_256Init.3
+    - path: /usr/share/man/man3/SHA512_256Update.3
+    - path: /usr/share/man/man3/SHA512_256Transform.3
+    - path: /usr/share/man/man3/SHA512Pad.3
+    - path: /usr/share/man/man3/SHA512Data.3
+    - path: /usr/share/man/man3/SHA512File.3
+    - path: /usr/share/man/man3/SHA512FileChunk.3
+    - path: /usr/share/man/man3/SHA512Final.3
+    - path: /usr/share/man/man3/SHA512End.3
+    - path: /usr/share/man/man3/SHA512Init.3
+    - path: /usr/share/man/man3/SHA512Update.3
+    - path: /usr/share/man/man3/SHA512Transform.3
+    - path: /usr/share/man/man3/SHAKE128_Final.3
+    - path: /usr/share/man/man3/SHAKE128_Init.3
+    - path: /usr/share/man/man3/SHAKE128_Update.3
+    - path: /usr/share/man/man3/SHAKE256_Final.3
+    - path: /usr/share/man/man3/SHAKE256_Init.3
+    - path: /usr/share/man/man3/SHAKE256_Update.3
+    - path: /usr/share/man/man3/md2.3
+    - path: /usr/share/man/man3/md4.3
+    - path: /usr/share/man/man3/md5.3
+    - path: /usr/share/man/man3/rmd160.3
+    - path: /usr/share/man/man3/sha1.3
+    - path: /usr/share/man/man3/sha2.3
+    - path: /usr/share/man/man3/sha3.3
+    - path: /usr/share/man/man3/shake.3
+    - path: /usr/share/man/man7/libmd.7
+
+resolution:
+  /usr/lib/libc.so.6: glibc

@@ -1,0 +1,135 @@
+package:
+  schema: 1
+  name: wl-mirror
+  slug: wl-mirror
+  namespace: desktop/wayland
+  version: 0.18.3
+  description: Wayland output mirror client
+  homepage: https://github.com/Ferdi265/wl-mirror
+  checksum: 82618664cd7480b2d6711516e37b4abc22478a2df9b8f2c29160b273690e47e1
+
+sources:
+- name: wl-mirror
+  url: https://github.com/Ferdi265/wl-mirror/releases/download/v0.18.3/wl-mirror-0.18.3.tar.gz
+  sha256: 52c15744ed2aee1aadb690bce91af49312cae0ed2f514d23bfbfaf0548dbac44
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: wayland
+  commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
+- name: mesa
+  commit: x86_64/pkg/libs/graphics/mesa/24.2.7/bundles/dev
+- name: libdrm
+  commit: x86_64/pkg/libs/graphics/libdrm/2.4.123/bundles/dev
+- name: scdoc
+  commit: x86_64/pkg/dev/tools/scdoc/1.11.4/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: elfutils
+  commit: x86_64/pkg/dev/util/elfutils/0.191/bundles/dev
+- name: libarchive
+  commit: x86_64/pkg/libs/archive/libarchive/3.8.4/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4141:6596, 6573:6838]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_wl_mirror} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
+
+    # disable LTO to avoid link issues with generated protocol code
+    export CFLAGS="${CFLAGS//-flto=auto/}"
+    export LDFLAGS="${LDFLAGS//-flto=auto/}"
+
+    cmake -B build -G Ninja \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DINSTALL_DOCUMENTATION=ON \
+      -DWITH_GBM=ON
+
+    ninja -C build
+    DESTDIR=${OUT_DIR} ninja -C build install
+
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/wl-mirror
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/wl-mirror
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libEGL.so.1
+      - /usr/lib/libGLESv2.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdrm.so.2
+      - /usr/lib/libgbm.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-egl.so.1
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libdrm.so.2: libdrm
+  /usr/lib/libEGL.so.1: mesa
+  /usr/lib/libGLESv2.so.2: mesa
+  /usr/lib/libgbm.so.1: mesa
+  /usr/lib/libwayland-client.so.0: wayland
+  /usr/lib/libwayland-egl.so.1: wayland

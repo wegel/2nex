@@ -1,0 +1,459 @@
+package:
+  schema: 1
+  name: Podman
+  slug: podman
+  namespace: apps/containers
+  version: 5.4.1
+  description: A tool for managing OCI containers and pods
+  homepage: https://podman.io/
+  checksum: 22c34447bf782c8d570870685682fb150ddd07c1c620793dab906b496bd9dc37
+
+sources:
+- name: podman
+  url: https://github.com/containers/podman/archive/refs/tags/v5.4.1.tar.gz
+  sha256: 502117195c06678db612313aaf42505cabeea860f8668802a0608754eb0df9f6
+- name: uapi_config
+  file: pkg/apps/containers/podman-uapi-config.patch
+  sha256: b76a17accfda096793f6e8c02c07b7ce95766fc57b68140a8c26de26687786c9
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: mandoc
+  commit: x86_64/pkg/cli/text/mandoc/1.14.6/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: go
+  commit: x86_64/pkg/dev/lang/go/1.26.4/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: libgpgme
+  commit: x86_64/pkg/dev/libs/libgpgme/2.0.1/bundles/dev
+- name: libseccomp
+  commit: x86_64/pkg/dev/libs/libseccomp/2.5.6/bundles/dev
+- name: shadow
+  commit: x86_64/pkg/core/userland/shadow/4.15.1/bundles/dev
+- name: btrfs-progs
+  commit: x86_64/pkg/core/fs/btrfs-progs/6.10/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: inetutils
+  commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: libgpg-error
+  commit: x86_64/pkg/dev/libs/libgpg-error/1.59/bundles/dev
+- name: libassuan
+  commit: x86_64/pkg/dev/libs/libassuan/3.0.2/bundles/dev
+- name: libxcrypt
+  commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4207:9439, 12967:41887, 16919:42209]
+
+  script: |
+    tar --no-same-owner -xf /./${SOURCE_podman} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i /${SOURCE_uapi_config}
+
+    # Set up Go environment
+    export GOROOT="/usr/lib/go"
+    export GOPATH="${WORK_DIR}/gopath"
+    export PATH="/usr/bin:/usr/lib/go/bin:${PATH}"
+    export CGO_ENABLED=1
+    export GO111MODULE=on
+    export GOFLAGS="-trimpath -ldflags=-compressdwarf=false"
+
+    # Set up proxy to disable external downloads
+    export GOPROXY=off
+    export GOSUMDB=off
+
+    go test \
+      github.com/containers/common/pkg/config \
+      github.com/containers/image/v5/pkg/sysregistriesv2 \
+      github.com/containers/image/v5/signature \
+      github.com/containers/image/v5/docker \
+      github.com/containers/storage/types
+
+    printf 'podman UAPI smoke: containers.conf, registries.conf, policy, storage.conf, and registries.d tests passed\n'
+
+    # Create symlinks for compiler and linker to ensure build tools can find them
+    mkdir -p /usr/local/bin
+    ln -sf /usr/bin/gcc /usr/local/bin/cc
+    ln -sf /usr/bin/ld.bfd /usr/local/bin/ld
+    export PATH="/usr/local/bin:${PATH}"
+
+    # Configure PKG_CONFIG_PATH for dependencies
+    export PKG_CONFIG_PATH="/usr/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/share/pkgconfig"
+
+    # Configure library path to ensure libcrypt is found
+    export LD_LIBRARY_PATH="/usr/lib:/usr/lib64"
+
+    # Use upstream's host feature checks and install the normal Linux tools.
+    make GO=go GIT_COMMIT=v5.4.1 PREFIX=/usr podman podman-remote rootlessport quadlet docs
+    make \
+      GO=go \
+      GIT_COMMIT=v5.4.1 \
+      DESTDIR="${OUT_DIR}" \
+      PREFIX=/usr \
+      install.bin \
+      install.remote \
+      install.man \
+      install.systemd \
+      install.completions
+
+    # Set consistent timestamps for reproducible builds
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+
+bundles:
+  full:
+  - bin
+  - lib
+  - man
+  - misc
+  - remote
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/podman
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgpgme.so.45
+      - /usr/lib/libresolv.so.2
+      - /usr/lib/libseccomp.so.2
+      - /usr/lib/libsubid.so.4
+    - path: /usr/bin/podmansh
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgpgme.so.45
+      - /usr/lib/libresolv.so.2
+      - /usr/lib/libseccomp.so.2
+      - /usr/lib/libsubid.so.4
+    - path: /usr/libexec/podman/quadlet
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/libexec/podman/rootlessport
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libresolv.so.2
+
+  lib:
+    files:
+    - path: /usr/lib/systemd/system-generators/podman-system-generator
+    - path: /usr/lib/systemd/system/podman-auto-update.service
+    - path: /usr/lib/systemd/system/podman-auto-update.timer
+    - path: /usr/lib/systemd/system/podman-clean-transient.service
+    - path: /usr/lib/systemd/system/podman-kube@.service
+    - path: /usr/lib/systemd/system/podman-restart.service
+    - path: /usr/lib/systemd/system/podman.service
+    - path: /usr/lib/systemd/system/podman.socket
+    - path: /usr/lib/systemd/user-generators/podman-user-generator
+    - path: /usr/lib/systemd/user/podman-auto-update.service
+    - path: /usr/lib/systemd/user/podman-auto-update.timer
+    - path: /usr/lib/systemd/user/podman-clean-transient.service
+    - path: /usr/lib/systemd/user/podman-kube@.service
+    - path: /usr/lib/systemd/user/podman-restart.service
+    - path: /usr/lib/systemd/user/podman-user-wait-network-online.service
+    - path: /usr/lib/systemd/user/podman.service
+    - path: /usr/lib/systemd/user/podman.socket
+    - path: /usr/lib/tmpfiles.d/podman.conf
+
+  man:
+    files:
+    - path: /usr/share/man/man1/podman-artifact-add.1
+    - path: /usr/share/man/man1/podman-artifact-inspect.1
+    - path: /usr/share/man/man1/podman-artifact-ls.1
+    - path: /usr/share/man/man1/podman-artifact-pull.1
+    - path: /usr/share/man/man1/podman-artifact-push.1
+    - path: /usr/share/man/man1/podman-artifact-rm.1
+    - path: /usr/share/man/man1/podman-artifact.1
+    - path: /usr/share/man/man1/podman-attach.1
+    - path: /usr/share/man/man1/podman-auto-update.1
+    - path: /usr/share/man/man1/podman-build.1
+    - path: /usr/share/man/man1/podman-commit.1
+    - path: /usr/share/man/man1/podman-completion.1
+    - path: /usr/share/man/man1/podman-compose.1
+    - path: /usr/share/man/man1/podman-container-attach.1
+    - path: /usr/share/man/man1/podman-container-checkpoint.1
+    - path: /usr/share/man/man1/podman-container-cleanup.1
+    - path: /usr/share/man/man1/podman-container-clone.1
+    - path: /usr/share/man/man1/podman-container-commit.1
+    - path: /usr/share/man/man1/podman-container-cp.1
+    - path: /usr/share/man/man1/podman-container-create.1
+    - path: /usr/share/man/man1/podman-container-diff.1
+    - path: /usr/share/man/man1/podman-container-exec.1
+    - path: /usr/share/man/man1/podman-container-exists.1
+    - path: /usr/share/man/man1/podman-container-export.1
+    - path: /usr/share/man/man1/podman-container-init.1
+    - path: /usr/share/man/man1/podman-container-inspect.1
+    - path: /usr/share/man/man1/podman-container-kill.1
+    - path: /usr/share/man/man1/podman-container-list.1
+    - path: /usr/share/man/man1/podman-container-logs.1
+    - path: /usr/share/man/man1/podman-container-ls.1
+    - path: /usr/share/man/man1/podman-container-mount.1
+    - path: /usr/share/man/man1/podman-container-pause.1
+    - path: /usr/share/man/man1/podman-container-port.1
+    - path: /usr/share/man/man1/podman-container-prune.1
+    - path: /usr/share/man/man1/podman-container-ps.1
+    - path: /usr/share/man/man1/podman-container-rename.1
+    - path: /usr/share/man/man1/podman-container-restart.1
+    - path: /usr/share/man/man1/podman-container-restore.1
+    - path: /usr/share/man/man1/podman-container-rm.1
+    - path: /usr/share/man/man1/podman-container-run.1
+    - path: /usr/share/man/man1/podman-container-runlabel.1
+    - path: /usr/share/man/man1/podman-container-start.1
+    - path: /usr/share/man/man1/podman-container-stats.1
+    - path: /usr/share/man/man1/podman-container-stop.1
+    - path: /usr/share/man/man1/podman-container-top.1
+    - path: /usr/share/man/man1/podman-container-umount.1
+    - path: /usr/share/man/man1/podman-container-unmount.1
+    - path: /usr/share/man/man1/podman-container-unpause.1
+    - path: /usr/share/man/man1/podman-container-update.1
+    - path: /usr/share/man/man1/podman-container-wait.1
+    - path: /usr/share/man/man1/podman-container.1
+    - path: /usr/share/man/man1/podman-cp.1
+    - path: /usr/share/man/man1/podman-create.1
+    - path: /usr/share/man/man1/podman-diff.1
+    - path: /usr/share/man/man1/podman-events.1
+    - path: /usr/share/man/man1/podman-exec.1
+    - path: /usr/share/man/man1/podman-export.1
+    - path: /usr/share/man/man1/podman-farm-build.1
+    - path: /usr/share/man/man1/podman-farm-create.1
+    - path: /usr/share/man/man1/podman-farm-list.1
+    - path: /usr/share/man/man1/podman-farm-remove.1
+    - path: /usr/share/man/man1/podman-farm-update.1
+    - path: /usr/share/man/man1/podman-farm.1
+    - path: /usr/share/man/man1/podman-generate-kube.1
+    - path: /usr/share/man/man1/podman-generate-spec.1
+    - path: /usr/share/man/man1/podman-generate-systemd.1
+    - path: /usr/share/man/man1/podman-generate.1
+    - path: /usr/share/man/man1/podman-healthcheck-run.1
+    - path: /usr/share/man/man1/podman-healthcheck.1
+    - path: /usr/share/man/man1/podman-help.1
+    - path: /usr/share/man/man1/podman-history.1
+    - path: /usr/share/man/man1/podman-image-build.1
+    - path: /usr/share/man/man1/podman-image-diff.1
+    - path: /usr/share/man/man1/podman-image-exists.1
+    - path: /usr/share/man/man1/podman-image-history.1
+    - path: /usr/share/man/man1/podman-image-import.1
+    - path: /usr/share/man/man1/podman-image-inspect.1
+    - path: /usr/share/man/man1/podman-image-list.1
+    - path: /usr/share/man/man1/podman-image-load.1
+    - path: /usr/share/man/man1/podman-image-ls.1
+    - path: /usr/share/man/man1/podman-image-mount.1
+    - path: /usr/share/man/man1/podman-image-prune.1
+    - path: /usr/share/man/man1/podman-image-pull.1
+    - path: /usr/share/man/man1/podman-image-push.1
+    - path: /usr/share/man/man1/podman-image-rm.1
+    - path: /usr/share/man/man1/podman-image-save.1
+    - path: /usr/share/man/man1/podman-image-scp.1
+    - path: /usr/share/man/man1/podman-image-search.1
+    - path: /usr/share/man/man1/podman-image-sign.1
+    - path: /usr/share/man/man1/podman-image-tag.1
+    - path: /usr/share/man/man1/podman-image-tree.1
+    - path: /usr/share/man/man1/podman-image-trust.1
+    - path: /usr/share/man/man1/podman-image-umount.1
+    - path: /usr/share/man/man1/podman-image-unmount.1
+    - path: /usr/share/man/man1/podman-image-untag.1
+    - path: /usr/share/man/man1/podman-image.1
+    - path: /usr/share/man/man1/podman-images.1
+    - path: /usr/share/man/man1/podman-import.1
+    - path: /usr/share/man/man1/podman-info.1
+    - path: /usr/share/man/man1/podman-init.1
+    - path: /usr/share/man/man1/podman-inspect.1
+    - path: /usr/share/man/man1/podman-kill.1
+    - path: /usr/share/man/man1/podman-kube-apply.1
+    - path: /usr/share/man/man1/podman-kube-down.1
+    - path: /usr/share/man/man1/podman-kube-generate.1
+    - path: /usr/share/man/man1/podman-kube-play.1
+    - path: /usr/share/man/man1/podman-kube.1
+    - path: /usr/share/man/man1/podman-load.1
+    - path: /usr/share/man/man1/podman-login.1
+    - path: /usr/share/man/man1/podman-logout.1
+    - path: /usr/share/man/man1/podman-logs.1
+    - path: /usr/share/man/man1/podman-machine-info.1
+    - path: /usr/share/man/man1/podman-machine-init.1
+    - path: /usr/share/man/man1/podman-machine-inspect.1
+    - path: /usr/share/man/man1/podman-machine-list.1
+    - path: /usr/share/man/man1/podman-machine-ls.1
+    - path: /usr/share/man/man1/podman-machine-os-apply.1
+    - path: /usr/share/man/man1/podman-machine-os.1
+    - path: /usr/share/man/man1/podman-machine-reset.1
+    - path: /usr/share/man/man1/podman-machine-rm.1
+    - path: /usr/share/man/man1/podman-machine-set.1
+    - path: /usr/share/man/man1/podman-machine-ssh.1
+    - path: /usr/share/man/man1/podman-machine-start.1
+    - path: /usr/share/man/man1/podman-machine-stop.1
+    - path: /usr/share/man/man1/podman-machine.1
+    - path: /usr/share/man/man1/podman-manifest-add.1
+    - path: /usr/share/man/man1/podman-manifest-annotate.1
+    - path: /usr/share/man/man1/podman-manifest-create.1
+    - path: /usr/share/man/man1/podman-manifest-exists.1
+    - path: /usr/share/man/man1/podman-manifest-inspect.1
+    - path: /usr/share/man/man1/podman-manifest-push.1
+    - path: /usr/share/man/man1/podman-manifest-remove.1
+    - path: /usr/share/man/man1/podman-manifest-rm.1
+    - path: /usr/share/man/man1/podman-manifest.1
+    - path: /usr/share/man/man1/podman-mount.1
+    - path: /usr/share/man/man1/podman-network-connect.1
+    - path: /usr/share/man/man1/podman-network-create.1
+    - path: /usr/share/man/man1/podman-network-disconnect.1
+    - path: /usr/share/man/man1/podman-network-exists.1
+    - path: /usr/share/man/man1/podman-network-inspect.1
+    - path: /usr/share/man/man1/podman-network-ls.1
+    - path: /usr/share/man/man1/podman-network-prune.1
+    - path: /usr/share/man/man1/podman-network-reload.1
+    - path: /usr/share/man/man1/podman-network-rm.1
+    - path: /usr/share/man/man1/podman-network-update.1
+    - path: /usr/share/man/man1/podman-network.1
+    - path: /usr/share/man/man1/podman-pause.1
+    - path: /usr/share/man/man1/podman-play-kube.1
+    - path: /usr/share/man/man1/podman-pod-clone.1
+    - path: /usr/share/man/man1/podman-pod-create.1
+    - path: /usr/share/man/man1/podman-pod-exists.1
+    - path: /usr/share/man/man1/podman-pod-inspect.1
+    - path: /usr/share/man/man1/podman-pod-kill.1
+    - path: /usr/share/man/man1/podman-pod-logs.1
+    - path: /usr/share/man/man1/podman-pod-pause.1
+    - path: /usr/share/man/man1/podman-pod-prune.1
+    - path: /usr/share/man/man1/podman-pod-ps.1
+    - path: /usr/share/man/man1/podman-pod-restart.1
+    - path: /usr/share/man/man1/podman-pod-rm.1
+    - path: /usr/share/man/man1/podman-pod-start.1
+    - path: /usr/share/man/man1/podman-pod-stats.1
+    - path: /usr/share/man/man1/podman-pod-stop.1
+    - path: /usr/share/man/man1/podman-pod-top.1
+    - path: /usr/share/man/man1/podman-pod-unpause.1
+    - path: /usr/share/man/man1/podman-pod.1
+    - path: /usr/share/man/man1/podman-port.1
+    - path: /usr/share/man/man1/podman-ps.1
+    - path: /usr/share/man/man1/podman-pull.1
+    - path: /usr/share/man/man1/podman-push.1
+    - path: /usr/share/man/man1/podman-remote.1
+    - path: /usr/share/man/man1/podman-rename.1
+    - path: /usr/share/man/man1/podman-restart.1
+    - path: /usr/share/man/man1/podman-rm.1
+    - path: /usr/share/man/man1/podman-rmi.1
+    - path: /usr/share/man/man1/podman-run.1
+    - path: /usr/share/man/man1/podman-save.1
+    - path: /usr/share/man/man1/podman-search.1
+    - path: /usr/share/man/man1/podman-secret-create.1
+    - path: /usr/share/man/man1/podman-secret-exists.1
+    - path: /usr/share/man/man1/podman-secret-inspect.1
+    - path: /usr/share/man/man1/podman-secret-ls.1
+    - path: /usr/share/man/man1/podman-secret-rm.1
+    - path: /usr/share/man/man1/podman-secret.1
+    - path: /usr/share/man/man1/podman-start.1
+    - path: /usr/share/man/man1/podman-stats.1
+    - path: /usr/share/man/man1/podman-stop.1
+    - path: /usr/share/man/man1/podman-system-check.1
+    - path: /usr/share/man/man1/podman-system-connection-add.1
+    - path: /usr/share/man/man1/podman-system-connection-default.1
+    - path: /usr/share/man/man1/podman-system-connection-list.1
+    - path: /usr/share/man/man1/podman-system-connection-remove.1
+    - path: /usr/share/man/man1/podman-system-connection-rename.1
+    - path: /usr/share/man/man1/podman-system-connection.1
+    - path: /usr/share/man/man1/podman-system-df.1
+    - path: /usr/share/man/man1/podman-system-events.1
+    - path: /usr/share/man/man1/podman-system-info.1
+    - path: /usr/share/man/man1/podman-system-migrate.1
+    - path: /usr/share/man/man1/podman-system-prune.1
+    - path: /usr/share/man/man1/podman-system-renumber.1
+    - path: /usr/share/man/man1/podman-system-reset.1
+    - path: /usr/share/man/man1/podman-system-service.1
+    - path: /usr/share/man/man1/podman-system.1
+    - path: /usr/share/man/man1/podman-tag.1
+    - path: /usr/share/man/man1/podman-top.1
+    - path: /usr/share/man/man1/podman-umount.1
+    - path: /usr/share/man/man1/podman-unmount.1
+    - path: /usr/share/man/man1/podman-unpause.1
+    - path: /usr/share/man/man1/podman-unshare.1
+    - path: /usr/share/man/man1/podman-untag.1
+    - path: /usr/share/man/man1/podman-update.1
+    - path: /usr/share/man/man1/podman-version.1
+    - path: /usr/share/man/man1/podman-volume-create.1
+    - path: /usr/share/man/man1/podman-volume-exists.1
+    - path: /usr/share/man/man1/podman-volume-export.1
+    - path: /usr/share/man/man1/podman-volume-import.1
+    - path: /usr/share/man/man1/podman-volume-inspect.1
+    - path: /usr/share/man/man1/podman-volume-ls.1
+    - path: /usr/share/man/man1/podman-volume-mount.1
+    - path: /usr/share/man/man1/podman-volume-prune.1
+    - path: /usr/share/man/man1/podman-volume-reload.1
+    - path: /usr/share/man/man1/podman-volume-rm.1
+    - path: /usr/share/man/man1/podman-volume-unmount.1
+    - path: /usr/share/man/man1/podman-volume.1
+    - path: /usr/share/man/man1/podman-wait.1
+    - path: /usr/share/man/man1/podman.1
+    - path: /usr/share/man/man1/podmansh.1
+    - path: /usr/share/man/man5/podman-systemd.unit.5
+    - path: /usr/share/man/man5/quadlet.5
+    - path: /usr/share/man/man7/podman-rootless.7
+    - path: /usr/share/man/man7/podman-troubleshooting.7
+
+  misc:
+    files:
+    - path: /usr/share/bash-completion/completions/podman
+    - path: /usr/share/bash-completion/completions/podman-remote
+    - path: /usr/share/fish/vendor_completions.d/podman-remote.fish
+    - path: /usr/share/fish/vendor_completions.d/podman.fish
+    - path: /usr/share/zsh/site-functions/_podman
+    - path: /usr/share/zsh/site-functions/_podman-remote
+
+  remote:
+    files:
+    - path: /usr/bin/podman-remote
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libresolv.so.2
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libresolv.so.2: glibc
+  /usr/lib/libgpgme.so.45: libgpgme
+  /usr/lib/libseccomp.so.2: libseccomp
+  /usr/lib/libsubid.so.4: shadow

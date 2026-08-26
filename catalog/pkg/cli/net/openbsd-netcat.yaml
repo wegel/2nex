@@ -1,0 +1,141 @@
+package:
+  schema: 1
+  name: openbsd-netcat
+  slug: openbsd-netcat
+  namespace: cli/net
+  version: "1.238"
+  description: TCP/IP swiss army knife from OpenBSD
+  homepage: https://salsa.debian.org/debian/netcat-openbsd
+  checksum: dec135ab2661bce6b3e4041447bd389c404abb90b5819604d25f217dfd0f92ba
+
+sources:
+- name: netcat
+  url: https://deb.debian.org/debian/pool/main/n/netcat-openbsd/netcat-openbsd_1.238.orig.tar.gz
+  sha256: 9f72a37d85dec1366309fdb0172be4e67e09ec26e89f13156315149e17c02479
+- name: debian
+  url: https://deb.debian.org/debian/pool/main/n/netcat-openbsd/netcat-openbsd_1.238-1.debian.tar.xz
+  sha256: eefeb9ff863ebd4384274b132a3ff9b492aacb244e445c34dbfb36cfee596930
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: libbsd
+  commit: x86_64/pkg/libs/system/libbsd/0.12.2/bundles/dev
+- name: libmd
+  commit: x86_64/pkg/libs/crypto/libmd/1.2.0/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [1927:370]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_netcat} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    tar --no-same-owner -xf /./${SOURCE_debian} -C "${WORK_DIR}"
+
+    while IFS= read -r patch_name; do
+      patch --batch --fuzz=0 -p1 < "debian/patches/${patch_name}"
+    done < debian/patches/series
+
+    make \
+      CC=gcc \
+      PKG_CONFIG=pkg-config \
+      CFLAGS="${CFLAGS} -DDEBIAN_VERSION=\\\"1.238-1\\\"" \
+      LDFLAGS="${LDFLAGS}"
+
+    mkdir -p "${OUT_DIR}/usr/bin" "${OUT_DIR}/usr/share/man/man1"
+    install -m 755 nc "${OUT_DIR}/usr/bin/nc.openbsd"
+    ln -sf nc.openbsd "${OUT_DIR}/usr/bin/nc"
+    ln -sf nc.openbsd "${OUT_DIR}/usr/bin/netcat"
+    install -m 644 nc.1 "${OUT_DIR}/usr/share/man/man1/nc_openbsd.1"
+    ln -sf nc_openbsd.1 "${OUT_DIR}/usr/share/man/man1/nc.1"
+    ln -sf nc_openbsd.1 "${OUT_DIR}/usr/share/man/man1/nc.openbsd.1"
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/nc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libresolv.so.2
+    - path: /usr/bin/nc.openbsd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libresolv.so.2
+    - path: /usr/bin/netcat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbsd.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libresolv.so.2
+
+  man:
+    files:
+    - path: /usr/share/man/man1/nc.1
+    - path: /usr/share/man/man1/nc.openbsd.1
+    - path: /usr/share/man/man1/nc_openbsd.1
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libresolv.so.2: glibc
+  /usr/lib/libbsd.so.0: libbsd

@@ -1,0 +1,42 @@
+[package]
+name = "nex-bootloader"
+version = "0.1.0"
+edition = "2021"
+description = "zub-aware UEFI bootloader for nex"
+
+[features]
+default = ["bootloader-bin"]
+bootloader-bin = []
+
+[[bin]]
+name = "nex-bootloader"
+path = "src/main.rs"
+test = false
+bench = false
+required-features = ["bootloader-bin"]
+
+[dependencies]
+uefi = { version = "0.32", features = ["alloc", "logger", "global_allocator", "panic_handler"] }
+log = "0.4"
+ext4-view = { version = "0.9", default-features = false }
+
+# LUKS2 support
+aes = { version = "0.8", default-features = false }
+xts-mode = { version = "0.5", default-features = false }
+argon2 = { version = "0.5", default-features = false, features = ["alloc"] }
+sha2 = { version = "0.10", default-features = false, features = ["force-soft"] }
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+hmac = { version = "0.12", default-features = false }
+digest = { version = "0.10", default-features = false }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+opt-level = "z"
+lto = true
+panic = "abort"
+strip = true

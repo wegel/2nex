@@ -1,0 +1,29 @@
+From: Nex Distribution <nex@example.invalid>
+Subject: iwd: search administrator, runtime, and vendor configuration
+Source: https://mirrors.edge.kernel.org/pub/linux/network/wireless/iwd-2.22.tar.xz
+Upstream: Not submitted; this implements the UAPI configuration directory order.
+
+iwd already selects the first main.conf from a colon-separated directory
+list. Use that reader for /etc, /run, and /usr/lib. Do not let systemd replace
+the compiled list with its single ConfigurationDirectory path.
+
+diff --git a/configure b/configure
+index 2aa047a..0455e2e 100755
+--- a/configure
++++ b/configure
+@@ -13908 +13908 @@ printf "%s\n" "#define DAEMON_STORAGEDIR \"/var/lib/iwd\"" >>confdefs.h
+-printf "%s\n" "#define DAEMON_CONFIGDIR \"/etc/iwd\"" >>confdefs.h
++printf "%s\n" "#define DAEMON_CONFIGDIR \"/etc/iwd:/run/iwd:/usr/lib/iwd\"" >>confdefs.h
+diff --git a/configure.ac b/configure.ac
+index e4e2b83..cc1cc02 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -152 +152 @@ AC_DEFINE_UNQUOTED(DAEMON_STORAGEDIR, "/var/lib/iwd",
+-AC_DEFINE_UNQUOTED(DAEMON_CONFIGDIR, "/etc/iwd",
++AC_DEFINE_UNQUOTED(DAEMON_CONFIGDIR, "/etc/iwd:/run/iwd:/usr/lib/iwd",
+diff --git a/src/iwd.service.in b/src/iwd.service.in
+index 1f1997f..e25f0fd 100644
+--- a/src/iwd.service.in
++++ b/src/iwd.service.in
+@@ -24 +23,0 @@ ProtectKernelModules=yes
+-ConfigurationDirectory=iwd

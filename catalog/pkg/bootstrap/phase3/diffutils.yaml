@@ -1,0 +1,57 @@
+package:
+  schema: 1
+  name: Diffutils
+  slug: diffutils
+  namespace: bootstrap/phase3
+  version: "3.10"
+  description: A package of several programs related to finding differences between files
+  homepage: https://www.gnu.org/software/diffutils/
+  checksum: c6943474047e9c1629bdbf95d1ed84e66897afe80cec7c0ff718e3f25e4c07f0
+  seed: true
+
+sources:
+- name: diffutils
+  url: https://ftp.gnu.org/gnu/diffutils/diffutils-3.10.tar.xz
+  sha256: 90e5e93cc724e4ebe12ede80df1634063c7a855692685919bfe60b556c9bd09e
+
+dependencies:
+- name: temporary-system
+  commit: x86_64/pkg/bootstrap/phase1/temporary-system/1.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/bootstrap/phase3/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+
+build:
+  environment: 002d6759a3ccdb3587b39a187250574c6d1de529
+  profile: [4116:3314, 8243:7435, 12384:10113, 16542:12949, 20640:22951, 24764:26085, 28877:28663, 32485:28975]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_diffutils} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --disable-nls
+    make
+    make DESTDIR=$OUT_DIR install
+
+    rm -rf ${OUT_DIR}/usr/share
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/cmp
+    - path: /usr/bin/diff
+    - path: /usr/bin/diff3
+    - path: /usr/bin/sdiff

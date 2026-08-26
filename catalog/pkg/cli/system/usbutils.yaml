@@ -1,0 +1,101 @@
+package:
+  schema: 1
+  name: USB Utilities
+  slug: usbutils
+  namespace: cli/system
+  version: "019"
+  description: Command-line utilities for inspecting USB devices
+  homepage: https://www.kernel.org/pub/linux/utils/usb/usbutils/
+  checksum: 48e578713eff28e954b61ad93ff52d6bca72a3c58517c0686869c99cf5ce71b6
+
+sources:
+- name: usbutils
+  url: https://www.kernel.org/pub/linux/utils/usb/usbutils/usbutils-019.tar.gz
+  sha256: 347c52b65a6aeb22cfe3af8382192004f99725850e1dc5f705336e54cf6d59fc
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: libusb
+  commit: x86_64/pkg/libs/system/libusb/1.0.29/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4105:3207, 4208:3249]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_usbutils}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      --pkg-config-path=/usr/lib/pkgconfig:/usr/share/pkgconfig
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  full:
+  - bin
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/lsusb
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libudev.so.1
+      - /usr/lib/libusb-1.0.so.0
+    - path: /usr/bin/lsusb.py
+    - path: /usr/bin/usb-devices
+    - path: /usr/bin/usbhid-dump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libusb-1.0.so.0
+
+  man:
+    files:
+    - path: /usr/share/man/man1/lsusb.py.1
+    - path: /usr/share/man/man1/usb-devices.1
+    - path: /usr/share/man/man8/lsusb.8
+    - path: /usr/share/man/man8/usbhid-dump.8
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libusb-1.0.so.0: libusb
+  /usr/lib/libudev.so.1: systemd

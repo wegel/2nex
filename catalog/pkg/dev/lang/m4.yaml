@@ -1,0 +1,126 @@
+package:
+  schema: 1
+  name: M4
+  slug: m4
+  namespace: dev/lang
+  version: 1.4.19
+  description: A macro processor
+  homepage: https://www.gnu.org/software/m4/
+  checksum: 9a5881bf4efb2b6d747fad11e356bfa8c2f2f59bc036076e1bb411b68e267bf2
+  seed: true
+
+sources:
+- name: m4
+  url: https://ftp.gnu.org/gnu/m4/m4-1.4.19.tar.xz
+  sha256: 63aede5c6d33b6d9b13511cd0be2cac046f2e70fd0a07aa9573a04a82783af96
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
+- name: texinfo
+  commit: x86_64/pkg/cli/text/texinfo/7.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase3/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase3/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase3/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase3/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase3/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase3/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase3/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase3/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4102:2453, 12427:11188, 24777:21273, 41228:30673, 53581:31697, 70028:32379, 82385:32839, 102911:33844, 128393:34480, 133929:34813]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_m4} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr
+    make
+    make check || true # currently fails when building inside a container
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+  full:
+  - bin
+  - info
+  - locale
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/m4
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  info:
+    files:
+    - path: /usr/share/info/dir
+    - path: /usr/share/info/m4.info
+    - path: /usr/share/info/m4.info-1
+    - path: /usr/share/info/m4.info-2
+
+  locale:
+    files:
+    - path: /usr/share/locale/bg/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/ga/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/m4.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/m4.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/m4.1
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

@@ -1,0 +1,76 @@
+system:
+  schema: 1
+  name: Flat Minimal System
+  slug: flat-minimal
+  version: 0.0.1
+  description: Minimal flat rootfs with bash init (no systemd)
+  checksum: f34164d3ca1219ea8786624c5ba914f9c49a7b3a98d50eab2f4b112226029ecf
+
+dependencies:
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+
+packages:
+- name: glibc-lib
+  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/lib
+- name: glibc-conf
+  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/conf
+- name: attr-conf
+  commit: x86_64/pkg/libs/system/attr/2.5.2/outputs/conf
+- name: bash-bin
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
+- name: coreutils-bin
+  commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
+- name: util-linux-bin
+  commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/bin
+- name: util-linux-lib
+  commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/lib
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+
+  script: |
+    set -eu
+    # create minimal /etc/passwd and /etc/group
+    mkdir -p /target/etc
+
+    cat > /target/etc/passwd << 'EOF'
+    root:x:0:0:root:/root:/bin/bash
+    EOF
+
+    cat > /target/etc/group << 'EOF'
+    root:x:0:
+    EOF
+
+    # create mount points for essential filesystems
+    mkdir -p /target/{proc,sys,dev,run}
+
+    # create a simple init script
+    cat > /target/init << 'EOF'
+    #!/usr/bin/bash
+
+    mount -t proc proc /proc
+    mount -t sysfs sysfs /sys
+    mount -t devtmpfs devtmpfs /dev
+    mount -t tmpfs tmpfs /run
+
+    echo "=== nex flat-minimal started ==="
+    echo "System info:"
+    uname -a
+    echo ""
+    echo "Mounted filesystems:"
+    mount
+    echo ""
+    echo "Starting shell on /dev/console..."
+
+    # run shell on console, loop forever on exit
+    while true; do
+        setsid /usr/bin/bash </dev/console >/dev/console 2>&1 || true
+        echo "Shell exited, restarting..."
+        sleep 1
+    done
+    EOF
+
+    chmod +x /target/init
+
+    find /target -exec touch -d "2024-01-01T00:00:00+00:00" {} \;

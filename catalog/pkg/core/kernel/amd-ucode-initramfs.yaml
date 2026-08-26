@@ -1,0 +1,82 @@
+package:
+  schema: 1
+  name: AMD Early Microcode Initramfs
+  slug: amd-ucode-initramfs
+  namespace: core/kernel
+  version: "20251125"
+  description: early AMD CPU microcode cpio for Linux boot
+  homepage: https://docs.kernel.org/x86/microcode.html
+  checksum: c4658869e755f46f34cd8c245382e8775ca738e3aeb7b49ae08cd79f043912f5
+
+sources:
+- name: gen_init_cpio
+  file: pkg/core/kernel/gen_init_cpio.c
+  sha256: 309cab96d2b43133a0758f165fbcf9cc1b671623555ef8dadd9983095c462345
+- name: gen_initramfs
+  file: pkg/core/kernel/gen_initramfs.sh
+  sha256: a3cf8ccffd72d8087904aece0cde4883c13912a6f4eb958c185fa9eda65bedf0
+
+dependencies:
+- name: linux-firmware
+  commit: x86_64/pkg/core/kernel/linux-firmware/20251125/outputs/amd-ucode
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [1068:290]
+
+  script: |
+    set -eu
+
+    MICROCODE_ROOT="${WORK_DIR}/amd-ucode-initramfs"
+    MICROCODE_DIR="${MICROCODE_ROOT}/kernel/x86/microcode"
+    mkdir -p "${MICROCODE_DIR}"
+
+    MICROCODE_PAYLOAD="${MICROCODE_DIR}/AuthenticAMD.bin"
+    : > "${MICROCODE_PAYLOAD}"
+    for blob in \
+        /usr/lib/firmware/amd-ucode/microcode_amd.bin \
+        /usr/lib/firmware/amd-ucode/microcode_amd_fam15h.bin \
+        /usr/lib/firmware/amd-ucode/microcode_amd_fam16h.bin \
+        /usr/lib/firmware/amd-ucode/microcode_amd_fam17h.bin \
+        /usr/lib/firmware/amd-ucode/microcode_amd_fam19h.bin \
+        /usr/lib/firmware/amd-ucode/microcode_amd_fam1ah.bin; do
+        [ -f "${blob}" ] || { echo "missing AMD microcode blob: ${blob}" >&2; exit 1; }
+        cat "${blob}" >> "${MICROCODE_PAYLOAD}"
+    done
+    [ -s "${MICROCODE_PAYLOAD}" ] || { echo "empty AMD microcode payload" >&2; exit 1; }
+
+    chmod 0644 "${MICROCODE_PAYLOAD}"
+    find "${MICROCODE_ROOT}" -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;
+
+    mkdir -p "${WORK_DIR}/usr" "${OUT_DIR}/boot"
+    cp "/${SOURCE_gen_initramfs}" "${WORK_DIR}/usr/gen_initramfs.sh"
+    chmod +x "${WORK_DIR}/usr/gen_initramfs.sh"
+    gcc -O2 -Wall -Wextra -o "${WORK_DIR}/usr/gen_init_cpio" "/${SOURCE_gen_init_cpio}"
+
+    (cd "${WORK_DIR}" && ./usr/gen_initramfs.sh -o "${OUT_DIR}/boot/amd-ucode.cpio" -d "2024-01-01T00:00:00+00:00" -u squash -g squash "${MICROCODE_ROOT}")
+    touch -d "2024-01-01T00:00:00+00:00" "${OUT_DIR}/boot/amd-ucode.cpio"
+
+bundles:
+  full:
+  - boot
+
+outputs:
+  boot:
+    files:
+    - path: /boot/amd-ucode.cpio

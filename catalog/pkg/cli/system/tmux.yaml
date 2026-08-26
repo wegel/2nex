@@ -1,0 +1,164 @@
+package:
+  schema: 1
+  name: tmux
+  slug: tmux
+  namespace: cli/system
+  version: 3.6a
+  description: Terminal multiplexer
+  homepage: https://github.com/tmux/tmux
+  checksum: 137dbaf7b2751344e6b94f101827db037b5de7aa1ddea5499e2918d3e51768b0
+
+sources:
+- name: tmux
+  url: https://github.com/tmux/tmux/releases/download/3.6a/tmux-3.6a.tar.gz
+  sha256: b6d8d9c76585db8ef5fa00d4931902fa4b8cbe8166f528f44fc403961a3f3759
+- name: uapi_config
+  file: pkg/cli/system/tmux-uapi-config.patch
+  sha256: 26dad8fc1d01692cf94aa9abafaf50415a71596c1940b2034344b0915a1edd51
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: libevent
+  commit: x86_64/pkg/libs/system/libevent/2.1.12/bundles/dev
+- name: bison
+  commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: glibc-locale-en-us
+  commit: x86_64/pkg/libs/system/glibc-locale-en-us/2.39/bundles/full
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [8283:6176, 25223:6186, 53828:6217, 86502:6439, 115136:6599, 143701:6745, 171894:6895, 215308:7223, 258987:7611, 285688:12149]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_tmux} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    ./configure --prefix=/usr --sysconfdir=/etc
+
+    make
+    make DESTDIR=${OUT_DIR} install
+
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/tmux
+
+    # TMUX_CONF is an overlay list. Plant a distinct @nexuapi value in
+    # each system tier and read it with start-server, which needs no TTY.
+    # The sandbox sets LC_ALL=C; tmux 3.6 refuses to start without UTF-8.
+    # C.UTF-8 is not installed here, but LANG=en_US.UTF-8 is in the
+    # environment and -u forces UTF-8 output.
+    unset LC_ALL
+    export LANG=en_US.UTF-8
+    export LC_CTYPE=en_US.UTF-8
+    mkdir -p /etc /run/tmux /usr/lib/tmux
+    export HOME="${WORK_DIR}/tmux-empty-home"
+    mkdir -p "${HOME}"
+    unset XDG_CONFIG_HOME || true
+    TMUX="${OUT_DIR}/usr/bin/tmux"
+    vendor=/usr/lib/tmux/tmux.conf
+    runtime=/run/tmux/tmux.conf
+    admin=/etc/tmux.conf
+    rm -f "${vendor}" "${runtime}" "${admin}"
+
+    expect_uapi() {
+      "${TMUX}" -u -L nexuapi kill-server >/dev/null 2>&1 || true
+      actual=$("${TMUX}" -u -L nexuapi start-server \; show -gv @nexuapi)
+      "${TMUX}" -u -L nexuapi kill-server >/dev/null 2>&1 || true
+      if [ "${actual}" != "$1" ]; then
+        printf 'tmux UAPI smoke: expected @nexuapi %s, got %s\n' "$1" "${actual}" >&2
+        exit 1
+      fi
+    }
+
+    printf 'set -g @nexuapi vendor\n' > "${vendor}"
+    expect_uapi vendor
+
+    printf 'set -g @nexuapi runtime\n' > "${runtime}"
+    expect_uapi runtime
+
+    printf 'set -g @nexuapi admin\n' > "${admin}"
+    expect_uapi admin
+
+    rm -f "${admin}"
+    expect_uapi runtime
+
+    printf 'set -g @nexuapi only\n' > "${WORK_DIR}/only.conf"
+    "${TMUX}" -u -L nexuapi kill-server >/dev/null 2>&1 || true
+    actual=$("${TMUX}" -u -L nexuapi -f "${WORK_DIR}/only.conf" start-server \; show -gv @nexuapi)
+    "${TMUX}" -u -L nexuapi kill-server >/dev/null 2>&1 || true
+    if [ "${actual}" != "only" ]; then
+      printf 'tmux UAPI smoke: -f should ignore the system files, got %s\n' "${actual}" >&2
+      exit 1
+    fi
+
+    rm -f "${vendor}" "${runtime}" "${admin}"
+    printf 'tmux UAPI smoke: the config loader read all three tiers in order\n'
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/tmux
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libevent_core-2.1.so.7
+      - /usr/lib/libm.so.6
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/libresolv.so.2
+
+  man:
+    files:
+    - path: /usr/share/man/man1/tmux.1
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libresolv.so.2: glibc
+  /usr/lib/libevent_core-2.1.so.7: libevent
+  /usr/lib/libncursesw.so.6: ncurses

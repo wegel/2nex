@@ -1,0 +1,132 @@
+package:
+  schema: 1
+  name: XML::Parser
+  slug: xml-parser
+  namespace: dev/perl
+  version: "2.47"
+  description: A Perl module for parsing XML documents
+  homepage: https://metacpan.org/pod/XML::Parser
+  checksum: 5458b04219733564cb6baa32a9c4d0ad1de7fc8a77a943dd27da8c9a31ddccbd
+
+sources:
+- name: xml_parser
+  url: https://cpan.metacpan.org/authors/id/T/TO/TODDR/XML-Parser-2.47.tar.gz
+  sha256: ad4aae643ec784f489b956abe952432871a622d4e2b5c619e8855accbfc4d1d8
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4138:5169, 7309:5803]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    perl Makefile.PL
+    make
+    make DESTDIR=$OUT_DIR install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+    find ${OUT_DIR} -name "*.so" -exec strip --strip-unneeded {} \; 2>/dev/null || true
+
+bundles:
+  dev:
+  - lib
+
+  full:
+  - lib
+  - man
+
+outputs:
+  lib:
+    files:
+    - path: /usr/lib/perl5/5.38/core_perl/perllocal.pod
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser.pm
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/Japanese_Encodings.msg
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/README
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/big5.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/euc-kr.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/ibm866.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/iso-8859-2.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/iso-8859-3.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/iso-8859-4.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/iso-8859-5.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/iso-8859-7.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/iso-8859-8.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/iso-8859-9.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/iso-8859-15.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/koi8-r.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/windows-1250.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/windows-1251.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/windows-1252.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/windows-1255.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/x-euc-jp-jisx0221.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/x-euc-jp-unicode.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/x-sjis-cp932.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/x-sjis-jdk117.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/x-sjis-jisx0221.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Encodings/x-sjis-unicode.enc
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Expat.pm
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/LWPExternEnt.pl
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Style/Debug.pm
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Style/Objects.pm
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Style/Stream.pm
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Style/Subs.pm
+    - path: /usr/lib/perl5/5.38/site_perl/XML/Parser/Style/Tree.pm
+    - path: /usr/lib/perl5/5.38/site_perl/auto/XML/Parser/.packlist
+    - path: /usr/lib/perl5/5.38/site_perl/auto/XML/Parser/Expat/Expat.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libexpat.so.1
+
+  man:
+    files:
+    - path: /usr/share/man/man3/XML::Parser.3
+    - path: /usr/share/man/man3/XML::Parser::Expat.3
+    - path: /usr/share/man/man3/XML::Parser::Style::Debug.3
+    - path: /usr/share/man/man3/XML::Parser::Style::Objects.3
+    - path: /usr/share/man/man3/XML::Parser::Style::Stream.3
+    - path: /usr/share/man/man3/XML::Parser::Style::Subs.3
+    - path: /usr/share/man/man3/XML::Parser::Style::Tree.3
+
+resolution:
+  /usr/lib/libexpat.so.1: expat
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

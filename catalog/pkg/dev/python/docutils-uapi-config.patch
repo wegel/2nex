@@ -1,0 +1,32 @@
+From: Nex package maintainers
+Subject: read docutils.conf from the three UAPI system tiers
+Source: Nex downstream patch for Docutils 0.21.2
+Upstream: not submitted; needs agreement on Unix vendor and transient paths
+
+`OptionParser.standard_config_files` only looked for a system file at
+`/etc/docutils.conf`. Extend the list with `/run/docutils.conf` and
+`/usr/lib/docutils/docutils.conf` so Nex-built readers honor `/etc`,
+`/run`, and `/usr` in that priority, per
+`.agents/MANIFESTS_CODE_STYLE.md`.
+
+`get_standard_config_settings` reads every file in
+`standard_config_files` in order and lets later files override
+earlier ones key by key, so the admin file must sort last among the
+three system tiers to win. List order becomes `/usr/lib`, then
+`/run`, then `/etc`, keeping the project (`./docutils.conf`) and user
+(`~/.docutils`) files last and unchanged. `DOCUTILSCONFIG` still
+replaces the whole list when set, matching upstream behavior.
+
+--- a/docutils/frontend.py
++++ b/docutils/frontend.py
+@@ -534,7 +534,9 @@
+     """
+
+     standard_config_files = [
+-        '/etc/docutils.conf',           # system-wide
++        '/usr/lib/docutils/docutils.conf',  # system-wide, package default
++        '/run/docutils.conf',           # system-wide, transient
++        '/etc/docutils.conf',           # system-wide, admin
+         './docutils.conf',              # project-specific
+         '~/.docutils']                  # user-specific
+     """Docutils configuration files, using ConfigParser syntax.

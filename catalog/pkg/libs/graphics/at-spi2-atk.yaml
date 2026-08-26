@@ -1,0 +1,149 @@
+package:
+  schema: 1
+  name: at-spi2-atk
+  slug: at-spi2-atk
+  namespace: libs/graphics
+  version: 2.38.0
+  description: AT-SPI2 bridge for ATK
+  homepage: https://wiki.gnome.org/Accessibility
+  checksum: 0490d3bdcbab2dad6c967bd079c3a30711e1c8b826988ba03e3f0188492bd577
+
+sources:
+- name: at-spi2-atk
+  url: https://download.gnome.org/sources/at-spi2-atk/2.38/at-spi2-atk-2.38.0.tar.xz
+  sha256: cfa008a5af822b36ae6287f18182c40c91dd699c55faa38605881ed175ca464f
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: dbus
+  commit: x86_64/pkg/core/ipc/dbus/1.16.2/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: atk
+  commit: x86_64/pkg/libs/graphics/atk/2.38.0/bundles/dev
+- name: at-spi2-core
+  commit: x86_64/pkg/libs/graphics/at-spi2-core/2.54.0/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4151:4834, 7569:6785]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig:/usr/lib64/pkgconfig
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --buildtype=release \
+      -Dtests=false
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/at-spi2-atk/2.0/atk-bridge.h
+    - path: /usr/lib/pkgconfig/atk-bridge-2.0.pc
+
+  lib:
+    files:
+    - path: /usr/lib/gnome-settings-daemon-3.0/gtk-modules/at-spi2-atk.desktop
+    - path: /usr/lib/gtk-2.0/modules/libatk-bridge.so
+      needs:
+      - /usr/lib/libatk-bridge-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+    - path: /usr/lib/libatk-bridge-2.0.so
+      needs:
+      - /usr/lib/libatk-1.0.so.0
+      - /usr/lib/libatspi.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+    - path: /usr/lib/libatk-bridge-2.0.so.0
+      needs:
+      - /usr/lib/libatk-1.0.so.0
+      - /usr/lib/libatspi.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+    - path: /usr/lib/libatk-bridge-2.0.so.0.0.0
+      needs:
+      - /usr/lib/libatk-1.0.so.0
+      - /usr/lib/libatspi.so.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+
+resolution:
+  /usr/lib/libatk-1.0.so.0: at-spi2-core
+  /usr/lib/libatspi.so.0: at-spi2-core
+  /usr/lib/libdbus-1.so.3: dbus
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgmodule-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libatk-bridge-2.0.so.0: self

@@ -1,0 +1,363 @@
+package:
+  schema: 1
+  name: libosinfo
+  slug: libosinfo
+  namespace: dev/virt
+  version: 1.12.0
+  description: Operating system information library
+  homepage: https://libosinfo.org/
+  checksum: c4d3ef98b28f28f9303c44706ec9b0fbd8be8d870e43aa1ffe7c0735fe17d1b8
+
+sources:
+- name: libosinfo
+  url: https://releases.pagure.org/libosinfo/libosinfo-1.12.0.tar.xz
+  sha256: ad8557ece26793da43d26de565e3d68ce2ee6bfb8d0113b7cc7dfe07f6bfc6b6
+- name: uapi_config
+  file: pkg/dev/virt/libosinfo-uapi-config.patch
+  sha256: 9a14eac35dc3ce878489987f1d50583cd7bb80bb1e2410170c98fce3315d0ffd
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: gettext
+  commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: libxslt
+  commit: x86_64/pkg/libs/text/libxslt/1.1.42/bundles/dev
+- name: libsoup3
+  commit: x86_64/pkg/libs/net/libsoup3/3.6.4/bundles/dev
+- name: sqlite3
+  commit: x86_64/pkg/libs/data/sqlite3/3.51.1/bundles/dev
+- name: libpsl
+  commit: x86_64/pkg/libs/net/libpsl/0.21.5/bundles/dev
+- name: libidn2
+  commit: x86_64/pkg/libs/text/libidn2/2.3.7/bundles/dev
+- name: libunistring
+  commit: x86_64/pkg/libs/text/libunistring/1.3/bundles/dev
+- name: brotli
+  commit: x86_64/pkg/libs/compression/brotli/1.1.0/bundles/dev
+- name: nghttp2
+  commit: x86_64/pkg/libs/net/nghttp2/1.64.0/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: gobject-introspection
+  commit: x86_64/pkg/dev/tools/gobject-introspection/1.84.0/bundles/dev
+- name: hwdata
+  commit: x86_64/pkg/libs/graphics/hwdata/0.402/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4112:1069, 8222:1069, 12328:1836, 16472:4776, 20618:4776, 23087:5135]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf /${SOURCE_libosinfo} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    meson setup build \
+      --prefix=/usr \
+      --sysconfdir=/etc \
+      --libdir=lib \
+      --buildtype=release \
+      -Denable-gtk-doc=false \
+      -Denable-tests=false \
+      -Denable-introspection=enabled \
+      -Denable-vala=disabled \
+      -Dlibsoup-abi=3.0 \
+      -Dwith-pci-ids-path=/usr/share/hwdata/pci.ids \
+      -Dwith-usb-ids-path=/usr/share/hwdata/usb.ids
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    installed_lib="${OUT_DIR}/usr/lib/libosinfo-1.0.so.0.1012.0"
+    if grep -qa '/usr/etc' "${installed_lib}"; then
+      printf 'libosinfo UAPI smoke: found /usr/etc compiled into libosinfo-1.0.so\n' >&2
+      exit 1
+    fi
+    if ! grep -qa '/run/osinfo' "${installed_lib}"; then
+      printf 'libosinfo UAPI smoke: /run/osinfo missing from libosinfo-1.0.so\n' >&2
+      exit 1
+    fi
+    if ! grep -qa '/etc/osinfo' "${installed_lib}"; then
+      printf 'libosinfo UAPI smoke: /etc/osinfo missing from libosinfo-1.0.so\n' >&2
+      exit 1
+    fi
+
+    plant_os() {
+      dir="$1"
+      name="$2"
+      mkdir -p "${dir}/os/nex.internal"
+      cat > "${dir}/os/nex.internal/test-uapi-loader-tier.xml" <<EOX
+    <?xml version="1.0" encoding="UTF-8"?>
+    <libosinfo version="0.0.1">
+      <os id="http://nex.internal/test/uapi-loader-tier">
+        <short-id>nex-uapi-loader-tier</short-id>
+        <name>${name}</name>
+        <vendor>libosinfo.org</vendor>
+        <family>test</family>
+      </os>
+    </libosinfo>
+    EOX
+    }
+
+    mkdir -p /usr/share/osinfo /run/osinfo /etc/osinfo
+    plant_os /usr/share/osinfo "Nex UAPI vendor os"
+    plant_os /run/osinfo "Nex UAPI run os"
+    plant_os /etc/osinfo "Nex UAPI admin os"
+
+    run_query() {
+      env -u OSINFO_SYSTEM_DIR -u OSINFO_RUN_DIR -u OSINFO_LOCAL_DIR -u OSINFO_USER_DIR \
+        LD_LIBRARY_PATH="${OUT_DIR}/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+        "${OUT_DIR}/usr/bin/osinfo-query" --fields=name os short-id=nex-uapi-loader-tier \
+        | tail -n +3 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+    }
+    expect_name() {
+      actual="$(run_query)"
+      if [ "${actual}" != "$1" ]; then
+        printf 'libosinfo UAPI smoke: expected %s, got %s\n' "$1" "${actual}" >&2
+        exit 1
+      fi
+    }
+    expect_name "Nex UAPI admin os"
+    rm -f /etc/osinfo/os/nex.internal/test-uapi-loader-tier.xml
+    expect_name "Nex UAPI run os"
+    rm -f /run/osinfo/os/nex.internal/test-uapi-loader-tier.xml
+    expect_name "Nex UAPI vendor os"
+    rm -rf /usr/share/osinfo /run/osinfo /etc/osinfo
+
+    printf 'libosinfo UAPI smoke: loader searched /usr/share/osinfo, /run/osinfo, and /etc/osinfo\n'
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - man
+  - misc
+
+  full:
+  - bin
+  - dev
+  - lib
+  - man
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/osinfo-detect
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libosinfo-1.0.so.0
+      - /usr/share/hwdata/pci.ids
+      - /usr/share/hwdata/usb.ids
+    - path: /usr/bin/osinfo-install-script
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libosinfo-1.0.so.0
+      - /usr/share/hwdata/pci.ids
+      - /usr/share/hwdata/usb.ids
+    - path: /usr/bin/osinfo-query
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libosinfo-1.0.so.0
+      - /usr/share/hwdata/pci.ids
+      - /usr/share/hwdata/usb.ids
+
+  dev:
+    files:
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_avatar_format.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_datamap.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_datamaplist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_db.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_deployment.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_deploymentlist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_device.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_device_driver.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_device_driverlist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_devicelink.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_devicelinkfilter.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_devicelinklist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_devicelist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_entity.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_enum_types.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_filter.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_firmware.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_firmwarelist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_image.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_imagelist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_install_config.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_install_config_param.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_install_config_paramlist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_install_script.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_install_scriptlist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_list.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_loader.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_macros.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_media.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_medialist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_os.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_os_variant.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_os_variantlist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_oslist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_platform.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_platformlist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_product.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_productfilter.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_productlist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_resources.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_resourceslist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_tree.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_treelist.h
+    - path: /usr/include/libosinfo-1.0/osinfo/osinfo_version.h
+    - path: /usr/lib/pkgconfig/libosinfo-1.0.pc
+
+  lib:
+    files:
+    - path: /usr/lib/girepository-1.0/Libosinfo-1.0.typelib
+      needs:
+      - /usr/lib/girepository-1.0/GLib-2.0.typelib
+      - /usr/lib/girepository-1.0/GObject-2.0.typelib
+      - /usr/lib/girepository-1.0/Gio-2.0.typelib
+      - /usr/lib/girepository-1.0/libxml2-2.0.typelib
+    - path: /usr/lib/libosinfo-1.0.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libsoup-3.0.so.0
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libxslt.so.1
+    - path: /usr/lib/libosinfo-1.0.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libsoup-3.0.so.0
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libxslt.so.1
+    - path: /usr/lib/libosinfo-1.0.so.0.1012.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libsoup-3.0.so.0
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libxslt.so.1
+
+  locale:
+    files:
+    - path: /usr/share/locale/ca/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/eu/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/fur/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/pt_PT/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/si/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/libosinfo.mo
+    - path: /usr/share/locale/zh_Hans/LC_MESSAGES/libosinfo.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/osinfo-detect.1
+    - path: /usr/share/man/man1/osinfo-install-script.1
+    - path: /usr/share/man/man1/osinfo-query.1
+
+  misc:
+    files:
+    - path: /usr/share/gir-1.0/Libosinfo-1.0.gir
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libgio-2.0.so.0: glib2
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/girepository-1.0/GLib-2.0.typelib: gobject-introspection
+  /usr/lib/girepository-1.0/GObject-2.0.typelib: gobject-introspection
+  /usr/lib/girepository-1.0/Gio-2.0.typelib: gobject-introspection
+  /usr/lib/girepository-1.0/libxml2-2.0.typelib: gobject-introspection
+  /usr/share/hwdata/pci.ids: hwdata
+  /usr/share/hwdata/usb.ids: hwdata
+  /usr/lib/libsoup-3.0.so.0: libsoup3
+  /usr/lib/libxml2.so.2: libxml2
+  /usr/lib/libxslt.so.1: libxslt
+  /usr/lib/libosinfo-1.0.so.0: self

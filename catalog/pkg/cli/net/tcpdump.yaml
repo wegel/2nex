@@ -1,0 +1,103 @@
+package:
+  schema: 1
+  name: tcpdump
+  slug: tcpdump
+  namespace: cli/net
+  version: 4.99.6
+  description: Command-line packet analyzer
+  homepage: https://www.tcpdump.org/
+  checksum: 0e0aa23383a55af29af4750e36bc4c545b03c0408ebdd8174244d3d7aaccae38
+
+sources:
+- name: tcpdump
+  url: https://www.tcpdump.org/release/tcpdump-4.99.6.tar.xz
+  sha256: 40a8cefd45f0d2a06827e6658efb830d484868c449ad80f7efb33516af44f3da
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: libpcap
+  commit: x86_64/pkg/libs/net/libpcap/1.10.6/bundles/dev
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4115:16219, 8519:17438, 21317:20409, 33637:22010, 41848:22818, 54176:23570, 62397:24299, 78834:25878, 91163:27094, 100253:28003]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "/./${SOURCE_tcpdump}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    ./configure \
+      --prefix=/usr \
+      --disable-local-libpcap \
+      --without-smi \
+      --with-crypto \
+      --without-cap-ng
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/tcpdump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libpcap.so.1
+    - path: /usr/bin/tcpdump.4.99.6
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libpcap.so.1
+
+  man:
+    files:
+    - path: /usr/share/man/man1/tcpdump.1
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libpcap.so.1: libpcap
+  /usr/lib/libcrypto.so.3: openssl

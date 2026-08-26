@@ -1,0 +1,69 @@
+From: Nex package maintainers
+Subject: read autostart jackdrc from UAPI directories
+Source: Nex downstream patch for jack2 1.9.22
+Upstream: not submitted; needs agreement on Unix vendor and transient paths
+
+Keep $HOME/.jackdrc first so a per-user config always wins. When it is
+absent, select the first complete file from /etc/jackdrc, /run/jackdrc, or
+/usr/lib/jackdrc instead of stopping at /etc. An empty higher-tier file
+deliberately masks a lower default. Keep /etc/jackd.conf only as a
+last-resort alias for the old config name after the three tiers; nothing in
+this tree writes that name.
+
+--- a/common/JackServerGlobals.cpp
++++ b/common/JackServerGlobals.cpp
+@@ -23,9 +23,41 @@
+ #include "shm.h"
+ #include <getopt.h>
+ #include <errno.h>
++#include <unistd.h>
+
+ static char* server_name = NULL;
+
++/*
++ * jack_open_system_config() names the file that autostart reads when
++ * $HOME/.jackdrc is absent. Nex ships vendor defaults under /usr/lib and
++ * lets a transient tree under /run override them, both below the
++ * administrator's /etc, so the first complete file wins and an empty
++ * higher-tier file still masks the tiers below it. /etc/jackd.conf is
++ * kept only as a last-resort alias for the old config name; nothing in
++ * this tree writes it.
++ */
++static FILE* jack_open_system_config()
++{
++    static const char* tiers[] = {
++        "/etc/jackdrc",
++        "/run/jackdrc",
++        "/usr/lib/jackdrc",
++    };
++    size_t i;
++    FILE* fp;
++
++    for (i = 0; i < sizeof(tiers) / sizeof(tiers[0]); i++) {
++        if (access(tiers[i], R_OK) == 0) {
++            fp = fopen(tiers[i], "r");
++            if (fp) {
++                return fp;
++            }
++        }
++    }
++
++    return fopen("/etc/jackd.conf", "r");
++}
++
+ namespace Jack
+ {
+
+@@ -167,11 +199,7 @@
+         fp = fopen(filename, "r");
+
+         if (!fp) {
+-            fp = fopen("/etc/jackdrc", "r");
+-        }
+-        // if still not found, check old config name for backwards compatibility
+-        if (!fp) {
+-            fp = fopen("/etc/jackd.conf", "r");
++            fp = jack_open_system_config();
+         }
+
+         argc = 0;

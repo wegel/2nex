@@ -1,0 +1,73 @@
+package:
+  schema: 1
+  name: nex Dynamic Linker Shim
+  slug: nex-ld-shim
+  namespace: core/nex
+  version: 0.0.1
+  description: Minimal PT_INTERP shim using raw syscalls (no libc dependency)
+  checksum: 991749efff08d516b8bb6f70574314c84899199ce3c61da0f52eb2553e7541a1
+
+sources:
+- name: shim
+  file: pkg/core/nex/nex-ld-shim-raw.c
+  sha256: 8ae27ab031f89886250db44272c5f5b713e0150ca1591d7fcc5f71c55a476002
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [433:161]
+
+  script: |
+    # create output directory
+    mkdir -p ${OUT_DIR}/usr/lib
+
+    # compile the shim without libc - uses raw syscalls only
+    # flags:
+    #   -nostdlib -nostartfiles: don't link libc or crt
+    #   -fno-builtin: don't use builtin functions (they may call libc)
+    #   -fno-stack-protector: stack canary requires %fs segment (set by libc)
+    #   -static -O2: static binary, optimized
+    #   -Wl,-Ttext-segment=0x200000: load at 0x200000 to avoid conflict with
+    #     non-PIE executables that default to 0x400000
+    gcc -nostdlib -nostartfiles -static \
+        -fno-builtin -fno-stack-protector \
+        -O2 -Wall -Wextra \
+        -Wl,-Ttext-segment=0x200000 \
+        -o ${OUT_DIR}/usr/lib/nex-ld-shim \
+        ${SOURCE_shim}
+
+    # strip the binary
+    strip ${OUT_DIR}/usr/lib/nex-ld-shim
+
+    # set timestamp for reproducibility
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  full:
+  - lib
+
+outputs:
+  lib:
+    files:
+    - path: /usr/lib/nex-ld-shim

@@ -1,0 +1,158 @@
+package:
+  schema: 1
+  name: efivar
+  slug: efivar
+  namespace: libs/system
+  version: "39"
+  description: Tools and libraries for manipulating EFI variables
+  homepage: https://github.com/rhboot/efivar
+  checksum: d0c040dd7624adbb6ab7aabcbd853e90fb5522e6838aff5f01772888f63fe110
+
+sources:
+- name: efivar
+  url: https://github.com/rhboot/efivar/archive/refs/tags/39.tar.gz
+  sha256: c9edd15f2eeeea63232f3e669a48e992c7be9aff57ee22672ac31f5eca1609a6
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4218:292, 8790:294, 13334:296, 17942:299, 22576:400, 27156:420, 32310:1228, 36434:2046, 38596:2082]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_efivar}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    make \
+      CC=gcc \
+      HOSTCC=gcc \
+      HOST_MARCH= \
+      PREFIX=/usr \
+      LIBDIR=/usr/lib \
+      ENABLE_DOCS=0
+
+    make \
+      DESTDIR="${OUT_DIR}" \
+      CC=gcc \
+      HOSTCC=gcc \
+      HOST_MARCH= \
+      PREFIX=/usr \
+      LIBDIR=/usr/lib \
+      ENABLE_DOCS=0 \
+      install
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/efisecdb
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libefisec.so.1
+      - /usr/lib/libefivar.so.1
+    - path: /usr/bin/efivar
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libefivar.so.1
+
+  dev:
+    files:
+    - path: /usr/include/efivar/efiboot-creator.h
+    - path: /usr/include/efivar/efiboot-loadopt.h
+    - path: /usr/include/efivar/efiboot.h
+    - path: /usr/include/efivar/efisec-secdb.h
+    - path: /usr/include/efivar/efisec-types.h
+    - path: /usr/include/efivar/efisec.h
+    - path: /usr/include/efivar/efivar-dp.h
+    - path: /usr/include/efivar/efivar-guids.h
+    - path: /usr/include/efivar/efivar-time.h
+    - path: /usr/include/efivar/efivar-types.h
+    - path: /usr/include/efivar/efivar.h
+    - path: /usr/lib/pkgconfig/efiboot.pc
+    - path: /usr/lib/pkgconfig/efisec.pc
+    - path: /usr/lib/pkgconfig/efivar.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libefiboot.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libefivar.so.1
+    - path: /usr/lib/libefiboot.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libefivar.so.1
+    - path: /usr/lib/libefiboot.so.1.39
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libefivar.so.1
+    - path: /usr/lib/libefisec.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libefisec.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libefisec.so.1.39
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libefivar.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libefivar.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libefivar.so.1.39
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libefisec.so.1: self
+  /usr/lib/libefivar.so.1: self

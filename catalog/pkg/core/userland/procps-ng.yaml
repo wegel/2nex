@@ -1,0 +1,401 @@
+package:
+  schema: 1
+  name: procps-ng
+  slug: procps-ng
+  namespace: core/userland
+  version: 4.0.5
+  description: Utilities for monitoring system processes
+  homepage: https://gitlab.com/procps-ng/procps
+  checksum: c3485cf8fad139589c2bf345fa5ba023b4fbfd93908875f8c09c1d8e1aa09530
+
+sources:
+- name: procps_ng
+  url: https://sourceforge.net/projects/procps-ng/files/Production/procps-ng-4.0.5.tar.xz/download
+  sha256: c2e6d193cc78f84cd6ddb72aaf6d5c6a9162f0470e5992092057f5ff518562fa
+- name: uapi_config
+  file: pkg/core/userland/procps-ng-uapi-config.patch
+  sha256: 1aa777fcc15d4608a85ec5689a4a056010d6b286ba1dc169b80382cfb3440f1a
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4108:1920, 8210:3858, 12316:5633, 16490:7532, 20598:7597, 24754:9491, 28413:10201]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    ./configure --prefix=/usr                           \
+                --sbindir=/usr/bin                      \
+                --disable-static                        \
+                --disable-kill                          \
+                --with-systemd                          \
+                --disable-modern-top
+
+    make
+    make DESTDIR=${OUT_DIR} install
+
+    grep -qa '/etc/topdefaultrc' "${OUT_DIR}/usr/bin/top"
+    grep -qa '/run/top/topdefaultrc' "${OUT_DIR}/usr/bin/top"
+    grep -qa '/usr/lib/top/topdefaultrc' "${OUT_DIR}/usr/bin/top"
+
+    mkdir -p /etc /run/top /usr/lib/top "${WORK_DIR}/empty-home"
+    export HOME="${WORK_DIR}/empty-home"
+    unset XDG_CONFIG_HOME
+    expect_top_default() {
+      desc="$1"
+      path="$2"
+      err="${WORK_DIR}/top-smoke.err"
+      set +e
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+        "${OUT_DIR}/usr/bin/top" -b -n 1 >"${WORK_DIR}/top-smoke.out" 2>"${err}"
+      set -e
+      if ! grep -q "${path}" "${err}"; then
+        printf 'procps-ng UAPI smoke: expected %s for %s, log:\n' \
+          "${path}" "${desc}" >&2
+        cat "${err}" >&2
+        exit 1
+      fi
+    }
+    printf 'bad\nbad\n' > /usr/lib/top/topdefaultrc
+    rm -f /etc/topdefaultrc /run/top/topdefaultrc
+    expect_top_default "vendor alone" "/usr/lib/top/topdefaultrc"
+    printf 'bad\nbad\n' > /run/top/topdefaultrc
+    expect_top_default "runtime over vendor" "/run/top/topdefaultrc"
+    printf 'bad\nbad\n' > /etc/topdefaultrc
+    expect_top_default "admin over runtime" "/etc/topdefaultrc"
+    rm -f /etc/topdefaultrc /run/top/topdefaultrc /usr/lib/top/topdefaultrc
+    printf 'procps-ng UAPI smoke: topdefaultrc loader read all three tiers in order\n'
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - lib
+
+  full:
+  - bin
+  - dev
+  - lib
+  - locale
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/free
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libproc2.so.1
+    - path: /usr/bin/hugetop
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/libproc2.so.1
+    - path: /usr/bin/pgrep
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libproc2.so.1
+    - path: /usr/bin/pidof
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libproc2.so.1
+    - path: /usr/bin/pidwait
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libproc2.so.1
+    - path: /usr/bin/pkill
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libproc2.so.1
+    - path: /usr/bin/pmap
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libproc2.so.1
+    - path: /usr/bin/ps
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libproc2.so.1
+    - path: /usr/bin/pwdx
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/slabtop
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/libproc2.so.1
+    - path: /usr/bin/sysctl
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/tload
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libproc2.so.1
+    - path: /usr/bin/top
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/libproc2.so.1
+    - path: /usr/bin/uptime
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libproc2.so.1
+    - path: /usr/bin/vmstat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libproc2.so.1
+    - path: /usr/bin/w
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libproc2.so.1
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/bin/watch
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+
+  dev:
+    files:
+    - path: /usr/include/libproc2/diskstats.h
+    - path: /usr/include/libproc2/meminfo.h
+    - path: /usr/include/libproc2/misc.h
+    - path: /usr/include/libproc2/pids.h
+    - path: /usr/include/libproc2/slabinfo.h
+    - path: /usr/include/libproc2/stat.h
+    - path: /usr/include/libproc2/vmstat.h
+    - path: /usr/include/libproc2/xtra-procps-debug.h
+    - path: /usr/lib/libproc2.la
+    - path: /usr/lib/pkgconfig/libproc2.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/procps-ng/FAQ
+    - path: /usr/share/doc/procps-ng/bugs.md
+    - path: /usr/share/doc/procps-ng/libproc.supp
+
+  lib:
+    files:
+    - path: /usr/lib/libproc2.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/libproc2.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/libproc2.so.1.0.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsystemd.so.0
+
+  locale:
+    files:
+    - path: /usr/share/locale/de/LC_MESSAGES/procps-ng.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/procps-ng.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/procps-ng.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/procps-ng.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/procps-ng.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/procps-ng.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/procps-ng.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/procps-ng.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/procps-ng.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/procps-ng.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/procps-ng.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/procps-ng.mo
+
+  man:
+    files:
+    - path: /usr/share/man/de/man1/free.1
+    - path: /usr/share/man/de/man1/kill.1
+    - path: /usr/share/man/de/man1/pgrep.1
+    - path: /usr/share/man/de/man1/pidof.1
+    - path: /usr/share/man/de/man1/pmap.1
+    - path: /usr/share/man/de/man1/ps.1
+    - path: /usr/share/man/de/man1/pwdx.1
+    - path: /usr/share/man/de/man1/skill.1
+    - path: /usr/share/man/de/man1/slabtop.1
+    - path: /usr/share/man/de/man1/tload.1
+    - path: /usr/share/man/de/man1/uptime.1
+    - path: /usr/share/man/de/man1/w.1
+    - path: /usr/share/man/de/man1/watch.1
+    - path: /usr/share/man/de/man5/sysctl.conf.5
+    - path: /usr/share/man/de/man8/sysctl.8
+    - path: /usr/share/man/de/man8/vmstat.8
+    - path: /usr/share/man/fr/man1/free.1
+    - path: /usr/share/man/fr/man1/pmap.1
+    - path: /usr/share/man/fr/man1/ps.1
+    - path: /usr/share/man/fr/man1/pwdx.1
+    - path: /usr/share/man/fr/man1/slabtop.1
+    - path: /usr/share/man/fr/man1/tload.1
+    - path: /usr/share/man/fr/man8/vmstat.8
+    - path: /usr/share/man/man1/free.1
+    - path: /usr/share/man/man1/hugetop.1
+    - path: /usr/share/man/man1/pgrep.1
+    - path: /usr/share/man/man1/pidof.1
+    - path: /usr/share/man/man1/pidwait.1
+    - path: /usr/share/man/man1/pkill.1
+    - path: /usr/share/man/man1/pmap.1
+    - path: /usr/share/man/man1/ps.1
+    - path: /usr/share/man/man1/pwdx.1
+    - path: /usr/share/man/man1/slabtop.1
+    - path: /usr/share/man/man1/tload.1
+    - path: /usr/share/man/man1/top.1
+    - path: /usr/share/man/man1/uptime.1
+    - path: /usr/share/man/man1/w.1
+    - path: /usr/share/man/man1/watch.1
+    - path: /usr/share/man/man3/procps.3
+    - path: /usr/share/man/man3/procps_misc.3
+    - path: /usr/share/man/man3/procps_pids.3
+    - path: /usr/share/man/man5/sysctl.conf.5
+    - path: /usr/share/man/man8/sysctl.8
+    - path: /usr/share/man/man8/vmstat.8
+    - path: /usr/share/man/pl/man1/free.1
+    - path: /usr/share/man/pl/man1/pgrep.1
+    - path: /usr/share/man/pl/man1/pidof.1
+    - path: /usr/share/man/pl/man1/pmap.1
+    - path: /usr/share/man/pl/man1/pwdx.1
+    - path: /usr/share/man/pl/man1/slabtop.1
+    - path: /usr/share/man/pl/man8/vmstat.8
+    - path: /usr/share/man/pt_BR/man1/free.1
+    - path: /usr/share/man/pt_BR/man1/pmap.1
+    - path: /usr/share/man/pt_BR/man1/pwdx.1
+    - path: /usr/share/man/pt_BR/man1/slabtop.1
+    - path: /usr/share/man/pt_BR/man1/tload.1
+    - path: /usr/share/man/pt_BR/man8/vmstat.8
+    - path: /usr/share/man/ro/man1/free.1
+    - path: /usr/share/man/ro/man1/kill.1
+    - path: /usr/share/man/ro/man1/pgrep.1
+    - path: /usr/share/man/ro/man1/pidof.1
+    - path: /usr/share/man/ro/man1/pmap.1
+    - path: /usr/share/man/ro/man1/ps.1
+    - path: /usr/share/man/ro/man1/pwdx.1
+    - path: /usr/share/man/ro/man1/skill.1
+    - path: /usr/share/man/ro/man1/slabtop.1
+    - path: /usr/share/man/ro/man1/tload.1
+    - path: /usr/share/man/ro/man1/top.1
+    - path: /usr/share/man/ro/man1/uptime.1
+    - path: /usr/share/man/ro/man1/w.1
+    - path: /usr/share/man/ro/man1/watch.1
+    - path: /usr/share/man/ro/man3/procps.3
+    - path: /usr/share/man/ro/man3/procps_misc.3
+    - path: /usr/share/man/ro/man3/procps_pids.3
+    - path: /usr/share/man/ro/man5/sysctl.conf.5
+    - path: /usr/share/man/ro/man8/sysctl.8
+    - path: /usr/share/man/ro/man8/vmstat.8
+    - path: /usr/share/man/sv/man1/free.1
+    - path: /usr/share/man/sv/man1/pgrep.1
+    - path: /usr/share/man/sv/man1/pidof.1
+    - path: /usr/share/man/sv/man1/pmap.1
+    - path: /usr/share/man/sv/man1/ps.1
+    - path: /usr/share/man/sv/man1/pwdx.1
+    - path: /usr/share/man/sv/man1/slabtop.1
+    - path: /usr/share/man/sv/man1/tload.1
+    - path: /usr/share/man/sv/man8/sysctl.8
+    - path: /usr/share/man/sv/man8/vmstat.8
+    - path: /usr/share/man/uk/man1/free.1
+    - path: /usr/share/man/uk/man1/kill.1
+    - path: /usr/share/man/uk/man1/pgrep.1
+    - path: /usr/share/man/uk/man1/pidof.1
+    - path: /usr/share/man/uk/man1/pmap.1
+    - path: /usr/share/man/uk/man1/ps.1
+    - path: /usr/share/man/uk/man1/pwdx.1
+    - path: /usr/share/man/uk/man1/skill.1
+    - path: /usr/share/man/uk/man1/slabtop.1
+    - path: /usr/share/man/uk/man1/tload.1
+    - path: /usr/share/man/uk/man1/top.1
+    - path: /usr/share/man/uk/man1/uptime.1
+    - path: /usr/share/man/uk/man1/w.1
+    - path: /usr/share/man/uk/man1/watch.1
+    - path: /usr/share/man/uk/man3/procps.3
+    - path: /usr/share/man/uk/man3/procps_misc.3
+    - path: /usr/share/man/uk/man3/procps_pids.3
+    - path: /usr/share/man/uk/man5/sysctl.conf.5
+    - path: /usr/share/man/uk/man8/sysctl.8
+    - path: /usr/share/man/uk/man8/vmstat.8
+    - path: /usr/share/man/zh_CN/man1/free.1
+    - path: /usr/share/man/zh_CN/man1/pgrep.1
+    - path: /usr/share/man/zh_CN/man1/pidof.1
+    - path: /usr/share/man/zh_CN/man1/pmap.1
+    - path: /usr/share/man/zh_CN/man1/ps.1
+    - path: /usr/share/man/zh_CN/man1/pwdx.1
+    - path: /usr/share/man/zh_CN/man1/slabtop.1
+    - path: /usr/share/man/zh_CN/man1/tload.1
+    - path: /usr/share/man/zh_CN/man8/sysctl.8
+    - path: /usr/share/man/zh_CN/man8/vmstat.8
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libncursesw.so.6: ncurses
+  /usr/lib/libproc2.so.1: self
+  /usr/lib/libsystemd.so.0: systemd

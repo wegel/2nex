@@ -1,0 +1,806 @@
+From: Package maintainers <packages@localhost>
+Subject: [PATCH] follow UAPI configuration file precedence
+Source: https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.9p1.tar.gz
+Upstream: Not submitted; this is a generic UAPI configuration proposal.
+
+Select system configuration from admin, runtime, and vendor directories.
+Merge drop-ins by basename, and keep explicit command-line paths exact.
+Install package defaults below /usr and keep host-owned configuration in /etc.
+
+Apply the same selection in ssh-keysign. It checks EnableSSHKeysign before it
+signs with a host key, so reading only the administrator file made that option
+invisible when it came from a drop-in or from the runtime or vendor directory,
+and host-based authentication then failed even though ssh itself had accepted
+the option.
+
+diff --git a/Makefile.in b/Makefile.in
+index 4243006..3c31f9d 100644
+
+diff -urN a/Makefile.in b/Makefile.in
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -9,6 +9,9 @@
+ libexecdir=@libexecdir@
+ datadir=@datadir@
+ datarootdir=@datarootdir@
++sshvendordir=$(prefix)/lib/ssh
++sshsharedir=$(datadir)/ssh
++sshruntimedir=/run/ssh
+ mandir=@mandir@
+ mansubdir=@mansubdir@
+ sysconfdir=@sysconfdir@
+@@ -34,6 +37,9 @@
+ BUILDDIR=@abs_top_builddir@
+ 
+ PATHS= -DSSHDIR=\"$(sysconfdir)\" \
++	-DSSH_VENDOR_DIR=\"$(sshvendordir)\" \
++	-DSSH_RUNTIME_DIR=\"$(sshruntimedir)\" \
++	-DSSHSHAREDIR=\"$(sshsharedir)\" \
+ 	-D_PATH_SSH_PROGRAM=\"$(SSH_PROGRAM)\" \
+ 	-D_PATH_SSH_ASKPASS_DEFAULT=\"$(ASKPASS_PROGRAM)\" \
+ 	-D_PATH_SFTP_SERVER=\"$(SFTP_SERVER)\" \
+@@ -117,10 +123,10 @@
+ 
+ SKOBJS=	ssh-sk-client.o
+ 
+-SSHOBJS= ssh.o readconf.o clientloop.o sshtty.o \
++SSHOBJS= ssh.o readconf.o system-config.o clientloop.o sshtty.o \
+ 	sshconnect.o sshconnect2.o mux.o $(SKOBJS)
+ 
+-SSHDOBJS=sshd.o \
++SSHDOBJS=sshd.o system-config.o \
+ 	platform-listen.o \
+ 	servconf.o sshpty.o srclimit.o groupaccess.o auth2-methods.o \
+ 	dns.o fatal.o compat.o utf8.o authfd.o canohost.o \
+@@ -151,7 +157,7 @@
+ 
+ SSHKEYGEN_OBJS=	ssh-keygen.o sshsig.o $(SKOBJS)
+ 
+-SSHKEYSIGN_OBJS=ssh-keysign.o readconf.o uidswap.o $(SKOBJS)
++SSHKEYSIGN_OBJS=ssh-keysign.o readconf.o system-config.o uidswap.o $(SKOBJS)
+ 
+ P11HELPER_OBJS=	ssh-pkcs11-helper.o ssh-pkcs11.o $(SKOBJS)
+ 
+@@ -171,9 +177,9 @@
+ CONFIGFILES_IN=sshd_config ssh_config moduli
+ 
+ PATHSUBS	= \
+-	-e 's|/etc/ssh/ssh_config|$(sysconfdir)/ssh_config|g' \
++	-e 's|/etc/ssh/ssh_config|$(sshvendordir)/ssh_config|g' \
+ 	-e 's|/etc/ssh/ssh_known_hosts|$(sysconfdir)/ssh_known_hosts|g' \
+-	-e 's|/etc/ssh/sshd_config|$(sysconfdir)/sshd_config|g' \
++	-e 's|/etc/ssh/sshd_config|$(sshvendordir)/sshd_config|g' \
+ 	-e 's|/usr/libexec|$(libexecdir)|g' \
+ 	-e 's|/etc/shosts.equiv|$(sysconfdir)/shosts.equiv|g' \
+ 	-e 's|/etc/ssh/ssh_host_key|$(sysconfdir)/ssh_host_key|g' \
+@@ -182,8 +188,8 @@
+ 	-e 's|/etc/ssh/ssh_host_rsa_key|$(sysconfdir)/ssh_host_rsa_key|g' \
+ 	-e 's|/etc/ssh/ssh_host_ed25519_key|$(sysconfdir)/ssh_host_ed25519_key|g' \
+ 	-e 's|/var/run/sshd.pid|$(piddir)/sshd.pid|g' \
+-	-e 's|/etc/moduli|$(sysconfdir)/moduli|g' \
+-	-e 's|/etc/ssh/moduli|$(sysconfdir)/moduli|g' \
++	-e 's|/etc/moduli|$(sshsharedir)/moduli|g' \
++	-e 's|/etc/ssh/moduli|$(sshsharedir)/moduli|g' \
+ 	-e 's|/etc/ssh/sshrc|$(sysconfdir)/sshrc|g' \
+ 	-e 's|/usr/X11R6/bin/xauth|$(XAUTH_PATH)|g' \
+ 	-e 's|/var/empty|$(PRIVSEP_PATH)|g' \
+@@ -217,6 +223,11 @@
+ sshd$(EXEEXT): libssh.a	$(LIBCOMPAT) $(SSHDOBJS)
+ 	$(LD) -o $@ $(SSHDOBJS) $(LDFLAGS) -lssh -lopenbsd-compat $(SSHDLIBS) $(LIBS) $(CHANNELLIBS)
+ 
++regress/system-config-test$(EXEEXT): $(srcdir)/regress/system-config-test.c \
++    $(srcdir)/system-config.c $(srcdir)/system-config.h config.h
++	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ \
++	    $(srcdir)/regress/system-config-test.c $(srcdir)/system-config.c
++
+ sshd-session$(EXEEXT): libssh.a	$(LIBCOMPAT) $(SSHD_SESSION_OBJS)
+ 	$(LD) -o $@ $(SSHD_SESSION_OBJS) $(LDFLAGS) -lssh -lopenbsd-compat $(SSHDLIBS) $(LIBS) $(GSSLIBS) $(K5LIBS) $(CHANNELLIBS)
+ 
+@@ -278,6 +289,7 @@
+ clean:	regressclean
+ 	rm -f *.o *.lo *.a $(TARGETS) logintest config.cache config.log
+ 	rm -f *.out core survey
++	rm -f regress/system-config-test$(EXEEXT)
+ 	rm -f regress/check-perm$(EXEEXT)
+ 	rm -f regress/mkdtemp$(EXEEXT)
+ 	rm -f regress/unittests/test_helper/*.a
+@@ -388,12 +400,12 @@
+ 	$(AUTORECONF)
+ 	-rm -rf autom4te.cache .depend.bak
+ 
+-install: $(CONFIGFILES) $(MANPAGES) $(TARGETS) install-files install-sysconf host-key check-config
+-install-nokeys: $(CONFIGFILES) $(MANPAGES) $(TARGETS) install-files install-sysconf
++install: $(CONFIGFILES) $(MANPAGES) $(TARGETS) install-files install-default-config host-key check-config
++install-nokeys: $(CONFIGFILES) $(MANPAGES) $(TARGETS) install-files install-default-config
+ install-nosysconf: $(CONFIGFILES) $(MANPAGES) $(TARGETS) install-files
+ 
+ check-config:
+-	-$(DESTDIR)$(sbindir)/sshd -t -f $(DESTDIR)$(sysconfdir)/sshd_config
++	-$(DESTDIR)$(sbindir)/sshd -t -f $(DESTDIR)$(sshvendordir)/sshd_config
+ 
+ install-files:
+ 	$(MKDIR_P) $(DESTDIR)$(bindir)
+@@ -432,28 +444,12 @@
+ 	$(INSTALL) -m 644 ssh-pkcs11-helper.8.out $(DESTDIR)$(mandir)/$(mansubdir)8/ssh-pkcs11-helper.8
+ 	$(INSTALL) -m 644 ssh-sk-helper.8.out $(DESTDIR)$(mandir)/$(mansubdir)8/ssh-sk-helper.8
+ 
+-install-sysconf:
+-	$(MKDIR_P) $(DESTDIR)$(sysconfdir)
+-	@if [ ! -f $(DESTDIR)$(sysconfdir)/ssh_config ]; then \
+-		$(INSTALL) -m 644 ssh_config.out $(DESTDIR)$(sysconfdir)/ssh_config; \
+-	else \
+-		echo "$(DESTDIR)$(sysconfdir)/ssh_config already exists, install will not overwrite"; \
+-	fi
+-	@if [ ! -f $(DESTDIR)$(sysconfdir)/sshd_config ]; then \
+-		$(INSTALL) -m 644 sshd_config.out $(DESTDIR)$(sysconfdir)/sshd_config; \
+-	else \
+-		echo "$(DESTDIR)$(sysconfdir)/sshd_config already exists, install will not overwrite"; \
+-	fi
+-	@if [ ! -f $(DESTDIR)$(sysconfdir)/moduli ]; then \
+-		if [ -f $(DESTDIR)$(sysconfdir)/primes ]; then \
+-			echo "moving $(DESTDIR)$(sysconfdir)/primes to $(DESTDIR)$(sysconfdir)/moduli"; \
+-			mv "$(DESTDIR)$(sysconfdir)/primes" "$(DESTDIR)$(sysconfdir)/moduli"; \
+-		else \
+-			$(INSTALL) -m 644 moduli.out $(DESTDIR)$(sysconfdir)/moduli; \
+-		fi ; \
+-	else \
+-		echo "$(DESTDIR)$(sysconfdir)/moduli already exists, install will not overwrite"; \
+-	fi
++install-default-config:
++	$(MKDIR_P) $(DESTDIR)$(sshvendordir)
++	$(MKDIR_P) $(DESTDIR)$(sshsharedir)
++	$(INSTALL) -m 644 ssh_config.out $(DESTDIR)$(sshvendordir)/ssh_config
++	$(INSTALL) -m 644 sshd_config.out $(DESTDIR)$(sshvendordir)/sshd_config
++	$(INSTALL) -m 644 moduli.out $(DESTDIR)$(sshsharedir)/moduli
+ 
+ host-key: ssh-keygen$(EXEEXT)
+ 	@if [ -z "$(DESTDIR)" ] ; then \
+@@ -469,9 +465,11 @@
+ 	fi
+ 
+ uninstallall:	uninstall
+-	-rm -f $(DESTDIR)$(sysconfdir)/ssh_config
+-	-rm -f $(DESTDIR)$(sysconfdir)/sshd_config
+-	-rmdir $(DESTDIR)$(sysconfdir)
++	-rm -f $(DESTDIR)$(sshvendordir)/ssh_config
++	-rm -f $(DESTDIR)$(sshvendordir)/sshd_config
++	-rm -f $(DESTDIR)$(sshsharedir)/moduli
++	-rmdir $(DESTDIR)$(sshvendordir)
++	-rmdir $(DESTDIR)$(sshsharedir)
+ 	-rmdir $(DESTDIR)$(bindir)
+ 	-rmdir $(DESTDIR)$(sbindir)
+ 	-rmdir $(DESTDIR)$(mandir)/$(mansubdir)1
+diff -urN a/pathnames.h b/pathnames.h
+--- a/pathnames.h
++++ b/pathnames.h
+@@ -18,6 +18,10 @@
+ #define SSHDIR				ETCDIR "/ssh"
+ #endif
+ 
++#ifndef SSHSHAREDIR
++#define SSHSHAREDIR			"/usr/share/ssh"
++#endif
++
+ #ifndef _PATH_SSH_PIDDIR
+ #define _PATH_SSH_PIDDIR		"/var/run"
+ #endif
+@@ -41,7 +45,7 @@
+ #define _PATH_HOST_ED25519_KEY_FILE	SSHDIR "/ssh_host_ed25519_key"
+ #define _PATH_HOST_XMSS_KEY_FILE	SSHDIR "/ssh_host_xmss_key"
+ #define _PATH_HOST_RSA_KEY_FILE		SSHDIR "/ssh_host_rsa_key"
+-#define _PATH_DH_MODULI			SSHDIR "/moduli"
++#define _PATH_DH_MODULI			SSHSHAREDIR "/moduli"
+ 
+ #ifndef _PATH_SSH_PROGRAM
+ #define _PATH_SSH_PROGRAM		"/usr/bin/ssh"
+diff -urN a/regress/system-config-test.c b/regress/system-config-test.c
+--- a/regress/system-config-test.c
++++ b/regress/system-config-test.c
+@@ -0,0 +1,133 @@
++/* Test UAPI system configuration file selection. */
++
++#include "includes.h"
++
++#include <sys/stat.h>
++#include <sys/types.h>
++
++#include <errno.h>
++#include <fcntl.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++
++#include "system-config.h"
++
++static void
++fail(const char *message)
++{
++	fprintf(stderr, "system-config-test: %s: %s\n", message,
++	    strerror(errno));
++	exit(1);
++}
++
++static void
++make_dir(const char *path)
++{
++	if (mkdir(path, 0755) != 0 && errno != EEXIST)
++		fail(path);
++}
++
++static void
++make_file(const char *path)
++{
++	int fd;
++
++	if ((fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644)) == -1)
++		fail(path);
++	if (close(fd) != 0)
++		fail(path);
++}
++
++static void
++expect_file(const char *want)
++{
++	char *path = NULL;
++	int r;
++
++	if ((r = system_config_file("ssh_config", &path)) != 1) {
++		errno = r == 0 ? ENOENT : errno;
++		fail("system_config_file");
++	}
++	if (strcmp(path, want) != 0) {
++		fprintf(stderr, "system-config-test: got %s, want %s\n",
++		    path, want);
++		exit(1);
++	}
++	free(path);
++}
++
++static void
++expect_dropins(void)
++{
++	const char *want[] = {
++	    "/etc/ssh/ssh_config.d/99-empty.conf",
++	    "/usr/lib/ssh/ssh_config.d/90-late.conf",
++	    "/etc/ssh/ssh_config.d/50-mask.conf",
++	    "/usr/lib/ssh/ssh_config.d/10-early.conf"
++	};
++	char **paths = NULL;
++	size_t i, npaths = 0;
++
++	if (system_config_dropins("ssh_config", &paths, &npaths) != 0)
++		fail("system_config_dropins");
++	if (npaths != sizeof(want) / sizeof(want[0])) {
++		fprintf(stderr, "system-config-test: got %zu drop-ins, want %zu\n",
++		    npaths, sizeof(want) / sizeof(want[0]));
++		exit(1);
++	}
++	for (i = 0; i < npaths; i++) {
++		if (strcmp(paths[i], want[i]) == 0)
++			continue;
++		fprintf(stderr,
++		    "system-config-test: drop-in %zu is %s, want %s\n",
++		    i, paths[i], want[i]);
++		exit(1);
++	}
++	system_config_free(paths, npaths);
++}
++
++int
++main(void)
++{
++	char root[] = "/tmp/system-config-test.XXXXXXXX";
++
++	if (mkdtemp(root) == NULL)
++		fail("mkdtemp");
++	if (chroot(root) != 0 || chdir("/") != 0)
++		fail("chroot");
++	make_dir("/etc");
++	make_dir("/etc/ssh");
++	make_dir("/run");
++	make_dir("/run/ssh");
++	make_dir("/usr");
++	make_dir("/usr/lib");
++	make_dir("/usr/lib/ssh");
++	make_dir("/dev");
++	make_file("/dev/null");
++
++	make_file("/usr/lib/ssh/ssh_config");
++	expect_file("/usr/lib/ssh/ssh_config");
++	make_file("/run/ssh/ssh_config");
++	expect_file("/run/ssh/ssh_config");
++	if (symlink("/dev/null", "/etc/ssh/ssh_config") != 0)
++		fail("symlink");
++	expect_file("/etc/ssh/ssh_config");
++
++	make_dir("/usr/lib/ssh/ssh_config.d");
++	make_dir("/run/ssh/ssh_config.d");
++	make_dir("/etc/ssh/ssh_config.d");
++	make_file("/usr/lib/ssh/ssh_config.d/10-early.conf");
++	make_file("/usr/lib/ssh/ssh_config.d/50-mask.conf");
++	make_file("/usr/lib/ssh/ssh_config.d/90-late.conf");
++	make_file("/run/ssh/ssh_config.d/50-mask.conf");
++	if (symlink("/dev/null", "/etc/ssh/ssh_config.d/50-mask.conf") != 0)
++		fail("symlink");
++	make_file("/etc/ssh/ssh_config.d/99-empty.conf");
++	make_file("/etc/ssh/ssh_config.d/ignored.txt");
++	expect_dropins();
++
++	puts("system config selection tests passed");
++	return 0;
++}
+diff -urN a/ssh.c b/ssh.c
+--- a/ssh.c
++++ b/ssh.c
+@@ -93,6 +93,7 @@
+ #include "authfd.h"
+ #include "authfile.h"
+ #include "pathnames.h"
++#include "system-config.h"
+ #include "dispatch.h"
+ #include "clientloop.h"
+ #include "log.h"
+@@ -561,7 +562,8 @@
+ process_config_files(const char *host_name, struct passwd *pw, int final_pass,
+     int *want_final_pass)
+ {
+-	char buf[PATH_MAX];
++	char buf[PATH_MAX], *system_config = NULL, **dropins = NULL;
++	size_t i, ndropins = 0;
+ 	int r;
+ 
+ 	if (config != NULL) {
+@@ -579,10 +581,29 @@
+ 			    &options, SSHCONF_CHECKPERM | SSHCONF_USERCONF |
+ 			    (final_pass ? SSHCONF_FINAL : 0), want_final_pass);
+ 
+-		/* Read systemwide configuration file after user config. */
+-		(void)read_config_file(_PATH_HOST_CONFIG_FILE, pw,
+-		    host, host_name, &options,
+-		    final_pass ? SSHCONF_FINAL : 0, want_final_pass);
++		if (system_config_dropins("ssh_config", &dropins,
++		    &ndropins) != 0)
++			fatal("Can't select system configuration drop-ins: %s",
++			    strerror(errno));
++		for (i = 0; i < ndropins; i++) {
++			if (!read_config_file(dropins[i], pw, host, host_name,
++			    &options, final_pass ? SSHCONF_FINAL : 0,
++			    want_final_pass))
++				fatal("Can't open system config file %.100s: %.100s",
++				    dropins[i], strerror(errno));
++		}
++		system_config_free(dropins, ndropins);
++
++		r = system_config_file("ssh_config", &system_config);
++		if (r == -1)
++			fatal("Can't select system config file: %s",
++			    strerror(errno));
++		if (r == 1 && !read_config_file(system_config, pw, host,
++		    host_name, &options, final_pass ? SSHCONF_FINAL : 0,
++		    want_final_pass))
++			fatal("Can't open system config file %.100s: %.100s",
++			    system_config, strerror(errno));
++		free(system_config);
+ 	}
+ }
+ 
+diff -urN a/sshd.c b/sshd.c
+--- a/sshd.c
++++ b/sshd.c
+@@ -81,6 +81,7 @@
+ #include "sshkey.h"
+ #include "authfile.h"
+ #include "pathnames.h"
++#include "system-config.h"
+ #include "canohost.h"
+ #include "hostfile.h"
+ #include "auth.h"
+@@ -1179,6 +1180,25 @@
+ 	exit(0);
+ }
+ 
++static void
++append_config_include(struct sshbuf *conf, const char *path)
++{
++	const char *cp;
++	int r;
++
++	if ((r = sshbuf_put(conf, "Include \"", 9)) != 0)
++		fatal_fr(r, "sshbuf_put");
++	for (cp = path; *cp != '\0'; cp++) {
++		if ((*cp == '\\' || *cp == '"') &&
++		    (r = sshbuf_put_u8(conf, '\\')) != 0)
++			fatal_fr(r, "sshbuf_put_u8");
++		if ((r = sshbuf_put_u8(conf, *cp)) != 0)
++			fatal_fr(r, "sshbuf_put_u8");
++	}
++	if ((r = sshbuf_put(conf, "\"\n", 2)) != 0)
++		fatal_fr(r, "sshbuf_put");
++}
++
+ /*
+  * Main program for the daemon.
+  */
+@@ -1189,11 +1209,14 @@
+ 	extern int optind;
+ 	int log_stderr = 0, inetd_flag = 0, test_flag = 0, no_daemon_flag = 0;
+ 	char *config_file_name = _PATH_SERVER_CONFIG_FILE;
++	int config_file_explicit = 0;
+ 	int r, opt, do_dump_cfg = 0, keytype, already_daemon, have_agent = 0;
+ 	int sock_in = -1, sock_out = -1, newsock = -1, rexec_argc = 0;
+ 	int devnull, config_s[2] = { -1 , -1 }, have_connection_info = 0;
+ 	int need_chroot = 1;
+ 	char *fp, *line, *logfile = NULL, **rexec_argv = NULL;
++	char *system_config = NULL, **config_dropins = NULL;
++	size_t nconfig_dropins = 0;
+ 	struct stat sb;
+ 	u_int i, j;
+ 	mode_t new_umask;
+@@ -1246,6 +1269,7 @@
+ 			break;
+ 		case 'f':
+ 			config_file_name = optarg;
++			config_file_explicit = 1;
+ 			break;
+ 		case 'c':
+ 			servconf_add_hostcert("[command-line]", 0,
+@@ -1407,8 +1431,31 @@
+ 	/* Fetch our configuration */
+ 	if ((cfg = sshbuf_new()) == NULL)
+ 		fatal("sshbuf_new config failed");
+-	if (strcasecmp(config_file_name, "none") != 0)
+-		load_server_config(config_file_name, cfg);
++	if (strcasecmp(config_file_name, "none") != 0) {
++		if (config_file_explicit) {
++			load_server_config(config_file_name, cfg);
++		} else {
++			if (system_config_dropins("sshd_config", &config_dropins,
++			    &nconfig_dropins) != 0)
++				fatal("Can't select system configuration drop-ins: %s",
++				    strerror(errno));
++			for (i = 0; i < nconfig_dropins; i++)
++				append_config_include(cfg, config_dropins[i]);
++			system_config_free(config_dropins, nconfig_dropins);
++			config_dropins = NULL;
++			r = system_config_file("sshd_config", &system_config);
++			if (r == -1)
++				fatal("Can't select system config file: %s",
++				    strerror(errno));
++			if (r == 0)
++				fatal("No system sshd_config found in %s, %s, or %s",
++				    SSHDIR, SSH_RUNTIME_DIR, SSH_VENDOR_DIR);
++			append_config_include(cfg, system_config);
++			config_file_name = system_config;
++			if ((r = sshbuf_put_u8(cfg, 0)) != 0)
++				fatal_fr(r, "sshbuf_put_u8");
++		}
++	}
+ 
+ 	parse_server_config(&options, config_file_name, cfg,
+ 	    &includes, NULL, 0);
+diff -urN a/ssh-keysign.c b/ssh-keysign.c
+--- a/ssh-keysign.c
++++ b/ssh-keysign.c
+@@ -55,6 +55,7 @@
+ #include "msg.h"
+ #include "canohost.h"
+ #include "pathnames.h"
++#include "system-config.h"
+ #include "readconf.h"
+ #include "uidswap.h"
+ #include "ssherr.h"
+@@ -182,8 +183,8 @@
+ 	struct passwd *pw;
+ 	int r, key_fd[NUM_KEYTYPES], i, found, version = 2, fd;
+ 	u_char *signature, *data, rver;
+-	char *host, *fp, *pkalg;
+-	size_t slen, dlen;
++	char *host, *fp, *pkalg, *system_config = NULL, **dropins = NULL;
++	size_t slen, dlen, di, ndropins = 0;
+ 
+ 	if (pledge("stdio rpath getpw dns id", NULL) != 0)
+ 		fatal("%s: pledge: %s", __progname, strerror(errno));
+@@ -222,12 +223,24 @@
+ 
+ 	/* verify that ssh-keysign is enabled by the admin */
+ 	initialize_options(&options);
+-	(void)read_config_file(_PATH_HOST_CONFIG_FILE, pw, "", "",
+-	    &options, 0, NULL);
++	if (system_config_dropins("ssh_config", &dropins, &ndropins) != 0)
++		fatal("Can't select system configuration drop-ins: %s",
++		    strerror(errno));
++	for (di = 0; di < ndropins; di++)
++		(void)read_config_file(dropins[di], pw, "", "", &options, 0,
++		    NULL);
++	system_config_free(dropins, ndropins);
++	if (system_config_file("ssh_config", &system_config) == -1)
++		fatal("Can't select system config file: %s", strerror(errno));
++	if (system_config != NULL)
++		(void)read_config_file(system_config, pw, "", "", &options, 0,
++		    NULL);
+ 	(void)fill_default_options(&options);
+ 	if (options.enable_ssh_keysign != 1)
+ 		fatal("ssh-keysign not enabled in %s",
++		    system_config != NULL ? system_config :
+ 		    _PATH_HOST_CONFIG_FILE);
++	free(system_config);
+ 
+ 	if (pledge("stdio dns", NULL) != 0)
+ 		fatal("%s: pledge: %s", __progname, strerror(errno));
+diff -urN a/system-config.c b/system-config.c
+--- a/system-config.c
++++ b/system-config.c
+@@ -0,0 +1,253 @@
++/*
++ * Copyright (c) 2026 Wegel Corp.
++ *
++ * Permission to use, copy, modify, and distribute this software for any
++ * purpose with or without fee is hereby granted, provided that the above
++ * copyright notice and this permission notice appear in all copies.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
++ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
++ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
++ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++ */
++
++#include "includes.h"
++
++#include <sys/types.h>
++#include <sys/stat.h>
++
++#include <dirent.h>
++#include <errno.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++
++#include "system-config.h"
++
++#ifndef SSH_RUNTIME_DIR
++#define SSH_RUNTIME_DIR "/run/ssh"
++#endif
++#ifndef SSH_VENDOR_DIR
++#define SSH_VENDOR_DIR "/usr/lib/ssh"
++#endif
++
++struct config_entry {
++	char *name;
++	char *path;
++};
++
++static char *
++config_strdup(const char *s)
++{
++	size_t len;
++	char *ret;
++
++	len = strlen(s) + 1;
++	if ((ret = malloc(len)) == NULL)
++		return NULL;
++	memcpy(ret, s, len);
++	return ret;
++}
++
++static char *
++config_path(const char *dir, const char *name, const char *suffix)
++{
++	size_t dirlen, namelen, suffixlen, len;
++	char *ret;
++
++	dirlen = strlen(dir);
++	namelen = strlen(name);
++	suffixlen = suffix == NULL ? 0 : strlen(suffix);
++	if (dirlen > SIZE_MAX - namelen - suffixlen - 2) {
++		errno = ENAMETOOLONG;
++		return NULL;
++	}
++	len = dirlen + 1 + namelen + suffixlen + 1;
++	if ((ret = malloc(len)) == NULL)
++		return NULL;
++	(void)snprintf(ret, len, "%s/%s%s", dir, name,
++	    suffix == NULL ? "" : suffix);
++	return ret;
++}
++
++int
++system_config_file(const char *name, char **pathp)
++{
++	const char *dirs[] = { SSHDIR, SSH_RUNTIME_DIR, SSH_VENDOR_DIR };
++	struct stat st;
++	size_t i;
++	char *path;
++
++	*pathp = NULL;
++	for (i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
++		if ((path = config_path(dirs[i], name, NULL)) == NULL)
++			return -1;
++		if (lstat(path, &st) == 0) {
++			*pathp = path;
++			return 1;
++		}
++		if (errno != ENOENT && errno != ENOTDIR) {
++			free(path);
++			return -1;
++		}
++		free(path);
++	}
++	return 0;
++}
++
++static int
++has_conf_suffix(const char *name)
++{
++	size_t len;
++
++	len = strlen(name);
++	return len > 5 && strcmp(name + len - 5, ".conf") == 0;
++}
++
++static int
++replace_entry(struct config_entry **entriesp, size_t *nentriesp,
++    const char *name, const char *path)
++{
++	struct config_entry *entries, *new_entries;
++	char *new_name, *new_path;
++	size_t i, nentries;
++
++	entries = *entriesp;
++	nentries = *nentriesp;
++	if ((new_path = config_strdup(path)) == NULL)
++		return -1;
++	for (i = 0; i < nentries; i++) {
++		if (strcmp(entries[i].name, name) != 0)
++			continue;
++		free(entries[i].path);
++		entries[i].path = new_path;
++		return 0;
++	}
++	if ((new_name = config_strdup(name)) == NULL) {
++		free(new_path);
++		return -1;
++	}
++	if (nentries == SIZE_MAX / sizeof(*entries)) {
++		free(new_name);
++		free(new_path);
++		errno = ENOMEM;
++		return -1;
++	}
++	new_entries = realloc(entries, (nentries + 1) * sizeof(*entries));
++	if (new_entries == NULL) {
++		free(new_name);
++		free(new_path);
++		return -1;
++	}
++	new_entries[nentries].name = new_name;
++	new_entries[nentries].path = new_path;
++	*entriesp = new_entries;
++	*nentriesp = nentries + 1;
++	return 0;
++}
++
++static int
++collect_dir(const char *base, const char *name,
++    struct config_entry **entriesp, size_t *nentriesp)
++{
++	struct dirent *de;
++	DIR *dir;
++	char *dirname, *path;
++	int saved_errno;
++
++	if ((dirname = config_path(base, name, ".d")) == NULL)
++		return -1;
++	if ((dir = opendir(dirname)) == NULL) {
++		saved_errno = errno;
++		free(dirname);
++		if (saved_errno == ENOENT || saved_errno == ENOTDIR)
++			return 0;
++		errno = saved_errno;
++		return -1;
++	}
++	errno = 0;
++	while ((de = readdir(dir)) != NULL) {
++		if (!has_conf_suffix(de->d_name))
++			continue;
++		if ((path = config_path(dirname, de->d_name, NULL)) == NULL)
++			goto fail;
++		if (replace_entry(entriesp, nentriesp, de->d_name, path) != 0) {
++			free(path);
++			goto fail;
++		}
++		free(path);
++	}
++	if (errno != 0)
++		goto fail;
++	free(dirname);
++	if (closedir(dir) != 0)
++		return -1;
++	return 0;
++
++ fail:
++	saved_errno = errno;
++	free(dirname);
++	(void)closedir(dir);
++	errno = saved_errno;
++	return -1;
++}
++
++static int
++entry_compare_desc(const void *va, const void *vb)
++{
++	const struct config_entry *a = va;
++	const struct config_entry *b = vb;
++
++	return strcmp(b->name, a->name);
++}
++
++void
++system_config_free(char **paths, size_t npaths)
++{
++	size_t i;
++
++	for (i = 0; i < npaths; i++)
++		free(paths[i]);
++	free(paths);
++}
++
++int
++system_config_dropins(const char *name, char ***pathsp, size_t *npathsp)
++{
++	const char *dirs[] = { SSH_VENDOR_DIR, SSH_RUNTIME_DIR, SSHDIR };
++	struct config_entry *entries = NULL;
++	char **paths = NULL;
++	size_t i, nentries = 0;
++
++	*pathsp = NULL;
++	*npathsp = 0;
++	for (i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
++		if (collect_dir(dirs[i], name, &entries, &nentries) != 0)
++			goto fail;
++	}
++	qsort(entries, nentries, sizeof(*entries), entry_compare_desc);
++	if (nentries != 0 &&
++	    (paths = calloc(nentries, sizeof(*paths))) == NULL)
++		goto fail;
++	for (i = 0; i < nentries; i++) {
++		paths[i] = entries[i].path;
++		entries[i].path = NULL;
++		free(entries[i].name);
++	}
++	free(entries);
++	*pathsp = paths;
++	*npathsp = nentries;
++	return 0;
++
++ fail:
++	for (i = 0; i < nentries; i++) {
++		free(entries[i].name);
++		free(entries[i].path);
++	}
++	free(entries);
++	free(paths);
++	return -1;
++}
+diff -urN a/system-config.h b/system-config.h
+--- a/system-config.h
++++ b/system-config.h
+@@ -0,0 +1,15 @@
++/*
++ * Select system configuration files using the UAPI Configuration Files
++ * precedence rules.
++ */
++
++#ifndef SYSTEM_CONFIG_H
++#define SYSTEM_CONFIG_H
++
++#include <stddef.h>
++
++int system_config_file(const char *, char **);
++int system_config_dropins(const char *, char ***, size_t *);
++void system_config_free(char **, size_t);
++
++#endif

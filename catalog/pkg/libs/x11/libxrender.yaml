@@ -1,0 +1,137 @@
+package:
+  schema: 1
+  name: libxrender
+  slug: libxrender
+  namespace: libs/x11
+  version: 0.9.11
+  description: X11 libxrender library
+  homepage: https://xorg.freedesktop.org/
+  checksum: e7ea92956c0099942809135e4ffe906b7e2cea3e04aa58437b1774439c8cbe0f
+
+sources:
+- name: libxrender
+  url: https://xorg.freedesktop.org/archive/individual/lib/libXrender-0.9.11.tar.xz
+  sha256: bc53759a3a83d1ff702fb59641b3d2f7c56e05051fa0cfa93501166fa782dc24
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: xorgproto
+  commit: x86_64/pkg/libs/x11/xorgproto/2024.1/bundles/dev
+- name: util-macros
+  commit: x86_64/pkg/libs/x11/util-macros/1.20.2/bundles/dev
+- name: libx11
+  commit: x86_64/pkg/libs/x11/libx11/1.8.10/bundles/dev
+- name: libxcb
+  commit: x86_64/pkg/libs/x11/libxcb/1.17.0/bundles/dev
+- name: libxau
+  commit: x86_64/pkg/libs/x11/libxau/1.0.12/bundles/dev
+- name: libxdmcp
+  commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4138:7318, 8255:18116, 8533:18675]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --disable-static
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - doc
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/X11/extensions/Xrender.h
+    - path: /usr/lib/libXrender.la
+    - path: /usr/lib/pkgconfig/xrender.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/libXrender/libXrender.txt
+
+  lib:
+    files:
+    - path: /usr/lib/libXrender.so
+      needs:
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libXau.so.6
+      - /usr/lib/libXdmcp.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxcb.so.1
+    - path: /usr/lib/libXrender.so.1
+      needs:
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libXau.so.6
+      - /usr/lib/libXdmcp.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxcb.so.1
+    - path: /usr/lib/libXrender.so.1.3.0
+      needs:
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libXau.so.6
+      - /usr/lib/libXdmcp.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libxcb.so.1
+
+resolution:
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libX11.so.6: libx11
+  /usr/lib/libXau.so.6: libxau
+  /usr/lib/libxcb.so.1: libxcb
+  /usr/lib/libXdmcp.so.6: libxdmcp

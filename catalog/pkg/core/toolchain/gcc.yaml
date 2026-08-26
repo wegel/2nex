@@ -1,0 +1,2041 @@
+package:
+  schema: 1
+  name: GNU Compiler Collection
+  slug: gcc
+  namespace: core/toolchain
+  version: 13.2.0
+  description: The GNU Compiler Collection includes front ends for C, C++, Objective-C, Fortran, Ada, Go, and D, as well as libraries for these languages.
+  homepage: https://gcc.gnu.org/
+  checksum: 4efc1225392aed4d0b9e9e144d40d8d83163989f4c1f5820119a88fccbf63b2c
+  seed: true
+
+sources:
+- name: gcc
+  url: https://ftp.gnu.org/gnu/gcc/gcc-13.2.0/gcc-13.2.0.tar.xz
+  sha256: e275e76442a6067341a27f04c5c6b83d8613144004c0413528863dc6b5c743da
+- name: gcc9_reproducible_builds_buildid_for_checksum
+  file: pkg/core/toolchain/gcc-build-id-pch-checksum.patch
+  sha256: 5ff5cedd9dc2d18cf2854367801c4b5db8887bd801d68e91f21eb69c26531b11
+- name: gcc9_reproducible_builds
+  file: pkg/core/toolchain/gcc-reproducible-ada-generated-file.patch
+  sha256: c65a469ad7723b14a957facd111be5cb0da5913ee17ca90165212b8a58c85b58
+- name: mpfr
+  url: https://ftp.gnu.org/gnu/mpfr/mpfr-4.2.1.tar.xz
+  sha256: 277807353a6726978996945af13e52829e3abd7a9a5b7fb2793894e18f1fcbb2
+- name: gmp
+  url: https://ftp.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz
+  sha256: a3c2b80201b89e68616f4ad30bc66aee4927c3ce50e33929ca819d5c43538898
+- name: mpc
+  url: https://ftp.gnu.org/gnu/mpc/mpc-1.3.1.tar.gz
+  sha256: ab642492f5cf882b74aa0cb730cd410a81edcdbec895183ce930e706c1c759b8
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: libxcrypt
+  commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase3/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase3/coreutils/9.5/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/bootstrap/phase3/diffutils/3.10/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase3/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase3/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase3/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/bootstrap/phase3/gzip/1.13/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase3/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/bootstrap/phase3/patch/2.7.6/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase3/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase3/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [118157:11680, 455425:16206, 1026470:23763, 1710172:39230, 2278704:83886, 2849877:155391, 3415722:161174, 4279397:201815, 5124394:242339, 5689934:260734]
+
+  script: |
+    # gcc's build system doesn't use gcc-ar/gcc-ranlib consistently, so disable LTO
+    CFLAGS=${CFLAGS/-Werror=format-security/}
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-Werror=format-security/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
+    tar --no-same-owner -xf ${SOURCE_gcc} -C "${WORK_DIR}" --strip-components=1
+
+    # extract in-tree mpfr/gmp/mpc (avoids bootstrap dependency chain)
+    mkdir -p ${WORK_DIR}/mpfr ${WORK_DIR}/gmp ${WORK_DIR}/mpc
+    tar --no-same-owner -xf ${SOURCE_mpfr} -C ${WORK_DIR}/mpfr --strip-components=1
+    tar --no-same-owner -xf ${SOURCE_gmp} -C ${WORK_DIR}/gmp --strip-components=1
+    tar --no-same-owner -xf ${SOURCE_mpc} -C ${WORK_DIR}/mpc --strip-components=1
+
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -p0 < /${SOURCE_gcc9_reproducible_builds}
+    patch --batch --fuzz=0 -p1 < /${SOURCE_gcc9_reproducible_builds_buildid_for_checksum}
+
+    sed -e "/m64=/s/lib64/lib/" -i.orig gcc/config/i386/t-linux64
+
+    mkdir -pv build
+    cd       build
+
+    ../configure --prefix=/usr            \
+               LD=ld                    \
+               --enable-languages=c,c++ \
+               --enable-default-pie     \
+               --enable-default-ssp     \
+               --disable-multilib       \
+               --disable-bootstrap      \
+               --disable-fixincludes    \
+               --with-system-zlib
+
+    ulimit -s 32768
+
+    make
+    make DESTDIR=${OUT_DIR} install
+    ln -sv gcc ${OUT_DIR}/usr/bin/cc
+    ln -svr /usr/bin/cpp ${OUT_DIR}/usr/lib
+
+    mkdir -pv ${OUT_DIR}/usr/share/gdb/auto-load/usr/lib
+    mv -v ${OUT_DIR}/usr/lib/*gdb.py ${OUT_DIR}/usr/share/gdb/auto-load/usr/lib
+    find "${OUT_DIR}" -name "*.la" -delete
+
+
+    # strip runtime libraries (but not .o files or plugins)
+    find "${OUT_DIR}/usr/lib" -type f -name "*.so.*" -exec strip {} \;
+
+    # strip binaries in /usr/bin and /usr/libexec
+    find "${OUT_DIR}/usr/bin" -type f -executable -exec strip {} \;
+    find "${OUT_DIR}/usr/libexec/gcc" -type f -executable -exec strip {} \;
+
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - locale
+  - static
+
+  full:
+  - bin
+  - dev
+  - lib
+  - locale
+  - man
+  - static
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/c++
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/cc
+    - path: /usr/bin/cpp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/g++
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/gcc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/gcc-ar
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/gcc-nm
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/gcc-ranlib
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/gcov
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/gcov-dump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/gcov-tool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/lto-dump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/x86_64-pc-linux-gnu-c++
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/x86_64-pc-linux-gnu-g++
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/x86_64-pc-linux-gnu-gcc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/x86_64-pc-linux-gnu-gcc-13.2.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/x86_64-pc-linux-gnu-gcc-ar
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/x86_64-pc-linux-gnu-gcc-nm
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/x86_64-pc-linux-gnu-gcc-ranlib
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/cc1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/cc1plus
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/collect2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/g++-mapper-server
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/mkinstalldirs
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/lto-wrapper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/lto1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/gengtype
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  dev:
+    files:
+    - path: /usr/include/c++/13.2.0/algorithm
+    - path: /usr/include/c++/13.2.0/any
+    - path: /usr/include/c++/13.2.0/array
+    - path: /usr/include/c++/13.2.0/atomic
+    - path: /usr/include/c++/13.2.0/backward/auto_ptr.h
+    - path: /usr/include/c++/13.2.0/backward/backward_warning.h
+    - path: /usr/include/c++/13.2.0/backward/binders.h
+    - path: /usr/include/c++/13.2.0/backward/hash_fun.h
+    - path: /usr/include/c++/13.2.0/backward/hash_map
+    - path: /usr/include/c++/13.2.0/backward/hash_set
+    - path: /usr/include/c++/13.2.0/backward/hashtable.h
+    - path: /usr/include/c++/13.2.0/backward/strstream
+    - path: /usr/include/c++/13.2.0/barrier
+    - path: /usr/include/c++/13.2.0/bit
+    - path: /usr/include/c++/13.2.0/bits/algorithmfwd.h
+    - path: /usr/include/c++/13.2.0/bits/align.h
+    - path: /usr/include/c++/13.2.0/bits/alloc_traits.h
+    - path: /usr/include/c++/13.2.0/bits/allocated_ptr.h
+    - path: /usr/include/c++/13.2.0/bits/allocator.h
+    - path: /usr/include/c++/13.2.0/bits/atomic_base.h
+    - path: /usr/include/c++/13.2.0/bits/atomic_futex.h
+    - path: /usr/include/c++/13.2.0/bits/atomic_lockfree_defines.h
+    - path: /usr/include/c++/13.2.0/bits/atomic_timed_wait.h
+    - path: /usr/include/c++/13.2.0/bits/atomic_wait.h
+    - path: /usr/include/c++/13.2.0/bits/basic_ios.h
+    - path: /usr/include/c++/13.2.0/bits/basic_ios.tcc
+    - path: /usr/include/c++/13.2.0/bits/basic_string.h
+    - path: /usr/include/c++/13.2.0/bits/basic_string.tcc
+    - path: /usr/include/c++/13.2.0/bits/boost_concept_check.h
+    - path: /usr/include/c++/13.2.0/bits/c++0x_warning.h
+    - path: /usr/include/c++/13.2.0/bits/char_traits.h
+    - path: /usr/include/c++/13.2.0/bits/charconv.h
+    - path: /usr/include/c++/13.2.0/bits/chrono.h
+    - path: /usr/include/c++/13.2.0/bits/chrono_io.h
+    - path: /usr/include/c++/13.2.0/bits/codecvt.h
+    - path: /usr/include/c++/13.2.0/bits/concept_check.h
+    - path: /usr/include/c++/13.2.0/bits/cow_string.h
+    - path: /usr/include/c++/13.2.0/bits/cpp_type_traits.h
+    - path: /usr/include/c++/13.2.0/bits/cxxabi_forced.h
+    - path: /usr/include/c++/13.2.0/bits/cxxabi_init_exception.h
+    - path: /usr/include/c++/13.2.0/bits/deque.tcc
+    - path: /usr/include/c++/13.2.0/bits/enable_special_members.h
+    - path: /usr/include/c++/13.2.0/bits/erase_if.h
+    - path: /usr/include/c++/13.2.0/bits/exception.h
+    - path: /usr/include/c++/13.2.0/bits/exception_defines.h
+    - path: /usr/include/c++/13.2.0/bits/exception_ptr.h
+    - path: /usr/include/c++/13.2.0/bits/forward_list.h
+    - path: /usr/include/c++/13.2.0/bits/forward_list.tcc
+    - path: /usr/include/c++/13.2.0/bits/fs_dir.h
+    - path: /usr/include/c++/13.2.0/bits/fs_fwd.h
+    - path: /usr/include/c++/13.2.0/bits/fs_ops.h
+    - path: /usr/include/c++/13.2.0/bits/fs_path.h
+    - path: /usr/include/c++/13.2.0/bits/fstream.tcc
+    - path: /usr/include/c++/13.2.0/bits/functexcept.h
+    - path: /usr/include/c++/13.2.0/bits/functional_hash.h
+    - path: /usr/include/c++/13.2.0/bits/gslice.h
+    - path: /usr/include/c++/13.2.0/bits/gslice_array.h
+    - path: /usr/include/c++/13.2.0/bits/hash_bytes.h
+    - path: /usr/include/c++/13.2.0/bits/hashtable.h
+    - path: /usr/include/c++/13.2.0/bits/hashtable_policy.h
+    - path: /usr/include/c++/13.2.0/bits/indirect_array.h
+    - path: /usr/include/c++/13.2.0/bits/invoke.h
+    - path: /usr/include/c++/13.2.0/bits/ios_base.h
+    - path: /usr/include/c++/13.2.0/bits/istream.tcc
+    - path: /usr/include/c++/13.2.0/bits/iterator_concepts.h
+    - path: /usr/include/c++/13.2.0/bits/list.tcc
+    - path: /usr/include/c++/13.2.0/bits/locale_classes.h
+    - path: /usr/include/c++/13.2.0/bits/locale_classes.tcc
+    - path: /usr/include/c++/13.2.0/bits/locale_conv.h
+    - path: /usr/include/c++/13.2.0/bits/locale_facets.h
+    - path: /usr/include/c++/13.2.0/bits/locale_facets.tcc
+    - path: /usr/include/c++/13.2.0/bits/locale_facets_nonio.h
+    - path: /usr/include/c++/13.2.0/bits/locale_facets_nonio.tcc
+    - path: /usr/include/c++/13.2.0/bits/localefwd.h
+    - path: /usr/include/c++/13.2.0/bits/mask_array.h
+    - path: /usr/include/c++/13.2.0/bits/max_size_type.h
+    - path: /usr/include/c++/13.2.0/bits/memory_resource.h
+    - path: /usr/include/c++/13.2.0/bits/memoryfwd.h
+    - path: /usr/include/c++/13.2.0/bits/mofunc_impl.h
+    - path: /usr/include/c++/13.2.0/bits/move.h
+    - path: /usr/include/c++/13.2.0/bits/move_only_function.h
+    - path: /usr/include/c++/13.2.0/bits/nested_exception.h
+    - path: /usr/include/c++/13.2.0/bits/new_allocator.h
+    - path: /usr/include/c++/13.2.0/bits/node_handle.h
+    - path: /usr/include/c++/13.2.0/bits/ostream.tcc
+    - path: /usr/include/c++/13.2.0/bits/ostream_insert.h
+    - path: /usr/include/c++/13.2.0/bits/parse_numbers.h
+    - path: /usr/include/c++/13.2.0/bits/postypes.h
+    - path: /usr/include/c++/13.2.0/bits/predefined_ops.h
+    - path: /usr/include/c++/13.2.0/bits/ptr_traits.h
+    - path: /usr/include/c++/13.2.0/bits/quoted_string.h
+    - path: /usr/include/c++/13.2.0/bits/random.h
+    - path: /usr/include/c++/13.2.0/bits/random.tcc
+    - path: /usr/include/c++/13.2.0/bits/range_access.h
+    - path: /usr/include/c++/13.2.0/bits/ranges_algo.h
+    - path: /usr/include/c++/13.2.0/bits/ranges_algobase.h
+    - path: /usr/include/c++/13.2.0/bits/ranges_base.h
+    - path: /usr/include/c++/13.2.0/bits/ranges_cmp.h
+    - path: /usr/include/c++/13.2.0/bits/ranges_uninitialized.h
+    - path: /usr/include/c++/13.2.0/bits/ranges_util.h
+    - path: /usr/include/c++/13.2.0/bits/refwrap.h
+    - path: /usr/include/c++/13.2.0/bits/regex.h
+    - path: /usr/include/c++/13.2.0/bits/regex.tcc
+    - path: /usr/include/c++/13.2.0/bits/regex_automaton.h
+    - path: /usr/include/c++/13.2.0/bits/regex_automaton.tcc
+    - path: /usr/include/c++/13.2.0/bits/regex_compiler.h
+    - path: /usr/include/c++/13.2.0/bits/regex_compiler.tcc
+    - path: /usr/include/c++/13.2.0/bits/regex_constants.h
+    - path: /usr/include/c++/13.2.0/bits/regex_error.h
+    - path: /usr/include/c++/13.2.0/bits/regex_executor.h
+    - path: /usr/include/c++/13.2.0/bits/regex_executor.tcc
+    - path: /usr/include/c++/13.2.0/bits/regex_scanner.h
+    - path: /usr/include/c++/13.2.0/bits/regex_scanner.tcc
+    - path: /usr/include/c++/13.2.0/bits/requires_hosted.h
+    - path: /usr/include/c++/13.2.0/bits/semaphore_base.h
+    - path: /usr/include/c++/13.2.0/bits/shared_ptr.h
+    - path: /usr/include/c++/13.2.0/bits/shared_ptr_atomic.h
+    - path: /usr/include/c++/13.2.0/bits/shared_ptr_base.h
+    - path: /usr/include/c++/13.2.0/bits/slice_array.h
+    - path: /usr/include/c++/13.2.0/bits/specfun.h
+    - path: /usr/include/c++/13.2.0/bits/sstream.tcc
+    - path: /usr/include/c++/13.2.0/bits/std_abs.h
+    - path: /usr/include/c++/13.2.0/bits/std_function.h
+    - path: /usr/include/c++/13.2.0/bits/std_mutex.h
+    - path: /usr/include/c++/13.2.0/bits/std_thread.h
+    - path: /usr/include/c++/13.2.0/bits/stl_algo.h
+    - path: /usr/include/c++/13.2.0/bits/stl_algobase.h
+    - path: /usr/include/c++/13.2.0/bits/stl_bvector.h
+    - path: /usr/include/c++/13.2.0/bits/stl_construct.h
+    - path: /usr/include/c++/13.2.0/bits/stl_deque.h
+    - path: /usr/include/c++/13.2.0/bits/stl_function.h
+    - path: /usr/include/c++/13.2.0/bits/stl_heap.h
+    - path: /usr/include/c++/13.2.0/bits/stl_iterator.h
+    - path: /usr/include/c++/13.2.0/bits/stl_iterator_base_funcs.h
+    - path: /usr/include/c++/13.2.0/bits/stl_iterator_base_types.h
+    - path: /usr/include/c++/13.2.0/bits/stl_list.h
+    - path: /usr/include/c++/13.2.0/bits/stl_map.h
+    - path: /usr/include/c++/13.2.0/bits/stl_multimap.h
+    - path: /usr/include/c++/13.2.0/bits/stl_multiset.h
+    - path: /usr/include/c++/13.2.0/bits/stl_numeric.h
+    - path: /usr/include/c++/13.2.0/bits/stl_pair.h
+    - path: /usr/include/c++/13.2.0/bits/stl_queue.h
+    - path: /usr/include/c++/13.2.0/bits/stl_raw_storage_iter.h
+    - path: /usr/include/c++/13.2.0/bits/stl_relops.h
+    - path: /usr/include/c++/13.2.0/bits/stl_set.h
+    - path: /usr/include/c++/13.2.0/bits/stl_stack.h
+    - path: /usr/include/c++/13.2.0/bits/stl_tempbuf.h
+    - path: /usr/include/c++/13.2.0/bits/stl_tree.h
+    - path: /usr/include/c++/13.2.0/bits/stl_uninitialized.h
+    - path: /usr/include/c++/13.2.0/bits/stl_vector.h
+    - path: /usr/include/c++/13.2.0/bits/stream_iterator.h
+    - path: /usr/include/c++/13.2.0/bits/streambuf.tcc
+    - path: /usr/include/c++/13.2.0/bits/streambuf_iterator.h
+    - path: /usr/include/c++/13.2.0/bits/string_view.tcc
+    - path: /usr/include/c++/13.2.0/bits/stringfwd.h
+    - path: /usr/include/c++/13.2.0/bits/this_thread_sleep.h
+    - path: /usr/include/c++/13.2.0/bits/uniform_int_dist.h
+    - path: /usr/include/c++/13.2.0/bits/unique_lock.h
+    - path: /usr/include/c++/13.2.0/bits/unique_ptr.h
+    - path: /usr/include/c++/13.2.0/bits/unordered_map.h
+    - path: /usr/include/c++/13.2.0/bits/unordered_set.h
+    - path: /usr/include/c++/13.2.0/bits/uses_allocator.h
+    - path: /usr/include/c++/13.2.0/bits/uses_allocator_args.h
+    - path: /usr/include/c++/13.2.0/bits/utility.h
+    - path: /usr/include/c++/13.2.0/bits/valarray_after.h
+    - path: /usr/include/c++/13.2.0/bits/valarray_array.h
+    - path: /usr/include/c++/13.2.0/bits/valarray_array.tcc
+    - path: /usr/include/c++/13.2.0/bits/valarray_before.h
+    - path: /usr/include/c++/13.2.0/bits/vector.tcc
+    - path: /usr/include/c++/13.2.0/bitset
+    - path: /usr/include/c++/13.2.0/cassert
+    - path: /usr/include/c++/13.2.0/ccomplex
+    - path: /usr/include/c++/13.2.0/cctype
+    - path: /usr/include/c++/13.2.0/cerrno
+    - path: /usr/include/c++/13.2.0/cfenv
+    - path: /usr/include/c++/13.2.0/cfloat
+    - path: /usr/include/c++/13.2.0/charconv
+    - path: /usr/include/c++/13.2.0/chrono
+    - path: /usr/include/c++/13.2.0/cinttypes
+    - path: /usr/include/c++/13.2.0/ciso646
+    - path: /usr/include/c++/13.2.0/climits
+    - path: /usr/include/c++/13.2.0/clocale
+    - path: /usr/include/c++/13.2.0/cmath
+    - path: /usr/include/c++/13.2.0/codecvt
+    - path: /usr/include/c++/13.2.0/compare
+    - path: /usr/include/c++/13.2.0/complex
+    - path: /usr/include/c++/13.2.0/complex.h
+    - path: /usr/include/c++/13.2.0/concepts
+    - path: /usr/include/c++/13.2.0/condition_variable
+    - path: /usr/include/c++/13.2.0/coroutine
+    - path: /usr/include/c++/13.2.0/csetjmp
+    - path: /usr/include/c++/13.2.0/csignal
+    - path: /usr/include/c++/13.2.0/cstdalign
+    - path: /usr/include/c++/13.2.0/cstdarg
+    - path: /usr/include/c++/13.2.0/cstdbool
+    - path: /usr/include/c++/13.2.0/cstddef
+    - path: /usr/include/c++/13.2.0/cstdint
+    - path: /usr/include/c++/13.2.0/cstdio
+    - path: /usr/include/c++/13.2.0/cstdlib
+    - path: /usr/include/c++/13.2.0/cstring
+    - path: /usr/include/c++/13.2.0/ctgmath
+    - path: /usr/include/c++/13.2.0/ctime
+    - path: /usr/include/c++/13.2.0/cuchar
+    - path: /usr/include/c++/13.2.0/cwchar
+    - path: /usr/include/c++/13.2.0/cwctype
+    - path: /usr/include/c++/13.2.0/cxxabi.h
+    - path: /usr/include/c++/13.2.0/debug/assertions.h
+    - path: /usr/include/c++/13.2.0/debug/bitset
+    - path: /usr/include/c++/13.2.0/debug/debug.h
+    - path: /usr/include/c++/13.2.0/debug/deque
+    - path: /usr/include/c++/13.2.0/debug/formatter.h
+    - path: /usr/include/c++/13.2.0/debug/forward_list
+    - path: /usr/include/c++/13.2.0/debug/functions.h
+    - path: /usr/include/c++/13.2.0/debug/helper_functions.h
+    - path: /usr/include/c++/13.2.0/debug/list
+    - path: /usr/include/c++/13.2.0/debug/macros.h
+    - path: /usr/include/c++/13.2.0/debug/map
+    - path: /usr/include/c++/13.2.0/debug/map.h
+    - path: /usr/include/c++/13.2.0/debug/multimap.h
+    - path: /usr/include/c++/13.2.0/debug/multiset.h
+    - path: /usr/include/c++/13.2.0/debug/safe_base.h
+    - path: /usr/include/c++/13.2.0/debug/safe_container.h
+    - path: /usr/include/c++/13.2.0/debug/safe_iterator.h
+    - path: /usr/include/c++/13.2.0/debug/safe_iterator.tcc
+    - path: /usr/include/c++/13.2.0/debug/safe_local_iterator.h
+    - path: /usr/include/c++/13.2.0/debug/safe_local_iterator.tcc
+    - path: /usr/include/c++/13.2.0/debug/safe_sequence.h
+    - path: /usr/include/c++/13.2.0/debug/safe_sequence.tcc
+    - path: /usr/include/c++/13.2.0/debug/safe_unordered_base.h
+    - path: /usr/include/c++/13.2.0/debug/safe_unordered_container.h
+    - path: /usr/include/c++/13.2.0/debug/safe_unordered_container.tcc
+    - path: /usr/include/c++/13.2.0/debug/set
+    - path: /usr/include/c++/13.2.0/debug/set.h
+    - path: /usr/include/c++/13.2.0/debug/stl_iterator.h
+    - path: /usr/include/c++/13.2.0/debug/string
+    - path: /usr/include/c++/13.2.0/debug/unordered_map
+    - path: /usr/include/c++/13.2.0/debug/unordered_set
+    - path: /usr/include/c++/13.2.0/debug/vector
+    - path: /usr/include/c++/13.2.0/decimal/decimal
+    - path: /usr/include/c++/13.2.0/decimal/decimal.h
+    - path: /usr/include/c++/13.2.0/deque
+    - path: /usr/include/c++/13.2.0/exception
+    - path: /usr/include/c++/13.2.0/execution
+    - path: /usr/include/c++/13.2.0/expected
+    - path: /usr/include/c++/13.2.0/experimental/algorithm
+    - path: /usr/include/c++/13.2.0/experimental/any
+    - path: /usr/include/c++/13.2.0/experimental/array
+    - path: /usr/include/c++/13.2.0/experimental/bits/fs_dir.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/fs_fwd.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/fs_ops.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/fs_path.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/lfts_config.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/net.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/numeric_traits.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/shared_ptr.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/simd.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/simd_builtin.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/simd_converter.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/simd_detail.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/simd_fixed_size.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/simd_math.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/simd_neon.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/simd_ppc.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/simd_scalar.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/simd_x86_conversions.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/simd_x86.h
+    - path: /usr/include/c++/13.2.0/experimental/bits/string_view.tcc
+    - path: /usr/include/c++/13.2.0/experimental/buffer
+    - path: /usr/include/c++/13.2.0/experimental/chrono
+    - path: /usr/include/c++/13.2.0/experimental/contract
+    - path: /usr/include/c++/13.2.0/experimental/deque
+    - path: /usr/include/c++/13.2.0/experimental/executor
+    - path: /usr/include/c++/13.2.0/experimental/filesystem
+    - path: /usr/include/c++/13.2.0/experimental/forward_list
+    - path: /usr/include/c++/13.2.0/experimental/functional
+    - path: /usr/include/c++/13.2.0/experimental/internet
+    - path: /usr/include/c++/13.2.0/experimental/io_context
+    - path: /usr/include/c++/13.2.0/experimental/iterator
+    - path: /usr/include/c++/13.2.0/experimental/list
+    - path: /usr/include/c++/13.2.0/experimental/map
+    - path: /usr/include/c++/13.2.0/experimental/memory
+    - path: /usr/include/c++/13.2.0/experimental/memory_resource
+    - path: /usr/include/c++/13.2.0/experimental/net
+    - path: /usr/include/c++/13.2.0/experimental/netfwd
+    - path: /usr/include/c++/13.2.0/experimental/numeric
+    - path: /usr/include/c++/13.2.0/experimental/optional
+    - path: /usr/include/c++/13.2.0/experimental/propagate_const
+    - path: /usr/include/c++/13.2.0/experimental/random
+    - path: /usr/include/c++/13.2.0/experimental/ratio
+    - path: /usr/include/c++/13.2.0/experimental/regex
+    - path: /usr/include/c++/13.2.0/experimental/scope
+    - path: /usr/include/c++/13.2.0/experimental/set
+    - path: /usr/include/c++/13.2.0/experimental/simd
+    - path: /usr/include/c++/13.2.0/experimental/socket
+    - path: /usr/include/c++/13.2.0/experimental/source_location
+    - path: /usr/include/c++/13.2.0/experimental/string
+    - path: /usr/include/c++/13.2.0/experimental/string_view
+    - path: /usr/include/c++/13.2.0/experimental/synchronized_value
+    - path: /usr/include/c++/13.2.0/experimental/system_error
+    - path: /usr/include/c++/13.2.0/experimental/timer
+    - path: /usr/include/c++/13.2.0/experimental/tuple
+    - path: /usr/include/c++/13.2.0/experimental/type_traits
+    - path: /usr/include/c++/13.2.0/experimental/unordered_map
+    - path: /usr/include/c++/13.2.0/experimental/unordered_set
+    - path: /usr/include/c++/13.2.0/experimental/utility
+    - path: /usr/include/c++/13.2.0/experimental/vector
+    - path: /usr/include/c++/13.2.0/ext/algorithm
+    - path: /usr/include/c++/13.2.0/ext/aligned_buffer.h
+    - path: /usr/include/c++/13.2.0/ext/alloc_traits.h
+    - path: /usr/include/c++/13.2.0/ext/atomicity.h
+    - path: /usr/include/c++/13.2.0/ext/bitmap_allocator.h
+    - path: /usr/include/c++/13.2.0/ext/cast.h
+    - path: /usr/include/c++/13.2.0/ext/cmath
+    - path: /usr/include/c++/13.2.0/ext/codecvt_specializations.h
+    - path: /usr/include/c++/13.2.0/ext/concurrence.h
+    - path: /usr/include/c++/13.2.0/ext/debug_allocator.h
+    - path: /usr/include/c++/13.2.0/ext/enc_filebuf.h
+    - path: /usr/include/c++/13.2.0/ext/extptr_allocator.h
+    - path: /usr/include/c++/13.2.0/ext/functional
+    - path: /usr/include/c++/13.2.0/ext/hash_map
+    - path: /usr/include/c++/13.2.0/ext/hash_set
+    - path: /usr/include/c++/13.2.0/ext/iterator
+    - path: /usr/include/c++/13.2.0/ext/malloc_allocator.h
+    - path: /usr/include/c++/13.2.0/ext/memory
+    - path: /usr/include/c++/13.2.0/ext/mt_allocator.h
+    - path: /usr/include/c++/13.2.0/ext/new_allocator.h
+    - path: /usr/include/c++/13.2.0/ext/numeric
+    - path: /usr/include/c++/13.2.0/ext/numeric_traits.h
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/assoc_container.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/bin_search_tree_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/constructors_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/find_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/info_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/insert_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/iterators_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/node_iterators.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/point_iterators.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/policy_access_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/r_erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/rotate_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/split_join_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/bin_search_tree_/traits.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/binary_heap_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/const_iterator.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/constructors_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/entry_cmp.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/entry_pred.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/find_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/info_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/insert_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/iterators_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/point_const_iterator.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/policy_access_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/resize_policy.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/split_join_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binary_heap_/trace_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binomial_heap_/binomial_heap_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binomial_heap_/constructors_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binomial_heap_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binomial_heap_base_/binomial_heap_base_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binomial_heap_base_/constructors_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binomial_heap_base_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binomial_heap_base_/erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binomial_heap_base_/find_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binomial_heap_base_/insert_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/binomial_heap_base_/split_join_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/branch_policy/branch_policy.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/branch_policy/null_node_metadata.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/branch_policy/traits.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/cc_ht_map_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/cmp_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/cond_key_dtor_entry_dealtor.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/constructor_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/constructor_destructor_no_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/constructor_destructor_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/debug_no_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/debug_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/entry_list_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/erase_no_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/erase_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/find_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/find_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/info_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/insert_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/insert_no_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/insert_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/iterators_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/policy_access_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/resize_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/resize_no_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/resize_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/size_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cc_hash_table_map_/trace_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/cond_dealtor.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/container_base_dispatch.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/debug_map_base.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/eq_fn/eq_by_less.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/eq_fn/hash_eq_fn.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/constructor_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/constructor_destructor_no_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/constructor_destructor_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/debug_no_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/debug_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/erase_no_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/erase_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/find_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/find_no_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/find_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/gp_ht_map_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/info_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/insert_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/insert_no_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/insert_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/iterator_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/policy_access_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/resize_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/resize_no_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/resize_store_hash_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/gp_hash_table_map_/trace_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/hash_fn/direct_mask_range_hashing_imp.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/hash_fn/direct_mod_range_hashing_imp.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/hash_fn/linear_probe_fn_imp.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/hash_fn/mask_based_range_hashing.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/hash_fn/mod_based_range_hashing.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/hash_fn/probe_fn_base.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/hash_fn/quadratic_probe_fn_imp.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/hash_fn/ranged_hash_fn.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/hash_fn/ranged_probe_fn.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/hash_fn/sample_probe_fn.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/hash_fn/sample_range_hashing.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/hash_fn/sample_ranged_hash_fn.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/hash_fn/sample_ranged_probe_fn.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/left_child_next_sibling_heap_/const_iterator.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/left_child_next_sibling_heap_/constructors_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/left_child_next_sibling_heap_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/left_child_next_sibling_heap_/erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/left_child_next_sibling_heap_/info_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/left_child_next_sibling_heap_/insert_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/left_child_next_sibling_heap_/iterators_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/left_child_next_sibling_heap_/left_child_next_sibling_heap_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/left_child_next_sibling_heap_/node.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/left_child_next_sibling_heap_/point_const_iterator.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/left_child_next_sibling_heap_/policy_access_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/left_child_next_sibling_heap_/trace_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/list_update_map_/constructor_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/list_update_map_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/list_update_map_/entry_metadata_base.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/list_update_map_/erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/list_update_map_/find_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/list_update_map_/info_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/list_update_map_/insert_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/list_update_map_/iterators_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/list_update_map_/lu_map_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/list_update_map_/trace_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/list_update_policy/lu_counter_metadata.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/list_update_policy/sample_update_policy.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/ov_tree_map_/constructors_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/ov_tree_map_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/ov_tree_map_/erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/ov_tree_map_/info_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/ov_tree_map_/insert_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/ov_tree_map_/iterators_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/ov_tree_map_/node_iterators.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/ov_tree_map_/ov_tree_map_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/ov_tree_map_/policy_access_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/ov_tree_map_/split_join_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/ov_tree_map_/traits.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pairing_heap_/constructors_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pairing_heap_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pairing_heap_/erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pairing_heap_/find_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pairing_heap_/insert_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pairing_heap_/pairing_heap_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pairing_heap_/split_join_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/constructors_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/find_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/info_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/insert_join_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/iterators_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/pat_trie_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/pat_trie_base.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/policy_access_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/r_erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/rotate_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/split_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/synth_access_traits.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/trace_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/traits.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/pat_trie_/update_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/priority_queue_base_dispatch.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rb_tree_map_/constructors_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rb_tree_map_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rb_tree_map_/erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rb_tree_map_/find_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rb_tree_map_/info_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rb_tree_map_/insert_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rb_tree_map_/node.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rb_tree_map_/rb_tree_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rb_tree_map_/split_join_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rb_tree_map_/traits.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rc_binomial_heap_/constructors_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rc_binomial_heap_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rc_binomial_heap_/erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rc_binomial_heap_/insert_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rc_binomial_heap_/rc.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rc_binomial_heap_/rc_binomial_heap_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rc_binomial_heap_/split_join_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/rc_binomial_heap_/trace_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/resize_policy/cc_hash_max_collision_check_resize_trigger_imp.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/resize_policy/hash_exponential_size_policy_imp.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/resize_policy/hash_load_check_resize_trigger_imp.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/resize_policy/hash_load_check_resize_trigger_size_base.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/resize_policy/hash_prime_size_policy_imp.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/resize_policy/hash_standard_resize_policy_imp.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/resize_policy/sample_resize_policy.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/resize_policy/sample_resize_trigger.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/resize_policy/sample_size_policy.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/splay_tree_/constructors_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/splay_tree_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/splay_tree_/erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/splay_tree_/find_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/splay_tree_/info_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/splay_tree_/insert_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/splay_tree_/node.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/splay_tree_/splay_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/splay_tree_/splay_tree_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/splay_tree_/split_join_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/splay_tree_/traits.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/standard_policies.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/thin_heap_/constructors_destructor_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/thin_heap_/debug_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/thin_heap_/erase_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/thin_heap_/find_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/thin_heap_/insert_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/thin_heap_/split_join_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/thin_heap_/thin_heap_.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/thin_heap_/trace_fn_imps.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/tree_policy/node_metadata_selector.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/tree_policy/order_statistics_imp.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/tree_policy/sample_tree_node_update.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/tree_trace_base.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/trie_policy/node_metadata_selector.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/trie_policy/order_statistics_imp.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/trie_policy/prefix_search_node_update_imp.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/trie_policy/sample_trie_access_traits.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/trie_policy/sample_trie_node_update.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/trie_policy/trie_policy_base.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/trie_policy/trie_string_access_traits_imp.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/type_utils.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/types_traits.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/unordered_iterator/const_iterator.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/unordered_iterator/iterator.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/unordered_iterator/point_const_iterator.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/detail/unordered_iterator/point_iterator.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/exception.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/hash_policy.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/list_update_policy.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/priority_queue.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/tag_and_trait.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/tree_policy.hpp
+    - path: /usr/include/c++/13.2.0/ext/pb_ds/trie_policy.hpp
+    - path: /usr/include/c++/13.2.0/ext/pod_char_traits.h
+    - path: /usr/include/c++/13.2.0/ext/pointer.h
+    - path: /usr/include/c++/13.2.0/ext/pool_allocator.h
+    - path: /usr/include/c++/13.2.0/ext/random
+    - path: /usr/include/c++/13.2.0/ext/random.tcc
+    - path: /usr/include/c++/13.2.0/ext/rb_tree
+    - path: /usr/include/c++/13.2.0/ext/rc_string_base.h
+    - path: /usr/include/c++/13.2.0/ext/rope
+    - path: /usr/include/c++/13.2.0/ext/ropeimpl.h
+    - path: /usr/include/c++/13.2.0/ext/slist
+    - path: /usr/include/c++/13.2.0/ext/sso_string_base.h
+    - path: /usr/include/c++/13.2.0/ext/stdio_filebuf.h
+    - path: /usr/include/c++/13.2.0/ext/stdio_sync_filebuf.h
+    - path: /usr/include/c++/13.2.0/ext/string_conversions.h
+    - path: /usr/include/c++/13.2.0/ext/throw_allocator.h
+    - path: /usr/include/c++/13.2.0/ext/type_traits.h
+    - path: /usr/include/c++/13.2.0/ext/typelist.h
+    - path: /usr/include/c++/13.2.0/ext/vstring.h
+    - path: /usr/include/c++/13.2.0/ext/vstring.tcc
+    - path: /usr/include/c++/13.2.0/ext/vstring_fwd.h
+    - path: /usr/include/c++/13.2.0/ext/vstring_util.h
+    - path: /usr/include/c++/13.2.0/fenv.h
+    - path: /usr/include/c++/13.2.0/filesystem
+    - path: /usr/include/c++/13.2.0/format
+    - path: /usr/include/c++/13.2.0/forward_list
+    - path: /usr/include/c++/13.2.0/fstream
+    - path: /usr/include/c++/13.2.0/functional
+    - path: /usr/include/c++/13.2.0/future
+    - path: /usr/include/c++/13.2.0/initializer_list
+    - path: /usr/include/c++/13.2.0/iomanip
+    - path: /usr/include/c++/13.2.0/ios
+    - path: /usr/include/c++/13.2.0/iosfwd
+    - path: /usr/include/c++/13.2.0/iostream
+    - path: /usr/include/c++/13.2.0/istream
+    - path: /usr/include/c++/13.2.0/iterator
+    - path: /usr/include/c++/13.2.0/latch
+    - path: /usr/include/c++/13.2.0/limits
+    - path: /usr/include/c++/13.2.0/list
+    - path: /usr/include/c++/13.2.0/locale
+    - path: /usr/include/c++/13.2.0/map
+    - path: /usr/include/c++/13.2.0/math.h
+    - path: /usr/include/c++/13.2.0/memory
+    - path: /usr/include/c++/13.2.0/memory_resource
+    - path: /usr/include/c++/13.2.0/mutex
+    - path: /usr/include/c++/13.2.0/new
+    - path: /usr/include/c++/13.2.0/numbers
+    - path: /usr/include/c++/13.2.0/numeric
+    - path: /usr/include/c++/13.2.0/optional
+    - path: /usr/include/c++/13.2.0/ostream
+    - path: /usr/include/c++/13.2.0/parallel/algo.h
+    - path: /usr/include/c++/13.2.0/parallel/algobase.h
+    - path: /usr/include/c++/13.2.0/parallel/algorithm
+    - path: /usr/include/c++/13.2.0/parallel/algorithmfwd.h
+    - path: /usr/include/c++/13.2.0/parallel/balanced_quicksort.h
+    - path: /usr/include/c++/13.2.0/parallel/base.h
+    - path: /usr/include/c++/13.2.0/parallel/basic_iterator.h
+    - path: /usr/include/c++/13.2.0/parallel/checkers.h
+    - path: /usr/include/c++/13.2.0/parallel/compatibility.h
+    - path: /usr/include/c++/13.2.0/parallel/compiletime_settings.h
+    - path: /usr/include/c++/13.2.0/parallel/equally_split.h
+    - path: /usr/include/c++/13.2.0/parallel/features.h
+    - path: /usr/include/c++/13.2.0/parallel/find.h
+    - path: /usr/include/c++/13.2.0/parallel/find_selectors.h
+    - path: /usr/include/c++/13.2.0/parallel/for_each.h
+    - path: /usr/include/c++/13.2.0/parallel/for_each_selectors.h
+    - path: /usr/include/c++/13.2.0/parallel/iterator.h
+    - path: /usr/include/c++/13.2.0/parallel/list_partition.h
+    - path: /usr/include/c++/13.2.0/parallel/losertree.h
+    - path: /usr/include/c++/13.2.0/parallel/merge.h
+    - path: /usr/include/c++/13.2.0/parallel/multiseq_selection.h
+    - path: /usr/include/c++/13.2.0/parallel/multiway_merge.h
+    - path: /usr/include/c++/13.2.0/parallel/multiway_mergesort.h
+    - path: /usr/include/c++/13.2.0/parallel/numeric
+    - path: /usr/include/c++/13.2.0/parallel/numericfwd.h
+    - path: /usr/include/c++/13.2.0/parallel/omp_loop.h
+    - path: /usr/include/c++/13.2.0/parallel/omp_loop_static.h
+    - path: /usr/include/c++/13.2.0/parallel/par_loop.h
+    - path: /usr/include/c++/13.2.0/parallel/parallel.h
+    - path: /usr/include/c++/13.2.0/parallel/partial_sum.h
+    - path: /usr/include/c++/13.2.0/parallel/partition.h
+    - path: /usr/include/c++/13.2.0/parallel/queue.h
+    - path: /usr/include/c++/13.2.0/parallel/quicksort.h
+    - path: /usr/include/c++/13.2.0/parallel/random_number.h
+    - path: /usr/include/c++/13.2.0/parallel/random_shuffle.h
+    - path: /usr/include/c++/13.2.0/parallel/search.h
+    - path: /usr/include/c++/13.2.0/parallel/set_operations.h
+    - path: /usr/include/c++/13.2.0/parallel/settings.h
+    - path: /usr/include/c++/13.2.0/parallel/sort.h
+    - path: /usr/include/c++/13.2.0/parallel/tags.h
+    - path: /usr/include/c++/13.2.0/parallel/types.h
+    - path: /usr/include/c++/13.2.0/parallel/unique_copy.h
+    - path: /usr/include/c++/13.2.0/parallel/workstealing.h
+    - path: /usr/include/c++/13.2.0/pstl/algorithm_fwd.h
+    - path: /usr/include/c++/13.2.0/pstl/algorithm_impl.h
+    - path: /usr/include/c++/13.2.0/pstl/execution_defs.h
+    - path: /usr/include/c++/13.2.0/pstl/execution_impl.h
+    - path: /usr/include/c++/13.2.0/pstl/glue_algorithm_defs.h
+    - path: /usr/include/c++/13.2.0/pstl/glue_algorithm_impl.h
+    - path: /usr/include/c++/13.2.0/pstl/glue_execution_defs.h
+    - path: /usr/include/c++/13.2.0/pstl/glue_memory_defs.h
+    - path: /usr/include/c++/13.2.0/pstl/glue_memory_impl.h
+    - path: /usr/include/c++/13.2.0/pstl/glue_numeric_defs.h
+    - path: /usr/include/c++/13.2.0/pstl/glue_numeric_impl.h
+    - path: /usr/include/c++/13.2.0/pstl/memory_impl.h
+    - path: /usr/include/c++/13.2.0/pstl/numeric_fwd.h
+    - path: /usr/include/c++/13.2.0/pstl/numeric_impl.h
+    - path: /usr/include/c++/13.2.0/pstl/parallel_backend.h
+    - path: /usr/include/c++/13.2.0/pstl/parallel_backend_serial.h
+    - path: /usr/include/c++/13.2.0/pstl/parallel_backend_tbb.h
+    - path: /usr/include/c++/13.2.0/pstl/parallel_backend_utils.h
+    - path: /usr/include/c++/13.2.0/pstl/parallel_impl.h
+    - path: /usr/include/c++/13.2.0/pstl/pstl_config.h
+    - path: /usr/include/c++/13.2.0/pstl/unseq_backend_simd.h
+    - path: /usr/include/c++/13.2.0/pstl/utils.h
+    - path: /usr/include/c++/13.2.0/queue
+    - path: /usr/include/c++/13.2.0/random
+    - path: /usr/include/c++/13.2.0/ranges
+    - path: /usr/include/c++/13.2.0/ratio
+    - path: /usr/include/c++/13.2.0/regex
+    - path: /usr/include/c++/13.2.0/scoped_allocator
+    - path: /usr/include/c++/13.2.0/semaphore
+    - path: /usr/include/c++/13.2.0/set
+    - path: /usr/include/c++/13.2.0/shared_mutex
+    - path: /usr/include/c++/13.2.0/source_location
+    - path: /usr/include/c++/13.2.0/span
+    - path: /usr/include/c++/13.2.0/spanstream
+    - path: /usr/include/c++/13.2.0/sstream
+    - path: /usr/include/c++/13.2.0/stack
+    - path: /usr/include/c++/13.2.0/stacktrace
+    - path: /usr/include/c++/13.2.0/stdatomic.h
+    - path: /usr/include/c++/13.2.0/stdexcept
+    - path: /usr/include/c++/13.2.0/stdfloat
+    - path: /usr/include/c++/13.2.0/stdlib.h
+    - path: /usr/include/c++/13.2.0/stop_token
+    - path: /usr/include/c++/13.2.0/streambuf
+    - path: /usr/include/c++/13.2.0/string
+    - path: /usr/include/c++/13.2.0/string_view
+    - path: /usr/include/c++/13.2.0/syncstream
+    - path: /usr/include/c++/13.2.0/system_error
+    - path: /usr/include/c++/13.2.0/tgmath.h
+    - path: /usr/include/c++/13.2.0/thread
+    - path: /usr/include/c++/13.2.0/tr1/array
+    - path: /usr/include/c++/13.2.0/tr1/bessel_function.tcc
+    - path: /usr/include/c++/13.2.0/tr1/beta_function.tcc
+    - path: /usr/include/c++/13.2.0/tr1/ccomplex
+    - path: /usr/include/c++/13.2.0/tr1/cctype
+    - path: /usr/include/c++/13.2.0/tr1/cfenv
+    - path: /usr/include/c++/13.2.0/tr1/cfloat
+    - path: /usr/include/c++/13.2.0/tr1/cinttypes
+    - path: /usr/include/c++/13.2.0/tr1/climits
+    - path: /usr/include/c++/13.2.0/tr1/cmath
+    - path: /usr/include/c++/13.2.0/tr1/complex
+    - path: /usr/include/c++/13.2.0/tr1/complex.h
+    - path: /usr/include/c++/13.2.0/tr1/cstdarg
+    - path: /usr/include/c++/13.2.0/tr1/cstdbool
+    - path: /usr/include/c++/13.2.0/tr1/cstdint
+    - path: /usr/include/c++/13.2.0/tr1/cstdio
+    - path: /usr/include/c++/13.2.0/tr1/cstdlib
+    - path: /usr/include/c++/13.2.0/tr1/ctgmath
+    - path: /usr/include/c++/13.2.0/tr1/ctime
+    - path: /usr/include/c++/13.2.0/tr1/ctype.h
+    - path: /usr/include/c++/13.2.0/tr1/cwchar
+    - path: /usr/include/c++/13.2.0/tr1/cwctype
+    - path: /usr/include/c++/13.2.0/tr1/ell_integral.tcc
+    - path: /usr/include/c++/13.2.0/tr1/exp_integral.tcc
+    - path: /usr/include/c++/13.2.0/tr1/fenv.h
+    - path: /usr/include/c++/13.2.0/tr1/float.h
+    - path: /usr/include/c++/13.2.0/tr1/functional
+    - path: /usr/include/c++/13.2.0/tr1/functional_hash.h
+    - path: /usr/include/c++/13.2.0/tr1/gamma.tcc
+    - path: /usr/include/c++/13.2.0/tr1/hashtable.h
+    - path: /usr/include/c++/13.2.0/tr1/hashtable_policy.h
+    - path: /usr/include/c++/13.2.0/tr1/hypergeometric.tcc
+    - path: /usr/include/c++/13.2.0/tr1/inttypes.h
+    - path: /usr/include/c++/13.2.0/tr1/legendre_function.tcc
+    - path: /usr/include/c++/13.2.0/tr1/limits.h
+    - path: /usr/include/c++/13.2.0/tr1/math.h
+    - path: /usr/include/c++/13.2.0/tr1/memory
+    - path: /usr/include/c++/13.2.0/tr1/modified_bessel_func.tcc
+    - path: /usr/include/c++/13.2.0/tr1/poly_hermite.tcc
+    - path: /usr/include/c++/13.2.0/tr1/poly_laguerre.tcc
+    - path: /usr/include/c++/13.2.0/tr1/random
+    - path: /usr/include/c++/13.2.0/tr1/random.h
+    - path: /usr/include/c++/13.2.0/tr1/random.tcc
+    - path: /usr/include/c++/13.2.0/tr1/regex
+    - path: /usr/include/c++/13.2.0/tr1/riemann_zeta.tcc
+    - path: /usr/include/c++/13.2.0/tr1/shared_ptr.h
+    - path: /usr/include/c++/13.2.0/tr1/special_function_util.h
+    - path: /usr/include/c++/13.2.0/tr1/stdarg.h
+    - path: /usr/include/c++/13.2.0/tr1/stdbool.h
+    - path: /usr/include/c++/13.2.0/tr1/stdint.h
+    - path: /usr/include/c++/13.2.0/tr1/stdio.h
+    - path: /usr/include/c++/13.2.0/tr1/stdlib.h
+    - path: /usr/include/c++/13.2.0/tr1/tgmath.h
+    - path: /usr/include/c++/13.2.0/tr1/tuple
+    - path: /usr/include/c++/13.2.0/tr1/type_traits
+    - path: /usr/include/c++/13.2.0/tr1/unordered_map
+    - path: /usr/include/c++/13.2.0/tr1/unordered_map.h
+    - path: /usr/include/c++/13.2.0/tr1/unordered_set
+    - path: /usr/include/c++/13.2.0/tr1/unordered_set.h
+    - path: /usr/include/c++/13.2.0/tr1/utility
+    - path: /usr/include/c++/13.2.0/tr1/wchar.h
+    - path: /usr/include/c++/13.2.0/tr1/wctype.h
+    - path: /usr/include/c++/13.2.0/tr2/bool_set
+    - path: /usr/include/c++/13.2.0/tr2/bool_set.tcc
+    - path: /usr/include/c++/13.2.0/tr2/dynamic_bitset
+    - path: /usr/include/c++/13.2.0/tr2/dynamic_bitset.tcc
+    - path: /usr/include/c++/13.2.0/tr2/ratio
+    - path: /usr/include/c++/13.2.0/tr2/type_traits
+    - path: /usr/include/c++/13.2.0/tuple
+    - path: /usr/include/c++/13.2.0/type_traits
+    - path: /usr/include/c++/13.2.0/typeindex
+    - path: /usr/include/c++/13.2.0/typeinfo
+    - path: /usr/include/c++/13.2.0/unordered_map
+    - path: /usr/include/c++/13.2.0/unordered_set
+    - path: /usr/include/c++/13.2.0/utility
+    - path: /usr/include/c++/13.2.0/valarray
+    - path: /usr/include/c++/13.2.0/variant
+    - path: /usr/include/c++/13.2.0/vector
+    - path: /usr/include/c++/13.2.0/version
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/atomic_word.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/basic_file.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/c++allocator.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/c++config.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/c++io.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/c++locale.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/cpu_defines.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/ctype_base.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/ctype_inline.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/cxxabi_tweaks.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/error_constants.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/extc++.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/gthr-default.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/gthr-posix.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/gthr-single.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/gthr.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/messages_members.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/opt_random.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/os_defines.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/stdc++.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/stdtr1c++.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/bits/time_members.h
+    - path: /usr/include/c++/13.2.0/x86_64-pc-linux-gnu/ext/opt_random.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/acc_prof.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/adxintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/ammintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/amxbf16intrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/amxcomplexintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/amxfp16intrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/amxint8intrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/amxtileintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx2intrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vbmi2vlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vbmi2intrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vbmiintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vbmivlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512cdintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512bf16vlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512bf16intrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512pfintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512ifmaintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512ifmavlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512fintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512bitalgintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vlbwintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vldqintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vnniintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vnnivlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vp2intersectintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vp2intersectvlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512fp16vlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512fp16intrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vpopcntdqintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512vpopcntdqvlintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512dqintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512erintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx512bwintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx5124fmapsintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avx5124vnniwintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avxifmaintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avxintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avxneconvertintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avxvnniint8intrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/avxvnniintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/bmi2intrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/bmiintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/bmmintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/cet.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/cetintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/cldemoteintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/clflushoptintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/clwbintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/clzerointrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/cmpccxaddintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/cpuid.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/cross-stdarg.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/emmintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/enqcmdintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/f16cintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/float.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/fma4intrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/fmaintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/fxsrintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/gcov.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/gfniintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/hresetintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/ia32intrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/immintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/iso646.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/keylockerintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/limits.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/lwpintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/lzcntintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/mm3dnow.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/mm_malloc.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/mmintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/movdirintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/mwaitintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/mwaitxintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/nmmintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/omp.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/openacc.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/pconfigintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/pkuintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/pmmintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/popcntintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/prfchiintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/prfchwintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/quadmath.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/quadmath_weak.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/raointintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/rdseedintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/rtmintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/sanitizer/asan_interface.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/sanitizer/common_interface_defs.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/sanitizer/hwasan_interface.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/sanitizer/lsan_interface.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/sanitizer/tsan_interface.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/serializeintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/sgxintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/shaintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/smmintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/ssp/ssp.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/ssp/stdio.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/ssp/string.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/ssp/unistd.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/stdalign.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/stdarg.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/stdatomic.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/stdbool.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/stddef.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/stdfix.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/stdint-gcc.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/stdint.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/stdnoreturn.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/syslimits.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/tbmintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/tmmintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/tsxldtrkintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/uintrintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/unwind.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/vaesintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/varargs.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/vpclmulqdqintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/waitpkgintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/wbnoinvdintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/wmmintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/x86intrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/x86gprintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/xmmintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/xopintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/xsavecintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/xsaveintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/xsaveoptintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/xsavesintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/include/xtestintrin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/include/limits.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ada/gcc-interface/ada-tree.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/addresses.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/alias.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/align.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/all-tree.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/alloc-pool.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ansidecl.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/array-traits.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/asan.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/attr-fnspec.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/attribs.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/auto-host.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/auto-profile.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/b-header-vars
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/backend.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/basic-block.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/bb-reorder.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/bitmap.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/builtin-attrs.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/builtin-types.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/builtins.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/builtins.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/bversion.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/c-family/c-common.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/c-family/c-common.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/c-family/c-objc.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/c-family/c-pragma.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/c-family/c-pretty-print.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/c-tree.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/calls.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ccmp.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cfg-flags.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cfg.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cfganal.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cfgbuild.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cfgcleanup.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cfgexpand.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cfghooks.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cfgloop.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cfgloopmanip.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cfgrtl.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cgraph.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cif-code.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/collect-utils.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/collect2-aix.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/collect2.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/color-macros.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/common/config/i386/i386-cpuinfo.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/conditions.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/elfos.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/glibc-stdint.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/gnu-user.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/att.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/biarch64.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/gnu-user-common.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/gnu-user64.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/i386.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/i386-isa.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/i386-opts.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/i386-protos.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/linux-common.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/linux64.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/stringop.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/unix.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/x86-64.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/i386/x86-tune.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/initfini-array.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/linux-android.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/linux-protos.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/linux.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/config/vxworks-dummy.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/configargs.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/context.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/convert.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/coretypes.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/coroutine-builtins.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/coverage.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cp/contracts.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cp/cp-trait.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cp/cp-tree.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cp/cp-tree.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cp/cxx-pretty-print.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cp/name-lookup.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cp/operators.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cp/type-utils.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cppbuiltin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cppdefault.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cpplib.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/cselib.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ctfc.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/d/d-tree.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/data-streamer.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/dbgcnt.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/dbgcnt.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/dce.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ddg.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/debug.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/defaults.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/df.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/dfp.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/diagnostic-client-data-hooks.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/diagnostic-color.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/diagnostic-core.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/diagnostic-event-id.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/diagnostic-metadata.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/diagnostic-path.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/diagnostic-spec.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/diagnostic-url.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/diagnostic.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/diagnostic.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/digraph.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/dojump.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/dominance.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/domwalk.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/double-int.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/dump-context.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/dumpfile.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/dwarf2asm.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/dwarf2ctf.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/dwarf2out.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/edit-context.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/emit-rtl.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/errors.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/escaped_string.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/et-forest.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/except.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/explow.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/expmed.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/expr.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/fibonacci_heap.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/file-find.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/file-prefix-map.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/filenames.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/fixed-value.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/flag-types.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/flags.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/fold-const-call.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/fold-const.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/function-abi.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/function.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gcc-plugin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gcc-rich-location.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gcc-symtab.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gcc.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gcov-counter.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gcov-io.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gcse-common.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gcse.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/generic-match.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gengtype.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/genrtl.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gensupport.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ggc-internal.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ggc.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-array-bounds.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-builder.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-expr.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-fold.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-iterator.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-low.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-match.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-predicate-analysis.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-predict.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-pretty-print.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-range-cache.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-range-edge.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-range-fold.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-range-gori.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-range-infer.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-range-op.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-range-path.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-range-trace.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-range.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-ssa-warn-access.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-ssa-warn-restrict.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-ssa.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-streamer.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple-walk.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimple.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimplify-me.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gimplify.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/glimits.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gomp-constants.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/graph.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/graphds.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/graphite.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/graphviz.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gsstruct.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gsyms.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gsyslimits.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gtm-builtins.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/gtype-desc.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/hard-reg-set.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/hash-map-traits.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/hash-map.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/hash-set.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/hash-table.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/hash-traits.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/hashtab.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/highlev-plugin-common.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/hooks.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/hosthooks-def.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/hosthooks.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/hw-doloop.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/hwint.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ifcvt.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/inchash.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/incpath.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/input.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/insn-addr.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/insn-attr-common.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/insn-attr.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/insn-codes.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/insn-config.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/insn-constants.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/insn-flags.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/insn-modes-inline.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/insn-modes.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/insn-notes.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/int-vector-builder.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/internal-fn.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/internal-fn.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/intl.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ipa-fnsummary.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ipa-icf-gimple.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ipa-icf.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ipa-inline.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ipa-modref-tree.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ipa-modref.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ipa-param-manipulation.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ipa-predicate.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ipa-prop.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ipa-ref.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ipa-reference.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ipa-utils.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ira-int.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ira.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/is-a.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/iterator-utils.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/json.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/langhooks-def.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/langhooks.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/lcm.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/libfuncs.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/libiberty.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/limitx.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/limity.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/line-map.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/logical-location.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/loop-unroll.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/lower-subreg.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/lra-int.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/lra.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/lto-compress.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/lto-section-names.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/lto-streamer.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/m2/m2-tree.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/machmode.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/machmode.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/make-unique.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/md5.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/mem-stats-traits.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/mem-stats.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/memmodel.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/memory-block.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/mode-classes.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/mux-utils.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/objc/objc-tree.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/obstack-utils.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/obstack.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/omp-builtins.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/omp-expand.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/omp-general.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/omp-low.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/omp-offload.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/omp-simd-clone.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/opt-problem.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/opt-suggestions.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/optabs-libfuncs.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/optabs-query.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/optabs-tree.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/optabs.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/optabs.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/optinfo-emit-json.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/optinfo.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/options.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/opts-diagnostic.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/opts-jobserver.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/opts.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ordered-hash-map.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/output.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/pass-instances.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/pass_manager.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/passes.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/plugin-api.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/plugin-version.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/plugin.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/plugin.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/pointer-query.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/poly-int-types.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/poly-int.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/predict.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/predict.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/prefix.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/pretty-print.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/print-rtl.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/print-tree.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/profile-count.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/profile.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/range-op.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/range.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/read-md.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/read-rtl-function.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/real.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/realmpfr.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/recog.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/reg-notes.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/regcprop.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/regrename.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/regs.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/regset.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/reload.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/resource.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/rtl-error.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/rtl-iter.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/rtl-ssa.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/rtl.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/rtl.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/rtlanal.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/rtlhash.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/rtlhooks-def.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/rtx-vector-builder.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/run-rtl-passes.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/safe-ctype.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/sanitizer.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/sbitmap.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/sched-int.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/sel-sched-dump.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/sel-sched-ir.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/sel-sched.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/selftest-diagnostic.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/selftest-rtl.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/selftest.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/sese.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/shortest-paths.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/shrink-wrap.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/signop.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/sparseset.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/spellcheck-tree.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/spellcheck.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/splay-tree-utils.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/splay-tree.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/sreal.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ssa-iterators.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ssa.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/statistics.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/stmt.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/stor-layout.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/streamer-hooks.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/stringpool.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/substring-locations.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/symbol-summary.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/symtab-clones.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/symtab-thunks.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/symtab.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/sync-builtins.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/system.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/target-def.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/target-globals.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/target-hooks-macros.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/target-insns.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/target.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/target.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/targhooks.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/timevar.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/timevar.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tm-preds.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tm.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tm_p.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/toplev.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tracer.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/trans-mem.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-affine.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-cfg.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-cfgcleanup.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-check.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-chrec.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-core.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-data-ref.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-dfa.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-diagnostic.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-dump.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-eh.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-hash-traits.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-hasher.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-if-conv.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-inline.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-into-ssa.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-iterator.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-logical-location.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-nested.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-object-size.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-outof-ssa.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-parloops.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-pass.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-phinodes.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-pretty-print.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-scalar-evolution.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-sra.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-address.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-alias-compare.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-alias.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-ccp.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-coalesce.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-dce.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-dom.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-dse.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-live.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-loop-ivopts.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-loop-manip.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-loop-niter.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-loop.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-math-opts.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-operands.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-propagate.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-reassoc.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-sccvn.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-scopedtables.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-strlen.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-ter.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-threadedge.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa-threadupdate.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssa.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-ssanames.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-stdarg.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-streamer.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-switch-conversion.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-vector-builder.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-vectorizer.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree-vrp.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tree.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/treestruct.def
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tristate.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tsan.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/tsystem.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/typeclass.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/typed-splay-tree.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/ubsan.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/valtrack.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/value-pointer-equiv.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/value-prof.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/value-query.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/value-range-pretty-print.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/value-range-storage.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/value-range.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/value-relation.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/varasm.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/vec-perm-indices.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/vec.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/vector-builder.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/version.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/vmsdbg.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/vr-values.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/vtable-verify.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/wide-int-bitmask.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/wide-int-print.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/wide-int.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/include/xcoff.h
+
+  info:
+    files:
+    - path: /usr/share/info/libgomp.info
+    - path: /usr/share/info/libitm.info
+    - path: /usr/share/info/libquadmath.info
+
+  lib:
+    files:
+    - path: /usr/lib/cpp
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtbegin.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtbeginS.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtbeginT.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtend.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtendS.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtfastmath.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtprec32.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtprec64.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/crtprec80.o
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/fixinc_list
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/gsyslimits.h
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/macro_list
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/install-tools/mkheaders.conf
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/gtype.state
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcc1plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcc1plugin.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcc1plugin.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcp1plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcp1plugin.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/plugin/libcp1plugin.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libasan.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libasan.so.8
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libasan.so.8.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libasan_preinit.o
+    - path: /usr/lib/libatomic.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libatomic.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libatomic.so.1.2.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libcc1.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libcc1.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libcc1.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libgcc_s.so
+    - path: /usr/lib/libgcc_s.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libgomp.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libgomp.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libgomp.so.1.0.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libgomp.spec
+    - path: /usr/lib/libhwasan.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libhwasan.so.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libhwasan.so.0.0.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libhwasan_preinit.o
+    - path: /usr/lib/libitm.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libitm.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libitm.so.1.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+    - path: /usr/lib/libitm.spec
+    - path: /usr/lib/liblsan.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/liblsan.so.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/liblsan.so.0.0.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/liblsan_preinit.o
+    - path: /usr/lib/libquadmath.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libquadmath.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libquadmath.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libsanitizer.spec
+    - path: /usr/lib/libssp.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libssp.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libssp.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libstdc++.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libstdc++.so.6
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libstdc++.so.6.0.32
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libtsan.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libtsan.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libtsan.so.2.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libtsan_preinit.o
+    - path: /usr/lib/libubsan.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libubsan.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libubsan.so.1.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/libexec/gcc/x86_64-pc-linux-gnu/13.2.0/liblto_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/share/gdb/auto-load/usr/lib/libstdc++.so.6.0.32-gdb.py
+
+  locale:
+    files:
+    - path: /usr/share/locale/be/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/be/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/gcc.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/cpplib.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/gcc.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/cpp.1
+    - path: /usr/share/man/man1/g++.1
+    - path: /usr/share/man/man1/gcc.1
+    - path: /usr/share/man/man1/gcov-dump.1
+    - path: /usr/share/man/man1/gcov-tool.1
+    - path: /usr/share/man/man1/gcov.1
+    - path: /usr/share/man/man1/lto-dump.1
+    - path: /usr/share/man/man7/fsf-funding.7
+    - path: /usr/share/man/man7/gfdl.7
+    - path: /usr/share/man/man7/gpl.7
+
+  misc:
+    files:
+    - path: /usr/share/gcc-13.2.0/python/libstdcxx/__init__.py
+    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/__init__.py
+    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/printers.py
+    - path: /usr/share/gcc-13.2.0/python/libstdcxx/v6/xmethods.py
+
+  static:
+    files:
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/libgcc.a
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/libgcc_eh.a
+    - path: /usr/lib/gcc/x86_64-pc-linux-gnu/13.2.0/libgcov.a
+    - path: /usr/lib/libasan.a
+    - path: /usr/lib/libatomic.a
+    - path: /usr/lib/libgomp.a
+    - path: /usr/lib/libhwasan.a
+    - path: /usr/lib/libitm.a
+    - path: /usr/lib/liblsan.a
+    - path: /usr/lib/libquadmath.a
+    - path: /usr/lib/libssp.a
+    - path: /usr/lib/libssp_nonshared.a
+    - path: /usr/lib/libstdc++.a
+    - path: /usr/lib/libstdc++exp.a
+    - path: /usr/lib/libstdc++fs.a
+    - path: /usr/lib/libsupc++.a
+    - path: /usr/lib/libtsan.a
+    - path: /usr/lib/libubsan.a
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libgcc_s.so.1: self
+  /usr/lib/libstdc++.so.6: self
+  /usr/lib/libz.so.1: zlib

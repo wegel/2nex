@@ -1,0 +1,39 @@
+From: Nex package maintainers
+Subject: [PATCH] Settings: read the system htoprc from all three UAPI tiers
+Source: no upstream commit; written for Nex against htop 3.3.0
+Upstream: not submitted. htop reads one system file at SYSCONFDIR/htoprc, so
+ a distribution cannot ship a default that a boot or an administrator may
+ replace. The change below adds the generic /run and /usr/lib tiers after
+ that file, keeps the existing user paths ahead of all three, and names no
+ Nex path in the admin tier.
+
+At startup, when HTOPRC is unset and no user file exists at
+~/.config/htop/htoprc or the legacy ~/.htoprc, htop reads SYSCONFDIR/htoprc
+(the administrator tier) and otherwise falls back to built-in defaults.
+There is no transient or vendor tier, so a running system cannot install a
+temporary override below /run, and a distribution cannot ship a default
+configuration below /usr.
+
+Try /run/htop/htoprc after SYSCONFDIR/htoprc, then /usr/lib/htop/htoprc,
+before falling back to built-in defaults. Settings_read() already returns
+false on a missing or unreadable file, so each added tier is only tried
+when every higher-priority tier is absent: an administrator file still
+wins over a runtime file, which still wins over a vendor file. HTOPRC and
+the user paths are unaffected and remain tried first.
+
+diff -urN a/Settings.c b/Settings.c
+--- a/Settings.c
++++ b/Settings.c
+@@ -846,6 +846,12 @@ Settings* Settings_new(unsigned int initialCpuCount, Hashtable* dynamicMeters,
+       this->changed = true;
+       ok = Settings_read(this, SYSCONFDIR "/htoprc", initialCpuCount);
+    }
++   if (!ok) {
++      ok = Settings_read(this, "/run/htop/htoprc", initialCpuCount);
++   }
++   if (!ok) {
++      ok = Settings_read(this, "/usr/lib/htop/htoprc", initialCpuCount);
++   }
+    if (!ok) {
+       Settings_defaultMeters(this, initialCpuCount);
+       Settings_defaultScreens(this);

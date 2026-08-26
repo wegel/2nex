@@ -1,0 +1,35 @@
+// Self-contained driver keymap for the libxkbcommon UAPI config check.
+//
+// xkb_keycodes, xkb_types, and xkb_compat are inlined so this keymap needs
+// no xkeyboard-config data at all. xkb_symbols is the part under test: it
+// includes two fixture files by bare name (no path), so libxkbcommon must
+// resolve each one through the real default include path search
+// (xkb_context_include_path_append_default() in src/context.c), the exact
+// function the UAPI config patch changes. The check script plants
+// "nex-uapi-test" and "nex-uapi-test-2" under symbols/ in different
+// combinations of the vendor, /run, and /etc tiers between compiles and
+// reads the distinguishing keysym each compile printed for <AE01> and
+// <AE02> to prove which tier's file won.
+xkb_keymap {
+    xkb_keycodes "nex-uapi-test" {
+        minimum = 8;
+        maximum = 255;
+        <AE01> = 10;
+        <AE02> = 11;
+    };
+
+    xkb_types "nex-uapi-test" {
+        type "ONE_LEVEL" {
+            modifiers = none;
+            level_name[Level1] = "Any";
+        };
+    };
+
+    xkb_compat "nex-uapi-test" {
+    };
+
+    xkb_symbols "nex-uapi-test" {
+        include "nex-uapi-test"
+        include "nex-uapi-test-2"
+    };
+};

@@ -1,0 +1,82 @@
+package:
+  schema: 1
+  name: Parse::Yapp
+  slug: parse-yapp
+  namespace: dev/perl
+  version: "1.21"
+  description: Perl parser generator module
+  homepage: https://metacpan.org/pod/Parse::Yapp
+  checksum: ad720966899c998dc28648a144293333252f49bbc01e8e05b1e52eebccd04c49
+
+sources:
+- name: parse_yapp
+  url: https://cpan.metacpan.org/authors/id/W/WB/WBRASWELL/Parse-Yapp-1.21.tar.gz
+  sha256: 3810e998308fba2e0f4f26043035032b027ce51ce5c8a52a8b8e340ca65f13e5
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [1810:513]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_parse_yapp} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    perl Makefile.PL
+    make
+    make test
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - lib
+
+  full:
+  - bin
+  - lib
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/yapp
+      needs:
+      - /usr/bin/perl
+
+  lib:
+    files:
+    - path: /usr/lib/perl5/5.38/core_perl/perllocal.pod
+    - path: /usr/lib/perl5/5.38/site_perl/Parse/Yapp.pm
+    - path: /usr/lib/perl5/5.38/site_perl/Parse/Yapp/Driver.pm
+    - path: /usr/lib/perl5/5.38/site_perl/Parse/Yapp/Grammar.pm
+    - path: /usr/lib/perl5/5.38/site_perl/Parse/Yapp/Lalr.pm
+    - path: /usr/lib/perl5/5.38/site_perl/Parse/Yapp/Options.pm
+    - path: /usr/lib/perl5/5.38/site_perl/Parse/Yapp/Output.pm
+    - path: /usr/lib/perl5/5.38/site_perl/Parse/Yapp/Parse.pm
+    - path: /usr/lib/perl5/5.38/site_perl/auto/Parse/Yapp/.packlist
+
+  man:
+    files:
+    - path: /usr/share/man/man1/yapp.1
+    - path: /usr/share/man/man3/Parse::Yapp.3
+
+resolution:
+  /usr/bin/perl: perl

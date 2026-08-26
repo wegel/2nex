@@ -1,0 +1,110 @@
+From: Nex package maintainers
+Subject: [PATCH] lib: read the full UAPI configuration hierarchy
+Source: Nex
+Upstream: not submitted; suitable for upstream review
+
+Shadow's libeconf support calls the deprecated econf_readDirs interface. That
+interface receives only the vendor and administrator paths, so it cannot read
+the transient /run path required by the UAPI configuration-file specification.
+
+Use econf_readConfig, which searches the vendor, transient, and administrator
+locations and implements main-file replacement, drop-ins, and masks. Preserve
+the --prefix behavior by passing the prefix through libeconf's ROOT_PREFIX
+option instead of constructing only the vendor and administrator paths.
+
+Apply the same change to chsh. Its shell_is_listed() also used econf_readDirs,
+so the list of valid login shells came only from the vendor and administrator
+directories and a boot-time /run/shells could never register a shell, even
+though login.defs in the same package already honoured that tier.
+
+diff -urN a/lib/getdef.c b/lib/getdef.c
+--- a/lib/getdef.c
++++ b/lib/getdef.c
+@@ -160,12 +160,12 @@
+ };
+ 
+ #ifdef USE_ECONF
++static const char* rootprefix = NULL;
+ #ifdef VENDORDIR
+ static const char* vendordir = VENDORDIR;
+ #else
+ static const char* vendordir = NULL;
+ #endif
+-static const char* sysconfdir = "/etc";
+ #else
+ #ifndef LOGINDEFS
+ #define LOGINDEFS "/etc/login.defs"
+@@ -448,14 +448,7 @@
+ void setdef_config_file (const char* file)
+ {
+ #ifdef USE_ECONF
+-	char  *cp;
+-
+-	xasprintf(&cp, "%s/%s", file, sysconfdir);
+-	sysconfdir = cp;
+-#ifdef VENDORDIR
+-	xasprintf(&cp, "%s/%s", file, vendordir);
+-	vendordir = cp;
+-#endif
++	rootprefix = file;
+ #else
+ 	def_fname = file;
+ #endif
+@@ -474,6 +467,7 @@
+ 	econf_err error;
+ 	char **keys;
+ 	size_t key_number;
++	char *options = NULL;
+ 
+ 	/*
+ 	 * Set the initialized flag.
+@@ -481,7 +475,24 @@
+ 	 */
+ 	def_loaded = true;
+ 
+-	error = econf_readDirs (&defs_file, vendordir, sysconfdir, "login", "defs", " \t", "#");
++	if (rootprefix != NULL) {
++		xasprintf(&options, "ROOT_PREFIX=%s", rootprefix);
++		error = econf_newKeyFile_with_options(&defs_file, options);
++		free(options);
++		if (error) {
++			SYSLOG ((LOG_CRIT, "cannot initialize login definitions [%s]",
++				econf_errString(error)));
++			exit (EXIT_FAILURE);
++		}
++	}
++
++	error = econf_readConfig (&defs_file,
++	                          NULL,
++	                          vendordir,
++	                          "login",
++	                          "defs",
++	                          " \t",
++	                          "#");
+ 	if (error) {
+ 		if (error == ECONF_NOFILE)
+ 			return;
+diff -urN a/src/chsh.c b/src/chsh.c
+--- a/src/chsh.c
++++ b/src/chsh.c
+@@ -152,13 +152,13 @@
+ 	char **keys;
+ 	econf_file *key_file;
+ 
+-	error = econf_readDirs(&key_file,
+-			       VENDORDIR,
+-			       ETCDIR,
+-			       SHELLS,
+-			       NULL,
+-			       "", /* key only */
+-			       "#" /* comment */);
++	error = econf_readConfig(&key_file,
++			         NULL,
++			         VENDORDIR,
++			         SHELLS,
++			         NULL,
++			         "", /* key only */
++			         "#" /* comment */);
+ 	if (error) {
+ 		fprintf (stderr,
+ 			 _("Cannot parse shell files: %s"),

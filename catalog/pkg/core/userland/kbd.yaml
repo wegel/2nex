@@ -1,0 +1,895 @@
+package:
+  schema: 1
+  name: kbd
+  slug: kbd
+  namespace: core/userland
+  version: 2.9.0
+  description: Keyboard and console utilities for Linux
+  homepage: https://kbd-project.org/
+  checksum: 17f3cdae47ba1afa32413938c337640b59400d0a41863ab3580bfd320d11322b
+
+sources:
+- name: kbd
+  url: https://www.kernel.org/pub/linux/utils/kbd/kbd-2.9.0.tar.xz
+  sha256: fb3197f17a99eb44d22a3a1a71f755f9622dd963e66acfdea1a45120951b02ed
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4161:5551, 8274:10087, 12376:15215, 16487:21202, 20612:21387, 24720:21919, 27388:22252]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_kbd} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr --disable-vlock --disable-tests
+
+    make
+
+    make DESTDIR=$OUT_DIR install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+
+  full:
+  - bin
+  - dev
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/chvt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/deallocvt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/dumpkeys
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/fgconsole
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/getkeycodes
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/kbd_mode
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/kbdinfo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/kbdrate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/loadkeys
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/loadunimap
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/mapscrn
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/openvt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/psfaddtable
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/psfgettable
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/psfstriptable
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/psfxtable
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/resizecons
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/setfont
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/setkeycodes
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/setleds
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/setmetamode
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/setvtrgb
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/showconsolefont
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/showkey
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/unicode_start
+    - path: /usr/bin/unicode_stop
+
+  dev:
+    files:
+    - path: /usr/share/keymaps/i386/include/applkey.map.gz
+    - path: /usr/share/keymaps/i386/include/azerty-layout.inc
+    - path: /usr/share/keymaps/i386/include/backspace.map.gz
+    - path: /usr/share/keymaps/i386/include/compose.inc
+    - path: /usr/share/keymaps/i386/include/ctrl.map.gz
+    - path: /usr/share/keymaps/i386/include/euro.map.gz
+    - path: /usr/share/keymaps/i386/include/euro1.inc
+    - path: /usr/share/keymaps/i386/include/euro1.map.gz
+    - path: /usr/share/keymaps/i386/include/euro2.map.gz
+    - path: /usr/share/keymaps/i386/include/keypad.map.gz
+    - path: /usr/share/keymaps/i386/include/linux-keys-bare.inc
+    - path: /usr/share/keymaps/i386/include/linux-keys-extd.inc
+    - path: /usr/share/keymaps/i386/include/linux-with-alt-and-altgr.inc
+    - path: /usr/share/keymaps/i386/include/linux-with-modeshift-altgr.inc
+    - path: /usr/share/keymaps/i386/include/linux-with-two-alt-keys.inc
+    - path: /usr/share/keymaps/i386/include/qwerty-layout.inc
+    - path: /usr/share/keymaps/i386/include/qwertz-layout.inc
+    - path: /usr/share/keymaps/i386/include/unicode.map.gz
+    - path: /usr/share/keymaps/i386/include/windowkeys.map.gz
+    - path: /usr/share/keymaps/include/compose.8859_7
+    - path: /usr/share/keymaps/include/compose.8859_8
+    - path: /usr/share/keymaps/include/compose.latin
+    - path: /usr/share/keymaps/include/compose.latin1
+    - path: /usr/share/keymaps/include/compose.latin2
+    - path: /usr/share/keymaps/include/compose.latin3
+    - path: /usr/share/keymaps/include/compose.latin4
+    - path: /usr/share/keymaps/include/vim-compose.latin1
+    - path: /usr/share/keymaps/mac/include/apple-a1048-base.inc
+    - path: /usr/share/keymaps/mac/include/apple-a1243-fn-reverse.inc
+    - path: /usr/share/keymaps/mac/include/apple-a1243-fn.inc
+    - path: /usr/share/keymaps/mac/include/mac-azerty-layout.inc
+    - path: /usr/share/keymaps/mac/include/mac-euro.map.gz
+    - path: /usr/share/keymaps/mac/include/mac-euro2.map.gz
+    - path: /usr/share/keymaps/mac/include/mac-linux-keys-bare.inc
+    - path: /usr/share/keymaps/mac/include/mac-qwerty-layout.inc
+    - path: /usr/share/keymaps/mac/include/mac-qwertz-layout.inc
+
+  locale:
+    files:
+    - path: /usr/share/locale/cs/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/sq/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/kbd.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/kbd.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/chvt.1
+    - path: /usr/share/man/man1/deallocvt.1
+    - path: /usr/share/man/man1/dumpkeys.1
+    - path: /usr/share/man/man1/fgconsole.1
+    - path: /usr/share/man/man1/kbd_mode.1
+    - path: /usr/share/man/man1/kbdinfo.1
+    - path: /usr/share/man/man1/loadkeys.1
+    - path: /usr/share/man/man1/openvt.1
+    - path: /usr/share/man/man1/psfaddtable.1
+    - path: /usr/share/man/man1/psfgettable.1
+    - path: /usr/share/man/man1/psfstriptable.1
+    - path: /usr/share/man/man1/psfxtable.1
+    - path: /usr/share/man/man1/setleds.1
+    - path: /usr/share/man/man1/setmetamode.1
+    - path: /usr/share/man/man1/showkey.1
+    - path: /usr/share/man/man1/unicode_start.1
+    - path: /usr/share/man/man1/unicode_stop.1
+    - path: /usr/share/man/man5/keymaps.5
+    - path: /usr/share/man/man8/getkeycodes.8
+    - path: /usr/share/man/man8/kbdrate.8
+    - path: /usr/share/man/man8/loadunimap.8
+    - path: /usr/share/man/man8/mapscrn.8
+    - path: /usr/share/man/man8/resizecons.8
+    - path: /usr/share/man/man8/setfont.8
+    - path: /usr/share/man/man8/setkeycodes.8
+    - path: /usr/share/man/man8/setvtrgb.8
+    - path: /usr/share/man/man8/showconsolefont.8
+
+  misc:
+    files:
+    - path: /usr/share/consolefonts/161.cp.gz
+    - path: /usr/share/consolefonts/162.cp.gz
+    - path: /usr/share/consolefonts/163.cp.gz
+    - path: /usr/share/consolefonts/164.cp.gz
+    - path: /usr/share/consolefonts/165.cp.gz
+    - path: /usr/share/consolefonts/737.cp.gz
+    - path: /usr/share/consolefonts/880.cp.gz
+    - path: /usr/share/consolefonts/928.cp.gz
+    - path: /usr/share/consolefonts/972.cp.gz
+    - path: /usr/share/consolefonts/Cyr_a8x8.psfu.gz
+    - path: /usr/share/consolefonts/Cyr_a8x14.psfu.gz
+    - path: /usr/share/consolefonts/Cyr_a8x16.psfu.gz
+    - path: /usr/share/consolefonts/ERRORS
+    - path: /usr/share/consolefonts/Goha-12.psfu.gz
+    - path: /usr/share/consolefonts/Goha-14.psfu.gz
+    - path: /usr/share/consolefonts/Goha-16.psfu.gz
+    - path: /usr/share/consolefonts/GohaClassic-12.psfu.gz
+    - path: /usr/share/consolefonts/GohaClassic-14.psfu.gz
+    - path: /usr/share/consolefonts/GohaClassic-16.psfu.gz
+    - path: /usr/share/consolefonts/Lat2-Terminus16.psfu.gz
+    - path: /usr/share/consolefonts/LatArCyrHeb-08.psfu.gz
+    - path: /usr/share/consolefonts/LatArCyrHeb-14.psfu.gz
+    - path: /usr/share/consolefonts/LatArCyrHeb-16+.psfu.gz
+    - path: /usr/share/consolefonts/LatArCyrHeb-16.psfu.gz
+    - path: /usr/share/consolefonts/LatArCyrHeb-19.psfu.gz
+    - path: /usr/share/consolefonts/LatCyrHebKa-16_GIA.psfu.gz
+    - path: /usr/share/consolefonts/LatGrkCyr-8x16.psfu.gz
+    - path: /usr/share/consolefonts/LatGrkCyr-12x22.psfu.gz
+    - path: /usr/share/consolefonts/LatKaCyrHeb-14.psfu.gz
+    - path: /usr/share/consolefonts/Mik_8x16.gz
+    - path: /usr/share/consolefonts/README.12x22
+    - path: /usr/share/consolefonts/README.Arabic
+    - path: /usr/share/consolefonts/README.Cyrillic
+    - path: /usr/share/consolefonts/README.Ethiopic
+    - path: /usr/share/consolefonts/README.Greek
+    - path: /usr/share/consolefonts/README.Hebrew
+    - path: /usr/share/consolefonts/README.Lat2-Terminus16
+    - path: /usr/share/consolefonts/README.LatGrkCyr
+    - path: /usr/share/consolefonts/README.Sun
+    - path: /usr/share/consolefonts/README.cp1250
+    - path: /usr/share/consolefonts/README.cybercafe
+    - path: /usr/share/consolefonts/README.drdos
+    - path: /usr/share/consolefonts/README.eurlatgr
+    - path: /usr/share/consolefonts/README.eurlatgr.mappings
+    - path: /usr/share/consolefonts/README.lat0
+    - path: /usr/share/consolefonts/README.lat7
+    - path: /usr/share/consolefonts/README.lat9
+    - path: /usr/share/consolefonts/README.psfu
+    - path: /usr/share/consolefonts/UniCyrExt_8x16.psf.gz
+    - path: /usr/share/consolefonts/UniCyr_8x8.psf.gz
+    - path: /usr/share/consolefonts/UniCyr_8x14.psf.gz
+    - path: /usr/share/consolefonts/UniCyr_8x16.psf.gz
+    - path: /usr/share/consolefonts/alt-8x8.gz
+    - path: /usr/share/consolefonts/alt-8x14.gz
+    - path: /usr/share/consolefonts/alt-8x16.gz
+    - path: /usr/share/consolefonts/altc-8x16.gz
+    - path: /usr/share/consolefonts/aply16.psf.gz
+    - path: /usr/share/consolefonts/arm8.fnt.gz
+    - path: /usr/share/consolefonts/cp850-8x8.psfu.gz
+    - path: /usr/share/consolefonts/cp850-8x14.psfu.gz
+    - path: /usr/share/consolefonts/cp850-8x16.psfu.gz
+    - path: /usr/share/consolefonts/cp857.08.gz
+    - path: /usr/share/consolefonts/cp857.14.gz
+    - path: /usr/share/consolefonts/cp857.16.gz
+    - path: /usr/share/consolefonts/cp865-8x8.psfu.gz
+    - path: /usr/share/consolefonts/cp865-8x14.psfu.gz
+    - path: /usr/share/consolefonts/cp865-8x16.psfu.gz
+    - path: /usr/share/consolefonts/cp866-8x8.psf.gz
+    - path: /usr/share/consolefonts/cp866-8x14.psf.gz
+    - path: /usr/share/consolefonts/cp866-8x16.psf.gz
+    - path: /usr/share/consolefonts/cp1250.psfu.gz
+    - path: /usr/share/consolefonts/cybercafe.fnt.gz
+    - path: /usr/share/consolefonts/cyr-sun16.psfu.gz
+    - path: /usr/share/consolefonts/default8x9.psfu.gz
+    - path: /usr/share/consolefonts/default8x16.psfu.gz
+    - path: /usr/share/consolefonts/drdos8x6.psfu.gz
+    - path: /usr/share/consolefonts/drdos8x8.psfu.gz
+    - path: /usr/share/consolefonts/drdos8x14.psfu.gz
+    - path: /usr/share/consolefonts/drdos8x16.psfu.gz
+    - path: /usr/share/consolefonts/eurlatgr.psfu.gz
+    - path: /usr/share/consolefonts/gr737c-8x6.psfu.gz
+    - path: /usr/share/consolefonts/gr737c-8x7.psfu.gz
+    - path: /usr/share/consolefonts/gr737a-8x8.psfu.gz
+    - path: /usr/share/consolefonts/gr737c-8x8.psfu.gz
+    - path: /usr/share/consolefonts/gr737b-8x11.psfu.gz
+    - path: /usr/share/consolefonts/gr737c-8x14.psfu.gz
+    - path: /usr/share/consolefonts/gr737c-8x16.psfu.gz
+    - path: /usr/share/consolefonts/gr737d-8x16.psfu.gz
+    - path: /usr/share/consolefonts/gr737a-9x14.psfu.gz
+    - path: /usr/share/consolefonts/gr737b-9x16-medieval.psfu.gz
+    - path: /usr/share/consolefonts/gr737a-9x16.psfu.gz
+    - path: /usr/share/consolefonts/gr928a-8x14.psfu.gz
+    - path: /usr/share/consolefonts/gr928b-8x14.psfu.gz
+    - path: /usr/share/consolefonts/gr928a-8x16.psfu.gz
+    - path: /usr/share/consolefonts/gr928b-8x16.psfu.gz
+    - path: /usr/share/consolefonts/gr928-8x16-thin.psfu.gz
+    - path: /usr/share/consolefonts/gr928-9x14.psfu.gz
+    - path: /usr/share/consolefonts/gr928-9x16.psfu.gz
+    - path: /usr/share/consolefonts/greek-polytonic.psfu.gz
+    - path: /usr/share/consolefonts/iso01.08.gz
+    - path: /usr/share/consolefonts/iso01-12x22.psfu.gz
+    - path: /usr/share/consolefonts/iso01.14.gz
+    - path: /usr/share/consolefonts/iso01.16.gz
+    - path: /usr/share/consolefonts/iso02.08.gz
+    - path: /usr/share/consolefonts/iso02-12x22.psfu.gz
+    - path: /usr/share/consolefonts/iso02.14.gz
+    - path: /usr/share/consolefonts/iso02.16.gz
+    - path: /usr/share/consolefonts/iso03.08.gz
+    - path: /usr/share/consolefonts/iso03.14.gz
+    - path: /usr/share/consolefonts/iso03.16.gz
+    - path: /usr/share/consolefonts/iso04.08.gz
+    - path: /usr/share/consolefonts/iso04.14.gz
+    - path: /usr/share/consolefonts/iso04.16.gz
+    - path: /usr/share/consolefonts/iso05.08.gz
+    - path: /usr/share/consolefonts/iso05.14.gz
+    - path: /usr/share/consolefonts/iso05.16.gz
+    - path: /usr/share/consolefonts/iso06.08.gz
+    - path: /usr/share/consolefonts/iso06.14.gz
+    - path: /usr/share/consolefonts/iso06.16.gz
+    - path: /usr/share/consolefonts/iso07u-16.psfu.gz
+    - path: /usr/share/consolefonts/iso07.14.gz
+    - path: /usr/share/consolefonts/iso07.16.gz
+    - path: /usr/share/consolefonts/iso08.08.gz
+    - path: /usr/share/consolefonts/iso08.14.gz
+    - path: /usr/share/consolefonts/iso08.16.gz
+    - path: /usr/share/consolefonts/iso09.08.gz
+    - path: /usr/share/consolefonts/iso09.14.gz
+    - path: /usr/share/consolefonts/iso09.16.gz
+    - path: /usr/share/consolefonts/iso10.08.gz
+    - path: /usr/share/consolefonts/iso10.14.gz
+    - path: /usr/share/consolefonts/iso10.16.gz
+    - path: /usr/share/consolefonts/koi8r-8x8.gz
+    - path: /usr/share/consolefonts/koi8r-8x14.gz
+    - path: /usr/share/consolefonts/koi8c-8x16.gz
+    - path: /usr/share/consolefonts/koi8r-8x16.gz
+    - path: /usr/share/consolefonts/koi8r.8x8.psfu.gz
+    - path: /usr/share/consolefonts/koi8-14.psf.gz
+    - path: /usr/share/consolefonts/koi8u_8x8.psfu.gz
+    - path: /usr/share/consolefonts/koi8u_8x14.psfu.gz
+    - path: /usr/share/consolefonts/koi8u_8x16.psfu.gz
+    - path: /usr/share/consolefonts/lat0-08.psfu.gz
+    - path: /usr/share/consolefonts/lat0-10.psfu.gz
+    - path: /usr/share/consolefonts/lat0-12.psfu.gz
+    - path: /usr/share/consolefonts/lat0-14.psfu.gz
+    - path: /usr/share/consolefonts/lat0-16.psfu.gz
+    - path: /usr/share/consolefonts/lat0-sun16.psfu.gz
+    - path: /usr/share/consolefonts/lat1-08.psfu.gz
+    - path: /usr/share/consolefonts/lat1-10.psfu.gz
+    - path: /usr/share/consolefonts/lat1-12.psfu.gz
+    - path: /usr/share/consolefonts/lat1-14.psfu.gz
+    - path: /usr/share/consolefonts/lat1-16.psfu.gz
+    - path: /usr/share/consolefonts/lat2a-16.psfu.gz
+    - path: /usr/share/consolefonts/lat2-08.psfu.gz
+    - path: /usr/share/consolefonts/lat2-10.psfu.gz
+    - path: /usr/share/consolefonts/lat2-12.psfu.gz
+    - path: /usr/share/consolefonts/lat2-14.psfu.gz
+    - path: /usr/share/consolefonts/lat2-16.psfu.gz
+    - path: /usr/share/consolefonts/lat2-sun16.psfu.gz
+    - path: /usr/share/consolefonts/lat4a-08.psfu.gz
+    - path: /usr/share/consolefonts/lat4a-10.psfu.gz
+    - path: /usr/share/consolefonts/lat4a-12.psfu.gz
+    - path: /usr/share/consolefonts/lat4a-14.psfu.gz
+    - path: /usr/share/consolefonts/lat4a-16+.psfu.gz
+    - path: /usr/share/consolefonts/lat4a-16.psfu.gz
+    - path: /usr/share/consolefonts/lat4a-19.psfu.gz
+    - path: /usr/share/consolefonts/lat4-08.psfu.gz
+    - path: /usr/share/consolefonts/lat4-10.psfu.gz
+    - path: /usr/share/consolefonts/lat4-12.psfu.gz
+    - path: /usr/share/consolefonts/lat4-14.psfu.gz
+    - path: /usr/share/consolefonts/lat4-16+.psfu.gz
+    - path: /usr/share/consolefonts/lat4-16.psfu.gz
+    - path: /usr/share/consolefonts/lat4-19.psfu.gz
+    - path: /usr/share/consolefonts/lat5-12.psfu.gz
+    - path: /usr/share/consolefonts/lat5-14.psfu.gz
+    - path: /usr/share/consolefonts/lat5-16.psfu.gz
+    - path: /usr/share/consolefonts/lat7a-14.psfu.gz
+    - path: /usr/share/consolefonts/lat7a-16.psf.gz
+    - path: /usr/share/consolefonts/lat7-14.psfu.gz
+    - path: /usr/share/consolefonts/lat9u-08.psfu.gz
+    - path: /usr/share/consolefonts/lat9v-08.psfu.gz
+    - path: /usr/share/consolefonts/lat9w-08.psfu.gz
+    - path: /usr/share/consolefonts/lat9u-10.psfu.gz
+    - path: /usr/share/consolefonts/lat9v-10.psfu.gz
+    - path: /usr/share/consolefonts/lat9w-10.psfu.gz
+    - path: /usr/share/consolefonts/lat9u-12.psfu.gz
+    - path: /usr/share/consolefonts/lat9v-12.psfu.gz
+    - path: /usr/share/consolefonts/lat9w-12.psfu.gz
+    - path: /usr/share/consolefonts/lat9u-14.psfu.gz
+    - path: /usr/share/consolefonts/lat9v-14.psfu.gz
+    - path: /usr/share/consolefonts/lat9w-14.psfu.gz
+    - path: /usr/share/consolefonts/lat9u-16.psfu.gz
+    - path: /usr/share/consolefonts/lat9v-16.psfu.gz
+    - path: /usr/share/consolefonts/lat9w-16.psfu.gz
+    - path: /usr/share/consolefonts/lat9-08.psf.gz
+    - path: /usr/share/consolefonts/lat9-10.psf.gz
+    - path: /usr/share/consolefonts/lat9-12.psf.gz
+    - path: /usr/share/consolefonts/lat9-14.psf.gz
+    - path: /usr/share/consolefonts/lat9-16.psf.gz
+    - path: /usr/share/consolefonts/latarcyrheb-sun16.psfu.gz
+    - path: /usr/share/consolefonts/latarcyrheb-sun32.psfu.gz
+    - path: /usr/share/consolefonts/pancyrillic.f16.psfu.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-1.a0-ff.08.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-1.a0-ff.14.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-1.a0-ff.16.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-2.a0-ff.08.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-2.a0-ff.14.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-2.a0-ff.16.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-3.a0-ff.08.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-3.a0-ff.14.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-3.a0-ff.16.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-4.a0-ff.08.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-4.a0-ff.14.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-4.a0-ff.16.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-5.a0-ff.08.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-5.a0-ff.14.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-5.a0-ff.16.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-6.a0-ff.08.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-6.a0-ff.14.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-6.a0-ff.16.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-7.a0-ff.08.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-7.a0-ff.14.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-7.a0-ff.16.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-8.a0-ff.08.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-8.a0-ff.14.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-8.a0-ff.16.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-9.a0-ff.08.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-9.a0-ff.14.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-9.a0-ff.16.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-10.a0-ff.08.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-10.a0-ff.14.gz
+    - path: /usr/share/consolefonts/partialfonts/8859-10.a0-ff.16.gz
+    - path: /usr/share/consolefonts/partialfonts/ascii.20-7f.08.gz
+    - path: /usr/share/consolefonts/partialfonts/ascii.20-7f.14.gz
+    - path: /usr/share/consolefonts/partialfonts/ascii.20-7f.16.gz
+    - path: /usr/share/consolefonts/partialfonts/cp437.00-1f.08.gz
+    - path: /usr/share/consolefonts/partialfonts/cp437.00-1f.14.gz
+    - path: /usr/share/consolefonts/partialfonts/cp437.00-1f.16.gz
+    - path: /usr/share/consolefonts/partialfonts/none.00-17.08.gz
+    - path: /usr/share/consolefonts/partialfonts/none.00-17.14.gz
+    - path: /usr/share/consolefonts/partialfonts/none.00-17.16.gz
+    - path: /usr/share/consolefonts/ruscii_8x8.psfu.gz
+    - path: /usr/share/consolefonts/ruscii_8x16.psfu.gz
+    - path: /usr/share/consolefonts/solar24x32.psfu.gz
+    - path: /usr/share/consolefonts/sun12x22.psfu.gz
+    - path: /usr/share/consolefonts/t.fnt.gz
+    - path: /usr/share/consolefonts/t850b.fnt.gz
+    - path: /usr/share/consolefonts/tcvn8x16.psf.gz
+    - path: /usr/share/consolefonts/viscii10-8x16.psfu.gz
+    - path: /usr/share/consoletrans/8859-1_to_uni.trans
+    - path: /usr/share/consoletrans/8859-2_to_uni.trans
+    - path: /usr/share/consoletrans/8859-3_to_uni.trans
+    - path: /usr/share/consoletrans/8859-4_to_uni.trans
+    - path: /usr/share/consoletrans/8859-5_to_uni.trans
+    - path: /usr/share/consoletrans/8859-6_to_uni.trans
+    - path: /usr/share/consoletrans/8859-7_to_uni.trans
+    - path: /usr/share/consoletrans/8859-8_to_uni.trans
+    - path: /usr/share/consoletrans/8859-9_to_uni.trans
+    - path: /usr/share/consoletrans/8859-10_to_uni.trans
+    - path: /usr/share/consoletrans/8859-13_to_uni.trans
+    - path: /usr/share/consoletrans/8859-14_to_uni.trans
+    - path: /usr/share/consoletrans/8859-15_to_uni.trans
+    - path: /usr/share/consoletrans/baltic.trans
+    - path: /usr/share/consoletrans/cp437_to_iso01.trans
+    - path: /usr/share/consoletrans/cp437_to_uni.trans
+    - path: /usr/share/consoletrans/cp737_to_uni.trans
+    - path: /usr/share/consoletrans/cp775_to_uni.trans
+    - path: /usr/share/consoletrans/cp850_to_iso01.trans
+    - path: /usr/share/consoletrans/cp850_to_uni.trans
+    - path: /usr/share/consoletrans/cp852_to_uni.trans
+    - path: /usr/share/consoletrans/cp853_to_uni.trans
+    - path: /usr/share/consoletrans/cp855_to_uni.trans
+    - path: /usr/share/consoletrans/cp857_to_uni.trans
+    - path: /usr/share/consoletrans/cp860_to_uni.trans
+    - path: /usr/share/consoletrans/cp861_to_uni.trans
+    - path: /usr/share/consoletrans/cp862_to_uni.trans
+    - path: /usr/share/consoletrans/cp863_to_uni.trans
+    - path: /usr/share/consoletrans/cp864_to_uni.trans
+    - path: /usr/share/consoletrans/cp865_to_uni.trans
+    - path: /usr/share/consoletrans/cp866_to_uni.trans
+    - path: /usr/share/consoletrans/cp869_to_uni.trans
+    - path: /usr/share/consoletrans/cp874_to_uni.trans
+    - path: /usr/share/consoletrans/cp1250_to_uni.trans
+    - path: /usr/share/consoletrans/cp1251_to_uni.trans
+    - path: /usr/share/consoletrans/iso02_to_cp1250.trans
+    - path: /usr/share/consoletrans/koi2alt
+    - path: /usr/share/consoletrans/koi8u2ruscii
+    - path: /usr/share/consoletrans/koi8-r_to_uni.trans
+    - path: /usr/share/consoletrans/koi8-u_to_uni.trans
+    - path: /usr/share/consoletrans/latin2u.trans
+    - path: /usr/share/consoletrans/null
+    - path: /usr/share/consoletrans/space
+    - path: /usr/share/consoletrans/trivial
+    - path: /usr/share/consoletrans/utflist
+    - path: /usr/share/consoletrans/vga2iso
+    - path: /usr/share/consoletrans/viscii1.0_to_tcvn.trans
+    - path: /usr/share/consoletrans/viscii1.0_to_viscii1.1.trans
+    - path: /usr/share/consoletrans/zero
+    - path: /usr/share/keymaps/amiga/amiga-de.map.gz
+    - path: /usr/share/keymaps/amiga/amiga-us.map.gz
+    - path: /usr/share/keymaps/atari/atari-de.map.gz
+    - path: /usr/share/keymaps/atari/atari-se.map.gz
+    - path: /usr/share/keymaps/atari/atari-uk-falcon.map.gz
+    - path: /usr/share/keymaps/atari/atari-us.map.gz
+    - path: /usr/share/keymaps/i386/azerty/azerty.map.gz
+    - path: /usr/share/keymaps/i386/azerty/be-latin1.map.gz
+    - path: /usr/share/keymaps/i386/azerty/fr-afnor.map.gz
+    - path: /usr/share/keymaps/i386/azerty/fr-latin1.map.gz
+    - path: /usr/share/keymaps/i386/azerty/fr-latin9.map.gz
+    - path: /usr/share/keymaps/i386/azerty/fr-pc.map.gz
+    - path: /usr/share/keymaps/i386/azerty/fr.map.gz
+    - path: /usr/share/keymaps/i386/azerty/wangbe.map.gz
+    - path: /usr/share/keymaps/i386/azerty/wangbe2.map.gz
+    - path: /usr/share/keymaps/i386/bepo/fr-bepo-latin9.map.gz
+    - path: /usr/share/keymaps/i386/bepo/fr-bepo.map.gz
+    - path: /usr/share/keymaps/i386/carpalx/carpalx-full.map.gz
+    - path: /usr/share/keymaps/i386/carpalx/carpalx.map.gz
+    - path: /usr/share/keymaps/i386/colemak/en-latin9.map.gz
+    - path: /usr/share/keymaps/i386/colemak/mod-dh-ansi-us-awing.map.gz
+    - path: /usr/share/keymaps/i386/colemak/mod-dh-ansi-us-fatz-wide.map.gz
+    - path: /usr/share/keymaps/i386/colemak/mod-dh-ansi-us-fatz.map.gz
+    - path: /usr/share/keymaps/i386/colemak/mod-dh-ansi-us-wide.map.gz
+    - path: /usr/share/keymaps/i386/colemak/mod-dh-ansi-us.map.gz
+    - path: /usr/share/keymaps/i386/colemak/mod-dh-iso-uk-wide.map.gz
+    - path: /usr/share/keymaps/i386/colemak/mod-dh-iso-uk.map.gz
+    - path: /usr/share/keymaps/i386/colemak/mod-dh-iso-us-wide.map.gz
+    - path: /usr/share/keymaps/i386/colemak/mod-dh-iso-us.map.gz
+    - path: /usr/share/keymaps/i386/colemak/mod-dh-matrix-us.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/ANSI-dvorak.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak-ca-fr.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak-de.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak-es.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak-fr.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak-l.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak-la.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak-no.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak-programmer.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak-r.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak-ru.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak-sv-a1.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak-sv-a5.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak-uk.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak-ukp.map.gz
+    - path: /usr/share/keymaps/i386/dvorak/dvorak.map.gz
+    - path: /usr/share/keymaps/i386/fgGIod/tr_f-latin5.map.gz
+    - path: /usr/share/keymaps/i386/fgGIod/trf.map.gz
+    - path: /usr/share/keymaps/i386/hcesar/hcesar.map.gz
+    - path: /usr/share/keymaps/i386/neo/3l.map.gz
+    - path: /usr/share/keymaps/i386/neo/README.md
+    - path: /usr/share/keymaps/i386/neo/adnw.map.gz
+    - path: /usr/share/keymaps/i386/neo/bone.map.gz
+    - path: /usr/share/keymaps/i386/neo/koy.map.gz
+    - path: /usr/share/keymaps/i386/neo/neo.map.gz
+    - path: /usr/share/keymaps/i386/neo/neoqwertz.map.gz
+    - path: /usr/share/keymaps/i386/olpc/es.map.gz
+    - path: /usr/share/keymaps/i386/olpc/pt.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/bashkir.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/bg-cp855.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/bg-cp1251.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/bg_bds-cp1251.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/bg_bds-utf8.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/bg_pho-cp1251.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/bg_pho-utf8.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/br-abnt.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/br-abnt2.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/br-latin1-abnt2.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/br-latin1-us.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/by-cp1251.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/by.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/bywin-cp1251.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ca.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/cf.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/cz-cp1250.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/cz-lat2.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/cz-lat2-prog.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/cz.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/defkeymap.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/defkeymap_V1.0.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/dk-latin1.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/dk.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/emacs.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/emacs2.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/es-cp850.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/es.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/et-nodeadkeys.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/et.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/fa.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/fi.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ge.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/gr-pc.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/gr.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/hu101.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/hypermap.m4
+    - path: /usr/share/keymaps/i386/qwerty/ie.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/il-heb.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/il-phonetic.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/il.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/is-latin1.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/is-latin1-us.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/it-ibm.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/it.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/it2.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/jp106.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/kazakh.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ky_alt_sh-UTF-8.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/kyrgyz.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/la-latin1.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/lt.baltic.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/lt.l4.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/lt.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/lv-tilde.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/lv.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/mk-cp1251.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/mk-utf.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/mk.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/mk0.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/nl.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/nl2.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/no-latin1.doc
+    - path: /usr/share/keymaps/i386/qwerty/no-latin1.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/no.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/pc110.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/pl.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/pl1.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/pl2.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/pl3.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/pl4.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/pt-latin1.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/pt-latin9.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ro.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ro_std.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ro_win.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ru-cp1251.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ru-ms.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ru-yawerty.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ru.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ru1.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ru2.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ru3.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ru4.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ru_win.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ruwin_alt-CP1251.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ruwin_alt-KOI8-R.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ruwin_alt-UTF-8.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ruwin_alt_sh-UTF-8.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ruwin_cplk-CP1251.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ruwin_cplk-KOI8-R.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ruwin_cplk-UTF-8.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ruwin_ct_sh-CP1251.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ruwin_ct_sh-KOI8-R.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ruwin_ct_sh-UTF-8.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ruwin_ctrl-CP1251.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ruwin_ctrl-KOI8-R.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ruwin_ctrl-UTF-8.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/se-fi-ir209.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/se-fi-lat6.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/se-ir209.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/se-lat6.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/sk-prog-qwerty.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/sk-qwerty.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/sr-cy.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/sv-latin1.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/tj_alt-UTF8.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/tr_q-latin5.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/tralt.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/trf.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/trq.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ttwin_alt-UTF-8.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ttwin_cplk-UTF-8.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ttwin_ct_sh-UTF-8.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ttwin_ctrl-UTF-8.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ua-cp1251.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ua-utf-ws.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ua-utf.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ua-ws.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/ua.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/uk.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/us-acentos.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/us.map.gz
+    - path: /usr/share/keymaps/i386/qwerty/us1.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/croat.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/cz-us-qwertz.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/cz.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/de-latin1.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/de-latin1-nodeadkeys.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/de-mobii.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/de.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/de_CH-latin1.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/de_alt_UTF-8.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/fr_CH-latin1.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/fr_CH.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/hu.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/sg-latin1-lk450.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/sg-latin1.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/sg-mac.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/sg.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/sk-prog-qwertz.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/sk-qwertz.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/slovene.map.gz
+    - path: /usr/share/keymaps/i386/qwertz/sr-latin.map.gz
+    - path: /usr/share/keymaps/mac/all/apple-a1048-sv.map.gz
+    - path: /usr/share/keymaps/mac/all/apple-a1243-sv-fn-reverse.map.gz
+    - path: /usr/share/keymaps/mac/all/apple-a1243-sv.map.gz
+    - path: /usr/share/keymaps/mac/all/apple-internal-0x0253-sv-fn-reverse.map.gz
+    - path: /usr/share/keymaps/mac/all/apple-internal-0x0253-sv.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-be.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-de-latin1.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-de-latin1-nodeadkeys.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-de_CH.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-dk-latin1.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-dvorak.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-es.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-fi-latin1.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-fr-legacy.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-fr.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-fr_CH-latin1.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-it.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-no-latin1.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-pl.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-pt-latin1.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-se.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-template.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-uk.map.gz
+    - path: /usr/share/keymaps/mac/all/mac-us.map.gz
+    - path: /usr/share/keymaps/pine/en.map.gz
+    - path: /usr/share/keymaps/ppc
+    - path: /usr/share/keymaps/sun/sun-pl-altgraph.map.gz
+    - path: /usr/share/keymaps/sun/sun-pl.map.gz
+    - path: /usr/share/keymaps/sun/sundvorak.map.gz
+    - path: /usr/share/keymaps/sun/sunkeymap.map.gz
+    - path: /usr/share/keymaps/sun/sunt4-es.map.gz
+    - path: /usr/share/keymaps/sun/sunt4-fi-latin1.map.gz
+    - path: /usr/share/keymaps/sun/sunt4-no-latin1.map.gz
+    - path: /usr/share/keymaps/sun/sunt5-cz-us.map.gz
+    - path: /usr/share/keymaps/sun/sunt5-de-latin1.map.gz
+    - path: /usr/share/keymaps/sun/sunt5-es.map.gz
+    - path: /usr/share/keymaps/sun/sunt5-fi-latin1.map.gz
+    - path: /usr/share/keymaps/sun/sunt5-fr-latin1.map.gz
+    - path: /usr/share/keymaps/sun/sunt5-ru.map.gz
+    - path: /usr/share/keymaps/sun/sunt5-uk.map.gz
+    - path: /usr/share/keymaps/sun/sunt5-us-cz.map.gz
+    - path: /usr/share/keymaps/sun/sunt6-uk.map.gz
+    - path: /usr/share/unimaps/8859-1.a0-ff.uni
+    - path: /usr/share/unimaps/8859-2.a0-ff.uni
+    - path: /usr/share/unimaps/8859-3.a0-ff.uni
+    - path: /usr/share/unimaps/8859-4.a0-ff.uni
+    - path: /usr/share/unimaps/8859-5.a0-ff.uni
+    - path: /usr/share/unimaps/8859-6.a0-ff.uni
+    - path: /usr/share/unimaps/8859-7.a0-ff.uni
+    - path: /usr/share/unimaps/8859-8.a0-ff.uni
+    - path: /usr/share/unimaps/8859-9.a0-ff.uni
+    - path: /usr/share/unimaps/8859-10.a0-ff.uni
+    - path: /usr/share/unimaps/8859-13.a0-ff.uni
+    - path: /usr/share/unimaps/8859-14.a0-ff.uni
+    - path: /usr/share/unimaps/8859-15.a0-ff.uni
+    - path: /usr/share/unimaps/ECMA144.uni
+    - path: /usr/share/unimaps/README
+    - path: /usr/share/unimaps/armscii8.uni
+    - path: /usr/share/unimaps/ascii.20-7f.uni
+    - path: /usr/share/unimaps/cp437.00-1f.uni
+    - path: /usr/share/unimaps/cp437.uni
+    - path: /usr/share/unimaps/cp737a.uni
+    - path: /usr/share/unimaps/cp737b.uni
+    - path: /usr/share/unimaps/cp737c.uni
+    - path: /usr/share/unimaps/cp737.uni
+    - path: /usr/share/unimaps/cp850a.uni
+    - path: /usr/share/unimaps/cp850b.uni
+    - path: /usr/share/unimaps/cp850z.uni
+    - path: /usr/share/unimaps/cp850.uni
+    - path: /usr/share/unimaps/cp865a.uni
+    - path: /usr/share/unimaps/cp865.uni
+    - path: /usr/share/unimaps/cp866a.uni
+    - path: /usr/share/unimaps/cp866.uni
+    - path: /usr/share/unimaps/cp1250.uni
+    - path: /usr/share/unimaps/cybercafe.uni
+    - path: /usr/share/unimaps/cyralt.uni
+    - path: /usr/share/unimaps/def.uni
+    - path: /usr/share/unimaps/empty.uni
+    - path: /usr/share/unimaps/ethiopic.uni
+    - path: /usr/share/unimaps/iso01.uni
+    - path: /usr/share/unimaps/iso02.uni
+    - path: /usr/share/unimaps/iso03.uni
+    - path: /usr/share/unimaps/iso04.uni
+    - path: /usr/share/unimaps/iso05.uni
+    - path: /usr/share/unimaps/iso06.uni
+    - path: /usr/share/unimaps/iso07u.uni
+    - path: /usr/share/unimaps/iso07.uni
+    - path: /usr/share/unimaps/iso08.uni
+    - path: /usr/share/unimaps/iso09.uni
+    - path: /usr/share/unimaps/iso10.uni
+    - path: /usr/share/unimaps/iso15.uni
+    - path: /usr/share/unimaps/koi8r.uni
+    - path: /usr/share/unimaps/koi8u.uni
+    - path: /usr/share/unimaps/lat1u.uni
+    - path: /usr/share/unimaps/lat1.uni
+    - path: /usr/share/unimaps/lat2u.uni
+    - path: /usr/share/unimaps/lat2.uni
+    - path: /usr/share/unimaps/lat4u.uni
+    - path: /usr/share/unimaps/lat4.uni
+    - path: /usr/share/unimaps/lat7.uni
+    - path: /usr/share/unimaps/lat9u.uni
+    - path: /usr/share/unimaps/lat9v.uni
+    - path: /usr/share/unimaps/lat9w.uni
+    - path: /usr/share/unimaps/ruscii.uni
+    - path: /usr/share/unimaps/tcvn.uni
+    - path: /usr/share/unimaps/viscii.uni
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libz.so.1: zlib

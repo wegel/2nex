@@ -1,0 +1,630 @@
+package:
+  schema: 1
+  name: E2fsprogs
+  slug: e2fsprogs
+  namespace: core/fs
+  version: 1.47.0
+  description: Utilities for managing ext2, ext3, and ext4 filesystems
+  homepage: http://e2fsprogs.sourceforge.net/
+  checksum: 007b868371fb25e9739d79e797f3834325de8e7715eda2ea2fc03028e9140e9d
+
+sources:
+- name: e2fsprogs
+  url: https://downloads.sourceforge.net/project/e2fsprogs/e2fsprogs/v1.47.0/e2fsprogs-1.47.0.tar.gz
+  sha256: 6667afde56eef0c6af26684974400e4d2288ea49e9441bf5e6229195d51a3578
+- name: uapi-config
+  file: pkg/core/fs/e2fsprogs-uapi-config.patch
+  sha256: 8c5ccc6d4a78c62d791bc84ab5d6abb4d0bfeef1accff49d50b8387a74cdf215
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: util_linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4137:938, 8247:3368, 12378:5658, 16509:6439, 20643:7941, 24741:9781, 28874:11215, 33017:11324, 37131:11389, 40633:11740]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    mkdir -v build
+    cd       build
+
+    ../configure --prefix=/usr           \
+             --sysconfdir=/etc       \
+             --enable-elf-shlibs     \
+             --disable-libblkid      \
+             --disable-libuuid       \
+             --disable-uuidd         \
+             --disable-fsck
+
+    make
+    make DESTDIR=$OUT_DIR install
+
+    mkdir -p "${OUT_DIR}/usr/lib"
+    mv "${OUT_DIR}/etc/e2scrub.conf" "${OUT_DIR}/usr/lib/e2scrub.conf"
+    mv "${OUT_DIR}/etc/mke2fs.conf" "${OUT_DIR}/usr/lib/mke2fs.conf"
+    rmdir "${OUT_DIR}/etc"
+
+    # move from /usr/sbin to /usr/bin
+    if [ -d "${OUT_DIR}/usr/sbin" ]; then
+      mv ${OUT_DIR}/usr/sbin/* ${OUT_DIR}/usr/bin/
+      rmdir ${OUT_DIR}/usr/sbin
+    fi
+
+    smoke_root="${WORK_DIR}/uapi-smoke-root"
+    smoke_report="${WORK_DIR}/uapi-smoke-report"
+    mkdir -p \
+      "${smoke_root}/etc" \
+      "${smoke_root}/run" \
+      "${smoke_root}/tmp" \
+      "${smoke_root}/usr/bin" \
+      "${smoke_root}/usr/lib"
+    : > "${smoke_root}/etc/mtab"
+    ln -s usr/lib "${smoke_root}/lib64"
+    cp \
+      "${OUT_DIR}/usr/bin/dumpe2fs" \
+      "${OUT_DIR}/usr/bin/e2fsck" \
+      "${OUT_DIR}/usr/bin/e2scrub" \
+      "${OUT_DIR}/usr/bin/e2scrub_all" \
+      "${OUT_DIR}/usr/bin/mke2fs" \
+      /usr/bin/bash \
+      "${smoke_root}/usr/bin/"
+    cp -L \
+      /usr/lib/ld-linux-x86-64.so.2 \
+      /usr/lib/libblkid.so.1 \
+      /usr/lib/libc.so.6 \
+      /usr/lib/libncursesw.so.6 \
+      /usr/lib/libuuid.so.1 \
+      "${smoke_root}/usr/lib/"
+    cp -L \
+      "${OUT_DIR}/usr/lib/libcom_err.so.2" \
+      "${OUT_DIR}/usr/lib/libe2p.so.2" \
+      "${OUT_DIR}/usr/lib/libext2fs.so.2" \
+      "${smoke_root}/usr/lib/"
+    cp \
+      "${OUT_DIR}/usr/lib/e2scrub.conf" \
+      "${OUT_DIR}/usr/lib/mke2fs.conf" \
+      "${smoke_root}/usr/lib/"
+
+    cat > "${WORK_DIR}/uapi-chroot.c" << 'EOF'
+    #include <stdio.h>
+    #include <unistd.h>
+
+    int main(int argc, char **argv) {
+      if (argc < 3 || chroot(argv[1]) != 0 || chdir("/") != 0) {
+        perror("uapi-chroot");
+        return 1;
+      }
+      execv(argv[2], &argv[2]);
+      perror("execv");
+      return 1;
+    }
+    EOF
+    gcc -O2 -o "${WORK_DIR}/uapi-chroot" "${WORK_DIR}/uapi-chroot.c"
+
+    make_mke2fs_config() {
+      sed "0,/inode_ratio = 16384/s//inode_ratio = $2/" \
+        "${OUT_DIR}/usr/lib/mke2fs.conf" > "$1"
+    }
+    assert_inode_count() {
+      rm -f "${smoke_root}/tmp/image"
+      truncate -s 1G "${smoke_root}/tmp/image"
+      "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+        /usr/bin/mke2fs -q -F -t ext4 /tmp/image
+      "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+        /usr/bin/dumpe2fs -h /tmp/image > "${smoke_report}" 2>/dev/null
+      grep -Eq "^Inode count:[[:space:]]+$1$" "${smoke_report}"
+    }
+
+    make_mke2fs_config "${smoke_root}/usr/lib/mke2fs.conf" 4096
+    assert_inode_count 262144
+    make_mke2fs_config "${smoke_root}/run/mke2fs.conf" 8192
+    assert_inode_count 131072
+    make_mke2fs_config "${smoke_root}/etc/mke2fs.conf" 32768
+    assert_inode_count 32768
+    : > "${smoke_root}/etc/mke2fs.conf"
+    rm -f "${smoke_root}/tmp/image"
+    truncate -s 1G "${smoke_root}/tmp/image"
+    "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+      /usr/bin/mke2fs -q -F -t ext4 /tmp/image \
+      > "${smoke_report}" 2>&1
+    grep -q 'does not define the ext4 filesystem type' "${smoke_report}"
+    "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+      /usr/bin/dumpe2fs -h /tmp/image > "${smoke_report}" 2>/dev/null
+    grep -Eq '^Inode count:[[:space:]]+131072$' "${smoke_report}"
+
+    assert_scrub_tier() {
+      test "$("${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+        /usr/bin/bash /usr/bin/e2scrub -V)" = "$1"
+      test "$("${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+        /usr/bin/bash /usr/bin/e2scrub_all -V)" = "$1"
+    }
+
+    printf 'printf "vendor\\n"\nexit 0\n' \
+      > "${smoke_root}/usr/lib/e2scrub.conf"
+    assert_scrub_tier vendor
+    printf 'printf "transient\\n"\nexit 0\n' \
+      > "${smoke_root}/run/e2scrub.conf"
+    assert_scrub_tier transient
+    printf 'printf "administrator\\n"\nexit 0\n' \
+      > "${smoke_root}/etc/e2scrub.conf"
+    assert_scrub_tier administrator
+    : > "${smoke_root}/etc/e2scrub.conf"
+    "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+      /usr/bin/bash /usr/bin/e2scrub -V | grep -q '^e2scrub '
+    "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+      /usr/bin/bash /usr/bin/e2scrub_all -V | grep -q '^e2scrub_all '
+
+    # e2fsck reads its own configuration file and must follow the same tiers
+    # that mke2fs does. `report_time` makes it print a "Memory used:" summary,
+    # so the presence of that line names whether the selected file was read.
+    rm -f "${smoke_root}/etc/mke2fs.conf" "${smoke_root}/run/mke2fs.conf"
+    rm -f "${smoke_root}/etc/e2scrub.conf" "${smoke_root}/run/e2scrub.conf"
+    rm -f "${smoke_root}/tmp/image"
+    truncate -s 32M "${smoke_root}/tmp/image"
+    "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+      /usr/bin/mke2fs -q -F -t ext4 /tmp/image
+
+    assert_fsck_reports_time() {
+      "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+        /usr/bin/e2fsck -f -n /tmp/image > "${smoke_report}" 2>&1 || true
+      if ! grep -q 'Memory used:' "${smoke_report}"; then
+        printf 'e2fsck smoke: %s was not read\n' "$1" >&2
+        exit 1
+      fi
+    }
+
+    assert_fsck_silent() {
+      "${WORK_DIR}/uapi-chroot" "${smoke_root}" \
+        /usr/bin/e2fsck -f -n /tmp/image > "${smoke_report}" 2>&1 || true
+      if grep -q 'Memory used:' "${smoke_report}"; then
+        printf 'e2fsck smoke: %s should not have applied\n' "$1" >&2
+        exit 1
+      fi
+    }
+
+    assert_fsck_silent 'no configuration file'
+    printf '[options]\n\treport_time = true\n' \
+      > "${smoke_root}/usr/lib/e2fsck.conf"
+    assert_fsck_reports_time /usr/lib/e2fsck.conf
+    rm "${smoke_root}/usr/lib/e2fsck.conf"
+    printf '[options]\n\treport_time = true\n' \
+      > "${smoke_root}/run/e2fsck.conf"
+    assert_fsck_reports_time /run/e2fsck.conf
+    printf '[options]\n\treport_time = true\n' \
+      > "${smoke_root}/etc/e2fsck.conf"
+    assert_fsck_reports_time /etc/e2fsck.conf
+
+    # An empty administrator file is selected and masks the lower tiers.
+    : > "${smoke_root}/etc/e2fsck.conf"
+    assert_fsck_silent 'the /run file under an empty /etc file'
+    rm -f "${smoke_root}/etc/e2fsck.conf" "${smoke_root}/run/e2fsck.conf"
+
+    printf 'e2fsprogs UAPI smoke: mke2fs, e2fsck, and e2scrub honoured all tiers\n'
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+  full:
+  - bin
+  - conf
+  - dev
+  - lib
+  - locale
+  - man
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/chattr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+    - path: /usr/bin/compile_et
+    - path: /usr/bin/lsattr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+    - path: /usr/bin/mk_cmds
+
+  conf:
+    files:
+    - path: /usr/lib/e2scrub.conf
+    - path: /usr/lib/mke2fs.conf
+
+  dev:
+    files:
+    - path: /usr/include/com_err.h
+    - path: /usr/include/e2p/e2p.h
+    - path: /usr/include/et/com_err.h
+    - path: /usr/include/ext2fs/bitops.h
+    - path: /usr/include/ext2fs/ext2_err.h
+    - path: /usr/include/ext2fs/ext2_ext_attr.h
+    - path: /usr/include/ext2fs/ext2_fs.h
+    - path: /usr/include/ext2fs/ext2_io.h
+    - path: /usr/include/ext2fs/ext2fs.h
+    - path: /usr/include/ext2fs/ext2_types.h
+    - path: /usr/include/ext2fs/ext3_extents.h
+    - path: /usr/include/ext2fs/hashmap.h
+    - path: /usr/include/ext2fs/qcow2.h
+    - path: /usr/include/ext2fs/tdb.h
+    - path: /usr/include/ss/ss.h
+    - path: /usr/include/ss/ss_err.h
+    - path: /usr/lib/pkgconfig/com_err.pc
+    - path: /usr/lib/pkgconfig/e2p.pc
+    - path: /usr/lib/pkgconfig/ext2fs.pc
+    - path: /usr/lib/pkgconfig/ss.pc
+
+  lib:
+    files:
+    - path: /usr/lib/e2initrd_helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libext2fs.so.2
+    - path: /usr/lib/libcom_err.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libcom_err.so.2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libcom_err.so.2.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libe2p.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libe2p.so.2
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libe2p.so.2.3
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libext2fs.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+    - path: /usr/lib/libext2fs.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+    - path: /usr/lib/libext2fs.so.2.4
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+    - path: /usr/lib/libss.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+    - path: /usr/lib/libss.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+    - path: /usr/lib/libss.so.2.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+
+  locale:
+    files:
+    - path: /usr/share/locale/ca/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/fur/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/e2fsprogs.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/e2fsprogs.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/chattr.1
+    - path: /usr/share/man/man1/compile_et.1
+    - path: /usr/share/man/man1/lsattr.1
+    - path: /usr/share/man/man1/mk_cmds.1
+    - path: /usr/share/man/man3/com_err.3
+    - path: /usr/share/man/man5/e2fsck.conf.5
+    - path: /usr/share/man/man5/ext2.5
+    - path: /usr/share/man/man5/ext3.5
+    - path: /usr/share/man/man5/ext4.5
+    - path: /usr/share/man/man5/mke2fs.conf.5
+    - path: /usr/share/man/man8/badblocks.8
+    - path: /usr/share/man/man8/debugfs.8
+    - path: /usr/share/man/man8/dumpe2fs.8
+    - path: /usr/share/man/man8/e2label.8
+    - path: /usr/share/man/man8/e2scrub.8
+    - path: /usr/share/man/man8/e2scrub_all.8
+    - path: /usr/share/man/man8/e2image.8
+    - path: /usr/share/man/man8/e2mmpstatus.8
+    - path: /usr/share/man/man8/e2undo.8
+    - path: /usr/share/man/man8/e2freefrag.8
+    - path: /usr/share/man/man8/e2fsck.8
+    - path: /usr/share/man/man8/e4defrag.8
+    - path: /usr/share/man/man8/e4crypt.8
+    - path: /usr/share/man/man8/filefrag.8
+    - path: /usr/share/man/man8/fsck.ext2.8
+    - path: /usr/share/man/man8/fsck.ext3.8
+    - path: /usr/share/man/man8/fsck.ext4.8
+    - path: /usr/share/man/man8/logsave.8
+    - path: /usr/share/man/man8/mke2fs.8
+    - path: /usr/share/man/man8/mkfs.ext2.8
+    - path: /usr/share/man/man8/mkfs.ext3.8
+    - path: /usr/share/man/man8/mkfs.ext4.8
+    - path: /usr/share/man/man8/mklost+found.8
+    - path: /usr/share/man/man8/resize2fs.8
+    - path: /usr/share/man/man8/tune2fs.8
+
+  misc:
+    files:
+    - path: /usr/bin/badblocks
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libext2fs.so.2
+    - path: /usr/bin/debugfs
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libss.so.2
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/dumpe2fs
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+    - path: /usr/bin/e2label
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/e2scrub
+    - path: /usr/bin/e2scrub_all
+    - path: /usr/bin/e2image
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libext2fs.so.2
+    - path: /usr/bin/e2mmpstatus
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+    - path: /usr/bin/e2undo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libext2fs.so.2
+    - path: /usr/bin/e2freefrag
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libext2fs.so.2
+    - path: /usr/bin/e2fsck
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/e4defrag
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libext2fs.so.2
+    - path: /usr/bin/e4crypt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/filefrag
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/fsck.ext2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/fsck.ext3
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/fsck.ext4
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/logsave
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/mke2fs
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/mkfs.ext2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/mkfs.ext3
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/mkfs.ext4
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libuuid.so.1
+    - path: /usr/bin/mklost+found
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/resize2fs
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+    - path: /usr/bin/tune2fs
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcom_err.so.2
+      - /usr/lib/libe2p.so.2
+      - /usr/lib/libext2fs.so.2
+      - /usr/lib/libuuid.so.1
+    - path: /usr/share/et/et_c.awk
+    - path: /usr/share/et/et_h.awk
+    - path: /usr/share/ss/ct_c.awk
+    - path: /usr/share/ss/ct_c.sed
+
+  static:
+    files:
+    - path: /usr/lib/libcom_err.a
+    - path: /usr/lib/libe2p.a
+    - path: /usr/lib/libext2fs.a
+    - path: /usr/lib/libss.a
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libcom_err.so.2: self
+  /usr/lib/libe2p.so.2: self
+  /usr/lib/libext2fs.so.2: self
+  /usr/lib/libss.so.2: self
+  /usr/lib/libblkid.so.1: util_linux
+  /usr/lib/libuuid.so.1: util_linux

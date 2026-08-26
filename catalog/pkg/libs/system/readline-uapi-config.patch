@@ -1,0 +1,56 @@
+From: Nex Distribution <nex@example.invalid>
+Subject: readline: search runtime and vendor inputrc files
+Source: https://ftp.gnu.org/gnu/readline/readline-8.2.tar.gz
+Upstream: Not submitted; this implements the UAPI configuration directory order.
+
+Keep INPUTRC and the user's ~/.inputrc ahead of system policy. When neither
+exists, select the first complete system file from /etc, /run, and /usr/lib.
+An empty higher-priority file succeeds and masks lower files.
+
+The 8.2 archive also omits `examples/rltest2.c` while its example install list
+still names that file. Remove the stale source entry so `make install` can
+install the example sources that the archive actually ships.
+
+diff --git a/bind.c b/bind.c
+index 5c64955..ba0c4d9 100644
+--- a/bind.c
++++ b/bind.c
+@@ -1034,7 +1034,9 @@ rl_re_read_init_file (int count, int ignore)
+      1. the filename used for the previous call
+      2. the value of the shell variable `INPUTRC'
+      3. ~/.inputrc
+-     4. /etc/inputrc
++     4. /etc/inputrc
++     5. /run/inputrc
++     6. /usr/lib/inputrc
+    If the file existed and could be opened and read, 0 is returned,
+    otherwise errno is returned. */
+ int
+@@ -1051 +1053 @@ rl_read_init_file (const char *filename)
+-      /* Try to read DEFAULT_INPUTRC; fall back to SYS_INPUTRC on failure */
++      /* Try the user file, then select the first complete system file. */
+@@ -1054 +1056,5 @@ rl_read_init_file (const char *filename)
+-      filename = SYS_INPUTRC;
++      if (_rl_read_init_file (SYS_INPUTRC, 0) == 0)
++	return 0;
++      if (_rl_read_init_file (RUN_INPUTRC, 0) == 0)
++	return 0;
++      filename = VENDOR_INPUTRC;
+diff --git a/examples/Makefile.in b/examples/Makefile.in
+index 460efbc..8f61282 100644
+--- a/examples/Makefile.in
++++ b/examples/Makefile.in
+@@ -74 +74 @@ SOURCES = excallback.c fileman.c histexamp.c manexamp.c rl-fgets.c rl.c \
+-		rltest2.c rl-callbacktest.c hist_erasedups.c hist_purgecmd.c \
++		rl-callbacktest.c hist_erasedups.c hist_purgecmd.c \
+diff --git a/rlconf.h b/rlconf.h
+index 0c39217..78f14c0 100644
+--- a/rlconf.h
++++ b/rlconf.h
+@@ -47,0 +48,6 @@
++/* A temporary system-wide override for one boot. */
++#define RUN_INPUTRC "/run/inputrc"
++
++/* The vendor-supplied system-wide fallback. */
++#define VENDOR_INPUTRC "/usr/lib/inputrc"
++

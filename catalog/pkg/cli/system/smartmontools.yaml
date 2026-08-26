@@ -1,0 +1,207 @@
+package:
+  schema: 1
+  name: Smartmontools
+  slug: smartmontools
+  namespace: cli/system
+  version: "7.5"
+  description: Utilities for monitoring storage devices through SMART
+  homepage: https://www.smartmontools.org/
+  checksum: 9c6ad1b96d029388c2e0f19fc100af545c1cbb19b38e8a08ddfa88192437c3e7
+
+sources:
+- name: smartmontools
+  url: https://downloads.sourceforge.net/project/smartmontools/smartmontools/7.5/smartmontools-7.5.tar.gz
+  sha256: 690b83ca331378da9ea0d9d61008c4b22dde391387b9bbad7f29387f2595f76e
+- name: uapi_config
+  file: pkg/cli/system/smartmontools-uapi-config.patch
+  sha256: 2c737ccbecb6d2f2c8303b7c7a0620364f42bdf92e5feb58284cc54e7bcb7b7e
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: inetutils
+  commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: libcap-ng
+  commit: x86_64/pkg/libs/security/libcap-ng/0.9.1/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4138:1673, 8414:1704, 12732:1706, 16978:1708, 21108:1754, 25243:3674, 26697:3722]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_smartmontools}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    export SOURCE_DATE_EPOCH=1704067200
+    export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
+    ./configure \
+      --prefix=/usr \
+      --sbindir=/usr/bin \
+      --sysconfdir=/etc \
+      --with-libcap-ng=yes \
+      --with-libsystemd=yes \
+      --with-smartdscriptdir=/usr/libexec/smartmontools \
+      --with-systemdsystemunitdir=/usr/lib/systemd/system
+    make
+    make DESTDIR="${OUT_DIR}" install
+    install -Dm644 \
+      "${OUT_DIR}/etc/smartd.conf" \
+      "${OUT_DIR}/usr/lib/smartmontools/smartd.conf"
+    rm "${OUT_DIR}/etc/smartd.conf"
+    sed -i '1s|^#! /bin/sh$|#!/usr/bin/sh|' \
+      "${OUT_DIR}/usr/bin/update-smart-drivedb" \
+      "${OUT_DIR}/usr/libexec/smartmontools/smartd_warning.sh"
+    sed -i 's|^ExecReload=/bin/kill|ExecReload=/usr/bin/kill|' \
+      "${OUT_DIR}/usr/lib/systemd/system/smartd.service"
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  full:
+  - bin
+  - conf
+  - doc
+  - lib
+  - man
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/smartctl
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/smartd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap-ng.so.0
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/bin/update-smart-drivedb
+      needs:
+      - /usr/bin/cat
+      - /usr/bin/chmod
+      - /usr/bin/curl
+      - /usr/bin/dd
+      - /usr/bin/mkdir
+      - /usr/bin/mv
+      - /usr/bin/rm
+      - /usr/bin/sed
+      - /usr/bin/sh
+      - /usr/bin/sleep
+      - /usr/bin/wc
+
+  conf:
+    files:
+    - path: /usr/lib/smartmontools/smartd.conf
+
+  doc:
+    files:
+    - path: /usr/share/doc/smartmontools/AUTHORS
+    - path: /usr/share/doc/smartmontools/COPYING
+    - path: /usr/share/doc/smartmontools/ChangeLog
+    - path: /usr/share/doc/smartmontools/ChangeLog-6.0-7.0
+    - path: /usr/share/doc/smartmontools/INSTALL
+    - path: /usr/share/doc/smartmontools/NEWS
+    - path: /usr/share/doc/smartmontools/README
+    - path: /usr/share/doc/smartmontools/TODO
+    - path: /usr/share/doc/smartmontools/examplescripts/Example1
+    - path: /usr/share/doc/smartmontools/examplescripts/Example2
+    - path: /usr/share/doc/smartmontools/examplescripts/Example3
+    - path: /usr/share/doc/smartmontools/examplescripts/Example4
+    - path: /usr/share/doc/smartmontools/examplescripts/Example5
+    - path: /usr/share/doc/smartmontools/examplescripts/Example6
+    - path: /usr/share/doc/smartmontools/examplescripts/Example7
+    - path: /usr/share/doc/smartmontools/examplescripts/Example8
+    - path: /usr/share/doc/smartmontools/examplescripts/README
+    - path: /usr/share/doc/smartmontools/smartd.conf
+
+  lib:
+    files:
+    - path: /usr/lib/systemd/system/smartd.service
+      needs:
+      - /usr/bin/kill
+    - path: /usr/libexec/smartmontools/smartd_warning.sh
+      needs:
+      - /usr/bin/hostname
+      - /usr/bin/sed
+      - /usr/bin/sh
+      - /usr/bin/uname
+
+  man:
+    files:
+    - path: /usr/share/man/man5/smartd.conf.5
+    - path: /usr/share/man/man8/smartctl.8
+    - path: /usr/share/man/man8/smartd.8
+    - path: /usr/share/man/man8/update-smart-drivedb.8
+
+  misc:
+    files:
+    - path: /usr/share/smartmontools/drivedb.h
+
+resolution:
+  /usr/bin/sh: bash
+  /usr/bin/cat: coreutils
+  /usr/bin/chmod: coreutils
+  /usr/bin/dd: coreutils
+  /usr/bin/mkdir: coreutils
+  /usr/bin/mv: coreutils
+  /usr/bin/rm: coreutils
+  /usr/bin/sleep: coreutils
+  /usr/bin/uname: coreutils
+  /usr/bin/wc: coreutils
+  /usr/bin/curl: curl
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/bin/hostname: inetutils
+  /usr/lib/libcap-ng.so.0: libcap-ng
+  /usr/bin/sed: sed
+  /usr/lib/libsystemd.so.0: systemd
+  /usr/bin/kill: util-linux

@@ -1,0 +1,475 @@
+package:
+  schema: 1
+  name: docutils
+  slug: docutils
+  namespace: dev/python
+  version: 0.21.2
+  description: Python documentation utilities - includes rst2man
+  homepage: https://docutils.sourceforge.io/
+  checksum: a70bae1fe3a861e9a643ef2960db2b76424cf678e9b7c52fe96d8cb690c3600e
+
+sources:
+- name: docutils
+  url: https://files.pythonhosted.org/packages/source/d/docutils/docutils-0.21.2.tar.gz
+  sha256: 3a6b18732edf182daa3cd12775bbb338cf5691468f91eeeb109deff6ebfa986f
+- name: uapi_config
+  file: pkg/dev/python/docutils-uapi-config.patch
+  sha256: 2565908f2f0719f24c96991663d66140b07100c3dc055e46964b27b16281057c
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: flit-core
+  commit: x86_64/pkg/dev/python/flit-core/3.9.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [3098:1135]
+
+  script: |
+    set -eux
+    tar --no-same-owner -xf /${SOURCE_docutils} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    python3 -m pip install --no-build-isolation --no-deps --root="${OUT_DIR}" --prefix=/usr .
+
+    mkdir -p /etc /run /usr/lib/docutils
+    vendor_conf=/usr/lib/docutils/docutils.conf
+    runtime_conf=/run/docutils.conf
+    admin_conf=/etc/docutils.conf
+    probe_home="${WORK_DIR}/docutils-uapi-home"
+    probe_cwd="${WORK_DIR}/docutils-uapi-cwd"
+    mkdir -p "${probe_home}" "${probe_cwd}"
+    probe_out="${WORK_DIR}/docutils-uapi-probe.out"
+    printf 'test\n====\n\n' > "${probe_cwd}/in.rst"
+    write_conf() {
+      printf '[general]\nreport_level: %s\n' "$2" > "$1"
+    }
+    run_probe() {
+      env -u DOCUTILSCONFIG HOME="${probe_home}" \
+        PYTHONPATH="${OUT_DIR}/usr/lib/python3.12/site-packages${PYTHONPATH:+:$PYTHONPATH}" \
+        "${OUT_DIR}/usr/bin/rst2html" --dump-settings in.rst \
+        > "${probe_out}" 2>&1 || true
+    }
+    expect_level() {
+      (
+        cd "${probe_cwd}"
+        run_probe
+      )
+      if ! grep -q "'report_level': $1" "${probe_out}"; then
+        printf 'docutils UAPI smoke: expected report_level %s, log:\n' "$1" >&2
+        cat "${probe_out}" >&2
+        exit 1
+      fi
+    }
+
+    write_conf "${vendor_conf}" 1
+    write_conf "${runtime_conf}" 2
+    write_conf "${admin_conf}" 3
+    expect_level 3
+    rm -f "${admin_conf}"
+    expect_level 2
+    rm -f "${runtime_conf}"
+    expect_level 1
+    rm -f "${vendor_conf}"
+    printf 'docutils UAPI smoke: config loader read all three tiers in order\n'
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/docutils
+    - path: /usr/bin/rst2s5
+    - path: /usr/bin/rst2man
+    - path: /usr/bin/rst2latex
+    - path: /usr/bin/rst2odt
+    - path: /usr/bin/rst2xetex
+    - path: /usr/bin/rst2xml
+    - path: /usr/bin/rst2pseudoxml
+    - path: /usr/bin/rst2html
+    - path: /usr/bin/rst2html4
+    - path: /usr/bin/rst2html5
+
+  dev:
+    files:
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/README.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isoamsa.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isoamsb.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isoamsc.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isoamsn.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isoamso.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isoamsr.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isobox.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isocyr1.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isocyr2.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isodia.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isogrk1.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isogrk2.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isogrk3.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isogrk4.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isogrk4-wide.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isolat1.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isolat2.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isomfrk-wide.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isomfrk.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isomopf-wide.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isomopf.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isomscr-wide.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isomscr.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isonum.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isopub.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/isotech.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/mmlalias.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/mmlextra-wide.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/mmlextra.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/s5defs.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/xhtml1-lat1.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/xhtml1-special.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/include/xhtml1-symbol.txt
+
+  lib:
+    files:
+    - path: /usr/lib/python3.12/site-packages/docutils-0.21.2.dist-info/COPYING.txt
+    - path: /usr/lib/python3.12/site-packages/docutils-0.21.2.dist-info/INSTALLER
+    - path: /usr/lib/python3.12/site-packages/docutils-0.21.2.dist-info/METADATA
+    - path: /usr/lib/python3.12/site-packages/docutils-0.21.2.dist-info/RECORD
+    - path: /usr/lib/python3.12/site-packages/docutils-0.21.2.dist-info/REQUESTED
+    - path: /usr/lib/python3.12/site-packages/docutils-0.21.2.dist-info/WHEEL
+    - path: /usr/lib/python3.12/site-packages/docutils-0.21.2.dist-info/direct_url.json
+    - path: /usr/lib/python3.12/site-packages/docutils-0.21.2.dist-info/entry_points.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/__main__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/__pycache__/__main__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/__pycache__/core.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/__pycache__/examples.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/__pycache__/frontend.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/__pycache__/io.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/__pycache__/nodes.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/__pycache__/statemachine.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/core.py
+    - path: /usr/lib/python3.12/site-packages/docutils/docutils.conf
+    - path: /usr/lib/python3.12/site-packages/docutils/examples.py
+    - path: /usr/lib/python3.12/site-packages/docutils/frontend.py
+    - path: /usr/lib/python3.12/site-packages/docutils/io.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/af.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/ar.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/ca.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/cs.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/da.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/de.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/en.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/eo.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/es.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/fa.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/fi.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/fr.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/gl.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/he.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/it.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/ja.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/ka.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/ko.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/lt.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/lv.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/nl.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/pl.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/pt_br.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/ru.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/sk.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/sv.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/uk.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/zh_cn.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/__pycache__/zh_tw.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/af.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/ar.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/ca.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/cs.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/da.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/de.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/en.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/eo.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/es.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/fa.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/fi.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/fr.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/gl.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/he.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/it.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/ja.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/ka.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/ko.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/lt.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/lv.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/nl.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/pl.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/pt_br.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/ru.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/sk.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/sv.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/uk.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/zh_cn.py
+    - path: /usr/lib/python3.12/site-packages/docutils/languages/zh_tw.py
+    - path: /usr/lib/python3.12/site-packages/docutils/nodes.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/__pycache__/commonmark_wrapper.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/__pycache__/null.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/__pycache__/recommonmark_wrapper.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/commonmark_wrapper.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/null.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/recommonmark_wrapper.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/__pycache__/roles.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/__pycache__/states.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/__pycache__/tableparser.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/__pycache__/admonitions.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/__pycache__/body.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/__pycache__/html.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/__pycache__/images.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/__pycache__/misc.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/__pycache__/parts.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/__pycache__/references.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/__pycache__/tables.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/admonitions.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/body.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/html.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/images.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/misc.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/parts.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/references.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/directives/tables.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/af.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/ar.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/ca.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/cs.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/da.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/de.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/en.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/eo.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/es.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/fa.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/fi.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/fr.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/gl.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/he.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/it.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/ja.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/ka.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/ko.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/lt.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/lv.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/nl.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/pl.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/pt_br.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/ru.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/sk.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/sv.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/uk.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/zh_cn.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/__pycache__/zh_tw.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/af.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/ar.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/ca.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/cs.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/da.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/de.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/en.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/eo.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/es.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/fa.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/fi.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/fr.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/gl.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/he.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/it.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/ja.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/ka.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/ko.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/lt.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/lv.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/nl.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/pl.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/pt_br.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/ru.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/sk.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/sv.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/uk.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/zh_cn.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/languages/zh_tw.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/roles.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/states.py
+    - path: /usr/lib/python3.12/site-packages/docutils/parsers/rst/tableparser.py
+    - path: /usr/lib/python3.12/site-packages/docutils/readers/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/readers/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/readers/__pycache__/doctree.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/readers/__pycache__/pep.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/readers/__pycache__/standalone.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/readers/doctree.py
+    - path: /usr/lib/python3.12/site-packages/docutils/readers/pep.py
+    - path: /usr/lib/python3.12/site-packages/docutils/readers/standalone.py
+    - path: /usr/lib/python3.12/site-packages/docutils/statemachine.py
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/__pycache__/components.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/__pycache__/frontmatter.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/__pycache__/misc.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/__pycache__/parts.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/__pycache__/peps.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/__pycache__/references.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/__pycache__/universal.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/__pycache__/writer_aux.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/components.py
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/frontmatter.py
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/misc.py
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/parts.py
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/peps.py
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/references.py
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/universal.py
+    - path: /usr/lib/python3.12/site-packages/docutils/transforms/writer_aux.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/__pycache__/code_analyzer.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/__pycache__/error_reporting.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/__pycache__/punctuation_chars.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/__pycache__/roman.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/__pycache__/smartquotes.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/__pycache__/urischemes.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/code_analyzer.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/error_reporting.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/__pycache__/latex2mathml.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/__pycache__/math2html.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/__pycache__/mathalphabet2unichar.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/__pycache__/mathml_elements.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/__pycache__/tex2mathml_extern.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/__pycache__/tex2unichar.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/__pycache__/unichar2tex.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/latex2mathml.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/math2html.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/mathalphabet2unichar.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/mathml_elements.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/tex2mathml_extern.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/tex2unichar.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/math/unichar2tex.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/punctuation_chars.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/roman.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/smartquotes.py
+    - path: /usr/lib/python3.12/site-packages/docutils/utils/urischemes.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/__pycache__/_html_base.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/__pycache__/docutils_xml.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/__pycache__/manpage.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/__pycache__/null.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/__pycache__/pseudoxml.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/_html_base.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/docutils_xml.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/html4css1/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/html4css1/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/html4css1/html4css1.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/html4css1/template.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/html5_polyglot/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/html5_polyglot/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/html5_polyglot/italic-field-names.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/html5_polyglot/math.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/html5_polyglot/minimal.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/html5_polyglot/plain.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/html5_polyglot/responsive.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/html5_polyglot/template.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/html5_polyglot/tuftig.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/latex2e/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/latex2e/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/latex2e/default.tex
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/latex2e/docutils.sty
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/latex2e/titlepage.tex
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/latex2e/titlingpage.tex
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/latex2e/xelatex.tex
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/manpage.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/null.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/odf_odt/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/odf_odt/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/odf_odt/__pycache__/prepstyles.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/odf_odt/__pycache__/pygmentsformatter.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/odf_odt/prepstyles.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/odf_odt/pygmentsformatter.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/odf_odt/styles.odt
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/pep_html/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/pep_html/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/pep_html/pep.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/pep_html/template.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/pseudoxml.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/README.txt
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/big-black/__base__
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/big-black/framing.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/big-black/pretty.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/big-white/framing.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/big-white/pretty.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/default/framing.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/default/opera.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/default/outline.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/default/pretty.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/default/print.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/default/s5-core.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/default/slides.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/default/slides.js
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/medium-black/__base__
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/medium-black/pretty.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/medium-white/framing.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/medium-white/pretty.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/small-black/__base__
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/small-black/pretty.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/small-white/framing.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/s5_html/themes/small-white/pretty.css
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/xetex/__init__.py
+    - path: /usr/lib/python3.12/site-packages/docutils/writers/xetex/__pycache__/__init__.cpython-312.pyc

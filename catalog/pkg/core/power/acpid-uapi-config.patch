@@ -1,0 +1,334 @@
+From: Nex package maintainers
+Subject: read acpi event rules from three tiers, /etc winning
+
+Source: Nex package maintainers
+Upstream: not submitted; acpid intentionally has a single, admin-set
+  ACPID_CONFDIR and treats layering as distribution policy
+
+acpid_read_conf() (event.c) opens exactly one directory, hardcoded to
+/etc/acpi/events, with -c as the only override. That collapses the
+vendor-shipped defaults (power button, lid) and any runtime-generated
+rules into the same directory an admin edits by hand, so a package
+that wants to ship default event rules has nowhere to put them but
+/etc, in violation of this distribution's package manifest policy of
+keeping vendor defaults out of /etc.
+
+Add a second entry point, acpid_read_conf_tiers(), that scans
+/usr/lib/acpi/events (vendor), /run/acpi/events (runtime), and
+/etc/acpi/events (admin) in that order, treating a directory's files
+as authoritative over any same-named file from a directory scanned
+after it. acpid.c calls this new entry point at startup and on
+SIGHUP unless the admin passed -c, in which case it falls back to the
+prior single-directory acpid_read_conf() so -c remains a full
+override of the tiered list rather than one more tier. A symlink to
+/dev/null in a higher-priority directory masks a same-named file from
+a lower one, the same masking convention used elsewhere on this
+system, without requiring a second stat of every file.
+
+--- a/acpid.h
++++ b/acpid.h
+@@ -26,6 +26,8 @@
+ #define ACPI_PROCDIR 		"/proc/acpi"
+ #define ACPID_EVENTFILE		ACPI_PROCDIR "/event"
+ #define ACPID_CONFDIR		"/etc/acpi/events"
++#define ACPID_CONFDIR_RUN	"/run/acpi/events"
++#define ACPID_CONFDIR_VENDOR	"/usr/lib/acpi/events"
+ #define ACPID_SOCKETFILE	"/var/run/acpid.socket"
+ #define ACPID_SOCKETMODE	0666
+ #define ACPID_CLIENTMAX		256
+--- a/event.h
++++ b/event.h
+@@ -27,6 +27,7 @@
+ #define DROP_EVENT 1
+ 
+ extern int acpid_read_conf(const char *confdir);
++extern int acpid_read_conf_tiers(const char *const *confdirs, int nconfdirs);
+ extern int acpid_add_client(int client, const char *origin);
+ extern int acpid_cleanup_rules(int do_detach);
+ extern int acpid_handle_event(const char *event);
+--- a/acpid.c
++++ b/acpid.c
+@@ -49,6 +49,7 @@
+ static void open_log(void);
+ static int std2null(void);
+ static int create_pidfile(void);
++static int read_conf(void);
+ static void clean_exit(int sig);
+ static void reload_conf(int sig);
+ 
+@@ -57,6 +58,7 @@
+ 
+ const char *progname;
+ static const char *confdir = ACPID_CONFDIR;
++static int confdir_set;
+ static const char *lockfile = ACPID_LOCKFILE;
+ static int nosocket;
+ static int foreground;
+@@ -130,7 +132,7 @@
+ 	signal(SIGPIPE, SIG_IGN);
+ 
+ 	/* read in our configuration */
+-	if (acpid_read_conf(confdir)) {
++	if (read_conf()) {
+ 		exit(EXIT_FAILURE);
+ 	}
+ 
+@@ -248,6 +250,7 @@
+ 		switch (i) {
+ 		case 'c':
+ 			confdir = optarg;
++			confdir_set = 1;
+ 			break;
+ 		case 'C':
+ 			clientmax = strtol(optarg, NULL, 0);
+@@ -476,12 +479,31 @@
+ 	clean_exit_with_status(EXIT_SUCCESS);
+ }
+ 
++/*
++ * read acpid's configuration, either from the single directory the
++ * admin gave with -c, or from the vendor, run, and /etc tiers, /etc
++ * winning over /run winning over the vendor tier
++ */
++static int
++read_conf(void)
++{
++	static const char *tiers[] = {
++		ACPID_CONFDIR,
++		ACPID_CONFDIR_RUN,
++		ACPID_CONFDIR_VENDOR,
++	};
++
++	if (confdir_set)
++		return acpid_read_conf(confdir);
++	return acpid_read_conf_tiers(tiers, sizeof(tiers) / sizeof(tiers[0]));
++}
++
+ static void
+ reload_conf(int sig __attribute__((unused)))
+ {
+ 	acpid_log(LOG_NOTICE, "reloading configuration");
+ 	acpid_cleanup_rules(0);
+-	acpid_read_conf(confdir);
++	read_conf();
+ }
+ 
+ int
+--- a/event.c
++++ b/event.c
+@@ -31,6 +31,7 @@
+ #include <string.h>
+ #include <errno.h>
+ #include <dirent.h>
++#include <limits.h>
+ #include <ctype.h>
+ #include <regex.h>
+ #include <signal.h>
+@@ -91,10 +92,73 @@
+ extern const char *dropaction;
+ 
+ /*
+- * read in all the configuration files
++ * a set of conf file basenames already accounted for by a
++ * higher-priority tier, so a lower tier can shadow them instead of
++ * loading a second copy
+  */
+-int
+-acpid_read_conf(const char *confdir)
++struct name_set {
++	char **names;
++	int n;
++	int cap;
++};
++
++static int
++name_set_contains(struct name_set *seen, const char *name)
++{
++	int i;
++
++	if (!seen)
++		return 0;
++	for (i = 0; i < seen->n; i++) {
++		if (!strcmp(seen->names[i], name))
++			return 1;
++	}
++	return 0;
++}
++
++static void
++name_set_add(struct name_set *seen, const char *name)
++{
++	if (!seen)
++		return;
++	if (seen->n == seen->cap) {
++		seen->cap = seen->cap ? seen->cap * 2 : 16;
++		seen->names = realloc(seen->names, seen->cap * sizeof(char *));
++	}
++	seen->names[seen->n++] = strdup(name);
++}
++
++static void
++name_set_free(struct name_set *seen)
++{
++	int i;
++
++	for (i = 0; i < seen->n; i++)
++		free(seen->names[i]);
++	free(seen->names);
++}
++
++/* is this dirent a symlink to /dev/null, i.e. a mask? */
++static int
++is_devnull_mask(DIR *dir, const char *name)
++{
++	char buf[PATH_MAX];
++	ssize_t len;
++
++	len = readlinkat(dirfd(dir), name, buf, sizeof(buf) - 1);
++	if (len < 0)
++		return 0; /* not a symlink, or unreadable: not a mask */
++	buf[len] = '\0';
++	return !strcmp(buf, "/dev/null");
++}
++
++/*
++ * read in the configuration files from a single directory, skipping
++ * any basename already accounted for in "seen" and recording every
++ * basename this directory accounts for (loaded or masked) into it
++ */
++static int
++scan_conf_dir(const char *confdir, struct name_set *seen)
+ {
+ 	DIR *dir;
+ 	struct dirent *dirent;
+@@ -102,13 +166,12 @@
+ 	regex_t preg;
+ 	int rc = 0;
+ 
+-	lock_rules();
+-
+ 	dir = opendir(confdir);
+ 	if (!dir) {
++		if (errno == ENOENT)
++			return 0; /* an optional tier need not exist */
+ 		acpid_log(LOG_ERR, "opendir(%s): %s",
+ 			confdir, strerror(errno));
+-		unlock_rules();
+ 		return -1;
+ 	}
+ 
+@@ -117,7 +180,6 @@
+ 	if (rc) {
+ 		closedir(dir);
+ 		acpid_log(LOG_ERR, "regcomp(): %d", rc);
+-		unlock_rules();
+ 		return -1;
+ 	}
+ 
+@@ -138,7 +200,6 @@
+             acpid_log(LOG_ERR, "asprintf: %s", strerror(errno));
+             regfree(&preg);
+             closedir(dir);
+-            unlock_rules();
+             return -1;
+         }
+ 
+@@ -149,6 +210,21 @@
+ 			continue;
+ 		}
+ 
++		/* a higher-priority tier already accounts for this name */
++		if (name_set_contains(seen, dirent->d_name)) {
++			acpid_log(LOG_INFO, "shadowing conf file %s", file);
++			free(file);
++			continue;
++		}
++
++		/* a symlink to /dev/null masks a same-named file in a lower tier */
++		if (is_devnull_mask(dir, dirent->d_name)) {
++			acpid_log(LOG_INFO, "masking conf file %s", file);
++			name_set_add(seen, dirent->d_name);
++			free(file);
++			continue;
++		}
++
+         /* ??? Check for DT_UNKNOWN and do this, then "else if" on not DT_REG
+                and do the same as the !S_ISREG() branch below. */
+         if (dirent->d_type != DT_REG) { /* may be DT_UNKNOWN ...*/
+@@ -166,7 +242,7 @@
+         }
+ 
+         /* open the rule file (might want to move this into parse_file()?) */
+-		if ((fd_rule = openat(dirfd(dir), dirent->d_name, 
++		if ((fd_rule = openat(dirfd(dir), dirent->d_name,
+                               O_RDONLY|O_CLOEXEC|O_NONBLOCK)) == -1) {
+                 /* something went _really_ wrong.. Not Gonna Happen(tm) */
+                 acpid_log(LOG_ERR, "openat(%s): %s", file, strerror(errno));
+@@ -174,7 +250,6 @@
+                 /* ??? Too extreme?  Why not just continue? */
+                 closedir(dir);
+                 regfree(&preg);
+-                unlock_rules();
+                 return -1;
+         }
+         /* fd is closed by parse_file() */
+@@ -187,11 +262,59 @@
+ 				enlist_rule(&cmd_list, r);
+ 			nrules++;
+ 		}
++		name_set_add(seen, dirent->d_name);
+ 		free(file);
+ 	}
+ 
+     regfree(&preg);
+ 	closedir(dir);
++
++	return nrules;
++}
++
++/*
++ * read in all the configuration files from a single directory
++ */
++int
++acpid_read_conf(const char *confdir)
++{
++	int nrules;
++
++	lock_rules();
++	nrules = scan_conf_dir(confdir, NULL);
++	unlock_rules();
++
++	if (nrules < 0)
++		return -1;
++
++	acpid_log(LOG_INFO, "%d rule%s loaded", nrules, (nrules == 1)?"":"s");
++
++	return 0;
++}
++
++/*
++ * read in all the configuration files across a set of directories,
++ * given highest-priority first; a directory's files shadow
++ * same-named files from every directory that follows it
++ */
++int
++acpid_read_conf_tiers(const char *const *confdirs, int nconfdirs)
++{
++	struct name_set seen = { NULL, 0, 0 };
++	int nrules = 0;
++	int i;
++
++	lock_rules();
++	for (i = 0; i < nconfdirs; i++) {
++		int n = scan_conf_dir(confdirs[i], &seen);
++		if (n < 0) {
++			name_set_free(&seen);
++			unlock_rules();
++			return -1;
++		}
++		nrules += n;
++	}
++	name_set_free(&seen);
+ 	unlock_rules();
+ 
+ 	acpid_log(LOG_INFO, "%d rule%s loaded", nrules, (nrules == 1)?"":"s");

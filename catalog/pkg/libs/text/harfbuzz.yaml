@@ -1,0 +1,311 @@
+package:
+  schema: 1
+  name: harfbuzz
+  slug: harfbuzz
+  namespace: libs/text
+  version: 10.1.0
+  description: OpenType text shaping engine
+  homepage: https://harfbuzz.github.io/
+  checksum: 77ec4d8796fd70d28f42946a36258bfb20dfda1f1e406f944a6401e04e861d6f
+
+sources:
+- name: harfbuzz
+  url: https://github.com/harfbuzz/harfbuzz/releases/download/10.1.0/harfbuzz-10.1.0.tar.xz
+  sha256: 6ce3520f2d089a33cef0fc48321334b8e0b72141f6a763719aaaecd2779ecb82
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: freetype
+  commit: x86_64/pkg/libs/graphics/freetype/2.14.1/bundles/dev
+- name: libpng
+  commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: gobject-introspection
+  commit: x86_64/pkg/dev/tools/gobject-introspection/1.84.0/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: cairo
+  commit: x86_64/pkg/libs/graphics/cairo/1.18.4/bundles/dev
+- name: fontconfig
+  commit: x86_64/pkg/libs/graphics/fontconfig/2.17.1/bundles/dev
+- name: pixman
+  commit: x86_64/pkg/libs/graphics/pixman/0.46.4/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4098:9091, 8217:10090, 12405:10938, 16543:44028, 20600:44206]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    export LDFLAGS="${LDFLAGS} -lstdc++"
+
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      -Ddocs=disabled \
+      -Dcairo=enabled \
+      -Dtests=disabled \
+      -Dintrospection=enabled
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/hb-info
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libharfbuzz-gobject.so.0
+      - /usr/lib/libharfbuzz.so.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/hb-ot-shape-closure
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libharfbuzz.so.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/hb-shape
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libharfbuzz.so.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/hb-subset
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libharfbuzz-subset.so.0
+      - /usr/lib/libharfbuzz.so.0
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/hb-view
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcairo.so.2
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libharfbuzz-cairo.so.0
+      - /usr/lib/libharfbuzz.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+
+  dev:
+    files:
+    - path: /usr/include/harfbuzz/hb-aat-layout.h
+    - path: /usr/include/harfbuzz/hb-aat.h
+    - path: /usr/include/harfbuzz/hb-blob.h
+    - path: /usr/include/harfbuzz/hb-buffer.h
+    - path: /usr/include/harfbuzz/hb-cairo.h
+    - path: /usr/include/harfbuzz/hb-common.h
+    - path: /usr/include/harfbuzz/hb-cplusplus.hh
+    - path: /usr/include/harfbuzz/hb-deprecated.h
+    - path: /usr/include/harfbuzz/hb-draw.h
+    - path: /usr/include/harfbuzz/hb-face.h
+    - path: /usr/include/harfbuzz/hb-features.h
+    - path: /usr/include/harfbuzz/hb-font.h
+    - path: /usr/include/harfbuzz/hb-ft.h
+    - path: /usr/include/harfbuzz/hb-glib.h
+    - path: /usr/include/harfbuzz/hb-gobject-enums.h
+    - path: /usr/include/harfbuzz/hb-gobject-structs.h
+    - path: /usr/include/harfbuzz/hb-gobject.h
+    - path: /usr/include/harfbuzz/hb-map.h
+    - path: /usr/include/harfbuzz/hb-ot-color.h
+    - path: /usr/include/harfbuzz/hb-ot-deprecated.h
+    - path: /usr/include/harfbuzz/hb-ot-font.h
+    - path: /usr/include/harfbuzz/hb-ot-layout.h
+    - path: /usr/include/harfbuzz/hb-ot-math.h
+    - path: /usr/include/harfbuzz/hb-ot-meta.h
+    - path: /usr/include/harfbuzz/hb-ot-metrics.h
+    - path: /usr/include/harfbuzz/hb-ot-name.h
+    - path: /usr/include/harfbuzz/hb-ot-shape.h
+    - path: /usr/include/harfbuzz/hb-ot-var.h
+    - path: /usr/include/harfbuzz/hb-ot.h
+    - path: /usr/include/harfbuzz/hb-paint.h
+    - path: /usr/include/harfbuzz/hb-set.h
+    - path: /usr/include/harfbuzz/hb-shape-plan.h
+    - path: /usr/include/harfbuzz/hb-shape.h
+    - path: /usr/include/harfbuzz/hb-style.h
+    - path: /usr/include/harfbuzz/hb-subset-repacker.h
+    - path: /usr/include/harfbuzz/hb-subset.h
+    - path: /usr/include/harfbuzz/hb-unicode.h
+    - path: /usr/include/harfbuzz/hb-version.h
+    - path: /usr/include/harfbuzz/hb.h
+    - path: /usr/lib/pkgconfig/harfbuzz-cairo.pc
+    - path: /usr/lib/pkgconfig/harfbuzz-gobject.pc
+    - path: /usr/lib/pkgconfig/harfbuzz-subset.pc
+    - path: /usr/lib/pkgconfig/harfbuzz.pc
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/harfbuzz/harfbuzz-config.cmake
+    - path: /usr/lib/girepository-1.0/HarfBuzz-0.0.typelib
+    - path: /usr/lib/libharfbuzz-cairo.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcairo.so.2
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libharfbuzz.so.0
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libharfbuzz-cairo.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcairo.so.2
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libharfbuzz.so.0
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libharfbuzz-cairo.so.0.61010.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcairo.so.2
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libharfbuzz.so.0
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libharfbuzz-gobject.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libharfbuzz.so.0
+    - path: /usr/lib/libharfbuzz-gobject.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libharfbuzz.so.0
+    - path: /usr/lib/libharfbuzz-gobject.so.0.61010.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libharfbuzz.so.0
+    - path: /usr/lib/libharfbuzz-subset.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libharfbuzz.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libharfbuzz-subset.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libharfbuzz.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libharfbuzz-subset.so.0.61010.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libharfbuzz.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libharfbuzz.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libharfbuzz.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libharfbuzz.so.0.61010.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+
+  misc:
+    files:
+    - path: /usr/share/gir-1.0/HarfBuzz-0.0.gir
+
+resolution:
+  /usr/lib/libcairo.so.2: cairo
+  /usr/lib/libfreetype.so.6: freetype
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libharfbuzz-cairo.so.0: self
+  /usr/lib/libharfbuzz-gobject.so.0: self
+  /usr/lib/libharfbuzz-subset.so.0: self
+  /usr/lib/libharfbuzz.so.0: self

@@ -1,0 +1,56 @@
+package:
+  schema: 1
+  name: cargo-c (Binary)
+  slug: cargo-c-bin
+  namespace: dev/tools
+  version: 0.10.18
+  description: Cargo C-ABI helpers for building and installing C-compatible libraries
+  homepage: https://github.com/lu-zero/cargo-c
+  checksum: 0105bc64628603d76edc830542152225d179f304c45e84e2e7732a77de39356d
+
+sources:
+- name: cargo_c
+  url: https://github.com/lu-zero/cargo-c/releases/download/v0.10.18/cargo-c-x86_64-unknown-linux-musl.tar.gz
+  sha256: c7972613334034cc09bb196c5b94505dfac6486eb25c705ecdccd821048c9c0d
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [32:476]
+
+  script: |
+    mkdir -p "${OUT_DIR}/usr/bin"
+    tar --no-same-owner -xf ${SOURCE_cargo_c} -C "${OUT_DIR}/usr/bin"
+    chmod +x "${OUT_DIR}/usr/bin"/*
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/cargo-capi
+    - path: /usr/bin/cargo-cbuild
+    - path: /usr/bin/cargo-cinstall
+    - path: /usr/bin/cargo-ctest

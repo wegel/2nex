@@ -1,0 +1,609 @@
+#!/bin/bash
+# nex-install: install the embedded Nex system from installer media to a disk.
+set -eu
+
+SYSTEM_DIR="/nex/installer/system"
+CHECKSUM_FILE="/nex/installer/system-checksum"
+BOOTLOADER_PATH="/nex/installer/BOOTX64.EFI"
+KCMDLINE_PATH="/nex/installer/kcmdline.txt"
+
+ESP_SIZE="512M"
+ROOT_SIZE=""
+ASSUME_YES=0
+ROOT_MARGIN_GIB=4
+PROVISION_DIR=""
+
+die() {
+    printf "error: %s\n" "$*" >&2
+    exit 1
+}
+
+step() {
+    printf "\n==> %s\n" "$*"
+}
+
+tui_available() {
+    [ "$ASSUME_YES" -eq 0 ] || return 1
+    command -v whiptail >/dev/null 2>&1 || return 1
+    [ -t 0 ] || return 1
+    [ -t 1 ] || return 1
+    case "${TERM:-}" in
+        ""|dumb) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+tui_title() {
+    printf "Nex Installer"
+}
+
+show_welcome() {
+    if tui_available; then
+        whiptail \
+            --title "$(tui_title)" \
+            --msgbox "This installer will copy the embedded Nex system to a selected disk.\n\nIt will create a 512 MiB EFI partition, a read-only deployment root, and a writable var partition." \
+            14 74
+        return 0
+    fi
+
+    printf "\n=== Nex Installer ===\n"
+    printf "This installer copies the embedded Nex system to a selected disk.\n"
+}
+
+partition_path() {
+    dev=$1
+    num=$2
+    case "$dev" in
+        *[0-9]) printf "%sp%s" "$dev" "$num" ;;
+        *) printf "%s%s" "$dev" "$num" ;;
+    esac
+}
+
+find_installer_disk() {
+    root_src=$(findmnt -n -o SOURCE / 2>/dev/null || true)
+    [ -n "$root_src" ] || return 0
+    pkname=$(lsblk -no PKNAME "$root_src" 2>/dev/null | head -1 || true)
+    [ -n "$pkname" ] || return 0
+    printf "/dev/%s\n" "$pkname"
+}
+
+is_installer_disk() {
+    dev=$1
+    installer_disk=$(find_installer_disk)
+    [ -n "$installer_disk" ] || return 1
+    [ "$dev" = "$installer_disk" ]
+}
+
+list_disk_paths() {
+    while read -r name type; do
+        case "$name:$type" in
+            loop*:*) ;;
+            *:disk) printf "/dev/%s\n" "$name" ;;
+        esac
+    done < <(lsblk -dn -o NAME,TYPE)
+}
+
+print_disk_row() {
+    index=$1
+    dev=$2
+    size=$(lsblk -dn -o SIZE "$dev" 2>/dev/null | sed 's/[[:space:]]*$//')
+    model=$(lsblk -dn -o MODEL "$dev" 2>/dev/null | sed 's/[[:space:]]*$//')
+    marker=""
+    if is_installer_disk "$dev"; then
+        marker=" (installer media)"
+    fi
+    printf "  %2s  %-14s %-8s %s%s\n" "$index" "$dev" "$size" "$model" "$marker"
+}
+
+plain_show_disks() {
+    printf "Available install targets:\n\n"
+    index=1
+    while read -r dev; do
+        print_disk_row "$index" "$dev"
+        index=$((index + 1))
+    done < <(list_disk_paths)
+    printf "\n"
+}
+
+tui_choose_device() {
+    args=()
+    index=1
+    while read -r dev; do
+        size=$(lsblk -dn -o SIZE "$dev" 2>/dev/null | sed 's/[[:space:]]*$//')
+        model=$(lsblk -dn -o MODEL "$dev" 2>/dev/null | sed 's/[[:space:]]*$//')
+        label="$dev  $size  $model"
+        if is_installer_disk "$dev"; then
+            label="$label  [installer media]"
+        fi
+        args+=("$dev" "$label" "OFF")
+        index=$((index + 1))
+    done < <(list_disk_paths)
+
+    [ "${#args[@]}" -gt 0 ] || die "no installable disks found"
+    whiptail \
+        --title "$(tui_title)" \
+        --radiolist "Choose the disk that Nex may erase." \
+        20 90 10 \
+        "${args[@]}" \
+        3>&1 1>&2 2>&3
+}
+
+select_disk_by_number() {
+    wanted=$1
+    index=1
+    while read -r dev; do
+        if [ "$index" -eq "$wanted" ]; then
+            printf "%s\n" "$dev"
+            return 0
+        fi
+        index=$((index + 1))
+    done < <(list_disk_paths)
+    return 1
+}
+
+choose_device() {
+    requested=${1:-}
+    if [ -n "$requested" ]; then
+        printf "%s\n" "$requested"
+        return 0
+    fi
+
+    if tui_available; then
+        tui_choose_device
+        return 0
+    fi
+
+    plain_show_disks
+    printf "Choose a disk number or absolute path: "
+    read -r choice
+    case "$choice" in
+        "" ) die "no disk selected" ;;
+        /dev/*) printf "%s\n" "$choice" ;;
+        *[!0-9]*) die "invalid disk choice: $choice" ;;
+        *) select_disk_by_number "$choice" || die "no disk numbered $choice" ;;
+    esac
+}
+
+validate_device() {
+    dev=$1
+    [ -b "$dev" ] || die "not a block device: $dev"
+    type=$(lsblk -dn -o TYPE "$dev" 2>/dev/null | head -1)
+    [ "$type" = "disk" ] || die "target must be a whole disk, got $type: $dev"
+    if is_installer_disk "$dev"; then
+        die "cannot install to the installer media: $dev"
+    fi
+}
+
+read_target_checksum() {
+    [ -f "$CHECKSUM_FILE" ] || die "system checksum not found at $CHECKSUM_FILE"
+    checksum=$(cat "$CHECKSUM_FILE")
+    checksum_len=$(printf "%s" "$checksum" | wc -c)
+    [ "$checksum_len" -eq 64 ] || die "invalid checksum length: $checksum_len"
+    printf "%s\n" "$checksum"
+}
+
+suggest_root_size() {
+    content_mib=""
+    if du_output=$(du -sm "$SYSTEM_DIR" 2>/dev/null); then
+        set -- $du_output
+        content_mib=$1
+    fi
+    if [ -z "$content_mib" ]; then
+        printf "8G\n"
+        return 0
+    fi
+
+    content_gib=$(((content_mib + 1023) / 1024))
+    suggested_gib=$((content_gib + ROOT_MARGIN_GIB))
+    [ "$suggested_gib" -ge 8 ] || suggested_gib=8
+    printf "%sG\n" "$suggested_gib"
+}
+
+prompt_root_size() {
+    [ -n "$ROOT_SIZE" ] || ROOT_SIZE=$(suggest_root_size)
+    [ "$ASSUME_YES" -eq 1 ] && return 0
+
+    if tui_available; then
+        chosen=$(whiptail \
+            --title "$(tui_title)" \
+            --inputbox "Choose the Nex deployment root partition size.\n\nSuggested size: $ROOT_SIZE\n\nThe remaining disk space becomes writable /var." \
+            13 74 "$ROOT_SIZE" \
+            3>&1 1>&2 2>&3) || die "aborted"
+        [ -n "$chosen" ] || die "root size cannot be empty"
+        ROOT_SIZE=$chosen
+        return 0
+    fi
+
+    printf "Root partition size [%s suggested]: " "$ROOT_SIZE"
+    read -r root_size
+    [ -n "$root_size" ] && ROOT_SIZE="$root_size"
+}
+
+plan_text() {
+    dev=$1
+    checksum=$2
+    printf "Nex will install this system:\n"
+    printf "  checksum: %s\n" "$checksum"
+    printf "  source:   %s\n" "$SYSTEM_DIR"
+    printf "\nNex will erase this disk:\n"
+    print_disk_row "*" "$dev"
+    printf "\nPartition plan:\n"
+    printf "  %s1  EFI system partition  %s\n" "$dev" "$ESP_SIZE"
+    printf "  %s2  Nex deployment root   %s\n" "$dev" "$ROOT_SIZE"
+    printf "  %s3  Nex writable var      remaining space\n" "$dev"
+    printf "\nUse --root-size SIZE or answer the prompt to choose another root size.\n"
+}
+
+show_plan() {
+    dev=$1
+    checksum=$2
+    if tui_available; then
+        plan=$(plan_text "$dev" "$checksum")
+        whiptail \
+            --title "$(tui_title)" \
+            --msgbox "$plan" \
+            22 90
+        return 0
+    fi
+
+    printf "\n"
+    plan_text "$dev" "$checksum"
+}
+
+confirm_destroy() {
+    dev=$1
+    if [ "$ASSUME_YES" -eq 1 ]; then
+        printf "\nSkipping confirmation because --yes was passed with %s.\n" "$dev"
+        return 0
+    fi
+
+    phrase="erase $dev"
+    if tui_available; then
+        confirm=$(whiptail \
+            --title "$(tui_title)" \
+            --inputbox "This is the final destructive step.\n\nType '$phrase' to erase $dev and install Nex." \
+            12 74 "" \
+            3>&1 1>&2 2>&3) || die "aborted"
+        [ "$confirm" = "$phrase" ] || die "aborted"
+        return 0
+    fi
+
+    printf "\nThis will erase all data on %s.\n" "$dev"
+    printf "Type '%s' to continue: " "$phrase"
+    read -r confirm
+    [ "$confirm" = "$phrase" ] || die "aborted"
+}
+
+partition_disk() {
+    dev=$1
+    step "Partitioning $dev"
+    sfdisk --wipe always "$dev" <<EOF
+label: gpt
+size=${ESP_SIZE}, type=uefi, name="EFI"
+size=${ROOT_SIZE}, type=linux, name="nex"
+type=linux, name="nex-var"
+EOF
+    partprobe "$dev" 2>/dev/null || sleep 1
+}
+
+format_partitions() {
+    dev=$1
+    esp=$(partition_path "$dev" 1)
+    root=$(partition_path "$dev" 2)
+    var=$(partition_path "$dev" 3)
+
+    step "Formatting partitions"
+    printf "  ESP:  %s\n" "$esp"
+    mkfs.fat -F32 "$esp" >/dev/null
+    printf "  root: %s\n" "$root"
+    mkfs.ext4 -F -q -L nex "$root"
+    printf "  var:  %s\n" "$var"
+    mkfs.ext4 -F -q -L nex-var "$var"
+}
+
+seed_installer_remotes() {
+    target_root=$1
+    store_dir="$target_root/nex/store"
+    config_path="$store_dir/config.toml"
+    mkdir -p "$store_dir/remotes"
+
+    cmdline_path=${NEX_INSTALL_CMDLINE:-/proc/cmdline}
+    cmdline=$(cat "$cmdline_path" 2>/dev/null || true)
+    for word in $cmdline; do
+        case "$word" in
+            nex.remote=*)
+                remote=${word#nex.remote=}
+                case "$remote" in
+                    *=*) ;;
+                    *) continue ;;
+                esac
+                name=${remote%%=*}
+                url=${remote#*=}
+                [ -n "$name" ] || continue
+                [ -n "$url" ] || continue
+                [ -f "$config_path" ] ||
+                    die "$config_path is missing; the store was not initialized"
+                append_zub_remote "$config_path" "$name" "$url"
+                printf "%s\n" "$url" > "$store_dir/remotes/$name"
+                ;;
+        esac
+    done
+}
+
+append_zub_remote() {
+    config_path=$1
+    name=$(toml_escape "$2")
+    url=$(toml_escape "$3")
+    cat >> "$config_path" <<EOF
+
+[[remotes]]
+name = "$name"
+url = "$url"
+EOF
+}
+
+provision_path_allowed() {
+    relative=$1
+    case "$relative" in
+        hostname|hosts|localtime|locale.conf|vconsole.conf|fstab|passwd|group|shadow)
+            return 0
+            ;;
+        NetworkManager/system-connections/*.nmconnection)
+            name=${relative#NetworkManager/system-connections/}
+            case "$name" in
+                ""|*/*|.nmconnection) return 1 ;;
+                *) return 0 ;;
+            esac
+            ;;
+        systemd/network/*.network|systemd/network/*.netdev|systemd/network/*.link)
+            name=${relative#systemd/network/}
+            case "$name" in
+                ""|*/*|.network|.netdev|.link) return 1 ;;
+                *) return 0 ;;
+            esac
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+provision_directory_allowed() {
+    case "$1" in
+        NetworkManager|NetworkManager/system-connections|systemd|systemd/network)
+            return 0
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+validate_provision_file() {
+    source=$1
+    relative=$2
+
+    provision_path_allowed "$relative" || \
+        die "provision path is not allowed: $relative"
+
+    if [ -L "$source" ]; then
+        [ "$relative" = localtime ] || \
+            die "only localtime may be a provisioned symlink: $relative"
+        link=$(readlink "$source")
+        case "$link" in
+            /usr/share/zoneinfo/|*/../*|*/./*|*//*)
+                die "localtime must use a canonical path below /usr/share/zoneinfo: $link"
+                ;;
+            /usr/share/zoneinfo/*) ;;
+            *) die "localtime must point below /usr/share/zoneinfo: $link" ;;
+        esac
+    fi
+}
+
+seed_factory_etc() {
+    deployment=$1
+    target_etc=$2
+    factory="$deployment/usr/share/factory/etc"
+    if [ ! -d "$factory" ]; then
+        factory="$deployment/etc"
+    fi
+    [ -d "$factory" ] || return 0
+    cp -a "$factory/." "$target_etc/"
+}
+
+copy_provision_tree() {
+    provision_dir=$1
+    target_etc=$2
+
+    [ -d "$provision_dir" ] || die "provision directory not found: $provision_dir"
+    # Check the complete tree before changing the target so a bad entry cannot
+    # leave a partially applied machine configuration.
+    while IFS= read -r -d '' source; do
+        relative=${source#"$provision_dir"/}
+        if [ -L "$source" ]; then
+            validate_provision_file "$source" "$relative"
+        elif [ -d "$source" ]; then
+            provision_directory_allowed "$relative" || \
+                die "provision directory is not allowed: $relative"
+        elif [ -f "$source" ]; then
+            validate_provision_file "$source" "$relative"
+        else
+            die "provision tree contains an unsupported file: $relative"
+        fi
+    done < <(find "$provision_dir" -mindepth 1 -print0)
+
+    while IFS= read -r -d '' source; do
+        relative=${source#"$provision_dir"/}
+        destination="$target_etc/$relative"
+        [ ! -d "$destination" ] || \
+            die "provision file would replace a directory: $relative"
+        mkdir -p "$(dirname "$destination")"
+        rm -f "$destination"
+        cp -a "$source" "$destination"
+
+        if [ -L "$destination" ]; then
+            chown -h 0:0 "$destination"
+        else
+            chown 0:0 "$destination"
+            case "$relative" in
+                shadow|NetworkManager/system-connections/*)
+                    chmod 600 "$destination"
+                    ;;
+                *) chmod 644 "$destination" ;;
+            esac
+        fi
+    done < <(find "$provision_dir" -mindepth 1 \( -type f -o -type l \) -print0)
+}
+
+toml_escape() {
+    printf "%s" "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+cleanup_mounts() {
+    umount /run/sysroot/boot/efi 2>/dev/null || true
+    umount /run/sysroot/var 2>/dev/null || true
+    umount /run/sysroot 2>/dev/null || true
+}
+
+copy_system() {
+    checksum=$1
+    deploy_dir="/nex/deployments/${checksum}.0"
+
+    step "Mounting target filesystems"
+    mkdir -p /run/sysroot
+    mount "$(partition_path "$DEVICE" 2)" /run/sysroot
+    mkdir -p /run/sysroot/var
+    mount "$(partition_path "$DEVICE" 3)" /run/sysroot/var
+
+    mkdir -p "/run/sysroot${deploy_dir}"
+
+    step "Copying Nex deployment"
+    cp -a "$SYSTEM_DIR"/. "/run/sysroot${deploy_dir}/"
+
+    step "Preparing writable state"
+    mkdir -p /run/sysroot/var/etc
+    mkdir -p /run/sysroot/var/home
+    mkdir -p /run/sysroot/var/root
+    mkdir -p /run/sysroot/var/log/journal
+    mkdir -p /run/sysroot/var/lib/systemd/{random-seed,timers,coredump}
+    mkdir -p /run/sysroot/var/lib/sshd
+    chmod 700 /run/sysroot/var/lib/sshd
+    mkdir -p /run/sysroot/var/cache/fontconfig
+    mkdir -p /run/sysroot/var/tmp
+    chmod 1777 /run/sysroot/var/tmp
+    ln -sf /run /run/sysroot/var/run
+    mkdir -p /run/sysroot/nex/store
+    mkdir -p /run/sysroot/nex/staging
+    mkdir -p /run/sysroot/var/nex/users
+    mkdir -p /run/sysroot/var/nex/manifests
+    mkdir -p /run/sysroot/var/nex/system
+
+    # zub init records this machine's own uid/gid mapping in the store's
+    # config.toml, and every write to the store needs it. A machine without a
+    # usable store cannot install or build anything, so a failure here ends the
+    # install rather than being swallowed.
+    command -v zub >/dev/null 2>&1 || die "zub not found; cannot initialize the machine store"
+    zub init /run/sysroot/nex/store || die "zub init failed for /nex/store"
+    seed_installer_remotes /run/sysroot
+
+    seed_factory_etc "/run/sysroot${deploy_dir}" /run/sysroot/var/etc
+    if [ -n "$PROVISION_DIR" ]; then
+        step "Applying machine provision files"
+        copy_provision_tree "$PROVISION_DIR" /run/sysroot/var/etc
+    fi
+    touch /run/sysroot/var/etc/.initialized
+
+    step "Creating deployment links"
+    deploy_rel="nex/deployments/${checksum}.0"
+    ln -sf "$deploy_rel/usr" /run/sysroot/usr
+    ln -sf /usr/lib /run/sysroot/lib
+    ln -sf "$deploy_rel/lib64" /run/sysroot/lib64
+    ln -sf /usr/bin /run/sysroot/bin
+    ln -sf /usr/bin /run/sysroot/sbin
+    ln -sf usr/bin/init /run/sysroot/init
+
+    mkdir -p /run/sysroot/proc /run/sysroot/sys /run/sysroot/dev /run/sysroot/run /run/sysroot/tmp
+
+    ln -sf /var/etc /run/sysroot/etc
+    ln -sf /var/home /run/sysroot/home
+    ln -sf /var/root /run/sysroot/root
+
+    ln -sfn "deployments/${checksum}.0" /run/sysroot/nex/current
+    ln -sfn "current/nex/pkg" /run/sysroot/nex/pkg
+    ln -sfn "current/nex/db" /run/sysroot/nex/db
+}
+
+install_bootloader() {
+    step "Installing the fallback UEFI bootloader"
+    mkdir -p /run/sysroot/boot/efi
+    mount "$(partition_path "$DEVICE" 1)" /run/sysroot/boot/efi
+    mkdir -p /run/sysroot/boot/efi/EFI/BOOT
+    cp "$BOOTLOADER_PATH" /run/sysroot/boot/efi/EFI/BOOT/BOOTX64.EFI
+    if [ -f "$KCMDLINE_PATH" ]; then
+        cp "$KCMDLINE_PATH" /run/sysroot/boot/efi/EFI/BOOT/kcmdline.txt
+    fi
+}
+
+install_system() {
+    checksum=$1
+    trap cleanup_mounts EXIT
+    copy_system "$checksum"
+    install_bootloader
+    step "Finalizing filesystems"
+    cleanup_mounts
+    trap - EXIT
+}
+
+main() {
+    [ "$(id -u)" -eq 0 ] || die "must be run as root"
+    [ -d "$SYSTEM_DIR" ] || die "installer system not found at $SYSTEM_DIR"
+    [ -f "$BOOTLOADER_PATH" ] || die "bootloader not found at $BOOTLOADER_PATH"
+
+    requested_device=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --yes|-y) ASSUME_YES=1; shift ;;
+            --root-size)
+                [ $# -ge 2 ] || die "--root-size requires a value"
+                ROOT_SIZE=$2
+                shift 2
+                ;;
+            --provision)
+                [ $# -ge 2 ] || die "--provision requires a directory"
+                PROVISION_DIR=$2
+                shift 2
+                ;;
+            --help|-h)
+                printf "usage: nex-install [--yes] [--root-size SIZE] [--provision ETC_TREE] [disk]\n"
+                exit 0
+                ;;
+            --*) die "unknown option: $1" ;;
+            *)
+                [ -z "$requested_device" ] || die "unexpected argument: $1"
+                requested_device=$1
+                shift
+                ;;
+        esac
+    done
+
+    if [ "$ASSUME_YES" -eq 1 ] && [ -z "$requested_device" ]; then
+        die "--yes requires an explicit target disk"
+    fi
+
+    show_welcome
+    checksum=$(read_target_checksum)
+    DEVICE=$(choose_device "$requested_device")
+    validate_device "$DEVICE"
+    prompt_root_size
+    show_plan "$DEVICE" "$checksum"
+    confirm_destroy "$DEVICE"
+
+    partition_disk "$DEVICE"
+    format_partitions "$DEVICE"
+    install_system "$checksum"
+
+    printf "\nInstallation complete.\n"
+    printf "Remove the USB drive and reboot this machine.\n"
+}
+
+if [ "${NEX_INSTALL_SOURCE_ONLY:-0}" = 1 ]; then
+    return 0 2>/dev/null || exit 0
+fi
+
+main "$@"

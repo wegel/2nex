@@ -1,0 +1,206 @@
+package:
+  schema: 1
+  name: wget
+  slug: wget
+  namespace: cli/net
+  version: 1.25.0
+  description: Non-interactive network downloader
+  homepage: https://www.gnu.org/software/wget/
+  checksum: a876127cd537d03c83ff475d14e65b3373429f17d45dca29b47b3d9ffb53520f
+
+sources:
+- name: wget
+  url: https://ftp.gnu.org/gnu/wget/wget-1.25.0.tar.gz
+  sha256: 766e48423e79359ea31e41db9e5c289675947a7fcf2efdcedb726ac9d0da3784
+- name: uapi_config
+  file: pkg/cli/net/wget-uapi-config.patch
+  sha256: 26e921d168fa00d550c484f706622e9c785cae7181c93ba19997a36d0994173e
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4099:1563, 8223:5137, 12364:9534, 16481:11387, 24688:20267, 28792:23464, 32888:24649, 41105:25045, 49474:26185, 51782:26242]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_wget}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    ./configure \
+      --prefix=/usr \
+      --sysconfdir=/usr/lib \
+      --with-ssl=openssl \
+      --without-libpsl \
+      --without-libidn \
+      --disable-nls \
+      --disable-static
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    test -s "${OUT_DIR}/usr/lib/wgetrc"
+
+    test_root=/tmp/wget-uapi-test
+    rm -rf "${test_root}"
+    mkdir -p "${test_root}/home" /etc /run
+
+    run_default_wget() {
+      set +e
+      output="$(env -u SYSTEM_WGETRC -u WGETRC \
+        HOME="${test_root}/home" \
+        "${OUT_DIR}/usr/bin/wget" --version 2>&1)"
+      status=$?
+      set -e
+    }
+
+    check_failed_at() {
+      expected=$1
+      test "${status}" -ne 0
+      case "${output}" in
+        *"${expected}"*) ;;
+        *)
+          printf '%s\n' "${output}" >&2
+          printf 'wget did not read %s\n' "${expected}" >&2
+          exit 1
+          ;;
+      esac
+    }
+
+    check_not_mentioned() {
+      rejected=$1
+      case "${output}" in
+        *"${rejected}"*)
+          printf '%s\n' "${output}" >&2
+          printf 'wget also read %s\n' "${rejected}" >&2
+          exit 1
+          ;;
+      esac
+    }
+
+    printf '%s\n' 'nex-invalid-vendor-option = on' > /usr/lib/wgetrc
+    run_default_wget
+    check_failed_at /usr/lib/wgetrc
+
+    printf '%s\n' 'nex-invalid-transient-option = on' > /run/wgetrc
+    run_default_wget
+    check_failed_at /run/wgetrc
+    check_not_mentioned nex-invalid-vendor-option
+
+    printf '%s\n' 'nex-invalid-administrator-option = on' > /etc/wgetrc
+    run_default_wget
+    check_failed_at /etc/wgetrc
+    check_not_mentioned nex-invalid-transient-option
+    check_not_mentioned nex-invalid-vendor-option
+
+    : > /etc/wgetrc
+    run_default_wget
+    test "${status}" -eq 0
+    check_not_mentioned nex-invalid-transient-option
+    check_not_mentioned nex-invalid-vendor-option
+
+    printf '%s\n' 'nex-invalid-explicit-option = on' > "${test_root}/explicit-wgetrc"
+    set +e
+    output="$(env -u WGETRC \
+      HOME="${test_root}/home" \
+      SYSTEM_WGETRC="${test_root}/explicit-wgetrc" \
+      "${OUT_DIR}/usr/bin/wget" --version 2>&1)"
+    status=$?
+    set -e
+    check_failed_at "${test_root}/explicit-wgetrc"
+    check_not_mentioned nex-invalid-administrator-option
+
+    set +e
+    output="$(env -u SYSTEM_WGETRC -u WGETRC \
+      HOME="${test_root}/home" \
+      "${OUT_DIR}/usr/bin/wget" \
+      --config="${test_root}/explicit-wgetrc" --version 2>&1)"
+    status=$?
+    set -e
+    check_failed_at "${test_root}/explicit-wgetrc"
+    check_not_mentioned nex-invalid-administrator-option
+
+    rm -f /etc/wgetrc /run/wgetrc /usr/lib/wgetrc
+    rm -rf "${test_root}"
+
+    find "${OUT_DIR}" -name '*.la' -delete
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - conf
+  - info
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/wget
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+
+  conf:
+    files:
+    - path: /usr/lib/wgetrc
+
+  info:
+    files:
+    - path: /usr/share/info/wget.info
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libcrypto.so.3: openssl
+  /usr/lib/libssl.so.3: openssl
+  /usr/lib/libz.so.1: zlib

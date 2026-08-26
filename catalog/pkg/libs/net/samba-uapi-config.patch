@@ -1,0 +1,104 @@
+Subject: libsmbclient: read vendor, run, and etc smb.conf tiers
+
+Source: Nex
+Upstream: not submitted; this narrows the Nex UAPI tiering rule to the
+libsmbclient context init path only, rather than samba's shared
+lp_load() used by every samba program
+
+smbc_init_context() (via SMBC_module_init()) already looks for the
+user's $HOME/.smb/smb.conf before falling back to the single compiled
+get_dyn_CONFIGFILE(), which this manifest's --sysconfdir=/etc build
+resolves to /etc/samba/smb.conf. That fallback has no vendor default
+and no per-boot override, so a Nex deployment cannot ship a client
+default such as a workgroup and a boot cannot override it.
+
+This patch keeps get_dyn_CONFIGFILE() (/etc/samba/smb.conf) exactly
+where it is and adds two lower tiers read before it:
+
+  1. /usr/lib/samba/smb.conf, the package/assembly vendor default.
+     This manifest already installs its private libraries below
+     /usr/lib/samba, so the vendor config lives beside them.
+  2. /run/samba/smb.conf, a boot-time override.
+
+The three tiers are merged, not selected: lp_load_client() on the
+vendor file resets every global to its compiled default and then
+applies whatever the vendor file sets, establishing the baseline.
+lp_load_client_no_reinit() on the /run and /etc files does not reset
+globals first, so it only overwrites the parameters each file actually
+names and leaves every other parameter at whatever the lower tier (or
+the compiled default) already set. That is the same overlay upstream
+already uses a few lines below for $HOME/.smb/smb.conf.append, so a
+partial administrator file cannot blank out a vendor default the way a
+plain reinit-and-reload would. A missing file at any tier makes that
+tier's pm_process() fail and leaves the previous tier's values
+untouched, so a missing vendor or /run file is silent.
+
+The $HOME/.smb/smb.conf and $HOME/.smb/smb.conf.append behavior is
+unchanged: a readable user file still replaces the whole system lookup,
+and the append file still overlays on top of whichever system tier
+loaded.
+
+This patch touches only source3/libsmb/libsmb_context.c, the
+libsmbclient-specific context bootstrap. It does not touch
+source3/param/loadparm.c or dynconfig, so smbd, nmbd, winbindd, and
+every other samba program this manifest does not build are unaffected.
+
+--- a/source3/libsmb/libsmb_context.c
++++ b/source3/libsmb/libsmb_context.c
+@@ -37,0 +38,11 @@
++ * Nex UAPI tiering for the libsmbclient-only system config lookup.
++ * get_dyn_CONFIGFILE() (/etc/samba/smb.conf under this build) stays the
++ * administrator tier. These two lower tiers are read before it: a vendor
++ * default below /usr, which this package already uses for its private
++ * libraries, and a /run override for a boot-time default. See
++ * SMBC_module_init() below for how the three are merged.
++ */
++#define NEX_SMB_CONF_VENDOR "/usr/lib/samba/smb.conf"
++#define NEX_SMB_CONF_RUN "/run/samba/smb.conf"
++
++/*
+@@ -72,0 +84,2 @@
++		bool sys_loaded;
++
+@@ -74,4 +87,17 @@
+-		 * Well, if that failed, try the get_dyn_CONFIGFILE
+-		 * Which points to the standard locn, and if that
+-		 * fails, silently ignore it and use the internal
+-		 * defaults ...
++		 * No per-user config. Build the system configuration from
++		 * three tiers, lowest priority first, each overlaying only
++		 * the parameters it actually sets:
++		 *
++		 *   1. NEX_SMB_CONF_VENDOR under /usr, the package or
++		 *      assembly default.
++		 *   2. NEX_SMB_CONF_RUN under /run, a boot-time override.
++		 *   3. get_dyn_CONFIGFILE() under /etc, the administrator
++		 *      file, unchanged from upstream.
++		 *
++		 * lp_load_client() resets every global to its compiled
++		 * default before parsing, so it establishes the baseline.
++		 * lp_load_client_no_reinit() leaves whatever is already set
++		 * and only overwrites the parameters the file names, the
++		 * same overlay used below for smb.conf.append. A missing
++		 * file at any tier is silent: that tier's pm_process() fails
++		 * and the previous tier's values are untouched.
+@@ -80 +106,13 @@
+-		if (!lp_load_client(get_dyn_CONFIGFILE())) {
++		sys_loaded = lp_load_client(NEX_SMB_CONF_VENDOR);
++		if (!sys_loaded) {
++			DEBUG(5, ("Could not load config file: %s\n",
++				  NEX_SMB_CONF_VENDOR));
++		}
++
++		if (lp_load_client_no_reinit(NEX_SMB_CONF_RUN)) {
++			sys_loaded = True;
++		}
++
++		if (lp_load_client_no_reinit(get_dyn_CONFIGFILE())) {
++			sys_loaded = True;
++		} else {
+@@ -83 +121,3 @@
+-		} else if (home) {
++		}
++
++		if (sys_loaded && home) {

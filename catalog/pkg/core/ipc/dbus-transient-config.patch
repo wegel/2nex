@@ -1,0 +1,431 @@
+From: Package maintainers <noreply@example.invalid>
+Subject: [PATCH] bus: load transient configuration before administrator policy
+Source: https://dbus.freedesktop.org/releases/dbus/dbus-1.16.2.tar.xz
+Upstream: Not submitted; this adds the conventional Linux /run policy tier.
+
+D-Bus already keeps its package defaults in /usr/share/dbus-1 and loads
+administrator policy from /etc/dbus-1. Add the corresponding /run/dbus-1
+drop-in directories between those two tiers. This gives image builders and
+early-boot tools a transient policy location without writing persistent host
+configuration.
+
+Merge the drop-in family instead of scanning three directories independently.
+include_dir() walked each directory with readdir and included every .conf it
+found, so a higher tier could not replace a same-named lower file and a link to
+/dev/null did not mask one. Add an <includedirs> element whose handler walks the
+vendor, /run, and /etc trees for one family, lets a higher tree replace a
+basename, treats a non-regular file such as a /dev/null link as a mask, sorts
+the survivors, and includes them in that order. The bus configuration files now
+name the family once instead of listing three directories.
+diff -urN a/bus/config-parser.c b/bus/config-parser.c
+--- a/bus/config-parser.c
++++ b/bus/config-parser.c
+@@ -35,6 +35,7 @@
+ #include <dbus/dbus-internals.h>
+ #include <dbus/dbus-misc.h>
+ #include <dbus/dbus-sysdeps.h>
++#include <sys/stat.h>
+ #include <dbus/dbus-test-tap.h>
+ #include <string.h>
+ 
+@@ -873,6 +874,19 @@
+ 
+       return TRUE;
+     }
++  else if (element_type == ELEMENT_INCLUDEDIRS)
++    {
++      if (!check_no_attributes (parser, "includedirs", attribute_names, attribute_values, error))
++        return FALSE;
++
++      if (push_element (parser, ELEMENT_INCLUDEDIRS) == NULL)
++        {
++          BUS_SET_OOM (error);
++          return FALSE;
++        }
++
++      return TRUE;
++    }
+   else if (element_type == ELEMENT_STANDARD_SESSION_SERVICEDIRS)
+     {
+       DBusError local_error = DBUS_ERROR_INIT;
+@@ -2296,6 +2310,7 @@
+     case ELEMENT_SERVICEDIR:
+     case ELEMENT_SERVICEHELPER:
+     case ELEMENT_INCLUDEDIR:
++    case ELEMENT_INCLUDEDIRS:
+     case ELEMENT_LIMIT:
+       if (!e->had_content)
+         {
+@@ -2476,6 +2491,273 @@
+   return TRUE;
+ }
+ 
++/*
++ * Merge one drop-in family across the vendor, runtime, and administrator
++ * trees. A file in a higher tree replaces the same basename in a lower one,
++ * and a symbolic link to /dev/null masks it entirely. The survivors are read
++ * in sorted order so a bus's own "later rule wins" semantics stay predictable
++ * rather than depending on readdir order.
++ */
++static int
++basename_compare (const void *a,
++                  const void *b)
++{
++  return strcmp (*(const char **) a, *(const char **) b);
++}
++
++static dbus_bool_t
++include_dir_family (BusConfigParser   *parser,
++                    const DBusString  *family,
++                    DBusError         *error)
++{
++  /*
++   * The vendor directory keeps upstream's meaning: it is relative to the
++   * configuration file that names the family, so a bus started from a staged
++   * tree still finds its own drop-ins. The transient and administrator trees
++   * are absolute machine locations.
++   */
++  static const char *const absolute_roots[] =
++  {
++    "/run/dbus-1",
++    DBUS_SYSCONFDIR "/dbus-1"
++  };
++  char **names = NULL;
++  char **paths = NULL;
++  int n_names = 0;
++  size_t i;
++  int j;
++  dbus_bool_t retval = FALSE;
++
++  for (i = 0; i < _DBUS_N_ELEMENTS (absolute_roots) + 1; i++)
++    {
++      DBusString dirname;
++      DBusString filename;
++      DBusDirIter *dir;
++      DBusError tmp_error;
++
++      if (!_dbus_string_init (&dirname))
++        {
++          BUS_SET_OOM (error);
++          goto out;
++        }
++
++      if (i == 0)
++        {
++          if (!make_full_path (&parser->basedir, family, &dirname))
++            {
++              _dbus_string_free (&dirname);
++              BUS_SET_OOM (error);
++              goto out;
++            }
++        }
++      else if (!_dbus_string_append (&dirname, absolute_roots[i - 1]) ||
++               !_dbus_string_append (&dirname, "/") ||
++               !_dbus_string_copy (family, 0, &dirname,
++                                   _dbus_string_get_length (&dirname)))
++        {
++          _dbus_string_free (&dirname);
++          BUS_SET_OOM (error);
++          goto out;
++        }
++
++      dbus_error_init (&tmp_error);
++      dir = _dbus_directory_open (&dirname, &tmp_error);
++
++      if (dir == NULL)
++        {
++          dbus_error_free (&tmp_error);
++          _dbus_string_free (&dirname);
++          continue;
++        }
++
++      if (!_dbus_string_init (&filename))
++        {
++          _dbus_directory_close (dir);
++          _dbus_string_free (&dirname);
++          BUS_SET_OOM (error);
++          goto out;
++        }
++
++      while (_dbus_directory_get_next_file (dir, &filename, &tmp_error))
++        {
++          DBusString full_path;
++          const char *name;
++          char *name_copy;
++          char *path_copy;
++          int found = -1;
++
++          if (!_dbus_string_ends_with_c_str (&filename, ".conf"))
++            continue;
++
++          if (!_dbus_string_init (&full_path))
++            {
++              _dbus_string_free (&filename);
++              _dbus_directory_close (dir);
++              _dbus_string_free (&dirname);
++              BUS_SET_OOM (error);
++              goto out;
++            }
++
++          if (!_dbus_string_copy (&dirname, 0, &full_path, 0) ||
++              !_dbus_concat_dir_and_file (&full_path, &filename))
++            {
++              _dbus_string_free (&full_path);
++              _dbus_string_free (&filename);
++              _dbus_directory_close (dir);
++              _dbus_string_free (&dirname);
++              BUS_SET_OOM (error);
++              goto out;
++            }
++
++          name = _dbus_string_get_const_data (&filename);
++
++          for (j = 0; j < n_names; j++)
++            {
++              if (strcmp (names[j], name) == 0)
++                {
++                  found = j;
++                  break;
++                }
++            }
++
++          name_copy = _dbus_strdup (name);
++          path_copy = _dbus_strdup (_dbus_string_get_const_data (&full_path));
++          _dbus_string_free (&full_path);
++
++          if (name_copy == NULL || path_copy == NULL)
++            {
++              dbus_free (name_copy);
++              dbus_free (path_copy);
++              _dbus_string_free (&filename);
++              _dbus_directory_close (dir);
++              _dbus_string_free (&dirname);
++              BUS_SET_OOM (error);
++              goto out;
++            }
++
++          if (found >= 0)
++            {
++              dbus_free (name_copy);
++              dbus_free (paths[found]);
++              paths[found] = path_copy;
++            }
++          else
++            {
++              char **new_names = dbus_realloc (names, sizeof (char *) * (size_t) (n_names + 1));
++              char **new_paths;
++
++              if (new_names == NULL)
++                {
++                  dbus_free (name_copy);
++                  dbus_free (path_copy);
++                  _dbus_string_free (&filename);
++                  _dbus_directory_close (dir);
++                  _dbus_string_free (&dirname);
++                  BUS_SET_OOM (error);
++                  goto out;
++                }
++
++              names = new_names;
++              new_paths = dbus_realloc (paths, sizeof (char *) * (size_t) (n_names + 1));
++
++              if (new_paths == NULL)
++                {
++                  dbus_free (name_copy);
++                  dbus_free (path_copy);
++                  _dbus_string_free (&filename);
++                  _dbus_directory_close (dir);
++                  _dbus_string_free (&dirname);
++                  BUS_SET_OOM (error);
++                  goto out;
++                }
++
++              paths = new_paths;
++              names[n_names] = name_copy;
++              paths[n_names] = path_copy;
++              n_names++;
++            }
++        }
++
++      _dbus_string_free (&filename);
++      _dbus_directory_close (dir);
++      _dbus_string_free (&dirname);
++      dbus_error_free (&tmp_error);
++    }
++
++  /*
++   * Sort by basename, then include the survivors. A link to /dev/null is a
++   * mask, so it occupies the name without contributing any rules.
++   */
++  for (j = 0; j < n_names; j++)
++    {
++      int k;
++
++      for (k = j + 1; k < n_names; k++)
++        {
++          if (basename_compare (&names[j], &names[k]) > 0)
++            {
++              char *tmp_name = names[j];
++              char *tmp_path = paths[j];
++
++              names[j] = names[k];
++              names[k] = tmp_name;
++              paths[j] = paths[k];
++              paths[k] = tmp_path;
++            }
++        }
++    }
++
++  for (j = 0; j < n_names; j++)
++    {
++      DBusString full_path;
++      DBusStat stat_buf;
++      dbus_bool_t masked = FALSE;
++
++      if (!_dbus_string_init (&full_path))
++        {
++          BUS_SET_OOM (error);
++          goto out;
++        }
++
++      if (!_dbus_string_append (&full_path, paths[j]))
++        {
++          _dbus_string_free (&full_path);
++          BUS_SET_OOM (error);
++          goto out;
++        }
++
++      /*
++       * A link to /dev/null resolves to a character device rather than a
++       * regular file, so anything that is not a regular file masks the lower
++       * tiers without contributing rules.
++       */
++      if (_dbus_stat (&full_path, &stat_buf, NULL) &&
++          !S_ISREG (stat_buf.mode))
++        masked = TRUE;
++
++      if (!masked && !include_file (parser, &full_path, TRUE, error))
++        {
++          _dbus_string_free (&full_path);
++          goto out;
++        }
++
++      _dbus_string_free (&full_path);
++    }
++
++  retval = TRUE;
++
++ out:
++  for (j = 0; j < n_names; j++)
++    {
++      dbus_free (names[j]);
++      dbus_free (paths[j]);
++    }
++  dbus_free (names);
++  dbus_free (paths);
++
++  return retval;
++}
++
+ static dbus_bool_t
+ include_dir (BusConfigParser   *parser,
+              const DBusString  *dirname,
+@@ -2728,6 +3010,15 @@
+       }
+       break;
+       
++    case ELEMENT_INCLUDEDIRS:
++      {
++        e->had_content = TRUE;
++
++        if (!include_dir_family (parser, content, error))
++          return FALSE;
++      }
++      break;
++
+     case ELEMENT_INCLUDEDIR:
+       {
+         DBusString full_path;
+@@ -3387,6 +3678,7 @@
+     case ELEMENT_SERVICEDIR:
+     case ELEMENT_SERVICEHELPER:
+     case ELEMENT_INCLUDEDIR:
++    case ELEMENT_INCLUDEDIRS:
+     case ELEMENT_CONFIGTYPE:
+     case ELEMENT_SELINUX:
+     case ELEMENT_ASSOCIATE:
+diff -urN a/bus/config-parser-common.c b/bus/config-parser-common.c
+--- a/bus/config-parser-common.c
++++ b/bus/config-parser-common.c
+@@ -85,6 +85,10 @@
+     {
+       return ELEMENT_INCLUDEDIR;
+     }
++  else if (strcmp (name, "includedirs") == 0)
++    {
++      return ELEMENT_INCLUDEDIRS;
++    }
+   else if (strcmp (name, "standard_session_servicedirs") == 0)
+     {
+       return ELEMENT_STANDARD_SESSION_SERVICEDIRS;
+@@ -175,6 +179,8 @@
+       return "servicehelper";
+     case ELEMENT_INCLUDEDIR:
+       return "includedir";
++    case ELEMENT_INCLUDEDIRS:
++      return "includedirs";
+     case ELEMENT_CONFIGTYPE:
+       return "type";
+     case ELEMENT_SELINUX:
+diff -urN a/bus/config-parser-common.h b/bus/config-parser-common.h
+--- a/bus/config-parser-common.h
++++ b/bus/config-parser-common.h
+@@ -43,6 +43,7 @@
+   ELEMENT_SERVICEDIR,
+   ELEMENT_SERVICEHELPER,
+   ELEMENT_INCLUDEDIR,
++  ELEMENT_INCLUDEDIRS,
+   /* this is really <type>, but winioctl.h defines ELEMENT_TYPE */
+   ELEMENT_CONFIGTYPE,
+   ELEMENT_SELINUX,
+diff -urN a/bus/session.conf.in b/bus/session.conf.in
+--- a/bus/session.conf.in
++++ b/bus/session.conf.in
+@@ -40,9 +40,9 @@
+ 
+   <!-- Config files are placed here that among other things, 
+        further restrict the above policy for specific services. -->
+-  <includedir>session.d</includedir>
++  <includedirs>session.d</includedirs>
++
+ 
+-  <includedir>@SYSCONFDIR_FROM_PKGDATADIR@/dbus-1/session.d</includedir>
+ 
+   <!-- This is included last so local configuration can override what's 
+        in this standard file -->
+diff -urN a/bus/system.conf.in b/bus/system.conf.in
+--- a/bus/system.conf.in
++++ b/bus/system.conf.in
+@@ -129,9 +129,9 @@
+ 
+   <!-- Config files are placed here that among other things, punch 
+        holes in the above policy for specific services. -->
+-  <includedir>system.d</includedir>
++  <includedirs>system.d</includedirs>
++
+ 
+-  <includedir>@SYSCONFDIR_FROM_PKGDATADIR@/dbus-1/system.d</includedir>
+ 
+   <!-- This is included last so local configuration can override what's 
+        in this standard file -->
+diff -urN a/meson.build b/meson.build
+--- a/meson.build
++++ b/meson.build
+@@ -924,6 +924,7 @@
+ config.set_quoted('DBUS_PREFIX', get_option('prefix'))
+ config.set_quoted('DBUS_BINDIR', get_option('prefix') / get_option('bindir'))
+ config.set_quoted('DBUS_DATADIR',get_option('prefix') / get_option('datadir'))
++config.set_quoted('DBUS_SYSCONFDIR', get_option('prefix') / get_option('sysconfdir'))
+ data_config.set('DBUS_LIBEXECDIR', get_option('prefix') / get_option('libexecdir'))
+ 
+ config.set_quoted('DBUS_RUNSTATEDIR',

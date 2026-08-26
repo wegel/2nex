@@ -1,0 +1,167 @@
+package:
+  schema: 1
+  name: gtk4-layer-shell
+  slug: gtk4-layer-shell
+  namespace: libs/wayland
+  version: 1.0.3
+  description: Library for GTK4 Wayland layer shell support
+  homepage: https://github.com/wmww/gtk4-layer-shell
+  checksum: 222b02af6274adce949b7b16efead0319cfc2db145d24526cc20195698100fa6
+
+sources:
+- name: gtk4-layer-shell
+  url: https://github.com/wmww/gtk4-layer-shell/archive/refs/tags/v1.0.3.tar.gz
+  sha256: 4d669c30b3dbc68ad69ade9752e6ebbe7be132db21a5a4734d42bc09c5481c34
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: wayland
+  commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
+- name: wayland-protocols
+  commit: x86_64/pkg/libs/wayland/wayland-protocols/1.46/bundles/dev
+- name: gtk4
+  commit: x86_64/pkg/libs/graphics/gtk4/4.20.3/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: cairo
+  commit: x86_64/pkg/libs/graphics/cairo/1.18.4/bundles/dev
+- name: pango
+  commit: x86_64/pkg/libs/text/pango/1.57.0/bundles/dev
+- name: gdk-pixbuf
+  commit: x86_64/pkg/libs/graphics/gdk-pixbuf/2.44.2/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: libjpeg-turbo
+  commit: x86_64/pkg/libs/graphics/libjpeg-turbo/3.1.2/bundles/dev
+- name: shared-mime-info
+  commit: x86_64/pkg/libs/system/shared-mime-info/2.4/bundles/dev
+- name: graphene
+  commit: x86_64/pkg/libs/graphics/graphene/1.10.8/bundles/dev
+- name: harfbuzz
+  commit: x86_64/pkg/libs/text/harfbuzz/10.1.0/bundles/dev
+- name: fontconfig
+  commit: x86_64/pkg/libs/graphics/fontconfig/2.17.1/bundles/dev
+- name: freetype
+  commit: x86_64/pkg/libs/graphics/freetype/2.14.1/bundles/dev
+- name: libpng
+  commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+- name: libtiff
+  commit: x86_64/pkg/libs/graphics/libtiff/4.7.1/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: fribidi
+  commit: x86_64/pkg/libs/text/fribidi/1.0.15/bundles/dev
+- name: pixman
+  commit: x86_64/pkg/libs/graphics/pixman/0.46.4/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [2580:4949]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_gtk4_layer_shell} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    export PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
+
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      --pkg-config-path=/usr/lib/pkgconfig:/usr/share/pkgconfig \
+      -Dexamples=false \
+      -Ddocs=false \
+      -Dtests=false \
+      -Dintrospection=false \
+      -Dvapi=false
+
+    ninja -C build
+    DESTDIR=${OUT_DIR} ninja -C build install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/gtk4-layer-shell/gtk4-layer-shell.h
+    - path: /usr/lib/pkgconfig/gtk4-layer-shell-0.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libgtk4-layer-shell.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgtk-4.so.1
+      - /usr/lib/libwayland-client.so.0
+    - path: /usr/lib/libgtk4-layer-shell.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgtk-4.so.1
+      - /usr/lib/libwayland-client.so.0
+    - path: /usr/lib/libgtk4-layer-shell.so.1.0.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgtk-4.so.1
+      - /usr/lib/libwayland-client.so.0
+
+resolution:
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libgtk-4.so.1: gtk4
+  /usr/lib/libwayland-client.so.0: wayland

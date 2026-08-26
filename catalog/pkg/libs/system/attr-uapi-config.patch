@@ -1,0 +1,67 @@
+From: Package maintainers
+Subject: [PATCH] libattr: select xattr policy from UAPI paths
+Source: downstream
+Upstream: not submitted; needs agreement on Linux vendor and transient paths
+
+Keep `/etc/xattr.conf` as the administrator file, add `/run/xattr.conf` for
+temporary machine policy, and use `/usr/lib/xattr.conf` for the package
+default. Select one complete file so an empty higher-priority file masks all
+lower policy.
+
+diff --git a/libattr/attr_copy_action.c b/libattr/attr_copy_action.c
+--- a/libattr/attr_copy_action.c
++++ b/libattr/attr_copy_action.c
+@@ -28,7 +28,11 @@
+ #define ERROR_CONTEXT_MACROS
+ #include "error_context.h"
+ 
+-#define ATTR_CONF SYSCONFDIR "/xattr.conf"
++static const char *const attr_conf_paths[] = {
++	SYSCONFDIR "/xattr.conf",
++	"/run/xattr.conf",
++	"/usr/lib/xattr.conf",
++};
+ 
+ struct attr_action {
+ 	struct attr_action *next;
+@@ -57,6 +61,7 @@ attr_parse_attr_conf(struct error_context *ctx)
+ 	char *text = NULL, *t;
+ 	size_t size_guess = 4096, len;
+ 	FILE *file;
++	const char *attr_conf = NULL;
+ 	char *pattern = NULL;
+ 	struct attr_action *new;
+ 	int action;
+@@ -65,9 +70,21 @@ attr_parse_attr_conf(struct error_context *ctx)
+ 		return 0;
+ 
+ repeat:
+-	if ((file = fopen(ATTR_CONF, "r")) == NULL) {
+-		if (errno == ENOENT)
++	if (!attr_conf) {
++		for (size_t i = 0;
++		     i < sizeof(attr_conf_paths) / sizeof(attr_conf_paths[0]);
++		     i++) {
++			file = fopen(attr_conf_paths[i], "r");
++			if (file || errno != ENOENT) {
++				attr_conf = attr_conf_paths[i];
++				break;
++			}
++		}
++		if (!attr_conf)
+ 			return 0;
++		if (!file)
++			goto fail;
++	} else if ((file = fopen(attr_conf, "r")) == NULL) {
+ 		goto fail;
+ 	}
+ 
+@@ -139,7 +156,7 @@ parse_error:
+ 
+ fail:
+ 	{
+-		const char *q = quote (ctx, ATTR_CONF);
++		const char *q = quote (ctx, attr_conf);
+ 		error (ctx, "%s", q);
+ 		quote_free (ctx, q);
+ 	}

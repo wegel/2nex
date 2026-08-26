@@ -1,0 +1,65 @@
+package:
+  schema: 1
+  name: noto-fonts
+  slug: noto-fonts
+  namespace: fonts
+  version: "7.0"
+  description: Google Noto fonts (merged universal set from go-noto-universal)
+  homepage: https://github.com/satbyy/go-noto-universal
+  checksum: 2ec4c9ad6502c65ffb879db84031454a2b739cbe1176215e1dfd3f2a65105931
+
+sources:
+- name: kurrent-regular
+  url: https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoKurrent-Regular.ttf
+  sha256: 2f2cee5fbb2403df352ca2005247f6c4faa70f3086ebd31b6c62308b5f2f9865
+- name: kurrent-bold
+  url: https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoKurrent-Bold.ttf
+  sha256: 6f5ab7b16acedeac76625f75159d9d303be85b291d47376760a1c9f87802853e
+- name: current-serif
+  url: https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoCurrentSerif.ttf
+  sha256: d656d56938493cafc10500bcc988b9ebfe4866f66a25a8a6f9653837a7b02e41
+- name: cjk-core
+  url: https://github.com/satbyy/go-noto-universal/releases/download/v7.0/GoNotoCJKCore.ttf
+  sha256: bfe18b47612e58ff28b568f32b55e35fde4505d6137581bf11d2363e257e2ad4
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [32:53]
+
+  script: |
+    mkdir -p ${OUT_DIR}/usr/share/fonts/noto
+
+    cp ${SOURCE_kurrent_regular} ${OUT_DIR}/usr/share/fonts/noto/GoNotoKurrent-Regular.ttf
+    cp ${SOURCE_kurrent_bold} ${OUT_DIR}/usr/share/fonts/noto/GoNotoKurrent-Bold.ttf
+    cp ${SOURCE_current_serif} ${OUT_DIR}/usr/share/fonts/noto/GoNotoCurrentSerif.ttf
+    cp ${SOURCE_cjk_core} ${OUT_DIR}/usr/share/fonts/noto/GoNotoCJKCore.ttf
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - fonts
+
+outputs:
+  fonts:
+    files:
+    - path: /usr/share/fonts/noto/GoNotoCJKCore.ttf
+    - path: /usr/share/fonts/noto/GoNotoCurrentSerif.ttf
+    - path: /usr/share/fonts/noto/GoNotoKurrent-Bold.ttf
+    - path: /usr/share/fonts/noto/GoNotoKurrent-Regular.ttf

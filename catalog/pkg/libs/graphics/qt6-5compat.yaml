@@ -1,0 +1,234 @@
+package:
+  schema: 1
+  name: qt6-5compat
+  slug: qt6-5compat
+  namespace: libs/graphics
+  version: 6.7.2
+  description: Qt6 compatibility APIs for software ported from Qt5
+  homepage: https://www.qt.io/
+  checksum: 6643886b819258019889eb86c43e8f734a97dcaf697763cc023904f957c1deeb
+
+sources:
+- name: qt6-5compat
+  url: https://download.qt.io/archive/qt/6.7/6.7.2/submodules/qt5compat-everywhere-src-6.7.2.tar.xz
+  sha256: 8826b5189efc4d9bdb64fdb1aa89d0fdf4e53c60948ed7995621ed046e38c003
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: icu
+  commit: x86_64/pkg/libs/system/icu/76.1/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: qt6-base
+  commit: x86_64/pkg/libs/graphics/qt6-base/6.7.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4132:10243, 8280:13173, 10405:14846]
+
+  script: |
+    set -eu
+
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
+    tar --no-same-owner -xf "${SOURCE_qt6_5compat}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    cmake -S . -B build -G Ninja \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DINSTALL_LIBDIR=lib \
+      -DINSTALL_INCLUDEDIR=include/qt6 \
+      -DINSTALL_ARCHDATADIR=lib/qt6 \
+      -DINSTALL_DATADIR=share/qt6 \
+      -DINSTALL_MKSPECSDIR=lib/qt6/mkspecs \
+      -DQT_BUILD_TESTS=OFF \
+      -DQT_BUILD_EXAMPLES=OFF
+
+    cmake --build build
+    DESTDIR="${OUT_DIR}" cmake --install build
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/qt6/QtCore5Compat/6.7.2/QtCore5Compat/private/qbinaryjson_p.h
+    - path: /usr/include/qt6/QtCore5Compat/6.7.2/QtCore5Compat/private/qbinaryjsonarray_p.h
+    - path: /usr/include/qt6/QtCore5Compat/6.7.2/QtCore5Compat/private/qbinaryjsonobject_p.h
+    - path: /usr/include/qt6/QtCore5Compat/6.7.2/QtCore5Compat/private/qbinaryjsonvalue_p.h
+    - path: /usr/include/qt6/QtCore5Compat/6.7.2/QtCore5Compat/private/qcodecmacros_p.h
+    - path: /usr/include/qt6/QtCore5Compat/6.7.2/QtCore5Compat/private/qicucodec_p.h
+    - path: /usr/include/qt6/QtCore5Compat/6.7.2/QtCore5Compat/private/qisciicodec_p.h
+    - path: /usr/include/qt6/QtCore5Compat/6.7.2/QtCore5Compat/private/qlatincodec_p.h
+    - path: /usr/include/qt6/QtCore5Compat/6.7.2/QtCore5Compat/private/qsimplecodec_p.h
+    - path: /usr/include/qt6/QtCore5Compat/6.7.2/QtCore5Compat/private/qtcore5compat-config_p.h
+    - path: /usr/include/qt6/QtCore5Compat/6.7.2/QtCore5Compat/private/qtextcodec_p.h
+    - path: /usr/include/qt6/QtCore5Compat/6.7.2/QtCore5Compat/private/qtsciicodec_p.h
+    - path: /usr/include/qt6/QtCore5Compat/6.7.2/QtCore5Compat/private/qutfcodec_p.h
+    - path: /usr/include/qt6/QtCore5Compat/6.7.2/QtCore5Compat/private/qxml_p.h
+    - path: /usr/include/qt6/QtCore5Compat/QBinaryJson
+    - path: /usr/include/qt6/QtCore5Compat/QConcatenable
+    - path: /usr/include/qt6/QtCore5Compat/QLinkedList
+    - path: /usr/include/qt6/QtCore5Compat/QLinkedListData
+    - path: /usr/include/qt6/QtCore5Compat/QLinkedListIterator
+    - path: /usr/include/qt6/QtCore5Compat/QLinkedListNode
+    - path: /usr/include/qt6/QtCore5Compat/QMutableLinkedListIterator
+    - path: /usr/include/qt6/QtCore5Compat/QRegExp
+    - path: /usr/include/qt6/QtCore5Compat/QStringRef
+    - path: /usr/include/qt6/QtCore5Compat/QTextCodec
+    - path: /usr/include/qt6/QtCore5Compat/QTextDecoder
+    - path: /usr/include/qt6/QtCore5Compat/QTextEncoder
+    - path: /usr/include/qt6/QtCore5Compat/QXmlAttributes
+    - path: /usr/include/qt6/QtCore5Compat/QXmlContentHandler
+    - path: /usr/include/qt6/QtCore5Compat/QXmlDTDHandler
+    - path: /usr/include/qt6/QtCore5Compat/QXmlDeclHandler
+    - path: /usr/include/qt6/QtCore5Compat/QXmlDefaultHandler
+    - path: /usr/include/qt6/QtCore5Compat/QXmlEntityResolver
+    - path: /usr/include/qt6/QtCore5Compat/QXmlErrorHandler
+    - path: /usr/include/qt6/QtCore5Compat/QXmlInputSource
+    - path: /usr/include/qt6/QtCore5Compat/QXmlLexicalHandler
+    - path: /usr/include/qt6/QtCore5Compat/QXmlLocator
+    - path: /usr/include/qt6/QtCore5Compat/QXmlNamespaceSupport
+    - path: /usr/include/qt6/QtCore5Compat/QXmlParseException
+    - path: /usr/include/qt6/QtCore5Compat/QXmlReader
+    - path: /usr/include/qt6/QtCore5Compat/QXmlSimpleReader
+    - path: /usr/include/qt6/QtCore5Compat/QtCore5Compat
+    - path: /usr/include/qt6/QtCore5Compat/QtCore5CompatDepends
+    - path: /usr/include/qt6/QtCore5Compat/QtCore5CompatVersion
+    - path: /usr/include/qt6/QtCore5Compat/qbinaryjson.h
+    - path: /usr/include/qt6/QtCore5Compat/qcore5global.h
+    - path: /usr/include/qt6/QtCore5Compat/qlinkedlist.h
+    - path: /usr/include/qt6/QtCore5Compat/qregexp.h
+    - path: /usr/include/qt6/QtCore5Compat/qstringref.h
+    - path: /usr/include/qt6/QtCore5Compat/qtcore5compat-config.h
+    - path: /usr/include/qt6/QtCore5Compat/qtcore5compatversion.h
+    - path: /usr/include/qt6/QtCore5Compat/qtextcodec.h
+    - path: /usr/include/qt6/QtCore5Compat/qxml.h
+    - path: /usr/lib/cmake/Qt6Core5Compat/Qt6Core5CompatConfig.cmake
+    - path: /usr/lib/pkgconfig/Qt6Core5Compat.pc
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/Qt6/FindWrapIconv.cmake
+    - path: /usr/lib/cmake/Qt6Core5Compat/Qt6Core5CompatAdditionalTargetInfo.cmake
+    - path: /usr/lib/cmake/Qt6Core5Compat/Qt6Core5CompatConfigVersion.cmake
+    - path: /usr/lib/cmake/Qt6Core5Compat/Qt6Core5CompatConfigVersionImpl.cmake
+    - path: /usr/lib/cmake/Qt6Core5Compat/Qt6Core5CompatDependencies.cmake
+    - path: /usr/lib/cmake/Qt6Core5Compat/Qt6Core5CompatTargets-release.cmake
+    - path: /usr/lib/cmake/Qt6Core5Compat/Qt6Core5CompatTargets.cmake
+    - path: /usr/lib/cmake/Qt6Core5Compat/Qt6Core5CompatVersionlessTargets.cmake
+    - path: /usr/lib/cmake/Qt6BuildInternals/StandaloneTests/Qt5CompatTestsConfig.cmake
+    - path: /usr/lib/libQt6Core5Compat.prl
+    - path: /usr/lib/libQt6Core5Compat.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libicui18n.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpcre2-8.so.0
+      - /usr/lib/libpcre2-16.so.0
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libQt6Core5Compat.so.6
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libicui18n.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpcre2-8.so.0
+      - /usr/lib/libpcre2-16.so.0
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libQt6Core5Compat.so.6.7.2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libicui18n.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpcre2-8.so.0
+      - /usr/lib/libpcre2-16.so.0
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/qt6/metatypes/qt6core5compat_release_metatypes.json
+    - path: /usr/lib/qt6/mkspecs/modules/qt_lib_core5compat.pri
+    - path: /usr/lib/qt6/mkspecs/modules/qt_lib_core5compat_private.pri
+    - path: /usr/lib/qt6/modules/Core5Compat.json
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libicui18n.so.76: icu
+  /usr/lib/libicuuc.so.76: icu
+  /usr/lib/libpcre2-8.so.0: pcre2
+  /usr/lib/libpcre2-16.so.0: pcre2
+  /usr/lib/libQt6Core.so.6: qt6-base
+  /usr/lib/libz.so.1: zlib
+  /usr/lib/libzstd.so.1: zstd

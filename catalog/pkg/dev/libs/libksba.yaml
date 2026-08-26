@@ -1,0 +1,105 @@
+package:
+  schema: 1
+  name: libksba
+  slug: libksba
+  namespace: dev/libs
+  version: 1.6.8
+  description: X.509 certificate and CMS data library used by GnuPG
+  homepage: https://www.gnupg.org/software/libksba/
+  checksum: a274065b866c5d8bc78f82f752cfbd856d5ce565596e043299865586521b893c
+
+sources:
+- name: libksba
+  url: https://gnupg.org/ftp/gcrypt/libksba/libksba-1.6.8.tar.bz2
+  sha256: 0f4510f1c7a679c3545990a31479f391ad45d84e039176309d42f80cf41743f5
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: libgpg-error
+  commit: x86_64/pkg/dev/libs/libgpg-error/1.59/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: inetutils
+  commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4131:1059, 8335:3272, 12589:3480, 21670:3485, 26221:3528, 30734:3533, 39308:3598, 47613:4603, 56248:4976, 59393:5061]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_libksba} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure \
+      --prefix=/usr \
+      --disable-static
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find ${OUT_DIR}/usr/lib -name '*.so*' -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/ksba.h
+    - path: /usr/lib/libksba.la
+    - path: /usr/lib/libksba.so
+    - path: /usr/lib/pkgconfig/ksba.pc
+    - path: /usr/share/aclocal/ksba.m4
+
+  info:
+    files:
+    - path: /usr/share/info/ksba.info
+
+  lib:
+    files:
+    - path: /usr/lib/libksba.so.8
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgpg-error.so.0
+    - path: /usr/lib/libksba.so.8.14.8
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgpg-error.so.0
+
+resolution:
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libgpg-error.so.0: libgpg-error

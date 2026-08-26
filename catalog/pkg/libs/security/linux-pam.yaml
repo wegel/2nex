@@ -1,0 +1,535 @@
+package:
+  schema: 1
+  name: linux-pam
+  slug: linux-pam
+  namespace: libs/security
+  version: 1.7.1
+  description: Pluggable Authentication Modules for Linux
+  homepage: https://github.com/linux-pam/linux-pam
+  checksum: 9ca63937ee63874fec88a71381a5beaf1feefd2ba85e0146c2a79bd2c2c6c351
+
+sources:
+- name: linux-pam
+  url: https://github.com/linux-pam/linux-pam/releases/download/v1.7.1/Linux-PAM-1.7.1.tar.xz
+  sha256: 21dbcec6e01dd578f14789eac9024a18941e6f2702a05cf91b28c232eeb26ab0
+- name: uapi_config
+  file: pkg/libs/security/linux-pam-uapi-config.patch
+  sha256: dd154419e06220fe11343de8bd8a84c04f60895cb4e37f15dbf710fd5ffeaf37
+- name: uapi_smoke
+  file: pkg/libs/security/linux-pam-uapi-smoke.c
+  sha256: c5385cdd67da1317844019ed2d03e942786969f1d932e15c4d387ed6cfb6336a
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: libxcrypt
+  commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
+- name: libeconf
+  commit: x86_64/pkg/libs/system/libeconf/0.8.4/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4099:2148, 8255:2253, 12404:2344, 16500:2434, 20664:3023, 24795:3679, 28975:3679, 29968:3821]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    meson setup build \
+      --prefix=/usr \
+      --sbindir=/usr/bin \
+      --buildtype=release \
+      -Ddocs=disabled \
+      -Dexamples=false \
+      -Deconf=enabled \
+      -Dvendordir=/usr/lib
+
+    ninja -C build
+    meson test -C build tst-pam_config --print-errorlogs
+    DESTDIR="${OUT_DIR}" ninja -C build install
+    rmdir \
+      "${OUT_DIR}/etc/security/limits.d" \
+      "${OUT_DIR}/etc/security/namespace.d" \
+      "${OUT_DIR}/etc/security" \
+      "${OUT_DIR}/etc"
+
+    # setuid for unix_chkpwd (needed for non-root password checks)
+    chmod 4755 "${OUT_DIR}/usr/bin/unix_chkpwd"
+
+    smoke_bin="${WORK_DIR}/pam-uapi-smoke"
+    smoke_service=uapi-service-smoke
+    limits_service=uapi-limits-smoke
+    env_service=uapi-env-smoke
+    gcc "/${SOURCE_uapi_smoke}" \
+      -I"${OUT_DIR}/usr/include" \
+      -L"${OUT_DIR}/usr/lib" \
+      -Wl,-rpath,"${OUT_DIR}/usr/lib" \
+      -lpam \
+      -o "${smoke_bin}"
+
+    mkdir -p /etc/pam.d /run/pam.d /usr/lib/pam.d
+    printf 'auth required %s\n' \
+      "${OUT_DIR}/usr/lib/security/pam_permit.so" \
+      > "/usr/lib/pam.d/${smoke_service}"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${smoke_service}" auth allow
+
+    printf 'auth required %s\n' \
+      "${OUT_DIR}/usr/lib/security/pam_deny.so" \
+      > "/run/pam.d/${smoke_service}"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${smoke_service}" auth deny
+
+    printf 'auth required %s\n' \
+      "${OUT_DIR}/usr/lib/security/pam_permit.so" \
+      > "/etc/pam.d/${smoke_service}"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${smoke_service}" auth allow
+
+    printf 'session required %s\n' \
+      "${OUT_DIR}/usr/lib/security/pam_limits.so" \
+      > "/usr/lib/pam.d/${limits_service}"
+    mkdir -p /usr/lib/security/limits.d /run/security/limits.d /etc/security/limits.d
+    printf 'root:x:0:0:root:/root:/bin/sh\n' > /etc/passwd
+
+    printf 'root soft nofile 2010\n' > /usr/lib/security/limits.conf
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${limits_service}" session-limit 2010
+    printf 'root soft nofile 2020\n' > /run/security/limits.conf
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${limits_service}" session-limit 2020
+    printf 'root soft nofile 2030\n' > /etc/security/limits.conf
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${limits_service}" session-limit 2030
+    : > /etc/security/limits.conf
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${limits_service}" session-limit unchanged
+
+    rm /usr/lib/security/limits.conf /run/security/limits.conf /etc/security/limits.conf
+    printf 'root soft nofile 2040\n' > /usr/lib/security/limits.d/10-vendor.conf
+    printf 'root soft nofile 2050\n' > /run/security/limits.d/20-runtime.conf
+    printf 'root soft nofile 2060\n' > /etc/security/limits.d/30-admin.conf
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${limits_service}" session-limit 2060
+
+    printf 'session required %s\n' \
+      "${OUT_DIR}/usr/lib/security/pam_env.so" \
+      > "/usr/lib/pam.d/${env_service}"
+    cp "${OUT_DIR}/usr/lib/security/pam_env.conf" /usr/lib/security/pam_env.conf
+    printf 'UAPI_LAYER=vendor\n' > /usr/lib/environment
+    printf 'UAPI_LAYER=runtime\n' > /run/environment
+    printf 'UAPI_LAYER=admin\n' > /etc/environment
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${env_service}" session-env UAPI_LAYER admin
+    rm /etc/environment
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${env_service}" session-env UAPI_LAYER runtime
+    rm /run/environment
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${env_service}" session-env UAPI_LAYER vendor
+    : > /etc/environment
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${env_service}" session-env-absent UAPI_LAYER
+
+    # pam_namespace_helper prepares the polyinstantiated directories that
+    # pam_namespace declares, so it must select the same namespace.conf the
+    # module does rather than only the administrator copy.
+    helper="${OUT_DIR}/usr/bin/pam_namespace_helper"
+    mkdir -p /usr/lib/security /run/security /etc/security
+    rm -f /usr/lib/security/namespace.conf /run/security/namespace.conf \
+      /etc/security/namespace.conf
+
+    assert_helper_tier() {
+      expected="$1"
+      actual=$("${helper}" | head -1)
+      case "${actual}" in
+        "mkdir ${expected}") ;;
+        *)
+          printf 'pam_namespace_helper: expected mkdir %s, got %s\n' \
+            "${expected}" "${actual}" >&2
+          exit 1
+          ;;
+      esac
+      rmdir "${expected}" 2>/dev/null || true
+    }
+
+    printf '/tmp/uapi-poly /tmp/uapi-vendor/ level root\n' \
+      > /usr/lib/security/namespace.conf
+    assert_helper_tier /tmp/uapi-vendor/
+    printf '/tmp/uapi-poly /tmp/uapi-runtime/ level root\n' \
+      > /run/security/namespace.conf
+    assert_helper_tier /tmp/uapi-runtime/
+    printf '/tmp/uapi-poly /tmp/uapi-admin/ level root\n' \
+      > /etc/security/namespace.conf
+    assert_helper_tier /tmp/uapi-admin/
+    rm /usr/lib/security/namespace.conf /run/security/namespace.conf \
+      /etc/security/namespace.conf
+
+    # pam_securetty must also honour a transient securetty file. Root on a tty
+    # that the selected file lists is allowed; a tty it omits is denied.
+    securetty_service=uapi-securetty-smoke
+    printf 'auth required %s\n' \
+      "${OUT_DIR}/usr/lib/security/pam_securetty.so" \
+      > "/usr/lib/pam.d/${securetty_service}"
+    rm -f /etc/securetty /run/securetty /usr/lib/securetty
+
+    printf 'uapivendor\n' > /usr/lib/securetty
+    PAM_UAPI_TTY=uapivendor LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${securetty_service}" auth allow
+    printf 'uapiruntime\n' > /run/securetty
+    PAM_UAPI_TTY=uapivendor LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${securetty_service}" auth deny
+    PAM_UAPI_TTY=uapiruntime LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${securetty_service}" auth allow
+    printf 'uapiadmin\n' > /etc/securetty
+    PAM_UAPI_TTY=uapiruntime LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${securetty_service}" auth deny
+    PAM_UAPI_TTY=uapiadmin LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+      "${smoke_bin}" "${securetty_service}" auth allow
+    rm -f /etc/securetty /run/securetty /usr/lib/securetty \
+      "/usr/lib/pam.d/${securetty_service}"
+
+    printf 'pam UAPI smoke: namespace helper and securetty honoured all tiers\n'
+
+    rm \
+      "/etc/pam.d/${smoke_service}" \
+      "/run/pam.d/${smoke_service}" \
+      "/usr/lib/pam.d/${smoke_service}" \
+      "/usr/lib/pam.d/${limits_service}" \
+      "/usr/lib/pam.d/${env_service}" \
+      /usr/lib/security/limits.d/10-vendor.conf \
+      /usr/lib/security/pam_env.conf \
+      /run/security/limits.d/20-runtime.conf \
+      /etc/security/limits.d/30-admin.conf \
+      /usr/lib/environment \
+      /etc/environment \
+      /etc/passwd
+    rmdir /usr/lib/security/limits.d /run/security/limits.d /etc/security/limits.d || true
+    rmdir /run/security /etc/security /run/pam.d /etc/pam.d || true
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+  - misc
+
+outputs:
+  conf:
+    files:
+    - path: /usr/lib/environment
+    - path: /usr/lib/security/access.conf
+    - path: /usr/lib/security/faillock.conf
+    - path: /usr/lib/security/group.conf
+    - path: /usr/lib/security/limits.conf
+    - path: /usr/lib/security/namespace.conf
+    - path: /usr/lib/security/namespace.init
+    - path: /usr/lib/security/pam_env.conf
+    - path: /usr/lib/security/pwhistory.conf
+    - path: /usr/lib/security/time.conf
+
+  dev:
+    files:
+    - path: /usr/include/security/_pam_compat.h
+    - path: /usr/include/security/_pam_macros.h
+    - path: /usr/include/security/_pam_types.h
+    - path: /usr/include/security/pam_appl.h
+    - path: /usr/include/security/pam_client.h
+    - path: /usr/include/security/pam_ext.h
+    - path: /usr/include/security/pam_filter.h
+    - path: /usr/include/security/pam_misc.h
+    - path: /usr/include/security/pam_modules.h
+    - path: /usr/include/security/pam_modutil.h
+    - path: /usr/lib/pkgconfig/pam.pc
+    - path: /usr/lib/pkgconfig/pam_misc.pc
+    - path: /usr/lib/pkgconfig/pamc.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libpam.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/lib/libpam.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/lib/libpam.so.0.85.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+    - path: /usr/lib/libpam_misc.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/libpam_misc.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/libpam_misc.so.0.82.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/libpamc.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libpamc.so.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libpamc.so.0.82.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/security/pam_access.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_canonicalize_user.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_debug.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_deny.so
+    - path: /usr/lib/security/pam_echo.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_env.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_exec.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_faildelay.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_faillock.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_filter.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_filter/upperLOWER
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_ftp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_group.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_issue.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_keyinit.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_limits.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_listfile.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_localuser.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_loginuid.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_mail.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_mkhomedir.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_motd.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_namespace.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_nologin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_permit.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_pwhistory.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_rhosts.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_rootok.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_securetty.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_setquota.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_shells.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libeconf.so.0
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_stress.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_succeed_if.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_time.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_timestamp.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_umask.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_unix.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_usertype.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_warn.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_wheel.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/security/pam_xauth.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/lib/systemd/system/pam_namespace.service
+
+  misc:
+    files:
+    - path: /usr/bin/faillock
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/bin/mkhomedir_helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/bin/pam_namespace_helper
+      needs:
+      - /usr/bin/mkdir
+      - /usr/bin/sed
+      - /usr/bin/sh
+    - path: /usr/bin/pam_timestamp_check
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/bin/pwhistory_helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+    - path: /usr/bin/unix_chkpwd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+
+resolution:
+  /usr/bin/sh: bash
+  /usr/bin/mkdir: coreutils
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libeconf.so.0: libeconf
+  /usr/lib/libcrypt.so.2: libxcrypt
+  /usr/bin/sed: sed
+  /usr/lib/libpam.so.0: self

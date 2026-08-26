@@ -1,0 +1,314 @@
+package:
+  schema: 1
+  name: libgcrypt
+  slug: libgcrypt
+  namespace: libs/crypto
+  version: 1.12.1
+  description: General-purpose cryptographic library from GnuPG
+  homepage: https://www.gnupg.org/software/libgcrypt/
+  checksum: 8b32a1dc29664db24ef678ef06229e58ea9494755f429ad9b2c289504573f30f
+
+sources:
+- name: libgcrypt
+  url: https://gnupg.org/ftp/gcrypt/libgcrypt/libgcrypt-1.12.1.tar.bz2
+  sha256: 7df5c08d952ba33f9b6bdabdb06a61a78b2cf62d2122c2d1d03a91a79832aa3c
+- name: uapi_config
+  file: pkg/libs/crypto/libgcrypt-uapi-config.patch
+  sha256: a645ebfb9e062565fd579df42ca6222675b30e7a5ac93b7e625eaf0f7f0eb680
+- name: uapi_smoke
+  file: pkg/libs/crypto/libgcrypt-uapi-smoke.c
+  sha256: 06a8b7b8f6a07798fe56eebdd9a6a5567179f7ea6d756e2c9aea353b3437e9bf
+- name: uapi_interpose
+  file: pkg/libs/crypto/libgcrypt-uapi-interpose.c
+  sha256: 87d0a54dbebd9e647224a66345646def27b3a4850ab903da84e6b7d7116b2c0b
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libgpg-error
+  commit: x86_64/pkg/dev/libs/libgpg-error/1.59/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: inetutils
+  commit: x86_64/pkg/net/misc/inetutils/2.5/bundles/dev
+- name: texinfo
+  commit: x86_64/pkg/cli/text/texinfo/7.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [8280:4052, 25120:7689, 51306:7889, 85554:8014, 116159:8147, 146065:8242, 171261:8377, 215516:10405, 258323:10876, 284864:12921]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf /${SOURCE_libgcrypt} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    ./configure \
+      --prefix=/usr \
+      --disable-static
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    # Reject /usr/etc: none of the three readers this package ships should
+    # ever resolve there.
+    if strings "${OUT_DIR}/usr/lib/libgcrypt.so.20.7.1" | grep -q '/usr/etc'; then
+      echo "libgcrypt uapi smoke: library names a /usr/etc path" >&2
+      exit 1
+    fi
+
+    mkdir -p /etc/gcrypt /run/gcrypt /usr/lib/gcrypt
+
+    smoke_bin="${WORK_DIR}/libgcrypt-uapi-smoke"
+    gcc -I"${OUT_DIR}/usr/include" \
+      "/${SOURCE_uapi_smoke}" \
+      -o "${smoke_bin}" \
+      -L"${OUT_DIR}/usr/lib" -lgcrypt
+
+    interpose_so="${WORK_DIR}/libgcrypt-uapi-interpose.so"
+    gcc -shared -fPIC -o "${interpose_so}" "/${SOURCE_uapi_interpose}" -ldl
+
+    open_log="${WORK_DIR}/gcrypt-open.log"
+    stdout_log="${WORK_DIR}/gcrypt-stdout.log"
+
+    reader_basename() {
+      case "$1" in
+        fips) echo fips_enabled ;;
+        hwf) echo hwf.deny ;;
+        random) echo random.conf ;;
+      esac
+    }
+
+    # fips_enabled's public fips-mode flag reads the same "active" value no
+    # matter which tier supplied the file, so on its own it cannot prove
+    # which tier was selected; the enabled hardware feature list (hwf.deny)
+    # is CPU-dependent; and the random.conf flags are internal-only. Every
+    # mode therefore always runs under the access()/fopen() interposer, and
+    # the interposer log, not the helper's own exit code, is the primary
+    # proof of which exact tier path the reader selected. A non-zero exit
+    # from the helper itself is never swallowed here, so set -e stops the
+    # build immediately if the helper crashes or fails.
+    event_prefix() {
+      case "$1" in
+        fips) echo GCRYPT_UAPI_ACCESS ;;
+        hwf|random) echo GCRYPT_UAPI_OPEN ;;
+      esac
+    }
+
+    run_tier() {
+      LD_PRELOAD="${interpose_so}" LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" \
+        "${smoke_bin}" "$1" >"${stdout_log}" 2>"${open_log}"
+    }
+
+    # Secondary evidence only: the public fips-mode flag must agree with
+    # which tier the interposer log proves was actually selected.
+    check_fips_public_state() {
+      out=$(cat "${stdout_log}")
+      if [ "${out}" != "fips-mode:$1" ]; then
+        echo "libgcrypt uapi smoke: fips public state expected $1, got ${out}" >&2
+        exit 1
+      fi
+    }
+
+    expect_selected() {
+      run_tier "$1"
+      prefix=$(event_prefix "$1")
+      name=$(reader_basename "$1")
+      if ! grep -qF "${prefix}:$2:ok" "${open_log}"; then
+        echo "libgcrypt uapi smoke: $1 reader did not select $2" >&2
+        cat "${open_log}" >&2
+        exit 1
+      fi
+      if grep -F "/${name}:ok" "${open_log}" | grep -qv -F "${prefix}:$2:ok"; then
+        echo "libgcrypt uapi smoke: $1 reader selected more than one $name tier" >&2
+        cat "${open_log}" >&2
+        exit 1
+      fi
+      if [ "$1" = fips ]; then
+        check_fips_public_state active
+      fi
+    }
+
+    expect_absent() {
+      run_tier "$1"
+      prefix=$(event_prefix "$1")
+      name=$(reader_basename "$1")
+      if grep -F "/${name}:ok" "${open_log}" > /dev/null; then
+        echo "libgcrypt uapi smoke: $1 reader selected a file with no tier present" >&2
+        cat "${open_log}" >&2
+        exit 1
+      fi
+      if ! grep -qF "${prefix}:$2:fail" "${open_log}"; then
+        echo "libgcrypt uapi smoke: $1 reader did not attempt $2" >&2
+        cat "${open_log}" >&2
+        exit 1
+      fi
+      if [ "$1" = fips ]; then
+        check_fips_public_state inactive
+      fi
+    }
+
+    # No tier present: all three readers must keep the compiled no-file
+    # behavior.
+    expect_absent fips /etc/gcrypt/fips_enabled
+    expect_absent hwf /etc/gcrypt/hwf.deny
+    expect_absent random /etc/gcrypt/random.conf
+
+    # /usr/lib is the lowest tier: present alone, it must be selected.
+    : > /usr/lib/gcrypt/fips_enabled
+    : > /usr/lib/gcrypt/hwf.deny
+    : > /usr/lib/gcrypt/random.conf
+    expect_selected fips /usr/lib/gcrypt/fips_enabled
+    expect_selected hwf /usr/lib/gcrypt/hwf.deny
+    expect_selected random /usr/lib/gcrypt/random.conf
+
+    # /run masks /usr/lib.
+    : > /run/gcrypt/fips_enabled
+    : > /run/gcrypt/hwf.deny
+    : > /run/gcrypt/random.conf
+    expect_selected fips /run/gcrypt/fips_enabled
+    expect_selected hwf /run/gcrypt/hwf.deny
+    expect_selected random /run/gcrypt/random.conf
+
+    # /etc masks /run and /usr/lib, even though the /etc files are empty.
+    : > /etc/gcrypt/fips_enabled
+    : > /etc/gcrypt/hwf.deny
+    : > /etc/gcrypt/random.conf
+    expect_selected fips /etc/gcrypt/fips_enabled
+    expect_selected hwf /etc/gcrypt/hwf.deny
+    expect_selected random /etc/gcrypt/random.conf
+
+    # Walk back down: removing /etc must fall through to /run, then
+    # /usr/lib, then to the compiled no-file default once nothing is left.
+    rm -f /etc/gcrypt/fips_enabled /etc/gcrypt/hwf.deny /etc/gcrypt/random.conf
+    expect_selected fips /run/gcrypt/fips_enabled
+    expect_selected hwf /run/gcrypt/hwf.deny
+    expect_selected random /run/gcrypt/random.conf
+
+    rm -f /run/gcrypt/fips_enabled /run/gcrypt/hwf.deny /run/gcrypt/random.conf
+    expect_selected fips /usr/lib/gcrypt/fips_enabled
+    expect_selected hwf /usr/lib/gcrypt/hwf.deny
+    expect_selected random /usr/lib/gcrypt/random.conf
+
+    rm -f /usr/lib/gcrypt/fips_enabled /usr/lib/gcrypt/hwf.deny /usr/lib/gcrypt/random.conf
+    expect_absent fips /etc/gcrypt/fips_enabled
+    expect_absent hwf /etc/gcrypt/hwf.deny
+    expect_absent random /etc/gcrypt/random.conf
+
+    rmdir /etc/gcrypt /run/gcrypt /usr/lib/gcrypt
+
+    echo "libgcrypt UAPI smoke: fips_enabled, hwf.deny, and random.conf all walk /etc, /run, then /usr/lib, proven by the exact access()/fopen() path the interposer recorded for each tier; none of the three readers has a filename-selecting override to exercise"
+
+    find "${OUT_DIR}" -name '*.la' -delete
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+  full:
+  - bin
+  - info
+  - lib
+  - man
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/dumpsexp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/hmac256
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/mpicalc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcrypt.so.20
+      - /usr/lib/libgpg-error.so.0
+
+  dev:
+    files:
+    - path: /usr/include/gcrypt.h
+    - path: /usr/lib/libgcrypt.so
+    - path: /usr/lib/pkgconfig/libgcrypt.pc
+
+  info:
+    files:
+    - path: /usr/share/info/dir
+    - path: /usr/share/info/gcrypt.info
+    - path: /usr/share/info/gcrypt.info-1
+    - path: /usr/share/info/gcrypt.info-2
+
+  lib:
+    files:
+    - path: /usr/lib/libgcrypt.so.20
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgpg-error.so.0
+    - path: /usr/lib/libgcrypt.so.20.7.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgpg-error.so.0
+
+  man:
+    files:
+    - path: /usr/share/man/man1/hmac256.1
+
+  misc:
+    files:
+    - path: /usr/share/aclocal/libgcrypt.m4
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libgpg-error.so.0: libgpg-error
+  /usr/lib/libgcrypt.so.20: self

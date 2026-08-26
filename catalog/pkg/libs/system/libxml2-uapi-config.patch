@@ -1,0 +1,83 @@
+Subject: add /run and vendor tiers to the compiled XML and SGML catalog
+  defaults
+Source: downstream patch for libxml2 2.13.5
+Upstream: not submitted; needs agreement on the /usr/share/xml,
+  /usr/share/sgml, /run/xml, and /run/sgml paths
+
+catalog.c:55-59 built XML_XML_DEFAULT_CATALOG from
+"file://" SYSCONFDIR "/xml/catalog" and XML_SGML_DEFAULT_CATALOG the same
+way from SYSCONFDIR "/sgml/catalog". Makefile.am:15 passes
+-DSYSCONFDIR='"$(sysconfdir)"', and the package manifest ran ./configure
+--prefix=/usr with no --sysconfdir, so autotools kept its ${prefix}/etc
+default and both constants compiled to /usr/etc: a path under the
+immutable /usr tree that a machine owner can never write. There was also
+no vendor or /run tier, so a package could not ship a default alias and a
+transient override had nowhere to go. This was confirmed against a built
+artifact: the Nex-built libxml2.so.2.13.5 inside the desktop rootfs
+snapshot carries exactly the string file:///usr/etc/xml/catalog and no
+/etc/xml/catalog at all.
+
+xmlInitializeCatalog() (catalog.c:3070) reads XML_CATALOG_FILES when set,
+or XML_XML_DEFAULT_CATALOG otherwise, and walks that string as a
+space-separated list, creating one XML_CATA_CATALOG entry per element and
+chaining them through nextent in the order they appear. Making the
+compiled default a space-separated list of three file:// URIs therefore
+needs no new parsing code: the existing space-separated-list walk already
+handles it, whichever source supplied the value.
+
+xmlCatalogListXMLResolve() (catalog.c:1970) walks that same chain forward
+and returns on the first entry that resolves the requested identifier:
+
+    while (catal != NULL) {
+        if (catal->type == XML_CATA_CATALOG) {
+            ...
+            ret = xmlCatalogXMLResolve(catal->children, pubID, sysID);
+            if (ret != NULL) {
+                break;
+            ...
+        catal = catal->next;
+    }
+
+so the first matching entry in the chain wins, not the last. This patch
+therefore orders each list with the administrator's SYSCONFDIR entry
+first, then /run, then the vendor entry last, so an administrator mapping
+beats the same mapping read from /run, which beats the vendor default.
+This is the opposite chain order from the popt repair in this tree, where
+handleAlias() walks backward and the last entry read wins; the two
+patches read their own reader's resolution order rather than assuming a
+shared shape.
+
+A missing base file in any tier stays silent: xmlFetchXMLCatalogFile()
+(catalog.c:1376) calls xmlParseXMLCatalogFile(), which calls
+xmlParseCatalogFile(), which calls xmlParserInputBufferCreateFilename();
+a nonexistent path makes that call return NULL without printing anything
+(the "Failed to parse catalog" trace only fires when XML_DEBUG_CATALOG is
+set), xmlFetchXMLCatalogFile() then marks the entry XML_CATA_BROKEN_CATALOG
+and returns -1, and xmlCatalogListXMLResolve() finds catal->children still
+NULL and moves on to catal->next. Adding two more entries to the chain
+does not change this: each absent tier is skipped the same way the single
+compiled tier already was skipped.
+
+Neither new tier installs anything under /etc or /usr/etc:
+/usr/share/xml, /usr/share/sgml, /run/xml, and /run/sgml are only
+compiled-in search paths that this package does not populate.
+
+XML_SGML_DEFAULT_CATALOG is not read anywhere else in this version of
+catalog.c; xmlInitializeCatalog() only auto-loads the XML default. The
+constant is still patched identically for consistency with the XML
+default and because it keeps the same #ifndef override hook available
+to a future caller.
+--- a/catalog.c
++++ b/catalog.c
+@@ -56 +56,4 @@
+-#define XML_XML_DEFAULT_CATALOG "file://" SYSCONFDIR "/xml/catalog"
++#define XML_XML_DEFAULT_CATALOG \
++    "file://" SYSCONFDIR "/xml/catalog" \
++    " file:///run/xml/catalog" \
++    " file:///usr/share/xml/catalog"
+@@ -59 +62,4 @@
+-#define XML_SGML_DEFAULT_CATALOG "file://" SYSCONFDIR "/sgml/catalog"
++#define XML_SGML_DEFAULT_CATALOG \
++    "file://" SYSCONFDIR "/sgml/catalog" \
++    " file:///run/sgml/catalog" \
++    " file:///usr/share/sgml/catalog"

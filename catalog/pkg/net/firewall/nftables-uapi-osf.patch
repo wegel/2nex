@@ -1,0 +1,59 @@
+From: Package maintainers
+Subject: [PATCH] osf: select fingerprints from UAPI paths
+Source: downstream
+Upstream: not submitted; needs agreement on Linux vendor and transient paths
+
+Keep /etc/nftables/osf/pf.os as the administrator database, add the matching
+/run path for temporary machine data, and use /usr/lib for the package
+database. Select one complete file so an empty higher-priority file masks
+lower data.
+
+diff --git a/src/nfnl_osf.c b/src/nfnl_osf.c
+--- a/src/nfnl_osf.c
++++ b/src/nfnl_osf.c
+@@ -353 +353,20 @@
+-#define OS_SIGNATURES DEFAULT_INCLUDE_PATH "/nftables/osf/pf.os"
++static FILE *open_os_signatures(const char **selected_path)
++{
++	static const char *const paths[] = {
++		DEFAULT_INCLUDE_PATH "/nftables/osf/pf.os",
++		"/run/nftables/osf/pf.os",
++		"/usr/lib/nftables/osf/pf.os",
++	};
++	FILE *file;
++	size_t i;
++
++	for (i = 0; i < sizeof(paths) / sizeof(paths[0]); i++) {
++		file = fopen(paths[i], "r");
++		if (file != NULL || errno != ENOENT) {
++			*selected_path = paths[i];
++			return file;
++		}
++	}
++	*selected_path = NULL;
++	return NULL;
++}
+@@ -356,0 +376 @@
++	const char *selected_path;
+@@ -361,5 +381 @@
+-	if (ctx->nft->debug_mask & NFT_DEBUG_MNL)
+-		nft_print(&ctx->nft->output, "Opening OS signature file '%s'\n",
+-			  OS_SIGNATURES);
+-
+-	inf = fopen(OS_SIGNATURES, "r");
++	inf = open_os_signatures(&selected_path);
+@@ -367,3 +383,7 @@
+-		if (ctx->nft->debug_mask & NFT_DEBUG_MNL)
+-			nft_print(&ctx->nft->output, "Failed to open file '%s'\n",
+-				  OS_SIGNATURES);
++		if (ctx->nft->debug_mask & NFT_DEBUG_MNL) {
++			if (selected_path != NULL)
++				nft_print(&ctx->nft->output, "Failed to open file '%s'\n",
++					  selected_path);
++			else
++				nft_print(&ctx->nft->output, "No OS signature file found\n");
++		}
+@@ -372,0 +393,3 @@
++	if (ctx->nft->debug_mask & NFT_DEBUG_MNL)
++		nft_print(&ctx->nft->output, "Opening OS signature file '%s'\n",
++			  selected_path);

@@ -1,0 +1,20 @@
+# explicit disables for production kernel
+CONFIG_DEBUG_KERNEL=n
+# CONFIG_GCOV_KERNEL is not set
+# CONFIG_EXPERT is not set
+# CONFIG_SYSFS_DEPRECATED is not set
+# CONFIG_FW_LOADER_USER_HELPER is not set
+# CONFIG_AUDIT is not set
+# CONFIG_RT_GROUP_SCHED is not set
+CONFIG_UEVENT_HELPER=n
+CONFIG_ENCRYPTED_KEYS=n
+CONFIG_TRUSTED_KEYS=n
+# CONFIG_AMD_MEM_ENCRYPT is not set
+# CONFIG_MEDIA_SUPPORT_FILTER is not set
+
+# RestrictFileSystems= disabled (requires DEBUG_INFO_BTF + BPF_LSM)
+# CONFIG_BPF_LSM is not set
+# CONFIG_DEBUG_INFO_BTF is not set
+CONFIG_MPTCP=n
+CONFIG_NET_TC_SKB_EXT=n
+# CONFIG_VME_BUS is not set

@@ -1,0 +1,438 @@
+package:
+  schema: 1
+  name: Elfutils
+  slug: elfutils
+  namespace: dev/util
+  version: "0.191"
+  description: A collection of utilities and libraries for handling ELF (Executable and Linkable Format) files
+  homepage: https://sourceware.org/elfutils/
+  checksum: 9e99673ba4c77f4fcdc543075acfe1f0d845bb00f9a6fddf7cd470f7cfe67bfb
+
+sources:
+- name: elfutils
+  url: https://sourceware.org/ftp/elfutils/0.191/elfutils-0.191.tar.bz2
+  sha256: df76db71366d1d708365fc7a6c60ca48398f14367eb2b8954efc8897147ad871
+- name: uapi_config
+  file: pkg/dev/util/elfutils-uapi-config.patch
+  sha256: af1c2e1f351200a490443b8346f711919264d89596bed2fd250b3e32a7e38e48
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: m4
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4113:2123, 8374:3842, 12474:4088, 16580:5593, 24809:6421, 28933:6919, 33054:7462, 41277:9953, 49535:12273, 54376:12576]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    ./configure --prefix=/usr                \
+                --sysconfdir=/etc            \
+                --disable-debuginfod         \
+                --enable-libdebuginfod=dummy \
+                --libdir=/usr/lib
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    # Upstream couples the profile hook install directory to sysconfdir. Keep
+    # the hook immutable while retaining its administrator-owned /etc lookup.
+    mkdir -p "${OUT_DIR}/usr/lib/profile.d"
+    mv "${OUT_DIR}/etc/profile.d/debuginfod.csh" \
+       "${OUT_DIR}/usr/lib/profile.d/debuginfod.csh"
+    mv "${OUT_DIR}/etc/profile.d/debuginfod.sh" \
+       "${OUT_DIR}/usr/lib/profile.d/debuginfod.sh"
+    rmdir "${OUT_DIR}/etc/profile.d" \
+          "${OUT_DIR}/etc/debuginfod" \
+          "${OUT_DIR}/etc"
+
+    test -s "${OUT_DIR}/usr/lib/profile.d/debuginfod.csh"
+    bash -n "${OUT_DIR}/usr/lib/profile.d/debuginfod.sh"
+    bash --noprofile --norc -c '
+      DEBUGINFOD_URLS=https://debuginfod.example.invalid/
+      export DEBUGINFOD_URLS
+      source "$1"
+      test "${DEBUGINFOD_URLS}" = https://debuginfod.example.invalid/
+    ' elfutils-test "${OUT_DIR}/usr/lib/profile.d/debuginfod.sh"
+
+    smoke_root="$(mktemp -d)"
+    mkdir -p "${smoke_root}/etc/debuginfod" \
+             "${smoke_root}/run/debuginfod" \
+             "${smoke_root}/usr/lib/debuginfod"
+    sed -e "s|\"/etc/debuginfod\"|\"${smoke_root}/etc/debuginfod\"|" \
+        -e "s|/run/debuginfod|${smoke_root}/run/debuginfod|" \
+        -e "s|prefix=\"/usr\"|prefix=\"${smoke_root}/usr\"|" \
+        "${OUT_DIR}/usr/lib/profile.d/debuginfod.sh" > "${smoke_root}/debuginfod.sh"
+
+    printf 'https://vendor.example/\n' > "${smoke_root}/usr/lib/debuginfod/vendor.urls"
+    bash --noprofile --norc -c '
+      unset DEBUGINFOD_URLS
+      source "$1"
+      case " ${DEBUGINFOD_URLS} " in
+        *" https://vendor.example/ "*) ;;
+        *) echo "vendor tier missing: ${DEBUGINFOD_URLS}" >&2; exit 1 ;;
+      esac
+    ' elfutils-test "${smoke_root}/debuginfod.sh"
+
+    printf 'https://run.example/\n' > "${smoke_root}/run/debuginfod/run.urls"
+    bash --noprofile --norc -c '
+      unset DEBUGINFOD_URLS
+      source "$1"
+      case "${DEBUGINFOD_URLS}" in
+        *"https://run.example/ https://vendor.example/"*) ;;
+        *) echo "run tier not ahead of vendor tier: ${DEBUGINFOD_URLS}" >&2; exit 1 ;;
+      esac
+    ' elfutils-test "${smoke_root}/debuginfod.sh"
+
+    printf 'https://admin.example/\n' > "${smoke_root}/etc/debuginfod/admin.urls"
+    bash --noprofile --norc -c '
+      unset DEBUGINFOD_URLS
+      source "$1"
+      case "${DEBUGINFOD_URLS}" in
+        *"https://admin.example/ https://run.example/ https://vendor.example/"*) ;;
+        *) echo "administrator tier not first: ${DEBUGINFOD_URLS}" >&2; exit 1 ;;
+      esac
+    ' elfutils-test "${smoke_root}/debuginfod.sh"
+
+    rm -rf "${smoke_root}"
+
+    echo "elfutils UAPI smoke: debuginfod.sh concatenated all three url tiers"
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - conf
+  - dev
+  - lib
+  - static
+
+  full:
+  - bin
+  - conf
+  - dev
+  - lib
+  - locale
+  - man
+  - static
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/debuginfod-find
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdebuginfod.so.1
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-addr2line
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/eu-ar
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-elfclassify
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-elfcmp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-elfcompress
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-elflint
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-findtextrel
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-make-debug-archive
+    - path: /usr/bin/eu-nm
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/eu-objdump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libasm.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-ranlib
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-readelf
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-size
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-srcfiles
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/eu-stack
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/eu-strings
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-strip
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/bin/eu-unstrip
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+
+  conf:
+    files:
+    - path: /usr/lib/profile.d/debuginfod.csh
+    - path: /usr/lib/profile.d/debuginfod.sh
+
+  dev:
+    files:
+    - path: /usr/include/dwarf.h
+    - path: /usr/include/elfutils/debuginfod.h
+    - path: /usr/include/elfutils/elf-knowledge.h
+    - path: /usr/include/elfutils/known-dwarf.h
+    - path: /usr/include/elfutils/libasm.h
+    - path: /usr/include/elfutils/libdw.h
+    - path: /usr/include/elfutils/libdwelf.h
+    - path: /usr/include/elfutils/libdwfl.h
+    - path: /usr/include/elfutils/version.h
+    - path: /usr/include/gelf.h
+    - path: /usr/include/libelf.h
+    - path: /usr/include/nlist.h
+    - path: /usr/lib/pkgconfig/libdebuginfod.pc
+    - path: /usr/lib/pkgconfig/libdw.pc
+    - path: /usr/lib/pkgconfig/libelf.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libasm-0.191.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/lib/libasm.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/lib/libasm.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdw.so.1
+      - /usr/lib/libelf.so.1
+    - path: /usr/lib/libdebuginfod-0.191.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libdebuginfod.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libdebuginfod.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libdw-0.191.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libdw.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libdw.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libelf.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libelf-0.191.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libelf.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libelf.so.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+
+  locale:
+    files:
+    - path: /usr/share/locale/de/LC_MESSAGES/elfutils.mo
+    - path: /usr/share/locale/en@boldquot/LC_MESSAGES/elfutils.mo
+    - path: /usr/share/locale/en@quot/LC_MESSAGES/elfutils.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/elfutils.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/elfutils.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/elfutils.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/elfutils.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/debuginfod-find.1
+    - path: /usr/share/man/man1/eu-elfclassify.1
+    - path: /usr/share/man/man1/eu-readelf.1
+    - path: /usr/share/man/man1/eu-srcfiles.1
+    - path: /usr/share/man/man3/debuginfod_add_http_header.3
+    - path: /usr/share/man/man3/debuginfod_begin.3
+    - path: /usr/share/man/man3/debuginfod_end.3
+    - path: /usr/share/man/man3/debuginfod_find_debuginfo.3
+    - path: /usr/share/man/man3/debuginfod_find_executable.3
+    - path: /usr/share/man/man3/debuginfod_find_section.3
+    - path: /usr/share/man/man3/debuginfod_find_source.3
+    - path: /usr/share/man/man3/debuginfod_get_url.3
+    - path: /usr/share/man/man3/debuginfod_get_user_data.3
+    - path: /usr/share/man/man3/debuginfod_set_progressfn.3
+    - path: /usr/share/man/man3/debuginfod_set_user_data.3
+    - path: /usr/share/man/man3/elf_begin.3
+    - path: /usr/share/man/man3/elf_clone.3
+    - path: /usr/share/man/man3/elf_getdata.3
+    - path: /usr/share/man/man3/elf_update.3
+    - path: /usr/share/man/man7/debuginfod-client-config.7
+
+  static:
+    files:
+    - path: /usr/lib/libasm.a
+    - path: /usr/lib/libdw.a
+    - path: /usr/lib/libelf.a
+
+resolution:
+  /usr/lib/libbz2.so.1.0: bzip2
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libasm.so.1: self
+  /usr/lib/libdebuginfod.so.1: self
+  /usr/lib/libdw.so.1: self
+  /usr/lib/libelf.so.1: self
+  /usr/lib/liblzma.so.5: xz
+  /usr/lib/libz.so.1: zlib
+  /usr/lib/libzstd.so.1: zstd

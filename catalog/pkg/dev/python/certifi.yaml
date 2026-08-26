@@ -1,0 +1,70 @@
+package:
+  schema: 1
+  name: certifi
+  slug: certifi
+  namespace: dev/python
+  version: 2026.6.17
+  description: Python package with Mozilla CA certificates
+  homepage: https://github.com/certifi/python-certifi
+  checksum: c12956afaff3252f9e71ddd80f65b30bfd1fea820f201f602e0ed0346147f3ce
+
+sources:
+- name: certifi
+  url: https://files.pythonhosted.org/packages/c9/c7/424b75da314c1045981bd9777432fad05a9e0c69daa4ed7e308bbaffe405/certifi-2026.6.17.tar.gz
+  sha256: 024c88eeec92ca068db80f02b8b07c9cef7b9fe261d1d535abfd5abd6f6af432
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: setuptools
+  commit: x86_64/pkg/dev/python/setuptools/70.0.0/bundles/dev
+- name: wheel
+  commit: x86_64/pkg/dev/python/wheel/0.43.0/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [957:2379]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "/./${SOURCE_certifi}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    python3 -m pip install --no-build-isolation --no-deps --root="${OUT_DIR}" --prefix=/usr .
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  full:
+  - lib
+
+outputs:
+  lib:
+    files:
+    - path: /usr/lib/python3.12/site-packages/certifi-2026.6.17.dist-info/INSTALLER
+    - path: /usr/lib/python3.12/site-packages/certifi-2026.6.17.dist-info/LICENSE
+    - path: /usr/lib/python3.12/site-packages/certifi-2026.6.17.dist-info/METADATA
+    - path: /usr/lib/python3.12/site-packages/certifi-2026.6.17.dist-info/RECORD
+    - path: /usr/lib/python3.12/site-packages/certifi-2026.6.17.dist-info/REQUESTED
+    - path: /usr/lib/python3.12/site-packages/certifi-2026.6.17.dist-info/WHEEL
+    - path: /usr/lib/python3.12/site-packages/certifi-2026.6.17.dist-info/direct_url.json
+    - path: /usr/lib/python3.12/site-packages/certifi-2026.6.17.dist-info/top_level.txt
+    - path: /usr/lib/python3.12/site-packages/certifi/__init__.py
+    - path: /usr/lib/python3.12/site-packages/certifi/__main__.py
+    - path: /usr/lib/python3.12/site-packages/certifi/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/certifi/__pycache__/__main__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/certifi/__pycache__/core.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/certifi/cacert.pem
+    - path: /usr/lib/python3.12/site-packages/certifi/core.py
+    - path: /usr/lib/python3.12/site-packages/certifi/py.typed

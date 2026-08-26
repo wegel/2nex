@@ -1,0 +1,399 @@
+package:
+  schema: 1
+  name: dbus
+  slug: dbus
+  namespace: core/ipc
+  version: 1.16.2
+  description: D-Bus message bus system
+  homepage: https://dbus.freedesktop.org/
+  checksum: 89726eaaed2fdd092f92282de81f3d8f4d0ecd273a804d6b2055c22ab18d8c79
+
+sources:
+- name: dbus
+  url: https://dbus.freedesktop.org/releases/dbus/dbus-1.16.2.tar.xz
+  sha256: 0ba2a1a4b16afe7bceb2c07e9ce99a8c2c3508e5dec290dbb643384bd6beb7e2
+- name: transient_config
+  file: pkg/core/ipc/dbus-transient-config.patch
+  sha256: 3ea1ff30a3f185bc4bbd4897b0a31b6205f77e100bc4625567f505b34ca3347f
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4097:1928, 8205:1928, 12396:2114, 16499:2188, 20670:2293, 24849:2400, 29007:2479, 33175:6540, 37266:8637]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf /${SOURCE_dbus} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_transient_config}"
+
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      -Dmodular_tests=disabled \
+      -Dapparmor=disabled \
+      -Dselinux=disabled \
+      -Dqt_help=disabled \
+      -Ddoxygen_docs=disabled \
+      -Dxml_docs=disabled \
+      -Dducktype_docs=disabled \
+      -Dsystemd=enabled \
+      -Dsystemd_system_unitdir=/usr/lib/systemd/system \
+      -Dsystemd_user_unitdir=/usr/lib/systemd/user
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    rm \
+      "${OUT_DIR}/etc/dbus-1/session.conf" \
+      "${OUT_DIR}/etc/dbus-1/system.conf"
+    rmdir "${OUT_DIR}/etc/dbus-1" "${OUT_DIR}/etc"
+
+    daemon="${OUT_DIR}/usr/bin/dbus-daemon"
+    send="${OUT_DIR}/usr/bin/dbus-send"
+    lib="${OUT_DIR}/usr/lib"
+    vendor_dir="${OUT_DIR}/usr/share/dbus-1/session.d"
+    transient_dir=/run/dbus-1/session.d
+    administrator_dir=/etc/dbus-1/session.d
+    test_name=90-layer-order-test.conf
+    backup_dir="${WORK_DIR}/dbus-config-backup"
+    mkdir -p \
+      "${vendor_dir}" \
+      "${transient_dir}" \
+      "${administrator_dir}" \
+      "${backup_dir}"
+
+    config_index=0
+    for config_path in \
+      "${vendor_dir}/${test_name}" \
+      "${transient_dir}/${test_name}" \
+      "${administrator_dir}/${test_name}"; do
+      config_index=$((config_index + 1))
+      if [ -e "${config_path}" ] || [ -L "${config_path}" ]; then
+        mv "${config_path}" "${backup_dir}/${config_index}"
+      fi
+    done
+
+    write_policy() {
+      action=$1
+      destination=$2
+      printf '%s\n' \
+        '<busconfig>' \
+        '  <policy context="default">' \
+        "    <${action} send_destination=\"${destination}\"/>" \
+        '  </policy>' \
+        '</busconfig>' > "$3"
+    }
+    bus_call_works() {
+      LD_LIBRARY_PATH="${lib}" \
+        "${send}" \
+          --bus="${bus_address}" \
+          --print-reply \
+          --dest=org.freedesktop.DBus \
+          / \
+          org.freedesktop.DBus.GetId >/dev/null 2>&1
+    }
+
+    write_policy deny org.freedesktop.DBus "${vendor_dir}/${test_name}"
+    write_policy allow org.freedesktop.DBus "${transient_dir}/${test_name}"
+    write_policy deny org.freedesktop.DBus "${administrator_dir}/${test_name}"
+
+    daemon_output=$(LD_LIBRARY_PATH="${lib}" \
+      "${daemon}" \
+        --config-file="${OUT_DIR}/usr/share/dbus-1/session.conf" \
+        --print-address=1 \
+        --print-pid=1 \
+        --fork)
+    bus_address=$(printf '%s\n' "${daemon_output}" | head -n 1)
+    daemon_pid=$(printf '%s\n' "${daemon_output}" | tail -n 1)
+
+    if bus_call_works; then
+      echo 'administrator D-Bus policy did not override transient policy' >&2
+      exit 1
+    fi
+    rm "${administrator_dir}/${test_name}"
+    kill -HUP "${daemon_pid}"
+    sleep 1
+    bus_call_works
+    rm "${transient_dir}/${test_name}"
+    kill -HUP "${daemon_pid}"
+    sleep 1
+    if bus_call_works; then
+      echo 'vendor D-Bus policy was not restored after reload' >&2
+      exit 1
+    fi
+    kill "${daemon_pid}"
+    wait "${daemon_pid}" 2>/dev/null || true
+
+    # A same-named file in a higher tree must replace the lower one outright,
+    # and a link to /dev/null must mask it. Both cases put a deny in the vendor
+    # file, because the base session policy already permits the call: the deny
+    # must disappear for the call to work. The additive scan this replaced kept
+    # the vendor deny in force in both cases.
+    start_test_bus() {
+      bus_output=$(LD_LIBRARY_PATH="${lib}" \
+        "${daemon}" \
+          --config-file="${OUT_DIR}/usr/share/dbus-1/session.conf" \
+          --print-address=1 \
+          --print-pid=1 \
+          --fork)
+      bus_address=$(printf '%s\n' "${bus_output}" | head -n 1)
+      daemon_pid=$(printf '%s\n' "${bus_output}" | tail -n 1)
+    }
+    stop_test_bus() {
+      kill "${daemon_pid}" 2>/dev/null || true
+      wait "${daemon_pid}" 2>/dev/null || true
+    }
+
+    write_policy deny org.freedesktop.DBus "${vendor_dir}/${test_name}"
+    write_policy allow org.example.NexUapiUnused \
+      "${administrator_dir}/${test_name}"
+    start_test_bus
+    if ! bus_call_works; then
+      echo 'administrator drop-in did not replace the same-named vendor file' >&2
+      stop_test_bus
+      exit 1
+    fi
+    stop_test_bus
+
+    rm "${administrator_dir}/${test_name}"
+    ln -s /dev/null "${administrator_dir}/${test_name}"
+    start_test_bus
+    if ! bus_call_works; then
+      echo 'a /dev/null drop-in did not mask the same-named vendor file' >&2
+      stop_test_bus
+      exit 1
+    fi
+    stop_test_bus
+    rm "${administrator_dir}/${test_name}" "${vendor_dir}/${test_name}"
+
+    printf 'dbus UAPI smoke: drop-in tiers, basename shadowing, and masking behaved\n'
+
+    explicit_config="${WORK_DIR}/explicit-session.conf"
+    printf '%s\n' \
+      '<busconfig>' \
+      '  <type>session</type>' \
+      '  <listen>unix:tmpdir=/tmp</listen>' \
+      '  <auth>EXTERNAL</auth>' \
+      '  <policy context="default">' \
+      '    <allow send_destination="*"/>' \
+      '    <allow receive_sender="*"/>' \
+      '    <allow own="*"/>' \
+      '  </policy>' \
+      '</busconfig>' > "${explicit_config}"
+    explicit_output=$(LD_LIBRARY_PATH="${lib}" \
+      "${daemon}" \
+        --config-file="${explicit_config}" \
+        --print-address=1 \
+        --print-pid=1 \
+        --fork)
+    bus_address=$(printf '%s\n' "${explicit_output}" | head -n 1)
+    daemon_pid=$(printf '%s\n' "${explicit_output}" | tail -n 1)
+    bus_call_works
+    kill "${daemon_pid}"
+    wait "${daemon_pid}" 2>/dev/null || true
+
+    rm -f \
+      "${vendor_dir}/${test_name}" \
+      "${transient_dir}/${test_name}" \
+      "${administrator_dir}/${test_name}"
+    config_index=0
+    for config_path in \
+      "${vendor_dir}/${test_name}" \
+      "${transient_dir}/${test_name}" \
+      "${administrator_dir}/${test_name}"; do
+      config_index=$((config_index + 1))
+      if [ -e "${backup_dir}/${config_index}" ] || \
+          [ -L "${backup_dir}/${config_index}" ]; then
+        mv "${backup_dir}/${config_index}" "${config_path}"
+      fi
+    done
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/dbus-cleanup-sockets
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/dbus-daemon
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+      - /usr/lib/libexpat.so.1
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/bin/dbus-launch
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/bin/dbus-monitor
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/bin/dbus-run-session
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/bin/dbus-send
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/bin/dbus-test-tool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/bin/dbus-update-activation-environment
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/bin/dbus-uuidgen
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+    - path: /usr/libexec/dbus-daemon-launch-helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdbus-1.so.3
+      - /usr/lib/libexpat.so.1
+
+  conf:
+    files:
+    - path: /usr/share/dbus-1/session.conf
+    - path: /usr/share/dbus-1/system.conf
+
+  dev:
+    files:
+    - path: /usr/include/dbus-1.0/dbus/dbus-address.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-bus.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-connection.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-errors.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-macros.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-memory.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-message.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-misc.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-pending-call.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-protocol.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-server.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-shared.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-signature.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-syntax.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-threads.h
+    - path: /usr/include/dbus-1.0/dbus/dbus-types.h
+    - path: /usr/include/dbus-1.0/dbus/dbus.h
+    - path: /usr/lib/dbus-1.0/include/dbus/dbus-arch-deps.h
+    - path: /usr/lib/pkgconfig/dbus-1.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/dbus/diagram.png
+    - path: /usr/share/doc/dbus/diagram.svg
+    - path: /usr/share/doc/dbus/examples/GetAllMatchRules.py
+    - path: /usr/share/doc/dbus/examples/example-session-disable-stats.conf
+    - path: /usr/share/doc/dbus/examples/example-system-enable-stats.conf
+    - path: /usr/share/doc/dbus/examples/example-system-hardening-without-traditional-activation.conf
+    - path: /usr/share/doc/dbus/index.html
+    - path: /usr/share/doc/dbus/system-activation.txt
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/DBus1/DBus1Config.cmake
+    - path: /usr/lib/cmake/DBus1/DBus1ConfigVersion.cmake
+    - path: /usr/lib/libdbus-1.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/libdbus-1.so.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/libdbus-1.so.3.38.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/systemd/system/dbus.service
+    - path: /usr/lib/systemd/system/dbus.socket
+    - path: /usr/lib/systemd/system/multi-user.target.wants/dbus.service
+    - path: /usr/lib/systemd/system/sockets.target.wants/dbus.socket
+    - path: /usr/lib/systemd/user/dbus.service
+    - path: /usr/lib/systemd/user/dbus.socket
+    - path: /usr/lib/systemd/user/sockets.target.wants/dbus.socket
+    - path: /usr/lib/sysusers.d/dbus.conf
+    - path: /usr/lib/tmpfiles.d/dbus.conf
+
+  misc:
+    files:
+    - path: /usr/share/xml/dbus-1/busconfig.dtd
+    - path: /usr/share/xml/dbus-1/catalog.xml
+    - path: /usr/share/xml/dbus-1/introspect.dtd
+
+resolution:
+  /usr/lib/libexpat.so.1: expat
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libdbus-1.so.3: self
+  /usr/lib/libsystemd.so.0: systemd

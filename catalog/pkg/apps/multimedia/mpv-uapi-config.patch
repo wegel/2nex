@@ -1,0 +1,82 @@
+From: Nex package maintainers
+Subject: [PATCH] path: read system config files from all three UAPI tiers
+Source: no upstream commit; written for Nex against mpv dbd7a905
+Upstream: not submitted. mpv compiles one system configuration directory, so a
+ distribution cannot ship a default that a boot or an administrator may
+ override. The change below adds the generic /etc, /run, and <prefix>/lib
+ order and names no Nex path, so any Linux system that follows the UAPI
+ configuration files specification can use it.
+
+mpv resolved its system configuration directory to a single compiled path,
+MPV_CONFDIR, which is /etc/mpv for a normal Linux prefix. mpv.conf, input.conf,
+encoding-profiles.conf, and the auto-loaded scripts directory therefore had one
+system location each. A package could not ship a default mpv.conf below /usr,
+and a boot-time tool had nowhere to put a temporary one.
+
+Split the system location into the three tiers that the UAPI configuration
+files specification describes: the lasting administrator directory, then a
+temporary directory that one boot owns, then the immutable package directory
+below <prefix>/lib. mpv already collects every config file it finds and loads
+them lowest priority last-wins, so listing the new directories after "global"
+in config_dirs gives administrator over transient over vendor, with the user's
+own files still winning over all three. Platforms whose path resolver does not
+answer the new types keep exactly one system directory, and --config-dir,
+MPV_HOME, and --no-config are unaffected because they still short-circuit
+every entry after the first.
+
+diff -urN a/meson.build b/meson.build
+--- a/meson.build
++++ b/meson.build
+@@ -1750,6 +1750,7 @@
+ feature_str = run_command(python, '-c', feature_sort, feature_keys, check: true).stdout()
+ conf_data.set_quoted('FULLCONFIG', feature_str)
+ conf_data.set_quoted('MPV_CONFDIR', join_paths(get_option('prefix'), get_option('sysconfdir'), 'mpv'))
++conf_data.set_quoted('MPV_VENDOR_CONFDIR', join_paths(get_option('prefix'), get_option('libdir'), 'mpv'))
+ conf_data.set_quoted('PLATFORM', host_machine.system())
+ configure_file(output : 'config.h', configuration : conf_data)
+ message('List of enabled features: ' + feature_str)
+diff -urN a/options/path.c b/options/path.c
+--- a/options/path.c
++++ b/options/path.c
+@@ -62,7 +62,13 @@
+     "old_home",
+     "osxbundle",
+     "exe_dir",
++    // The three system tiers, highest priority first: lasting administrator
++    // policy, then temporary policy that one boot owns, then the immutable
++    // package default. Config files load lowest priority first, so a higher
++    // tier overrides the same option from a lower one.
+     "global",
++    "global_transient",
++    "global_vendor",
+ };
+ 
+ // Return a platform specific path using a path type as defined in osdep/path.h.
+diff -urN a/osdep/path.h b/osdep/path.h
+--- a/osdep/path.h
++++ b/osdep/path.h
+@@ -8,7 +8,9 @@
+ //  "home"          the native mpv-specific user config dir
+ //  "old_home"      same as "home", but lesser priority (compatibility)
+ //  "osxbundle"     macOS bundle resource path
+-//  "global"        the least priority, global config file location
++//  "global"        the lasting administrator config file location
++//  "global_transient" temporary system config that one boot owns
++//  "global_vendor" the least priority, immutable package config location
+ //  "desktop"       path to desktop contents
+ //
+ //  These additional types are also defined. However, they are not necessarily
+diff -urN a/osdep/path-unix.c b/osdep/path-unix.c
+--- a/osdep/path-unix.c
++++ b/osdep/path-unix.c
+@@ -128,6 +128,10 @@
+         return mpv_state;
+     if (strcmp(type, "global") == 0)
+         return MPV_CONFDIR;
++    if (strcmp(type, "global_transient") == 0)
++        return "/run/mpv";
++    if (strcmp(type, "global_vendor") == 0)
++        return MPV_VENDOR_CONFDIR;
+     if (strcmp(type, "desktop") == 0)
+         return mpv_desktop;
+     return NULL;

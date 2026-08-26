@@ -1,0 +1,90 @@
+package:
+  schema: 1
+  name: Docker Compose
+  slug: docker-compose
+  namespace: apps/containers
+  version: 5.1.0+gite8c21434
+  description: Multi-container application runner for Docker
+  homepage: https://github.com/docker/compose
+  checksum: 6a17ef75da47077ae49afdc79b3d2f891415e62a63db67e894308147e58e0cd5
+
+sources:
+- name: docker_compose
+  url: https://github.com/docker/compose/archive/e8c214349819cc14804e8946adb8ae3576b7139c.tar.gz
+  sha256: 3000416fec8b64352f977ba0e10361976fcd62c2706fe4ba006e357e0d3e5dbe
+- name: vendor
+  sha256: fe9ca5dc9a9facae0dd53889b4b37a2900285d67fe5c41242f97bccfc02d8f99
+  go_sum: https://raw.githubusercontent.com/docker/compose/e8c214349819cc14804e8946adb8ae3576b7139c/go.sum
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: go
+  commit: x86_64/pkg/dev/lang/go/1.26.4/bundles/dev
+- name: docker
+  commit: x86_64/pkg/apps/containers/docker/29.3.0+git1da6517e1a/bundles/full
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [1703:11992]
+
+  script: |
+    set -eux
+    tar --no-same-owner -xf /${SOURCE_docker_compose} -C "${WORK_DIR}" --strip-components=1
+    tar --no-same-owner -xf /${SOURCE_vendor} -C "${WORK_DIR}"
+    cd "${WORK_DIR}"
+
+    export GOROOT=/usr/lib/go
+    export GOPATH="${WORK_DIR}/gopath"
+    export GOCACHE="${WORK_DIR}/gocache"
+    export GOENV=off
+    export GOTELEMETRY=off
+    export GOFLAGS=-mod=vendor
+    export GOTOOLCHAIN=local
+    export CGO_ENABLED=1
+    export CGO_CFLAGS="${CFLAGS}"
+    export CGO_LDFLAGS="${LDFLAGS} -Wl,--build-id=none"
+
+    go build \
+      -trimpath \
+      -buildvcs=false \
+      -ldflags="-s -w -buildid= -X github.com/docker/compose/v5/internal.Version=5.1.0+gite8c21434" \
+      -o docker-compose \
+      ./cmd
+
+    install -Dm755 docker-compose \
+      "${OUT_DIR}/usr/lib/docker/cli-plugins/docker-compose"
+
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  full:
+  - lib
+
+outputs:
+  lib:
+    files:
+    - path: /usr/lib/docker/cli-plugins/docker-compose
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

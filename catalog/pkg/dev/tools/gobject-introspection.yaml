@@ -1,0 +1,534 @@
+package:
+  schema: 1
+  name: GObject Introspection
+  slug: gobject-introspection
+  namespace: dev/tools
+  version: 1.84.0
+  description: Scanner and compiler for GObject introspection metadata
+  homepage: https://gi.readthedocs.io/
+  checksum: d5e4cb2453dc074586c5af4923a447865d14a593cdeb07db53e16918a7d22eb3
+
+sources:
+- name: gobject-introspection
+  url: https://download.gnome.org/sources/gobject-introspection/1.84/gobject-introspection-1.84.0.tar.xz
+  sha256: 945b57da7ec262e5c266b89e091d14be800cc424277d82a02872b7d794a84779
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: bison
+  commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
+- name: flex
+  commit: x86_64/pkg/core/toolchain/flex/2.6.4/bundles/dev
+- name: m4
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: setuptools
+  commit: x86_64/pkg/dev/python/setuptools/70.0.0/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: cairo
+  commit: x86_64/pkg/libs/graphics/cairo/1.18.4/bundles/dev
+- name: pixman
+  commit: x86_64/pkg/libs/graphics/pixman/0.46.4/bundles/dev
+- name: freetype
+  commit: x86_64/pkg/libs/graphics/freetype/2.14.1/bundles/dev
+- name: fontconfig
+  commit: x86_64/pkg/libs/graphics/fontconfig/2.17.1/bundles/dev
+- name: libpng
+  commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: xorgproto
+  commit: x86_64/pkg/libs/x11/xorgproto/2024.1/bundles/dev
+- name: libx11
+  commit: x86_64/pkg/libs/x11/libx11/1.8.10/bundles/dev
+- name: libxcb
+  commit: x86_64/pkg/libs/x11/libxcb/1.17.0/bundles/dev
+- name: libxau
+  commit: x86_64/pkg/libs/x11/libxau/1.0.12/bundles/dev
+- name: libxdmcp
+  commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
+- name: libxext
+  commit: x86_64/pkg/libs/x11/libxext/1.3.6/bundles/dev
+- name: libxrender
+  commit: x86_64/pkg/libs/x11/libxrender/0.9.11/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4148:4518, 8277:10886, 12418:11926, 16625:12919, 20735:13358, 24946:13775, 29053:15091, 33150:15713, 35679:16057]
+
+  script: |
+    set -eux
+    tar --no-same-owner -xf /${SOURCE_gobject_introspection} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --buildtype=release \
+      -Ddoctool=disabled \
+      -Dgtk_doc=false \
+      -Dtests=false \
+      -Dcairo=enabled
+
+    ninja -C build
+    ninja -C build \
+      gir/GLib-2.0.typelib \
+      gir/GObject-2.0.typelib \
+      gir/GModule-2.0.typelib \
+      gir/Gio-2.0.typelib
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    /usr/bin/python3 - "${OUT_DIR}/usr/bin/g-ir-scanner" "${OUT_DIR}/usr/bin/g-ir-annotation-tool" <<'PY'
+    import sys
+    from pathlib import Path
+
+    for filename in sys.argv[1:]:
+        script = Path(filename)
+        lines = script.read_text().splitlines()
+        lines[0] = "#!/usr/bin/python3"
+        script.write_text("\n".join(lines) + "\n")
+    PY
+
+    for namespace in GLib-2.0 GObject-2.0 GModule-2.0 Gio-2.0; do
+      install -Dm644 "build/gir/${namespace}.gir" "${OUT_DIR}/usr/share/gir-1.0/${namespace}.gir"
+      install -Dm644 "build/gir/${namespace}.typelib" "${OUT_DIR}/usr/lib/girepository-1.0/${namespace}.typelib"
+    done
+
+    mkdir -p "${OUT_DIR}/usr/lib/python3.12/site-packages"
+    cp -R --no-preserve=ownership /usr/lib/python3.12/site-packages/setuptools/_distutils "${OUT_DIR}/usr/lib/python3.12/site-packages/distutils"
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - misc
+
+  full:
+  - bin
+  - dev
+  - lib
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/g-ir-annotation-tool
+      needs:
+      - /usr/bin/python3
+    - path: /usr/bin/g-ir-compiler
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libffi.so.8
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libgirepository-1.0.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libm.so.6
+    - path: /usr/bin/g-ir-generate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgirepository-1.0.so.1
+      - /usr/lib/libglib-2.0.so.0
+    - path: /usr/bin/g-ir-inspect
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgirepository-1.0.so.1
+      - /usr/lib/libglib-2.0.so.0
+    - path: /usr/bin/g-ir-scanner
+      needs:
+      - /usr/bin/python3
+
+  dev:
+    files:
+    - path: /usr/include/gobject-introspection-1.0/giarginfo.h
+    - path: /usr/include/gobject-introspection-1.0/gibaseinfo.h
+    - path: /usr/include/gobject-introspection-1.0/gicallableinfo.h
+    - path: /usr/include/gobject-introspection-1.0/giconstantinfo.h
+    - path: /usr/include/gobject-introspection-1.0/gienuminfo.h
+    - path: /usr/include/gobject-introspection-1.0/gifieldinfo.h
+    - path: /usr/include/gobject-introspection-1.0/gifunctioninfo.h
+    - path: /usr/include/gobject-introspection-1.0/giinterfaceinfo.h
+    - path: /usr/include/gobject-introspection-1.0/giobjectinfo.h
+    - path: /usr/include/gobject-introspection-1.0/gipropertyinfo.h
+    - path: /usr/include/gobject-introspection-1.0/giregisteredtypeinfo.h
+    - path: /usr/include/gobject-introspection-1.0/girepository.h
+    - path: /usr/include/gobject-introspection-1.0/girffi.h
+    - path: /usr/include/gobject-introspection-1.0/gisignalinfo.h
+    - path: /usr/include/gobject-introspection-1.0/gistructinfo.h
+    - path: /usr/include/gobject-introspection-1.0/gitypeinfo.h
+    - path: /usr/include/gobject-introspection-1.0/gitypelib.h
+    - path: /usr/include/gobject-introspection-1.0/gitypes.h
+    - path: /usr/include/gobject-introspection-1.0/giunioninfo.h
+    - path: /usr/include/gobject-introspection-1.0/giversion.h
+    - path: /usr/include/gobject-introspection-1.0/giversionmacros.h
+    - path: /usr/include/gobject-introspection-1.0/givfuncinfo.h
+    - path: /usr/lib/pkgconfig/gobject-introspection-1.0.pc
+    - path: /usr/lib/pkgconfig/gobject-introspection-no-export-1.0.pc
+
+  lib:
+    files:
+    - path: /usr/lib/girepository-1.0/DBus-1.0.typelib
+    - path: /usr/lib/girepository-1.0/DBusGLib-1.0.typelib
+    - path: /usr/lib/girepository-1.0/GIRepository-2.0.typelib
+    - path: /usr/lib/girepository-1.0/GL-1.0.typelib
+    - path: /usr/lib/girepository-1.0/GLib-2.0.typelib
+    - path: /usr/lib/girepository-1.0/GModule-2.0.typelib
+    - path: /usr/lib/girepository-1.0/GObject-2.0.typelib
+    - path: /usr/lib/girepository-1.0/Gio-2.0.typelib
+    - path: /usr/lib/girepository-1.0/Vulkan-1.0.typelib
+    - path: /usr/lib/girepository-1.0/cairo-1.0.typelib
+    - path: /usr/lib/girepository-1.0/fontconfig-2.0.typelib
+    - path: /usr/lib/girepository-1.0/freetype2-2.0.typelib
+    - path: /usr/lib/girepository-1.0/libxml2-2.0.typelib
+    - path: /usr/lib/girepository-1.0/win32-1.0.typelib
+    - path: /usr/lib/girepository-1.0/xfixes-4.0.typelib
+    - path: /usr/lib/girepository-1.0/xft-2.0.typelib
+    - path: /usr/lib/girepository-1.0/xlib-2.0.typelib
+    - path: /usr/lib/girepository-1.0/xrandr-1.3.typelib
+    - path: /usr/lib/gobject-introspection/giscanner/__init__.py
+    - path: /usr/lib/gobject-introspection/giscanner/_giscanner.cpython-312-x86_64-linux-gnu.so
+      needs:
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libmount.so.1
+      - /usr/lib/libpcre2-8.so.0
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/gobject-introspection/giscanner/_version.py
+    - path: /usr/lib/gobject-introspection/giscanner/annotationmain.py
+    - path: /usr/lib/gobject-introspection/giscanner/annotationparser.py
+    - path: /usr/lib/gobject-introspection/giscanner/ast.py
+    - path: /usr/lib/gobject-introspection/giscanner/cachestore.py
+    - path: /usr/lib/gobject-introspection/giscanner/ccompiler.py
+    - path: /usr/lib/gobject-introspection/giscanner/codegen.py
+    - path: /usr/lib/gobject-introspection/giscanner/docmain.py
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/_doc.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/_index.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/_method.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/_methods.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/_properties.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/_signals.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/_staticmethods.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/_vfuncs.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/base.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/callback.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/class.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/default.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/enum.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/function.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/interface.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/method.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/Gjs/namespace.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/devdocs/meson.build
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/C/callback.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/C/class.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/C/constructor.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/C/default.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/C/enum.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/C/field.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/C/function.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/C/interface.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/C/method.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/C/namespace.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/C/property.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/C/record.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/C/signal.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/C/vfunc.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Gjs/callback.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Gjs/class.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Gjs/constructor.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Gjs/default.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Gjs/enum.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Gjs/field.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Gjs/function.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Gjs/interface.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Gjs/method.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Gjs/namespace.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Gjs/property.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Gjs/record.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Gjs/signal.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Gjs/vfunc.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Python/callback.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Python/class.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Python/constructor.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Python/default.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Python/enum.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Python/field.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Python/function.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Python/interface.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Python/method.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Python/namespace.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Python/property.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Python/record.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Python/signal.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/Python/vfunc.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/base.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/class.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/meson.build
+    - path: /usr/lib/gobject-introspection/giscanner/doctemplates/mallard/namespace.tmpl
+    - path: /usr/lib/gobject-introspection/giscanner/docwriter.py
+    - path: /usr/lib/gobject-introspection/giscanner/dumper.py
+    - path: /usr/lib/gobject-introspection/giscanner/gdumpparser.py
+    - path: /usr/lib/gobject-introspection/giscanner/girparser.py
+    - path: /usr/lib/gobject-introspection/giscanner/girwriter.py
+    - path: /usr/lib/gobject-introspection/giscanner/introspectablepass.py
+    - path: /usr/lib/gobject-introspection/giscanner/maintransformer.py
+    - path: /usr/lib/gobject-introspection/giscanner/mdextensions.py
+    - path: /usr/lib/gobject-introspection/giscanner/message.py
+    - path: /usr/lib/gobject-introspection/giscanner/msvccompiler.py
+    - path: /usr/lib/gobject-introspection/giscanner/pkgconfig.py
+    - path: /usr/lib/gobject-introspection/giscanner/scannermain.py
+    - path: /usr/lib/gobject-introspection/giscanner/sectionparser.py
+    - path: /usr/lib/gobject-introspection/giscanner/shlibs.py
+    - path: /usr/lib/gobject-introspection/giscanner/sourcescanner.py
+    - path: /usr/lib/gobject-introspection/giscanner/testcodegen.py
+    - path: /usr/lib/gobject-introspection/giscanner/transformer.py
+    - path: /usr/lib/gobject-introspection/giscanner/utils.py
+    - path: /usr/lib/gobject-introspection/giscanner/xmlwriter.py
+    - path: /usr/lib/libgirepository-1.0.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libffi.so.8
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libgirepository-1.0.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libffi.so.8
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libgirepository-1.0.so.1.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libffi.so.8
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgmodule-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/python3.12/site-packages/distutils/__init__.py
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/_collections.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/_functools.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/_itertools.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/_log.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/_macos_compat.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/_modified.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/_msvccompiler.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/archive_util.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/bcppcompiler.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/ccompiler.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/cmd.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/config.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/core.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/cygwinccompiler.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/debug.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/dep_util.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/dir_util.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/dist.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/errors.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/extension.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/fancy_getopt.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/file_util.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/filelist.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/log.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/msvc9compiler.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/msvccompiler.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/py38compat.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/py39compat.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/spawn.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/sysconfig.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/text_file.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/unixccompiler.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/util.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/version.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/versionpredicate.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/__pycache__/zosccompiler.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/_collections.py
+    - path: /usr/lib/python3.12/site-packages/distutils/_functools.py
+    - path: /usr/lib/python3.12/site-packages/distutils/_itertools.py
+    - path: /usr/lib/python3.12/site-packages/distutils/_log.py
+    - path: /usr/lib/python3.12/site-packages/distutils/_macos_compat.py
+    - path: /usr/lib/python3.12/site-packages/distutils/_modified.py
+    - path: /usr/lib/python3.12/site-packages/distutils/_msvccompiler.py
+    - path: /usr/lib/python3.12/site-packages/distutils/archive_util.py
+    - path: /usr/lib/python3.12/site-packages/distutils/bcppcompiler.py
+    - path: /usr/lib/python3.12/site-packages/distutils/ccompiler.py
+    - path: /usr/lib/python3.12/site-packages/distutils/cmd.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__init__.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/_framework_compat.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/bdist.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/bdist_dumb.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/bdist_rpm.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/build.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/build_clib.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/build_ext.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/build_py.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/build_scripts.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/check.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/clean.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/config.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/install.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/install_data.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/install_egg_info.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/install_headers.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/install_lib.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/install_scripts.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/register.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/sdist.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/__pycache__/upload.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/command/_framework_compat.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/bdist.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/bdist_dumb.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/bdist_rpm.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/build.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/build_clib.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/build_ext.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/build_py.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/build_scripts.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/check.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/clean.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/config.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/install.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/install_data.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/install_egg_info.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/install_headers.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/install_lib.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/install_scripts.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/register.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/sdist.py
+    - path: /usr/lib/python3.12/site-packages/distutils/command/upload.py
+    - path: /usr/lib/python3.12/site-packages/distutils/compat/__init__.py
+    - path: /usr/lib/python3.12/site-packages/distutils/compat/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/compat/__pycache__/py38.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/distutils/compat/py38.py
+    - path: /usr/lib/python3.12/site-packages/distutils/config.py
+    - path: /usr/lib/python3.12/site-packages/distutils/core.py
+    - path: /usr/lib/python3.12/site-packages/distutils/cygwinccompiler.py
+    - path: /usr/lib/python3.12/site-packages/distutils/debug.py
+    - path: /usr/lib/python3.12/site-packages/distutils/dep_util.py
+    - path: /usr/lib/python3.12/site-packages/distutils/dir_util.py
+    - path: /usr/lib/python3.12/site-packages/distutils/dist.py
+    - path: /usr/lib/python3.12/site-packages/distutils/errors.py
+    - path: /usr/lib/python3.12/site-packages/distutils/extension.py
+    - path: /usr/lib/python3.12/site-packages/distutils/fancy_getopt.py
+    - path: /usr/lib/python3.12/site-packages/distutils/file_util.py
+    - path: /usr/lib/python3.12/site-packages/distutils/filelist.py
+    - path: /usr/lib/python3.12/site-packages/distutils/log.py
+    - path: /usr/lib/python3.12/site-packages/distutils/msvc9compiler.py
+    - path: /usr/lib/python3.12/site-packages/distutils/msvccompiler.py
+    - path: /usr/lib/python3.12/site-packages/distutils/py38compat.py
+    - path: /usr/lib/python3.12/site-packages/distutils/py39compat.py
+    - path: /usr/lib/python3.12/site-packages/distutils/spawn.py
+    - path: /usr/lib/python3.12/site-packages/distutils/sysconfig.py
+    - path: /usr/lib/python3.12/site-packages/distutils/text_file.py
+    - path: /usr/lib/python3.12/site-packages/distutils/unixccompiler.py
+    - path: /usr/lib/python3.12/site-packages/distutils/util.py
+    - path: /usr/lib/python3.12/site-packages/distutils/version.py
+    - path: /usr/lib/python3.12/site-packages/distutils/versionpredicate.py
+    - path: /usr/lib/python3.12/site-packages/distutils/zosccompiler.py
+
+  man:
+    files:
+    - path: /usr/share/man/man1/g-ir-compiler.1
+    - path: /usr/share/man/man1/g-ir-doc-tool.1
+    - path: /usr/share/man/man1/g-ir-generate.1
+    - path: /usr/share/man/man1/g-ir-scanner.1
+
+  misc:
+    files:
+    - path: /usr/share/aclocal/introspection.m4
+    - path: /usr/share/gir-1.0/DBus-1.0.gir
+    - path: /usr/share/gir-1.0/DBusGLib-1.0.gir
+    - path: /usr/share/gir-1.0/GIRepository-2.0.gir
+    - path: /usr/share/gir-1.0/GL-1.0.gir
+    - path: /usr/share/gir-1.0/GLib-2.0.gir
+    - path: /usr/share/gir-1.0/GModule-2.0.gir
+    - path: /usr/share/gir-1.0/GObject-2.0.gir
+    - path: /usr/share/gir-1.0/Gio-2.0.gir
+    - path: /usr/share/gir-1.0/Vulkan-1.0.gir
+    - path: /usr/share/gir-1.0/cairo-1.0.gir
+    - path: /usr/share/gir-1.0/fontconfig-2.0.gir
+    - path: /usr/share/gir-1.0/freetype2-2.0.gir
+    - path: /usr/share/gir-1.0/gir-1.2.rnc
+    - path: /usr/share/gir-1.0/libxml2-2.0.gir
+    - path: /usr/share/gir-1.0/win32-1.0.gir
+    - path: /usr/share/gir-1.0/xfixes-4.0.gir
+    - path: /usr/share/gir-1.0/xft-2.0.gir
+    - path: /usr/share/gir-1.0/xlib-2.0.gir
+    - path: /usr/share/gir-1.0/xrandr-1.3.gir
+    - path: /usr/share/gobject-introspection-1.0/Makefile.introspection
+    - path: /usr/share/gobject-introspection-1.0/gdump.c
+
+resolution:
+  /usr/lib/libgio-2.0.so.0: glib2
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgmodule-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libffi.so.8: libffi
+  /usr/lib/libpcre2-8.so.0: pcre2
+  /usr/bin/python3: python3
+  /usr/lib/libgirepository-1.0.so.1: self
+  /usr/lib/libblkid.so.1: util-linux
+  /usr/lib/libmount.so.1: util-linux
+  /usr/lib/libz.so.1: zlib

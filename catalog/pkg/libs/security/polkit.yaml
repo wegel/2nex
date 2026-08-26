@@ -1,0 +1,325 @@
+package:
+  schema: 1
+  name: polkit
+  slug: polkit
+  namespace: libs/security
+  version: "124"
+  description: Application authorization framework
+  homepage: https://gitlab.freedesktop.org/polkit/polkit
+  checksum: 65c2d79230e0df9cbf1ea7af29208bbe5a648d1e5d29a6a1f1b76fa836712b29
+
+sources:
+- name: polkit
+  url: https://gitlab.freedesktop.org/polkit/polkit/-/archive/124/polkit-124.tar.gz
+  sha256: 72457d96a0538fd03a3ca96a6bf9b7faf82184d4d67c793eb759168e4fd49e20
+- name: run_tier_patch
+  file: pkg/libs/security/polkit-run-tier.patch
+  sha256: 748212f163792130c93e62bdfa67f91712551ef347a248b32f6209382a91e754
+- name: run_tier_check
+  file: pkg/libs/security/polkit-run-tier-check.sh
+  sha256: a679aeaef4aa2f336c44e81b54ff41dd634f1293a30eeab2f18cc457058bfc19
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: gettext
+  commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: dbus
+  commit: x86_64/pkg/core/ipc/dbus/1.16.2/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: linux-pam
+  commit: x86_64/pkg/libs/security/linux-pam/1.7.1/bundles/dev
+- name: duktape
+  commit: x86_64/pkg/dev/libs/duktape/2.7.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4126:736, 12444:1059, 20774:1082, 33198:1088, 45676:1094, 58188:1121, 66487:1122, 82982:1147, 99558:1147, 109990:3024]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_polkit} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_run_tier_patch}"
+
+    meson setup build \
+      --prefix=/usr \
+      --sysconfdir=/etc \
+      --localstatedir=/var \
+      --libdir=lib \
+      --buildtype=release \
+      -Dsession_tracking=libsystemd-login \
+      -Dauthfw=pam \
+      -Dpam_prefix=/usr/lib/pam.d \
+      -Dos_type=lfs \
+      -Djs_engine=duktape \
+      -Dexamples=false \
+      -Dtests=false \
+      -Dintrospection=false \
+      -Dgtk_doc=false \
+      -Dman=false
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # Drives the real, newly built polkitd through a live authorization
+    # decision over a private D-Bus system bus, checking which rules.d
+    # tier decides for a same-named file and that a missing /run tier is
+    # tolerated, instead of reimplementing the sort order this package
+    # patches; see the check script for detail.
+    sh "/${SOURCE_run_tier_check}" "${OUT_DIR}" "${WORK_DIR}"
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - bin
+  - conf
+  - dev
+  - lib
+  - locale
+  - misc
+
+  runtime:
+  - bin
+  - conf
+  - lib
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/pkaction
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpolkit-gobject-1.so.0
+    - path: /usr/bin/pkcheck
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpolkit-agent-1.so.0
+      - /usr/lib/libpolkit-gobject-1.so.0
+    - path: /usr/bin/pkexec
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libpolkit-agent-1.so.0
+      - /usr/lib/libpolkit-gobject-1.so.0
+    - path: /usr/bin/pkttyagent
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpolkit-agent-1.so.0
+      - /usr/lib/libpolkit-gobject-1.so.0
+
+  conf:
+    files:
+    - path: /usr/share/dbus-1/system.d/org.freedesktop.PolicyKit1.conf
+
+  dev:
+    files:
+    - path: /usr/include/polkit-1/polkit/polkit.h
+    - path: /usr/include/polkit-1/polkit/polkitactiondescription.h
+    - path: /usr/include/polkit-1/polkit/polkitauthority.h
+    - path: /usr/include/polkit-1/polkit/polkitauthorityfeatures.h
+    - path: /usr/include/polkit-1/polkit/polkitauthorizationresult.h
+    - path: /usr/include/polkit-1/polkit/polkitcheckauthorizationflags.h
+    - path: /usr/include/polkit-1/polkit/polkitdetails.h
+    - path: /usr/include/polkit-1/polkit/polkitenumtypes.h
+    - path: /usr/include/polkit-1/polkit/polkiterror.h
+    - path: /usr/include/polkit-1/polkit/polkitidentity.h
+    - path: /usr/include/polkit-1/polkit/polkitimplicitauthorization.h
+    - path: /usr/include/polkit-1/polkit/polkitpermission.h
+    - path: /usr/include/polkit-1/polkit/polkitprivate.h
+    - path: /usr/include/polkit-1/polkit/polkitsubject.h
+    - path: /usr/include/polkit-1/polkit/polkitsystembusname.h
+    - path: /usr/include/polkit-1/polkit/polkittemporaryauthorization.h
+    - path: /usr/include/polkit-1/polkit/polkittypes.h
+    - path: /usr/include/polkit-1/polkit/polkitunixgroup.h
+    - path: /usr/include/polkit-1/polkit/polkitunixnetgroup.h
+    - path: /usr/include/polkit-1/polkit/polkitunixprocess.h
+    - path: /usr/include/polkit-1/polkit/polkitunixsession.h
+    - path: /usr/include/polkit-1/polkit/polkitunixuser.h
+    - path: /usr/include/polkit-1/polkitagent/polkitagent.h
+    - path: /usr/include/polkit-1/polkitagent/polkitagentenumtypes.h
+    - path: /usr/include/polkit-1/polkitagent/polkitagentlistener.h
+    - path: /usr/include/polkit-1/polkitagent/polkitagentsession.h
+    - path: /usr/include/polkit-1/polkitagent/polkitagenttextlistener.h
+    - path: /usr/include/polkit-1/polkitagent/polkitagenttypes.h
+    - path: /usr/lib/pkgconfig/polkit-agent-1.pc
+    - path: /usr/lib/pkgconfig/polkit-gobject-1.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libpolkit-agent-1.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpolkit-gobject-1.so.0
+    - path: /usr/lib/libpolkit-agent-1.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpolkit-gobject-1.so.0
+    - path: /usr/lib/libpolkit-agent-1.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpolkit-gobject-1.so.0
+    - path: /usr/lib/libpolkit-gobject-1.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/libpolkit-gobject-1.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/libpolkit-gobject-1.so.0.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/pam.d/polkit-1
+    - path: /usr/lib/polkit-1/polkit-agent-helper-1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpam.so.0
+      - /usr/lib/libpolkit-gobject-1.so.0
+    - path: /usr/lib/polkit-1/polkitd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libduktape.so.207
+      - /usr/lib/libexpat.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libpolkit-gobject-1.so.0
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/systemd/system/polkit.service
+    - path: /usr/lib/sysusers.d/polkit.conf
+
+  locale:
+    files:
+    - path: /usr/share/locale/cs/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/nn/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/polkit-1.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/polkit-1.mo
+
+  misc:
+    files:
+    - path: /usr/share/dbus-1/system-services/org.freedesktop.PolicyKit1.service
+    - path: /usr/share/gettext/its/polkit.its
+    - path: /usr/share/gettext/its/polkit.loc
+    - path: /usr/share/polkit-1/actions/org.freedesktop.policykit.policy
+    - path: /usr/share/polkit-1/policyconfig-1.dtd
+    - path: /usr/share/polkit-1/rules.d/50-default.rules
+
+resolution:
+  /usr/lib/libduktape.so.207: duktape
+  /usr/lib/libexpat.so.1: expat
+  /usr/lib/libgio-2.0.so.0: glib2
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libpam.so.0: linux-pam
+  /usr/lib/libpolkit-agent-1.so.0: self
+  /usr/lib/libpolkit-gobject-1.so.0: self
+  /usr/lib/libsystemd.so.0: systemd

@@ -1,0 +1,83 @@
+package:
+  schema: 1
+  name: nex Utilities
+  slug: nex-utilities
+  namespace: core/userland
+  version: 0.0.1
+  description: nex build-time utilities
+  homepage: null
+  checksum: 092827be6ef30319af7c3ab52350ccb3bd4beb2782860e3738feb98c8b7dbd39
+
+sources: []
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [116:21]
+
+  script: |
+    mkdir -vp ${OUT_DIR}/usr/bin
+    cat << 'EOF' > ${OUT_DIR}/usr/bin/nex_strip_binaries
+    #!/bin/sh
+
+    # Set the path to the build output directory
+    BUILD_DIR="$1"
+
+    # Check if the build directory is provided
+    if [ -z "$BUILD_DIR" ]; then
+      echo "Please provide the path to the build output directory as an argument."
+      exit 1
+    fi
+
+    STRIP_TARGETS="ELF|current ar archive"
+    if [ -n "${SKIP_AR:-}" ]; then
+      echo "Skipping static libraries"
+      STRIP_TARGETS="ELF"
+    fi
+
+    # Function to strip debugging symbols from a binary
+    strip_debug_symbols() {
+      local file="$1"
+
+      # Check if the file is a binary (ELF) file or a .a (ar archive)
+      if file "$file" | grep -Eq "${STRIP_TARGETS}"; then
+        # Strip debugging symbols from the binary
+        strip "$file"
+        echo "Stripped debugging symbols from: $file"
+      fi
+    }
+
+    # Traverse the build directory and strip debugging symbols from binaries
+    find "$BUILD_DIR" -type f -print0 | while IFS= read -r -d '' file; do
+      strip_debug_symbols "$file"
+    done
+    EOF
+    chmod +x ${OUT_DIR}/usr/bin/nex_strip_binaries
+
+    test ! -e "${OUT_DIR}/etc"
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/nex_strip_binaries

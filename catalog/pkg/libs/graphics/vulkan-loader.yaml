@@ -1,0 +1,156 @@
+package:
+  schema: 1
+  name: vulkan-loader
+  slug: vulkan-loader
+  namespace: libs/graphics
+  version: 1.4.328.1
+  description: Vulkan ICD (Installable Client Driver) loader
+  homepage: https://github.com/KhronosGroup/Vulkan-Loader
+  checksum: 5d0aeb7c05a674c266b96a32616cd18e2e58eec42197c15ef30696e3f12cce4a
+
+sources:
+- name: vulkan-loader
+  url: https://github.com/KhronosGroup/Vulkan-Loader/archive/refs/tags/vulkan-sdk-1.4.328.1.tar.gz
+  sha256: 65a2a063a8a33ff298848bb1e70deff8499f1ea8aa486feaa8b2f507d8e9989d
+- name: uapi_config_patch
+  file: pkg/libs/graphics/vulkan-loader-uapi-config.patch
+  sha256: 1e1d92c37a26da93747bf981cc2e6f0106a407706085ec3e047950ab8ee9469e
+- name: uapi_smoke
+  file: pkg/libs/graphics/vulkan-loader-uapi-smoke.c
+  sha256: fbae3dcbf7c4a475c835bb423d864505102e16bb495a5de847ef454cb60b134e
+- name: uapi_check
+  file: pkg/libs/graphics/vulkan-loader-uapi-check.sh
+  sha256: 4ac15b0ca4efe42e9aedb070d6a13d6a59b4b512f3a77e2fec95dd802a10fefa
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: vulkan-headers
+  commit: x86_64/pkg/libs/graphics/vulkan-headers/1.4.328.1/bundles/dev
+- name: wayland
+  commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/dev
+- name: libarchive
+  commit: x86_64/pkg/libs/archive/libarchive/3.8.4/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [3597:6751]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config_patch}"
+
+    cmake -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DCMAKE_INSTALL_SYSCONFDIR=/etc \
+      -DBUILD_WSI_XCB_SUPPORT=OFF \
+      -DBUILD_WSI_WAYLAND_SUPPORT=ON \
+      -DBUILD_WSI_XLIB_SUPPORT=OFF \
+      -DBUILD_TESTS=OFF
+
+    cmake --build build
+    DESTDIR="${OUT_DIR}" cmake --install build
+
+    # Exercise the newly built, installed libvulkan through vkCreateInstance(),
+    # the public entry point that always runs the real default driver, implicit
+    # layer, and vk_loader_settings.json searches before it can tell whether a
+    # usable driver exists. VK_LOADER_DEBUG=all makes those real readers log the
+    # absolute path of every file each one selected, which the check script
+    # inspects instead of a working ICD.
+    sh "/${SOURCE_uapi_check}" \
+      "${OUT_DIR}" \
+      "${WORK_DIR}" \
+      "/${SOURCE_uapi_smoke}"
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/lib/pkgconfig/vulkan.pc
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/VulkanLoader/VulkanLoaderConfig-release.cmake
+    - path: /usr/lib/cmake/VulkanLoader/VulkanLoaderConfig.cmake
+    - path: /usr/lib/cmake/VulkanLoader/VulkanLoaderConfigVersion.cmake
+    - path: /usr/lib/libvulkan.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libvulkan.so.1
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libvulkan.so.1.4.328
+      needs:
+      - /usr/lib/libc.so.6
+
+resolution:
+  /usr/lib/libc.so.6: glibc

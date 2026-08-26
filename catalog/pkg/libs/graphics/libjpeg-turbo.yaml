@@ -1,0 +1,192 @@
+package:
+  schema: 1
+  name: libjpeg-turbo
+  slug: libjpeg-turbo
+  namespace: libs/graphics
+  version: 3.1.2
+  description: JPEG image codec with SIMD acceleration
+  homepage: https://libjpeg-turbo.org/
+  checksum: 555253e9e83201a25a4e338308184e9cb86ec3ffeefac26b36e3574823307a22
+
+sources:
+- name: libjpeg-turbo
+  url: https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.1.2/libjpeg-turbo-3.1.2.tar.gz
+  sha256: 8f0012234b464ce50890c490f18194f913a7b1f4e6a03d6644179fa0f867d0cf
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/dev
+- name: libarchive
+  commit: x86_64/pkg/libs/archive/libarchive/3.8.4/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4143:44585, 8273:55760, 12401:65497, 16529:74610, 20626:82051, 24746:89753, 28701:95179]
+
+  script: |
+    tar --no-same-owner -xzf /${SOURCE_libjpeg_turbo} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    cmake -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DENABLE_STATIC=OFF \
+      -DWITH_JPEG8=ON
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/cjpeg
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libjpeg.so.8
+    - path: /usr/bin/djpeg
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libjpeg.so.8
+    - path: /usr/bin/jpegtran
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libjpeg.so.8
+    - path: /usr/bin/rdjpgcom
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/tjbench
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libturbojpeg.so.0
+    - path: /usr/bin/wrjpgcom
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  dev:
+    files:
+    - path: /usr/include/jconfig.h
+    - path: /usr/include/jerror.h
+    - path: /usr/include/jmorecfg.h
+    - path: /usr/include/jpeglib.h
+    - path: /usr/include/turbojpeg.h
+    - path: /usr/lib/pkgconfig/libjpeg.pc
+    - path: /usr/lib/pkgconfig/libturbojpeg.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/libjpeg-turbo/LICENSE.md
+    - path: /usr/share/doc/libjpeg-turbo/README.ijg
+    - path: /usr/share/doc/libjpeg-turbo/README.md
+    - path: /usr/share/doc/libjpeg-turbo/example.c
+    - path: /usr/share/doc/libjpeg-turbo/libjpeg.txt
+    - path: /usr/share/doc/libjpeg-turbo/structure.txt
+    - path: /usr/share/doc/libjpeg-turbo/tjcomp.c
+    - path: /usr/share/doc/libjpeg-turbo/tjdecomp.c
+    - path: /usr/share/doc/libjpeg-turbo/tjtran.c
+    - path: /usr/share/doc/libjpeg-turbo/usage.txt
+    - path: /usr/share/doc/libjpeg-turbo/wizard.txt
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/libjpeg-turbo/libjpeg-turboConfig.cmake
+    - path: /usr/lib/cmake/libjpeg-turbo/libjpeg-turboConfigVersion.cmake
+    - path: /usr/lib/cmake/libjpeg-turbo/libjpeg-turboTargets-release.cmake
+    - path: /usr/lib/cmake/libjpeg-turbo/libjpeg-turboTargets.cmake
+    - path: /usr/lib/libjpeg.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libjpeg.so.8
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libjpeg.so.8.3.2
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libturbojpeg.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libturbojpeg.so.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libturbojpeg.so.0.4.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man1/cjpeg.1
+    - path: /usr/share/man/man1/djpeg.1
+    - path: /usr/share/man/man1/jpegtran.1
+    - path: /usr/share/man/man1/rdjpgcom.1
+    - path: /usr/share/man/man1/wrjpgcom.1
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libjpeg.so.8: self
+  /usr/lib/libturbojpeg.so.0: self

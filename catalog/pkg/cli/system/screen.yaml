@@ -1,0 +1,343 @@
+package:
+  schema: 1
+  name: screen
+  slug: screen
+  namespace: cli/system
+  version: 5.0.1
+  description: Full-screen window manager that multiplexes a physical terminal
+  homepage: https://www.gnu.org/software/screen/
+  checksum: ce7b2cce5083a9427519f2882fadeba5bb2c67295dbce3f6f1c39ed6d0b81ed4
+
+sources:
+- name: screen
+  url: https://ftp.gnu.org/gnu/screen/screen-5.0.1.tar.gz
+  sha256: 2dae36f4db379ffcd14b691596ba6ec18ac3a9e22bc47ac239789ab58409869d
+- name: uapi_config
+  file: pkg/cli/system/screen-uapi-config.patch
+  sha256: b58b984dfb8592a1ab75d472c670bec5dbe3e44f441823958b6e01ea8d170bd2
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: libxcrypt
+  commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: linux-pam
+  commit: x86_64/pkg/libs/security/linux-pam/1.7.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4189:1249, 8409:1250, 12667:1253, 16885:1311, 20988:2487, 23232:21500]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf /${SOURCE_screen} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    export LIBS="-lcrypt"
+
+    ./configure --prefix=/usr \
+      --sysconfdir=/etc
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    # screen.c's StartRc()/FinishRc() pair now runs for four screenrc paths in
+    # order before the first window is opened: /usr/lib/screen/screenrc,
+    # /run/screen/screenrc, SYSTEM_SCREENRC (/etc/screenrc), then the user file
+    # (-c / $SCREENRC / ~/.screenrc). FinishRc's "sessionname" command renames
+    # the session's already-bound socket, so planting a distinct sessionname
+    # per tier and watching the socket directory with inotify proves which
+    # files were read and in what order. The initial window is opened as
+    # "//group" (OpenDevice() in window.c treats that argument as a
+    # container-type window and returns without allocating or chowning a
+    # pty), so the session starts cleanly and stays live for inspection
+    # instead of exiting the instant the window is created.
+    mkdir -p /etc /run/screen /usr/lib/screen
+    export HOME="${WORK_DIR}/screen-empty-home"
+    mkdir -p "${HOME}"
+    unset SCREENRC
+
+    # screen refuses to start unless getpwuid() resolves the running uid; the
+    # build sandbox has no /etc/passwd entry for it, so give it one for this
+    # test only.
+    if [ ! -s /etc/passwd ]; then
+      printf 'nexbuild:x:%s:%s:nex build user:%s:/bin/sh\n' "$(id -u)" "$(id -g)" "${HOME}" > /etc/passwd
+    fi
+
+    printf '%s\n' \
+      '#include <poll.h>' \
+      '#include <stdio.h>' \
+      '#include <stdlib.h>' \
+      '#include <sys/inotify.h>' \
+      '#include <unistd.h>' \
+      '' \
+      'int main(int argc, char **argv)' \
+      '{' \
+      '	if (argc != 4)' \
+      '		return 2;' \
+      '	int timeout_ms = atoi(argv[3]);' \
+      '	int fd = inotify_init1(IN_NONBLOCK);' \
+      '	if (fd < 0 || inotify_add_watch(fd, argv[1], IN_CREATE | IN_MOVED_TO) < 0)' \
+      '		return 1;' \
+      '	FILE *out = fopen(argv[2], "w");' \
+      '	if (!out)' \
+      '		return 1;' \
+      '	char buf[4096];' \
+      '	struct pollfd pfd = { .fd = fd, .events = POLLIN };' \
+      '	for (int waited = 0; waited < timeout_ms; waited += 50) {' \
+      '		if (poll(&pfd, 1, 50) <= 0)' \
+      '			continue;' \
+      '		ssize_t len = read(fd, buf, sizeof(buf));' \
+      '		for (ssize_t i = 0; i >= 0 && i < len;) {' \
+      '			struct inotify_event *ev = (struct inotify_event *)(buf + i);' \
+      '			if (ev->len > 0) {' \
+      '				fprintf(out, "%s\n", ev->name);' \
+      '				fflush(out);' \
+      '			}' \
+      '			i += (ssize_t)sizeof(struct inotify_event) + ev->len;' \
+      '		}' \
+      '	}' \
+      '	fclose(out);' \
+      '	return 0;' \
+      '}' \
+      > "${WORK_DIR}/sockwatch.c"
+    gcc -O2 -o "${WORK_DIR}/sockwatch" "${WORK_DIR}/sockwatch.c"
+
+    SCREEN="${OUT_DIR}/usr/bin/screen"
+    vendor=/usr/lib/screen/screenrc
+    runtime=/run/screen/screenrc
+    admin=/etc/screenrc
+    rm -f "${vendor}" "${runtime}" "${admin}"
+
+    run_case() {
+      # $1 = case label, used for the socket directory and events log
+      # $2 = expected space-separated rename sequence, e.g. "start vendor-tier"
+      # remaining args = extra screen options placed before -S
+      label="$1"
+      expected="$2"
+      shift 2
+      export SCREENDIR="${WORK_DIR}/screen-sockets-${label}-$$"
+      mkdir -p "${SCREENDIR}"
+      chmod 700 "${SCREENDIR}"
+      events="${WORK_DIR}/screen-events-${label}.log"
+      rm -f "${events}"
+
+      "${WORK_DIR}/sockwatch" "${SCREENDIR}" "${events}" 2000 &
+      watcher=$!
+
+      # sockwatch creates the events file only after inotify_add_watch()
+      # succeeds, so its existence is the ready handshake: wait for it
+      # before starting Screen, or Screen can create and rename its socket
+      # before the watch exists and the case would fail nondeterministically.
+      i=0
+      while [ ! -e "${events}" ] && [ "$i" -lt 50 ]; do
+        if ! kill -0 "${watcher}" 2>/dev/null; then
+          break
+        fi
+        sleep 0.1
+        i=$((i + 1))
+      done
+      if [ ! -e "${events}" ]; then
+        if kill -0 "${watcher}" 2>/dev/null; then
+          printf 'screen UAPI smoke: case %s: watcher did not become ready in time\n' "${label}" >&2
+          kill "${watcher}" 2>/dev/null || true
+          wait "${watcher}" 2>/dev/null || true
+          exit 1
+        fi
+        wait "${watcher}"
+        watcher_status=$?
+        printf 'screen UAPI smoke: case %s: watcher exited early with status %s\n' "${label}" "${watcher_status}" >&2
+        exit "${watcher_status}"
+      fi
+
+      timeout 5 "${SCREEN}" "$@" -d -m -S start //group
+      wait "${watcher}"
+
+      observed=$(sed -E 's/^[0-9]+\.//' "${events}" | tr '\n' ' ' | sed -E 's/ +$//')
+      if [ "${observed}" != "${expected}" ]; then
+        printf 'screen UAPI smoke: case %s: expected sequence "%s", got "%s"\n' "${label}" "${expected}" "${observed}" >&2
+        exit 1
+      fi
+
+      count=$(find "${SCREENDIR}" -mindepth 1 -maxdepth 1 | wc -l)
+      if [ "${count}" -ne 1 ]; then
+        printf 'screen UAPI smoke: case %s: expected exactly one live socket, found %s\n' "${label}" "${count}" >&2
+        exit 1
+      fi
+      sockname=$(basename "$(find "${SCREENDIR}" -mindepth 1 -maxdepth 1 -print -quit)")
+      final=$(printf '%s\n' "${expected}" | awk '{print $NF}')
+      case "${sockname}" in
+        *".${final}")
+          ;;
+        *)
+          printf 'screen UAPI smoke: case %s: live socket "%s" does not end in .%s\n' "${label}" "${sockname}" "${final}" >&2
+          exit 1
+          ;;
+      esac
+
+      "${SCREEN}" -S "${sockname}" -X quit
+
+      i=0
+      while [ -e "${SCREENDIR}/${sockname}" ] && [ "$i" -lt 50 ]; do
+        sleep 0.1
+        i=$((i + 1))
+      done
+      if [ -e "${SCREENDIR}/${sockname}" ]; then
+        printf 'screen UAPI smoke: case %s: socket %s did not disappear after quit\n' "${label}" "${sockname}" >&2
+        exit 1
+      fi
+    }
+
+    # 1) no tier file exists: the socket keeps its initial name
+    run_case none "start"
+
+    # 2) vendor alone
+    printf 'sessionname vendor-tier\n' > "${vendor}"
+    run_case vendor-alone "start vendor-tier"
+
+    # 3) runtime overlays vendor
+    printf 'sessionname runtime-tier\n' > "${runtime}"
+    run_case runtime-over-vendor "start vendor-tier runtime-tier"
+
+    # 4) admin overlays both
+    printf 'sessionname admin-tier\n' > "${admin}"
+    run_case admin-over-both "start vendor-tier runtime-tier admin-tier"
+
+    # 5) missing admin uncovers runtime
+    rm -f "${admin}"
+    run_case uncover-runtime "start vendor-tier runtime-tier"
+
+    # 6) missing runtime uncovers vendor
+    rm -f "${runtime}"
+    run_case uncover-vendor "start vendor-tier"
+
+    # 7) missing vendor returns to the unmodified name
+    rm -f "${vendor}"
+    run_case uncover-none "start"
+
+    # 8) with all three system tiers present again, an explicit -c user file
+    # still wins over all of them
+    printf 'sessionname vendor-tier\n' > "${vendor}"
+    printf 'sessionname runtime-tier\n' > "${runtime}"
+    printf 'sessionname admin-tier\n' > "${admin}"
+    user_rc="${WORK_DIR}/screen-user.rc"
+    printf 'sessionname user-tier\n' > "${user_rc}"
+    run_case explicit-c "start vendor-tier runtime-tier admin-tier user-tier" -c "${user_rc}"
+
+    # bonus: $SCREENRC selects a user file, and -c still wins over $SCREENRC
+    # when both name different files
+    screenrc_env_rc="${WORK_DIR}/screen-screenrc-env.rc"
+    printf 'sessionname screenrcenv-tier\n' > "${screenrc_env_rc}"
+    export SCREENRC="${screenrc_env_rc}"
+    run_case screenrc-env-selected "start vendor-tier runtime-tier admin-tier screenrcenv-tier"
+    run_case c-flag-wins-over-screenrc "start vendor-tier runtime-tier admin-tier user-tier" -c "${user_rc}"
+    unset SCREENRC
+
+    rm -f "${vendor}" "${runtime}" "${admin}" "${user_rc}" "${screenrc_env_rc}"
+
+    if grep -a -q '/usr/etc' "${OUT_DIR}/usr/bin/screen-5.0.1"; then
+      printf 'screen UAPI smoke: found /usr/etc compiled into the binary\n' >&2
+      exit 1
+    fi
+
+    printf 'screen UAPI smoke: the config loader read all three tiers in order\n'
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/screen
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/libpam.so.0
+    - path: /usr/bin/screen-5.0.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/libpam.so.0
+
+  man:
+    files:
+    - path: /usr/share/man/man1/screen.1
+
+  misc:
+    files:
+    - path: /usr/share/screen/utf8encodings/01
+    - path: /usr/share/screen/utf8encodings/02
+    - path: /usr/share/screen/utf8encodings/03
+    - path: /usr/share/screen/utf8encodings/04
+    - path: /usr/share/screen/utf8encodings/18
+    - path: /usr/share/screen/utf8encodings/19
+    - path: /usr/share/screen/utf8encodings/a1
+    - path: /usr/share/screen/utf8encodings/a3
+    - path: /usr/share/screen/utf8encodings/bf
+    - path: /usr/share/screen/utf8encodings/c2
+    - path: /usr/share/screen/utf8encodings/c3
+    - path: /usr/share/screen/utf8encodings/c4
+    - path: /usr/share/screen/utf8encodings/c6
+    - path: /usr/share/screen/utf8encodings/c7
+    - path: /usr/share/screen/utf8encodings/c8
+    - path: /usr/share/screen/utf8encodings/cc
+    - path: /usr/share/screen/utf8encodings/cd
+    - path: /usr/share/screen/utf8encodings/d6
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libpam.so.0: linux-pam
+  /usr/lib/libncursesw.so.6: ncurses

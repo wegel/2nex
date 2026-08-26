@@ -1,0 +1,262 @@
+package:
+  schema: 1
+  name: libva
+  slug: libva
+  namespace: libs/graphics
+  version: 2.20.0
+  description: VA-API video acceleration library
+  homepage: https://github.com/intel/libva
+  checksum: c8b1667889b871409df67ef0e9b8e9233a94cc04708da5cb4372acd87328ea90
+
+sources:
+- name: libva
+  url: https://github.com/intel/libva/archive/refs/tags/2.20.0.tar.gz
+  sha256: 117f8d658a5fc9ea406ca80a3eb4ae1d70b15a54807c9ed77199c812bed73b60
+- name: config_patch
+  file: pkg/libs/graphics/libva-uapi-config.patch
+  sha256: 91f04b1ce779ae81549c048008301ed62cf8e53ead579b7b866a46857637a657
+- name: config_smoke
+  file: pkg/libs/graphics/libva-config-smoke.c
+  sha256: d5ae2c4398520e0bdb440120fe1b90a699855d8fc8fa71453a9c5ad30543d133
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: libdrm
+  commit: x86_64/pkg/libs/graphics/libdrm/2.4.123/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: wayland
+  commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4152:2646, 5608:2785]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_config_patch}"
+
+    meson setup build \
+      --prefix=/usr \
+      --libdir=lib \
+      --buildtype=release \
+      -Dwith_x11=no \
+      -Dwith_glx=no \
+      -Dwith_wayland=yes
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    # va_parseConfig() carries DLL_HIDDEN visibility, so the smoke cannot
+    # link against it directly. It goes through vaInitialize() instead,
+    # which reads LIBVA_MESSAGING_LEVEL via va_parseConfig() on every call,
+    # so each case below runs a fresh process against the real library.
+    config_smoke="${WORK_DIR}/libva-config-smoke"
+    gcc \
+      -Wall -Wextra -Werror \
+      -I"${OUT_DIR}/usr/include" \
+      "/${SOURCE_config_smoke}" \
+      -L"${OUT_DIR}/usr/lib" \
+      -lva \
+      -o "${config_smoke}"
+
+    admin_conf=/etc/libva.conf
+    runtime_conf=/run/libva.conf
+    vendor_conf=/usr/lib/libva.conf
+
+    cleanup_config_smoke() {
+      rm -f "${admin_conf}" "${runtime_conf}" "${vendor_conf}"
+    }
+    trap cleanup_config_smoke EXIT
+    cleanup_config_smoke
+    mkdir -p /etc /run /usr/lib
+
+    assert_level() {
+      LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" "${config_smoke}" "$1"
+    }
+    assert_level_with_env() {
+      env "LIBVA_MESSAGING_LEVEL=$1" \
+        LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+        "${config_smoke}" "$2"
+    }
+
+    printf 'LIBVA_MESSAGING_LEVEL=0\n' > "${vendor_conf}"
+    assert_level 0
+
+    printf 'LIBVA_MESSAGING_LEVEL=1\n' > "${runtime_conf}"
+    assert_level 1
+
+    printf 'LIBVA_MESSAGING_LEVEL=2\n' > "${admin_conf}"
+    assert_level 2
+
+    rm "${admin_conf}"
+    assert_level 1
+
+    rm "${runtime_conf}"
+    assert_level 0
+
+    printf 'LIBVA_MESSAGING_LEVEL=1\n' > "${runtime_conf}"
+    : > "${admin_conf}"
+    assert_level 2
+    rm "${admin_conf}"
+
+    rm "${runtime_conf}"
+    : > "${runtime_conf}"
+    assert_level 2
+    rm "${runtime_conf}"
+
+    rm "${vendor_conf}"
+    assert_level 2
+    assert_level_with_env 1 1
+
+    printf 'LIBVA_MESSAGING_LEVEL=0\n' > "${vendor_conf}"
+    assert_level_with_env 2 0
+
+    cleanup_config_smoke
+    trap - EXIT
+
+    printf 'libva UAPI smoke: libva.conf honoured all tiers\n'
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/va/va.h
+    - path: /usr/include/va/va_backend.h
+    - path: /usr/include/va/va_backend_prot.h
+    - path: /usr/include/va/va_backend_vpp.h
+    - path: /usr/include/va/va_backend_wayland.h
+    - path: /usr/include/va/va_compat.h
+    - path: /usr/include/va/va_dec_av1.h
+    - path: /usr/include/va/va_dec_hevc.h
+    - path: /usr/include/va/va_dec_jpeg.h
+    - path: /usr/include/va/va_dec_vp8.h
+    - path: /usr/include/va/va_dec_vp9.h
+    - path: /usr/include/va/va_drm.h
+    - path: /usr/include/va/va_drmcommon.h
+    - path: /usr/include/va/va_egl.h
+    - path: /usr/include/va/va_enc_av1.h
+    - path: /usr/include/va/va_enc_h264.h
+    - path: /usr/include/va/va_enc_hevc.h
+    - path: /usr/include/va/va_enc_jpeg.h
+    - path: /usr/include/va/va_enc_mpeg2.h
+    - path: /usr/include/va/va_enc_vp8.h
+    - path: /usr/include/va/va_enc_vp9.h
+    - path: /usr/include/va/va_fei.h
+    - path: /usr/include/va/va_fei_h264.h
+    - path: /usr/include/va/va_fei_hevc.h
+    - path: /usr/include/va/va_prot.h
+    - path: /usr/include/va/va_str.h
+    - path: /usr/include/va/va_tpi.h
+    - path: /usr/include/va/va_version.h
+    - path: /usr/include/va/va_vpp.h
+    - path: /usr/include/va/va_wayland.h
+    - path: /usr/lib/pkgconfig/libva-drm.pc
+    - path: /usr/lib/pkgconfig/libva-wayland.pc
+    - path: /usr/lib/pkgconfig/libva.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libva-drm.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdrm.so.2
+      - /usr/lib/libva.so.2
+    - path: /usr/lib/libva-drm.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdrm.so.2
+      - /usr/lib/libva.so.2
+    - path: /usr/lib/libva-drm.so.2.2000.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdrm.so.2
+      - /usr/lib/libva.so.2
+    - path: /usr/lib/libva-wayland.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdrm.so.2
+      - /usr/lib/libva.so.2
+      - /usr/lib/libwayland-client.so.0
+    - path: /usr/lib/libva-wayland.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdrm.so.2
+      - /usr/lib/libva.so.2
+      - /usr/lib/libwayland-client.so.0
+    - path: /usr/lib/libva-wayland.so.2.2000.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdrm.so.2
+      - /usr/lib/libva.so.2
+      - /usr/lib/libwayland-client.so.0
+    - path: /usr/lib/libva.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libva.so.2
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/libva.so.2.2000.0
+      needs:
+      - /usr/lib/libc.so.6
+
+resolution:
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libdrm.so.2: libdrm
+  /usr/lib/libva.so.2: self
+  /usr/lib/libwayland-client.so.0: wayland

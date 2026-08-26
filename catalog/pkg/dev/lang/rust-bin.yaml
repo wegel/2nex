@@ -1,0 +1,507 @@
+package:
+  schema: 1
+  name: Rust (Binary)
+  slug: rust-bin
+  namespace: dev/lang
+  version: 1.91.1
+  description: A language empowering everyone to build reliable and efficient software
+  homepage: https://www.rust-lang.org/
+  checksum: 8c2246a1a40436b2d623f619f3ed731a815dab967a57440c358a1b2d0dc7c01d
+
+sources:
+- name: rust_binary
+  url: https://static.rust-lang.org/dist/rust-1.91.1-x86_64-unknown-linux-gnu.tar.gz
+  sha256: 1c955c040dd087e4751d15588ddec288b4208bea16f8ec5046c164877e55fff7
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [853:7101]
+
+  script: |
+    set -eu
+
+    # Extract the Rust archive
+    mkdir -p "${WORK_DIR}/rust"
+    tar --no-same-owner -xf ${SOURCE_rust_binary} -C "${WORK_DIR}/rust" --strip-components=1
+    cd "${WORK_DIR}/rust"
+
+    # Run the installer script with a prefix for the output dir
+    ./install.sh --prefix=${OUT_DIR}/usr --without=rust-docs --disable-ldconfig
+
+    mkdir -p "${OUT_DIR}/usr/share/bash-completion/completions" \
+             "${OUT_DIR}/usr/share/rust"
+    mv "${OUT_DIR}/usr/etc/bash_completion.d/cargo" \
+       "${OUT_DIR}/usr/share/bash-completion/completions/cargo"
+    mv "${OUT_DIR}/usr/etc/target-spec-json-schema.json" \
+       "${OUT_DIR}/usr/share/rust/target-spec-json-schema.json"
+    rmdir "${OUT_DIR}/usr/etc/bash_completion.d" "${OUT_DIR}/usr/etc"
+
+    bash -n "${OUT_DIR}/usr/share/bash-completion/completions/cargo"
+    bash --noprofile --norc -c '
+      PATH="$2:${PATH}"
+      source "$1"
+      complete -p cargo >/dev/null
+    ' cargo-completion-test \
+      "${OUT_DIR}/usr/share/bash-completion/completions/cargo" \
+      "${OUT_DIR}/usr/bin"
+    test -s "${OUT_DIR}/usr/share/rust/target-spec-json-schema.json"
+    "${OUT_DIR}/usr/bin/cargo" --version
+    "${OUT_DIR}/usr/bin/rustc" --version
+
+    # Set consistent timestamps for reproducible builds
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - lib
+  - misc
+  - static
+
+  full:
+  - bin
+  - doc
+  - lib
+  - man
+  - misc
+  - static
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/cargo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/bin/cargo-clippy
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librustc_driver-39b12c59623303e4.so
+    - path: /usr/bin/cargo-fmt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpthread.so.0
+    - path: /usr/bin/clippy-driver
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+      - /usr/lib/librustc_driver-39b12c59623303e4.so
+    - path: /usr/bin/rust-analyzer
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librustc_driver-39b12c59623303e4.so
+    - path: /usr/bin/rust-gdb
+    - path: /usr/bin/rust-gdbgui
+    - path: /usr/bin/rust-lldb
+    - path: /usr/bin/rustc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+      - /usr/lib/librustc_driver-39b12c59623303e4.so
+    - path: /usr/bin/rustdoc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+      - /usr/lib/librustc_driver-39b12c59623303e4.so
+    - path: /usr/bin/rustfmt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librustc_driver-39b12c59623303e4.so
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld/ld.lld
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld/ld64.lld
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld/lld-link
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/gcc-ld/wasm-ld
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpthread.so.0
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/llc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-ar
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-as
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-cov
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-dis
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-link
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-nm
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-objcopy
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-objdump
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-profdata
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-readobj
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-size
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-strip
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/opt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/libz.so.1
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-objcopy
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/self-contained/llvm-bitcode-linker
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/bin/wasm-component-ld
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/libexec/rust-analyzer-proc-macro-srv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librustc_driver-39b12c59623303e4.so
+
+  doc:
+    files:
+    - path: /usr/share/doc/cargo/LICENSE-APACHE
+    - path: /usr/share/doc/cargo/LICENSE-MIT
+    - path: /usr/share/doc/cargo/LICENSE-THIRD-PARTY
+    - path: /usr/share/doc/cargo/README.md
+    - path: /usr/share/doc/clippy/LICENSE-APACHE
+    - path: /usr/share/doc/clippy/LICENSE-MIT
+    - path: /usr/share/doc/clippy/README.md
+    - path: /usr/share/doc/rust-analyzer/LICENSE-APACHE
+    - path: /usr/share/doc/rust-analyzer/LICENSE-MIT
+    - path: /usr/share/doc/rust-analyzer/README.md
+    - path: /usr/share/doc/rust/COPYRIGHT-library.html
+    - path: /usr/share/doc/rust/COPYRIGHT.html
+    - path: /usr/share/doc/rust/README.md
+    - path: /usr/share/doc/rust/json/alloc.json
+    - path: /usr/share/doc/rust/json/core.json
+    - path: /usr/share/doc/rust/json/proc_macro.json
+    - path: /usr/share/doc/rust/json/std.json
+    - path: /usr/share/doc/rust/json/std_detect.json
+    - path: /usr/share/doc/rust/json/test.json
+    - path: /usr/share/doc/rust/licenses/Apache-2.0.txt
+    - path: /usr/share/doc/rust/licenses/BSD-2-Clause.txt
+    - path: /usr/share/doc/rust/licenses/CC-BY-SA-4.0.txt
+    - path: /usr/share/doc/rust/licenses/GCC-exception-3.1.txt
+    - path: /usr/share/doc/rust/licenses/GPL-2.0-only.txt
+    - path: /usr/share/doc/rust/licenses/GPL-3.0-or-later.txt
+    - path: /usr/share/doc/rust/licenses/ISC.txt
+    - path: /usr/share/doc/rust/licenses/LLVM-exception.txt
+    - path: /usr/share/doc/rust/licenses/MIT.txt
+    - path: /usr/share/doc/rust/licenses/NCSA.txt
+    - path: /usr/share/doc/rust/licenses/OFL-1.1.txt
+    - path: /usr/share/doc/rust/licenses/Unicode-3.0.txt
+    - path: /usr/share/doc/rustfmt/LICENSE-APACHE
+    - path: /usr/share/doc/rustfmt/LICENSE-MIT
+    - path: /usr/share/doc/rustfmt/README.md
+
+  lib:
+    files:
+    - path: /usr/lib/libLLVM-21-rust-1.91.1-stable.so
+    - path: /usr/lib/libLLVM.so.21.1-rust-1.91.1-stable
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/librustc_driver-39b12c59623303e4.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+      - /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+    - path: /usr/lib/rustlib/components
+    - path: /usr/lib/rustlib/etc/gdb_load_rust_pretty_printers.py
+    - path: /usr/lib/rustlib/etc/gdb_lookup.py
+    - path: /usr/lib/rustlib/etc/gdb_providers.py
+    - path: /usr/lib/rustlib/etc/lldb_commands
+    - path: /usr/lib/rustlib/etc/lldb_lookup.py
+    - path: /usr/lib/rustlib/etc/lldb_providers.py
+    - path: /usr/lib/rustlib/etc/rust_types.py
+    - path: /usr/lib/rustlib/install.log
+    - path: /usr/lib/rustlib/manifest-cargo
+    - path: /usr/lib/rustlib/manifest-clippy-preview
+    - path: /usr/lib/rustlib/manifest-llvm-bitcode-linker-preview
+    - path: /usr/lib/rustlib/manifest-llvm-tools-preview
+    - path: /usr/lib/rustlib/manifest-rust-analysis-x86_64-unknown-linux-gnu
+    - path: /usr/lib/rustlib/manifest-rust-analyzer-preview
+    - path: /usr/lib/rustlib/manifest-rust-docs-json-preview
+    - path: /usr/lib/rustlib/manifest-rust-std-x86_64-unknown-linux-gnu
+    - path: /usr/lib/rustlib/manifest-rustc
+    - path: /usr/lib/rustlib/manifest-rustfmt-preview
+    - path: /usr/lib/rustlib/rust-installer-version
+    - path: /usr/lib/rustlib/uninstall.sh
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/analysis/removed.json
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM-21-rust-1.91.1-stable.so
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libaddr2line-05ff42d0bb8bc056.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libadler2-657586f1e76773bb.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/liballoc-91b4ad6132580879.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcfg_if-ca532f729409e986.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcompiler_builtins-a035fea0a7ead343.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libcore-f0bc820f356cd8e0.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libgetopts-0f0b4d134304b661.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libgimli-9e30a03d9a87a46b.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libhashbrown-e3c0c009096f309d.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/liblibc-a1d686c1facffe2c.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libmemchr-ff20d9e744b5ce29.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libminiz_oxide-9b8400ec28816bfd.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libobject-00745b6f63a5acb7.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libpanic_abort-30f7d7b18654a7fe.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libpanic_unwind-150250ca1242312f.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libproc_macro-c10eb12c9df63a3c.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libprofiler_builtins-16a978c23542b795.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_demangle-d3519961f658f03a.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_literal_escaper-0753a5fa3f28340e.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_alloc-2fb855ef27dbee02.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_core-84c61cf6bc98478a.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc_std_workspace_std-747a2e9c8dddac19.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd-a71a575950182156.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd-a71a575950182156.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdl.so.2
+      - /usr/lib/libpthread.so.0
+      - /usr/lib/librt.so.1
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libstd_detect-866c9680e50cd51f.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libsysroot-71ce03c829d8ce79.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libtest-7c1748abd1e929ec.rlib
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libunwind-1c92ef7cd9e0e2d8.rlib
+
+  man:
+    files:
+    - path: /usr/share/man/man1/cargo-add.1
+    - path: /usr/share/man/man1/cargo-bench.1
+    - path: /usr/share/man/man1/cargo-build.1
+    - path: /usr/share/man/man1/cargo-check.1
+    - path: /usr/share/man/man1/cargo-clean.1
+    - path: /usr/share/man/man1/cargo-doc.1
+    - path: /usr/share/man/man1/cargo-fetch.1
+    - path: /usr/share/man/man1/cargo-fix.1
+    - path: /usr/share/man/man1/cargo-generate-lockfile.1
+    - path: /usr/share/man/man1/cargo-help.1
+    - path: /usr/share/man/man1/cargo-info.1
+    - path: /usr/share/man/man1/cargo-init.1
+    - path: /usr/share/man/man1/cargo-install.1
+    - path: /usr/share/man/man1/cargo-locate-project.1
+    - path: /usr/share/man/man1/cargo-login.1
+    - path: /usr/share/man/man1/cargo-logout.1
+    - path: /usr/share/man/man1/cargo-metadata.1
+    - path: /usr/share/man/man1/cargo-new.1
+    - path: /usr/share/man/man1/cargo-owner.1
+    - path: /usr/share/man/man1/cargo-package.1
+    - path: /usr/share/man/man1/cargo-pkgid.1
+    - path: /usr/share/man/man1/cargo-publish.1
+    - path: /usr/share/man/man1/cargo-remove.1
+    - path: /usr/share/man/man1/cargo-report.1
+    - path: /usr/share/man/man1/cargo-run.1
+    - path: /usr/share/man/man1/cargo-rustc.1
+    - path: /usr/share/man/man1/cargo-rustdoc.1
+    - path: /usr/share/man/man1/cargo-search.1
+    - path: /usr/share/man/man1/cargo-test.1
+    - path: /usr/share/man/man1/cargo-tree.1
+    - path: /usr/share/man/man1/cargo-uninstall.1
+    - path: /usr/share/man/man1/cargo-update.1
+    - path: /usr/share/man/man1/cargo-vendor.1
+    - path: /usr/share/man/man1/cargo-version.1
+    - path: /usr/share/man/man1/cargo-yank.1
+    - path: /usr/share/man/man1/cargo.1
+    - path: /usr/share/man/man1/rustc.1
+    - path: /usr/share/man/man1/rustdoc.1
+
+  misc:
+    files:
+    - path: /usr/share/bash-completion/completions/cargo
+    - path: /usr/share/rust/target-spec-json-schema.json
+    - path: /usr/share/zsh/site-functions/_cargo
+
+  static:
+    files:
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc-stable_rt.asan.a
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc-stable_rt.dfsan.a
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc-stable_rt.lsan.a
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc-stable_rt.msan.a
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc-stable_rt.safestack.a
+    - path: /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/librustc-stable_rt.tsan.a
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libdl.so.2: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libpthread.so.0: glibc
+  /usr/lib/librt.so.1: glibc
+  /usr/lib/librustc_driver-39b12c59623303e4.so: self
+  /usr/lib/rustlib/x86_64-unknown-linux-gnu/lib/libLLVM.so.21.1-rust-1.91.1-stable: self
+  /usr/lib/libz.so.1: zlib

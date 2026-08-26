@@ -1,0 +1,1774 @@
+package:
+  schema: 1
+  name: VLC
+  slug: vlc
+  namespace: apps/multimedia
+  version: 3.0.23
+  description: Multimedia player and streaming framework
+  homepage: https://www.videolan.org/vlc/
+  checksum: d7c5afa7b3a7669b3a474197c23611810886e970ac161940c5249ef9b1198e09
+
+sources:
+- name: vlc
+  url: https://download.videolan.org/pub/videolan/vlc/3.0.23/vlc-3.0.23.tar.xz
+  sha256: e891cae6aa3ccda69bf94173d5105cbc55c7a7d9b1d21b9b21666e69eff3e7e0
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: gettext
+  commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: flex
+  commit: x86_64/pkg/core/toolchain/flex/2.6.4/bundles/dev
+- name: bison
+  commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
+- name: libtool
+  commit: x86_64/pkg/core/toolchain/libtool/2.4.7/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ffmpeg
+  commit: x86_64/pkg/libs/multimedia/ffmpeg/8.0.1/bundles/dev
+- name: alsa-lib
+  commit: x86_64/pkg/libs/audio/alsa-lib/1.2.14/bundles/dev
+- name: freetype
+  commit: x86_64/pkg/libs/graphics/freetype/2.14.1/bundles/dev
+- name: libpng
+  commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [12326:83689, 41196:133531, 90918:161323, 149031:198766, 198973:201124, 250362:203475, 299433:205191, 372457:210716, 448801:217315, 493984:239604]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_vlc} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    export BUILDCC=gcc
+    export CFLAGS="${CFLAGS//-flto=auto/}"
+    export CXXFLAGS="${CXXFLAGS//-flto=auto/}"
+    export LDFLAGS="${LDFLAGS//-flto=auto/}"
+
+    ./configure \
+      --prefix=/usr \
+      --disable-lua \
+      --disable-vlm \
+      --disable-sout \
+      --disable-dbus \
+      --disable-qt \
+      --disable-skins2 \
+      --disable-live555 \
+      --disable-linsys \
+      --disable-v4l2 \
+      --disable-libcddb \
+      --disable-vcd \
+      --disable-vnc \
+      --disable-freerdp \
+      --disable-dvbpsi \
+      --disable-sid \
+      --disable-ogg \
+      --disable-mad \
+      --disable-a52 \
+      --disable-x264 \
+      --disable-x26410b \
+      --disable-zvbi \
+      --disable-libass \
+      --disable-aribsub \
+      --disable-png \
+      --disable-jpeg \
+      --disable-xcb \
+      --without-x \
+      --disable-xvideo \
+      --disable-wayland \
+      --disable-sdl-image \
+      --disable-pulse \
+      --disable-jack \
+      --disable-samplerate \
+      --disable-chromaprint \
+      --disable-projectm \
+      --disable-notify \
+      --disable-libplacebo \
+      --disable-libgcrypt \
+      --disable-gnutls \
+      --disable-taglib \
+      --disable-kwallet \
+      --disable-vdpau \
+      --disable-dvdread \
+      --disable-dvdnav \
+      --disable-bluray \
+      --enable-avcodec \
+      --enable-swscale \
+      --enable-alsa
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    rm -f "${OUT_DIR}/usr/lib/vlc/plugins/plugins.dat"
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  full:
+  - bin
+  - lib
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/cvlc
+      needs:
+      - /usr/bin/sh
+    - path: /usr/bin/nvlc
+      needs:
+      - /usr/bin/sh
+    - path: /usr/bin/rvlc
+      needs:
+      - /usr/bin/sh
+    - path: /usr/bin/vlc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlc.so.5
+    - path: /usr/bin/vlc-wrapper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  dev:
+    files:
+    - path: /usr/include/vlc/deprecated.h
+    - path: /usr/include/vlc/libvlc.h
+    - path: /usr/include/vlc/libvlc_dialog.h
+    - path: /usr/include/vlc/libvlc_events.h
+    - path: /usr/include/vlc/libvlc_media.h
+    - path: /usr/include/vlc/libvlc_media_discoverer.h
+    - path: /usr/include/vlc/libvlc_media_library.h
+    - path: /usr/include/vlc/libvlc_media_list.h
+    - path: /usr/include/vlc/libvlc_media_list_player.h
+    - path: /usr/include/vlc/libvlc_media_player.h
+    - path: /usr/include/vlc/libvlc_renderer_discoverer.h
+    - path: /usr/include/vlc/libvlc_version.h
+    - path: /usr/include/vlc/libvlc_vlm.h
+    - path: /usr/include/vlc/plugins/vlc_about.h
+    - path: /usr/include/vlc/plugins/vlc_access.h
+    - path: /usr/include/vlc/plugins/vlc_actions.h
+    - path: /usr/include/vlc/plugins/vlc_addons.h
+    - path: /usr/include/vlc/plugins/vlc_aout.h
+    - path: /usr/include/vlc/plugins/vlc_aout_volume.h
+    - path: /usr/include/vlc/plugins/vlc_arrays.h
+    - path: /usr/include/vlc/plugins/vlc_atomic.h
+    - path: /usr/include/vlc/plugins/vlc_avcodec.h
+    - path: /usr/include/vlc/plugins/vlc_bits.h
+    - path: /usr/include/vlc/plugins/vlc_block.h
+    - path: /usr/include/vlc/plugins/vlc_block_helper.h
+    - path: /usr/include/vlc/plugins/vlc_boxes.h
+    - path: /usr/include/vlc/plugins/vlc_charset.h
+    - path: /usr/include/vlc/plugins/vlc_codec.h
+    - path: /usr/include/vlc/plugins/vlc_common.h
+    - path: /usr/include/vlc/plugins/vlc_config.h
+    - path: /usr/include/vlc/plugins/vlc_config_cat.h
+    - path: /usr/include/vlc/plugins/vlc_configuration.h
+    - path: /usr/include/vlc/plugins/vlc_cpu.h
+    - path: /usr/include/vlc/plugins/vlc_demux.h
+    - path: /usr/include/vlc/plugins/vlc_dialog.h
+    - path: /usr/include/vlc/plugins/vlc_epg.h
+    - path: /usr/include/vlc/plugins/vlc_es.h
+    - path: /usr/include/vlc/plugins/vlc_es_out.h
+    - path: /usr/include/vlc/plugins/vlc_events.h
+    - path: /usr/include/vlc/plugins/vlc_filter.h
+    - path: /usr/include/vlc/plugins/vlc_fingerprinter.h
+    - path: /usr/include/vlc/plugins/vlc_fourcc.h
+    - path: /usr/include/vlc/plugins/vlc_fs.h
+    - path: /usr/include/vlc/plugins/vlc_gcrypt.h
+    - path: /usr/include/vlc/plugins/vlc_http.h
+    - path: /usr/include/vlc/plugins/vlc_httpd.h
+    - path: /usr/include/vlc/plugins/vlc_image.h
+    - path: /usr/include/vlc/plugins/vlc_inhibit.h
+    - path: /usr/include/vlc/plugins/vlc_input.h
+    - path: /usr/include/vlc/plugins/vlc_input_item.h
+    - path: /usr/include/vlc/plugins/vlc_interface.h
+    - path: /usr/include/vlc/plugins/vlc_interrupt.h
+    - path: /usr/include/vlc/plugins/vlc_keystore.h
+    - path: /usr/include/vlc/plugins/vlc_main.h
+    - path: /usr/include/vlc/plugins/vlc_md5.h
+    - path: /usr/include/vlc/plugins/vlc_media_library.h
+    - path: /usr/include/vlc/plugins/vlc_memstream.h
+    - path: /usr/include/vlc/plugins/vlc_messages.h
+    - path: /usr/include/vlc/plugins/vlc_meta.h
+    - path: /usr/include/vlc/plugins/vlc_meta_fetcher.h
+    - path: /usr/include/vlc/plugins/vlc_mime.h
+    - path: /usr/include/vlc/plugins/vlc_modules.h
+    - path: /usr/include/vlc/plugins/vlc_mouse.h
+    - path: /usr/include/vlc/plugins/vlc_mtime.h
+    - path: /usr/include/vlc/plugins/vlc_network.h
+    - path: /usr/include/vlc/plugins/vlc_objects.h
+    - path: /usr/include/vlc/plugins/vlc_opengl.h
+    - path: /usr/include/vlc/plugins/vlc_picture.h
+    - path: /usr/include/vlc/plugins/vlc_picture_fifo.h
+    - path: /usr/include/vlc/plugins/vlc_picture_pool.h
+    - path: /usr/include/vlc/plugins/vlc_playlist.h
+    - path: /usr/include/vlc/plugins/vlc_plugin.h
+    - path: /usr/include/vlc/plugins/vlc_probe.h
+    - path: /usr/include/vlc/plugins/vlc_rand.h
+    - path: /usr/include/vlc/plugins/vlc_renderer_discovery.h
+    - path: /usr/include/vlc/plugins/vlc_services_discovery.h
+    - path: /usr/include/vlc/plugins/vlc_sout.h
+    - path: /usr/include/vlc/plugins/vlc_spu.h
+    - path: /usr/include/vlc/plugins/vlc_stream.h
+    - path: /usr/include/vlc/plugins/vlc_stream_extractor.h
+    - path: /usr/include/vlc/plugins/vlc_strings.h
+    - path: /usr/include/vlc/plugins/vlc_subpicture.h
+    - path: /usr/include/vlc/plugins/vlc_text_style.h
+    - path: /usr/include/vlc/plugins/vlc_threads.h
+    - path: /usr/include/vlc/plugins/vlc_timestamp_helper.h
+    - path: /usr/include/vlc/plugins/vlc_tls.h
+    - path: /usr/include/vlc/plugins/vlc_url.h
+    - path: /usr/include/vlc/plugins/vlc_variables.h
+    - path: /usr/include/vlc/plugins/vlc_video_splitter.h
+    - path: /usr/include/vlc/plugins/vlc_viewpoint.h
+    - path: /usr/include/vlc/plugins/vlc_vlm.h
+    - path: /usr/include/vlc/plugins/vlc_vout.h
+    - path: /usr/include/vlc/plugins/vlc_vout_display.h
+    - path: /usr/include/vlc/plugins/vlc_vout_osd.h
+    - path: /usr/include/vlc/plugins/vlc_vout_window.h
+    - path: /usr/include/vlc/plugins/vlc_xlib.h
+    - path: /usr/include/vlc/plugins/vlc_xml.h
+    - path: /usr/include/vlc/vlc.h
+    - path: /usr/lib/libvlc.la
+    - path: /usr/lib/libvlccore.la
+    - path: /usr/lib/pkgconfig/libvlc.pc
+    - path: /usr/lib/pkgconfig/vlc-plugin.pc
+    - path: /usr/lib/vlc/libcompat.la
+    - path: /usr/lib/vlc/plugins/access/libaccess_alsa_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libaccess_concat_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libaccess_imem_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libaccess_mms_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libattachment_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libavio_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libdtv_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libfilesystem_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libftp_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libhttp_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libhttps_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libidummy_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libimem_plugin.la
+    - path: /usr/lib/vlc/plugins/access/librist_plugin.la
+    - path: /usr/lib/vlc/plugins/access/librtp_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libsatip_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libsdp_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libshm_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libtcp_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libtimecode_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libudp_plugin.la
+    - path: /usr/lib/vlc/plugins/access/libvdr_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libaudio_format_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libaudiobargraph_a_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libchorus_flanger_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libcompressor_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libdolby_surround_decoder_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libequalizer_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libgain_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libheadphone_channel_mixer_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libkaraoke_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libmono_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libnormvol_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libparam_eq_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libremap_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libscaletempo_pitch_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libscaletempo_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libsimple_channel_mixer_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libspatializer_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libstereo_widen_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libtospdif_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libtrivial_channel_mixer_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_filter/libugly_resampler_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_mixer/libfloat_mixer_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_mixer/libinteger_mixer_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_output/libadummy_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_output/libafile_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_output/libalsa_plugin.la
+    - path: /usr/lib/vlc/plugins/audio_output/libamem_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libadpcm_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libaes3_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libaraw_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libavcodec_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libcc_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libcdg_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libcvdsub_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libddummy_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libdvbsub_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libg711_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/liblpcm_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/librawvideo_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libscte18_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libscte27_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libspdif_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libspudec_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libstl_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libsubsdec_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libsubstx3g_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libsubsusf_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libsvcdsub_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libtelx_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libtextst_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libttml_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libuleaddvaudio_plugin.la
+    - path: /usr/lib/vlc/plugins/codec/libwebvtt_plugin.la
+    - path: /usr/lib/vlc/plugins/control/libdummy_plugin.la
+    - path: /usr/lib/vlc/plugins/control/libgestures_plugin.la
+    - path: /usr/lib/vlc/plugins/control/libhotkeys_plugin.la
+    - path: /usr/lib/vlc/plugins/control/libmotion_plugin.la
+    - path: /usr/lib/vlc/plugins/control/libnetsync_plugin.la
+    - path: /usr/lib/vlc/plugins/control/liboldrc_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libadaptive_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libaiff_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libasf_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libau_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libavformat_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libavi_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libcaf_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libdemux_cdg_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libdemux_stl_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libdemuxdump_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libdiracsys_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libdirectory_demux_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libdmxmus_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libes_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libflacsys_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libh26x_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libimage_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libmjpeg_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libmp4_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libmpgv_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libnoseek_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libnsc_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libnsv_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libnuv_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libplaylist_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libps_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libpva_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/librawaud_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/librawdv_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/librawvid_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libreal_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libsmf_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libsubtitle_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libtta_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libty_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libvc1_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libvobsub_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libvoc_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libwav_plugin.la
+    - path: /usr/lib/vlc/plugins/demux/libxa_plugin.la
+    - path: /usr/lib/vlc/plugins/gui/libncurses_plugin.la
+    - path: /usr/lib/vlc/plugins/keystore/libfile_keystore_plugin.la
+    - path: /usr/lib/vlc/plugins/keystore/libmemory_keystore_plugin.la
+    - path: /usr/lib/vlc/plugins/logger/libconsole_logger_plugin.la
+    - path: /usr/lib/vlc/plugins/logger/libfile_logger_plugin.la
+    - path: /usr/lib/vlc/plugins/logger/libsyslog_plugin.la
+    - path: /usr/lib/vlc/plugins/meta_engine/libfolder_plugin.la
+    - path: /usr/lib/vlc/plugins/misc/libaddonsfsstorage_plugin.la
+    - path: /usr/lib/vlc/plugins/misc/libaddonsvorepository_plugin.la
+    - path: /usr/lib/vlc/plugins/misc/libaudioscrobbler_plugin.la
+    - path: /usr/lib/vlc/plugins/misc/libexport_plugin.la
+    - path: /usr/lib/vlc/plugins/misc/libfingerprinter_plugin.la
+    - path: /usr/lib/vlc/plugins/misc/liblogger_plugin.la
+    - path: /usr/lib/vlc/plugins/misc/libstats_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_a52_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_av1_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_avparser_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_copy_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_dirac_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_dts_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_flac_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_h264_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_hevc_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_mlp_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_mpeg4video_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_mpeg4audio_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_mpegaudio_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_mpegvideo_plugin.la
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_vc1_plugin.la
+    - path: /usr/lib/vlc/plugins/services_discovery/libmediadirs_plugin.la
+    - path: /usr/lib/vlc/plugins/services_discovery/libpodcast_plugin.la
+    - path: /usr/lib/vlc/plugins/services_discovery/libsap_plugin.la
+    - path: /usr/lib/vlc/plugins/spu/libaudiobargraph_v_plugin.la
+    - path: /usr/lib/vlc/plugins/spu/libdynamicoverlay_plugin.la
+    - path: /usr/lib/vlc/plugins/spu/liblogo_plugin.la
+    - path: /usr/lib/vlc/plugins/spu/libmarq_plugin.la
+    - path: /usr/lib/vlc/plugins/spu/libmosaic_plugin.la
+    - path: /usr/lib/vlc/plugins/spu/librss_plugin.la
+    - path: /usr/lib/vlc/plugins/spu/libsubsdelay_plugin.la
+    - path: /usr/lib/vlc/plugins/stream_filter/libadf_plugin.la
+    - path: /usr/lib/vlc/plugins/stream_filter/libcache_block_plugin.la
+    - path: /usr/lib/vlc/plugins/stream_filter/libcache_read_plugin.la
+    - path: /usr/lib/vlc/plugins/stream_filter/libdecomp_plugin.la
+    - path: /usr/lib/vlc/plugins/stream_filter/libhds_plugin.la
+    - path: /usr/lib/vlc/plugins/stream_filter/libinflate_plugin.la
+    - path: /usr/lib/vlc/plugins/stream_filter/libprefetch_plugin.la
+    - path: /usr/lib/vlc/plugins/stream_filter/librecord_plugin.la
+    - path: /usr/lib/vlc/plugins/stream_filter/libskiptags_plugin.la
+    - path: /usr/lib/vlc/plugins/text_renderer/libfreetype_plugin.la
+    - path: /usr/lib/vlc/plugins/text_renderer/libtdummy_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libchain_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libgrey_yuv_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_10_p010_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_nv12_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_rgb_mmx_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_rgb_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_rgb_sse2_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_yuy2_mmx_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_yuy2_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_yuy2_sse2_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libi422_i420_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libi422_yuy2_mmx_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libi422_yuy2_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libi422_yuy2_sse2_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/librv32_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libswscale_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libyuvp_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libyuy2_i420_plugin.la
+    - path: /usr/lib/vlc/plugins/video_chroma/libyuy2_i422_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libadjust_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libalphamask_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libanaglyph_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libantiflicker_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libball_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libblend_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libblendbench_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libbluescreen_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libcanvas_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libcolorthres_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libcroppadd_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libdeinterlace_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libedgedetection_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/liberase_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libextract_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libfps_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libfreeze_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libgaussianblur_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libgradfun_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libgradient_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libgrain_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libhqdn3d_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libinvert_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libmagnify_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libmirror_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libmotionblur_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libmotiondetect_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/liboldmovie_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libposterize_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libpsychedelic_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libpuzzle_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libripple_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/librotate_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libscale_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libscene_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libsepia_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libsharpen_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libtransform_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libvhs_plugin.la
+    - path: /usr/lib/vlc/plugins/video_filter/libwave_plugin.la
+    - path: /usr/lib/vlc/plugins/video_output/libfb_plugin.la
+    - path: /usr/lib/vlc/plugins/video_output/libflaschen_plugin.la
+    - path: /usr/lib/vlc/plugins/video_output/libvdummy_plugin.la
+    - path: /usr/lib/vlc/plugins/video_output/libvmem_plugin.la
+    - path: /usr/lib/vlc/plugins/video_output/libyuv_plugin.la
+    - path: /usr/lib/vlc/plugins/video_splitter/libclone_plugin.la
+    - path: /usr/lib/vlc/plugins/video_splitter/libwall_plugin.la
+    - path: /usr/lib/vlc/plugins/visualization/libvisual_plugin.la
+
+  doc:
+    files:
+    - path: /usr/share/doc/vlc/fortunes.txt
+    - path: /usr/share/doc/vlc/libvlc/CMakeLists.txt
+    - path: /usr/share/doc/vlc/libvlc/QtPlayer/LICENSE
+    - path: /usr/share/doc/vlc/libvlc/QtPlayer/QtVLC.pro
+    - path: /usr/share/doc/vlc/libvlc/QtPlayer/main.cpp
+    - path: /usr/share/doc/vlc/libvlc/QtPlayer/player.cpp
+    - path: /usr/share/doc/vlc/libvlc/QtPlayer/player.h
+    - path: /usr/share/doc/vlc/libvlc/gtk_player.c
+    - path: /usr/share/doc/vlc/libvlc/libvlc_DVD_ripper.c
+    - path: /usr/share/doc/vlc/libvlc/vlc-thumb.c
+    - path: /usr/share/doc/vlc/libvlc/win_player.c
+    - path: /usr/share/doc/vlc/libvlc/wx_player.cpp
+
+  lib:
+    files:
+    - path: /usr/lib/libvlc.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/libvlc.so.5
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/libvlc.so.5.6.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/libvlccore.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libvlccore.so.9
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/libvlccore.so.9.0.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/lib/vlc/plugins/access/libaccess_alsa_plugin.so
+      needs:
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libaccess_concat_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libaccess_imem_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libaccess_mms_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libattachment_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libavio_plugin.so
+      needs:
+      - /usr/lib/libavcodec.so.62
+      - /usr/lib/libavformat.so.62
+      - /usr/lib/libavutil.so.60
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libdtv_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libfilesystem_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libftp_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libhttp_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libhttps_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libidummy_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libimem_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/librist_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/librtp_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libsatip_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libsdp_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libshm_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libtcp_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libtimecode_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libudp_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/access/libvdr_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libaudio_format_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libaudiobargraph_a_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libchorus_flanger_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libcompressor_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libdolby_surround_decoder_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libequalizer_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libgain_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libheadphone_channel_mixer_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libkaraoke_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libmono_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libnormvol_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libparam_eq_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libremap_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libscaletempo_pitch_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libscaletempo_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libsimple_channel_mixer_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libspatializer_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libstereo_widen_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libtospdif_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libtrivial_channel_mixer_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_filter/libugly_resampler_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_mixer/libfloat_mixer_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_mixer/libinteger_mixer_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_output/libadummy_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_output/libafile_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_output/libalsa_plugin.so
+      needs:
+      - /usr/lib/libasound.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/audio_output/libamem_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libadpcm_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libaes3_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libaraw_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libavcodec_plugin.so
+      needs:
+      - /usr/lib/libavcodec.so.62
+      - /usr/lib/libavutil.so.60
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libcc_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libcdg_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libcvdsub_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libddummy_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libdvbsub_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libg711_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/liblpcm_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/librawvideo_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libscte18_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libscte27_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libspdif_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libspudec_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libstl_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libsubsdec_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libsubstx3g_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libsubsusf_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libsvcdsub_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libtelx_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libtextst_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libttml_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libuleaddvaudio_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/codec/libwebvtt_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/control/libdummy_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/control/libgestures_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/control/libhotkeys_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/control/libmotion_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/control/libnetsync_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/control/liboldrc_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libadaptive_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libvlccore.so.9
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/vlc/plugins/demux/libaiff_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libasf_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libau_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libavformat_plugin.so
+      needs:
+      - /usr/lib/libavcodec.so.62
+      - /usr/lib/libavformat.so.62
+      - /usr/lib/libavutil.so.60
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/vlc/plugins/demux/libavi_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libcaf_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libdemux_cdg_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libdemux_stl_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libdemuxdump_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libdiracsys_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libdirectory_demux_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libdmxmus_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libes_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libflacsys_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libh26x_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libimage_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libmjpeg_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libmp4_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/vlc/plugins/demux/libmpgv_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libnoseek_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libnsc_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libnsv_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libnuv_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libplaylist_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libps_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libpva_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/librawaud_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/librawdv_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/librawvid_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libreal_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libsmf_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libsubtitle_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libtta_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libty_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libvc1_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libvobsub_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libvoc_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libwav_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/demux/libxa_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/gui/libncurses_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/keystore/libfile_keystore_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/keystore/libmemory_keystore_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/logger/libconsole_logger_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/logger/libfile_logger_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/logger/libsyslog_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/meta_engine/libfolder_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/misc/libaddonsfsstorage_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/misc/libaddonsvorepository_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/misc/libaudioscrobbler_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/misc/libexport_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/misc/libfingerprinter_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/misc/liblogger_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/misc/libstats_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_a52_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_av1_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_avparser_plugin.so
+      needs:
+      - /usr/lib/libavcodec.so.62
+      - /usr/lib/libavutil.so.60
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_copy_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_dirac_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_dts_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_flac_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_h264_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_hevc_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_mlp_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_mpeg4video_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_mpeg4audio_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_mpegaudio_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_mpegvideo_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/packetizer/libpacketizer_vc1_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/services_discovery/libmediadirs_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/services_discovery/libpodcast_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/services_discovery/libsap_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/vlc/plugins/spu/libaudiobargraph_v_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/spu/libdynamicoverlay_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/spu/liblogo_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/spu/libmarq_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/spu/libmosaic_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/spu/librss_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/spu/libsubsdelay_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/stream_filter/libadf_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/stream_filter/libcache_block_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/stream_filter/libcache_read_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/stream_filter/libdecomp_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/stream_filter/libhds_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/stream_filter/libinflate_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/vlc/plugins/stream_filter/libprefetch_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/stream_filter/librecord_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/stream_filter/libskiptags_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/text_renderer/libfreetype_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/text_renderer/libtdummy_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libchain_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libgrey_yuv_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_10_p010_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_nv12_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_rgb_mmx_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_rgb_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_rgb_sse2_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_yuy2_mmx_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_yuy2_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libi420_yuy2_sse2_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libi422_i420_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libi422_yuy2_mmx_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libi422_yuy2_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libi422_yuy2_sse2_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/librv32_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libswscale_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libswscale.so.9
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libyuvp_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libyuy2_i420_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_chroma/libyuy2_i422_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libadjust_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libalphamask_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libanaglyph_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libantiflicker_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libball_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libblend_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libblendbench_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libbluescreen_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libcanvas_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libcolorthres_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libcroppadd_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libdeinterlace_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libedgedetection_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/liberase_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libextract_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libfps_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libfreeze_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libgaussianblur_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libgradfun_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libgradient_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libgrain_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libhqdn3d_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libinvert_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libmagnify_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libmirror_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libmotionblur_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libmotiondetect_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/liboldmovie_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libposterize_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libpsychedelic_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libpuzzle_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libripple_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/librotate_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libscale_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libscene_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libsepia_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libsharpen_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libtransform_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libvhs_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_filter/libwave_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_output/libfb_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_output/libflaschen_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_output/libvdummy_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_output/libvmem_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_output/libyuv_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_splitter/libclone_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/video_splitter/libwall_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/plugins/visualization/libvisual_plugin.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libm.so.6
+      - /usr/lib/libvlccore.so.9
+    - path: /usr/lib/vlc/vlc-cache-gen
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvlc.so.5
+
+  locale:
+    files:
+    - path: /usr/share/locale/ach/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/af/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/am/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/am_ET/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/an/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ar/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/as/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ast/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/be/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/bg/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/bn/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/bn_IN/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/br/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/brx/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/bs/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ca@valencia/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/cgg/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/co/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/cy/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/en_GB/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/es_MX/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/et/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/eu/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/fa/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ff/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/fur/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/fy/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ga/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/gd/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/gu/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/he/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/hi/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/hy/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ie/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/is/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/kab/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/kk/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/km/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/kn/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ks_IN/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ku_IQ/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ky/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/lg/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/lo/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/lt/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/lv/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/mai/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/mk/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ml/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/mn/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/mr/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/my/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ne/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/nn/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/oc/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/or_IN/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/pa/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ps/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/pt_PT/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/si/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/sl/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/sm/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/sq/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/sw/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ta/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/te/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/th/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/tt/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/ug/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/uz/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/wa/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/vlc.mo
+    - path: /usr/share/locale/zu/LC_MESSAGES/vlc.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/vlc-wrapper.1
+    - path: /usr/share/man/man1/vlc.1
+
+  misc:
+    files:
+    - path: /usr/share/applications/vlc.desktop
+    - path: /usr/share/icons/hicolor/16x16/apps/vlc.png
+    - path: /usr/share/icons/hicolor/16x16/apps/vlc.xpm
+    - path: /usr/share/icons/hicolor/32x32/apps/vlc-xmas.xpm
+    - path: /usr/share/icons/hicolor/32x32/apps/vlc.png
+    - path: /usr/share/icons/hicolor/32x32/apps/vlc.xpm
+    - path: /usr/share/icons/hicolor/48x48/apps/vlc-xmas.png
+    - path: /usr/share/icons/hicolor/48x48/apps/vlc.png
+    - path: /usr/share/icons/hicolor/128x128/apps/vlc-kb.png
+    - path: /usr/share/icons/hicolor/128x128/apps/vlc-xmas.png
+    - path: /usr/share/icons/hicolor/128x128/apps/vlc.png
+    - path: /usr/share/icons/hicolor/256x256/apps/vlc.png
+    - path: /usr/share/kde4/apps/solid/actions/vlc-openbd.desktop
+    - path: /usr/share/kde4/apps/solid/actions/vlc-opencda.desktop
+    - path: /usr/share/kde4/apps/solid/actions/vlc-opendvd.desktop
+    - path: /usr/share/kde4/apps/solid/actions/vlc-openvcd.desktop
+    - path: /usr/share/metainfo/org.videolan.vlc.appdata.xml
+    - path: /usr/share/vlc/utils/audio-vlc-default.sh
+    - path: /usr/share/vlc/utils/gnome-vlc-default.sh
+    - path: /usr/share/vlc/utils/video-vlc-default.sh
+    - path: /usr/share/vlc/vlc.ico
+
+  static:
+    files:
+    - path: /usr/lib/vlc/libcompat.a
+
+resolution:
+  /usr/lib/libasound.so.2: alsa-lib
+  /usr/bin/sh: bash
+  /usr/lib/libavcodec.so.62: ffmpeg
+  /usr/lib/libavformat.so.62: ffmpeg
+  /usr/lib/libavutil.so.60: ffmpeg
+  /usr/lib/libswscale.so.9: ffmpeg
+  /usr/lib/libfreetype.so.6: freetype
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libncursesw.so.6: ncurses
+  /usr/lib/libvlc.so.5: self
+  /usr/lib/libvlccore.so.9: self
+  /usr/lib/libz.so.1: zlib

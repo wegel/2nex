@@ -1,0 +1,90 @@
+package:
+  schema: 1
+  name: Patch
+  slug: patch
+  namespace: core/toolchain
+  version: 2.7.6
+  description: A utility to apply patch files to original sources
+  homepage: https://savannah.gnu.org/projects/patch/
+  checksum: 23d986a9a9a89cf1cb583d4bfc047de701b4854bac8462caa7a60f670573fbc0
+  seed: true
+
+sources:
+- name: patch
+  url: https://ftp.gnu.org/gnu/patch/patch-2.7.6.tar.xz
+  sha256: ac610bda97abe0d9f6b7c963255a11dcb196c25e337c61f94e4778d632f1d8fd
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/bootstrap/phase3/zlib/1.3.1/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase3/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase3/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase3/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase3/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase3/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase3/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase3/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase3/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4125:2774, 8244:6436, 12390:8006, 16486:9592, 20647:10457, 24798:12492, 28919:13845, 33066:14941, 34413:14980]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_patch} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr
+
+    make
+    make DESTDIR=${OUT_DIR} install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+  full:
+  - bin
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/patch
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libattr.so.1
+      - /usr/lib/libc.so.6
+
+  man:
+    files:
+    - path: /usr/share/man/man1/patch.1
+
+resolution:
+  /usr/lib/libattr.so.1: attr
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

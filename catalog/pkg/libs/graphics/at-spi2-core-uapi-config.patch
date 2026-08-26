@@ -1,0 +1,21 @@
+From: Nex package maintainers
+Subject: insert the transient tier between the administrator and vendor a11y bus config
+Source: Nex downstream patch for at-spi2-core 2.54.0
+Upstream: not submitted; needs agreement on the transient path
+
+ensure_a11y_bus() selects one complete D-Bus policy file for the
+accessibility bus: the administrator's SYSCONFDIR/at-spi2/accessibility.conf
+when it exists, otherwise the packaged DATADIR/defaults/at-spi2/accessibility.conf.
+Insert /run/at-spi2/accessibility.conf between those two tiers so a
+transient deployment can ship its own complete policy file without
+writing into /etc. The check stays a plain existence test, so an empty
+higher-tier file still wins and masks the tiers below it. The
+administrator path, the vendor path, and the no-administrator/no-runtime
+vendor fallback are unchanged; ATSPI_DBUS_IMPLEMENTATION selection is
+untouched.
+
+--- a/bus/at-spi-bus-launcher.c
++++ b/bus/at-spi-bus-launcher.c
+@@ -538,0 +539,2 @@
++  else if (g_file_test ("/run/at-spi2/accessibility.conf", G_FILE_TEST_EXISTS))
++    config_path = "--config-file=/run/at-spi2/accessibility.conf";

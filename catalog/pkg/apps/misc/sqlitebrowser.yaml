@@ -1,0 +1,298 @@
+package:
+  schema: 1
+  name: DB Browser for SQLite
+  slug: sqlitebrowser
+  namespace: apps/misc
+  version: 3.13.1+ce16bd0
+  description: Visual editor for SQLite database files
+  homepage: https://sqlitebrowser.org/
+  checksum: 27bcc18ee5833ecb9fe0ed490ad81e0d20b21323c962330a84cb8d06c983a702
+
+sources:
+- name: sqlitebrowser
+  url: https://github.com/sqlitebrowser/sqlitebrowser/archive/ce16bd02688a5ede1f49bdc596c15eb8837bdc6f.tar.gz
+  sha256: e32c34f889947927620fb6be607de802b9f18d754b768b313abba14b779bf4ee
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: icu
+  commit: x86_64/pkg/libs/system/icu/76.1/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: qt6-base
+  commit: x86_64/pkg/libs/graphics/qt6-base/6.7.2/bundles/dev
+- name: qt6-5compat
+  commit: x86_64/pkg/libs/graphics/qt6-5compat/6.7.2/bundles/dev
+- name: libglvnd
+  commit: x86_64/pkg/libs/graphics/libglvnd/1.7.0/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: dbus
+  commit: x86_64/pkg/core/ipc/dbus/1.16.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: fontconfig
+  commit: x86_64/pkg/libs/graphics/fontconfig/2.17.1/bundles/dev
+- name: freetype
+  commit: x86_64/pkg/libs/graphics/freetype/2.14.1/bundles/dev
+- name: libpng
+  commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+- name: harfbuzz
+  commit: x86_64/pkg/libs/text/harfbuzz/10.1.0/bundles/dev
+- name: libxkbcommon
+  commit: x86_64/pkg/libs/input/libxkbcommon/1.7.0/bundles/dev
+- name: libx11
+  commit: x86_64/pkg/libs/x11/libx11/1.8.10/bundles/dev
+- name: libxcb
+  commit: x86_64/pkg/libs/x11/libxcb/1.17.0/bundles/dev
+- name: libxau
+  commit: x86_64/pkg/libs/x11/libxau/1.0.12/bundles/dev
+- name: libxdmcp
+  commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
+- name: sqlite3
+  commit: x86_64/pkg/libs/data/sqlite3/3.51.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4105:7998, 12415:11153, 20648:14733, 37324:15109, 45553:15110, 57936:17081, 70313:40838, 86833:48060, 103344:52896, 111266:53326]
+
+  script: |
+    set -eu
+
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
+    tar --no-same-owner -xf "${SOURCE_sqlitebrowser}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    sed -i \
+      -e 's/ LinguistTools//' \
+      -e 's/include(config\/translations.cmake)/# translations disabled; qt6-base does not ship Qt Linguist tools/' \
+      -e '/src\/translations\/translations.qrc/d' \
+      CMakeLists.txt
+
+    cmake -S . -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DCMAKE_INSTALL_DATADIR=share \
+      -DQT_MAJOR=Qt6 \
+      -DBUILD_STABLE_VERSION=ON \
+      -DFORCE_INTERNAL_QSCINTILLA=ON \
+      -DFORCE_INTERNAL_QCUSTOMPLOT=ON \
+      -DFORCE_INTERNAL_QHEXEDIT=ON \
+      -DENABLE_TESTING=OFF \
+      -Dsqlcipher=OFF
+
+    cmake --build build
+    DESTDIR="${OUT_DIR}" cmake --install build
+
+    mkdir -p \
+      "${OUT_DIR}/usr/libexec/sqlitebrowser" \
+      "${OUT_DIR}/usr/lib/qt6/plugins/platforms"
+    mv "${OUT_DIR}/usr/bin/sqlitebrowser" \
+      "${OUT_DIR}/usr/libexec/sqlitebrowser/sqlitebrowser"
+    cp -a \
+      /usr/lib/qt6/plugins/platforms/libqminimal.so \
+      /usr/lib/qt6/plugins/platforms/libqoffscreen.so \
+      "${OUT_DIR}/usr/lib/qt6/plugins/platforms/"
+    cat > "${OUT_DIR}/usr/bin/sqlitebrowser" <<'EOF'
+    #!/usr/bin/bash
+    script=$0
+    if target=$(/usr/bin/readlink "$script"); then
+      case "$target" in
+        /*) script=$target ;;
+      esac
+    fi
+    root=${script%/usr/bin/sqlitebrowser}
+    if [ "$root" = "$script" ]; then
+      root=
+    fi
+
+    export QT_PLUGIN_PATH="${root}/usr/lib/qt6/plugins${QT_PLUGIN_PATH:+:${QT_PLUGIN_PATH}}"
+    if [ "${QT_QPA_PLATFORM:-}" = wayland ] && [ ! -e "${root}/usr/lib/qt6/plugins/platforms/libqwayland-generic.so" ]; then
+      export QT_QPA_PLATFORM=minimal
+    fi
+
+    exec "${root}/usr/libexec/sqlitebrowser/sqlitebrowser" "$@"
+    EOF
+    chmod 755 "${OUT_DIR}/usr/bin/sqlitebrowser"
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - misc
+
+  full:
+  - bin
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/sqlitebrowser
+      needs:
+      - /usr/bin/bash
+      - /usr/bin/readlink
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/qt6/plugins/platforms/libqminimal.so
+      - /usr/lib/qt6/plugins/platforms/libqoffscreen.so
+      - /usr/libexec/sqlitebrowser/sqlitebrowser
+    - path: /usr/lib/qt6/plugins/platforms/libqminimal.so
+      needs:
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/qt6/plugins/platforms/libqoffscreen.so
+      needs:
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libc.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/libexec/sqlitebrowser/sqlitebrowser
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libGLX.so.0
+      - /usr/lib/libGLdispatch.so.0
+      - /usr/lib/libQt6DBus.so.6
+      - /usr/lib/libQt6Network.so.6
+      - /usr/lib/libQt6Widgets.so.6
+      - /usr/lib/libQt6Xml.so.6
+      - /usr/lib/libQt6Core.so.6
+      - /usr/lib/libQt6Core5Compat.so.6
+      - /usr/lib/libQt6PrintSupport.so.6
+      - /usr/lib/libQt6Gui.so.6
+      - /usr/lib/libX11.so.6
+      - /usr/lib/libXau.so.6
+      - /usr/lib/libXdmcp.so.6
+      - /usr/lib/libbz2.so.1.0
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap.so.2
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libdbus-1.so.3
+      - /usr/lib/libexpat.so.1
+      - /usr/lib/libfontconfig.so.1
+      - /usr/lib/libfreetype.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libharfbuzz.so.0
+      - /usr/lib/libicudata.so.76
+      - /usr/lib/libicui18n.so.76
+      - /usr/lib/libicuuc.so.76
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpcre2-8.so.0
+      - /usr/lib/libpcre2-16.so.0
+      - /usr/lib/libpng16.so.16
+      - /usr/lib/libsqlite3.so
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libsystemd.so.0
+      - /usr/lib/libxcb.so.1
+      - /usr/lib/libxkbcommon.so.0
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+
+  misc:
+    files:
+    - path: /usr/share/applications/sqlitebrowser.desktop
+    - path: /usr/share/icons/hicolor/256x256/apps/sqlitebrowser.png
+    - path: /usr/share/icons/hicolor/scalable/apps/sqlitebrowser.svg
+    - path: /usr/share/metainfo/sqlitebrowser.desktop.appdata.xml
+
+resolution:
+  /usr/bin/bash: bash
+  /usr/lib/libbz2.so.1.0: bzip2
+  /usr/bin/readlink: coreutils
+  /usr/lib/libdbus-1.so.3: dbus
+  /usr/lib/libexpat.so.1: expat
+  /usr/lib/libfontconfig.so.1: fontconfig
+  /usr/lib/libfreetype.so.6: freetype
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libharfbuzz.so.0: harfbuzz
+  /usr/lib/libicudata.so.76: icu
+  /usr/lib/libicui18n.so.76: icu
+  /usr/lib/libicuuc.so.76: icu
+  /usr/lib/libcap.so.2: libcap
+  /usr/lib/libGLX.so.0: libglvnd
+  /usr/lib/libGLdispatch.so.0: libglvnd
+  /usr/lib/libpng16.so.16: libpng
+  /usr/lib/libX11.so.6: libx11
+  /usr/lib/libXau.so.6: libxau
+  /usr/lib/libxcb.so.1: libxcb
+  /usr/lib/libXdmcp.so.6: libxdmcp
+  /usr/lib/libxkbcommon.so.0: libxkbcommon
+  /usr/lib/libncursesw.so.6: ncurses
+  /usr/lib/libcrypto.so.3: openssl3
+  /usr/lib/libpcre2-8.so.0: pcre2
+  /usr/lib/libpcre2-16.so.0: pcre2
+  /usr/lib/libQt6Core5Compat.so.6: qt6-5compat
+  /usr/lib/libQt6DBus.so.6: qt6-base
+  /usr/lib/libQt6Network.so.6: qt6-base
+  /usr/lib/libQt6Widgets.so.6: qt6-base
+  /usr/lib/libQt6Xml.so.6: qt6-base
+  /usr/lib/libQt6Core.so.6: qt6-base
+  /usr/lib/libQt6PrintSupport.so.6: qt6-base
+  /usr/lib/libQt6Gui.so.6: qt6-base
+  /usr/lib/qt6/plugins/platforms/libqminimal.so: self
+  /usr/lib/qt6/plugins/platforms/libqoffscreen.so: self
+  /usr/libexec/sqlitebrowser/sqlitebrowser: self
+  /usr/lib/libsqlite3.so: sqlite3
+  /usr/lib/libsystemd.so.0: systemd
+  /usr/lib/libz.so.1: zlib
+  /usr/lib/libzstd.so.1: zstd

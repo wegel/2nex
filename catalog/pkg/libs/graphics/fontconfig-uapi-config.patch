@@ -1,0 +1,309 @@
+From: Package maintainers <packages@localhost>
+Subject: [PATCH] layer system configuration paths
+Source: downstream
+Upstream: not submitted; suitable for upstream review
+
+Select a complete main file from the administrator, transient, and vendor
+paths. Merge relative configuration directories by basename across the same
+paths, with empty higher-priority files masking lower files. Track every
+search directory so Fontconfig can notice files and directories that appear
+after it loads the configuration.
+
+diff --git a/src/fccfg.c b/src/fccfg.c
+--- a/src/fccfg.c
++++ b/src/fccfg.c
+@@ -2345,16 +2345,22 @@
+     return 0;
+ }
+ 
+-static FcChar8 **
++FcChar8 **
+ FcConfigGetPath (void)
+ {
+     FcChar8 **path;
+     FcChar8  *env, *e, *colon;
+     FcChar8  *dir;
+-    int       npath;
++    static const FcChar8 *const system_paths[] = {
++        (const FcChar8 *)"/etc/fonts",
++        (const FcChar8 *)"/run/fonts",
++        (const FcChar8 *)FONTCONFIG_PATH,
++    };
++    int       npath, nsystem;
+     int       i;
+ 
+-    npath = 2; /* default dir + null */
++    nsystem = sizeof (system_paths) / sizeof (system_paths[0]);
++    npath = nsystem + 1;
+     env = (FcChar8 *)getenv ("FONTCONFIG_PATH");
+     if (env) {
+ 	e = env;
+@@ -2398,11 +2404,21 @@
+ 	strcat ((char *)fontconfig_path, "\\fonts");
+     }
+ #endif
+-    dir = (FcChar8 *)FONTCONFIG_PATH;
+-    path[i] = malloc (strlen ((char *)dir) + 1);
+-    if (!path[i])
+-	goto bail1;
+-    strcpy ((char *)path[i], (const char *)dir);
++    for (int j = 0; j < nsystem; j++) {
++	FcBool duplicate = FcFalse;
++
++	dir = (FcChar8 *)system_paths[j];
++	for (int k = 0; k < i; k++)
++	    if (FcStrCmp (path[k], dir) == 0)
++		duplicate = FcTrue;
++	if (duplicate)
++	    continue;
++	path[i] = malloc (strlen ((char *)dir) + 1);
++	if (!path[i])
++	    goto bail1;
++	strcpy ((char *)path[i], (const char *)dir);
++	i++;
++    }
+     return path;
+ 
+ bail1:
+@@ -2413,7 +2429,7 @@
+     return 0;
+ }
+ 
+-static void
++void
+ FcConfigFreePath (FcChar8 **path)
+ {
+     FcChar8 **p;
+diff --git a/src/fcint.h b/src/fcint.h
+--- a/src/fcint.h
++++ b/src/fcint.h
+@@ -1107,6 +1107,12 @@
+ FcConfigRealFilename (FcConfig      *config,
+                       const FcChar8 *url);
+ 
++FcPrivate FcChar8 **
++FcConfigGetPath (void);
++
++FcPrivate void
++FcConfigFreePath (FcChar8 **path);
++
+ /* fclist.c */
+ 
+ FcPrivate FcBool
+diff --git a/src/fcinit.c b/src/fcinit.c
+--- a/src/fcinit.c
++++ b/src/fcinit.c
+@@ -47,8 +47,7 @@
+ 	"  <cachedir>" FC_CACHEDIR
+ 	"</cachedir>"
+ 	"  <cachedir prefix=\"xdg\">fontconfig</cachedir>"
+-	"  <include ignore_missing=\"yes\">" CONFIGDIR
+-	"</include>"
++	"  <include ignore_missing=\"yes\">conf.d</include>"
+ 	"  <include ignore_missing=\"yes\" prefix=\"xdg\">fontconfig/conf.d</include>"
+ 	"  <include ignore_missing=\"yes\" prefix=\"xdg\">fontconfig/fonts.conf</include>"
+ 	"</fontconfig>";
+diff --git a/fonts.conf.in b/fonts.conf.in
+--- a/fonts.conf.in
++++ b/fonts.conf.in
+@@ -1,6 +1,6 @@
+ <?xml version="1.0"?>
+ <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+-<!-- /etc/fonts/fonts.conf file to configure system font access -->
++<!-- Default file to configure system font access -->
+ <fontconfig>
+ 	<description>Default configuration file</description>
+ 
+diff --git a/src/fcxml.c b/src/fcxml.c
+--- a/src/fcxml.c
++++ b/src/fcxml.c
+@@ -3044,6 +3044,146 @@
+     return FcStrCmp (as, bs);
+ }
+ 
++static int
++FcSortCmpConfigFile (const void *a, const void *b)
++{
++    const FcChar8 *as = *((FcChar8 **)a);
++    const FcChar8 *bs = *((FcChar8 **)b);
++    const FcChar8 *abase = (const FcChar8 *)strrchr ((const char *)as, FC_DIR_SEPARATOR);
++    const FcChar8 *bbase = (const FcChar8 *)strrchr ((const char *)bs, FC_DIR_SEPARATOR);
++
++    return FcStrCmp (abase ? abase + 1 : as, bbase ? bbase + 1 : bs);
++}
++
++static FcChar8 *
++FcConfigPathFilename (FcConfig      *config,
++                      const FcChar8 *path,
++                      const FcChar8 *name)
++{
++    const FcChar8 *sysroot = FcConfigGetSysRoot (config);
++    const FcChar8 *rootpath = path;
++
++    if (sysroot && FcStrIsAbsoluteFilename (path)) {
++	size_t len = strlen ((const char *)sysroot);
++
++	if (strncmp ((const char *)path, (const char *)sysroot, len) == 0)
++	    sysroot = NULL;
++	else
++	    while (*rootpath == FC_DIR_SEPARATOR)
++		rootpath++;
++    } else
++	sysroot = NULL;
++
++    if (sysroot)
++	return name ? FcStrBuildFilename (sysroot, rootpath, name, NULL)
++	            : FcStrBuildFilename (sysroot, rootpath, NULL);
++    return name ? FcStrBuildFilename (path, name, NULL) : FcStrCopy (path);
++}
++
++static FcBool
++FcConfigAddPathRoots (FcConfig *config)
++{
++    FcChar8 **paths = FcConfigGetPath();
++    FcBool    ret = FcTrue;
++
++    if (!paths)
++	return FcFalse;
++    for (FcChar8 **p = paths; *p; p++) {
++	FcChar8 *path = FcConfigPathFilename (config, *p, NULL);
++
++	if (!path || !FcConfigAddConfigDir (config, path))
++	    ret = FcFalse;
++	if (path)
++	    FcStrFree (path);
++    }
++    FcConfigFreePath (paths);
++    return ret;
++}
++
++static FcBool
++FcConfigParseAndLoadPathDirs (FcConfig      *config,
++                              const FcChar8 *name,
++                              FcBool         complain,
++                              FcBool         load)
++{
++    FcChar8 **paths = FcConfigGetPath();
++    FcStrSet *files = NULL, *seen = NULL;
++    FcBool    found = FcFalse, ret = FcTrue;
++
++    if (!paths)
++	return FcFalse;
++    files = FcStrSetCreateEx (FCSS_GROW_BY_64);
++    seen = FcStrSetCreateEx (FCSS_GROW_BY_64);
++    if (!files || !seen) {
++	ret = FcFalse;
++	goto bail;
++    }
++
++    for (FcChar8 **p = paths; ret && *p; p++) {
++	FcChar8 *dir = FcConfigPathFilename (config, *p, name);
++	struct dirent *entry;
++	DIR *d;
++
++	if (!dir) {
++	    ret = FcFalse;
++	    break;
++	}
++	if (load && !FcConfigAddConfigDir (config, dir)) {
++	    FcStrFree (dir);
++	    ret = FcFalse;
++	    break;
++	}
++	d = opendir ((const char *)dir);
++	if (!d) {
++	    FcStrFree (dir);
++	    continue;
++	}
++	found = FcTrue;
++	while (ret && (entry = readdir (d))) {
++	    FcChar8 *file;
++	    struct stat statb;
++	    int len = strlen (entry->d_name);
++
++	    if (entry->d_name[0] < '0' || entry->d_name[0] > '9' ||
++	        len <= 5 || strcmp (entry->d_name + len - 5, ".conf") != 0 ||
++	        FcStrSetMember (seen, (const FcChar8 *)entry->d_name))
++		continue;
++	    if (!FcStrSetAdd (seen, (const FcChar8 *)entry->d_name)) {
++		ret = FcFalse;
++		break;
++	    }
++	    file = FcStrBuildFilename (dir, entry->d_name, NULL);
++	    if (!file) {
++		ret = FcFalse;
++		break;
++	    }
++	    if (FcStat (file, &statb) == 0 && statb.st_size == 0) {
++		if (load)
++		    ret = FcConfigAddConfigFile (config, file);
++	    } else
++		ret = FcStrSetAdd (files, file);
++	    FcStrFree (file);
++	}
++	closedir (d);
++	FcStrFree (dir);
++    }
++
++    if (ret) {
++	qsort (files->strs, files->num, sizeof (FcChar8 *),
++	       (int (*) (const void *, const void *))FcSortCmpConfigFile);
++	for (int i = 0; ret && i < files->num; i++)
++	    ret = _FcConfigParse (config, files->strs[i], complain, load);
++    }
++
++bail:
++    if (seen)
++	FcStrSetDestroy (seen);
++    if (files)
++	FcStrSetDestroy (files);
++    FcConfigFreePath (paths);
++    return (found && ret) || !complain;
++}
++
+ static FcBool
+ FcConfigParseAndLoadDir (FcConfig      *config,
+                          const FcChar8 *name,
+@@ -3265,6 +3405,10 @@
+     _ensureWin32GettersReady();
+ #endif
+ 
++    if (load && (!name || (!FcStrIsAbsoluteFilename (name) && name[0] != '~')))
++	if (!FcConfigAddPathRoots (config))
++	    goto bail0;
++
+     filename = FcConfigGetFilename (config, name);
+     if (!filename) {
+ 	FcStrBufString (&reason, (FcChar8 *)"No such file: ");
+@@ -3277,6 +3421,13 @@
+ 	FcStrBufString (&reason, name ? name : (FcChar8 *)"(null)");
+ 	goto bail0;
+     }
++    if (name && !FcStrIsAbsoluteFilename (name) && name[0] != '~' &&
++	FcFileIsDir (realfilename)) {
++	ret = FcConfigParseAndLoadPathDirs (config, name, complain, load);
++	FcStrFree (filename);
++	FcStrFree (realfilename);
++	return ret;
++    }
+     if (FcStrSetMember (config->availConfigFiles, realfilename)) {
+ 	FcStrFree (filename);
+ 	FcStrFree (realfilename);
+@@ -3305,6 +3456,17 @@
+ 	FcStrBufString (&reason, realfilename);
+ 	goto bail1;
+     }
++    {
++	struct stat statb;
++
++	if (FcStat (realfilename, &statb) == 0 && statb.st_size == 0) {
++	    close (fd);
++	    ret = FcConfigParseAndLoadFromMemoryInternal (
++		config, filename, (const FcChar8 *)"<fontconfig/>", complain, load);
++	    complain_again = FcFalse;
++	    goto bail1;
++	}
++    }
+ 
+     do {
+ 	len = read (fd, buf, BUFSIZ);

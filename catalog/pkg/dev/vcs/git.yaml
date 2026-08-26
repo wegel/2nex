@@ -1,0 +1,1036 @@
+package:
+  schema: 1
+  name: Git
+  slug: git
+  namespace: dev/vcs
+  version: 2.49.0
+  description: Distributed version control system
+  homepage: https://git-scm.com/
+  checksum: 51b15102f21257b22396de016d264484c94483e414eafd3e2985332cc30d3b35
+
+sources:
+- name: git
+  url: https://mirrors.edge.kernel.org/pub/software/scm/git/git-2.49.0.tar.xz
+  sha256: 618190cf590b7e9f6c11f91f23b1d267cd98c3ab33b850416d8758f8b5a85628
+- name: uapi_config
+  file: pkg/dev/vcs/git-uapi-config.patch
+  sha256: 5d53e00eb54a2fadd135b49a8e4c8f66a2e7e294928c9f20abfe4e0ffb00ab69
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4105:1594, 8211:2420, 12308:11674, 16425:17069, 20526:26413, 24646:26452, 25402:27924]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_git} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    # Build git directly without configure
+    # pass flags explicitly since git's Makefile uses hard assignments
+    make prefix=/usr \
+      CC=gcc \
+      AR="$AR" \
+      CFLAGS="$CFLAGS" \
+      LDFLAGS="$LDFLAGS" \
+      NO_GETTEXT=1 \
+      NO_TCLTK=1 \
+      NO_OPENSSL=1 \
+      NO_CURL=1 \
+      NO_ICONV=1 \
+      NO_EXPAT=1 \
+      all
+
+    make prefix=/usr \
+      CC=gcc \
+      AR="$AR" \
+      CFLAGS="$CFLAGS" \
+      LDFLAGS="$LDFLAGS" \
+      NO_GETTEXT=1 \
+      NO_TCLTK=1 \
+      NO_OPENSSL=1 \
+      NO_CURL=1 \
+      NO_ICONV=1 \
+      NO_EXPAT=1 \
+      DESTDIR="${OUT_DIR}" \
+      install
+
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/git || true
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/git-receive-pack || true
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/git-shell || true
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/git-upload-archive || true
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/git-upload-pack || true
+    strip --strip-unneeded ${OUT_DIR}/usr/bin/scalar || true
+    find ${OUT_DIR}/usr/libexec/git-core -type f -perm /u+x -exec strip --strip-unneeded {} \; 2>/dev/null || true
+
+    mkdir -p /etc /run /usr/lib
+    probe="${WORK_DIR}/git-uapi-probe"
+    mkdir -p "${probe}"
+    git_bin="${OUT_DIR}/usr/bin/git"
+    run_git() {
+      env -u GIT_CONFIG_SYSTEM -u GIT_DIR -u GIT_ATTR_NOSYSTEM \
+        HOME="${probe}" GIT_CONFIG_GLOBAL=/dev/null \
+        "${git_bin}" -C "${probe}" "$@"
+    }
+    printf '[nex]\n\ttier = vendor\n' > /usr/lib/gitconfig
+    printf '[nex]\n\ttier = run\n' > /run/gitconfig
+    printf '[nex]\n\ttier = admin\n' > /etc/gitconfig
+    printf '* nexattr=vendor\n' > /usr/lib/gitattributes
+    printf '* nexattr=run\n' > /run/gitattributes
+    printf '* nexattr=admin\n' > /etc/gitattributes
+    actual="$(run_git config --get nex.tier)"
+    if [ "${actual}" != admin ]; then
+      printf 'git UAPI smoke: expected admin, got %s\n' "${actual}" >&2
+      exit 1
+    fi
+    system_target="$(run_git var GIT_CONFIG_SYSTEM)"
+    if [ "${system_target}" != /etc/gitconfig ]; then
+      printf 'git UAPI smoke: --system target is %s\n' "${system_target}" >&2
+      exit 1
+    fi
+    attr_target="$(run_git var GIT_ATTR_SYSTEM)"
+    if [ "${attr_target}" != /etc/gitattributes ]; then
+      printf 'git UAPI smoke: attr target is %s\n' "${attr_target}" >&2
+      exit 1
+    fi
+    rm -f /etc/gitconfig /etc/gitattributes
+    actual="$(run_git config --get nex.tier)"
+    if [ "${actual}" != run ]; then
+      printf 'git UAPI smoke: expected run, got %s\n' "${actual}" >&2
+      exit 1
+    fi
+    attr_target="$(run_git var GIT_ATTR_SYSTEM)"
+    if [ "${attr_target}" != /run/gitattributes ]; then
+      printf 'git UAPI smoke: attr target is %s after removing /etc\n' "${attr_target}" >&2
+      exit 1
+    fi
+    : > /etc/gitconfig
+    if actual="$(run_git config --get nex.tier)"; then
+      printf 'git UAPI smoke: empty /etc/gitconfig leaked %s\n' "${actual}" >&2
+      exit 1
+    fi
+    rm -f /etc/gitconfig /run/gitconfig /run/gitattributes
+    actual="$(run_git config --get nex.tier)"
+    if [ "${actual}" != vendor ]; then
+      printf 'git UAPI smoke: expected vendor, got %s\n' "${actual}" >&2
+      exit 1
+    fi
+    attr_target="$(run_git var GIT_ATTR_SYSTEM)"
+    if [ "${attr_target}" != /usr/lib/gitattributes ]; then
+      printf 'git UAPI smoke: attr target is %s without higher files\n' "${attr_target}" >&2
+      exit 1
+    fi
+    rm -f /etc/gitconfig /run/gitconfig /usr/lib/gitconfig \
+          /etc/gitattributes /run/gitattributes /usr/lib/gitattributes
+    printf 'git UAPI smoke: system gitconfig and gitattributes read all three tiers in order\n'
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+  - misc
+
+  full:
+  - bin
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/git
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/git-cvsserver
+    - path: /usr/bin/git-receive-pack
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/git-shell
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/git-upload-archive
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/git-upload-pack
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/bin/scalar
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-add
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-am
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-annotate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-apply
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-archimport
+    - path: /usr/libexec/git-core/git-archive
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-backfill
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-bisect
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-blame
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-branch
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-bugreport
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-bundle
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-cat-file
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-check-attr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-check-ignore
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-check-mailmap
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-check-ref-format
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-checkout
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-checkout--worker
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-checkout-index
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-cherry
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-cherry-pick
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-clean
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-clone
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-column
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-commit
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-commit-graph
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-commit-tree
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-config
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-count-objects
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-credential
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-credential-cache
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-credential-cache--daemon
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-credential-store
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-cvsexportcommit
+    - path: /usr/libexec/git-core/git-cvsimport
+    - path: /usr/libexec/git-core/git-cvsserver
+    - path: /usr/libexec/git-core/git-daemon
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-describe
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-diagnose
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-diff
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-diff-files
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-diff-index
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-diff-tree
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-difftool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-difftool--helper
+    - path: /usr/libexec/git-core/git-fast-export
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-fast-import
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-fetch
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-fetch-pack
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-filter-branch
+    - path: /usr/libexec/git-core/git-fmt-merge-msg
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-for-each-ref
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-for-each-repo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-format-patch
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-fsck
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-fsck-objects
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-fsmonitor--daemon
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-gc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-get-tar-commit-id
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-grep
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-hash-object
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-help
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-hook
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-http-backend
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-imap-send
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-index-pack
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-init
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-init-db
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-instaweb
+    - path: /usr/libexec/git-core/git-interpret-trailers
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-log
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-ls-files
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-ls-remote
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-ls-tree
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-mailinfo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-mailsplit
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-maintenance
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-merge
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-merge-base
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-merge-file
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-merge-index
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-merge-octopus
+    - path: /usr/libexec/git-core/git-merge-one-file
+    - path: /usr/libexec/git-core/git-merge-ours
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-merge-recursive
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-merge-resolve
+    - path: /usr/libexec/git-core/git-merge-subtree
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-merge-tree
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-mergetool
+    - path: /usr/libexec/git-core/git-mergetool--lib
+    - path: /usr/libexec/git-core/git-mktag
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-mktree
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-multi-pack-index
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-mv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-name-rev
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-notes
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-p4
+    - path: /usr/libexec/git-core/git-pack-objects
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-pack-redundant
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-pack-refs
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-patch-id
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-prune
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-prune-packed
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-pull
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-push
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-quiltimport
+    - path: /usr/libexec/git-core/git-range-diff
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-read-tree
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-rebase
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-receive-pack
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-reflog
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-refs
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-remote
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-remote-ext
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-remote-fd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-repack
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-replace
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-replay
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-request-pull
+    - path: /usr/libexec/git-core/git-rerere
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-reset
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-restore
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-rev-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-rev-parse
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-revert
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-rm
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-send-email
+    - path: /usr/libexec/git-core/git-send-pack
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-sh-i18n
+    - path: /usr/libexec/git-core/git-sh-i18n--envsubst
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-sh-setup
+    - path: /usr/libexec/git-core/git-shell
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-shortlog
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-show
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-show-branch
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-show-index
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-show-ref
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-sparse-checkout
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-stage
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-stash
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-status
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-stripspace
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-submodule
+    - path: /usr/libexec/git-core/git-submodule--helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-svn
+    - path: /usr/libexec/git-core/git-switch
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-symbolic-ref
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-tag
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-unpack-file
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-unpack-objects
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-update-index
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-update-ref
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-update-server-info
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-upload-archive
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-upload-pack
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-var
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-verify-commit
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-verify-pack
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-verify-tag
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-version
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-web--browse
+    - path: /usr/libexec/git-core/git-whatchanged
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-worktree
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/git-write-tree
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+    - path: /usr/libexec/git-core/mergetools/araxis
+    - path: /usr/libexec/git-core/mergetools/bc
+    - path: /usr/libexec/git-core/mergetools/codecompare
+    - path: /usr/libexec/git-core/mergetools/deltawalker
+    - path: /usr/libexec/git-core/mergetools/diffmerge
+    - path: /usr/libexec/git-core/mergetools/diffuse
+    - path: /usr/libexec/git-core/mergetools/ecmerge
+    - path: /usr/libexec/git-core/mergetools/emerge
+    - path: /usr/libexec/git-core/mergetools/examdiff
+    - path: /usr/libexec/git-core/mergetools/guiffy
+    - path: /usr/libexec/git-core/mergetools/gvimdiff
+    - path: /usr/libexec/git-core/mergetools/kdiff3
+    - path: /usr/libexec/git-core/mergetools/kompare
+    - path: /usr/libexec/git-core/mergetools/meld
+    - path: /usr/libexec/git-core/mergetools/nvimdiff
+    - path: /usr/libexec/git-core/mergetools/opendiff
+    - path: /usr/libexec/git-core/mergetools/p4merge
+    - path: /usr/libexec/git-core/mergetools/smerge
+    - path: /usr/libexec/git-core/mergetools/tkdiff
+    - path: /usr/libexec/git-core/mergetools/tortoisemerge
+    - path: /usr/libexec/git-core/mergetools/vimdiff
+    - path: /usr/libexec/git-core/mergetools/vscode
+    - path: /usr/libexec/git-core/mergetools/winmerge
+    - path: /usr/libexec/git-core/mergetools/xxdiff
+    - path: /usr/libexec/git-core/scalar
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libz.so.1
+
+  misc:
+    files:
+    - path: /usr/share/git-core/templates/description
+    - path: /usr/share/git-core/templates/hooks/applypatch-msg.sample
+    - path: /usr/share/git-core/templates/hooks/commit-msg.sample
+    - path: /usr/share/git-core/templates/hooks/fsmonitor-watchman.sample
+    - path: /usr/share/git-core/templates/hooks/post-update.sample
+    - path: /usr/share/git-core/templates/hooks/pre-applypatch.sample
+    - path: /usr/share/git-core/templates/hooks/pre-commit.sample
+    - path: /usr/share/git-core/templates/hooks/pre-merge-commit.sample
+    - path: /usr/share/git-core/templates/hooks/pre-push.sample
+    - path: /usr/share/git-core/templates/hooks/pre-rebase.sample
+    - path: /usr/share/git-core/templates/hooks/pre-receive.sample
+    - path: /usr/share/git-core/templates/hooks/prepare-commit-msg.sample
+    - path: /usr/share/git-core/templates/hooks/push-to-checkout.sample
+    - path: /usr/share/git-core/templates/hooks/sendemail-validate.sample
+    - path: /usr/share/git-core/templates/hooks/update.sample
+    - path: /usr/share/git-core/templates/info/exclude
+    - path: /usr/share/gitweb/gitweb.cgi
+    - path: /usr/share/gitweb/static/git-favicon.png
+    - path: /usr/share/gitweb/static/git-logo.png
+    - path: /usr/share/gitweb/static/gitweb.css
+    - path: /usr/share/gitweb/static/gitweb.js
+    - path: /usr/share/perl5/FromCPAN/Error.pm
+    - path: /usr/share/perl5/FromCPAN/Mail/Address.pm
+    - path: /usr/share/perl5/Git.pm
+    - path: /usr/share/perl5/Git/I18N.pm
+    - path: /usr/share/perl5/Git/IndexInfo.pm
+    - path: /usr/share/perl5/Git/LoadCPAN.pm
+    - path: /usr/share/perl5/Git/LoadCPAN/Error.pm
+    - path: /usr/share/perl5/Git/LoadCPAN/Mail/Address.pm
+    - path: /usr/share/perl5/Git/Packet.pm
+    - path: /usr/share/perl5/Git/SVN.pm
+    - path: /usr/share/perl5/Git/SVN/Editor.pm
+    - path: /usr/share/perl5/Git/SVN/Fetcher.pm
+    - path: /usr/share/perl5/Git/SVN/GlobSpec.pm
+    - path: /usr/share/perl5/Git/SVN/Log.pm
+    - path: /usr/share/perl5/Git/SVN/Memoize/YAML.pm
+    - path: /usr/share/perl5/Git/SVN/Migration.pm
+    - path: /usr/share/perl5/Git/SVN/Prompt.pm
+    - path: /usr/share/perl5/Git/SVN/Ra.pm
+    - path: /usr/share/perl5/Git/SVN/Utils.pm
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libz.so.1: zlib

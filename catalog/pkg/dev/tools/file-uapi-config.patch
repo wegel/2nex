@@ -1,0 +1,75 @@
+From: Nex package maintainers
+Subject: [PATCH] magic: read the UAPI magic hierarchy before the compiled default
+Source: Nex
+Upstream: not submitted; needs agreement on Linux vendor and transient paths
+
+get_default_magic() only ever falls back to the compiled MAGIC path
+(/usr/share/misc/magic, via -DMAGIC in src/Makefile.am), so the
+/etc/magic seed in src/file.h is dead code and an administrator or a
+running system has no way to add or override signatures short of
+setting the MAGIC environment variable. Keep the per-user
+$HOME/.magic* files first, then walk /etc/magic (administrator),
+/run/magic (transient machine-generated policy), and finally the
+compiled vendor MAGIC path. file_apprentice() already splits MAGIC on
+PATHSEP and calls apprentice_1() on each entry, skipping any that do
+not exist, so a missing tier falls through without special-casing it
+here.
+
+diff -urN a/src/magic.c b/src/magic.c
+--- a/src/magic.c
++++ b/src/magic.c
+@@ -171,6 +171,15 @@
+ #endif
+ #endif
+
++/*
++ * /etc/magic is the administrator's file, /run/magic is transient
++ * machine-generated policy, and the compiled MAGIC path is the
++ * package-provided default. apprentice_1() already skips a missing
++ * file in a PATHSEP-separated list, so a tier that is absent falls
++ * through to the next one.
++ */
++#define UAPI_MAGIC "/etc/magic:/run/magic:" MAGIC
++
+ file_private const char *
+ get_default_magic(void)
+ {
+@@ -186,33 +195,33 @@
+ 		default_magic = NULL;
+ 	}
+ 	if ((home = getenv("HOME")) == NULL)
+-		return MAGIC;
++		return UAPI_MAGIC;
+
+ 	if (asprintf(&hmagicpath, "%s/.magic.mgc", home) < 0)
+-		return MAGIC;
++		return UAPI_MAGIC;
+ 	if (stat(hmagicpath, &st) == -1) {
+ 		free(hmagicpath);
+ 		if (asprintf(&hmagicpath, "%s/.magic", home) < 0)
+-			return MAGIC;
++			return UAPI_MAGIC;
+ 		if (stat(hmagicpath, &st) == -1)
+ 			goto out;
+ 		if (S_ISDIR(st.st_mode)) {
+ 			free(hmagicpath);
+ 			if (asprintf(&hmagicpath, "%s/%s", home, hmagic) < 0)
+-				return MAGIC;
++				return UAPI_MAGIC;
+ 			if (access(hmagicpath, R_OK) == -1)
+ 				goto out;
+ 		}
+ 	}
+
+-	if (asprintf(&default_magic, "%s:%s", hmagicpath, MAGIC) < 0)
++	if (asprintf(&default_magic, "%s:%s", hmagicpath, UAPI_MAGIC) < 0)
+ 		goto out;
+ 	free(hmagicpath);
+ 	return default_magic;
+ out:
+ 	default_magic = NULL;
+ 	free(hmagicpath);
+-	return MAGIC;
++	return UAPI_MAGIC;
+ #else
+ 	hmagicpath = NULL;

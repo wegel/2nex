@@ -1,0 +1,82 @@
+system:
+  schema: 1
+  name: Nex Minimal System
+  slug: nex-minimal
+  version: 0.0.1
+  description: Minimal nex rootfs with bash init
+  nex_structure: true
+  checksum: 5faeec10d5f6239726e3d7a8b10918d8bc6c9e5b9d451337ce236c7ab9512527
+
+dependencies:
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: nex-ld-shim
+  commit: x86_64/pkg/core/nex/nex-ld-shim/0.0.1/outputs/lib
+
+packages:
+- name: glibc-conf
+  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/conf
+- name: attr-conf
+  commit: x86_64/pkg/libs/system/attr/2.5.2/outputs/conf
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
+- name: util_linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/runtime
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/outputs/bin
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/outputs/bin
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/outputs/bin
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+
+  script: |
+    # create minimal /etc/passwd and /etc/group
+    mkdir -p /target/etc
+
+    cat > /target/etc/passwd << 'EOF'
+    root:x:0:0:root:/root:/bin/bash
+    EOF
+
+    cat > /target/etc/group << 'EOF'
+    root:x:0:
+    EOF
+
+    # create mount points for essential filesystems
+    mkdir -p /target/{proc,sys,dev,run,root}
+
+    # create a simple init script
+    cat > /target/init << 'EOF'
+    #!/usr/bin/bash
+
+    mount -t proc proc /proc
+    mount -t sysfs sysfs /sys
+    mount -t tmpfs tmpfs /run
+
+    echo "=== nex-minimal started ==="
+    echo "System info:"
+    uname -a
+    echo ""
+    echo "Package structure:"
+    ls -la /nex/pkg/
+    echo ""
+    echo "Symlinks in /usr/bin:"
+    ls -la /usr/bin/ | head -20
+    echo ""
+    echo "Testing bash from /nex structure..."
+    /usr/bin/bash --version
+    echo ""
+    echo "Starting shell..."
+
+    exec /usr/bin/bash
+    EOF
+
+    chmod +x /target/init
+
+    # Package links use absolute paths inside the assembled target. Timestamp
+    # each link itself instead of following it into the build capsule.
+    find /target -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;

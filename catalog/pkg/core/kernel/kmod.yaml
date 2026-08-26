@@ -1,0 +1,230 @@
+package:
+  schema: 1
+  name: kmod
+  slug: kmod
+  namespace: core/kernel
+  version: "32"
+  description: Linux kernel module handling
+  homepage: https://github.com/kmod-project/kmod
+  checksum: 7cceeca4e819389b64fd6df135c988690b5d8de661f7b8c80b98d1fd76e9f8ac
+
+sources:
+- name: kmod
+  url: https://www.kernel.org/pub/linux/utils/kernel/kmod/kmod-32.tar.xz
+  sha256: 630ed0d92275a88cb9a7bf68f5700e911fdadaf02e051cf2e4680ff8480bd492
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4131:3720, 8251:13623, 12361:25197, 14970:26565]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    ./configure --prefix=/usr          \
+            --sysconfdir=/etc      \
+            --with-openssl         \
+            --with-xz              \
+            --with-zstd            \
+            --with-zlib
+    make
+    make  DESTDIR=$OUT_DIR install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - lib
+  - man
+  - misc
+
+  runtime:
+  - bin
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/depmod
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/insmod
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/kmod
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/lsmod
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/modinfo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/modprobe
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/rmmod
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+
+  dev:
+    files:
+    - path: /usr/include/libkmod.h
+    - path: /usr/lib/libkmod.la
+    - path: /usr/lib/pkgconfig/kmod.pc
+    - path: /usr/lib/pkgconfig/libkmod.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libkmod.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libkmod.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/libkmod.so.2.4.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+
+  man:
+    files:
+    - path: /usr/share/man/man5/depmod.d.5
+    - path: /usr/share/man/man5/modprobe.d.5
+    - path: /usr/share/man/man5/modules.dep.5
+    - path: /usr/share/man/man5/modules.dep.bin.5
+    - path: /usr/share/man/man8/depmod.8
+    - path: /usr/share/man/man8/insmod.8
+    - path: /usr/share/man/man8/kmod.8
+    - path: /usr/share/man/man8/lsmod.8
+    - path: /usr/share/man/man8/modinfo.8
+    - path: /usr/share/man/man8/modprobe.8
+    - path: /usr/share/man/man8/rmmod.8
+
+  misc:
+    files:
+    - path: /usr/share/bash-completion/completions/kmod
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libcrypto.so.3: openssl3
+  /usr/lib/liblzma.so.5: xz
+  /usr/lib/libz.so.1: zlib
+  /usr/lib/libzstd.so.1: zstd

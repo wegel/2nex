@@ -1,0 +1,378 @@
+package:
+  schema: 1
+  name: userspace-rcu
+  slug: userspace-rcu
+  namespace: libs/system
+  version: 0.15.6
+  description: Read-copy-update synchronization library for userspace programs
+  homepage: https://liburcu.org/
+  checksum: 61860df6565f95c400563b8f6b3729496e5bd44fab396f605ff73a2fef9b6671
+
+sources:
+- name: userspace_rcu
+  url: https://lttng.org/files/urcu/userspace-rcu-0.15.6.tar.bz2
+  sha256: 850b192096eb11ebf2c70e8f97bc7da7479ee41da1bebeb44e3986908bac414f
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4113:10452, 8246:15215, 12356:20866, 20569:31310, 24685:34418, 28815:37517, 37117:41120, 45514:44879, 53783:48615, 55540:49290]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "/./${SOURCE_userspace_rcu}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    ./configure \
+      --prefix=/usr \
+      --libdir=/usr/lib \
+      --disable-static
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    find "${OUT_DIR}" -name '*.la' -delete
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - dev
+  - doc
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/urcu-bp.h
+    - path: /usr/include/urcu-call-rcu.h
+    - path: /usr/include/urcu-defer.h
+    - path: /usr/include/urcu-flavor.h
+    - path: /usr/include/urcu-pointer.h
+    - path: /usr/include/urcu-qsbr.h
+    - path: /usr/include/urcu.h
+    - path: /usr/include/urcu/annotate.h
+    - path: /usr/include/urcu/arch.h
+    - path: /usr/include/urcu/arch/aarch64.h
+    - path: /usr/include/urcu/arch/alpha.h
+    - path: /usr/include/urcu/arch/arm.h
+    - path: /usr/include/urcu/arch/gcc.h
+    - path: /usr/include/urcu/arch/generic.h
+    - path: /usr/include/urcu/arch/hppa.h
+    - path: /usr/include/urcu/arch/ia64.h
+    - path: /usr/include/urcu/arch/loongarch.h
+    - path: /usr/include/urcu/arch/m68k.h
+    - path: /usr/include/urcu/arch/mips.h
+    - path: /usr/include/urcu/arch/nios2.h
+    - path: /usr/include/urcu/arch/ppc.h
+    - path: /usr/include/urcu/arch/riscv.h
+    - path: /usr/include/urcu/arch/s390.h
+    - path: /usr/include/urcu/arch/sparc64.h
+    - path: /usr/include/urcu/arch/tile.h
+    - path: /usr/include/urcu/arch/x86.h
+    - path: /usr/include/urcu/assert.h
+    - path: /usr/include/urcu/call-rcu.h
+    - path: /usr/include/urcu/cds.h
+    - path: /usr/include/urcu/compiler.h
+    - path: /usr/include/urcu/config.h
+    - path: /usr/include/urcu/debug.h
+    - path: /usr/include/urcu/defer.h
+    - path: /usr/include/urcu/flavor.h
+    - path: /usr/include/urcu/futex.h
+    - path: /usr/include/urcu/hlist.h
+    - path: /usr/include/urcu/lfstack.h
+    - path: /usr/include/urcu/list.h
+    - path: /usr/include/urcu/map/clear.h
+    - path: /usr/include/urcu/map/urcu-bp.h
+    - path: /usr/include/urcu/map/urcu-mb.h
+    - path: /usr/include/urcu/map/urcu-memb.h
+    - path: /usr/include/urcu/map/urcu-qsbr.h
+    - path: /usr/include/urcu/map/urcu.h
+    - path: /usr/include/urcu/pointer.h
+    - path: /usr/include/urcu/rcuhlist.h
+    - path: /usr/include/urcu/rculfhash.h
+    - path: /usr/include/urcu/rculfqueue.h
+    - path: /usr/include/urcu/rculfstack.h
+    - path: /usr/include/urcu/rculist.h
+    - path: /usr/include/urcu/ref.h
+    - path: /usr/include/urcu/static/lfstack.h
+    - path: /usr/include/urcu/static/pointer.h
+    - path: /usr/include/urcu/static/rculfqueue.h
+    - path: /usr/include/urcu/static/rculfstack.h
+    - path: /usr/include/urcu/static/urcu-bp.h
+    - path: /usr/include/urcu/static/urcu-common.h
+    - path: /usr/include/urcu/static/urcu-mb.h
+    - path: /usr/include/urcu/static/urcu-memb.h
+    - path: /usr/include/urcu/static/urcu-qsbr.h
+    - path: /usr/include/urcu/static/urcu.h
+    - path: /usr/include/urcu/static/wfcqueue.h
+    - path: /usr/include/urcu/static/wfqueue.h
+    - path: /usr/include/urcu/static/wfstack.h
+    - path: /usr/include/urcu/syscall-compat.h
+    - path: /usr/include/urcu/system.h
+    - path: /usr/include/urcu/tls-compat.h
+    - path: /usr/include/urcu/uatomic.h
+    - path: /usr/include/urcu/uatomic/aarch64.h
+    - path: /usr/include/urcu/uatomic/alpha.h
+    - path: /usr/include/urcu/uatomic/api.h
+    - path: /usr/include/urcu/uatomic/arm.h
+    - path: /usr/include/urcu/uatomic/builtins-generic.h
+    - path: /usr/include/urcu/uatomic/builtins-x86.h
+    - path: /usr/include/urcu/uatomic/builtins.h
+    - path: /usr/include/urcu/uatomic/gcc.h
+    - path: /usr/include/urcu/uatomic/generic.h
+    - path: /usr/include/urcu/uatomic/hppa.h
+    - path: /usr/include/urcu/uatomic/ia64.h
+    - path: /usr/include/urcu/uatomic/loongarch.h
+    - path: /usr/include/urcu/uatomic/m68k.h
+    - path: /usr/include/urcu/uatomic/mips.h
+    - path: /usr/include/urcu/uatomic/nios2.h
+    - path: /usr/include/urcu/uatomic/ppc.h
+    - path: /usr/include/urcu/uatomic/riscv.h
+    - path: /usr/include/urcu/uatomic/s390.h
+    - path: /usr/include/urcu/uatomic/sparc64.h
+    - path: /usr/include/urcu/uatomic/tile.h
+    - path: /usr/include/urcu/uatomic/uassert.h
+    - path: /usr/include/urcu/uatomic/x86.h
+    - path: /usr/include/urcu/uatomic_arch.h
+    - path: /usr/include/urcu/urcu-bp.h
+    - path: /usr/include/urcu/urcu-futex.h
+    - path: /usr/include/urcu/urcu-mb.h
+    - path: /usr/include/urcu/urcu-memb.h
+    - path: /usr/include/urcu/urcu-poll.h
+    - path: /usr/include/urcu/urcu-qsbr.h
+    - path: /usr/include/urcu/urcu.h
+    - path: /usr/include/urcu/urcu_ref.h
+    - path: /usr/include/urcu/wfcqueue.h
+    - path: /usr/include/urcu/wfqueue.h
+    - path: /usr/include/urcu/wfstack.h
+    - path: /usr/lib/pkgconfig/liburcu-bp.pc
+    - path: /usr/lib/pkgconfig/liburcu-cds.pc
+    - path: /usr/lib/pkgconfig/liburcu-mb.pc
+    - path: /usr/lib/pkgconfig/liburcu-memb.pc
+    - path: /usr/lib/pkgconfig/liburcu-qsbr.pc
+    - path: /usr/lib/pkgconfig/liburcu.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/userspace-rcu/LICENSE.md
+    - path: /usr/share/doc/userspace-rcu/README.md
+    - path: /usr/share/doc/userspace-rcu/cds-api.md
+    - path: /usr/share/doc/userspace-rcu/examples/Makefile
+    - path: /usr/share/doc/userspace-rcu/examples/Makefile.examples.template
+    - path: /usr/share/doc/userspace-rcu/examples/hlist/Makefile
+    - path: /usr/share/doc/userspace-rcu/examples/hlist/Makefile.cds_hlist_add_head_rcu
+    - path: /usr/share/doc/userspace-rcu/examples/hlist/Makefile.cds_hlist_del_rcu
+    - path: /usr/share/doc/userspace-rcu/examples/hlist/Makefile.cds_hlist_for_each_entry_rcu
+    - path: /usr/share/doc/userspace-rcu/examples/hlist/Makefile.cds_hlist_for_each_rcu
+    - path: /usr/share/doc/userspace-rcu/examples/hlist/cds_hlist_add_head_rcu.c
+    - path: /usr/share/doc/userspace-rcu/examples/hlist/cds_hlist_del_rcu.c
+    - path: /usr/share/doc/userspace-rcu/examples/hlist/cds_hlist_for_each_entry_rcu.c
+    - path: /usr/share/doc/userspace-rcu/examples/hlist/cds_hlist_for_each_rcu.c
+    - path: /usr/share/doc/userspace-rcu/examples/lfstack/Makefile
+    - path: /usr/share/doc/userspace-rcu/examples/lfstack/Makefile.cds_lfs_pop_all_blocking
+    - path: /usr/share/doc/userspace-rcu/examples/lfstack/Makefile.cds_lfs_pop_blocking
+    - path: /usr/share/doc/userspace-rcu/examples/lfstack/Makefile.cds_lfs_push
+    - path: /usr/share/doc/userspace-rcu/examples/lfstack/cds_lfs_pop_all_blocking.c
+    - path: /usr/share/doc/userspace-rcu/examples/lfstack/cds_lfs_pop_blocking.c
+    - path: /usr/share/doc/userspace-rcu/examples/lfstack/cds_lfs_push.c
+    - path: /usr/share/doc/userspace-rcu/examples/list/Makefile
+    - path: /usr/share/doc/userspace-rcu/examples/list/Makefile.cds_list_add_rcu
+    - path: /usr/share/doc/userspace-rcu/examples/list/Makefile.cds_list_add_tail_rcu
+    - path: /usr/share/doc/userspace-rcu/examples/list/Makefile.cds_list_del_rcu
+    - path: /usr/share/doc/userspace-rcu/examples/list/Makefile.cds_list_for_each_entry_rcu
+    - path: /usr/share/doc/userspace-rcu/examples/list/Makefile.cds_list_for_each_rcu
+    - path: /usr/share/doc/userspace-rcu/examples/list/Makefile.cds_list_replace_rcu
+    - path: /usr/share/doc/userspace-rcu/examples/list/cds_list_add_rcu.c
+    - path: /usr/share/doc/userspace-rcu/examples/list/cds_list_add_tail_rcu.c
+    - path: /usr/share/doc/userspace-rcu/examples/list/cds_list_del_rcu.c
+    - path: /usr/share/doc/userspace-rcu/examples/list/cds_list_for_each_entry_rcu.c
+    - path: /usr/share/doc/userspace-rcu/examples/list/cds_list_for_each_rcu.c
+    - path: /usr/share/doc/userspace-rcu/examples/list/cds_list_replace_rcu.c
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/Makefile
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/Makefile.cds_lfht_add
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/Makefile.cds_lfht_add_replace
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/Makefile.cds_lfht_add_unique
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/Makefile.cds_lfht_del
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/Makefile.cds_lfht_destroy
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/Makefile.cds_lfht_for_each_entry_duplicate
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/Makefile.cds_lfht_lookup
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/cds_lfht_add.c
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/cds_lfht_add_replace.c
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/cds_lfht_add_unique.c
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/cds_lfht_del.c
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/cds_lfht_destroy.c
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/cds_lfht_for_each_entry_duplicate.c
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/cds_lfht_lookup.c
+    - path: /usr/share/doc/userspace-rcu/examples/rculfhash/jhash.h
+    - path: /usr/share/doc/userspace-rcu/examples/rculfqueue/Makefile
+    - path: /usr/share/doc/userspace-rcu/examples/rculfqueue/Makefile.cds_lfq_dequeue
+    - path: /usr/share/doc/userspace-rcu/examples/rculfqueue/Makefile.cds_lfq_enqueue
+    - path: /usr/share/doc/userspace-rcu/examples/rculfqueue/cds_lfq_dequeue.c
+    - path: /usr/share/doc/userspace-rcu/examples/rculfqueue/cds_lfq_enqueue.c
+    - path: /usr/share/doc/userspace-rcu/examples/urcu-flavors/Makefile
+    - path: /usr/share/doc/userspace-rcu/examples/urcu-flavors/Makefile.bp
+    - path: /usr/share/doc/userspace-rcu/examples/urcu-flavors/Makefile.mb
+    - path: /usr/share/doc/userspace-rcu/examples/urcu-flavors/Makefile.membarrier
+    - path: /usr/share/doc/userspace-rcu/examples/urcu-flavors/Makefile.qsbr
+    - path: /usr/share/doc/userspace-rcu/examples/urcu-flavors/bp.c
+    - path: /usr/share/doc/userspace-rcu/examples/urcu-flavors/mb.c
+    - path: /usr/share/doc/userspace-rcu/examples/urcu-flavors/membarrier.c
+    - path: /usr/share/doc/userspace-rcu/examples/urcu-flavors/qsbr.c
+    - path: /usr/share/doc/userspace-rcu/examples/wfcqueue/Makefile
+    - path: /usr/share/doc/userspace-rcu/examples/wfcqueue/Makefile.cds_wfcq_dequeue
+    - path: /usr/share/doc/userspace-rcu/examples/wfcqueue/Makefile.cds_wfcq_enqueue
+    - path: /usr/share/doc/userspace-rcu/examples/wfcqueue/Makefile.cds_wfcq_splice
+    - path: /usr/share/doc/userspace-rcu/examples/wfcqueue/cds_wfcq_dequeue.c
+    - path: /usr/share/doc/userspace-rcu/examples/wfcqueue/cds_wfcq_enqueue.c
+    - path: /usr/share/doc/userspace-rcu/examples/wfcqueue/cds_wfcq_splice.c
+    - path: /usr/share/doc/userspace-rcu/examples/wfstack/Makefile
+    - path: /usr/share/doc/userspace-rcu/examples/wfstack/Makefile.cds_wfs_pop
+    - path: /usr/share/doc/userspace-rcu/examples/wfstack/Makefile.cds_wfs_pop_all_blocking
+    - path: /usr/share/doc/userspace-rcu/examples/wfstack/Makefile.cds_wfs_push
+    - path: /usr/share/doc/userspace-rcu/examples/wfstack/cds_wfs_pop.c
+    - path: /usr/share/doc/userspace-rcu/examples/wfstack/cds_wfs_pop_all_blocking.c
+    - path: /usr/share/doc/userspace-rcu/examples/wfstack/cds_wfs_push.c
+    - path: /usr/share/doc/userspace-rcu/rcu-api.md
+    - path: /usr/share/doc/userspace-rcu/solaris-build.md
+    - path: /usr/share/doc/userspace-rcu/uatomic-api.md
+
+  lib:
+    files:
+    - path: /usr/lib/liburcu-bp.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu-bp.so.8
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu-bp.so.8.1.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu-cds.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu-cds.so.8
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu-cds.so.8.1.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu-common.so
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/liburcu-common.so.8
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/liburcu-common.so.8.1.0
+      needs:
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/liburcu-mb.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu-mb.so.8
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu-mb.so.8.1.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu-memb.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu-memb.so.8
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu-memb.so.8.1.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu-qsbr.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu-qsbr.so.8
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu-qsbr.so.8.1.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu.so.8
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+    - path: /usr/lib/liburcu.so.8.1.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/liburcu-common.so.8
+
+resolution:
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/liburcu-common.so.8: self

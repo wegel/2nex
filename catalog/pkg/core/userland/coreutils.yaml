@@ -1,0 +1,769 @@
+package:
+  schema: 1
+  name: Coreutils
+  slug: coreutils
+  namespace: core/userland
+  version: "9.5"
+  description: A set of basic GNU tools commonly used in shell scripts
+  homepage: https://www.gnu.org/software/coreutils/
+  checksum: f6510f96c6343c9cf3838aa5fd0a8192395ed102aa0ce6a628d99d2aa505e5e2
+  seed: true
+
+sources:
+- name: coreutils
+  url: https://ftp.gnu.org/gnu/coreutils/coreutils-9.5.tar.xz
+  sha256: cd328edeac92f6a665de9f323c93b712af1858bc2e0d88f3f7100469470a1b8a
+- name: patch
+  url: https://www.linuxfromscratch.org/patches/lfs/12.2-rc1/coreutils-9.5-i18n-2.patch
+  sha256: 99f1553ce9b7ded634bb56dac14ba6e439fc124daf8da436ee4cda1fd286f4a2
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/bootstrap/phase3/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/bootstrap/phase3/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/bootstrap/phase3/gcc/13.2.0/bundles/dev
+- name: texinfo
+  commit: x86_64/pkg/cli/text/texinfo/7.1/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: bash
+  commit: x86_64/pkg/bootstrap/phase3/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/bootstrap/phase3/coreutils/9.5/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/bootstrap/phase3/diffutils/3.10/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/bootstrap/phase3/findutils/4.9.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/bootstrap/phase3/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/bootstrap/phase3/grep/3.11/bundles/dev
+- name: m4
+  commit: x86_64/pkg/bootstrap/phase3/m4/1.4.19/bundles/dev
+- name: make
+  commit: x86_64/pkg/bootstrap/phase3/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/bootstrap/phase3/patch/2.7.6/bundles/dev
+- name: sed
+  commit: x86_64/pkg/bootstrap/phase3/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/bootstrap/phase3/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/bootstrap/phase3/xz/5.4.6/bundles/dev
+- name: gettext
+  commit: x86_64/pkg/cli/text/gettext/0.22.5/bundles/dev
+- name: autoconf
+  commit: x86_64/pkg/core/toolchain/autoconf/2.72/bundles/dev
+- name: automake
+  commit: x86_64/pkg/core/toolchain/automake/1.16.5/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4111:8893, 8209:13339, 16446:22004, 28771:30395, 37005:37772, 45271:49035, 53509:55164, 65836:56299, 78267:60697, 84332:61452]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_coreutils} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    patch --batch --fuzz=0 -Np1 -i /./${SOURCE_patch}
+
+    autoreconf -fiv
+    FORCE_UNSAFE_CONFIGURE=1 ./configure            \
+            --prefix=/usr                           \
+            --enable-no-install-program=kill,uptime \
+            --with-openssl                          \
+            gl_cv_func_fchmodat_works=no
+    make
+    make DESTDIR=$OUT_DIR install
+    mkdir -p ${OUT_DIR}/usr/share/man/man8
+    mv -v ${OUT_DIR}/usr/share/man/man1/chroot.1 ${OUT_DIR}/usr/share/man/man8/chroot.8
+    sed -i 's/"1"/"8"/' ${OUT_DIR}/usr/share/man/man8/chroot.8
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - lib
+
+  full:
+  - bin
+  - info
+  - lib
+  - locale
+  - man
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/[
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/b2sum
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/base32
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/base64
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/basename
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/basenc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/cat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/chcon
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/chgrp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/chmod
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/chown
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/chroot
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/comm
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/cp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libattr.so.1
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/csplit
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/cut
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/date
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/dd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/df
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/dir
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap.so.2
+    - path: /usr/bin/dircolors
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/dirname
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/du
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/echo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/env
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/expand
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/expr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+    - path: /usr/bin/factor
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+    - path: /usr/bin/false
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/fmt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/fold
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/groups
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/head
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/hostid
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/id
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/install
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libattr.so.1
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/join
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/link
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/ln
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/logname
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/ls
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap.so.2
+    - path: /usr/bin/mkdir
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/mkfifo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/mknod
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/mktemp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/mv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libattr.so.1
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/nice
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/nl
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/nohup
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/nproc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/numfmt
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/od
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/paste
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/pathchk
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/pinky
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/pr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/printenv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/printf
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/ptx
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/pwd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/readlink
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/realpath
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/rm
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/rmdir
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/runcon
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/seq
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/shred
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/shuf
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/sleep
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/sort
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/split
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/stat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/stdbuf
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/stty
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/sum
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/sync
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/tac
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/tail
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/tee
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/test
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/timeout
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/touch
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/tr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/true
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/truncate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/tsort
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/tty
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/uname
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/unexpand
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/uniq
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/unlink
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/users
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/vdir
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcap.so.2
+    - path: /usr/bin/wc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/who
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/whoami
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/yes
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+
+  checksum:
+    files:
+    - path: /usr/bin/cksum
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/bin/md5sum
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/bin/sha1sum
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/bin/sha224sum
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/bin/sha256sum
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/bin/sha384sum
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+    - path: /usr/bin/sha512sum
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+
+  info:
+    files:
+    - path: /usr/share/info/coreutils.info
+    - path: /usr/share/info/dir
+
+  lib:
+    files:
+    - path: /usr/libexec/coreutils/libstdbuf.so
+      needs:
+      - /usr/lib/libc.so.6
+
+  locale:
+    files:
+    - path: /usr/share/locale/af/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/af/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/be/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/be/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/bg/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/bg/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ca/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ca/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/cs/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/cs/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/da/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/da/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/de/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/el/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/el/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/eo/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/es/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/et/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/et/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/eu/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/eu/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/fi/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/fr/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ga/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ga/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/gl/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/gl/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/hr/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/hr/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/hu/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/hu/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ia/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ia/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/id/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/id/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/it/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ja/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ja/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ka/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/kk/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/kk/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ko/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ko/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/lg/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/lg/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/lt/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/lt/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ms/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/nb/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/nb/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/nl/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/pl/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/pt/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/pt/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/pt_BR/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ro/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ru/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ru/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/sk/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/sk/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/sl/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/sl/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/sr/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/sv/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/ta/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/ta/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/tr/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/tr/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/uk/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/vi/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/zh_CN/LC_TIME/coreutils.mo
+    - path: /usr/share/locale/zh_TW/LC_MESSAGES/coreutils.mo
+    - path: /usr/share/locale/zh_TW/LC_TIME/coreutils.mo
+
+  man:
+    files:
+    - path: /usr/share/man/man1/b2sum.1
+    - path: /usr/share/man/man1/base32.1
+    - path: /usr/share/man/man1/base64.1
+    - path: /usr/share/man/man1/basename.1
+    - path: /usr/share/man/man1/basenc.1
+    - path: /usr/share/man/man1/cat.1
+    - path: /usr/share/man/man1/chcon.1
+    - path: /usr/share/man/man1/chgrp.1
+    - path: /usr/share/man/man1/chmod.1
+    - path: /usr/share/man/man1/chown.1
+    - path: /usr/share/man/man1/cksum.1
+    - path: /usr/share/man/man1/comm.1
+    - path: /usr/share/man/man1/cp.1
+    - path: /usr/share/man/man1/csplit.1
+    - path: /usr/share/man/man1/cut.1
+    - path: /usr/share/man/man1/date.1
+    - path: /usr/share/man/man1/dd.1
+    - path: /usr/share/man/man1/df.1
+    - path: /usr/share/man/man1/dir.1
+    - path: /usr/share/man/man1/dircolors.1
+    - path: /usr/share/man/man1/dirname.1
+    - path: /usr/share/man/man1/du.1
+    - path: /usr/share/man/man1/echo.1
+    - path: /usr/share/man/man1/env.1
+    - path: /usr/share/man/man1/expand.1
+    - path: /usr/share/man/man1/expr.1
+    - path: /usr/share/man/man1/factor.1
+    - path: /usr/share/man/man1/false.1
+    - path: /usr/share/man/man1/fmt.1
+    - path: /usr/share/man/man1/fold.1
+    - path: /usr/share/man/man1/groups.1
+    - path: /usr/share/man/man1/head.1
+    - path: /usr/share/man/man1/hostid.1
+    - path: /usr/share/man/man1/id.1
+    - path: /usr/share/man/man1/install.1
+    - path: /usr/share/man/man1/join.1
+    - path: /usr/share/man/man1/link.1
+    - path: /usr/share/man/man1/ln.1
+    - path: /usr/share/man/man1/logname.1
+    - path: /usr/share/man/man1/ls.1
+    - path: /usr/share/man/man1/md5sum.1
+    - path: /usr/share/man/man1/mkdir.1
+    - path: /usr/share/man/man1/mkfifo.1
+    - path: /usr/share/man/man1/mknod.1
+    - path: /usr/share/man/man1/mktemp.1
+    - path: /usr/share/man/man1/mv.1
+    - path: /usr/share/man/man1/nice.1
+    - path: /usr/share/man/man1/nl.1
+    - path: /usr/share/man/man1/nohup.1
+    - path: /usr/share/man/man1/nproc.1
+    - path: /usr/share/man/man1/numfmt.1
+    - path: /usr/share/man/man1/od.1
+    - path: /usr/share/man/man1/paste.1
+    - path: /usr/share/man/man1/pathchk.1
+    - path: /usr/share/man/man1/pinky.1
+    - path: /usr/share/man/man1/pr.1
+    - path: /usr/share/man/man1/printenv.1
+    - path: /usr/share/man/man1/printf.1
+    - path: /usr/share/man/man1/ptx.1
+    - path: /usr/share/man/man1/pwd.1
+    - path: /usr/share/man/man1/readlink.1
+    - path: /usr/share/man/man1/realpath.1
+    - path: /usr/share/man/man1/rm.1
+    - path: /usr/share/man/man1/rmdir.1
+    - path: /usr/share/man/man1/runcon.1
+    - path: /usr/share/man/man1/seq.1
+    - path: /usr/share/man/man1/sha1sum.1
+    - path: /usr/share/man/man1/sha224sum.1
+    - path: /usr/share/man/man1/sha256sum.1
+    - path: /usr/share/man/man1/sha384sum.1
+    - path: /usr/share/man/man1/sha512sum.1
+    - path: /usr/share/man/man1/shred.1
+    - path: /usr/share/man/man1/shuf.1
+    - path: /usr/share/man/man1/sleep.1
+    - path: /usr/share/man/man1/sort.1
+    - path: /usr/share/man/man1/split.1
+    - path: /usr/share/man/man1/stat.1
+    - path: /usr/share/man/man1/stdbuf.1
+    - path: /usr/share/man/man1/stty.1
+    - path: /usr/share/man/man1/sum.1
+    - path: /usr/share/man/man1/sync.1
+    - path: /usr/share/man/man1/tac.1
+    - path: /usr/share/man/man1/tail.1
+    - path: /usr/share/man/man1/tee.1
+    - path: /usr/share/man/man1/test.1
+    - path: /usr/share/man/man1/timeout.1
+    - path: /usr/share/man/man1/touch.1
+    - path: /usr/share/man/man1/tr.1
+    - path: /usr/share/man/man1/true.1
+    - path: /usr/share/man/man1/truncate.1
+    - path: /usr/share/man/man1/tsort.1
+    - path: /usr/share/man/man1/tty.1
+    - path: /usr/share/man/man1/uname.1
+    - path: /usr/share/man/man1/unexpand.1
+    - path: /usr/share/man/man1/uniq.1
+    - path: /usr/share/man/man1/unlink.1
+    - path: /usr/share/man/man1/users.1
+    - path: /usr/share/man/man1/vdir.1
+    - path: /usr/share/man/man1/wc.1
+    - path: /usr/share/man/man1/who.1
+    - path: /usr/share/man/man1/whoami.1
+    - path: /usr/share/man/man1/yes.1
+    - path: /usr/share/man/man8/chroot.8
+
+resolution:
+  /usr/lib/libacl.so.1: acl
+  /usr/lib/libattr.so.1: attr
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libgmp.so.10: gmp
+  /usr/lib/libcap.so.2: libcap
+  /usr/lib/libcrypto.so.3: openssl3

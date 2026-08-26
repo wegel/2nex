@@ -1,0 +1,256 @@
+From: Package maintainers <packages@localhost>
+Subject: [PATCH] select privileged configuration from UAPI paths
+Source: downstream
+Upstream: not submitted; needs agreement on Unix vendor and transient paths
+
+Keep caller-supplied daemon configuration paths and unprivileged XDG files
+unchanged. For implicit privileged configuration, select the first complete
+file from /etc/libvirt, /run/libvirt, or /usr/lib/libvirt. An existing empty
+file remains selected and masks lower files.
+
+Cover libvirt-guests.sh too. Every compiled reader in this package now selects
+one file from the administrator, transient, and vendor trees, but the shipped
+script sourced a single administrator settings file, so no package or
+boot-time tool could supply its ON_BOOT or ON_SHUTDOWN defaults.
+
+--- a/src/libvirt_private.syms
++++ b/src/libvirt_private.syms
+@@ -2215,6 +2215,7 @@
+ virConfGetValueType;
+ virConfGetValueUInt;
+ virConfGetValueULLong;
++virConfFindSystemConfig;
+ virConfLoadConfig;
+ virConfNew;
+ virConfReadFile;
+
+--- a/src/util/virconf.h
++++ b/src/util/virconf.h
+@@ -124,4 +124,5 @@
+ int virConfWriteMem(char *memory,
+                     int *len,
+                     virConf *conf);
++char *virConfFindSystemConfig(const char *name);
+ int virConfLoadConfig(virConf **conf, const char *name);
+--- a/src/util/virconf.c
++++ b/src/util/virconf.c
+@@ -1490,12 +1490,32 @@
+     return use;
+ }
+ 
++char *
++virConfFindSystemConfig(const char *name)
++{
++    const char *directories[] = {
++        SYSCONFDIR "/libvirt",
++        "/run/libvirt",
++        LIBDIR "/libvirt",
++    };
++    size_t i;
++
++    for (i = 0; i < G_N_ELEMENTS(directories); i++) {
++        g_autofree char *path = g_strdup_printf("%s/%s", directories[i], name);
++
++        if (virFileExists(path))
++            return g_steal_pointer(&path);
++    }
++
++    return g_strdup_printf("%s/libvirt/%s", SYSCONFDIR, name);
++}
++
+ static char *
+ virConfLoadConfigPath(const char *name)
+ {
+     char *path;
+     if (geteuid() == 0) {
+-        path = g_strdup_printf("%s/libvirt/%s", SYSCONFDIR, name);
++        path = virConfFindSystemConfig(name);
+     } else {
+         g_autofree char *userdir = virGetUserConfigDirectory();
+ 
+--- a/src/remote/remote_daemon_config.c
++++ b/src/remote/remote_daemon_config.c
+@@ -76,7 +76,7 @@
+ daemonConfigFilePath(bool privileged, char **configfile)
+ {
+     if (privileged) {
+-        *configfile = g_strdup(SYSCONFDIR "/libvirt/" DAEMON_NAME ".conf");
++        *configfile = virConfFindSystemConfig(DAEMON_NAME ".conf");
+     } else {
+         g_autofree char *configdir = NULL;
+ 
+--- a/src/locking/lock_daemon_config.c
++++ b/src/locking/lock_daemon_config.c
+@@ -35,7 +35,7 @@
+ virLockDaemonConfigFilePath(bool privileged, char **configfile)
+ {
+     if (privileged) {
+-        *configfile = g_strdup(SYSCONFDIR "/libvirt/virtlockd.conf");
++        *configfile = virConfFindSystemConfig("virtlockd.conf");
+     } else {
+         g_autofree char *configdir = NULL;
+ 
+--- a/src/logging/log_daemon_config.c
++++ b/src/logging/log_daemon_config.c
+@@ -37,7 +37,7 @@
+ virLogDaemonConfigFilePath(bool privileged, char **configfile)
+ {
+     if (privileged) {
+-        *configfile = g_strdup(SYSCONFDIR "/libvirt/virtlogd.conf");
++        *configfile = virConfFindSystemConfig("virtlogd.conf");
+     } else {
+         g_autofree char *configdir = NULL;
+ 
+--- a/src/network/bridge_driver_conf.c
++++ b/src/network/bridge_driver_conf.c
+@@ -25,6 +25,7 @@
+ #include "datatypes.h"
+ #include "virlog.h"
+ #include "virerror.h"
++#include "virconf.h"
+ #include "virfile.h"
+ #include "virutil.h"
+ #include "virfirewall.h" /* for binary names */
+@@ -194,7 +195,10 @@
+         cfg->dnsmasqStateDir = g_strdup_printf("%s/dnsmasq/lib", rundir);
+     }
+ 
+-    configfile = g_strconcat(configdir, "/network.conf", NULL);
++    if (privileged)
++        configfile = virConfFindSystemConfig("network.conf");
++    else
++        configfile = g_strconcat(configdir, "/network.conf", NULL);
+ 
+     if (virNetworkLoadDriverConfig(cfg, privileged, configfile) < 0)
+         return NULL;
+--- a/src/qemu/qemu_driver.c
++++ b/src/qemu/qemu_driver.c
+@@ -31,6 +31,7 @@
+ #include <sys/ioctl.h>
+ 
+ #include "qemu_driver.h"
++#include "virconf.h"
+ #include "qemu_agent.h"
+ #include "qemu_alias.h"
+ #include "qemu_block.h"
+@@ -593,7 +594,10 @@
+     if (!(qemu_driver->config = cfg = virQEMUDriverConfigNew(privileged, root)))
+         goto error;
+ 
+-    driverConf = g_strdup_printf("%s/qemu.conf", cfg->configBaseDir);
++    if (privileged && root == NULL)
++        driverConf = virConfFindSystemConfig("qemu.conf");
++    else
++        driverConf = g_strdup_printf("%s/qemu.conf", cfg->configBaseDir);
+ 
+     if (virQEMUDriverConfigLoadFile(cfg, driverConf, privileged) < 0)
+         goto error;
+--- a/src/locking/lock_manager.c
++++ b/src/locking/lock_manager.c
+@@ -23,6 +23,7 @@
+ 
+ #include "lock_manager.h"
+ #include "lock_driver_nop.h"
++#include "virconf.h"
+ #include "virerror.h"
+ #include "virfile.h"
+ #include "virlog.h"
+@@ -130,7 +131,13 @@
+     VIR_DEBUG("name=%s driverName=%s configDir=%s flags=0x%x",
+               name, driverName, configDir, flags);
+ 
+-    configFile = g_strdup_printf("%s/%s-%s.conf", configDir, driverName, name);
++    if (STREQ(configDir, SYSCONFDIR "/libvirt")) {
++        g_autofree char *configName = g_strdup_printf("%s-%s.conf", driverName, name);
++
++        configFile = virConfFindSystemConfig(configName);
++    } else {
++        configFile = g_strdup_printf("%s/%s-%s.conf", configDir, driverName, name);
++    }
+ 
+     if (STREQ(name, "nop")) {
+         driver = &virLockDriverNop;
+--- a/src/util/virauth.c
++++ b/src/util/virauth.c
+@@ -24,6 +24,7 @@
+ 
+ 
+ #include "virauth.h"
++#include "virconf.h"
+ #include "viralloc.h"
+ #include "virutil.h"
+ #include "virlog.h"
+@@ -76,7 +77,7 @@
+ 
+     VIR_FREE(*path);
+ 
+-    *path = g_strdup(SYSCONFDIR "/libvirt/auth.conf");
++    *path = virConfFindSystemConfig("auth.conf");
+ 
+     VIR_DEBUG("Checking for readability of '%s'", *path);
+     if (access(*path, R_OK) == 0)
+--- a/tools/virt-login-shell-helper.c
++++ b/tools/virt-login-shell-helper.c
+@@ -36,12 +36,11 @@
+ #include "virgettext.h"
+ #define VIR_FROM_THIS VIR_FROM_NONE
+ 
+-static const char *conf_file = SYSCONFDIR "/libvirt/virt-login-shell.conf";
+-
+ static int virLoginShellAllowedUser(virConf *conf,
+                                     const char *name,
+                                     gid_t *groups,
+-                                    size_t ngroups)
++                                    size_t ngroups,
++                                    const char *config_file)
+ {
+     int ret = -1;
+     size_t i;
+@@ -81,7 +80,7 @@
+     }
+     virReportSystemError(EPERM,
+                          _("%1$s not matched against 'allowed_users' in %2$s"),
+-                         name, conf_file);
++                         name, config_file);
+  cleanup:
+     VIR_FREE(gname);
+     return ret;
+@@ -147,7 +146,7 @@
+ main(int argc, char **argv)
+ {
+     g_autoptr(virConf) conf = NULL;
+-    const char *login_shell_path = conf_file;
++    g_autofree char *login_shell_path = virConfFindSystemConfig("virt-login-shell.conf");
+     pid_t cpid = -1;
+     int ret = EXIT_CANCELED;
+     int status;
+@@ -262,7 +261,8 @@
+ 
+     ngroups = virGetGroupList(uid, gid, &groups);
+ 
+-    if (virLoginShellAllowedUser(conf, name, groups, ngroups) < 0)
++    if (virLoginShellAllowedUser(conf, name, groups, ngroups,
++                                 login_shell_path) < 0)
+         goto cleanup;
+ 
+     if (virLoginShellGetShellArgv(conf, &shargv, &shargvlen) < 0)
+--- a/tools/libvirt-guests.sh.in
++++ b/tools/libvirt-guests.sh.in
+@@ -40,8 +40,15 @@
+ SYNC_TIME=0
+ PERSISTENT_ONLY="default"
+ 
+-test -f "$initconfdir"/libvirt-guests &&
+-    . "$initconfdir"/libvirt-guests
++# Select one complete settings file: persistent administrator policy, then
++# temporary machine policy, then the package default. The first file found
++# wins, so an empty higher file masks the lower ones.
++for uapi_dir in "$initconfdir" /run/sysconfig /usr/lib/sysconfig; do
++    if test -f "$uapi_dir"/libvirt-guests; then
++        . "$uapi_dir"/libvirt-guests
++        break
++    fi
++done
+ 
+ LISTFILE="$localstatedir"/lib/libvirt/libvirt-guests
+ VAR_SUBSYS_LIBVIRT_GUESTS="$localstatedir"/lock/subsys/libvirt-guests

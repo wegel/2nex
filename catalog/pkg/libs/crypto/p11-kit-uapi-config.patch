@@ -1,0 +1,359 @@
+From: Nex package maintainers
+Subject: global pkcs11.conf and system .module directories walk the three UAPI tiers
+Source: Nex downstream patch for p11-kit 0.25.5
+Upstream: not submitted; needs agreement on a machine-generated transient tier
+
+p11-kit compiles a single global settings file, P11_SYSTEM_CONFIG_FILE
+("/etc/pkcs11/pkcs11.conf" on this distribution), and two system module
+directories, P11_SYSTEM_CONFIG_MODULES ("/etc/pkcs11/modules") and
+P11_PACKAGE_CONFIG_MODULES ("/usr/share/p11-kit/modules"), with no
+transient "/run" tier at all. load_config_from_file() also only ever
+filled in a same-named module file's unset fields from whichever file
+loaded first, so a later, higher-priority file could never fully replace
+an earlier one; it could only patch in fields the earlier file omitted.
+
+This patch adds a "/run/pkcs11" transient tier to both families and
+changes the module-directory combination so that the vendor
+(P11_PACKAGE_CONFIG_MODULES), runtime ("/run/pkcs11/modules"), and
+administrator (P11_SYSTEM_CONFIG_MODULES) directories are first combined
+among themselves, with a higher tier's same-named file completely
+replacing (not merging into) a lower tier's file of the same name. That
+combined system result then only fills in config names the user
+directory left unset, exactly as a single system directory always did,
+so user-configuration semantics (user-config: none/merge/only) are
+unchanged.
+
+conf.c's _p11_conf_load_modules() gains a run_dir parameter between
+package_dir and system_dir. All four callers in test-conf.c pass a
+nonexistent fixture path for it, leaving every existing fixture-based
+regression test unaffected: none of the existing package-modules and
+system-modules fixtures share a basename, so the merge-vs-shadow change
+between those two tiers has no observable effect on them either.
+
+The global settings file gains the same three-tier walk:
+p11_conf_select_system_conf_file() selects the first regular file among
+"/etc/pkcs11/pkcs11.conf", "/run/pkcs11/pkcs11.conf", and
+"/usr/share/p11-kit/pkcs11.conf". A present higher-tier file masks a
+lower one even if empty, because the walk stops at the first regular
+file, not the first file with content. When no tier has a regular file,
+the reader falls back to the compiled default, which already names the
+administrator tier's own path, reproducing the original no-file
+behavior exactly.
+
+Every existing override keeps winning outright over the new walk. A
+test that calls p11_kit_override_system_files() with a non-NULL
+system_conf, or a caller that sets P11_SYSTEM_CONFIG_FILE, marks the
+selection overridden; the walk then returns NULL and the caller uses
+the explicit path exactly as before, without consulting the three
+tiers at all. P11_SYSTEM_CONFIG_MODULES and P11_PACKAGE_CONFIG_MODULES
+keep overriding their respective directories outright, the same as
+upstream, because the new run-tier directory is combined additively
+alongside them rather than replacing either.
+
+The global variables that back this resolution (p11_config_system_file
+and friends, the new p11_config_run_modules, and the tier-selection and
+override-tracking logic) move to conf.c, which is linked both into
+libp11-kit and, as a separate static copy, directly into the
+statically-linked p11-kit command-line tool. modules.c and
+print-config.c previously computed the module registry and "p11-kit
+print-config" output through two different code paths: the real module
+registry (used by C_Initialize and "p11-kit list-modules") went through
+modules.c's hidden-visibility globals, while print-config.c read the
+compiled P11_SYSTEM_CONFIG_FILE and friends directly and never even
+called the environment-override hook. Sharing the resolution through
+conf.c keeps both readers reporting the exact same paths and lets
+print-config.c honor P11_* environment overrides for the first time.
+
+--- a/p11-kit/conf.c
++++ b/p11-kit/conf.c
+@@ -72,0 +73,87 @@
++/*
++ * These are global variables to be overridden in tests. They live here,
++ * rather than in modules.c, because conf.c is linked into both libp11-kit
++ * and the statically-linked p11-kit tool, and both readers (the module
++ * registry and "p11-kit print-config") must see the same paths.
++ */
++const char *p11_config_system_file = P11_SYSTEM_CONFIG_FILE;
++const char *p11_config_user_file = P11_USER_CONFIG_FILE;
++const char *p11_config_package_modules = P11_PACKAGE_CONFIG_MODULES;
++const char *p11_config_run_modules = "/run/pkcs11/modules";
++const char *p11_config_system_modules = P11_SYSTEM_CONFIG_MODULES;
++const char *p11_config_user_modules = P11_USER_CONFIG_MODULES;
++
++/*
++ * Whether p11_config_system_file no longer names the compiled default,
++ * because a test called p11_kit_override_system_files() or a caller set
++ * P11_SYSTEM_CONFIG_FILE. Either explicit source is an exact path and
++ * must win outright over the vendor/runtime/administrator tier walk.
++ */
++static bool p11_config_system_file_overridden = false;
++
++void
++p11_conf_mark_system_file_overridden (void)
++{
++	p11_config_system_file_overridden = true;
++}
++
++#ifdef P11_ENV_OVERRIDE_PATHS
++/**
++ * p11_conf_get_paths_from_env:
++ *
++ * Adjusts the global settings file and module directory paths, so that
++ * they can be changed at run-time, based on system environment variables.
++ */
++void
++p11_conf_get_paths_from_env (void)
++{
++	char *path;
++
++	if ((path = secure_getenv ("P11_SYSTEM_CONFIG_FILE"))) {
++		p11_config_system_file = path;
++		p11_config_system_file_overridden = true;
++	}
++	if ((path = secure_getenv ("P11_USER_CONFIG_FILE")))
++		p11_config_user_file = path;
++	if ((path = secure_getenv ("P11_PACKAGE_CONFIG_MODULES")))
++		p11_config_package_modules = path;
++	if ((path = secure_getenv ("P11_SYSTEM_CONFIG_MODULES")))
++		p11_config_system_modules = path;
++	if ((path = secure_getenv ("P11_USER_CONFIG_MODULES")))
++		p11_config_user_modules = path;
++}
++#endif
++
++/**
++ * p11_conf_select_system_conf_file:
++ *
++ * Selects the global pkcs11.conf that a caller did not name explicitly:
++ * the first regular file among the administrator, runtime, and
++ * package-owned tiers. Returns a newly allocated path, or %NULL when
++ * either an explicit override is in effect (p11_config_system_file
++ * already names the exact file to use) or none of the three tiers has
++ * a regular file (the caller then keeps using the compiled default,
++ * which is the administrator tier's own path).
++ */
++char *
++p11_conf_select_system_conf_file (void)
++{
++	static const char *const tiers[] = {
++		"/etc/pkcs11/pkcs11.conf",
++		"/run/pkcs11/pkcs11.conf",
++		"/usr/share/p11-kit/pkcs11.conf",
++	};
++	struct stat sb;
++	unsigned i;
++
++	if (p11_config_system_file_overridden)
++		return NULL;
++
++	for (i = 0; i < sizeof (tiers) / sizeof (tiers[0]); i++) {
++		if (stat (tiers[i], &sb) == 0 && S_ISREG (sb.st_mode))
++			return strdup (tiers[i]);
++	}
++
++	return NULL;
++}
++
+@@ -356 +443,2 @@
+-                       int flags)
++                       int flags,
++                       bool shadow)
+@@ -382,0 +471,9 @@
++	} else if (shadow) {
++		/*
++		 * A higher-priority tier's file with the same basename
++		 * fully replaces a lower tier's file, instead of only
++		 * filling in the fields it left unset.
++		 */
++		if (!p11_dict_set (configs, key, config))
++			return_val_if_reached (false);
++		config = NULL;
+@@ -403 +500,2 @@
+-                             int flags)
++                             int flags,
++                             bool shadow)
+@@ -445 +543 @@
+-		if (!is_dir && !load_config_from_file (path, &st, dp->d_name, configs, flags)) {
++		if (!is_dir && !load_config_from_file (path, &st, dp->d_name, configs, flags, shadow)) {
+@@ -463,0 +562,35 @@
++/*
++ * Fold a fully-shadowed vendor/runtime/administrator combination into
++ * the (possibly user-populated) result. A name already present in
++ * "configs" keeps taking priority and only has its unset fields filled
++ * in, exactly as a single system directory always did; a name not yet
++ * present moves over as-is.
++ */
++static bool
++merge_system_configs (p11_dict *configs,
++                      p11_dict *sysconfigs)
++{
++	p11_dictiter iter;
++	void *key;
++	void *value;
++	char *stolen_key;
++	p11_dict *stolen_config;
++	p11_dict *prev;
++
++	p11_dict_iterate (sysconfigs, &iter);
++	while (p11_dict_next (&iter, &key, &value)) {
++		prev = p11_dict_get (configs, key);
++		if (prev == NULL) {
++			if (!p11_dict_steal (sysconfigs, key, (void **)&stolen_key, (void **)&stolen_config))
++				assert_not_reached ();
++			if (!p11_dict_set (configs, stolen_key, stolen_config))
++				return_val_if_reached (false);
++		} else {
++			if (!_p11_conf_merge_defaults (prev, value))
++				return false;
++		}
++	}
++
++	return true;
++}
++
+@@ -466,0 +600 @@
++                        const char *run_dir,
+@@ -470,0 +605 @@
++	p11_dict *sysconfigs;
+@@ -485 +620 @@
+-		else if (!load_configs_from_directory (path, configs, flags))
++		else if (!load_configs_from_directory (path, configs, flags, false))
+@@ -497,2 +632,5 @@
+-	 * Basically if a value for the same config name is not already
+-	 * loaded above (in the user configs) then they're loaded here.
++	 * The vendor, runtime, and administrator directories are combined
++	 * among themselves first, with a higher tier's same-named file
++	 * fully shadowing a lower tier's. The result then only fills in
++	 * config names not already loaded above (in the user configs),
++	 * exactly as a single system directory always did.
+@@ -502,2 +640,16 @@
+-		if (!load_configs_from_directory (system_dir, configs, flags) ||
+-		    !load_configs_from_directory (package_dir, configs, flags)) {
++
++		sysconfigs = p11_dict_new (p11_dict_str_hash, p11_dict_str_equal,
++		                          free, (p11_destroyer)p11_dict_free);
++		return_val_if_fail (sysconfigs != NULL, NULL);
++
++		if (!load_configs_from_directory (package_dir, sysconfigs, flags, true) ||
++		    !load_configs_from_directory (run_dir, sysconfigs, flags, true) ||
++		    !load_configs_from_directory (system_dir, sysconfigs, flags, true)) {
++			error = errno;
++			p11_dict_free (sysconfigs);
++			p11_dict_free (configs);
++			errno = error;
++			return NULL;
++		}
++
++		if (!merge_system_configs (configs, sysconfigs)) {
+@@ -504,0 +657 @@
++			p11_dict_free (sysconfigs);
+@@ -508,0 +662,2 @@
++
++		p11_dict_free (sysconfigs);
+--- a/p11-kit/conf.h
++++ b/p11-kit/conf.h
+@@ -68,0 +69 @@
++                                              const char *run_dir,
+--- a/p11-kit/modules.c
++++ b/p11-kit/modules.c
+@@ -185,6 +185,7 @@
+-/* These are global variables to be overridden in tests */
+-const char *p11_config_system_file = P11_SYSTEM_CONFIG_FILE;
+-const char *p11_config_user_file = P11_USER_CONFIG_FILE;
+-const char *p11_config_package_modules = P11_PACKAGE_CONFIG_MODULES;
+-const char *p11_config_system_modules = P11_SYSTEM_CONFIG_MODULES;
+-const char *p11_config_user_modules = P11_USER_CONFIG_MODULES;
++/*
++ * p11_config_system_file, p11_config_user_file, p11_config_package_modules,
++ * p11_config_run_modules, p11_config_system_modules, and
++ * p11_config_user_modules live in conf.c: that translation unit is linked
++ * into both libp11-kit and the statically-linked p11-kit tool, while this
++ * file is only linked into libp11-kit itself.
++ */
+@@ -226 +227 @@
+-	if (system_conf)
++	if (system_conf) {
+@@ -227,0 +229,2 @@
++		p11_conf_mark_system_file_overridden ();
++	}
+@@ -679,0 +683,4 @@
++ * The system-wide conf.c reader calls the same function, since it needs
++ * these overrides too and, unlike this file, is linked into the
++ * statically-linked p11-kit tool as well as libp11-kit; the module-path
++ * override stays here because only this file uses p11_module_path.
+@@ -681 +688 @@
+-static void
++void
+@@ -686,10 +693,2 @@
+-	if ((path = secure_getenv ("P11_SYSTEM_CONFIG_FILE")))
+-		p11_config_system_file = path;
+-	if ((path = secure_getenv ("P11_USER_CONFIG_FILE")))
+-		p11_config_user_file = path;
+-	if ((path = secure_getenv ("P11_PACKAGE_CONFIG_MODULES")))
+-		p11_config_package_modules = path;
+-	if ((path = secure_getenv ("P11_SYSTEM_CONFIG_MODULES")))
+-		p11_config_system_modules = path;
+-	if ((path = secure_getenv ("P11_USER_CONFIG_MODULES")))
+-		p11_config_user_modules = path;
++	p11_conf_get_paths_from_env ();
++
+@@ -708,0 +708 @@
++	char *tiered_system_file;
+@@ -722 +722,4 @@
+-	config = _p11_conf_load_globals (p11_config_system_file, p11_config_user_file, &mode);
++	tiered_system_file = p11_conf_select_system_conf_file ();
++	config = _p11_conf_load_globals (tiered_system_file ? tiered_system_file : p11_config_system_file,
++	                                 p11_config_user_file, &mode);
++	free (tiered_system_file);
+@@ -729,0 +733 @@
++	                                  p11_config_run_modules,
+--- a/p11-kit/print-config.c
++++ b/p11-kit/print-config.c
+@@ -42,0 +43 @@
++#include "private.h"
+@@ -64,0 +66 @@
++	char *tiered_system_file;
+@@ -67,2 +69,7 @@
+-	global_conf = _p11_conf_load_globals (P11_SYSTEM_CONFIG_FILE,
+-					      P11_USER_CONFIG_FILE,
++#ifdef P11_ENV_OVERRIDE_PATHS
++	p11_conf_get_paths_from_env ();
++#endif
++
++	tiered_system_file = p11_conf_select_system_conf_file ();
++	global_conf = _p11_conf_load_globals (tiered_system_file ? tiered_system_file : p11_config_system_file,
++					      p11_config_user_file,
+@@ -69,0 +77 @@
++	free (tiered_system_file);
+@@ -74,3 +82,4 @@
+-					       P11_PACKAGE_CONFIG_MODULES,
+-					       P11_SYSTEM_CONFIG_MODULES,
+-					       P11_USER_CONFIG_MODULES);
++					       p11_config_package_modules,
++					       p11_config_run_modules,
++					       p11_config_system_modules,
++					       p11_config_user_modules);
+--- a/p11-kit/private.h
++++ b/p11-kit/private.h
+@@ -44,0 +45 @@
++extern const char *p11_config_run_modules;
+@@ -46,0 +48,9 @@
++
++void         p11_conf_mark_system_file_overridden                 (void);
++
++#ifdef P11_ENV_OVERRIDE_PATHS
++void         p11_conf_get_paths_from_env                          (void);
++void         p11_get_paths_from_env                               (void);
++#endif
++
++char *       p11_conf_select_system_conf_file                     (void);
+--- a/p11-kit/test-conf.c
++++ b/p11-kit/test-conf.c
+@@ -273,0 +274 @@
++	                                  SRCDIR "/p11-kit/fixtures/non-existant",
+@@ -306,0 +308 @@
++	                                  SRCDIR "/p11-kit/fixtures/non-existant",
+@@ -337,0 +340 @@
++	                                  SRCDIR "/p11-kit/fixtures/non-existant",
+@@ -368,0 +372 @@
++	                                  SRCDIR "/p11-kit/fixtures/non-existant",

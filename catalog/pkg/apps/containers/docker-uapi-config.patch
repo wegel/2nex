@@ -1,0 +1,112 @@
+From: Nex package maintainers
+Subject: [PATCH] daemon: select daemon.json from UAPI paths
+
+The daemon's implicit configuration file was a single administrator path, so a
+package could not ship a daemon.json and a boot-time tool had nowhere to put a
+temporary one. Select the first daemon.json among /etc/docker, /run/docker, and
+/usr/lib/docker; the first file found wins completely, so an empty
+administrator file masks the lower tiers. When none exists the administrator
+path is still returned and the daemon starts from its compiled defaults, which
+is what a missing /etc/docker/daemon.json already did. Rootless mode keeps its
+single per-user file, and an explicit --config-file is unaffected.
+
+diff -urN a/daemon/command/daemon_unix.go b/daemon/command/daemon_unix.go
+--- a/daemon/command/daemon_unix.go
++++ b/daemon/command/daemon_unix.go
+@@ -33,11 +33,32 @@
+ 	return filepath.Join(configHome, "docker")
+ }
+ 
++// systemDaemonConfigDirs lists the system directories that may hold
++// daemon.json, highest priority first: lasting administrator policy, then
++// temporary machine policy that one boot owns, then the package default.
++var systemDaemonConfigDirs = []string{"/etc/docker", "/run/docker", "/usr/lib/docker"}
++
+ func getDefaultDaemonConfigFile() string {
+ 	dir := getDefaultDaemonConfigDir()
+ 	if dir == "" {
+ 		return ""
+ 	}
++	if honorXDG {
++		// Rootless keeps its single per-user file.
++		return filepath.Join(dir, "daemon.json")
++	}
++
++	// The first file that exists wins completely, so an empty administrator
++	// file masks the lower tiers. When none exists the administrator path is
++	// returned and the daemon starts from its compiled defaults, which is the
++	// behaviour a missing /etc/docker/daemon.json already had.
++	for _, systemDir := range systemDaemonConfigDirs {
++		path := filepath.Join(systemDir, "daemon.json")
++		if _, err := os.Stat(path); err == nil {
++			return path
++		}
++	}
++
+ 	return filepath.Join(dir, "daemon.json")
+ }
+ 
+diff -urN a/daemon/command/nex_uapi_daemon_config_test.go b/daemon/command/nex_uapi_daemon_config_test.go
+--- a/daemon/command/nex_uapi_daemon_config_test.go
++++ b/daemon/command/nex_uapi_daemon_config_test.go
+@@ -0,0 +1,60 @@
++//go:build unix
++
++package command
++
++import (
++	"os"
++	"path/filepath"
++	"testing"
++)
++
++// TestNexDaemonConfigTiers checks that the implicit daemon.json is selected
++// from the administrator, transient, and vendor directories in that order, and
++// that the administrator path is returned when none exists.
++func TestNexDaemonConfigTiers(t *testing.T) {
++	if honorXDG {
++		t.Skip("rootless mode keeps a single per-user file")
++	}
++
++	root := t.TempDir()
++	saved := systemDaemonConfigDirs
++	t.Cleanup(func() { systemDaemonConfigDirs = saved })
++
++	admin := filepath.Join(root, "etc")
++	runtime := filepath.Join(root, "run")
++	vendor := filepath.Join(root, "usr")
++	systemDaemonConfigDirs = []string{admin, runtime, vendor}
++
++	for _, dir := range systemDaemonConfigDirs {
++		if err := os.MkdirAll(dir, 0o755); err != nil {
++			t.Fatal(err)
++		}
++	}
++
++	write := func(dir string) string {
++		path := filepath.Join(dir, "daemon.json")
++		if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
++			t.Fatal(err)
++		}
++		return path
++	}
++
++	if got, want := getDefaultDaemonConfigFile(), "/etc/docker/daemon.json"; got != want {
++		t.Fatalf("no file: got %q, want %q", got, want)
++	}
++
++	wantVendor := write(vendor)
++	if got := getDefaultDaemonConfigFile(); got != wantVendor {
++		t.Fatalf("vendor tier: got %q, want %q", got, wantVendor)
++	}
++
++	wantRuntime := write(runtime)
++	if got := getDefaultDaemonConfigFile(); got != wantRuntime {
++		t.Fatalf("runtime tier: got %q, want %q", got, wantRuntime)
++	}
++
++	wantAdmin := write(admin)
++	if got := getDefaultDaemonConfigFile(); got != wantAdmin {
++		t.Fatalf("admin tier: got %q, want %q", got, wantAdmin)
++	}
++}

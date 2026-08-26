@@ -1,0 +1,277 @@
+package:
+  schema: 1
+  name: fontconfig
+  slug: fontconfig
+  namespace: libs/graphics
+  version: 2.17.1
+  description: Font configuration and customization library
+  homepage: https://www.freedesktop.org/wiki/Software/fontconfig/
+  checksum: 128736eb96e78f6680b80a86fba2cb339c62d43e4cd901faa50ccc7b2206e755
+
+sources:
+- name: fontconfig
+  url: https://gitlab.freedesktop.org/api/v4/projects/890/packages/generic/fontconfig/2.17.1/fontconfig-2.17.1.tar.xz
+  sha256: 9f5cae93f4fffc1fbc05ae99cdfc708cd60dfd6612ffc0512827025c026fa541
+- name: system_config
+  file: pkg/libs/graphics/fontconfig-uapi-config.patch
+  sha256: 825ff321323957fda09698f476f41d1fb0c023a3915615f8f061c371f9aca051
+- name: config_smoke
+  file: pkg/libs/graphics/fontconfig-config-smoke.c
+  sha256: 11c9edb999c470d8544ff1fd5971cfbe6e04c5b095c583b6d5419fa57c71ad2e
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: freetype
+  commit: x86_64/pkg/libs/graphics/freetype/2.14.1/bundles/dev
+- name: libpng
+  commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: gperf
+  commit: x86_64/pkg/core/toolchain/gperf/3.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4140:1933, 8242:2537, 12407:2696, 16526:5445, 19464:6562]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "/${SOURCE_fontconfig}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_system_config}"
+
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      -Ddoc=disabled \
+      -Dtests=disabled \
+      -Dbaseconfig-dir=/usr/share/fontconfig \
+      -Dconfig-dir=/usr/share/fontconfig/conf.d
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    config_smoke="${WORK_DIR}/fontconfig-config-smoke"
+    gcc \
+      -Wall -Wextra -Werror \
+      -I"${OUT_DIR}/usr/include" \
+      -L"${OUT_DIR}/usr/lib" \
+      "/${SOURCE_config_smoke}" \
+      -lfontconfig \
+      -o "${config_smoke}"
+
+    smoke_root="${WORK_DIR}/fontconfig-smoke-root"
+    mkdir -p "${smoke_root}/usr/share"
+    cp -a "${OUT_DIR}/usr/share/fontconfig" \
+      "${smoke_root}/usr/share/fontconfig"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${config_smoke}" graph "${smoke_root}"
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${config_smoke}" suite "${smoke_root}"
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/fc-cache
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+    - path: /usr/bin/fc-cat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+    - path: /usr/bin/fc-conflist
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+    - path: /usr/bin/fc-list
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+    - path: /usr/bin/fc-match
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+    - path: /usr/bin/fc-pattern
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+    - path: /usr/bin/fc-query
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+    - path: /usr/bin/fc-scan
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+    - path: /usr/bin/fc-validate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfontconfig.so.1
+      - /usr/lib/libfreetype.so.6
+
+  conf:
+    files:
+    - path: /usr/share/fontconfig/conf.avail/05-reset-dirs-sample.conf
+    - path: /usr/share/fontconfig/conf.avail/09-autohint-if-no-hinting.conf
+    - path: /usr/share/fontconfig/conf.avail/10-autohint.conf
+    - path: /usr/share/fontconfig/conf.avail/10-hinting-full.conf
+    - path: /usr/share/fontconfig/conf.avail/10-hinting-medium.conf
+    - path: /usr/share/fontconfig/conf.avail/10-hinting-none.conf
+    - path: /usr/share/fontconfig/conf.avail/10-hinting-slight.conf
+    - path: /usr/share/fontconfig/conf.avail/10-no-antialias.conf
+    - path: /usr/share/fontconfig/conf.avail/10-scale-bitmap-fonts.conf
+    - path: /usr/share/fontconfig/conf.avail/10-sub-pixel-bgr.conf
+    - path: /usr/share/fontconfig/conf.avail/10-sub-pixel-none.conf
+    - path: /usr/share/fontconfig/conf.avail/10-sub-pixel-rgb.conf
+    - path: /usr/share/fontconfig/conf.avail/10-sub-pixel-vbgr.conf
+    - path: /usr/share/fontconfig/conf.avail/10-sub-pixel-vrgb.conf
+    - path: /usr/share/fontconfig/conf.avail/10-unhinted.conf
+    - path: /usr/share/fontconfig/conf.avail/10-yes-antialias.conf
+    - path: /usr/share/fontconfig/conf.avail/11-lcdfilter-default.conf
+    - path: /usr/share/fontconfig/conf.avail/11-lcdfilter-legacy.conf
+    - path: /usr/share/fontconfig/conf.avail/11-lcdfilter-light.conf
+    - path: /usr/share/fontconfig/conf.avail/11-lcdfilter-none.conf
+    - path: /usr/share/fontconfig/conf.avail/20-unhint-small-vera.conf
+    - path: /usr/share/fontconfig/conf.avail/25-unhint-nonlatin.conf
+    - path: /usr/share/fontconfig/conf.avail/30-metric-aliases.conf
+    - path: /usr/share/fontconfig/conf.avail/35-lang-normalize.conf
+    - path: /usr/share/fontconfig/conf.avail/40-nonlatin.conf
+    - path: /usr/share/fontconfig/conf.avail/45-generic.conf
+    - path: /usr/share/fontconfig/conf.avail/45-latin.conf
+    - path: /usr/share/fontconfig/conf.avail/48-guessfamily.conf
+    - path: /usr/share/fontconfig/conf.avail/48-spacing.conf
+    - path: /usr/share/fontconfig/conf.avail/49-sansserif.conf
+    - path: /usr/share/fontconfig/conf.avail/50-user.conf
+    - path: /usr/share/fontconfig/conf.avail/51-local.conf
+    - path: /usr/share/fontconfig/conf.avail/60-generic.conf
+    - path: /usr/share/fontconfig/conf.avail/60-latin.conf
+    - path: /usr/share/fontconfig/conf.avail/65-fonts-persian.conf
+    - path: /usr/share/fontconfig/conf.avail/65-khmer.conf
+    - path: /usr/share/fontconfig/conf.avail/65-nonlatin.conf
+    - path: /usr/share/fontconfig/conf.avail/69-unifont.conf
+    - path: /usr/share/fontconfig/conf.avail/70-no-bitmaps-and-emoji.conf
+    - path: /usr/share/fontconfig/conf.avail/70-no-bitmaps-except-emoji.conf
+    - path: /usr/share/fontconfig/conf.avail/70-no-bitmaps.conf
+    - path: /usr/share/fontconfig/conf.avail/70-yes-bitmaps.conf
+    - path: /usr/share/fontconfig/conf.avail/80-delicious.conf
+    - path: /usr/share/fontconfig/conf.avail/90-synthetic.conf
+    - path: /usr/share/fontconfig/conf.d/10-hinting-slight.conf
+    - path: /usr/share/fontconfig/conf.d/10-scale-bitmap-fonts.conf
+    - path: /usr/share/fontconfig/conf.d/10-sub-pixel-none.conf
+    - path: /usr/share/fontconfig/conf.d/10-yes-antialias.conf
+    - path: /usr/share/fontconfig/conf.d/11-lcdfilter-default.conf
+    - path: /usr/share/fontconfig/conf.d/20-unhint-small-vera.conf
+    - path: /usr/share/fontconfig/conf.d/30-metric-aliases.conf
+    - path: /usr/share/fontconfig/conf.d/40-nonlatin.conf
+    - path: /usr/share/fontconfig/conf.d/45-generic.conf
+    - path: /usr/share/fontconfig/conf.d/45-latin.conf
+    - path: /usr/share/fontconfig/conf.d/48-spacing.conf
+    - path: /usr/share/fontconfig/conf.d/49-sansserif.conf
+    - path: /usr/share/fontconfig/conf.d/50-user.conf
+    - path: /usr/share/fontconfig/conf.d/51-local.conf
+    - path: /usr/share/fontconfig/conf.d/60-generic.conf
+    - path: /usr/share/fontconfig/conf.d/60-latin.conf
+    - path: /usr/share/fontconfig/conf.d/65-fonts-persian.conf
+    - path: /usr/share/fontconfig/conf.d/65-nonlatin.conf
+    - path: /usr/share/fontconfig/conf.d/69-unifont.conf
+    - path: /usr/share/fontconfig/conf.d/70-no-bitmaps-except-emoji.conf
+    - path: /usr/share/fontconfig/conf.d/80-delicious.conf
+    - path: /usr/share/fontconfig/conf.d/90-synthetic.conf
+    - path: /usr/share/fontconfig/fonts.conf
+
+  dev:
+    files:
+    - path: /usr/include/fontconfig/fcfreetype.h
+    - path: /usr/include/fontconfig/fcprivate.h
+    - path: /usr/include/fontconfig/fontconfig.h
+    - path: /usr/lib/pkgconfig/fontconfig.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libfontconfig.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libexpat.so.1
+      - /usr/lib/libfreetype.so.6
+    - path: /usr/lib/libfontconfig.so.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libexpat.so.1
+      - /usr/lib/libfreetype.so.6
+    - path: /usr/lib/libfontconfig.so.1.16.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libexpat.so.1
+      - /usr/lib/libfreetype.so.6
+
+  misc:
+    files:
+    - path: /usr/share/fontconfig/conf.d/README
+    - path: /usr/share/gettext/its/fontconfig.its
+    - path: /usr/share/gettext/its/fontconfig.loc
+    - path: /usr/share/xml/fontconfig/fonts.dtd
+
+resolution:
+  /usr/lib/libexpat.so.1: expat
+  /usr/lib/libfreetype.so.6: freetype
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libfontconfig.so.1: self

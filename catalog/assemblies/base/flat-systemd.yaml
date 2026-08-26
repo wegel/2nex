@@ -1,0 +1,146 @@
+system:
+  schema: 1
+  name: Flat Systemd System
+  slug: flat-systemd
+  version: 0.0.1
+  description: Minimal flat rootfs with systemd init
+  checksum: 042bcc354a037438b4f255e68fc5dbabf0a48c267e293f808548f1db2af2895e
+
+dependencies:
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+
+packages:
+- name: glibc-conf
+  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/conf
+- name: attr-conf
+  commit: x86_64/pkg/libs/system/attr/2.5.2/outputs/conf
+- name: openssl-conf
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/outputs/conf
+- name: linux
+  commit: x86_64/pkg/core/kernel/linux/6.18.24/bundles/vm
+- name: linux-boot
+  commit: x86_64/pkg/core/kernel/linux/6.18.24/outputs/boot
+- name: initramfs
+  commit: x86_64/pkg/core/kernel/initramfs/1.0.0/outputs/boot
+- name: systemd-bin
+  commit: x86_64/pkg/core/init/systemd/257.5/outputs/bin
+- name: systemd-lib
+  commit: x86_64/pkg/core/init/systemd/257.5/outputs/lib
+- name: coreutils-bin
+  commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
+- name: util-linux-bin
+  commit: x86_64/pkg/core/userland/util_linux/2.40/outputs/bin
+- name: bash-bin
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
+- name: shadow
+  commit: x86_64/pkg/core/userland/shadow/4.15.1/bundles/runtime
+- name: dbus-broker-bin
+  commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/bin
+- name: dbus-broker-conf
+  commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/conf
+- name: dbus-broker-lib
+  commit: x86_64/pkg/core/ipc/dbus-broker/37/outputs/lib
+- name: kmod-bin
+  commit: x86_64/pkg/core/kernel/kmod/32/outputs/bin
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+
+  script: |
+    mkdir -p /target/etc /target/root
+
+    cat > /target/etc/passwd << 'EOF'
+    root:x:0:0:root:/root:/usr/bin/bash
+    systemd-network:x:192:192:systemd Network Management:/:/usr/bin/nologin
+    systemd-resolve:x:193:193:systemd Resolver:/:/usr/bin/nologin
+    systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/bin/nologin
+    EOF
+
+    cat > /target/etc/group << 'EOF'
+    root:x:0:
+    systemd-network:x:192:
+    systemd-resolve:x:193:
+    systemd-timesync:x:194:
+    systemd-journal:x:190:
+    EOF
+
+    cat > /target/etc/shadow << 'EOF'
+    root:!*:19735:0:99999:7:::
+    systemd-network:!*:19735::::::
+    systemd-resolve:!*:19735::::::
+    systemd-timesync:!*:19735::::::
+    EOF
+    chmod 600 /target/etc/shadow
+
+    cat > /target/usr/lib/os-release << 'EOF'
+    NAME="nex"
+    PRETTY_NAME="nex Linux"
+    ID=nex
+    VERSION="0.0.1"
+    EOF
+
+    test -f /target/usr/lib/nsswitch.conf
+    test ! -e /target/etc/nsswitch.conf
+    test ! -e /target/etc/os-release
+
+    echo "uninitialized" > /target/etc/machine-id
+
+    mkdir -p /target/{proc,sys,dev,run,tmp}
+    ln -sf usr/lib /target/lib
+    ln -sf usr/lib /target/lib64
+    ln -sf usr/bin /target/bin
+
+    mkdir -p /target/etc/systemd/system
+    mkdir -p /target/var/log/journal
+    mkdir -p /target/var/lib/systemd
+
+    cat > /target/usr/lib/profile << 'EOF'
+    : "${PS1:=# }"
+    export PS1
+
+    _profile_fragment_names=$(
+        for _profile_fragment_dir in \
+            /usr/lib/profile.d /run/profile.d /etc/profile.d
+        do
+            [ -d "${_profile_fragment_dir}" ] || continue
+            for _profile_fragment in "${_profile_fragment_dir}"/*.sh; do
+                [ -e "${_profile_fragment}" ] || [ -L "${_profile_fragment}" ] || continue
+                printf '%s\n' "${_profile_fragment##*/}"
+            done
+        done | LC_ALL=C sort -u
+    )
+
+    _profile_saved_ifs=${IFS}
+    IFS='
+    '
+    for _profile_fragment_name in ${_profile_fragment_names}; do
+        _profile_fragment=
+        for _profile_fragment_dir in \
+            /usr/lib/profile.d /run/profile.d /etc/profile.d
+        do
+            _profile_candidate=${_profile_fragment_dir}/${_profile_fragment_name}
+            if [ -e "${_profile_candidate}" ] || [ -L "${_profile_candidate}" ]; then
+                _profile_fragment=${_profile_candidate}
+            fi
+        done
+
+        [ -f "${_profile_fragment}" ] && . "${_profile_fragment}"
+    done
+    IFS=${_profile_saved_ifs}
+
+    unset _profile_candidate _profile_fragment _profile_fragment_dir
+    unset _profile_fragment_name _profile_fragment_names _profile_saved_ifs
+    EOF
+
+    ln -sf /usr/lib/systemd/systemd /target/init
+
+    # kmod symlinks
+    ln -sf /usr/bin/kmod /target/usr/bin/modprobe
+    ln -sf /usr/bin/kmod /target/usr/bin/insmod
+    ln -sf /usr/bin/kmod /target/usr/bin/rmmod
+    ln -sf /usr/bin/kmod /target/usr/bin/lsmod
+    ln -sf /usr/bin/kmod /target/usr/bin/depmod
+    ln -sf /usr/bin /target/sbin
+
+    find /target -exec touch -h -d "2024-01-01T00:00:00+00:00" {} \;

@@ -1,0 +1,230 @@
+package:
+  schema: 1
+  name: spdlog
+  slug: spdlog
+  namespace: dev/libs
+  version: 1.15.3
+  description: Fast C++ logging library
+  homepage: https://github.com/gabime/spdlog
+  checksum: 935885b9a21690a9c97edc8d8343c8d32717720d03936cac0994b120436092b6
+
+sources:
+- name: spdlog
+  url: https://github.com/gabime/spdlog/archive/refs/tags/v1.15.3.tar.gz
+  sha256: 15a04e69c222eb6c01094b5c7ff8a249b36bb22788d72519646fb85feb267e67
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/full
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/full
+- name: libarchive
+  commit: x86_64/pkg/libs/archive/libarchive/3.8.4/bundles/dev
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: bzip2
+  commit: x86_64/pkg/libs/compression/bzip2/1.0.8/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: lz4
+  commit: x86_64/pkg/libs/compression/lz4/1.9.4/bundles/dev
+- name: fmt
+  commit: x86_64/pkg/dev/libs/fmt/11.2.0/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4142:5624, 7725:5678]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "${SOURCE_spdlog}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    cmake -S . -B build -G Ninja \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DSPDLOG_BUILD_SHARED=ON \
+      -DSPDLOG_FMT_EXTERNAL=ON \
+      -DSPDLOG_BUILD_EXAMPLE=OFF \
+      -DSPDLOG_BUILD_EXAMPLE_HO=OFF \
+      -DSPDLOG_BUILD_TESTS=OFF \
+      -DSPDLOG_BUILD_TESTS_HO=OFF \
+      -DSPDLOG_BUILD_BENCH=OFF
+
+    cmake --build build
+    DESTDIR="${OUT_DIR}" cmake --install build
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/spdlog/async.h
+    - path: /usr/include/spdlog/async_logger-inl.h
+    - path: /usr/include/spdlog/async_logger.h
+    - path: /usr/include/spdlog/cfg/argv.h
+    - path: /usr/include/spdlog/cfg/env.h
+    - path: /usr/include/spdlog/cfg/helpers-inl.h
+    - path: /usr/include/spdlog/cfg/helpers.h
+    - path: /usr/include/spdlog/common-inl.h
+    - path: /usr/include/spdlog/common.h
+    - path: /usr/include/spdlog/details/backtracer-inl.h
+    - path: /usr/include/spdlog/details/backtracer.h
+    - path: /usr/include/spdlog/details/circular_q.h
+    - path: /usr/include/spdlog/details/console_globals.h
+    - path: /usr/include/spdlog/details/file_helper-inl.h
+    - path: /usr/include/spdlog/details/file_helper.h
+    - path: /usr/include/spdlog/details/fmt_helper.h
+    - path: /usr/include/spdlog/details/log_msg-inl.h
+    - path: /usr/include/spdlog/details/log_msg.h
+    - path: /usr/include/spdlog/details/log_msg_buffer-inl.h
+    - path: /usr/include/spdlog/details/log_msg_buffer.h
+    - path: /usr/include/spdlog/details/mpmc_blocking_q.h
+    - path: /usr/include/spdlog/details/null_mutex.h
+    - path: /usr/include/spdlog/details/os-inl.h
+    - path: /usr/include/spdlog/details/os.h
+    - path: /usr/include/spdlog/details/periodic_worker-inl.h
+    - path: /usr/include/spdlog/details/periodic_worker.h
+    - path: /usr/include/spdlog/details/registry-inl.h
+    - path: /usr/include/spdlog/details/registry.h
+    - path: /usr/include/spdlog/details/synchronous_factory.h
+    - path: /usr/include/spdlog/details/tcp_client-windows.h
+    - path: /usr/include/spdlog/details/tcp_client.h
+    - path: /usr/include/spdlog/details/thread_pool-inl.h
+    - path: /usr/include/spdlog/details/thread_pool.h
+    - path: /usr/include/spdlog/details/udp_client-windows.h
+    - path: /usr/include/spdlog/details/udp_client.h
+    - path: /usr/include/spdlog/details/windows_include.h
+    - path: /usr/include/spdlog/fmt/bin_to_hex.h
+    - path: /usr/include/spdlog/fmt/chrono.h
+    - path: /usr/include/spdlog/fmt/compile.h
+    - path: /usr/include/spdlog/fmt/fmt.h
+    - path: /usr/include/spdlog/fmt/ostr.h
+    - path: /usr/include/spdlog/fmt/ranges.h
+    - path: /usr/include/spdlog/fmt/std.h
+    - path: /usr/include/spdlog/fmt/xchar.h
+    - path: /usr/include/spdlog/formatter.h
+    - path: /usr/include/spdlog/fwd.h
+    - path: /usr/include/spdlog/logger-inl.h
+    - path: /usr/include/spdlog/logger.h
+    - path: /usr/include/spdlog/mdc.h
+    - path: /usr/include/spdlog/pattern_formatter-inl.h
+    - path: /usr/include/spdlog/pattern_formatter.h
+    - path: /usr/include/spdlog/sinks/android_sink.h
+    - path: /usr/include/spdlog/sinks/ansicolor_sink-inl.h
+    - path: /usr/include/spdlog/sinks/ansicolor_sink.h
+    - path: /usr/include/spdlog/sinks/base_sink-inl.h
+    - path: /usr/include/spdlog/sinks/base_sink.h
+    - path: /usr/include/spdlog/sinks/basic_file_sink-inl.h
+    - path: /usr/include/spdlog/sinks/basic_file_sink.h
+    - path: /usr/include/spdlog/sinks/callback_sink.h
+    - path: /usr/include/spdlog/sinks/daily_file_sink.h
+    - path: /usr/include/spdlog/sinks/dist_sink.h
+    - path: /usr/include/spdlog/sinks/dup_filter_sink.h
+    - path: /usr/include/spdlog/sinks/hourly_file_sink.h
+    - path: /usr/include/spdlog/sinks/kafka_sink.h
+    - path: /usr/include/spdlog/sinks/mongo_sink.h
+    - path: /usr/include/spdlog/sinks/msvc_sink.h
+    - path: /usr/include/spdlog/sinks/null_sink.h
+    - path: /usr/include/spdlog/sinks/ostream_sink.h
+    - path: /usr/include/spdlog/sinks/qt_sinks.h
+    - path: /usr/include/spdlog/sinks/ringbuffer_sink.h
+    - path: /usr/include/spdlog/sinks/rotating_file_sink-inl.h
+    - path: /usr/include/spdlog/sinks/rotating_file_sink.h
+    - path: /usr/include/spdlog/sinks/sink-inl.h
+    - path: /usr/include/spdlog/sinks/sink.h
+    - path: /usr/include/spdlog/sinks/stdout_color_sinks-inl.h
+    - path: /usr/include/spdlog/sinks/stdout_color_sinks.h
+    - path: /usr/include/spdlog/sinks/stdout_sinks-inl.h
+    - path: /usr/include/spdlog/sinks/stdout_sinks.h
+    - path: /usr/include/spdlog/sinks/syslog_sink.h
+    - path: /usr/include/spdlog/sinks/systemd_sink.h
+    - path: /usr/include/spdlog/sinks/tcp_sink.h
+    - path: /usr/include/spdlog/sinks/udp_sink.h
+    - path: /usr/include/spdlog/sinks/win_eventlog_sink.h
+    - path: /usr/include/spdlog/sinks/wincolor_sink-inl.h
+    - path: /usr/include/spdlog/sinks/wincolor_sink.h
+    - path: /usr/include/spdlog/spdlog-inl.h
+    - path: /usr/include/spdlog/spdlog.h
+    - path: /usr/include/spdlog/stopwatch.h
+    - path: /usr/include/spdlog/tweakme.h
+    - path: /usr/include/spdlog/version.h
+    - path: /usr/lib/cmake/spdlog/spdlogConfig.cmake
+    - path: /usr/lib/pkgconfig/spdlog.pc
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/spdlog/spdlogConfigTargets-release.cmake
+    - path: /usr/lib/cmake/spdlog/spdlogConfigTargets.cmake
+    - path: /usr/lib/cmake/spdlog/spdlogConfigVersion.cmake
+    - path: /usr/lib/libspdlog.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfmt.so.11
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libspdlog.so.1.15
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfmt.so.11
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/libspdlog.so.1.15.3
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfmt.so.11
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+
+resolution:
+  /usr/lib/libfmt.so.11: fmt
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc

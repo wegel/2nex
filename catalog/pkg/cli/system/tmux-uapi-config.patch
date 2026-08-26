@@ -1,0 +1,64 @@
+From: Nex package maintainers
+Subject: [PATCH] build: read the system tmux.conf from all three UAPI paths
+Source: no upstream commit; written for Nex against tmux 3.6a
+Upstream: not submitted. tmux reads one system file at
+ SYSCONFDIR/tmux.conf, so a distribution cannot ship a default that a boot
+ or an administrator may replace. The change below adds the generic
+ /usr/lib and /run tiers ahead of that file, keeps the existing user files
+ after those, and names no Nex path.
+
+At startup, when no -f configfile is given, tmux.c expands TMUX_CONF, a
+colon-separated list built by Makefile.am from $(sysconfdir)/tmux.conf and
+the user's own files. There is no vendor or runtime tier, so a distribution
+cannot ship a default configuration below /usr, and a running system cannot
+install a temporary override below /run: only a persistent /etc file works.
+
+Read /usr/lib/tmux/tmux.conf, then /run/tmux/tmux.conf, then the existing
+SYSCONFDIR/tmux.conf, before the user files. expand_paths() already sources
+every file in the list that exists and silently skips a missing one, so
+this only adds two more optional overlay reads: an administrator file
+still overrides a runtime file, which still overrides a vendor file, which
+still overrides nothing. -f still replaces the whole list with the one
+path given.
+
+Makefile.in ships pre-generated in the release tarball and is patched
+alongside Makefile.am so the change takes effect without an autoreconf.
+tmux.h's fallback TMUX_CONF is updated to match, for consistency should a
+build ever omit the -DTMUX_CONF preprocessor flag.
+
+diff -urN a/Makefile.am b/Makefile.am
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -11,7 +11,7 @@
+ # Preprocessor flags.
+ AM_CPPFLAGS += @XOPEN_DEFINES@ \
+ 	-DTMUX_VERSION='"@VERSION@"' \
+-	-DTMUX_CONF='"$(sysconfdir)/tmux.conf:~/.tmux.conf:$$XDG_CONFIG_HOME/tmux/tmux.conf:~/.config/tmux/tmux.conf"' \
++	-DTMUX_CONF='"/usr/lib/tmux/tmux.conf:/run/tmux/tmux.conf:$(sysconfdir)/tmux.conf:~/.tmux.conf:$$XDG_CONFIG_HOME/tmux/tmux.conf:~/.config/tmux/tmux.conf"' \
+ 	-DTMUX_LOCK_CMD='"@DEFAULT_LOCK_CMD@"' \
+ 	-DTMUX_TERM='"@DEFAULT_TERM@"'
+
+diff -urN a/Makefile.in b/Makefile.in
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -385,7 +385,7 @@
+ # Preprocessor flags.
+ AM_CPPFLAGS = @AM_CPPFLAGS@ @XOPEN_DEFINES@ \
+ 	-DTMUX_VERSION='"@VERSION@"' \
+-	-DTMUX_CONF='"$(sysconfdir)/tmux.conf:~/.tmux.conf:$$XDG_CONFIG_HOME/tmux/tmux.conf:~/.config/tmux/tmux.conf"' \
++	-DTMUX_CONF='"/usr/lib/tmux/tmux.conf:/run/tmux/tmux.conf:$(sysconfdir)/tmux.conf:~/.tmux.conf:$$XDG_CONFIG_HOME/tmux/tmux.conf:~/.config/tmux/tmux.conf"' \
+ 	-DTMUX_LOCK_CMD='"@DEFAULT_LOCK_CMD@"' \
+ 	-DTMUX_TERM='"@DEFAULT_TERM@"' $(am__append_4) $(am__append_5) \
+ 	$(am__append_6) $(am__append_7) $(am__append_9) \
+diff -urN a/tmux.h b/tmux.h
+--- a/tmux.h
++++ b/tmux.h
+@@ -81,7 +81,7 @@
+
+ /* Default configuration files and socket paths. */
+ #ifndef TMUX_CONF
+-#define TMUX_CONF "/etc/tmux.conf:~/.tmux.conf"
++#define TMUX_CONF "/usr/lib/tmux/tmux.conf:/run/tmux/tmux.conf:/etc/tmux.conf:~/.tmux.conf"
+ #endif
+ #ifndef TMUX_SOCK
+ #define TMUX_SOCK "$TMUX_TMPDIR:" _PATH_TMP

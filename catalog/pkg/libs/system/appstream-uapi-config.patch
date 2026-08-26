@@ -1,0 +1,56 @@
+Subject: add a /run tier to the OS configuration file search
+Source: downstream patch for AppStream 1.1.1
+Upstream: not submitted; needs agreement on the /run/appstream.conf path
+
+as_context_ensure_os_config_loaded() (src/as-context.c:608-654) selects
+one complete OS configuration file and loads it with
+g_key_file_load_from_file(): the first file that exists wins completely,
+and the function never merges keys from more than one file. Before this
+patch the selection checked only two tiers in order, SYSCONFDIR
+"/appstream.conf" then AS_DATADIR "/appstream.conf". meson.build:38-43
+defines SYSCONFDIR from get_option('prefix') / get_option('sysconfdir'),
+and Meson's sysconfdir option special-cases a /usr prefix to resolve to
+/etc rather than /usr/etc, so with the package manifest's
+--prefix=/usr that constant already compiles to /etc: a path the
+administrator can write. AS_DATADIR resolves to
+${prefix}/share/appstream, i.e. /usr/share/appstream, where this
+package's own build already installs its vendor appstream.conf. Both
+tiers were already correct. There was no /run tier, so a deployment could
+not supply transient FreeRepos policy between the vendor default and the
+administrator's file, and a boot could not override the vendor default
+without writing into the persistent, administrator-owned /etc tree.
+
+This patch adds exactly one more g_file_test() check between the
+existing two, in the same "first file that exists wins" shape the
+function already had: SYSCONFDIR, then the new AS_RUNCONFDIR
+"/appstream.conf" (AS_RUNCONFDIR defaults to "/run"), then AS_DATADIR.
+The selection stays whole-file: whichever tier's file is chosen still
+supplies every key the reader will see, exactly as before this patch,
+because as_context_ensure_os_config_loaded() treats the chosen file as
+the complete configuration for the running process rather than a
+fragment to combine with the other tiers. A missing file in any tier
+stays silent, as it already did for the pre-existing two tiers:
+g_file_test() with G_FILE_TEST_EXISTS returns FALSE without touching the
+filesystem's error state, and the function only calls g_debug(), never
+g_warning(), when it cannot open the file it selected. The existing
+g_debug ("Loading OS configuration from: %s", as_config_fname) call is
+unchanged and still names whichever file the three-way selection above
+it actually chose.
+
+Neither this patch nor the package installs anything under /etc,
+/usr/etc, or /run: /run/appstream.conf is only a compiled-in search path
+that this package does not populate.
+--- a/src/as-context.c
++++ b/src/as-context.c
+@@ -607,0 +608,4 @@
++#ifndef AS_RUNCONFDIR
++#define AS_RUNCONFDIR "/run"
++#endif
++
+@@ -622 +626,2 @@
+-	/* load data from /etc, but fall back to the default in /usr/share if the override does not exist */
++	/* load data from /etc, then /run, then fall back to the vendor default in /usr/share
++	 * if neither override exists */
+@@ -623,0 +629,2 @@
++	if (!g_file_test (as_config_fname, G_FILE_TEST_EXISTS))
++		as_config_fname = AS_RUNCONFDIR "/appstream.conf";

@@ -1,0 +1,67 @@
+# systemd README required options
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+CONFIG_MULTIUSER=y
+CONFIG_MODULES=y
+CONFIG_CGROUPS=y
+CONFIG_INOTIFY_USER=y
+CONFIG_SIGNALFD=y
+CONFIG_TIMERFD=y
+CONFIG_EPOLL=y
+CONFIG_UNIX=y
+CONFIG_NET=y
+CONFIG_INET=y
+CONFIG_SYSFS=y
+CONFIG_PROC_FS=y
+CONFIG_FHANDLE=y
+
+# udev requirements
+CONFIG_DMI=y
+CONFIG_DMIID=y
+CONFIG_DMI_SYSFS=y
+CONFIG_BLK_DEV_BSG=y
+
+# namespaces used by systemd units, and by the build sandbox, which unshares
+# all of them at once. CONFIG_IPC_NS depends on CONFIG_SYSVIPC: without it the
+# option is silently dropped, /proc/self/ns/ipc never appears, and every
+# `unshare --ipc` fails with EINVAL, which is what stopped a machine building
+# any package.
+CONFIG_SYSVIPC=y
+CONFIG_NAMESPACES=y
+CONFIG_UTS_NS=y
+CONFIG_IPC_NS=y
+CONFIG_PID_NS=y
+CONFIG_NET_NS=y
+CONFIG_USER_NS=y
+CONFIG_MNT_NS=y
+CONFIG_CGROUP_NS=y
+
+# cgroup v2 controllers commonly used by systemd
+CONFIG_CGROUP_SCHED=y
+CONFIG_FAIR_GROUP_SCHED=y
+CONFIG_CFS_BANDWIDTH=y
+CONFIG_CGROUP_PIDS=y
+CONFIG_CGROUP_CPUACCT=y
+CONFIG_CPUSETS=y
+CONFIG_MEMCG=y
+CONFIG_BLK_CGROUP=y
+CONFIG_CGROUP_DEVICE=y
+CONFIG_CGROUP_FREEZER=y
+
+# systemd security features
+CONFIG_SECCOMP=y
+CONFIG_SECCOMP_FILTER=y
+CONFIG_KCMP=y
+
+# BPF-based resource controls used by systemd
+CONFIG_BPF=y
+CONFIG_BPF_SYSCALL=y
+CONFIG_BPF_JIT=y
+CONFIG_HAVE_EBPF_JIT=y
+CONFIG_CGROUP_BPF=y
+
+# systemd-oomd
+CONFIG_PSI=y
+
+# core security framework
+CONFIG_SECURITY=y

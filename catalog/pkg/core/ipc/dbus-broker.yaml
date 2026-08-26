@@ -1,0 +1,301 @@
+package:
+  schema: 1
+  name: D-Bus Broker
+  slug: dbus-broker
+  namespace: core/ipc
+  version: "37"
+  description: Linux D-Bus Message Broker
+  homepage: https://github.com/bus1/dbus-broker
+  checksum: 089a1bed94abf872b6841f59d4271bf6f3f4fe99315de22bf5728db77282648d
+
+sources:
+- name: dbus-broker
+  url: https://github.com/bus1/dbus-broker/releases/download/v37/dbus-broker-37.tar.xz
+  sha256: f819a8db8795fa08c767612e3823fd594694a0990f2543ecf35d6a1a6bf2ab5b
+- name: uapi_config
+  file: pkg/core/ipc/dbus-broker-uapi-config.patch
+  sha256: 801bf533497c0f1b55469c8a883eec5a6d018fcbdc28872fa5b327ac3d91b65d
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4098:629, 8194:629, 12339:1041, 16485:1290, 20600:1917, 22416:5189]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    # configure dbus-broker
+    mkdir -p build
+    cd build
+
+    meson setup .. \
+      --prefix=/usr \
+      --sysconfdir=/etc \
+      --buildtype=release \
+      -Daudit=false \
+      -Ddocs=false \
+      -Dlinux-4-17=true \
+      -Dsystem-console-users=gdm,sddm,lightdm
+
+    # build
+    ninja
+    DESTDIR="${OUT_DIR}" ninja install
+
+    # create dbus vendor directories - administrator drop-ins live under
+    # /etc, which a Nex package must not create or own
+    mkdir -p ${OUT_DIR}/usr/share/dbus-1/system.d
+    mkdir -p ${OUT_DIR}/usr/share/dbus-1/session.d
+    mkdir -p ${OUT_DIR}/var/lib/dbus
+
+    # create dbus system.conf - required by dbus-broker-launch
+    cat > ${OUT_DIR}/usr/share/dbus-1/system.conf << 'DBUS_CONF'
+    <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+     "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+    <busconfig>
+      <type>system</type>
+      <user>root</user>
+      <auth>EXTERNAL</auth>
+      <listen>unix:path=/run/dbus/system_bus_socket</listen>
+      <policy context="default">
+        <allow user="*"/>
+        <allow own="*"/>
+        <allow send_type="method_call"/>
+        <allow send_type="signal"/>
+        <allow receive_type="method_call"/>
+        <allow receive_type="signal"/>
+      </policy>
+      <includedir>/usr/share/dbus-1/system.d</includedir>
+      <includedir>/run/dbus-1/system.d</includedir>
+      <includedir>/etc/dbus-1/system.d</includedir>
+      <standard_system_servicedirs/>
+    </busconfig>
+    DBUS_CONF
+
+    # create dbus session.conf - for user sessions
+    cat > ${OUT_DIR}/usr/share/dbus-1/session.conf << 'DBUS_CONF'
+    <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+     "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+    <busconfig>
+      <type>session</type>
+      <auth>EXTERNAL</auth>
+      <listen>unix:tmpdir=/tmp</listen>
+      <policy context="default">
+        <allow send_destination="*" eavesdrop="true"/>
+        <allow eavesdrop="true"/>
+        <allow own="*"/>
+        <allow user="*"/>
+      </policy>
+      <includedir>/usr/share/dbus-1/session.d</includedir>
+      <includedir>/run/dbus-1/session.d</includedir>
+      <includedir>/etc/dbus-1/session.d</includedir>
+    </busconfig>
+    DBUS_CONF
+
+    # create dbus.socket - required by dbus-broker.service (normally from dbus reference impl)
+    cat > ${OUT_DIR}/usr/lib/systemd/system/dbus.socket << 'DBUS_SOCKET'
+    [Unit]
+    Description=D-Bus System Message Bus Socket
+    Documentation=man:dbus-broker-launch(1)
+    DefaultDependencies=false
+    Before=sockets.target
+
+    [Socket]
+    ListenStream=/run/dbus/system_bus_socket
+    SocketMode=0666
+    Service=dbus-broker.service
+
+    [Install]
+    WantedBy=sockets.target
+    DBUS_SOCKET
+
+    # create dbus.service alias symlink (normally created by systemctl enable)
+    ln -sf dbus-broker.service ${OUT_DIR}/usr/lib/systemd/system/dbus.service
+    ln -sf dbus-broker.service ${OUT_DIR}/usr/lib/systemd/user/dbus.service
+
+    # create user dbus.socket
+    cat > ${OUT_DIR}/usr/lib/systemd/user/dbus.socket << 'DBUS_SOCKET'
+    [Unit]
+    Description=D-Bus User Message Bus Socket
+    Documentation=man:dbus-broker-launch(1)
+    DefaultDependencies=false
+    Before=sockets.target
+
+    [Socket]
+    ListenStream=%t/bus
+    ExecStartPost=-/bin/systemctl --user set-environment DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus
+
+    [Install]
+    WantedBy=sockets.target
+    DBUS_SOCKET
+
+    # The parser change lives in dbus-broker-launch's config reader, which has
+    # no running-bus dependency to prove. Drive it in-process through the
+    # test-config probe already built above: plant the same basename in the
+    # vendor, transient, and administrator tiers, mask the administrator copy
+    # with a /dev/null symlink, then unmask it, and read back which file each
+    # pass actually included.
+    probe="${WORK_DIR}/build/src/test-config"
+    smoke_root="${WORK_DIR}/dbus-broker-uapi-smoke"
+    vendor_dir="${smoke_root}/vendor"
+    run_dir="${smoke_root}/run"
+    etc_dir="${smoke_root}/etc"
+    test_name=90-uapi-smoke.conf
+    mkdir -p "${vendor_dir}" "${run_dir}" "${etc_dir}"
+
+    write_marker() {
+      printf '%s\n' \
+        '<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN" "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">' \
+        '<busconfig>' \
+        "  <servicedir>$2</servicedir>" \
+        '</busconfig>' > "$1"
+    }
+
+    write_marker "${vendor_dir}/${test_name}" /vendor-marker
+    write_marker "${run_dir}/${test_name}" /run-marker
+    ln -s /dev/null "${etc_dir}/${test_name}"
+
+    main_conf="${smoke_root}/main.conf"
+    printf '%s\n' \
+      '<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN" "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">' \
+      '<busconfig>' \
+      "  <includedir>${vendor_dir}</includedir>" \
+      "  <includedir>${run_dir}</includedir>" \
+      "  <includedir>${etc_dir}</includedir>" \
+      '</busconfig>' > "${main_conf}"
+
+    contains() {
+      case "$1" in
+        *"$2"*) return 0 ;;
+        *) return 1 ;;
+      esac
+    }
+
+    masked_output=$("${probe}" "${main_conf}" 2>&1)
+    if contains "${masked_output}" "${test_name}"; then
+      echo 'a /dev/null drop-in did not mask the vendor and transient tiers' >&2
+      exit 1
+    fi
+
+    rm "${etc_dir}/${test_name}"
+    write_marker "${etc_dir}/${test_name}" /etc-marker
+
+    unmasked_output=$("${probe}" "${main_conf}" 2>&1)
+    if ! contains "${unmasked_output}" "${etc_dir}/${test_name}"; then
+      echo 'administrator drop-in did not win once unmasked' >&2
+      exit 1
+    fi
+    if contains "${unmasked_output}" "${run_dir}/${test_name}"; then
+      echo 'transient drop-in was not shadowed by the administrator tier' >&2
+      exit 1
+    fi
+    if contains "${unmasked_output}" "${vendor_dir}/${test_name}"; then
+      echo 'vendor drop-in was not shadowed by the higher tiers' >&2
+      exit 1
+    fi
+
+    rm "${etc_dir}/${test_name}"
+    run_only_output=$("${probe}" "${main_conf}" 2>&1)
+    if ! contains "${run_only_output}" "${run_dir}/${test_name}"; then
+      echo 'transient drop-in did not win over the vendor tier' >&2
+      exit 1
+    fi
+
+    echo 'dbus-broker UAPI smoke: the config loader read all three tiers in order'
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  full:
+  - bin
+  - conf
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/dbus-broker
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+    - path: /usr/bin/dbus-broker-launch
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libexpat.so.1
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libsystemd.so.0
+
+  conf:
+    files:
+    - path: /usr/share/dbus-1/session.conf
+    - path: /usr/share/dbus-1/system.conf
+
+  lib:
+    files:
+    - path: /usr/lib/systemd/catalog/dbus-broker-launch.catalog
+    - path: /usr/lib/systemd/catalog/dbus-broker.catalog
+    - path: /usr/lib/systemd/system/dbus-broker.service
+    - path: /usr/lib/systemd/system/dbus.service
+    - path: /usr/lib/systemd/system/dbus.socket
+    - path: /usr/lib/systemd/user/dbus-broker.service
+    - path: /usr/lib/systemd/user/dbus.service
+    - path: /usr/lib/systemd/user/dbus.socket
+
+resolution:
+  /usr/lib/libexpat.so.1: expat
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libsystemd.so.0: systemd

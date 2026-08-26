@@ -1,0 +1,371 @@
+package:
+  schema: 1
+  name: OSTree
+  slug: ostree
+  namespace: core/fs
+  version: "2026.1"
+  description: Versioned filesystem tree storage and operating system deployment tools
+  homepage: https://ostreedev.github.io/ostree/
+  checksum: bed476afcea258b6e3c106192767dff807fde5a2f64d9c48c6fc0f0be06d26a9
+
+sources:
+- name: ostree
+  url: https://github.com/ostreedev/ostree/releases/download/v2026.1/libostree-2026.1.tar.xz
+  sha256: 8e77c285dd6fa5ec5fb063130390977be727fe11107335ed8778a40385069e95
+- name: grub_command
+  file: pkg/core/fs/ostree-grub-command.patch
+  sha256: 5c0800da2eac70c9fb79c77c2a179fb7c22be10a49e52fef18b8e0761ec71401
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: bison
+  commit: x86_64/pkg/core/toolchain/bison/3.8.2/bundles/dev
+- name: m4
+  commit: x86_64/pkg/dev/lang/m4/1.4.19/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: e2fsprogs
+  commit: x86_64/pkg/core/fs/e2fsprogs/1.47.0/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/bundles/dev
+- name: libgpgme
+  commit: x86_64/pkg/dev/libs/libgpgme/2.0.1/bundles/dev
+- name: libgpg-error
+  commit: x86_64/pkg/dev/libs/libgpg-error/1.59/bundles/dev
+- name: libassuan
+  commit: x86_64/pkg/dev/libs/libassuan/3.0.2/bundles/dev
+- name: libarchive
+  commit: x86_64/pkg/libs/archive/libarchive/3.8.4/bundles/dev
+- name: fuse3
+  commit: x86_64/pkg/libs/system/fuse3/3.17.4/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4102:1745, 8233:2984, 12371:3729, 16484:4381, 20587:5022, 24695:7800, 28851:7998, 29370:8107]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "/${SOURCE_ostree}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_grub_command}"
+
+    BASH_COMPLETIONSDIR=/usr/share/bash-completion/completions \
+      ./configure \
+        --prefix=/usr \
+        --sysconfdir=/etc \
+        --sbindir=/usr/bin \
+        --libexecdir=/usr/lib \
+        --disable-static \
+        --with-curl \
+        --without-soup \
+        --with-gpgme \
+        --enable-rofiles-fuse \
+        --with-libmount \
+        --with-libsystemd \
+        --with-systemdsystemunitdir=/usr/lib/systemd/system \
+        --with-systemdsystemgeneratordir=/usr/lib/systemd/system-generators
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    rm "${OUT_DIR}/etc/grub.d/15_ostree"
+    rmdir \
+      "${OUT_DIR}/etc/grub.d" \
+      "${OUT_DIR}/etc/ostree/remotes.d" \
+      "${OUT_DIR}/etc/ostree" \
+      "${OUT_DIR}/etc"
+
+    grub_script="${OUT_DIR}/usr/lib/libostree/grub2-15_ostree"
+    test -x "${grub_script}"
+    mkdir -p \
+      /boot/grub2 \
+      /etc/default \
+      /ostree/repo \
+      /usr/share/grub
+
+    cat > /usr/share/grub/grub-mkconfig_lib <<'EOF'
+    grub_get_device_id() {
+      printf 'device-id:%s\n' "$1"
+    }
+    prepare_grub_to_access_device() {
+      printf 'prepare:%s\n' "$1"
+    }
+    EOF
+    cat > /usr/bin/ostree <<'EOF'
+    #!/bin/sh
+    test "$*" = 'admin instutil grub2-generate'
+    test "${GRUB2_BOOT_DEVICE_ID}" = 'device-id:/dev/mock-boot'
+    test "${GRUB2_PREPARE_ROOT_CACHE}" = 'prepare:/dev/mock-boot'
+    printf '%s\n' 'menuentry mock-ostree'
+    EOF
+    chmod 755 /usr/bin/ostree
+    printf '%s\n' 'GRUB_ENABLE_BLSCFG=false' > /etc/default/grub
+
+    output="$(GRUB_DEVICE=/dev/mock-root \
+      GRUB_DEVICE_BOOT=/dev/mock-boot \
+      "${grub_script}")"
+    test "${output}" = 'menuentry mock-ostree'
+
+    set +e
+    output="$("${grub_script}" 2>&1)"
+    status=$?
+    set -e
+    test "${status}" -eq 1
+    case "${output}" in
+      *'must be run as a child of grub2-mkconfig'*) ;;
+      *)
+        printf '%s\n' "${output}" >&2
+        exit 1
+        ;;
+    esac
+
+    printf '%s\n' 'GRUB_ENABLE_BLSCFG=true' > /etc/default/grub
+    : > /boot/grub2/.grub2-blscfg-supported
+    output="$(GRUB_DEVICE=/dev/mock-root "${grub_script}")"
+    test -z "${output}"
+
+    rm -rf /ostree/repo
+    rm -f \
+      /boot/grub2/.grub2-blscfg-supported \
+      /etc/default/grub \
+      /usr/bin/ostree \
+      /usr/share/grub/grub-mkconfig_lib
+
+    find "${OUT_DIR}" -name '*.la' -delete
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -h -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+  - misc
+
+  full:
+  - bin
+  - lib
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/ostree
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libarchive.so.13
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libostree-1.so.1
+    - path: /usr/bin/rofiles-fuse
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfuse3.so.4
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libostree-1.so.1
+
+  dev:
+    files:
+    - path: /usr/include/ostree-1/ostree-async-progress.h
+    - path: /usr/include/ostree-1/ostree-autocleanups.h
+    - path: /usr/include/ostree-1/ostree-blob-reader.h
+    - path: /usr/include/ostree-1/ostree-bootconfig-parser.h
+    - path: /usr/include/ostree-1/ostree-content-writer.h
+    - path: /usr/include/ostree-1/ostree-core.h
+    - path: /usr/include/ostree-1/ostree-deployment.h
+    - path: /usr/include/ostree-1/ostree-diff.h
+    - path: /usr/include/ostree-1/ostree-dummy-enumtypes.h
+    - path: /usr/include/ostree-1/ostree-gpg-verify-result.h
+    - path: /usr/include/ostree-1/ostree-kernel-args.h
+    - path: /usr/include/ostree-1/ostree-mutable-tree.h
+    - path: /usr/include/ostree-1/ostree-ref.h
+    - path: /usr/include/ostree-1/ostree-remote.h
+    - path: /usr/include/ostree-1/ostree-repo-deprecated.h
+    - path: /usr/include/ostree-1/ostree-repo-file.h
+    - path: /usr/include/ostree-1/ostree-repo-finder-avahi.h
+    - path: /usr/include/ostree-1/ostree-repo-finder-config.h
+    - path: /usr/include/ostree-1/ostree-repo-finder-mount.h
+    - path: /usr/include/ostree-1/ostree-repo-finder-override.h
+    - path: /usr/include/ostree-1/ostree-repo-finder.h
+    - path: /usr/include/ostree-1/ostree-repo-os.h
+    - path: /usr/include/ostree-1/ostree-repo.h
+    - path: /usr/include/ostree-1/ostree-sepolicy.h
+    - path: /usr/include/ostree-1/ostree-sign-ed25519.h
+    - path: /usr/include/ostree-1/ostree-sign.h
+    - path: /usr/include/ostree-1/ostree-sysroot-upgrader.h
+    - path: /usr/include/ostree-1/ostree-sysroot.h
+    - path: /usr/include/ostree-1/ostree-types.h
+    - path: /usr/include/ostree-1/ostree-version.h
+    - path: /usr/include/ostree-1/ostree.h
+    - path: /usr/lib/pkgconfig/ostree-1.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libostree-1.so
+      needs:
+      - /usr/lib/libarchive.so.13
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcurl.so.4
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libgpgme.so.45
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libmount.so.1
+      - /usr/lib/libsystemd.so.0
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libostree-1.so.1
+      needs:
+      - /usr/lib/libarchive.so.13
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcurl.so.4
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libgpgme.so.45
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libmount.so.1
+      - /usr/lib/libsystemd.so.0
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libostree-1.so.1.0.0
+      needs:
+      - /usr/lib/libarchive.so.13
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcurl.so.4
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libgpg-error.so.0
+      - /usr/lib/libgpgme.so.45
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libmount.so.1
+      - /usr/lib/libsystemd.so.0
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libostree/grub2-15_ostree
+    - path: /usr/lib/ostree/ostree-prepare-root
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libsystemd.so.0
+    - path: /usr/lib/ostree/ostree-remount
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+    - path: /usr/lib/systemd/system-generators/ostree-system-generator
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libostree-1.so.1
+    - path: /usr/lib/systemd/system/ostree-boot-complete.service
+    - path: /usr/lib/systemd/system/ostree-finalize-staged-hold.service
+    - path: /usr/lib/systemd/system/ostree-finalize-staged.service
+    - path: /usr/lib/systemd/system/ostree-prepare-root.service
+    - path: /usr/lib/systemd/system/ostree-remount.service
+    - path: /usr/lib/systemd/system/ostree-state-overlay@.service
+    - path: /usr/lib/tmpfiles.d/ostree-tmpfiles.conf
+
+  misc:
+    files:
+    - path: /usr/share/bash-completion/completions/ostree
+    - path: /usr/share/ostree/trusted.gpg.d/README-gpg
+
+resolution:
+  /usr/lib/libcurl.so.4: curl
+  /usr/lib/libfuse3.so.4: fuse3
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libgio-2.0.so.0: glib2
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libarchive.so.13: libarchive
+  /usr/lib/libgpg-error.so.0: libgpg-error
+  /usr/lib/libgpgme.so.45: libgpgme
+  /usr/lib/libostree-1.so.1: self
+  /usr/lib/libsystemd.so.0: systemd
+  /usr/lib/libblkid.so.1: util-linux
+  /usr/lib/libmount.so.1: util-linux
+  /usr/lib/liblzma.so.5: xz
+  /usr/lib/libz.so.1: zlib

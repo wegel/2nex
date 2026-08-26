@@ -1,0 +1,1051 @@
+package:
+  schema: 1
+  name: libvirt
+  slug: libvirt
+  namespace: dev/virt
+  version: 11.0.0
+  description: Toolkit for virtualization management
+  homepage: https://libvirt.org/
+  checksum: 475324bc09440ee26d158468fb9e5b234e2846c4da9ca670664d73544ea8bd40
+
+sources:
+- name: libvirt
+  url: https://download.libvirt.org/libvirt-11.0.0.tar.xz
+  sha256: 01a176ff4042ad58cf83c09fe0925d6bc8eed0ecce1e0ee19b8ef4c1ffa3806e
+- name: uapi_config
+  file: pkg/dev/virt/libvirt-uapi-config.patch
+  sha256: 4e01a34b3c0f3014cca310ce56c788e0e4fd722f455c4d0274ffae21c116df0d
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: glib2
+  commit: x86_64/pkg/dev/libs/glib2/2.84.0/bundles/dev
+- name: pcre2
+  commit: x86_64/pkg/dev/libs/pcre2/10.44/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: gnutls
+  commit: x86_64/pkg/libs/crypto/gnutls/3.8.8/bundles/dev
+- name: nettle
+  commit: x86_64/pkg/libs/crypto/nettle/3.1/bundles/dev
+- name: libtasn1
+  commit: x86_64/pkg/libs/crypto/libtasn1/4.19.0/bundles/dev
+- name: p11-kit
+  commit: x86_64/pkg/libs/crypto/p11-kit/0.25.5/bundles/dev
+- name: libidn2
+  commit: x86_64/pkg/libs/text/libidn2/2.3.7/bundles/dev
+- name: libunistring
+  commit: x86_64/pkg/libs/text/libunistring/1.3/bundles/dev
+- name: libnl
+  commit: x86_64/pkg/libs/net/libnl/3.11.0/bundles/dev
+- name: util-linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/dev
+- name: readline
+  commit: x86_64/pkg/libs/system/readline/8.2/bundles/dev
+- name: perl
+  commit: x86_64/pkg/dev/lang/perl/5.38.2/bundles/dev
+- name: libxslt
+  commit: x86_64/pkg/libs/text/libxslt/1.1.42/bundles/dev
+- name: json-c
+  commit: x86_64/pkg/libs/system/json-c/0.18/bundles/dev
+- name: libtirpc
+  commit: x86_64/pkg/libs/net/libtirpc/1.3.7/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4106:1555, 12336:3437, 24664:3950, 36979:4566, 49448:5648, 61916:6886, 70235:7996, 90793:46830, 107351:46845, 116906:50461]
+
+  script: |
+    tar --no-same-owner -xf /${SOURCE_libvirt} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+    patch -Np1 --batch --fuzz=0 < /${SOURCE_uapi_config}
+
+    mkdir build && cd build
+    meson setup .. \
+      --prefix=/usr \
+      --sbindir=/usr/bin \
+      --sysconfdir=/etc \
+      --localstatedir=/var \
+      --buildtype=release \
+      -Ddriver_qemu=enabled \
+      -Dqemu_user=nobody \
+      -Dqemu_group=nobody \
+      -Ddriver_lxc=disabled \
+      -Ddriver_openvz=disabled \
+      -Ddriver_esx=disabled \
+      -Ddriver_vmware=disabled \
+      -Ddriver_vbox=disabled \
+      -Ddriver_libxl=disabled \
+      -Ddriver_ch=disabled \
+      -Dstorage_zfs=disabled \
+      -Dstorage_gluster=disabled \
+      -Dstorage_rbd=disabled \
+      -Dstorage_iscsi=disabled \
+      -Dstorage_iscsi_direct=disabled \
+      -Dnumactl=disabled \
+      -Dnumad=disabled \
+      -Dapparmor=disabled \
+      -Dselinux=disabled \
+      -Daudit=disabled \
+      -Dpolkit=disabled \
+      -Dlibssh=disabled \
+      -Dlibssh2=disabled \
+      -Dsasl=disabled \
+      -Dfirewalld=disabled \
+      -Dwireshark_dissector=disabled \
+      -Ddocs=disabled \
+      -Dtests=disabled \
+      -Dsecdriver_apparmor=disabled \
+      -Dsecdriver_selinux=disabled
+
+    ninja
+    DESTDIR="${OUT_DIR}" ninja install
+
+    mkdir -p docs-api "${OUT_DIR}/usr/share/libvirt/api"
+    python3 ../scripts/apibuild.py ../docs docs-api
+    install -m 0644 docs-api/libvirt-api.xml "${OUT_DIR}/usr/share/libvirt/api/libvirt-api.xml"
+    install -m 0644 docs-api/libvirt-admin-api.xml "${OUT_DIR}/usr/share/libvirt/api/libvirt-admin-api.xml"
+    install -m 0644 docs-api/libvirt-lxc-api.xml "${OUT_DIR}/usr/share/libvirt/api/libvirt-lxc-api.xml"
+    install -m 0644 docs-api/libvirt-qemu-api.xml "${OUT_DIR}/usr/share/libvirt/api/libvirt-qemu-api.xml"
+
+    mkdir -p \
+      "${OUT_DIR}/usr/lib/libvirt" \
+      "${OUT_DIR}/usr/lib/logrotate.d" \
+      "${OUT_DIR}/usr/lib/ssh/ssh_config.d" \
+      "${OUT_DIR}/usr/share/libvirt/initial-state"
+    for config in "${OUT_DIR}"/etc/libvirt/*.conf; do
+      mv "${config}" "${OUT_DIR}/usr/lib/libvirt/"
+    done
+    mv \
+      "${OUT_DIR}/etc/libvirt/nwfilter" \
+      "${OUT_DIR}/usr/share/libvirt/initial-state/nwfilter"
+    mkdir -p "${OUT_DIR}/usr/share/libvirt/initial-state/qemu"
+    mv \
+      "${OUT_DIR}/etc/libvirt/qemu/networks" \
+      "${OUT_DIR}/usr/share/libvirt/initial-state/qemu/networks"
+    mv \
+      "${OUT_DIR}"/etc/logrotate.d/libvirtd* \
+      "${OUT_DIR}/usr/lib/logrotate.d/"
+    mv \
+      "${OUT_DIR}/etc/ssh/ssh_config.d/30-libvirt-ssh-proxy.conf" \
+      "${OUT_DIR}/usr/lib/ssh/ssh_config.d/"
+    rmdir \
+      "${OUT_DIR}/etc/libvirt/qemu/autostart" \
+      "${OUT_DIR}/etc/libvirt/qemu" \
+      "${OUT_DIR}/etc/libvirt/secrets" \
+      "${OUT_DIR}/etc/libvirt/storage/autostart" \
+      "${OUT_DIR}/etc/libvirt/storage" \
+      "${OUT_DIR}/etc/libvirt" \
+      "${OUT_DIR}/etc/logrotate.d" \
+      "${OUT_DIR}/etc/ssh/ssh_config.d" \
+      "${OUT_DIR}/etc/ssh"
+
+    test -s "${OUT_DIR}/usr/lib/logrotate.d/libvirtd"
+    test -s "${OUT_DIR}/usr/lib/logrotate.d/libvirtd.libxl"
+    test -s "${OUT_DIR}/usr/lib/logrotate.d/libvirtd.lxc"
+    test -s "${OUT_DIR}/usr/lib/logrotate.d/libvirtd.qemu"
+    grep -F '/var/log/libvirt/libvirtd.log' \
+      "${OUT_DIR}/usr/lib/logrotate.d/libvirtd"
+    grep -F '/var/log/libvirt/qemu/*.log' \
+      "${OUT_DIR}/usr/lib/logrotate.d/libvirtd.qemu"
+    grep -F 'ProxyCommand /usr/libexec/libvirt-ssh-proxy %h %p' \
+      "${OUT_DIR}/usr/lib/ssh/ssh_config.d/30-libvirt-ssh-proxy.conf"
+    test ! -e "${OUT_DIR}/etc/logrotate.d"
+    test ! -e "${OUT_DIR}/etc/ssh"
+
+    mkdir -p /usr/lib/libvirt /run/libvirt /etc/libvirt
+    printf '%s\n' 'invalid vendor syntax' > /usr/lib/libvirt/virtlogd.conf
+    : > /run/libvirt/virtlogd.conf
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${OUT_DIR}/usr/bin/virtlogd" \
+        --timeout 1 \
+        --pid-file /tmp/libvirt-uapi.pid
+
+    printf '%s\n' 'invalid administrator syntax' > /etc/libvirt/virtlogd.conf
+    if LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${OUT_DIR}/usr/bin/virtlogd" \
+        --timeout 1 \
+        --pid-file /tmp/libvirt-uapi.pid; then
+      echo 'virtlogd ignored the administrator configuration' >&2
+      exit 1
+    fi
+
+    : > /etc/libvirt/virtlogd.conf
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${OUT_DIR}/usr/bin/virtlogd" \
+        --timeout 1 \
+        --pid-file /tmp/libvirt-uapi.pid
+
+    rm /etc/libvirt/virtlogd.conf /run/libvirt/virtlogd.conf
+    if LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${OUT_DIR}/usr/bin/virtlogd" \
+        --timeout 1 \
+        --pid-file /tmp/libvirt-uapi.pid; then
+      echo 'virtlogd accepted invalid vendor configuration' >&2
+      exit 1
+    fi
+
+    : > /tmp/libvirt-explicit.conf
+    LD_LIBRARY_PATH="${OUT_DIR}/usr/lib:/usr/lib" \
+      "${OUT_DIR}/usr/bin/virtlogd" \
+        --config /tmp/libvirt-explicit.conf \
+        --timeout 1 \
+        --pid-file /tmp/libvirt-uapi.pid
+    rm \
+      /tmp/libvirt-explicit.conf \
+      /usr/lib/libvirt/virtlogd.conf
+    rmdir /usr/lib/libvirt /run/libvirt /etc/libvirt
+
+    # libvirt-guests.sh must select its settings file from the same three trees
+    # the compiled readers use. The script echoes each value it applies through
+    # a shell trace, so run it with an unknown command and read back ON_BOOT.
+    guests_script="${OUT_DIR}/usr/libexec/libvirt-guests.sh"
+    # The script sources /usr/bin/gettext.sh before it reads its settings, and
+    # this build root has no gettext tools, so provide a stub that defines the
+    # two helpers the script uses.
+    if [ ! -r /usr/bin/gettext.sh ]; then
+      printf '%s\n' \
+        'eval_gettext() { eval "echo \"$1\""; }' \
+        'eval_ngettext() { eval "echo \"$1\""; }' \
+        > /usr/bin/gettext.sh
+    fi
+    mkdir -p /etc/sysconfig /run/sysconfig /usr/lib/sysconfig
+    rm -f /etc/sysconfig/libvirt-guests /run/sysconfig/libvirt-guests \
+      /usr/lib/sysconfig/libvirt-guests
+
+    guests_on_boot() {
+      sh -x "${guests_script}" uapi-no-such-command 2>&1 \
+        | sed -n "s/^+* *ON_BOOT=//p" | tail -1
+    }
+
+    assert_on_boot() {
+      actual=$(guests_on_boot)
+      if [ "${actual}" != "$1" ]; then
+        printf 'libvirt-guests read ON_BOOT=%s, expected %s\n' \
+          "${actual}" "$1" >&2
+        exit 1
+      fi
+    }
+
+    assert_on_boot start
+    printf 'ON_BOOT=uapi-vendor\n' > /usr/lib/sysconfig/libvirt-guests
+    assert_on_boot uapi-vendor
+    printf 'ON_BOOT=uapi-runtime\n' > /run/sysconfig/libvirt-guests
+    assert_on_boot uapi-runtime
+    printf 'ON_BOOT=uapi-admin\n' > /etc/sysconfig/libvirt-guests
+    assert_on_boot uapi-admin
+    rm /etc/sysconfig/libvirt-guests /run/sysconfig/libvirt-guests \
+      /usr/lib/sysconfig/libvirt-guests
+    rmdir /etc/sysconfig /run/sysconfig /usr/lib/sysconfig 2>/dev/null || true
+
+    printf 'libvirt UAPI smoke: virtlogd and libvirt-guests honoured all tiers\n'
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+  - conf
+  - dev
+  - lib
+  - misc
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/virsh
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libreadline.so.8
+      - /usr/lib/libvirt-lxc.so.0
+      - /usr/lib/libvirt-qemu.so.0
+      - /usr/lib/libvirt.so.0
+      - /usr/lib/libxml2.so.2
+    - path: /usr/bin/virt-admin
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libreadline.so.8
+      - /usr/lib/libvirt-admin.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/bin/virt-host-validate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/bin/virt-login-shell
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/bin/virt-pki-query-dn
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libvirt.so.0
+    - path: /usr/bin/virt-pki-validate
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libvirt.so.0
+    - path: /usr/bin/virt-qemu-qmp-proxy
+    - path: /usr/bin/virt-qemu-run
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/bin/virt-qemu-sev-validate
+    - path: /usr/bin/virt-ssh-helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/bin/virt-xml-validate
+    - path: /usr/libexec/libvirt-guests.sh
+    - path: /usr/libexec/libvirt-ssh-proxy
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+      - /usr/lib/libxml2.so.2
+    - path: /usr/libexec/libvirt_iohelper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/libexec/libvirt_leaseshelper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/libexec/virt-login-shell-helper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt-lxc.so.0
+      - /usr/lib/libvirt.so.0
+
+  conf:
+    files:
+    - path: /usr/lib/libvirt/libvirt-admin.conf
+    - path: /usr/lib/libvirt/libvirt.conf
+    - path: /usr/lib/libvirt/libvirtd.conf
+    - path: /usr/lib/libvirt/network.conf
+    - path: /usr/lib/libvirt/qemu-lockd.conf
+    - path: /usr/lib/libvirt/qemu.conf
+    - path: /usr/lib/libvirt/virt-login-shell.conf
+    - path: /usr/lib/libvirt/virtlockd.conf
+    - path: /usr/lib/libvirt/virtlogd.conf
+    - path: /usr/lib/libvirt/virtnetworkd.conf
+    - path: /usr/lib/libvirt/virtnwfilterd.conf
+    - path: /usr/lib/libvirt/virtproxyd.conf
+    - path: /usr/lib/libvirt/virtqemud.conf
+    - path: /usr/lib/libvirt/virtsecretd.conf
+    - path: /usr/lib/libvirt/virtstoraged.conf
+    - path: /usr/lib/logrotate.d/libvirtd
+    - path: /usr/lib/logrotate.d/libvirtd.libxl
+    - path: /usr/lib/logrotate.d/libvirtd.lxc
+    - path: /usr/lib/logrotate.d/libvirtd.qemu
+    - path: /usr/lib/ssh/ssh_config.d/30-libvirt-ssh-proxy.conf
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-arp.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-dhcp-server.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-dhcp.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-dhcpv6-server.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-dhcpv6.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-incoming-ipv4.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-incoming-ipv6.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-ipv4.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/allow-ipv6.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/clean-traffic-gateway.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/clean-traffic.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-arp-ip-spoofing.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-arp-mac-spoofing.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-arp-spoofing.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-ip-multicast.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-ip-spoofing.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-ipv6-multicast.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-ipv6-spoofing.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-mac-broadcast.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-mac-spoofing.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-other-l2-traffic.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/no-other-rarp-traffic.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/qemu-announce-self-rarp.xml
+    - path: /usr/share/libvirt/initial-state/nwfilter/qemu-announce-self.xml
+    - path: /usr/share/libvirt/initial-state/qemu/networks/autostart/default.xml
+    - path: /usr/share/libvirt/initial-state/qemu/networks/default.xml
+
+  dev:
+    files:
+    - path: /usr/include/libvirt/libvirt-admin.h
+    - path: /usr/include/libvirt/libvirt-common.h
+    - path: /usr/include/libvirt/libvirt-domain-checkpoint.h
+    - path: /usr/include/libvirt/libvirt-domain-snapshot.h
+    - path: /usr/include/libvirt/libvirt-domain.h
+    - path: /usr/include/libvirt/libvirt-event.h
+    - path: /usr/include/libvirt/libvirt-host.h
+    - path: /usr/include/libvirt/libvirt-interface.h
+    - path: /usr/include/libvirt/libvirt-lxc.h
+    - path: /usr/include/libvirt/libvirt-network.h
+    - path: /usr/include/libvirt/libvirt-nodedev.h
+    - path: /usr/include/libvirt/libvirt-nwfilter.h
+    - path: /usr/include/libvirt/libvirt-qemu.h
+    - path: /usr/include/libvirt/libvirt-secret.h
+    - path: /usr/include/libvirt/libvirt-storage.h
+    - path: /usr/include/libvirt/libvirt-stream.h
+    - path: /usr/include/libvirt/libvirt.h
+    - path: /usr/include/libvirt/virterror.h
+    - path: /usr/lib/pkgconfig/libvirt-admin.pc
+    - path: /usr/lib/pkgconfig/libvirt-lxc.pc
+    - path: /usr/lib/pkgconfig/libvirt-qemu.pc
+    - path: /usr/lib/pkgconfig/libvirt.pc
+    - path: /usr/share/libvirt/api/libvirt-admin-api.xml
+    - path: /usr/share/libvirt/api/libvirt-api.xml
+    - path: /usr/share/libvirt/api/libvirt-lxc-api.xml
+    - path: /usr/share/libvirt/api/libvirt-qemu-api.xml
+
+  doc:
+    files:
+    - path: /usr/share/doc/libvirt/examples/c/admin/client_close.c
+    - path: /usr/share/doc/libvirt/examples/c/admin/client_info.c
+    - path: /usr/share/doc/libvirt/examples/c/admin/client_limits.c
+    - path: /usr/share/doc/libvirt/examples/c/admin/list_clients.c
+    - path: /usr/share/doc/libvirt/examples/c/admin/list_servers.c
+    - path: /usr/share/doc/libvirt/examples/c/admin/logging.c
+    - path: /usr/share/doc/libvirt/examples/c/admin/threadpool_params.c
+    - path: /usr/share/doc/libvirt/examples/c/domain/dommigrate.c
+    - path: /usr/share/doc/libvirt/examples/c/domain/domtop.c
+    - path: /usr/share/doc/libvirt/examples/c/domain/info1.c
+    - path: /usr/share/doc/libvirt/examples/c/domain/rename.c
+    - path: /usr/share/doc/libvirt/examples/c/domain/suspend.c
+    - path: /usr/share/doc/libvirt/examples/c/misc/event-test.c
+    - path: /usr/share/doc/libvirt/examples/c/misc/hellolibvirt.c
+    - path: /usr/share/doc/libvirt/examples/c/misc/openauth.c
+    - path: /usr/share/doc/libvirt/examples/polkit/libvirt-acl.rules
+    - path: /usr/share/doc/libvirt/examples/sh/virt-lxc-convert
+    - path: /usr/share/doc/libvirt/examples/systemtap/amd-sev-es-vmsa.stp
+    - path: /usr/share/doc/libvirt/examples/systemtap/events.stp
+    - path: /usr/share/doc/libvirt/examples/systemtap/lock-debug.stp
+    - path: /usr/share/doc/libvirt/examples/systemtap/qemu-monitor.stp
+    - path: /usr/share/doc/libvirt/examples/systemtap/rpc-monitor.stp
+    - path: /usr/share/doc/libvirt/examples/xml/storage/pool-dir.xml
+    - path: /usr/share/doc/libvirt/examples/xml/storage/pool-fs.xml
+    - path: /usr/share/doc/libvirt/examples/xml/storage/pool-logical.xml
+    - path: /usr/share/doc/libvirt/examples/xml/storage/pool-netfs.xml
+    - path: /usr/share/doc/libvirt/examples/xml/storage/vol-cow.xml
+    - path: /usr/share/doc/libvirt/examples/xml/storage/vol-qcow.xml
+    - path: /usr/share/doc/libvirt/examples/xml/storage/vol-qcow2.xml
+    - path: /usr/share/doc/libvirt/examples/xml/storage/vol-raw.xml
+    - path: /usr/share/doc/libvirt/examples/xml/storage/vol-sparse.xml
+    - path: /usr/share/doc/libvirt/examples/xml/storage/vol-vmdk.xml
+    - path: /usr/share/doc/libvirt/examples/xml/test/testdev.xml
+    - path: /usr/share/doc/libvirt/examples/xml/test/testdomfc4.xml
+    - path: /usr/share/doc/libvirt/examples/xml/test/testdomfv0.xml
+    - path: /usr/share/doc/libvirt/examples/xml/test/testnetdef.xml
+    - path: /usr/share/doc/libvirt/examples/xml/test/testnetpriv.xml
+    - path: /usr/share/doc/libvirt/examples/xml/test/testnode.xml
+    - path: /usr/share/doc/libvirt/examples/xml/test/testnodeinline.xml
+    - path: /usr/share/doc/libvirt/examples/xml/test/testpool.xml
+    - path: /usr/share/doc/libvirt/examples/xml/test/testvol.xml
+
+  lib:
+    files:
+    - path: /usr/lib/libnss_libvirt.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libjson-c.so.5
+    - path: /usr/lib/libnss_libvirt_guest.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libjson-c.so.5
+    - path: /usr/lib/libvirt-admin.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt-admin.so.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt-admin.so.0.11000.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt-lxc.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt-lxc.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt-lxc.so.0.11000.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt-qemu.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt-qemu.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt-qemu.so.0.11000.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libjson-c.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libxml2.so.2
+    - path: /usr/lib/libvirt.so.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libjson-c.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libxml2.so.2
+    - path: /usr/lib/libvirt.so.0.11000.0
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libjson-c.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnl-3.so.200
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libxml2.so.2
+    - path: /usr/lib/libvirt/connection-driver/libvirt_driver_network.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt/connection-driver/libvirt_driver_nwfilter.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt/connection-driver/libvirt_driver_qemu.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libvirt.so.0
+      - /usr/lib/libxml2.so.2
+    - path: /usr/lib/libvirt/connection-driver/libvirt_driver_secret.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt/connection-driver/libvirt_driver_storage.so
+      needs:
+      - /usr/lib/libblkid.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+      - /usr/lib/libxml2.so.2
+    - path: /usr/lib/libvirt/lock-driver/lockd.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt/storage-backend/libvirt_storage_backend_fs.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt/storage-backend/libvirt_storage_backend_scsi.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt/storage-backend/libvirt_storage_backend_vstorage.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/libvirt/storage-file/libvirt_storage_file_fs.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libvirt.so.0
+    - path: /usr/lib/sysctl.d/60-libvirtd.conf
+    - path: /usr/lib/sysctl.d/60-qemu-postcopy-migration.conf
+    - path: /usr/lib/sysusers.d/libvirt-qemu.conf
+
+  misc:
+    files:
+    - path: /usr/bin/libvirtd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libvirt-lxc.so.0
+      - /usr/lib/libvirt-qemu.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/bin/virtlockd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libvirt.so.0
+    - path: /usr/bin/virtlogd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libvirt.so.0
+    - path: /usr/bin/virtnetworkd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libvirt-lxc.so.0
+      - /usr/lib/libvirt-qemu.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/bin/virtnwfilterd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libvirt-lxc.so.0
+      - /usr/lib/libvirt-qemu.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/bin/virtproxyd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libvirt-lxc.so.0
+      - /usr/lib/libvirt-qemu.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/bin/virtqemud
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libvirt-lxc.so.0
+      - /usr/lib/libvirt-qemu.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/bin/virtsecretd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libvirt-lxc.so.0
+      - /usr/lib/libvirt-qemu.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/bin/virtstoraged
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgio-2.0.so.0
+      - /usr/lib/libglib-2.0.so.0
+      - /usr/lib/libgobject-2.0.so.0
+      - /usr/lib/libtirpc.so.3
+      - /usr/lib/libvirt-lxc.so.0
+      - /usr/lib/libvirt-qemu.so.0
+      - /usr/lib/libvirt.so.0
+    - path: /usr/share/augeas/lenses/libvirt_lockd.aug
+    - path: /usr/share/augeas/lenses/libvirtd.aug
+    - path: /usr/share/augeas/lenses/libvirtd_network.aug
+    - path: /usr/share/augeas/lenses/libvirtd_qemu.aug
+    - path: /usr/share/augeas/lenses/tests/test_libvirt_lockd.aug
+    - path: /usr/share/augeas/lenses/tests/test_libvirtd.aug
+    - path: /usr/share/augeas/lenses/tests/test_libvirtd_network.aug
+    - path: /usr/share/augeas/lenses/tests/test_libvirtd_qemu.aug
+    - path: /usr/share/augeas/lenses/tests/test_virtlockd.aug
+    - path: /usr/share/augeas/lenses/tests/test_virtlogd.aug
+    - path: /usr/share/augeas/lenses/tests/test_virtnetworkd.aug
+    - path: /usr/share/augeas/lenses/tests/test_virtnwfilterd.aug
+    - path: /usr/share/augeas/lenses/tests/test_virtproxyd.aug
+    - path: /usr/share/augeas/lenses/tests/test_virtqemud.aug
+    - path: /usr/share/augeas/lenses/tests/test_virtsecretd.aug
+    - path: /usr/share/augeas/lenses/tests/test_virtstoraged.aug
+    - path: /usr/share/augeas/lenses/virtlockd.aug
+    - path: /usr/share/augeas/lenses/virtlogd.aug
+    - path: /usr/share/augeas/lenses/virtnetworkd.aug
+    - path: /usr/share/augeas/lenses/virtnwfilterd.aug
+    - path: /usr/share/augeas/lenses/virtproxyd.aug
+    - path: /usr/share/augeas/lenses/virtqemud.aug
+    - path: /usr/share/augeas/lenses/virtsecretd.aug
+    - path: /usr/share/augeas/lenses/virtstoraged.aug
+    - path: /usr/share/libvirt/cpu_map/arm_FT-2000plus.xml
+    - path: /usr/share/libvirt/cpu_map/arm_Falkor.xml
+    - path: /usr/share/libvirt/cpu_map/arm_Kunpeng-920.xml
+    - path: /usr/share/libvirt/cpu_map/arm_Neoverse-N1.xml
+    - path: /usr/share/libvirt/cpu_map/arm_Neoverse-N2.xml
+    - path: /usr/share/libvirt/cpu_map/arm_Neoverse-V1.xml
+    - path: /usr/share/libvirt/cpu_map/arm_Tengyun-S2500.xml
+    - path: /usr/share/libvirt/cpu_map/arm_ThunderX299xx.xml
+    - path: /usr/share/libvirt/cpu_map/arm_a64fx.xml
+    - path: /usr/share/libvirt/cpu_map/arm_cortex-a53.xml
+    - path: /usr/share/libvirt/cpu_map/arm_cortex-a57.xml
+    - path: /usr/share/libvirt/cpu_map/arm_cortex-a72.xml
+    - path: /usr/share/libvirt/cpu_map/arm_features.xml
+    - path: /usr/share/libvirt/cpu_map/arm_vendors.xml
+    - path: /usr/share/libvirt/cpu_map/index.xml
+    - path: /usr/share/libvirt/cpu_map/ppc64_POWER6.xml
+    - path: /usr/share/libvirt/cpu_map/ppc64_POWER7.xml
+    - path: /usr/share/libvirt/cpu_map/ppc64_POWER8.xml
+    - path: /usr/share/libvirt/cpu_map/ppc64_POWER9.xml
+    - path: /usr/share/libvirt/cpu_map/ppc64_POWER10.xml
+    - path: /usr/share/libvirt/cpu_map/ppc64_POWERPC_e5500.xml
+    - path: /usr/share/libvirt/cpu_map/ppc64_POWERPC_e6500.xml
+    - path: /usr/share/libvirt/cpu_map/ppc64_vendors.xml
+    - path: /usr/share/libvirt/cpu_map/x86_486-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_486.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Broadwell-IBRS.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Broadwell-noTSX-IBRS.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Broadwell-noTSX.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Broadwell-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Broadwell-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Broadwell-v3.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Broadwell-v4.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Broadwell.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Cascadelake-Server-noTSX.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Cascadelake-Server-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Cascadelake-Server-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Cascadelake-Server-v3.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Cascadelake-Server-v4.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Cascadelake-Server-v5.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Cascadelake-Server.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Conroe-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Conroe.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Cooperlake-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Cooperlake-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Cooperlake.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Denverton-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Denverton-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Denverton-v3.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Denverton.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Dhyana-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Dhyana-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Dhyana.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-Genoa-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-Genoa.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-IBPB.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-Milan-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-Milan-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-Milan.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-Rome-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-Rome-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-Rome-v3.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-Rome-v4.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-Rome.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-v3.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC-v4.xml
+    - path: /usr/share/libvirt/cpu_map/x86_EPYC.xml
+    - path: /usr/share/libvirt/cpu_map/x86_GraniteRapids-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_GraniteRapids-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_GraniteRapids.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Haswell-IBRS.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Haswell-noTSX-IBRS.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Haswell-noTSX.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Haswell-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Haswell-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Haswell-v3.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Haswell-v4.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Haswell.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Icelake-Client-noTSX.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Icelake-Client.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Icelake-Server-noTSX.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Icelake-Server-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Icelake-Server-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Icelake-Server-v3.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Icelake-Server-v4.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Icelake-Server-v5.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Icelake-Server-v6.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Icelake-Server-v7.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Icelake-Server.xml
+    - path: /usr/share/libvirt/cpu_map/x86_IvyBridge-IBRS.xml
+    - path: /usr/share/libvirt/cpu_map/x86_IvyBridge-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_IvyBridge-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_IvyBridge.xml
+    - path: /usr/share/libvirt/cpu_map/x86_KnightsMill-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_KnightsMill.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Nehalem-IBRS.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Nehalem-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Nehalem-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Nehalem.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Opteron_G1-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Opteron_G1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Opteron_G2-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Opteron_G2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Opteron_G3-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Opteron_G3.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Opteron_G4-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Opteron_G4.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Opteron_G5-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Opteron_G5.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Penryn-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Penryn.xml
+    - path: /usr/share/libvirt/cpu_map/x86_SandyBridge-IBRS.xml
+    - path: /usr/share/libvirt/cpu_map/x86_SandyBridge-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_SandyBridge-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_SandyBridge.xml
+    - path: /usr/share/libvirt/cpu_map/x86_SapphireRapids-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_SapphireRapids-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_SapphireRapids-v3.xml
+    - path: /usr/share/libvirt/cpu_map/x86_SapphireRapids.xml
+    - path: /usr/share/libvirt/cpu_map/x86_SierraForest-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_SierraForest.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Client-IBRS.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Client-noTSX-IBRS.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Client-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Client-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Client-v3.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Client-v4.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Client.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Server-IBRS.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Server-noTSX-IBRS.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Server-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Server-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Server-v3.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Server-v4.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Server-v5.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Skylake-Server.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Snowridge-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Snowridge-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Snowridge-v3.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Snowridge-v4.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Snowridge.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Westmere-IBRS.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Westmere-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Westmere-v2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_Westmere.xml
+    - path: /usr/share/libvirt/cpu_map/x86_athlon-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_athlon.xml
+    - path: /usr/share/libvirt/cpu_map/x86_core2duo-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_core2duo.xml
+    - path: /usr/share/libvirt/cpu_map/x86_coreduo-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_coreduo.xml
+    - path: /usr/share/libvirt/cpu_map/x86_cpu64-rhel5.xml
+    - path: /usr/share/libvirt/cpu_map/x86_cpu64-rhel6.xml
+    - path: /usr/share/libvirt/cpu_map/x86_features.xml
+    - path: /usr/share/libvirt/cpu_map/x86_kvm32-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_kvm32.xml
+    - path: /usr/share/libvirt/cpu_map/x86_kvm64-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_kvm64.xml
+    - path: /usr/share/libvirt/cpu_map/x86_n270-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_n270.xml
+    - path: /usr/share/libvirt/cpu_map/x86_pentium-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_pentium.xml
+    - path: /usr/share/libvirt/cpu_map/x86_pentium2-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_pentium2.xml
+    - path: /usr/share/libvirt/cpu_map/x86_pentium3-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_pentium3.xml
+    - path: /usr/share/libvirt/cpu_map/x86_pentiumpro.xml
+    - path: /usr/share/libvirt/cpu_map/x86_phenom-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_phenom.xml
+    - path: /usr/share/libvirt/cpu_map/x86_qemu32-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_qemu32.xml
+    - path: /usr/share/libvirt/cpu_map/x86_qemu64-v1.xml
+    - path: /usr/share/libvirt/cpu_map/x86_qemu64.xml
+    - path: /usr/share/libvirt/cpu_map/x86_vendors.xml
+    - path: /usr/share/libvirt/schemas/basictypes.rng
+    - path: /usr/share/libvirt/schemas/capability.rng
+    - path: /usr/share/libvirt/schemas/cpu.rng
+    - path: /usr/share/libvirt/schemas/cputypes.rng
+    - path: /usr/share/libvirt/schemas/domain.rng
+    - path: /usr/share/libvirt/schemas/domainbackup.rng
+    - path: /usr/share/libvirt/schemas/domaincaps.rng
+    - path: /usr/share/libvirt/schemas/domaincheckpoint.rng
+    - path: /usr/share/libvirt/schemas/domaincommon.rng
+    - path: /usr/share/libvirt/schemas/domainoverrides.rng
+    - path: /usr/share/libvirt/schemas/domainsnapshot.rng
+    - path: /usr/share/libvirt/schemas/inactiveDomain.rng
+    - path: /usr/share/libvirt/schemas/interface.rng
+    - path: /usr/share/libvirt/schemas/network.rng
+    - path: /usr/share/libvirt/schemas/networkcommon.rng
+    - path: /usr/share/libvirt/schemas/networkport.rng
+    - path: /usr/share/libvirt/schemas/nodedev.rng
+    - path: /usr/share/libvirt/schemas/nwfilter.rng
+    - path: /usr/share/libvirt/schemas/nwfilter_params.rng
+    - path: /usr/share/libvirt/schemas/nwfilterbinding.rng
+    - path: /usr/share/libvirt/schemas/privatedata.rng
+    - path: /usr/share/libvirt/schemas/secret.rng
+    - path: /usr/share/libvirt/schemas/storagecommon.rng
+    - path: /usr/share/libvirt/schemas/storagepool.rng
+    - path: /usr/share/libvirt/schemas/storagepoolcaps.rng
+    - path: /usr/share/libvirt/schemas/storagevol.rng
+    - path: /usr/share/libvirt/test-screenshot.png
+
+resolution:
+  /usr/lib/libacl.so.1: acl
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libgio-2.0.so.0: glib2
+  /usr/lib/libglib-2.0.so.0: glib2
+  /usr/lib/libgobject-2.0.so.0: glib2
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libgnutls.so.30: gnutls
+  /usr/lib/libjson-c.so.5: json-c
+  /usr/lib/libnl-3.so.200: libnl
+  /usr/lib/libtirpc.so.3: libtirpc
+  /usr/lib/libxml2.so.2: libxml2
+  /usr/lib/libreadline.so.8: readline
+  /usr/lib/libvirt-admin.so.0: self
+  /usr/lib/libvirt-lxc.so.0: self
+  /usr/lib/libvirt-qemu.so.0: self
+  /usr/lib/libvirt.so.0: self
+  /usr/lib/libblkid.so.1: util-linux

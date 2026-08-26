@@ -1,0 +1,130 @@
+From: Nex package maintainers
+Subject: [PATCH] add the transient configuration tier and drop /usr/etc
+
+Every distrobox command sources the same fixed list of configuration files, so
+a later file overrides an earlier one. The list had no /run entry, which left a
+boot-time tool with nowhere to put temporary machine policy, and it read
+/usr/etc, which is not a vendor location on a system that keeps package
+defaults below /usr/share and /usr/lib.
+
+Insert /run/distrobox/distrobox.conf between the package defaults and the
+administrator file, and drop the /usr/etc entry. The per-user files and the
+DBX_* environment variables keep their existing priority above all of them.
+
+diff -urN a/distrobox-assemble b/distrobox-assemble
+--- a/distrobox-assemble
++++ b/distrobox-assemble
+@@ -93,8 +93,8 @@
+ 	${nix_config_file}
+ 	/usr/share/distrobox/distrobox.conf
+ 	/usr/share/defaults/distrobox/distrobox.conf
+-	/usr/etc/distrobox/distrobox.conf
+ 	/usr/local/share/distrobox/distrobox.conf
++	/run/distrobox/distrobox.conf
+ 	/etc/distrobox/distrobox.conf
+ 	${XDG_CONFIG_HOME:-"${HOME}/.config"}/distrobox/distrobox.conf
+ 	${HOME}/.distroboxrc
+diff -urN a/distrobox-create b/distrobox-create
+--- a/distrobox-create
++++ b/distrobox-create
+@@ -124,8 +124,8 @@
+ 	${nix_config_file}
+ 	/usr/share/distrobox/distrobox.conf
+ 	/usr/share/defaults/distrobox/distrobox.conf
+-	/usr/etc/distrobox/distrobox.conf
+ 	/usr/local/share/distrobox/distrobox.conf
++	/run/distrobox/distrobox.conf
+ 	/etc/distrobox/distrobox.conf
+ 	${XDG_CONFIG_HOME:-"${HOME}/.config"}/distrobox/distrobox.conf
+ 	${HOME}/.distroboxrc
+diff -urN a/distrobox-enter b/distrobox-enter
+--- a/distrobox-enter
++++ b/distrobox-enter
+@@ -124,8 +124,8 @@
+ 	${nix_config_file}
+ 	/usr/share/distrobox/distrobox.conf
+ 	/usr/share/defaults/distrobox/distrobox.conf
+-	/usr/etc/distrobox/distrobox.conf
+ 	/usr/local/share/distrobox/distrobox.conf
++	/run/distrobox/distrobox.conf
+ 	/etc/distrobox/distrobox.conf
+ 	${XDG_CONFIG_HOME:-"${HOME}/.config"}/distrobox/distrobox.conf
+ 	${HOME}/.distroboxrc
+diff -urN a/distrobox-ephemeral b/distrobox-ephemeral
+--- a/distrobox-ephemeral
++++ b/distrobox-ephemeral
+@@ -74,8 +74,8 @@
+ 	${nix_config_file}
+ 	/usr/share/distrobox/distrobox.conf
+ 	/usr/share/defaults/distrobox/distrobox.conf
+-	/usr/etc/distrobox/distrobox.conf
+ 	/usr/local/share/distrobox/distrobox.conf
++	/run/distrobox/distrobox.conf
+ 	/etc/distrobox/distrobox.conf
+ 	${XDG_CONFIG_HOME:-"${HOME}/.config"}/distrobox/distrobox.conf
+ 	${HOME}/.distroboxrc
+diff -urN a/distrobox-generate-entry b/distrobox-generate-entry
+--- a/distrobox-generate-entry
++++ b/distrobox-generate-entry
+@@ -69,8 +69,8 @@
+ 	${nix_config_file}
+ 	/usr/share/distrobox/distrobox.conf
+ 	/usr/share/defaults/distrobox/distrobox.conf
+-	/usr/etc/distrobox/distrobox.conf
+ 	/usr/local/share/distrobox/distrobox.conf
++	/run/distrobox/distrobox.conf
+ 	/etc/distrobox/distrobox.conf
+ 	${XDG_CONFIG_HOME:-"${HOME}/.config"}/distrobox/distrobox.conf
+ 	${HOME}/.distroboxrc
+diff -urN a/distrobox-list b/distrobox-list
+--- a/distrobox-list
++++ b/distrobox-list
+@@ -65,8 +65,8 @@
+ 	${nix_config_file}
+ 	/usr/share/distrobox/distrobox.conf
+ 	/usr/share/defaults/distrobox/distrobox.conf
+-	/usr/etc/distrobox/distrobox.conf
+ 	/usr/local/share/distrobox/distrobox.conf
++	/run/distrobox/distrobox.conf
+ 	/etc/distrobox/distrobox.conf
+ 	${XDG_CONFIG_HOME:-"${HOME}/.config"}/distrobox/distrobox.conf
+ 	${HOME}/.distroboxrc
+diff -urN a/distrobox-rm b/distrobox-rm
+--- a/distrobox-rm
++++ b/distrobox-rm
+@@ -75,8 +75,8 @@
+ 	${nix_config_file}
+ 	/usr/share/distrobox/distrobox.conf
+ 	/usr/share/defaults/distrobox/distrobox.conf
+-	/usr/etc/distrobox/distrobox.conf
+ 	/usr/local/share/distrobox/distrobox.conf
++	/run/distrobox/distrobox.conf
+ 	/etc/distrobox/distrobox.conf
+ 	${XDG_CONFIG_HOME:-"${HOME}/.config"}/distrobox/distrobox.conf
+ 	${HOME}/.distroboxrc
+diff -urN a/distrobox-stop b/distrobox-stop
+--- a/distrobox-stop
++++ b/distrobox-stop
+@@ -73,8 +73,8 @@
+ 	${nix_config_file}
+ 	/usr/share/distrobox/distrobox.conf
+ 	/usr/share/defaults/distrobox/distrobox.conf
+-	/usr/etc/distrobox/distrobox.conf
+ 	/usr/local/share/distrobox/distrobox.conf
++	/run/distrobox/distrobox.conf
+ 	/etc/distrobox/distrobox.conf
+ 	${XDG_CONFIG_HOME:-"${HOME}/.config"}/distrobox/distrobox.conf
+ 	${HOME}/.distroboxrc
+diff -urN a/distrobox-upgrade b/distrobox-upgrade
+--- a/distrobox-upgrade
++++ b/distrobox-upgrade
+@@ -59,8 +59,8 @@
+ 	${nix_config_file}
+ 	/usr/share/distrobox/distrobox.conf
+ 	/usr/share/defaults/distrobox/distrobox.conf
+-	/usr/etc/distrobox/distrobox.conf
+ 	/usr/local/share/distrobox/distrobox.conf
++	/run/distrobox/distrobox.conf
+ 	/etc/distrobox/distrobox.conf
+ 	${XDG_CONFIG_HOME:-"${HOME}/.config"}/distrobox/distrobox.conf
+ 	${HOME}/.distroboxrc

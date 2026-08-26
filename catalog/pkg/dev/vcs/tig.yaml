@@ -1,0 +1,181 @@
+package:
+  schema: 1
+  name: tig
+  slug: tig
+  namespace: dev/vcs
+  version: 2.6.0
+  description: Text-mode interface for git
+  homepage: https://github.com/jonas/tig
+  checksum: 719e941eeb2fba518741a3e0aabae2a306c62679832ef0cedc5a298270f47bed
+
+sources:
+- name: tig
+  url: https://github.com/jonas/tig/releases/download/tig-2.6.0/tig-2.6.0.tar.gz
+  sha256: 99d4a0fdd3d93547ebacfe511195cb92e4f75b91644c06293c067f401addeb3e
+- name: uapi_config
+  file: pkg/dev/vcs/tig-uapi-config.patch
+  sha256: 7d7de1e6f653232f7a55b959a11535efa25d50b61d181a8c1f0329e3ece6b7d7
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: readline
+  commit: x86_64/pkg/libs/system/readline/8.2/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: git
+  commit: x86_64/pkg/dev/vcs/git/2.49.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [3583:2452]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "${SOURCE_tig}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    ./configure --prefix=/usr --sysconfdir=/usr/lib
+
+    make
+
+    make DESTDIR="${OUT_DIR}" install
+
+    test -s "${OUT_DIR}/usr/lib/tigrc"
+
+    test_root=/tmp/tig-uapi-test
+    rm -rf "${test_root}"
+    mkdir -p "${test_root}/home" /etc /run
+
+    check_selected_file() {
+      expected=$1
+      shift
+      output="$(printf '\n' | env \
+        HOME="${test_root}/home" \
+        TIGRC_USER= \
+        TIG_NO_DISPLAY=1 \
+        TERM=xterm \
+        "$@" 2>&1 || true)"
+      case "${output}" in
+        *"${expected}"*) ;;
+        *)
+          printf '%s\n' "${output}" >&2
+          printf 'tig did not read %s\n' "${expected}" >&2
+          exit 1
+          ;;
+      esac
+    }
+
+    check_not_mentioned() {
+      rejected=$1
+      case "${output}" in
+        *"${rejected}"*)
+          printf '%s\n' "${output}" >&2
+          printf 'tig also read %s\n' "${rejected}" >&2
+          exit 1
+          ;;
+      esac
+    }
+
+    printf '%s\n' 'nex-invalid-vendor-option' > /usr/lib/tigrc
+    check_selected_file /usr/lib/tigrc \
+      env -u TIGRC_SYSTEM "${OUT_DIR}/usr/bin/tig"
+
+    printf '%s\n' 'nex-invalid-transient-option' > /run/tigrc
+    check_selected_file /run/tigrc \
+      env -u TIGRC_SYSTEM "${OUT_DIR}/usr/bin/tig"
+    check_not_mentioned /usr/lib/tigrc
+
+    printf '%s\n' 'nex-invalid-administrator-option' > /etc/tigrc
+    check_selected_file /etc/tigrc \
+      env -u TIGRC_SYSTEM "${OUT_DIR}/usr/bin/tig"
+    check_not_mentioned /run/tigrc
+    check_not_mentioned /usr/lib/tigrc
+
+    : > /etc/tigrc
+    output="$(printf '\n' | env -u TIGRC_SYSTEM \
+      HOME="${test_root}/home" \
+      TIGRC_USER= \
+      TIG_NO_DISPLAY=1 \
+      TERM=xterm \
+      "${OUT_DIR}/usr/bin/tig" 2>&1 || true)"
+    check_not_mentioned /run/tigrc
+    check_not_mentioned /usr/lib/tigrc
+
+    printf '%s\n' 'nex-invalid-explicit-option' > "${test_root}/explicit-tigrc"
+    check_selected_file "${test_root}/explicit-tigrc" \
+      env TIGRC_SYSTEM="${test_root}/explicit-tigrc" "${OUT_DIR}/usr/bin/tig"
+    check_not_mentioned /etc/tigrc
+
+    rm -f /etc/tigrc /run/tigrc /usr/lib/tigrc
+    rm -rf "${test_root}"
+
+    strip --strip-unneeded "${OUT_DIR}/usr/bin/tig"
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+  - conf
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/tig
+      needs:
+      - /usr/bin/git
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libncursesw.so.6
+      - /usr/lib/libreadline.so.8
+
+  conf:
+    files:
+    - path: /usr/lib/tigrc
+
+resolution:
+  /usr/bin/git: git
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libncursesw.so.6: ncurses
+  /usr/lib/libreadline.so.8: readline

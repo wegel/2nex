@@ -1,0 +1,72 @@
+package:
+  schema: 1
+  name: kvmfr
+  slug: kvmfr
+  namespace: core/kernel
+  version: B7
+  description: Looking Glass KVM frame relay kernel module
+  homepage: https://looking-glass.io/
+  checksum: 6a380199a301a430949d66bd1fdaa7905a2626e252096a5ea2adf13a95405d5f
+
+sources:
+- name: looking_glass
+  url: https://looking-glass.io/artifact/stable/source
+  sha256: 09e506660ccc1b9691d06caa70179b52ffb4393299895cff3c2f0e74fcd69985
+
+dependencies:
+- name: linux-module-sdk
+  commit: x86_64/pkg/core/kernel/linux/6.18.24/bundles/module-sdk
+- name: elfutils-lib
+  commit: x86_64/pkg/dev/util/elfutils/0.191/outputs/lib
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: which
+  commit: x86_64/pkg/core/userland/which/2.23/outputs/bin
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [655:908]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf "/${SOURCE_looking_glass}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}/module"
+
+    make KVER=6.18.24 KDIR=/usr/src/linux-6.18.24 all
+
+    install -Dm644 kvmfr.ko \
+      "${OUT_DIR}/usr/lib/modules/6.18.24/extra/kvmfr.ko"
+
+    strip --strip-debug "${OUT_DIR}/usr/lib/modules/6.18.24/extra/kvmfr.ko"
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  runtime:
+  - module
+
+outputs:
+  module:
+    files:
+    - path: /usr/lib/modules/6.18.24/extra/kvmfr.ko

@@ -1,0 +1,64 @@
+From: Package maintainers
+Subject: [PATCH] slsh: search system startup files in UAPI order
+Source: downstream
+Upstream: not submitted; needs agreement on Linux vendor and transient paths
+
+Keep SLSH_CONF_DIR and SLSH_LIB_DIR as explicit single-directory overrides.
+Without either override, select the first slsh.rc found in the configured
+system directory, /run, or /usr/lib. An empty selected file therefore masks
+the lower startup files.
+
+diff --git a/slsh/slsh.c b/slsh/slsh.c
+--- a/slsh/slsh.c
++++ b/slsh/slsh.c
+@@ -363,31 +363,45 @@
+ {
+    char pathbuf[2048];
+    SLFUTURE_CONST char *dir;
++   unsigned int i;
+    int status;
+ 
++   static SLFUTURE_CONST char *const system_conf_dirs[] =
++     {
++#ifdef SLSH_CONF_DIR
++	SLSH_CONF_DIR,
++#endif
++	"/run",
++	"/usr/lib"
++     };
++
+    dir = getenv (SLSH_CONF_DIR_ENV);
+    if (dir == NULL)
+      dir = getenv (SLSH_LIB_DIR_ENV);
+ 
+    if (NULL == dir)
+      {
+-#ifdef SLSH_CONF_DIR
+-	dir = SLSH_CONF_DIR;
+-	if (dir != NULL)
++	for (i = 0;
++	     i < sizeof (system_conf_dirs) / sizeof (system_conf_dirs[0]);
++	     i++)
+ 	  {
+-	     status = try_to_load_file (dir, (char *)SLSHRC_FILE, NULL);
++	     status = try_to_load_file (system_conf_dirs[i],
++					(char *)SLSHRC_FILE, NULL);
+ 	     if (status == -1)
+ 	       return -1;
+ 	     if (status == 1)
+ 	       return 0;
+ 	  }
+-#endif
+ 
++#ifndef SLSH_CONF_DIR
+ #ifdef __WIN32__
+ 	dir = prepend_exec_root (pgm, "\\etc", pathbuf, sizeof(pathbuf));
+ #else
+ 	dir = prepend_exec_root (pgm, "/etc", pathbuf, sizeof(pathbuf));
+ #endif
++#else
++	dir = NULL;
++#endif
+      }
+ 
+    if (-1 == (status = try_to_load_file (dir, (char *)SLSHRC_FILE, NULL)))

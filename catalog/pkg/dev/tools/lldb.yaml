@@ -1,0 +1,865 @@
+package:
+  schema: 1
+  name: LLDB
+  slug: lldb
+  namespace: dev/tools
+  version: 21.1.8
+  description: LLVM debugger
+  homepage: https://lldb.llvm.org/
+  checksum: 6a94a142c8809637f21d836e64a51ada2ce30128b210c5f00eca128ebf17ebd5
+
+sources:
+- name: llvm
+  url: https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/llvm-project-21.1.8.src.tar.xz
+  sha256: 4633a23617fa31a3ea51242586ea7fb1da7140e426bd62fc164261fe036aa142
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: llvm
+  commit: x86_64/pkg/dev/toolchain/llvm/21.1.8/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [8225:10007, 20724:16405, 41828:42552, 66686:74163, 87518:101604, 108230:124546, 133353:143314, 162346:164619, 195320:178342, 216269:179308]
+
+  script: |
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
+    tar --no-same-owner -xf "${SOURCE_llvm}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    cmake -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DLLVM_DIR=/usr/lib/cmake/llvm \
+      -DClang_DIR=/usr/lib/cmake/clang \
+      -DPython3_EXECUTABLE=/usr/bin/python3 \
+      -DLLDB_ENABLE_PYTHON=OFF \
+      -DLLDB_ENABLE_LUA=OFF \
+      -DLLDB_ENABLE_LIBEDIT=OFF \
+      -DLLDB_ENABLE_CURSES=OFF \
+      -DLLDB_INCLUDE_TESTS=OFF \
+      -DLLDB_INCLUDE_DOCS=OFF \
+      -DLLDB_INCLUDE_EXAMPLES=OFF \
+      lldb
+
+    python3 lldb/scripts/generate-sbapi-dwarf-enum.py \
+      /usr/include/llvm/BinaryFormat/Dwarf.def \
+      -o build/include/lldb/API/SBLanguages.h
+    test -s build/include/lldb/API/SBLanguages.h
+
+    cmake --build build
+    DESTDIR="${OUT_DIR}" cmake --install build
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - lib
+
+  full:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/lldb
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblldb.so.21.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/lldb-argdumper
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/lldb-dap
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblldb.so.21.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/lldb-instr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/bin/lldb-server
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+
+  dev:
+    files:
+    - path: /usr/include/lldb/API/LLDB.h
+    - path: /usr/include/lldb/API/SBAddress.h
+    - path: /usr/include/lldb/API/SBAddressRange.h
+    - path: /usr/include/lldb/API/SBAddressRangeList.h
+    - path: /usr/include/lldb/API/SBAttachInfo.h
+    - path: /usr/include/lldb/API/SBBlock.h
+    - path: /usr/include/lldb/API/SBBreakpoint.h
+    - path: /usr/include/lldb/API/SBBreakpointLocation.h
+    - path: /usr/include/lldb/API/SBBreakpointName.h
+    - path: /usr/include/lldb/API/SBBroadcaster.h
+    - path: /usr/include/lldb/API/SBCommandInterpreter.h
+    - path: /usr/include/lldb/API/SBCommandInterpreterRunOptions.h
+    - path: /usr/include/lldb/API/SBCommandReturnObject.h
+    - path: /usr/include/lldb/API/SBCommunication.h
+    - path: /usr/include/lldb/API/SBCompileUnit.h
+    - path: /usr/include/lldb/API/SBData.h
+    - path: /usr/include/lldb/API/SBDebugger.h
+    - path: /usr/include/lldb/API/SBDeclaration.h
+    - path: /usr/include/lldb/API/SBDefines.h
+    - path: /usr/include/lldb/API/SBEnvironment.h
+    - path: /usr/include/lldb/API/SBError.h
+    - path: /usr/include/lldb/API/SBEvent.h
+    - path: /usr/include/lldb/API/SBExecutionContext.h
+    - path: /usr/include/lldb/API/SBExpressionOptions.h
+    - path: /usr/include/lldb/API/SBFile.h
+    - path: /usr/include/lldb/API/SBFileSpec.h
+    - path: /usr/include/lldb/API/SBFileSpecList.h
+    - path: /usr/include/lldb/API/SBFormat.h
+    - path: /usr/include/lldb/API/SBFrame.h
+    - path: /usr/include/lldb/API/SBFunction.h
+    - path: /usr/include/lldb/API/SBHostOS.h
+    - path: /usr/include/lldb/API/SBInstruction.h
+    - path: /usr/include/lldb/API/SBInstructionList.h
+    - path: /usr/include/lldb/API/SBLanguageRuntime.h
+    - path: /usr/include/lldb/API/SBLanguages.h
+    - path: /usr/include/lldb/API/SBLaunchInfo.h
+    - path: /usr/include/lldb/API/SBLineEntry.h
+    - path: /usr/include/lldb/API/SBListener.h
+    - path: /usr/include/lldb/API/SBMemoryRegionInfo.h
+    - path: /usr/include/lldb/API/SBMemoryRegionInfoList.h
+    - path: /usr/include/lldb/API/SBModule.h
+    - path: /usr/include/lldb/API/SBModuleSpec.h
+    - path: /usr/include/lldb/API/SBMutex.h
+    - path: /usr/include/lldb/API/SBPlatform.h
+    - path: /usr/include/lldb/API/SBProcess.h
+    - path: /usr/include/lldb/API/SBProcessInfo.h
+    - path: /usr/include/lldb/API/SBProcessInfoList.h
+    - path: /usr/include/lldb/API/SBProgress.h
+    - path: /usr/include/lldb/API/SBQueue.h
+    - path: /usr/include/lldb/API/SBQueueItem.h
+    - path: /usr/include/lldb/API/SBReproducer.h
+    - path: /usr/include/lldb/API/SBSaveCoreOptions.h
+    - path: /usr/include/lldb/API/SBScriptObject.h
+    - path: /usr/include/lldb/API/SBSection.h
+    - path: /usr/include/lldb/API/SBSourceManager.h
+    - path: /usr/include/lldb/API/SBStatisticsOptions.h
+    - path: /usr/include/lldb/API/SBStream.h
+    - path: /usr/include/lldb/API/SBStringList.h
+    - path: /usr/include/lldb/API/SBStructuredData.h
+    - path: /usr/include/lldb/API/SBSymbol.h
+    - path: /usr/include/lldb/API/SBSymbolContext.h
+    - path: /usr/include/lldb/API/SBSymbolContextList.h
+    - path: /usr/include/lldb/API/SBTarget.h
+    - path: /usr/include/lldb/API/SBThread.h
+    - path: /usr/include/lldb/API/SBThreadCollection.h
+    - path: /usr/include/lldb/API/SBThreadPlan.h
+    - path: /usr/include/lldb/API/SBTrace.h
+    - path: /usr/include/lldb/API/SBTraceCursor.h
+    - path: /usr/include/lldb/API/SBType.h
+    - path: /usr/include/lldb/API/SBTypeCategory.h
+    - path: /usr/include/lldb/API/SBTypeEnumMember.h
+    - path: /usr/include/lldb/API/SBTypeFilter.h
+    - path: /usr/include/lldb/API/SBTypeFormat.h
+    - path: /usr/include/lldb/API/SBTypeNameSpecifier.h
+    - path: /usr/include/lldb/API/SBTypeSummary.h
+    - path: /usr/include/lldb/API/SBTypeSynthetic.h
+    - path: /usr/include/lldb/API/SBUnixSignals.h
+    - path: /usr/include/lldb/API/SBValue.h
+    - path: /usr/include/lldb/API/SBValueList.h
+    - path: /usr/include/lldb/API/SBVariablesOptions.h
+    - path: /usr/include/lldb/API/SBWatchpoint.h
+    - path: /usr/include/lldb/API/SBWatchpointOptions.h
+    - path: /usr/include/lldb/Breakpoint/Breakpoint.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointID.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointIDList.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointList.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointLocation.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointLocationCollection.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointLocationList.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointName.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointOptions.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointPrecondition.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointResolver.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointResolverAddress.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointResolverFileLine.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointResolverFileRegex.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointResolverName.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointResolverScripted.h
+    - path: /usr/include/lldb/Breakpoint/BreakpointSite.h
+    - path: /usr/include/lldb/Breakpoint/StopCondition.h
+    - path: /usr/include/lldb/Breakpoint/StopPointSiteList.h
+    - path: /usr/include/lldb/Breakpoint/Stoppoint.h
+    - path: /usr/include/lldb/Breakpoint/StoppointCallbackContext.h
+    - path: /usr/include/lldb/Breakpoint/StoppointHitCounter.h
+    - path: /usr/include/lldb/Breakpoint/StoppointSite.h
+    - path: /usr/include/lldb/Breakpoint/Watchpoint.h
+    - path: /usr/include/lldb/Breakpoint/WatchpointAlgorithms.h
+    - path: /usr/include/lldb/Breakpoint/WatchpointList.h
+    - path: /usr/include/lldb/Breakpoint/WatchpointOptions.h
+    - path: /usr/include/lldb/Breakpoint/WatchpointResource.h
+    - path: /usr/include/lldb/Core/Address.h
+    - path: /usr/include/lldb/Core/AddressRange.h
+    - path: /usr/include/lldb/Core/AddressRangeListImpl.h
+    - path: /usr/include/lldb/Core/AddressResolver.h
+    - path: /usr/include/lldb/Core/AddressResolverFileLine.h
+    - path: /usr/include/lldb/Core/Architecture.h
+    - path: /usr/include/lldb/Core/Communication.h
+    - path: /usr/include/lldb/Core/DataFileCache.h
+    - path: /usr/include/lldb/Core/Debugger.h
+    - path: /usr/include/lldb/Core/DebuggerEvents.h
+    - path: /usr/include/lldb/Core/Declaration.h
+    - path: /usr/include/lldb/Core/DemangledNameInfo.h
+    - path: /usr/include/lldb/Core/Disassembler.h
+    - path: /usr/include/lldb/Core/DumpDataExtractor.h
+    - path: /usr/include/lldb/Core/DumpRegisterInfo.h
+    - path: /usr/include/lldb/Core/DumpRegisterValue.h
+    - path: /usr/include/lldb/Core/EmulateInstruction.h
+    - path: /usr/include/lldb/Core/FileLineResolver.h
+    - path: /usr/include/lldb/Core/FormatEntity.h
+    - path: /usr/include/lldb/Core/Highlighter.h
+    - path: /usr/include/lldb/Core/IOHandler.h
+    - path: /usr/include/lldb/Core/IOHandlerCursesGUI.h
+    - path: /usr/include/lldb/Core/LoadedModuleInfoList.h
+    - path: /usr/include/lldb/Core/Mangled.h
+    - path: /usr/include/lldb/Core/Module.h
+    - path: /usr/include/lldb/Core/ModuleChild.h
+    - path: /usr/include/lldb/Core/ModuleList.h
+    - path: /usr/include/lldb/Core/ModuleSpec.h
+    - path: /usr/include/lldb/Core/Opcode.h
+    - path: /usr/include/lldb/Core/PluginInterface.h
+    - path: /usr/include/lldb/Core/PluginManager.h
+    - path: /usr/include/lldb/Core/Progress.h
+    - path: /usr/include/lldb/Core/ProtocolServer.h
+    - path: /usr/include/lldb/Core/RichManglingContext.h
+    - path: /usr/include/lldb/Core/SearchFilter.h
+    - path: /usr/include/lldb/Core/Section.h
+    - path: /usr/include/lldb/Core/SourceLocationSpec.h
+    - path: /usr/include/lldb/Core/SourceManager.h
+    - path: /usr/include/lldb/Core/Statusline.h
+    - path: /usr/include/lldb/Core/StreamAsynchronousIO.h
+    - path: /usr/include/lldb/Core/StructuredDataImpl.h
+    - path: /usr/include/lldb/Core/Telemetry.h
+    - path: /usr/include/lldb/Core/ThreadSafeDenseSet.h
+    - path: /usr/include/lldb/Core/ThreadSafeValue.h
+    - path: /usr/include/lldb/Core/ThreadedCommunication.h
+    - path: /usr/include/lldb/Core/UniqueCStringMap.h
+    - path: /usr/include/lldb/Core/UserSettingsController.h
+    - path: /usr/include/lldb/Core/Value.h
+    - path: /usr/include/lldb/Core/dwarf.h
+    - path: /usr/include/lldb/DataFormatters/CXXFunctionPointer.h
+    - path: /usr/include/lldb/DataFormatters/DataVisualization.h
+    - path: /usr/include/lldb/DataFormatters/DumpValueObjectOptions.h
+    - path: /usr/include/lldb/DataFormatters/FormatCache.h
+    - path: /usr/include/lldb/DataFormatters/FormatClasses.h
+    - path: /usr/include/lldb/DataFormatters/FormatManager.h
+    - path: /usr/include/lldb/DataFormatters/FormatterSection.h
+    - path: /usr/include/lldb/DataFormatters/FormattersContainer.h
+    - path: /usr/include/lldb/DataFormatters/FormattersHelpers.h
+    - path: /usr/include/lldb/DataFormatters/LanguageCategory.h
+    - path: /usr/include/lldb/DataFormatters/StringPrinter.h
+    - path: /usr/include/lldb/DataFormatters/TypeCategory.h
+    - path: /usr/include/lldb/DataFormatters/TypeCategoryMap.h
+    - path: /usr/include/lldb/DataFormatters/TypeFormat.h
+    - path: /usr/include/lldb/DataFormatters/TypeSummary.h
+    - path: /usr/include/lldb/DataFormatters/TypeSynthetic.h
+    - path: /usr/include/lldb/DataFormatters/ValueObjectPrinter.h
+    - path: /usr/include/lldb/DataFormatters/VectorIterator.h
+    - path: /usr/include/lldb/DataFormatters/VectorType.h
+    - path: /usr/include/lldb/Expression/DWARFExpression.h
+    - path: /usr/include/lldb/Expression/DWARFExpressionList.h
+    - path: /usr/include/lldb/Expression/DiagnosticManager.h
+    - path: /usr/include/lldb/Expression/DynamicCheckerFunctions.h
+    - path: /usr/include/lldb/Expression/Expression.h
+    - path: /usr/include/lldb/Expression/ExpressionParser.h
+    - path: /usr/include/lldb/Expression/ExpressionSourceCode.h
+    - path: /usr/include/lldb/Expression/ExpressionTypeSystemHelper.h
+    - path: /usr/include/lldb/Expression/ExpressionVariable.h
+    - path: /usr/include/lldb/Expression/FunctionCaller.h
+    - path: /usr/include/lldb/Expression/IRExecutionUnit.h
+    - path: /usr/include/lldb/Expression/IRInterpreter.h
+    - path: /usr/include/lldb/Expression/IRMemoryMap.h
+    - path: /usr/include/lldb/Expression/LLVMUserExpression.h
+    - path: /usr/include/lldb/Expression/Materializer.h
+    - path: /usr/include/lldb/Expression/ObjectFileJIT.h
+    - path: /usr/include/lldb/Expression/REPL.h
+    - path: /usr/include/lldb/Expression/UserExpression.h
+    - path: /usr/include/lldb/Expression/UtilityFunction.h
+    - path: /usr/include/lldb/Host/Config.h
+    - path: /usr/include/lldb/Host/ConnectionFileDescriptor.h
+    - path: /usr/include/lldb/Host/Debug.h
+    - path: /usr/include/lldb/Host/Editline.h
+    - path: /usr/include/lldb/Host/File.h
+    - path: /usr/include/lldb/Host/FileAction.h
+    - path: /usr/include/lldb/Host/FileCache.h
+    - path: /usr/include/lldb/Host/FileSystem.h
+    - path: /usr/include/lldb/Host/Host.h
+    - path: /usr/include/lldb/Host/HostGetOpt.h
+    - path: /usr/include/lldb/Host/HostInfo.h
+    - path: /usr/include/lldb/Host/HostInfoBase.h
+    - path: /usr/include/lldb/Host/HostNativeProcess.h
+    - path: /usr/include/lldb/Host/HostNativeProcessBase.h
+    - path: /usr/include/lldb/Host/HostNativeThread.h
+    - path: /usr/include/lldb/Host/HostNativeThreadBase.h
+    - path: /usr/include/lldb/Host/HostNativeThreadForward.h
+    - path: /usr/include/lldb/Host/HostProcess.h
+    - path: /usr/include/lldb/Host/HostThread.h
+    - path: /usr/include/lldb/Host/JSONTransport.h
+    - path: /usr/include/lldb/Host/LZMA.h
+    - path: /usr/include/lldb/Host/LockFile.h
+    - path: /usr/include/lldb/Host/LockFileBase.h
+    - path: /usr/include/lldb/Host/MainLoop.h
+    - path: /usr/include/lldb/Host/MainLoopBase.h
+    - path: /usr/include/lldb/Host/MemoryMonitor.h
+    - path: /usr/include/lldb/Host/MonitoringProcessLauncher.h
+    - path: /usr/include/lldb/Host/OptionParser.h
+    - path: /usr/include/lldb/Host/Pipe.h
+    - path: /usr/include/lldb/Host/PipeBase.h
+    - path: /usr/include/lldb/Host/PosixApi.h
+    - path: /usr/include/lldb/Host/ProcessLaunchInfo.h
+    - path: /usr/include/lldb/Host/ProcessLauncher.h
+    - path: /usr/include/lldb/Host/ProcessRunLock.h
+    - path: /usr/include/lldb/Host/PseudoTerminal.h
+    - path: /usr/include/lldb/Host/SafeMachO.h
+    - path: /usr/include/lldb/Host/Socket.h
+    - path: /usr/include/lldb/Host/SocketAddress.h
+    - path: /usr/include/lldb/Host/StreamFile.h
+    - path: /usr/include/lldb/Host/Terminal.h
+    - path: /usr/include/lldb/Host/ThreadLauncher.h
+    - path: /usr/include/lldb/Host/Time.h
+    - path: /usr/include/lldb/Host/XML.h
+    - path: /usr/include/lldb/Host/aix/HostInfoAIX.h
+    - path: /usr/include/lldb/Host/aix/Support.h
+    - path: /usr/include/lldb/Host/android/HostInfoAndroid.h
+    - path: /usr/include/lldb/Host/common/GetOptInc.h
+    - path: /usr/include/lldb/Host/common/NativeBreakpointList.h
+    - path: /usr/include/lldb/Host/common/NativeProcessProtocol.h
+    - path: /usr/include/lldb/Host/common/NativeRegisterContext.h
+    - path: /usr/include/lldb/Host/common/NativeThreadProtocol.h
+    - path: /usr/include/lldb/Host/common/NativeWatchpointList.h
+    - path: /usr/include/lldb/Host/common/TCPSocket.h
+    - path: /usr/include/lldb/Host/common/UDPSocket.h
+    - path: /usr/include/lldb/Host/common/ZipFileResolver.h
+    - path: /usr/include/lldb/Host/freebsd/HostInfoFreeBSD.h
+    - path: /usr/include/lldb/Host/linux/AbstractSocket.h
+    - path: /usr/include/lldb/Host/linux/Host.h
+    - path: /usr/include/lldb/Host/linux/HostInfoLinux.h
+    - path: /usr/include/lldb/Host/linux/Ptrace.h
+    - path: /usr/include/lldb/Host/linux/Support.h
+    - path: /usr/include/lldb/Host/linux/Uio.h
+    - path: /usr/include/lldb/Host/macosx/HostInfoMacOSX.h
+    - path: /usr/include/lldb/Host/macosx/HostThreadMacOSX.h
+    - path: /usr/include/lldb/Host/netbsd/HostInfoNetBSD.h
+    - path: /usr/include/lldb/Host/openbsd/HostInfoOpenBSD.h
+    - path: /usr/include/lldb/Host/posix/ConnectionFileDescriptorPosix.h
+    - path: /usr/include/lldb/Host/posix/DomainSocket.h
+    - path: /usr/include/lldb/Host/posix/HostInfoPosix.h
+    - path: /usr/include/lldb/Host/posix/HostProcessPosix.h
+    - path: /usr/include/lldb/Host/posix/HostThreadPosix.h
+    - path: /usr/include/lldb/Host/posix/LockFilePosix.h
+    - path: /usr/include/lldb/Host/posix/MainLoopPosix.h
+    - path: /usr/include/lldb/Host/posix/PipePosix.h
+    - path: /usr/include/lldb/Host/posix/ProcessLauncherPosixFork.h
+    - path: /usr/include/lldb/Host/posix/Support.h
+    - path: /usr/include/lldb/Host/windows/AutoHandle.h
+    - path: /usr/include/lldb/Host/windows/ConnectionGenericFileWindows.h
+    - path: /usr/include/lldb/Host/windows/HostInfoWindows.h
+    - path: /usr/include/lldb/Host/windows/HostProcessWindows.h
+    - path: /usr/include/lldb/Host/windows/HostThreadWindows.h
+    - path: /usr/include/lldb/Host/windows/LockFileWindows.h
+    - path: /usr/include/lldb/Host/windows/MainLoopWindows.h
+    - path: /usr/include/lldb/Host/windows/PipeWindows.h
+    - path: /usr/include/lldb/Host/windows/PosixApi.h
+    - path: /usr/include/lldb/Host/windows/ProcessLauncherWindows.h
+    - path: /usr/include/lldb/Host/windows/windows.h
+    - path: /usr/include/lldb/Initialization/SystemInitializer.h
+    - path: /usr/include/lldb/Initialization/SystemInitializerCommon.h
+    - path: /usr/include/lldb/Initialization/SystemLifetimeManager.h
+    - path: /usr/include/lldb/Interpreter/CommandAlias.h
+    - path: /usr/include/lldb/Interpreter/CommandCompletions.h
+    - path: /usr/include/lldb/Interpreter/CommandHistory.h
+    - path: /usr/include/lldb/Interpreter/CommandInterpreter.h
+    - path: /usr/include/lldb/Interpreter/CommandObject.h
+    - path: /usr/include/lldb/Interpreter/CommandObjectMultiword.h
+    - path: /usr/include/lldb/Interpreter/CommandOptionArgumentTable.h
+    - path: /usr/include/lldb/Interpreter/CommandOptionValidators.h
+    - path: /usr/include/lldb/Interpreter/CommandReturnObject.h
+    - path: /usr/include/lldb/Interpreter/Interfaces/OperatingSystemInterface.h
+    - path: /usr/include/lldb/Interpreter/Interfaces/ScriptedInterface.h
+    - path: /usr/include/lldb/Interpreter/Interfaces/ScriptedInterfaceUsages.h
+    - path: /usr/include/lldb/Interpreter/Interfaces/ScriptedPlatformInterface.h
+    - path: /usr/include/lldb/Interpreter/Interfaces/ScriptedProcessInterface.h
+    - path: /usr/include/lldb/Interpreter/Interfaces/ScriptedStopHookInterface.h
+    - path: /usr/include/lldb/Interpreter/Interfaces/ScriptedThreadInterface.h
+    - path: /usr/include/lldb/Interpreter/Interfaces/ScriptedThreadPlanInterface.h
+    - path: /usr/include/lldb/Interpreter/OptionArgParser.h
+    - path: /usr/include/lldb/Interpreter/OptionGroupArchitecture.h
+    - path: /usr/include/lldb/Interpreter/OptionGroupBoolean.h
+    - path: /usr/include/lldb/Interpreter/OptionGroupFile.h
+    - path: /usr/include/lldb/Interpreter/OptionGroupFormat.h
+    - path: /usr/include/lldb/Interpreter/OptionGroupMemoryTag.h
+    - path: /usr/include/lldb/Interpreter/OptionGroupOutputFile.h
+    - path: /usr/include/lldb/Interpreter/OptionGroupPlatform.h
+    - path: /usr/include/lldb/Interpreter/OptionGroupPythonClassWithDict.h
+    - path: /usr/include/lldb/Interpreter/OptionGroupString.h
+    - path: /usr/include/lldb/Interpreter/OptionGroupUInt64.h
+    - path: /usr/include/lldb/Interpreter/OptionGroupUUID.h
+    - path: /usr/include/lldb/Interpreter/OptionGroupValueObjectDisplay.h
+    - path: /usr/include/lldb/Interpreter/OptionGroupVariable.h
+    - path: /usr/include/lldb/Interpreter/OptionGroupWatchpoint.h
+    - path: /usr/include/lldb/Interpreter/OptionValue.h
+    - path: /usr/include/lldb/Interpreter/OptionValueArch.h
+    - path: /usr/include/lldb/Interpreter/OptionValueArgs.h
+    - path: /usr/include/lldb/Interpreter/OptionValueArray.h
+    - path: /usr/include/lldb/Interpreter/OptionValueBoolean.h
+    - path: /usr/include/lldb/Interpreter/OptionValueChar.h
+    - path: /usr/include/lldb/Interpreter/OptionValueDictionary.h
+    - path: /usr/include/lldb/Interpreter/OptionValueEnumeration.h
+    - path: /usr/include/lldb/Interpreter/OptionValueFileColonLine.h
+    - path: /usr/include/lldb/Interpreter/OptionValueFileSpec.h
+    - path: /usr/include/lldb/Interpreter/OptionValueFileSpecList.h
+    - path: /usr/include/lldb/Interpreter/OptionValueFormat.h
+    - path: /usr/include/lldb/Interpreter/OptionValueFormatEntity.h
+    - path: /usr/include/lldb/Interpreter/OptionValueLanguage.h
+    - path: /usr/include/lldb/Interpreter/OptionValuePathMappings.h
+    - path: /usr/include/lldb/Interpreter/OptionValueProperties.h
+    - path: /usr/include/lldb/Interpreter/OptionValueRegex.h
+    - path: /usr/include/lldb/Interpreter/OptionValueSInt64.h
+    - path: /usr/include/lldb/Interpreter/OptionValueString.h
+    - path: /usr/include/lldb/Interpreter/OptionValueUInt64.h
+    - path: /usr/include/lldb/Interpreter/OptionValueUUID.h
+    - path: /usr/include/lldb/Interpreter/OptionValues.h
+    - path: /usr/include/lldb/Interpreter/Options.h
+    - path: /usr/include/lldb/Interpreter/Property.h
+    - path: /usr/include/lldb/Interpreter/ScriptInterpreter.h
+    - path: /usr/include/lldb/Interpreter/ScriptObject.h
+    - path: /usr/include/lldb/LLDB.h
+    - path: /usr/include/lldb/SBAddress.h
+    - path: /usr/include/lldb/SBAddressRange.h
+    - path: /usr/include/lldb/SBAddressRangeList.h
+    - path: /usr/include/lldb/SBAttachInfo.h
+    - path: /usr/include/lldb/SBBlock.h
+    - path: /usr/include/lldb/SBBreakpoint.h
+    - path: /usr/include/lldb/SBBreakpointLocation.h
+    - path: /usr/include/lldb/SBBreakpointName.h
+    - path: /usr/include/lldb/SBBroadcaster.h
+    - path: /usr/include/lldb/SBCommandInterpreter.h
+    - path: /usr/include/lldb/SBCommandInterpreterRunOptions.h
+    - path: /usr/include/lldb/SBCommandReturnObject.h
+    - path: /usr/include/lldb/SBCommunication.h
+    - path: /usr/include/lldb/SBCompileUnit.h
+    - path: /usr/include/lldb/SBData.h
+    - path: /usr/include/lldb/SBDebugger.h
+    - path: /usr/include/lldb/SBDeclaration.h
+    - path: /usr/include/lldb/SBDefines.h
+    - path: /usr/include/lldb/SBEnvironment.h
+    - path: /usr/include/lldb/SBError.h
+    - path: /usr/include/lldb/SBEvent.h
+    - path: /usr/include/lldb/SBExecutionContext.h
+    - path: /usr/include/lldb/SBExpressionOptions.h
+    - path: /usr/include/lldb/SBFile.h
+    - path: /usr/include/lldb/SBFileSpec.h
+    - path: /usr/include/lldb/SBFileSpecList.h
+    - path: /usr/include/lldb/SBFormat.h
+    - path: /usr/include/lldb/SBFrame.h
+    - path: /usr/include/lldb/SBFunction.h
+    - path: /usr/include/lldb/SBHostOS.h
+    - path: /usr/include/lldb/SBInstruction.h
+    - path: /usr/include/lldb/SBInstructionList.h
+    - path: /usr/include/lldb/SBLanguageRuntime.h
+    - path: /usr/include/lldb/SBLaunchInfo.h
+    - path: /usr/include/lldb/SBLineEntry.h
+    - path: /usr/include/lldb/SBListener.h
+    - path: /usr/include/lldb/SBMemoryRegionInfo.h
+    - path: /usr/include/lldb/SBMemoryRegionInfoList.h
+    - path: /usr/include/lldb/SBModule.h
+    - path: /usr/include/lldb/SBModuleSpec.h
+    - path: /usr/include/lldb/SBMutex.h
+    - path: /usr/include/lldb/SBPlatform.h
+    - path: /usr/include/lldb/SBProcess.h
+    - path: /usr/include/lldb/SBProcessInfo.h
+    - path: /usr/include/lldb/SBProcessInfoList.h
+    - path: /usr/include/lldb/SBProgress.h
+    - path: /usr/include/lldb/SBQueue.h
+    - path: /usr/include/lldb/SBQueueItem.h
+    - path: /usr/include/lldb/SBReproducer.h
+    - path: /usr/include/lldb/SBSaveCoreOptions.h
+    - path: /usr/include/lldb/SBScriptObject.h
+    - path: /usr/include/lldb/SBSection.h
+    - path: /usr/include/lldb/SBSourceManager.h
+    - path: /usr/include/lldb/SBStatisticsOptions.h
+    - path: /usr/include/lldb/SBStream.h
+    - path: /usr/include/lldb/SBStringList.h
+    - path: /usr/include/lldb/SBStructuredData.h
+    - path: /usr/include/lldb/SBSymbol.h
+    - path: /usr/include/lldb/SBSymbolContext.h
+    - path: /usr/include/lldb/SBSymbolContextList.h
+    - path: /usr/include/lldb/SBTarget.h
+    - path: /usr/include/lldb/SBThread.h
+    - path: /usr/include/lldb/SBThreadCollection.h
+    - path: /usr/include/lldb/SBThreadPlan.h
+    - path: /usr/include/lldb/SBTrace.h
+    - path: /usr/include/lldb/SBTraceCursor.h
+    - path: /usr/include/lldb/SBType.h
+    - path: /usr/include/lldb/SBTypeCategory.h
+    - path: /usr/include/lldb/SBTypeEnumMember.h
+    - path: /usr/include/lldb/SBTypeFilter.h
+    - path: /usr/include/lldb/SBTypeFormat.h
+    - path: /usr/include/lldb/SBTypeNameSpecifier.h
+    - path: /usr/include/lldb/SBTypeSummary.h
+    - path: /usr/include/lldb/SBTypeSynthetic.h
+    - path: /usr/include/lldb/SBUnixSignals.h
+    - path: /usr/include/lldb/SBValue.h
+    - path: /usr/include/lldb/SBValueList.h
+    - path: /usr/include/lldb/SBVariablesOptions.h
+    - path: /usr/include/lldb/SBWatchpoint.h
+    - path: /usr/include/lldb/SBWatchpointOptions.h
+    - path: /usr/include/lldb/Symbol/ArmUnwindInfo.h
+    - path: /usr/include/lldb/Symbol/Block.h
+    - path: /usr/include/lldb/Symbol/CallFrameInfo.h
+    - path: /usr/include/lldb/Symbol/CompactUnwindInfo.h
+    - path: /usr/include/lldb/Symbol/CompileUnit.h
+    - path: /usr/include/lldb/Symbol/CompilerDecl.h
+    - path: /usr/include/lldb/Symbol/CompilerDeclContext.h
+    - path: /usr/include/lldb/Symbol/CompilerType.h
+    - path: /usr/include/lldb/Symbol/DWARFCallFrameInfo.h
+    - path: /usr/include/lldb/Symbol/DebugMacros.h
+    - path: /usr/include/lldb/Symbol/DeclVendor.h
+    - path: /usr/include/lldb/Symbol/FuncUnwinders.h
+    - path: /usr/include/lldb/Symbol/Function.h
+    - path: /usr/include/lldb/Symbol/LineEntry.h
+    - path: /usr/include/lldb/Symbol/LineTable.h
+    - path: /usr/include/lldb/Symbol/LocateSymbolFile.h
+    - path: /usr/include/lldb/Symbol/ObjectContainer.h
+    - path: /usr/include/lldb/Symbol/ObjectFile.h
+    - path: /usr/include/lldb/Symbol/PostfixExpression.h
+    - path: /usr/include/lldb/Symbol/SaveCoreOptions.h
+    - path: /usr/include/lldb/Symbol/SourceModule.h
+    - path: /usr/include/lldb/Symbol/Symbol.h
+    - path: /usr/include/lldb/Symbol/SymbolContext.h
+    - path: /usr/include/lldb/Symbol/SymbolContextScope.h
+    - path: /usr/include/lldb/Symbol/SymbolFile.h
+    - path: /usr/include/lldb/Symbol/SymbolFileOnDemand.h
+    - path: /usr/include/lldb/Symbol/SymbolLocation.h
+    - path: /usr/include/lldb/Symbol/SymbolLocator.h
+    - path: /usr/include/lldb/Symbol/SymbolVendor.h
+    - path: /usr/include/lldb/Symbol/Symtab.h
+    - path: /usr/include/lldb/Symbol/TaggedASTType.h
+    - path: /usr/include/lldb/Symbol/Type.h
+    - path: /usr/include/lldb/Symbol/TypeList.h
+    - path: /usr/include/lldb/Symbol/TypeMap.h
+    - path: /usr/include/lldb/Symbol/TypeSystem.h
+    - path: /usr/include/lldb/Symbol/UnwindPlan.h
+    - path: /usr/include/lldb/Symbol/UnwindTable.h
+    - path: /usr/include/lldb/Symbol/Variable.h
+    - path: /usr/include/lldb/Symbol/VariableList.h
+    - path: /usr/include/lldb/Target/ABI.h
+    - path: /usr/include/lldb/Target/AppleArm64ExceptionClass.h
+    - path: /usr/include/lldb/Target/AssertFrameRecognizer.h
+    - path: /usr/include/lldb/Target/CoreFileMemoryRanges.h
+    - path: /usr/include/lldb/Target/DynamicLoader.h
+    - path: /usr/include/lldb/Target/DynamicRegisterInfo.h
+    - path: /usr/include/lldb/Target/ExecutionContext.h
+    - path: /usr/include/lldb/Target/ExecutionContextScope.h
+    - path: /usr/include/lldb/Target/InstrumentationRuntime.h
+    - path: /usr/include/lldb/Target/InstrumentationRuntimeStopInfo.h
+    - path: /usr/include/lldb/Target/JITLoader.h
+    - path: /usr/include/lldb/Target/JITLoaderList.h
+    - path: /usr/include/lldb/Target/Language.h
+    - path: /usr/include/lldb/Target/LanguageRuntime.h
+    - path: /usr/include/lldb/Target/Memory.h
+    - path: /usr/include/lldb/Target/MemoryHistory.h
+    - path: /usr/include/lldb/Target/MemoryRegionInfo.h
+    - path: /usr/include/lldb/Target/MemoryTagManager.h
+    - path: /usr/include/lldb/Target/MemoryTagMap.h
+    - path: /usr/include/lldb/Target/ModuleCache.h
+    - path: /usr/include/lldb/Target/OperatingSystem.h
+    - path: /usr/include/lldb/Target/PathMappingList.h
+    - path: /usr/include/lldb/Target/Platform.h
+    - path: /usr/include/lldb/Target/PostMortemProcess.h
+    - path: /usr/include/lldb/Target/Process.h
+    - path: /usr/include/lldb/Target/ProcessStructReader.h
+    - path: /usr/include/lldb/Target/ProcessTrace.h
+    - path: /usr/include/lldb/Target/Queue.h
+    - path: /usr/include/lldb/Target/QueueItem.h
+    - path: /usr/include/lldb/Target/QueueList.h
+    - path: /usr/include/lldb/Target/RegisterCheckpoint.h
+    - path: /usr/include/lldb/Target/RegisterContext.h
+    - path: /usr/include/lldb/Target/RegisterContextUnwind.h
+    - path: /usr/include/lldb/Target/RegisterFlags.h
+    - path: /usr/include/lldb/Target/RegisterNumber.h
+    - path: /usr/include/lldb/Target/RegisterTypeBuilder.h
+    - path: /usr/include/lldb/Target/RemoteAwarePlatform.h
+    - path: /usr/include/lldb/Target/Runtime.h
+    - path: /usr/include/lldb/Target/ScriptedThreadPlan.h
+    - path: /usr/include/lldb/Target/SectionLoadHistory.h
+    - path: /usr/include/lldb/Target/SectionLoadList.h
+    - path: /usr/include/lldb/Target/StackFrame.h
+    - path: /usr/include/lldb/Target/StackFrameList.h
+    - path: /usr/include/lldb/Target/StackFrameRecognizer.h
+    - path: /usr/include/lldb/Target/StackID.h
+    - path: /usr/include/lldb/Target/Statistics.h
+    - path: /usr/include/lldb/Target/StopInfo.h
+    - path: /usr/include/lldb/Target/StructuredDataPlugin.h
+    - path: /usr/include/lldb/Target/SystemRuntime.h
+    - path: /usr/include/lldb/Target/Target.h
+    - path: /usr/include/lldb/Target/TargetList.h
+    - path: /usr/include/lldb/Target/Thread.h
+    - path: /usr/include/lldb/Target/ThreadCollection.h
+    - path: /usr/include/lldb/Target/ThreadList.h
+    - path: /usr/include/lldb/Target/ThreadPlan.h
+    - path: /usr/include/lldb/Target/ThreadPlanBase.h
+    - path: /usr/include/lldb/Target/ThreadPlanCallFunction.h
+    - path: /usr/include/lldb/Target/ThreadPlanCallFunctionUsingABI.h
+    - path: /usr/include/lldb/Target/ThreadPlanCallOnFunctionExit.h
+    - path: /usr/include/lldb/Target/ThreadPlanCallUserExpression.h
+    - path: /usr/include/lldb/Target/ThreadPlanRunToAddress.h
+    - path: /usr/include/lldb/Target/ThreadPlanShouldStopHere.h
+    - path: /usr/include/lldb/Target/ThreadPlanSingleThreadTimeout.h
+    - path: /usr/include/lldb/Target/ThreadPlanStack.h
+    - path: /usr/include/lldb/Target/ThreadPlanStepInRange.h
+    - path: /usr/include/lldb/Target/ThreadPlanStepInstruction.h
+    - path: /usr/include/lldb/Target/ThreadPlanStepOut.h
+    - path: /usr/include/lldb/Target/ThreadPlanStepOverBreakpoint.h
+    - path: /usr/include/lldb/Target/ThreadPlanStepOverRange.h
+    - path: /usr/include/lldb/Target/ThreadPlanStepRange.h
+    - path: /usr/include/lldb/Target/ThreadPlanStepThrough.h
+    - path: /usr/include/lldb/Target/ThreadPlanStepUntil.h
+    - path: /usr/include/lldb/Target/ThreadPlanTracer.h
+    - path: /usr/include/lldb/Target/ThreadSpec.h
+    - path: /usr/include/lldb/Target/TimeoutResumeAll.h
+    - path: /usr/include/lldb/Target/Trace.h
+    - path: /usr/include/lldb/Target/TraceCursor.h
+    - path: /usr/include/lldb/Target/TraceDumper.h
+    - path: /usr/include/lldb/Target/TraceExporter.h
+    - path: /usr/include/lldb/Target/UnixSignals.h
+    - path: /usr/include/lldb/Target/Unwind.h
+    - path: /usr/include/lldb/Target/UnwindAssembly.h
+    - path: /usr/include/lldb/Target/UnwindLLDB.h
+    - path: /usr/include/lldb/Target/VerboseTrapFrameRecognizer.h
+    - path: /usr/include/lldb/Utility/AddressableBits.h
+    - path: /usr/include/lldb/Utility/AnsiTerminal.h
+    - path: /usr/include/lldb/Utility/AppleUuidCompatibility.h
+    - path: /usr/include/lldb/Utility/ArchSpec.h
+    - path: /usr/include/lldb/Utility/Args.h
+    - path: /usr/include/lldb/Utility/Baton.h
+    - path: /usr/include/lldb/Utility/Broadcaster.h
+    - path: /usr/include/lldb/Utility/Checksum.h
+    - path: /usr/include/lldb/Utility/Cloneable.h
+    - path: /usr/include/lldb/Utility/CompletionRequest.h
+    - path: /usr/include/lldb/Utility/Connection.h
+    - path: /usr/include/lldb/Utility/ConstString.h
+    - path: /usr/include/lldb/Utility/DataBuffer.h
+    - path: /usr/include/lldb/Utility/DataBufferHeap.h
+    - path: /usr/include/lldb/Utility/DataBufferLLVM.h
+    - path: /usr/include/lldb/Utility/DataEncoder.h
+    - path: /usr/include/lldb/Utility/DataExtractor.h
+    - path: /usr/include/lldb/Utility/Diagnostics.h
+    - path: /usr/include/lldb/Utility/DiagnosticsRendering.h
+    - path: /usr/include/lldb/Utility/Endian.h
+    - path: /usr/include/lldb/Utility/Environment.h
+    - path: /usr/include/lldb/Utility/ErrorMessages.h
+    - path: /usr/include/lldb/Utility/Event.h
+    - path: /usr/include/lldb/Utility/FileSpec.h
+    - path: /usr/include/lldb/Utility/FileSpecList.h
+    - path: /usr/include/lldb/Utility/Flags.h
+    - path: /usr/include/lldb/Utility/GDBRemote.h
+    - path: /usr/include/lldb/Utility/IOObject.h
+    - path: /usr/include/lldb/Utility/Instrumentation.h
+    - path: /usr/include/lldb/Utility/Iterable.h
+    - path: /usr/include/lldb/Utility/LLDBAssert.h
+    - path: /usr/include/lldb/Utility/LLDBLog.h
+    - path: /usr/include/lldb/Utility/Listener.h
+    - path: /usr/include/lldb/Utility/Log.h
+    - path: /usr/include/lldb/Utility/NameMatches.h
+    - path: /usr/include/lldb/Utility/OptionDefinition.h
+    - path: /usr/include/lldb/Utility/Predicate.h
+    - path: /usr/include/lldb/Utility/ProcessInfo.h
+    - path: /usr/include/lldb/Utility/RangeMap.h
+    - path: /usr/include/lldb/Utility/RealpathPrefixes.h
+    - path: /usr/include/lldb/Utility/RegisterValue.h
+    - path: /usr/include/lldb/Utility/RegularExpression.h
+    - path: /usr/include/lldb/Utility/Scalar.h
+    - path: /usr/include/lldb/Utility/ScriptedMetadata.h
+    - path: /usr/include/lldb/Utility/SelectHelper.h
+    - path: /usr/include/lldb/Utility/SharedCluster.h
+    - path: /usr/include/lldb/Utility/State.h
+    - path: /usr/include/lldb/Utility/Status.h
+    - path: /usr/include/lldb/Utility/Stream.h
+    - path: /usr/include/lldb/Utility/StreamBuffer.h
+    - path: /usr/include/lldb/Utility/StreamString.h
+    - path: /usr/include/lldb/Utility/StreamTee.h
+    - path: /usr/include/lldb/Utility/StringExtractor.h
+    - path: /usr/include/lldb/Utility/StringExtractorGDBRemote.h
+    - path: /usr/include/lldb/Utility/StringLexer.h
+    - path: /usr/include/lldb/Utility/StringList.h
+    - path: /usr/include/lldb/Utility/StructuredData.h
+    - path: /usr/include/lldb/Utility/SupportFile.h
+    - path: /usr/include/lldb/Utility/ThreadSafeDenseMap.h
+    - path: /usr/include/lldb/Utility/TildeExpressionResolver.h
+    - path: /usr/include/lldb/Utility/Timeout.h
+    - path: /usr/include/lldb/Utility/Timer.h
+    - path: /usr/include/lldb/Utility/TraceGDBRemotePackets.h
+    - path: /usr/include/lldb/Utility/TraceIntelPTGDBRemotePackets.h
+    - path: /usr/include/lldb/Utility/UUID.h
+    - path: /usr/include/lldb/Utility/UnimplementedError.h
+    - path: /usr/include/lldb/Utility/UriParser.h
+    - path: /usr/include/lldb/Utility/UserID.h
+    - path: /usr/include/lldb/Utility/UserIDResolver.h
+    - path: /usr/include/lldb/Utility/VASPrintf.h
+    - path: /usr/include/lldb/Utility/VMRange.h
+    - path: /usr/include/lldb/Utility/XcodeSDK.h
+    - path: /usr/include/lldb/Utility/ZipFile.h
+    - path: /usr/include/lldb/ValueObject/DILAST.h
+    - path: /usr/include/lldb/ValueObject/DILEval.h
+    - path: /usr/include/lldb/ValueObject/DILLexer.h
+    - path: /usr/include/lldb/ValueObject/DILParser.h
+    - path: /usr/include/lldb/ValueObject/ValueObject.h
+    - path: /usr/include/lldb/ValueObject/ValueObjectCast.h
+    - path: /usr/include/lldb/ValueObject/ValueObjectChild.h
+    - path: /usr/include/lldb/ValueObject/ValueObjectConstResult.h
+    - path: /usr/include/lldb/ValueObject/ValueObjectConstResultCast.h
+    - path: /usr/include/lldb/ValueObject/ValueObjectConstResultChild.h
+    - path: /usr/include/lldb/ValueObject/ValueObjectConstResultImpl.h
+    - path: /usr/include/lldb/ValueObject/ValueObjectDynamicValue.h
+    - path: /usr/include/lldb/ValueObject/ValueObjectList.h
+    - path: /usr/include/lldb/ValueObject/ValueObjectMemory.h
+    - path: /usr/include/lldb/ValueObject/ValueObjectRegister.h
+    - path: /usr/include/lldb/ValueObject/ValueObjectSynthetic.h
+    - path: /usr/include/lldb/ValueObject/ValueObjectUpdater.h
+    - path: /usr/include/lldb/ValueObject/ValueObjectVTable.h
+    - path: /usr/include/lldb/ValueObject/ValueObjectVariable.h
+    - path: /usr/include/lldb/Version/Version.h
+    - path: /usr/include/lldb/lldb-defines.h
+    - path: /usr/include/lldb/lldb-enumerations.h
+    - path: /usr/include/lldb/lldb-forward.h
+    - path: /usr/include/lldb/lldb-private-enumerations.h
+    - path: /usr/include/lldb/lldb-private-forward.h
+    - path: /usr/include/lldb/lldb-private-interfaces.h
+    - path: /usr/include/lldb/lldb-private-types.h
+    - path: /usr/include/lldb/lldb-private.h
+    - path: /usr/include/lldb/lldb-public.h
+    - path: /usr/include/lldb/lldb-types.h
+    - path: /usr/include/lldb/lldb-versioning.h
+
+  lib:
+    files:
+    - path: /usr/lib/liblldb.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/liblldb.so.21.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/liblldb.so.21.1.8
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblzma.so.5
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libxml2.so.2
+      - /usr/lib/libz.so.1
+      - /usr/lib/libzstd.so.1
+    - path: /usr/lib/liblldbIntelFeatures.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblldb.so.21.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/liblldbIntelFeatures.so.21.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/liblldb.so.21.1
+      - /usr/lib/libm.so.6
+      - /usr/lib/libstdc++.so.6
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libxml2.so.2: libxml2
+  /usr/lib/liblldb.so.21.1: self
+  /usr/lib/liblzma.so.5: xz
+  /usr/lib/libz.so.1: zlib
+  /usr/lib/libzstd.so.1: zstd

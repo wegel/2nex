@@ -1,0 +1,683 @@
+package:
+  schema: 1
+  name: FreeRDP
+  slug: freerdp
+  namespace: apps/misc
+  version: 3.27.1
+  description: Remote Desktop Protocol client tools
+  homepage: https://www.freerdp.com/
+  checksum: a82ea8ae449baea5d345e91d6e7a8fafc68fe9512f76e5ad6e7bcbe37631c303
+
+sources:
+- name: freerdp
+  url: https://github.com/FreeRDP/FreeRDP/archive/refs/tags/3.27.1.tar.gz
+  sha256: 929ac6a5a8651fcf524e0f061aa7e0186e25eae5af2096525f99f6f7a376fc86
+- name: uapi_config
+  file: pkg/apps/misc/freerdp-uapi-config.patch
+  sha256: 8df2dee5a62252003bf82a9a9c5357ae801eeda22051dbae70df412e65e4b359
+
+dependencies:
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: diffutils
+  commit: x86_64/pkg/core/userland/diffutils/3.10/bundles/dev
+- name: file
+  commit: x86_64/pkg/dev/tools/file/5.45/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: cmake
+  commit: x86_64/pkg/dev/build/cmake/3.31.10/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: wayland
+  commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
+- name: wayland-protocols
+  commit: x86_64/pkg/libs/wayland/wayland-protocols/1.46/bundles/dev
+- name: libxkbcommon
+  commit: x86_64/pkg/libs/input/libxkbcommon/1.7.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [12349:1929, 41297:2555, 90890:2884, 153112:3140, 202791:3335, 252227:3500, 305983:3674, 380541:3959, 455334:4250, 504376:35830]
+
+  script: |
+    set -eu
+
+    CFLAGS=${CFLAGS/-flto=auto/}
+    CXXFLAGS=${CXXFLAGS/-flto=auto/}
+    LDFLAGS=${LDFLAGS/-flto=auto/}
+
+    tar --no-same-owner -xzf /${SOURCE_freerdp} -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    cmake -S . -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/usr \
+      -DCMAKE_INSTALL_LIBDIR=lib \
+      -DBUILD_SHARED_LIBS=ON \
+      -DBUILD_TESTING=OFF \
+      -DBUILD_TESTING_INTERNAL=OFF \
+      -DBUILD_BENCHMARK=OFF \
+      -DWITH_CLANG_FORMAT=OFF \
+      -DWITH_INTERNAL_MD4=ON \
+      -DWITH_UNICODE_BUILTIN=ON \
+      -DWITH_MANPAGES=OFF \
+      -DWITH_SAMPLE=OFF \
+      -DWITH_CLIENT_COMMON=ON \
+      -DWITH_CLIENT=ON \
+      -DWITH_CLIENT_SDL=OFF \
+      -DWITH_CLIENT_INTERFACE=OFF \
+      -DWITH_SERVER=OFF \
+      -DWITH_SERVER_INTERFACE=OFF \
+      -DWITH_CHANNELS=ON \
+      -DWITH_CLIENT_CHANNELS=ON \
+      -DCHANNEL_URBDRC=OFF \
+      -DWITH_X11=OFF \
+      -DWITH_XINERAMA=OFF \
+      -DWITH_XEXT=OFF \
+      -DWITH_XCURSOR=OFF \
+      -DWITH_XV=OFF \
+      -DWITH_XI=OFF \
+      -DWITH_XRENDER=OFF \
+      -DWITH_XRANDR=OFF \
+      -DWITH_XFIXES=OFF \
+      -DWITH_WAYLAND=ON \
+      -DWITH_ALSA=OFF \
+      -DWITH_PULSE=OFF \
+      -DWITH_OSS=OFF \
+      -DWITH_FFMPEG=OFF \
+      -DWITH_DSP_FFMPEG=OFF \
+      -DWITH_VIDEO_FFMPEG=OFF \
+      -DWITH_OPENH264=OFF \
+      -DWITH_SWSCALE=OFF \
+      -DWITH_CAIRO=OFF \
+      -DWITH_CUPS=OFF \
+      -DWITH_FUSE=OFF \
+      -DWITH_KRB5=OFF \
+      -DWITH_SMARTCARD_PCSC=OFF \
+      -DWITH_SMARTCARD_INSPECT=OFF \
+      -DWITH_URIPARSER=OFF \
+      -DWITH_JSON_DISABLED=ON
+
+    cmake --build build
+    DESTDIR="${OUT_DIR}" cmake --install build
+
+    # HKLM.reg holds machine-wide client policy, so libfreerdp must read it
+    # from /etc, then /run, then /usr/lib. Each tier names a different
+    # DesktopWidth, and the probe prints the width that a real settings object
+    # ended up with.
+    hive_admin=/etc/FreeRDP/FreeRDP/HKLM.reg
+    hive_runtime=/run/FreeRDP/FreeRDP/HKLM.reg
+    hive_vendor=/usr/lib/FreeRDP/FreeRDP/HKLM.reg
+
+    mkdir -p "$(dirname "${hive_admin}")" "$(dirname "${hive_runtime}")" \
+        "$(dirname "${hive_vendor}")"
+    rm -f "${hive_admin}" "${hive_runtime}" "${hive_vendor}"
+
+    cat > "${WORK_DIR}/freerdp-uapi-probe.c" <<'PROBE'
+    #include <freerdp/settings.h>
+    #include <stdio.h>
+
+    int main(void) {
+      rdpSettings *settings = freerdp_settings_new(0);
+
+      if (!settings) {
+        return 2;
+      }
+
+      printf("%u\n", freerdp_settings_get_uint32(settings, FreeRDP_DesktopWidth));
+      freerdp_settings_free(settings);
+      return 0;
+    }
+    PROBE
+
+    gcc ${CFLAGS} ${LDFLAGS} -o "${WORK_DIR}/freerdp-uapi-probe" \
+        "${WORK_DIR}/freerdp-uapi-probe.c" \
+        -I"${OUT_DIR}/usr/include/freerdp3" \
+        -I"${OUT_DIR}/usr/include/winpr3" \
+        -L"${OUT_DIR}/usr/lib" -lfreerdp3 -lwinpr3
+
+    write_hive() {
+        mkdir -p "$(dirname "$1")"
+        printf '[HKEY_LOCAL_MACHINE\\Software\\FreeRDP\\FreeRDP\\Client]\n' > "$1"
+        printf '"DesktopWidth"=dword:%s\n' "$2" >> "$1"
+    }
+
+    probe_width() {
+        LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" HOME="${WORK_DIR}" \
+            "${WORK_DIR}/freerdp-uapi-probe"
+    }
+
+    expect_width() {
+        actual=$(probe_width)
+        if [ "${actual}" != "$1" ]; then
+            printf 'freerdp UAPI smoke: expected width %s, got %s\n' \
+                "$1" "${actual}" >&2
+            exit 1
+        fi
+    }
+
+    # With no hive anywhere the compiled default stands. Every tier value below
+    # differs from it, so a tier that is silently ignored cannot pass.
+    default_width=$(probe_width)
+    if [ "${default_width}" = 1201 ] || [ "${default_width}" = 1202 ] \
+        || [ "${default_width}" = 1203 ]; then
+        printf 'freerdp UAPI smoke: default width %s collides with a tier value\n' \
+            "${default_width}" >&2
+        exit 1
+    fi
+
+    write_hive "${hive_vendor}" 1201
+    expect_width 1201
+
+    write_hive "${hive_runtime}" 1202
+    expect_width 1202
+
+    write_hive "${hive_admin}" 1203
+    expect_width 1203
+
+    # An empty administrator hive wins completely, so it masks both lower
+    # tiers and the client falls back to its compiled default.
+    : > "${hive_admin}"
+    expect_width "${default_width}"
+
+    rm -f "${hive_admin}" "${hive_runtime}" "${hive_vendor}"
+    expect_width "${default_width}"
+
+    rm -f "${WORK_DIR}/freerdp-uapi-probe" "${WORK_DIR}/freerdp-uapi-probe.c"
+
+    printf 'freerdp UAPI smoke: all three hive tiers and the mask behaved\n'
+
+    find "${OUT_DIR}" -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+  full:
+  - bin
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/winpr-hash
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libwinpr3.so.3
+    - path: /usr/bin/winpr-makecert
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libwinpr-tools3.so.3
+    - path: /usr/bin/wlfreerdp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfreerdp-client3.so.3
+      - /usr/lib/libfreerdp3.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libuwac0.so.0
+      - /usr/lib/libwinpr3.so.3
+
+  dev:
+    files:
+    - path: /usr/include/freerdp3/freerdp/addin.h
+    - path: /usr/include/freerdp3/freerdp/altsec.h
+    - path: /usr/include/freerdp3/freerdp/api.h
+    - path: /usr/include/freerdp3/freerdp/assistance.h
+    - path: /usr/include/freerdp3/freerdp/autodetect.h
+    - path: /usr/include/freerdp3/freerdp/build-config.h
+    - path: /usr/include/freerdp3/freerdp/buildflags.h
+    - path: /usr/include/freerdp3/freerdp/cache/persistent.h
+    - path: /usr/include/freerdp3/freerdp/channels/ainput.h
+    - path: /usr/include/freerdp3/freerdp/channels/audin.h
+    - path: /usr/include/freerdp3/freerdp/channels/channels.h
+    - path: /usr/include/freerdp3/freerdp/channels/cliprdr.h
+    - path: /usr/include/freerdp3/freerdp/channels/disp.h
+    - path: /usr/include/freerdp3/freerdp/channels/drdynvc.h
+    - path: /usr/include/freerdp3/freerdp/channels/echo.h
+    - path: /usr/include/freerdp3/freerdp/channels/encomsp.h
+    - path: /usr/include/freerdp3/freerdp/channels/geometry.h
+    - path: /usr/include/freerdp3/freerdp/channels/gfxredir.h
+    - path: /usr/include/freerdp3/freerdp/channels/location.h
+    - path: /usr/include/freerdp3/freerdp/channels/log.h
+    - path: /usr/include/freerdp3/freerdp/channels/rail.h
+    - path: /usr/include/freerdp3/freerdp/channels/rdp2tcp.h
+    - path: /usr/include/freerdp3/freerdp/channels/rdpdr.h
+    - path: /usr/include/freerdp3/freerdp/channels/rdpear.h
+    - path: /usr/include/freerdp3/freerdp/channels/rdpecam.h
+    - path: /usr/include/freerdp3/freerdp/channels/rdpei.h
+    - path: /usr/include/freerdp3/freerdp/channels/rdpemsc.h
+    - path: /usr/include/freerdp3/freerdp/channels/rdpewa.h
+    - path: /usr/include/freerdp3/freerdp/channels/rdpgfx.h
+    - path: /usr/include/freerdp3/freerdp/channels/rdpsnd.h
+    - path: /usr/include/freerdp3/freerdp/channels/remdesk.h
+    - path: /usr/include/freerdp3/freerdp/channels/scard.h
+    - path: /usr/include/freerdp3/freerdp/channels/telemetry.h
+    - path: /usr/include/freerdp3/freerdp/channels/tsmf.h
+    - path: /usr/include/freerdp3/freerdp/channels/urbdrc.h
+    - path: /usr/include/freerdp3/freerdp/channels/video.h
+    - path: /usr/include/freerdp3/freerdp/channels/wtsvc.h
+    - path: /usr/include/freerdp3/freerdp/client.h
+    - path: /usr/include/freerdp3/freerdp/client/ainput.h
+    - path: /usr/include/freerdp3/freerdp/client/audin.h
+    - path: /usr/include/freerdp3/freerdp/client/channels.h
+    - path: /usr/include/freerdp3/freerdp/client/client_cliprdr_file.h
+    - path: /usr/include/freerdp3/freerdp/client/cliprdr.h
+    - path: /usr/include/freerdp3/freerdp/client/cmdline.h
+    - path: /usr/include/freerdp3/freerdp/client/disp.h
+    - path: /usr/include/freerdp3/freerdp/client/drdynvc.h
+    - path: /usr/include/freerdp3/freerdp/client/encomsp.h
+    - path: /usr/include/freerdp3/freerdp/client/file.h
+    - path: /usr/include/freerdp3/freerdp/client/geometry.h
+    - path: /usr/include/freerdp3/freerdp/client/location.h
+    - path: /usr/include/freerdp3/freerdp/client/printer.h
+    - path: /usr/include/freerdp3/freerdp/client/rail.h
+    - path: /usr/include/freerdp3/freerdp/client/rdpdr.h
+    - path: /usr/include/freerdp3/freerdp/client/rdpei.h
+    - path: /usr/include/freerdp3/freerdp/client/rdpgfx.h
+    - path: /usr/include/freerdp3/freerdp/client/rdpsnd.h
+    - path: /usr/include/freerdp3/freerdp/client/remdesk.h
+    - path: /usr/include/freerdp3/freerdp/client/sshagent.h
+    - path: /usr/include/freerdp3/freerdp/client/tsmf.h
+    - path: /usr/include/freerdp3/freerdp/client/utils/smartcard_cli.h
+    - path: /usr/include/freerdp3/freerdp/client/video.h
+    - path: /usr/include/freerdp3/freerdp/codec/audio.h
+    - path: /usr/include/freerdp3/freerdp/codec/av1.h
+    - path: /usr/include/freerdp3/freerdp/codec/bitmap.h
+    - path: /usr/include/freerdp3/freerdp/codec/bulk.h
+    - path: /usr/include/freerdp3/freerdp/codec/clear.h
+    - path: /usr/include/freerdp3/freerdp/codec/color.h
+    - path: /usr/include/freerdp3/freerdp/codec/dsp.h
+    - path: /usr/include/freerdp3/freerdp/codec/h264.h
+    - path: /usr/include/freerdp3/freerdp/codec/interleaved.h
+    - path: /usr/include/freerdp3/freerdp/codec/jpeg.h
+    - path: /usr/include/freerdp3/freerdp/codec/nsc.h
+    - path: /usr/include/freerdp3/freerdp/codec/planar.h
+    - path: /usr/include/freerdp3/freerdp/codec/progressive.h
+    - path: /usr/include/freerdp3/freerdp/codec/region.h
+    - path: /usr/include/freerdp3/freerdp/codec/rfx.h
+    - path: /usr/include/freerdp3/freerdp/codec/video.h
+    - path: /usr/include/freerdp3/freerdp/codec/yuv.h
+    - path: /usr/include/freerdp3/freerdp/codec/zgfx.h
+    - path: /usr/include/freerdp3/freerdp/codecs.h
+    - path: /usr/include/freerdp3/freerdp/config.h
+    - path: /usr/include/freerdp3/freerdp/constants.h
+    - path: /usr/include/freerdp3/freerdp/crypto/ber.h
+    - path: /usr/include/freerdp3/freerdp/crypto/certificate.h
+    - path: /usr/include/freerdp3/freerdp/crypto/certificate_data.h
+    - path: /usr/include/freerdp3/freerdp/crypto/certificate_store.h
+    - path: /usr/include/freerdp3/freerdp/crypto/crypto.h
+    - path: /usr/include/freerdp3/freerdp/crypto/der.h
+    - path: /usr/include/freerdp3/freerdp/crypto/er.h
+    - path: /usr/include/freerdp3/freerdp/crypto/per.h
+    - path: /usr/include/freerdp3/freerdp/crypto/privatekey.h
+    - path: /usr/include/freerdp3/freerdp/display.h
+    - path: /usr/include/freerdp3/freerdp/dvc.h
+    - path: /usr/include/freerdp3/freerdp/emulate/scard/smartcard_emulate.h
+    - path: /usr/include/freerdp3/freerdp/error.h
+    - path: /usr/include/freerdp3/freerdp/event.h
+    - path: /usr/include/freerdp3/freerdp/extension.h
+    - path: /usr/include/freerdp3/freerdp/freerdp.h
+    - path: /usr/include/freerdp3/freerdp/gdi/bitmap.h
+    - path: /usr/include/freerdp3/freerdp/gdi/dc.h
+    - path: /usr/include/freerdp3/freerdp/gdi/gdi.h
+    - path: /usr/include/freerdp3/freerdp/gdi/gfx.h
+    - path: /usr/include/freerdp3/freerdp/gdi/pen.h
+    - path: /usr/include/freerdp3/freerdp/gdi/region.h
+    - path: /usr/include/freerdp3/freerdp/gdi/shape.h
+    - path: /usr/include/freerdp3/freerdp/gdi/video.h
+    - path: /usr/include/freerdp3/freerdp/graphics.h
+    - path: /usr/include/freerdp3/freerdp/heartbeat.h
+    - path: /usr/include/freerdp3/freerdp/input.h
+    - path: /usr/include/freerdp3/freerdp/license.h
+    - path: /usr/include/freerdp3/freerdp/listener.h
+    - path: /usr/include/freerdp3/freerdp/locale/keyboard.h
+    - path: /usr/include/freerdp3/freerdp/locale/locale.h
+    - path: /usr/include/freerdp3/freerdp/log.h
+    - path: /usr/include/freerdp3/freerdp/message.h
+    - path: /usr/include/freerdp3/freerdp/metrics.h
+    - path: /usr/include/freerdp3/freerdp/peer.h
+    - path: /usr/include/freerdp3/freerdp/pointer.h
+    - path: /usr/include/freerdp3/freerdp/primary.h
+    - path: /usr/include/freerdp3/freerdp/primitives.h
+    - path: /usr/include/freerdp3/freerdp/rail.h
+    - path: /usr/include/freerdp3/freerdp/redirection.h
+    - path: /usr/include/freerdp3/freerdp/scancode.h
+    - path: /usr/include/freerdp3/freerdp/secondary.h
+    - path: /usr/include/freerdp3/freerdp/server/ainput.h
+    - path: /usr/include/freerdp3/freerdp/server/audin.h
+    - path: /usr/include/freerdp3/freerdp/server/channels.h
+    - path: /usr/include/freerdp3/freerdp/server/cliprdr.h
+    - path: /usr/include/freerdp3/freerdp/server/disp.h
+    - path: /usr/include/freerdp3/freerdp/server/drdynvc.h
+    - path: /usr/include/freerdp3/freerdp/server/echo.h
+    - path: /usr/include/freerdp3/freerdp/server/encomsp.h
+    - path: /usr/include/freerdp3/freerdp/server/gfxredir.h
+    - path: /usr/include/freerdp3/freerdp/server/location.h
+    - path: /usr/include/freerdp3/freerdp/server/proxy/proxy_config.h
+    - path: /usr/include/freerdp3/freerdp/server/proxy/proxy_context.h
+    - path: /usr/include/freerdp3/freerdp/server/proxy/proxy_log.h
+    - path: /usr/include/freerdp3/freerdp/server/proxy/proxy_modules_api.h
+    - path: /usr/include/freerdp3/freerdp/server/proxy/proxy_server.h
+    - path: /usr/include/freerdp3/freerdp/server/proxy/proxy_types.h
+    - path: /usr/include/freerdp3/freerdp/server/rail.h
+    - path: /usr/include/freerdp3/freerdp/server/rdpdr.h
+    - path: /usr/include/freerdp3/freerdp/server/rdpecam-enumerator.h
+    - path: /usr/include/freerdp3/freerdp/server/rdpecam.h
+    - path: /usr/include/freerdp3/freerdp/server/rdpei.h
+    - path: /usr/include/freerdp3/freerdp/server/rdpemsc.h
+    - path: /usr/include/freerdp3/freerdp/server/rdpgfx.h
+    - path: /usr/include/freerdp3/freerdp/server/rdpsnd.h
+    - path: /usr/include/freerdp3/freerdp/server/remdesk.h
+    - path: /usr/include/freerdp3/freerdp/server/server-common.h
+    - path: /usr/include/freerdp3/freerdp/server/shadow.h
+    - path: /usr/include/freerdp3/freerdp/server/telemetry.h
+    - path: /usr/include/freerdp3/freerdp/session.h
+    - path: /usr/include/freerdp3/freerdp/settings.h
+    - path: /usr/include/freerdp3/freerdp/settings_keys.h
+    - path: /usr/include/freerdp3/freerdp/settings_types.h
+    - path: /usr/include/freerdp3/freerdp/settings_types_private.h
+    - path: /usr/include/freerdp3/freerdp/streamdump.h
+    - path: /usr/include/freerdp3/freerdp/svc.h
+    - path: /usr/include/freerdp3/freerdp/timer.h
+    - path: /usr/include/freerdp3/freerdp/transport_io.h
+    - path: /usr/include/freerdp3/freerdp/types.h
+    - path: /usr/include/freerdp3/freerdp/update.h
+    - path: /usr/include/freerdp3/freerdp/utils/aad.h
+    - path: /usr/include/freerdp3/freerdp/utils/cliprdr_utils.h
+    - path: /usr/include/freerdp3/freerdp/utils/drdynvc.h
+    - path: /usr/include/freerdp3/freerdp/utils/encoded_types.h
+    - path: /usr/include/freerdp3/freerdp/utils/gfx.h
+    - path: /usr/include/freerdp3/freerdp/utils/helpers.h
+    - path: /usr/include/freerdp3/freerdp/utils/http.h
+    - path: /usr/include/freerdp3/freerdp/utils/passphrase.h
+    - path: /usr/include/freerdp3/freerdp/utils/pcap.h
+    - path: /usr/include/freerdp3/freerdp/utils/pod_arrays.h
+    - path: /usr/include/freerdp3/freerdp/utils/profiler.h
+    - path: /usr/include/freerdp3/freerdp/utils/proxy_utils.h
+    - path: /usr/include/freerdp3/freerdp/utils/rdpdr_utils.h
+    - path: /usr/include/freerdp3/freerdp/utils/ringbuffer.h
+    - path: /usr/include/freerdp3/freerdp/utils/signal.h
+    - path: /usr/include/freerdp3/freerdp/utils/smartcard_call.h
+    - path: /usr/include/freerdp3/freerdp/utils/smartcard_operations.h
+    - path: /usr/include/freerdp3/freerdp/utils/smartcard_pack.h
+    - path: /usr/include/freerdp3/freerdp/utils/smartcardlogon.h
+    - path: /usr/include/freerdp3/freerdp/utils/stopwatch.h
+    - path: /usr/include/freerdp3/freerdp/utils/string.h
+    - path: /usr/include/freerdp3/freerdp/version.h
+    - path: /usr/include/freerdp3/freerdp/window.h
+    - path: /usr/include/uwac0/uwac/build-config.h
+    - path: /usr/include/uwac0/uwac/buildflags.h
+    - path: /usr/include/uwac0/uwac/config.h
+    - path: /usr/include/uwac0/uwac/uwac-tools.h
+    - path: /usr/include/uwac0/uwac/uwac.h
+    - path: /usr/include/uwac0/uwac/version.h
+    - path: /usr/include/winpr3/winpr/asn1.h
+    - path: /usr/include/winpr3/winpr/assert-api.h
+    - path: /usr/include/winpr3/winpr/assert.h
+    - path: /usr/include/winpr3/winpr/atexit.h
+    - path: /usr/include/winpr3/winpr/bcrypt.h
+    - path: /usr/include/winpr3/winpr/bitstream.h
+    - path: /usr/include/winpr3/winpr/build-config.h
+    - path: /usr/include/winpr3/winpr/buildflags.h
+    - path: /usr/include/winpr3/winpr/cast.h
+    - path: /usr/include/winpr3/winpr/clipboard.h
+    - path: /usr/include/winpr3/winpr/cmdline.h
+    - path: /usr/include/winpr3/winpr/collections.h
+    - path: /usr/include/winpr3/winpr/comm.h
+    - path: /usr/include/winpr3/winpr/config.h
+    - path: /usr/include/winpr3/winpr/cred.h
+    - path: /usr/include/winpr3/winpr/crt.h
+    - path: /usr/include/winpr3/winpr/crypto.h
+    - path: /usr/include/winpr3/winpr/custom-crypto.h
+    - path: /usr/include/winpr3/winpr/debug.h
+    - path: /usr/include/winpr3/winpr/dsparse.h
+    - path: /usr/include/winpr3/winpr/endian.h
+    - path: /usr/include/winpr3/winpr/environment.h
+    - path: /usr/include/winpr3/winpr/error.h
+    - path: /usr/include/winpr3/winpr/file.h
+    - path: /usr/include/winpr3/winpr/handle.h
+    - path: /usr/include/winpr3/winpr/image.h
+    - path: /usr/include/winpr3/winpr/ini.h
+    - path: /usr/include/winpr3/winpr/input.h
+    - path: /usr/include/winpr3/winpr/interlocked.h
+    - path: /usr/include/winpr3/winpr/intrin.h
+    - path: /usr/include/winpr3/winpr/io.h
+    - path: /usr/include/winpr3/winpr/json.h
+    - path: /usr/include/winpr3/winpr/library.h
+    - path: /usr/include/winpr3/winpr/memory.h
+    - path: /usr/include/winpr3/winpr/ncrypt.h
+    - path: /usr/include/winpr3/winpr/nt.h
+    - path: /usr/include/winpr3/winpr/ntlm.h
+    - path: /usr/include/winpr3/winpr/pack.h
+    - path: /usr/include/winpr3/winpr/path.h
+    - path: /usr/include/winpr3/winpr/pipe.h
+    - path: /usr/include/winpr3/winpr/platform.h
+    - path: /usr/include/winpr3/winpr/pool.h
+    - path: /usr/include/winpr3/winpr/print.h
+    - path: /usr/include/winpr3/winpr/registry.h
+    - path: /usr/include/winpr3/winpr/rpc.h
+    - path: /usr/include/winpr3/winpr/sam.h
+    - path: /usr/include/winpr3/winpr/schannel.h
+    - path: /usr/include/winpr3/winpr/secapi.h
+    - path: /usr/include/winpr3/winpr/security.h
+    - path: /usr/include/winpr3/winpr/shell.h
+    - path: /usr/include/winpr3/winpr/smartcard.h
+    - path: /usr/include/winpr3/winpr/spec.h
+    - path: /usr/include/winpr3/winpr/ssl.h
+    - path: /usr/include/winpr3/winpr/sspi.h
+    - path: /usr/include/winpr3/winpr/sspicli.h
+    - path: /usr/include/winpr3/winpr/stream.h
+    - path: /usr/include/winpr3/winpr/string.h
+    - path: /usr/include/winpr3/winpr/strlst.h
+    - path: /usr/include/winpr3/winpr/synch.h
+    - path: /usr/include/winpr3/winpr/sysinfo.h
+    - path: /usr/include/winpr3/winpr/tchar.h
+    - path: /usr/include/winpr3/winpr/thread.h
+    - path: /usr/include/winpr3/winpr/timezone.h
+    - path: /usr/include/winpr3/winpr/tools/makecert.h
+    - path: /usr/include/winpr3/winpr/user.h
+    - path: /usr/include/winpr3/winpr/version.h
+    - path: /usr/include/winpr3/winpr/wincrypt.h
+    - path: /usr/include/winpr3/winpr/windows.h
+    - path: /usr/include/winpr3/winpr/winpr.h
+    - path: /usr/include/winpr3/winpr/winsock.h
+    - path: /usr/include/winpr3/winpr/wlog.h
+    - path: /usr/include/winpr3/winpr/wtsapi.h
+    - path: /usr/include/winpr3/winpr/wtypes.h
+    - path: /usr/lib/pkgconfig/freerdp-client3.pc
+    - path: /usr/lib/pkgconfig/freerdp3.pc
+    - path: /usr/lib/pkgconfig/uwac0.pc
+    - path: /usr/lib/pkgconfig/winpr-tools3.pc
+    - path: /usr/lib/pkgconfig/winpr3.pc
+
+  lib:
+    files:
+    - path: /usr/lib/cmake/FreeRDP-Client3/FreeRDP-ClientConfig.cmake
+    - path: /usr/lib/cmake/FreeRDP-Client3/FreeRDP-ClientConfigVersion.cmake
+    - path: /usr/lib/cmake/FreeRDP-Client3/FreeRDP-ClientTargets-release.cmake
+    - path: /usr/lib/cmake/FreeRDP-Client3/FreeRDP-ClientTargets.cmake
+    - path: /usr/lib/cmake/FreeRDP3/FreeRDPConfig.cmake
+    - path: /usr/lib/cmake/FreeRDP3/FreeRDPConfigVersion.cmake
+    - path: /usr/lib/cmake/FreeRDP3/FreeRDPTargets-release.cmake
+    - path: /usr/lib/cmake/FreeRDP3/FreeRDPTargets.cmake
+    - path: /usr/lib/cmake/WinPR-tools3/WinPR-toolsConfig.cmake
+    - path: /usr/lib/cmake/WinPR-tools3/WinPR-toolsConfigVersion.cmake
+    - path: /usr/lib/cmake/WinPR-tools3/WinPR-toolsTargets-release.cmake
+    - path: /usr/lib/cmake/WinPR-tools3/WinPR-toolsTargets.cmake
+    - path: /usr/lib/cmake/WinPR3/WinPRConfig.cmake
+    - path: /usr/lib/cmake/WinPR3/WinPRConfigVersion.cmake
+    - path: /usr/lib/cmake/WinPR3/WinPRTargets-release.cmake
+    - path: /usr/lib/cmake/WinPR3/WinPRTargets.cmake
+    - path: /usr/lib/cmake/uwac0/uwac-release.cmake
+    - path: /usr/lib/cmake/uwac0/uwac.cmake
+    - path: /usr/lib/cmake/uwac0/uwacConfig.cmake
+    - path: /usr/lib/cmake/uwac0/uwacConfigVersion.cmake
+    - path: /usr/lib/libfreerdp-client3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfreerdp3.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwinpr3.so.3
+    - path: /usr/lib/libfreerdp-client3.so.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfreerdp3.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwinpr3.so.3
+    - path: /usr/lib/libfreerdp-client3.so.3.27.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfreerdp3.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwinpr3.so.3
+    - path: /usr/lib/libfreerdp3.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libwinpr3.so.3
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libfreerdp3.so.3
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libwinpr3.so.3
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libfreerdp3.so.3.27.1
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libwinpr3.so.3
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libuwac0.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfreerdp3.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libwinpr3.so.3
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/lib/libuwac0.so.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfreerdp3.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libwinpr3.so.3
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/lib/libuwac0.so.0.2.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libfreerdp3.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-cursor.so.0
+      - /usr/lib/libwinpr3.so.3
+      - /usr/lib/libxkbcommon.so.0
+    - path: /usr/lib/libwinpr-tools3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libwinpr3.so.3
+    - path: /usr/lib/libwinpr-tools3.so.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libwinpr3.so.3
+    - path: /usr/lib/libwinpr-tools3.so.3.27.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libwinpr3.so.3
+    - path: /usr/lib/libwinpr3.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libssl.so.3
+    - path: /usr/lib/libwinpr3.so.3
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libssl.so.3
+    - path: /usr/lib/libwinpr3.so.3.27.1
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libssl.so.3
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libxkbcommon.so.0: libxkbcommon
+  /usr/lib/libcrypto.so.3: openssl3
+  /usr/lib/libssl.so.3: openssl3
+  /usr/lib/libfreerdp-client3.so.3: self
+  /usr/lib/libfreerdp3.so.3: self
+  /usr/lib/libuwac0.so.0: self
+  /usr/lib/libwinpr-tools3.so.3: self
+  /usr/lib/libwinpr3.so.3: self
+  /usr/lib/libwayland-client.so.0: wayland
+  /usr/lib/libwayland-cursor.so.0: wayland
+  /usr/lib/libz.so.1: zlib

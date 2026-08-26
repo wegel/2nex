@@ -1,0 +1,59 @@
+From: Nex package maintainers
+Subject: [PATCH] main: read the screenrc from vendor and runtime tiers too
+Source: no upstream commit; written for Nex against screen 5.0.1
+Upstream: not submitted. screen already overlays SYSTEM_SCREENRC (a fixed
+ sysconfdir path) and the user's rc file, but it has no tier below /etc, so
+ a distribution cannot ship a default that a boot or an administrator may
+ replace.
+
+At startup, when the session is not yet attached, screen.c calls StartRc()
+then FinishRc() once for SYSTEM_SCREENRC and once for the user's rc file
+(RcFileName, set from -c, $SCREENRC, or ~/.screenrc). StartRc() gathers
+termcap fragments and follows "source" lines; FinishRc() runs the commands.
+Both silently skip a file that does not exist, so adding more calls before
+the SYSTEM_SCREENRC pair only adds two more optional overlay reads: an
+administrator file still overrides a runtime file, which still overrides a
+vendor file, which still overrides nothing. -c and $SCREENRC still name the
+user file exactly as before.
+
+Read /usr/lib/screen/screenrc, then /run/screen/screenrc, before the
+existing SYSTEM_SCREENRC and user file, in both the StartRc and FinishRc
+passes.
+
+socket.c re-runs only the StartRc pass on reattach, to refresh termcap
+capabilities without re-running rc commands; the same two tiers are added
+there in the same order, StartRc only, to match that existing behavior.
+
+diff -urN a/screen.c b/screen.c
+--- a/screen.c
++++ b/screen.c
+@@ -1065,6 +1065,8 @@
+ 	snprintf(SocketPath + strlen(SocketPath), sizeof(SocketPath) - strlen(SocketPath), "/%s", socknamebuf);
+
+ 	ServerSocket = MakeServerSocket();
++	(void)StartRc("/usr/lib/screen/screenrc", 0);
++	(void)StartRc("/run/screen/screenrc", 0);
+ #ifdef SYSTEM_SCREENRC
+ 	(void)StartRc(SYSTEM_SCREENRC, 0);
+ #endif
+@@ -1106,6 +1108,8 @@
+ 	} else
+ 		brktty(-1);	/* just try */
+ 	xsignal(SIGCHLD, SigChld);
++	FinishRc("/usr/lib/screen/screenrc");
++	FinishRc("/run/screen/screenrc");
+ #ifdef SYSTEM_SCREENRC
+ 	FinishRc(SYSTEM_SCREENRC);
+ #endif
+diff -urN a/socket.c b/socket.c
+--- a/socket.c
++++ b/socket.c
+@@ -986,6 +986,8 @@
+ 	if (extra_incap)
+ 		free(extra_incap);
+ 	extra_incap = extra_outcap = NULL;
++	StartRc("/usr/lib/screen/screenrc", 1);
++	StartRc("/run/screen/screenrc", 1);
+ 	StartRc(SYSTEM_SCREENRC, 1);
+ 	StartRc(RcFileName, 1);
+ 	if (InitTermcap(m->m.attach.columns, m->m.attach.lines)) {

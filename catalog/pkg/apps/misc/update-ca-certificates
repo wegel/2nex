@@ -1,0 +1,78 @@
+#!/bin/sh
+set -eu
+
+usage() {
+    echo "usage: update-ca-certificates [--output-dir PATH]" >&2
+    exit 2
+}
+
+output_dir=/etc/ssl/certs
+if [ "$#" -ne 0 ]; then
+    [ "$#" -eq 2 ] || usage
+    [ "$1" = --output-dir ] || usage
+    output_dir=$2
+fi
+
+case "$output_dir" in
+    /|"")
+        usage
+        ;;
+    /*)
+        ;;
+    *)
+        echo "update-ca-certificates: output directory must be absolute" >&2
+        exit 2
+        ;;
+esac
+
+parent=${output_dir%/*}
+name=${output_dir##*/}
+mkdir -p "$parent"
+
+staging=$(mktemp -d "${parent}/.${name}.new.XXXXXX")
+old=
+
+cleanup() {
+    if [ -n "$old" ] && [ -e "$old" ] && \
+        [ ! -e "$output_dir" ] && [ ! -L "$output_dir" ]; then
+        mv "$old" "$output_dir" || true
+    fi
+    if [ -n "$staging" ] && [ -d "$staging" ]; then
+        chmod u+w "$staging" 2>/dev/null || true
+        rm -rf "$staging"
+    fi
+}
+trap cleanup EXIT HUP INT TERM
+
+trust extract \
+    --overwrite \
+    --filter=ca-anchors \
+    --format=pem-directory-hash \
+    --purpose=server-auth \
+    "$staging"
+trust extract \
+    --overwrite \
+    --filter=ca-anchors \
+    --format=pem-bundle \
+    --purpose=server-auth \
+    "$staging/ca-certificates.crt"
+chmod u+w "$staging"
+
+if [ -e "$output_dir" ] || [ -L "$output_dir" ]; then
+    old="${parent}/.${name}.old.$$"
+    mv "$output_dir" "$old"
+fi
+
+if ! mv "$staging" "$output_dir"; then
+    if [ -n "$old" ]; then
+        mv "$old" "$output_dir"
+    fi
+    exit 1
+fi
+staging=
+
+if [ -n "$old" ]; then
+    rm -rf "$old"
+fi
+
+trap - EXIT HUP INT TERM

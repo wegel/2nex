@@ -1,0 +1,76 @@
+package:
+  schema: 1
+  name: fzf
+  slug: fzf
+  namespace: cli/system
+  version: 0.67.0
+  description: A command-line fuzzy finder
+  homepage: https://github.com/junegunn/fzf
+  checksum: 644da06a8b0939c3813d00bc76c063a77ad52b7c2b10b3893a9f843148eab786
+
+sources:
+- name: fzf
+  url: https://github.com/junegunn/fzf/archive/refs/tags/v0.67.0.tar.gz
+  sha256: da72936dd23045346769dbf233a7a1fa6b4cfe4f0e856b279821598ce8f692af
+- name: vendor
+  sha256: ae1522efa2076fe1b88e8e23e6645e296ff5d306661403c195667cce9d0e5de7
+  go_sum: https://raw.githubusercontent.com/junegunn/fzf/v0.67.0/go.sum
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: go
+  commit: x86_64/pkg/dev/lang/go/1.26.4/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [32:3278]
+
+  script: |
+    tar --no-same-owner -xf ${SOURCE_fzf} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    tar --no-same-owner -xf /./${SOURCE_vendor} -C "${WORK_DIR}"
+
+    export GOROOT=/usr/lib/go
+    export GOPATH=${WORK_DIR}/gopath
+    export GOCACHE=${WORK_DIR}/gocache
+    export CGO_ENABLED=0
+    export GOTOOLCHAIN=local
+    mkdir -p ${GOPATH} ${GOCACHE}
+
+    go build -mod=vendor -ldflags="-s -w -X main.version=0.67.0" -o fzf
+
+    mkdir -p ${OUT_DIR}/usr/bin
+    install -m 755 fzf ${OUT_DIR}/usr/bin/fzf
+
+    strip --strip-all ${OUT_DIR}/usr/bin/fzf
+
+    find "${OUT_DIR}" -exec touch -d '2024-01-01T00:00:00+00:00' {} \;
+
+bundles:
+  dev:
+  - bin
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/fzf

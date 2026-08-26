@@ -1,0 +1,104 @@
+package:
+  schema: 1
+  name: charset-normalizer
+  slug: charset-normalizer
+  namespace: dev/python
+  version: 3.4.7
+  description: Python character encoding detector
+  homepage: https://charset-normalizer.readthedocs.io/
+  checksum: ab84c54de6c7f0c7262b9d2fc918907478bedf9807714443f8fbea89a764ef24
+
+sources:
+- name: charset_normalizer
+  url: https://files.pythonhosted.org/packages/e7/a1/67fe25fac3c7642725500a3f6cfe5821ad557c3abb11c9d20d12c7008d3e/charset_normalizer-3.4.7.tar.gz
+  sha256: ae89db9e5f98a11a4bf50407d4363e7b09b31e55bc117b4f7d80aab97ba009e5
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: setuptools
+  commit: x86_64/pkg/dev/python/setuptools/70.0.0/bundles/dev
+- name: wheel
+  commit: x86_64/pkg/dev/python/wheel/0.43.0/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [1036:900]
+
+  script: |
+    set -eu
+
+    export CHARSET_NORMALIZER_USE_MYPYC=0
+    tar --no-same-owner -xf "/./${SOURCE_charset_normalizer}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+
+    python3 -m pip install --no-build-isolation --no-deps --root="${OUT_DIR}" --prefix=/usr .
+    sed -i '1s|^#!/usr/sbin/python3$|#!/usr/bin/python3|' "${OUT_DIR}/usr/bin/normalizer"
+
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  full:
+  - bin
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/normalizer
+      needs:
+      - /usr/bin/python3
+      - /usr/lib/python3.12/site-packages/charset_normalizer/__init__.py
+
+  lib:
+    files:
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer-3.4.7.dist-info/INSTALLER
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer-3.4.7.dist-info/LICENSE
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer-3.4.7.dist-info/METADATA
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer-3.4.7.dist-info/RECORD
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer-3.4.7.dist-info/REQUESTED
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer-3.4.7.dist-info/WHEEL
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer-3.4.7.dist-info/direct_url.json
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer-3.4.7.dist-info/entry_points.txt
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer-3.4.7.dist-info/top_level.txt
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/__init__.py
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/__main__.py
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/__pycache__/__main__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/__pycache__/api.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/__pycache__/cd.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/__pycache__/constant.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/__pycache__/legacy.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/__pycache__/md.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/__pycache__/models.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/__pycache__/utils.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/__pycache__/version.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/api.py
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/cd.py
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/cli/__init__.py
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/cli/__main__.py
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/cli/__pycache__/__init__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/cli/__pycache__/__main__.cpython-312.pyc
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/constant.py
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/legacy.py
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/md.py
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/models.py
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/py.typed
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/utils.py
+    - path: /usr/lib/python3.12/site-packages/charset_normalizer/version.py
+
+resolution:
+  /usr/bin/python3: python3
+  /usr/lib/python3.12/site-packages/charset_normalizer/__init__.py: self

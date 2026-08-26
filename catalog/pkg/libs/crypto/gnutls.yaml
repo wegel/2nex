@@ -1,0 +1,409 @@
+package:
+  schema: 1
+  name: gnutls
+  slug: gnutls
+  namespace: libs/crypto
+  version: 3.8.8
+  description: Secure communications library implementing SSL, TLS and DTLS
+  homepage: https://www.gnutls.org/
+  checksum: 0dc92d11e5afba54ac363d2eac4f87f76ec2268398222cec32d7fdc006387f14
+
+sources:
+- name: gnutls
+  url: https://www.gnupg.org/ftp/gcrypt/gnutls/v3.8/gnutls-3.8.8.tar.xz
+  sha256: ac4f020e583880b51380ed226e59033244bc536cad2623f2e26f5afa2939d8fb
+- name: uapi_config
+  file: pkg/libs/crypto/gnutls-uapi-config.patch
+  sha256: dc5496a5ebfc7a9ee64389396c05119e03709489db9f11bc0a3afe6306a3359f
+- name: uapi_smoke
+  file: pkg/libs/crypto/gnutls-uapi-smoke.c
+  sha256: 0e8a72081260651a9075d2ca59dfc934b63ccc7de69aee6cca017f6abb42435f
+
+dependencies:
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/bundles/dev
+- name: nettle
+  commit: x86_64/pkg/libs/crypto/nettle/3.1/bundles/dev
+- name: libtasn1
+  commit: x86_64/pkg/libs/crypto/libtasn1/4.19.0/bundles/dev
+- name: p11-kit
+  commit: x86_64/pkg/libs/crypto/p11-kit/0.25.5/bundles/dev
+- name: libidn2
+  commit: x86_64/pkg/libs/text/libidn2/2.3.7/bundles/dev
+- name: libunistring
+  commit: x86_64/pkg/libs/text/libunistring/1.3/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [490208:90884, 1950371:91939, 4387239:92903, 7314592:93810, 9751098:94848, 12188337:144397, 14624492:160908, 18279106:206198, 21937290:209612, 24370689:217252]
+
+  script: |
+    set -eu
+    tar --no-same-owner -xf /${SOURCE_gnutls} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    ./configure --prefix=/usr \
+      --disable-static \
+      --with-default-trust-store-pkcs11="pkcs11:" \
+      --without-tpm \
+      --disable-guile \
+      --disable-doc
+
+    make
+
+    make DESTDIR="${OUT_DIR}" install
+
+    # Reject /usr/etc: neither reader this package ships should ever resolve there.
+    if strings "${OUT_DIR}/usr/lib/libgnutls.so.30.40.2" | grep -q '/usr/etc'; then
+      echo "gnutls uapi smoke: library names a /usr/etc path" >&2
+      exit 1
+    fi
+
+    mkdir -p /etc/gnutls /run/gnutls /usr/lib/gnutls
+
+    smoke_bin="${WORK_DIR}/gnutls-uapi-smoke"
+    gcc -I"${OUT_DIR}/usr/include" \
+      "/${SOURCE_uapi_smoke}" \
+      -o "${smoke_bin}" \
+      -L"${OUT_DIR}/usr/lib" -lgnutls
+
+    uapi_smoke() {
+      GNUTLS_NO_IMPLICIT_INIT=1 LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" "${smoke_bin}" "$@"
+    }
+
+    # No tier present: both readers must keep the compiled no-file behavior.
+    uapi_smoke priority - || {
+      echo "gnutls uapi smoke: priority reader opened a file with no tier present" >&2
+      exit 1
+    }
+    uapi_smoke pkcs11 - || {
+      echo "gnutls uapi smoke: pkcs11 reader opened a file with no tier present" >&2
+      exit 1
+    }
+
+    # /usr/lib is the lowest tier: present alone, it must be selected.
+    : > /usr/lib/gnutls/config
+    : > /usr/lib/gnutls/pkcs11.conf
+    uapi_smoke priority /usr/lib/gnutls/config || {
+      echo "gnutls uapi smoke: priority reader did not select the /usr/lib vendor tier" >&2
+      exit 1
+    }
+    uapi_smoke pkcs11 /usr/lib/gnutls/pkcs11.conf || {
+      echo "gnutls uapi smoke: pkcs11 reader did not select the /usr/lib vendor tier" >&2
+      exit 1
+    }
+
+    # /run masks /usr/lib.
+    : > /run/gnutls/config
+    : > /run/gnutls/pkcs11.conf
+    uapi_smoke priority /run/gnutls/config || {
+      echo "gnutls uapi smoke: priority reader did not select /run over /usr/lib" >&2
+      exit 1
+    }
+    uapi_smoke pkcs11 /run/gnutls/pkcs11.conf || {
+      echo "gnutls uapi smoke: pkcs11 reader did not select /run over /usr/lib" >&2
+      exit 1
+    }
+
+    # /etc masks /run and /usr/lib, even though the /etc file is empty.
+    : > /etc/gnutls/config
+    : > /etc/gnutls/pkcs11.conf
+    uapi_smoke priority /etc/gnutls/config || {
+      echo "gnutls uapi smoke: priority reader did not select /etc over /run" >&2
+      exit 1
+    }
+    uapi_smoke pkcs11 /etc/gnutls/pkcs11.conf || {
+      echo "gnutls uapi smoke: pkcs11 reader did not select /etc over /run" >&2
+      exit 1
+    }
+
+    # The priority reader's explicit override is the GNUTLS_SYSTEM_PRIORITY_FILE
+    # environment variable. It must win even with /etc present.
+    : > /usr/lib/gnutls/config-override
+    GNUTLS_SYSTEM_PRIORITY_FILE=/usr/lib/gnutls/config-override \
+      GNUTLS_NO_IMPLICIT_INIT=1 LD_LIBRARY_PATH="${OUT_DIR}/usr/lib" "${smoke_bin}" priority /usr/lib/gnutls/config-override || {
+      echo "gnutls uapi smoke: GNUTLS_SYSTEM_PRIORITY_FILE override did not win over /etc" >&2
+      exit 1
+    }
+    rm -f /usr/lib/gnutls/config-override
+
+    # The deprecated pkcs11 reader has no environment override; callers pass
+    # the file straight to gnutls_pkcs11_init() as its non-NULL
+    # deprecated_config_file argument. A file at that argument, outside all
+    # three tier names, must win even with /etc present, proving the NULL-only
+    # tier walk in the patch never runs for this call.
+    : > /usr/lib/gnutls/pkcs11-explicit.conf
+    uapi_smoke pkcs11 /usr/lib/gnutls/pkcs11-explicit.conf /usr/lib/gnutls/pkcs11-explicit.conf || {
+      echo "gnutls uapi smoke: the gnutls_pkcs11_init() explicit argument did not win over /etc" >&2
+      exit 1
+    }
+    rm -f /usr/lib/gnutls/pkcs11-explicit.conf
+
+    # Walk back down: removing /etc must fall through to /run, then /usr/lib,
+    # then to the compiled no-file default once nothing is left.
+    rm -f /etc/gnutls/config /etc/gnutls/pkcs11.conf
+    uapi_smoke priority /run/gnutls/config || {
+      echo "gnutls uapi smoke: priority reader did not fall back to /run after /etc was removed" >&2
+      exit 1
+    }
+    uapi_smoke pkcs11 /run/gnutls/pkcs11.conf || {
+      echo "gnutls uapi smoke: pkcs11 reader did not fall back to /run after /etc was removed" >&2
+      exit 1
+    }
+
+    rm -f /run/gnutls/config /run/gnutls/pkcs11.conf
+    uapi_smoke priority /usr/lib/gnutls/config || {
+      echo "gnutls uapi smoke: priority reader did not fall back to /usr/lib after /run was removed" >&2
+      exit 1
+    }
+    uapi_smoke pkcs11 /usr/lib/gnutls/pkcs11.conf || {
+      echo "gnutls uapi smoke: pkcs11 reader did not fall back to /usr/lib after /run was removed" >&2
+      exit 1
+    }
+
+    rm -f /usr/lib/gnutls/config /usr/lib/gnutls/pkcs11.conf
+    uapi_smoke priority - || {
+      echo "gnutls uapi smoke: priority reader kept a stale tier after every file was removed" >&2
+      exit 1
+    }
+    uapi_smoke pkcs11 - || {
+      echo "gnutls uapi smoke: pkcs11 reader kept a stale tier after every file was removed" >&2
+      exit 1
+    }
+
+    rmdir /etc/gnutls /run/gnutls /usr/lib/gnutls
+
+    echo "gnutls UAPI smoke: system priority file and deprecated pkcs11.conf both walk /etc, /run, then /usr/lib; GNUTLS_SYSTEM_PRIORITY_FILE overrides the priority reader and a non-NULL gnutls_pkcs11_init() argument overrides the pkcs11 reader"
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/certtool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libtasn1.so.6
+    - path: /usr/bin/gnutls-cli
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libm.so.6
+    - path: /usr/bin/gnutls-cli-debug
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+    - path: /usr/bin/gnutls-serv
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+    - path: /usr/bin/ocsptool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+    - path: /usr/bin/p11tool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+    - path: /usr/bin/psktool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgnutls.so.30
+
+  dev:
+    files:
+    - path: /usr/include/gnutls/abstract.h
+    - path: /usr/include/gnutls/compat.h
+    - path: /usr/include/gnutls/crypto.h
+    - path: /usr/include/gnutls/dtls.h
+    - path: /usr/include/gnutls/gnutls.h
+    - path: /usr/include/gnutls/gnutlsxx.h
+    - path: /usr/include/gnutls/ocsp.h
+    - path: /usr/include/gnutls/openpgp.h
+    - path: /usr/include/gnutls/pkcs7.h
+    - path: /usr/include/gnutls/pkcs11.h
+    - path: /usr/include/gnutls/pkcs12.h
+    - path: /usr/include/gnutls/self-test.h
+    - path: /usr/include/gnutls/socket.h
+    - path: /usr/include/gnutls/system-keys.h
+    - path: /usr/include/gnutls/tpm.h
+    - path: /usr/include/gnutls/urls.h
+    - path: /usr/include/gnutls/x509-ext.h
+    - path: /usr/include/gnutls/x509.h
+    - path: /usr/lib/libgnutls.la
+    - path: /usr/lib/libgnutlsxx.la
+    - path: /usr/lib/pkgconfig/gnutls.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libgnutls.so
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libhogweed.so.6
+      - /usr/lib/libidn2.so.0
+      - /usr/lib/libnettle.so.8
+      - /usr/lib/libp11-kit.so.0
+      - /usr/lib/libtasn1.so.6
+      - /usr/lib/libunistring.so.5
+    - path: /usr/lib/libgnutls.so.30
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libhogweed.so.6
+      - /usr/lib/libidn2.so.0
+      - /usr/lib/libnettle.so.8
+      - /usr/lib/libp11-kit.so.0
+      - /usr/lib/libtasn1.so.6
+      - /usr/lib/libunistring.so.5
+    - path: /usr/lib/libgnutls.so.30.40.2
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libhogweed.so.6
+      - /usr/lib/libidn2.so.0
+      - /usr/lib/libnettle.so.8
+      - /usr/lib/libp11-kit.so.0
+      - /usr/lib/libtasn1.so.6
+      - /usr/lib/libunistring.so.5
+    - path: /usr/lib/libgnutlsxx.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libhogweed.so.6
+      - /usr/lib/libidn2.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnettle.so.8
+      - /usr/lib/libp11-kit.so.0
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libtasn1.so.6
+      - /usr/lib/libunistring.so.5
+    - path: /usr/lib/libgnutlsxx.so.30
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libhogweed.so.6
+      - /usr/lib/libidn2.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnettle.so.8
+      - /usr/lib/libp11-kit.so.0
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libtasn1.so.6
+      - /usr/lib/libunistring.so.5
+    - path: /usr/lib/libgnutlsxx.so.30.0.0
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libgmp.so.10
+      - /usr/lib/libgnutls.so.30
+      - /usr/lib/libhogweed.so.6
+      - /usr/lib/libidn2.so.0
+      - /usr/lib/libm.so.6
+      - /usr/lib/libnettle.so.8
+      - /usr/lib/libp11-kit.so.0
+      - /usr/lib/libstdc++.so.6
+      - /usr/lib/libtasn1.so.6
+      - /usr/lib/libunistring.so.5
+
+  locale:
+    files:
+    - path: /usr/share/locale/cs/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/de/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/eo/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/es/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/fi/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/fr/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/it/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/ka/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/ms/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/nl/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/pl/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/pt_BR/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/ro/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/sr/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/sv/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/uk/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/vi/LC_MESSAGES/gnutls.mo
+    - path: /usr/share/locale/zh_CN/LC_MESSAGES/gnutls.mo
+
+resolution:
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libgmp.so.10: gmp
+  /usr/lib/libidn2.so.0: libidn2
+  /usr/lib/libtasn1.so.6: libtasn1
+  /usr/lib/libunistring.so.5: libunistring
+  /usr/lib/libhogweed.so.6: nettle
+  /usr/lib/libnettle.so.8: nettle
+  /usr/lib/libp11-kit.so.0: p11-kit
+  /usr/lib/libgnutls.so.30: self

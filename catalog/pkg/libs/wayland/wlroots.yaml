@@ -1,0 +1,298 @@
+package:
+  schema: 1
+  name: wlroots
+  slug: wlroots
+  namespace: libs/wayland
+  version: 0.19.2
+  description: Modular Wayland compositor library
+  homepage: https://gitlab.freedesktop.org/wlroots/wlroots
+  checksum: b75e7313390ab3884850e5df47b9043f025172054ef130e0b6153881dab0bfe7
+
+sources:
+- name: wlroots
+  url: https://gitlab.freedesktop.org/wlroots/wlroots/-/archive/0.19.2/wlroots-0.19.2.tar.gz
+  sha256: f0530ecaa8739d15f97bd1e1edddb77e281d57e42d4263fccb67157f71730d17
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: meson
+  commit: x86_64/pkg/core/toolchain/meson/1.6.1/bundles/dev
+- name: ninja
+  commit: x86_64/pkg/core/toolchain/ninja/1.12.1/bundles/dev
+- name: python3
+  commit: x86_64/pkg/dev/lang/python3/3.12.2/bundles/dev
+- name: pkgconf
+  commit: x86_64/pkg/core/toolchain/pkgconf/2.2.0/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: wayland
+  commit: x86_64/pkg/libs/wayland/wayland/1.24.0/bundles/dev
+- name: wayland-protocols
+  commit: x86_64/pkg/libs/wayland/wayland-protocols/1.46/bundles/dev
+- name: libdrm
+  commit: x86_64/pkg/libs/graphics/libdrm/2.4.123/bundles/dev
+- name: mesa
+  commit: x86_64/pkg/libs/graphics/mesa/24.2.7/bundles/dev
+- name: pixman
+  commit: x86_64/pkg/libs/graphics/pixman/0.46.4/bundles/dev
+- name: libxkbcommon
+  commit: x86_64/pkg/libs/input/libxkbcommon/1.7.0/bundles/dev
+- name: libinput
+  commit: x86_64/pkg/libs/input/libinput/1.30.0/bundles/dev
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/dev
+- name: libxml2
+  commit: x86_64/pkg/libs/system/libxml2/2.13.5/bundles/dev
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/bundles/dev
+- name: libffi
+  commit: x86_64/pkg/libs/system/libffi/3.4.6/bundles/dev
+- name: libseat
+  commit: x86_64/pkg/libs/wayland/libseat/0.9.1/bundles/dev
+- name: hwdata
+  commit: x86_64/pkg/libs/graphics/hwdata/0.402/bundles/dev
+- name: libdisplay-info
+  commit: x86_64/pkg/libs/graphics/libdisplay-info/0.3.0/bundles/dev
+- name: libxcb
+  commit: x86_64/pkg/libs/x11/libxcb/1.17.0/bundles/dev
+- name: xcb-util-wm
+  commit: x86_64/pkg/libs/x11/xcb-util-wm/0.4.2/bundles/dev
+- name: xorgproto
+  commit: x86_64/pkg/libs/x11/xorgproto/2024.1/bundles/dev
+- name: libxau
+  commit: x86_64/pkg/libs/x11/libxau/1.0.12/bundles/dev
+- name: libxdmcp
+  commit: x86_64/pkg/libs/x11/libxdmcp/1.1.5/bundles/dev
+- name: xwayland
+  commit: x86_64/pkg/servers/xwayland/24.1.4/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4105:5104, 8218:8477, 12397:9267, 16525:9728, 20645:10387, 24747:12855, 28870:15474, 37187:26278, 45561:27128, 47260:27414]
+
+  script: |
+    tar --no-same-owner -xzf /${SOURCE0} -C "${WORK_DIR}" --strip-components=1
+    cd ${WORK_DIR}
+
+    meson setup build \
+      --prefix=/usr \
+      --buildtype=release \
+      -Dexamples=false \
+      -Dbackends=drm,libinput \
+      -Drenderers=gles2 \
+      -Dxwayland=enabled \
+      -Dsession=enabled
+
+    ninja -C build
+    DESTDIR="${OUT_DIR}" ninja -C build install
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - dev
+  - lib
+
+outputs:
+  dev:
+    files:
+    - path: /usr/include/wlroots-0.19/wlr/backend.h
+    - path: /usr/include/wlroots-0.19/wlr/backend/drm.h
+    - path: /usr/include/wlroots-0.19/wlr/backend/headless.h
+    - path: /usr/include/wlroots-0.19/wlr/backend/interface.h
+    - path: /usr/include/wlroots-0.19/wlr/backend/libinput.h
+    - path: /usr/include/wlroots-0.19/wlr/backend/multi.h
+    - path: /usr/include/wlroots-0.19/wlr/backend/session.h
+    - path: /usr/include/wlroots-0.19/wlr/backend/wayland.h
+    - path: /usr/include/wlroots-0.19/wlr/config.h
+    - path: /usr/include/wlroots-0.19/wlr/interfaces/wlr_buffer.h
+    - path: /usr/include/wlroots-0.19/wlr/interfaces/wlr_ext_image_capture_source_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/interfaces/wlr_keyboard.h
+    - path: /usr/include/wlroots-0.19/wlr/interfaces/wlr_output.h
+    - path: /usr/include/wlroots-0.19/wlr/interfaces/wlr_pointer.h
+    - path: /usr/include/wlroots-0.19/wlr/interfaces/wlr_switch.h
+    - path: /usr/include/wlroots-0.19/wlr/interfaces/wlr_tablet_pad.h
+    - path: /usr/include/wlroots-0.19/wlr/interfaces/wlr_tablet_tool.h
+    - path: /usr/include/wlroots-0.19/wlr/interfaces/wlr_touch.h
+    - path: /usr/include/wlroots-0.19/wlr/render/allocator.h
+    - path: /usr/include/wlroots-0.19/wlr/render/color.h
+    - path: /usr/include/wlroots-0.19/wlr/render/dmabuf.h
+    - path: /usr/include/wlroots-0.19/wlr/render/drm_format_set.h
+    - path: /usr/include/wlroots-0.19/wlr/render/drm_syncobj.h
+    - path: /usr/include/wlroots-0.19/wlr/render/egl.h
+    - path: /usr/include/wlroots-0.19/wlr/render/gles2.h
+    - path: /usr/include/wlroots-0.19/wlr/render/interface.h
+    - path: /usr/include/wlroots-0.19/wlr/render/pass.h
+    - path: /usr/include/wlroots-0.19/wlr/render/pixman.h
+    - path: /usr/include/wlroots-0.19/wlr/render/swapchain.h
+    - path: /usr/include/wlroots-0.19/wlr/render/wlr_renderer.h
+    - path: /usr/include/wlroots-0.19/wlr/render/wlr_texture.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_alpha_modifier_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_buffer.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_color_management_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_compositor.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_content_type_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_cursor.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_cursor_shape_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_damage_ring.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_data_control_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_data_device.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_drm.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_drm_lease_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_export_dmabuf_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_ext_data_control_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_ext_foreign_toplevel_list_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_ext_image_capture_source_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_ext_image_copy_capture_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_foreign_toplevel_management_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_fractional_scale_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_gamma_control_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_idle_inhibit_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_idle_notify_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_input_device.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_input_method_v2.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_keyboard.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_keyboard_group.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_keyboard_shortcuts_inhibit_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_layer_shell_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_linux_dmabuf_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_linux_drm_syncobj_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_output.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_output_layer.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_output_layout.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_output_management_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_output_power_management_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_output_swapchain_manager.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_pointer.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_pointer_constraints_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_pointer_gestures_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_presentation_time.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_primary_selection.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_primary_selection_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_relative_pointer_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_scene.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_screencopy_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_seat.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_security_context_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_server_decoration.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_session_lock_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_shm.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_single_pixel_buffer_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_subcompositor.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_switch.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_tablet_pad.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_tablet_tool.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_tablet_v2.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_tearing_control_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_text_input_v3.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_touch.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_transient_seat_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_viewporter.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_virtual_keyboard_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_virtual_pointer_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_xcursor_manager.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_xdg_activation_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_xdg_decoration_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_xdg_dialog_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_xdg_foreign_registry.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_xdg_foreign_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_xdg_foreign_v2.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_xdg_output_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_xdg_shell.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_xdg_system_bell_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/types/wlr_xdg_toplevel_icon_v1.h
+    - path: /usr/include/wlroots-0.19/wlr/util/addon.h
+    - path: /usr/include/wlroots-0.19/wlr/util/box.h
+    - path: /usr/include/wlroots-0.19/wlr/util/edges.h
+    - path: /usr/include/wlroots-0.19/wlr/util/log.h
+    - path: /usr/include/wlroots-0.19/wlr/util/region.h
+    - path: /usr/include/wlroots-0.19/wlr/util/transform.h
+    - path: /usr/include/wlroots-0.19/wlr/version.h
+    - path: /usr/include/wlroots-0.19/wlr/xcursor.h
+    - path: /usr/include/wlroots-0.19/wlr/xwayland.h
+    - path: /usr/include/wlroots-0.19/wlr/xwayland/server.h
+    - path: /usr/include/wlroots-0.19/wlr/xwayland/shell.h
+    - path: /usr/include/wlroots-0.19/wlr/xwayland/xwayland.h
+    - path: /usr/lib/pkgconfig/wlroots-0.19.pc
+
+  lib:
+    files:
+    - path: /usr/lib/libwlroots-0.19.so
+      needs:
+      - /usr/lib/libEGL.so.1
+      - /usr/lib/libGLESv2.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libdisplay-info.so.3
+      - /usr/lib/libdrm.so.2
+      - /usr/lib/libgbm.so.1
+      - /usr/lib/libinput.so.10
+      - /usr/lib/libm.so.6
+      - /usr/lib/libpixman-1.so.0
+      - /usr/lib/libseat.so.1
+      - /usr/lib/libudev.so.1
+      - /usr/lib/libwayland-client.so.0
+      - /usr/lib/libwayland-server.so.0
+      - /usr/lib/libxcb-composite.so.0
+      - /usr/lib/libxcb-ewmh.so.2
+      - /usr/lib/libxcb-icccm.so.4
+      - /usr/lib/libxcb-render.so.0
+      - /usr/lib/libxcb-res.so.0
+      - /usr/lib/libxcb-xfixes.so.0
+      - /usr/lib/libxcb.so.1
+      - /usr/lib/libxkbcommon.so.0
+
+resolution:
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libdisplay-info.so.3: libdisplay-info
+  /usr/lib/libdrm.so.2: libdrm
+  /usr/lib/libinput.so.10: libinput
+  /usr/lib/libseat.so.1: libseat
+  /usr/lib/libxcb-composite.so.0: libxcb
+  /usr/lib/libxcb-render.so.0: libxcb
+  /usr/lib/libxcb-res.so.0: libxcb
+  /usr/lib/libxcb-xfixes.so.0: libxcb
+  /usr/lib/libxcb.so.1: libxcb
+  /usr/lib/libxkbcommon.so.0: libxkbcommon
+  /usr/lib/libpixman-1.so.0: pixman
+  /usr/lib/libudev.so.1: systemd
+  /usr/lib/libwayland-client.so.0: wayland
+  /usr/lib/libwayland-server.so.0: wayland
+  /usr/lib/libxcb-ewmh.so.2: xcb-util-wm
+  /usr/lib/libxcb-icccm.so.4: xcb-util-wm
+  /usr/lib/libEGL.so.1:
+    capability: graphics.egl
+    fallback: mesa
+  /usr/lib/libGLESv2.so.2:
+    capability: graphics.gles
+    fallback: mesa
+  /usr/lib/libgbm.so.1:
+    capability: graphics.gbm
+    fallback: mesa

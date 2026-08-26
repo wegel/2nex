@@ -1,0 +1,424 @@
+system:
+  schema: 1
+  name: Nex Systemd Base
+  slug: nex-systemd
+  version: 0.0.1
+  description: Minimal nex rootfs with systemd, networking, and SSH
+  nex_structure: true
+  checksum: 3adea94c1a359da2945e319e7e3b68eda3515e98bff2857af5ec74d5956fca6b
+
+dependencies:
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/outputs/bin
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/lib
+- name: gcc-libs
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/outputs/lib
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/runtime
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/outputs/lib
+- name: xz
+  commit: x86_64/pkg/libs/compression/xz/5.4.6/outputs/lib
+- name: zstd
+  commit: x86_64/pkg/libs/compression/zstd/1.5.6/outputs/lib
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/outputs/lib
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/outputs/lib
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/outputs/lib
+- name: expat
+  commit: x86_64/pkg/libs/system/expat/2.6.2/outputs/lib
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/outputs/lib
+- name: libxcrypt
+  commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/outputs/lib
+- name: openssl
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/outputs/lib
+- name: nex-ld-shim
+  commit: x86_64/pkg/core/nex/nex-ld-shim/0.0.1/outputs/lib
+
+packages:
+# base policy
+- name: glibc-conf
+  commit: x86_64/pkg/libs/system/glibc/2.39/outputs/conf
+- name: attr-conf
+  commit: x86_64/pkg/libs/system/attr/2.5.2/outputs/conf
+- name: openssl-conf
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/outputs/conf
+- name: linux-pam-conf
+  commit: x86_64/pkg/libs/security/linux-pam/1.7.1/outputs/conf
+# init and ipc
+- name: systemd
+  commit: x86_64/pkg/core/init/systemd/257.5/bundles/minimal
+- name: dbus-broker
+  commit: x86_64/pkg/core/ipc/dbus-broker/37/bundles/full
+# shell and core utilities
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/outputs/bin
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/outputs/bin
+- name: util_linux
+  commit: x86_64/pkg/core/userland/util_linux/2.40/bundles/runtime
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/outputs/bin
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/outputs/bin
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/outputs/bin
+- name: shadow
+  commit: x86_64/pkg/core/userland/shadow/4.15.1/bundles/runtime
+- name: kbd
+  commit: x86_64/pkg/core/userland/kbd/2.9.0/bundles/full
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/outputs/bin
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/outputs/bin
+# kernel
+- name: kmod
+  commit: x86_64/pkg/core/kernel/kmod/32/bundles/runtime
+- name: linux
+  commit: x86_64/pkg/core/kernel/linux/6.18.24/bundles/vm
+  placement: root
+# nex stage mounts OverlayFS on /usr/bin, so a machine that installs a package
+# needs overlay.ko. The vm bundle carries 8 outputs and not this one; only the
+# 141-output all-modules bundle has it. Take the single output.
+- name: kernel-fs-overlay
+  commit: x86_64/pkg/core/kernel/linux/6.18.24/outputs/fs-overlay
+  placement: root
+- name: initramfs
+  commit: x86_64/pkg/core/kernel/initramfs/1.0.0/outputs/boot
+# networking
+- name: curl
+  commit: x86_64/pkg/cli/net/curl/8.17.0/outputs/bin
+- name: ca-certificates
+  commit: x86_64/pkg/apps/misc/ca-certificates/20251104/bundles/full
+- name: p11-kit
+  commit: x86_64/pkg/libs/crypto/p11-kit/0.25.5/bundles/runtime
+- name: openssh
+  commit: x86_64/pkg/cli/net/openssh/9.9p1/bundles/dev
+# nex package manager
+- name: zub
+  commit: x86_64/pkg/core/nex/zub/0.0.3-17f2ca6/outputs/bin
+- name: glibc-tools
+  commit: x86_64/pkg/libs/system/glibc/2.39/files
+  paths:
+  - /usr/bin/ldd
+  - /usr/bin/getent
+
+files:
+# users and groups
+- path: /etc/passwd
+  mode: 420
+  content: |
+    root:x:0:0:root:/root:/bin/bash
+    systemd-network:x:192:192:systemd Network Management:/:/usr/bin/nologin
+    systemd-resolve:x:193:193:systemd Resolver:/:/usr/bin/nologin
+    systemd-timesync:x:194:194:systemd Time Synchronization:/:/usr/bin/nologin
+    sshd:x:74:74:Privilege-separated SSH:/var/lib/sshd:/usr/bin/nologin
+
+- path: /etc/group
+  mode: 420
+  content: |
+    root:x:0:
+    systemd-network:x:192:
+    systemd-resolve:x:193:
+    systemd-timesync:x:194:
+    systemd-journal:x:190:
+    sshd:x:74:
+    utmp:x:22:
+
+- path: /etc/shadow
+  mode: 384
+  content: |
+    root:!*:19735:0:99999:7:::
+    systemd-network:!*:19735::::::
+    systemd-resolve:!*:19735::::::
+    systemd-timesync:!*:19735::::::
+    sshd:!*:19735::::::
+
+# distribution defaults
+- path: /usr/lib/os-release
+  mode: 420
+  content: |
+    NAME="nex"
+    PRETTY_NAME="nex Linux"
+    ID=nex
+    VERSION_ID=0.0.1
+
+- path: /etc/machine-id
+  mode: 420
+
+- path: /usr/lib/inputrc
+  mode: 420
+  content: |
+    set editing-mode emacs
+    set bell-style none
+    "\e[1;5C": forward-word
+    "\e[1;5D": backward-word
+    "\C-h": backward-kill-word
+
+# Initial machine authentication policy. A provisioner may replace these
+# files before the first boot, and the machine owner may change them later.
+- path: /etc/pam.d/system-auth
+  mode: 420
+  content: |
+    auth      sufficient pam_unix.so
+    auth      required   pam_deny.so
+
+    account   required   pam_nologin.so
+    account   sufficient pam_unix.so
+    account   required   pam_permit.so
+
+    password  sufficient pam_unix.so sha512 shadow try_first_pass
+    password  required   pam_deny.so
+
+    -session  optional   pam_loginuid.so
+    session   required   pam_systemd.so
+    session   required   pam_unix.so
+
+- path: /etc/pam.d/other
+  mode: 420
+  content: |
+    auth      required pam_deny.so
+    account   required pam_deny.so
+    password  required pam_deny.so
+    session   required pam_deny.so
+
+# systemd networking
+- path: /usr/lib/systemd/network/80-dhcp.network
+  mode: 420
+  content: |
+    [Match]
+    Name=en*
+
+    [Network]
+    DHCP=yes
+
+# initialize /nex/manifests as a writable git repo (backed by /var) on first boot
+- path: /usr/local/bin/nex-init-manifests
+  mode: 493
+  content: |
+    #!/bin/sh
+    set -eu
+
+    dst=/nex/manifests
+    bundle=/usr/share/nex/nex.bundle
+
+    if [ -d "$dst/.git" ]; then
+        exit 0
+    fi
+
+    if [ ! -f "$bundle" ]; then
+        echo "nex-init-manifests: missing repository bundle at $bundle" >&2
+        exit 0
+    fi
+
+    if ! command -v git >/dev/null 2>&1; then
+        echo "nex-init-manifests: git not available, cannot clone the bundle" >&2
+        exit 0
+    fi
+
+    # Clone rather than init: manifests name their build environment by
+    # historical Git blob, and a repository created from a file tree holds only
+    # current content, so none of those blobs resolve and no package can build.
+    mkdir -p "$dst"
+    if ! git clone -q "$bundle" "$dst"; then
+        echo "nex-init-manifests: could not clone $bundle" >&2
+        exit 0
+    fi
+
+    git -C "$dst" config user.name "nex"
+    git -C "$dst" config user.email "nex@localhost"
+
+- path: /usr/lib/systemd/system/nex-init-manifests.service
+  mode: 420
+  content: |
+    [Unit]
+    Description=Initialize /nex/manifests for self-hosting
+    After=local-fs.target
+
+    [Service]
+    Type=oneshot
+    ExecStart=/usr/local/bin/nex-init-manifests
+
+    [Install]
+    WantedBy=multi-user.target
+
+# dbus socket activation expects /run/dbus to exist (it is a tmpfs, so create via tmpfiles)
+- path: /usr/lib/tmpfiles.d/dbus.conf
+  mode: 420
+  content: |
+    d /run/dbus 0755 root root -
+
+# directories
+- path: /var/lib/sshd
+  mode: 448
+  directory: true
+
+# symlinks
+- path: /bin
+  symlink: /usr/bin
+  replace: true
+
+- path: /sbin
+  symlink: /usr/sbin
+  replace: true
+
+- path: /lib
+  symlink: /usr/lib
+  replace: true
+
+# Glibc installs a few of its own utilities with this interpreter path. Nex
+# keeps the selected architecture loader below /lib64.
+- path: /usr/lib/ld-linux-x86-64.so.2
+  symlink: /lib64/ld-linux-x86-64.so.2
+
+- path: /usr/sbin
+  symlink: /usr/bin
+  replace: true
+
+- path: /var/run
+  symlink: /run
+
+- path: /etc/mtab
+  symlink: /proc/self/mounts
+
+- path: /etc/resolv.conf
+  symlink: /run/systemd/resolve/stub-resolv.conf
+
+# OpenSSL compatibility path; the early boot service regenerates this cache.
+- path: /etc/ssl/certs
+  symlink: /run/ssl/certs
+
+- path: /usr/lib/systemd/system/update-ca-certificates.service.d/runtime-store.conf
+  mode: 420
+  content: |
+    [Service]
+    ExecStartPre=/usr/bin/mkdir -p /run/ssl
+    ExecStartPre=-/usr/bin/ln -sT /usr/lib/ssl/certs /run/ssl/certs
+    ExecStart=
+    ExecStart=/usr/bin/update-ca-certificates --output-dir /run/ssl/certs
+
+- path: /init
+  symlink: usr/bin/init
+
+# systemd dbus-activation aliases (force symlinks to avoid duplicate BusName units)
+- path: /usr/lib/systemd/system/dbus-org.freedesktop.hostname1.service
+  symlink: systemd-hostnamed.service
+  replace: true
+
+- path: /usr/lib/systemd/system/dbus-org.freedesktop.locale1.service
+  symlink: systemd-localed.service
+  replace: true
+
+- path: /usr/lib/systemd/system/dbus-org.freedesktop.login1.service
+  symlink: systemd-logind.service
+  replace: true
+
+- path: /usr/lib/systemd/system/dbus-org.freedesktop.machine1.service
+  symlink: systemd-machined.service
+  replace: true
+
+- path: /usr/lib/systemd/system/dbus-org.freedesktop.portable1.service
+  symlink: systemd-portabled.service
+  replace: true
+
+- path: /usr/lib/systemd/system/dbus-org.freedesktop.timedate1.service
+  symlink: systemd-timedated.service
+  replace: true
+
+# dbus.service alias
+- path: /usr/lib/systemd/system/dbus.service
+  symlink: dbus-broker.service
+  replace: true
+
+# systemd service enablement
+- path: /etc/systemd/system/multi-user.target.wants/systemd-networkd.service
+  symlink: /usr/lib/systemd/system/systemd-networkd.service
+
+- path: /etc/systemd/system/multi-user.target.wants/systemd-resolved.service
+  symlink: /usr/lib/systemd/system/systemd-resolved.service
+
+- path: /etc/systemd/system/getty.target.wants/getty@tty1.service
+  symlink: /usr/lib/systemd/system/getty@.service
+
+- path: /etc/systemd/system/multi-user.target.wants/nex-init-manifests.service
+  symlink: /usr/lib/systemd/system/nex-init-manifests.service
+
+- path: /etc/systemd/system/sockets.target.wants/dbus.socket
+  symlink: /usr/lib/systemd/system/dbus.socket
+
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+
+  script: |
+    set -eux
+
+    # directories for runtime
+    mkdir -p /target/{proc,sys,dev,run,tmp,root}
+    mkdir -p /target/dev/{hugepages,mqueue,shm}
+    mkdir -p /target/sys/kernel/{debug,tracing,config}
+    mkdir -p /target/sys/fs/{fuse/connections,cgroup}
+    mkdir -p /target/var/{log/journal,lib/systemd/{random-seed,timers,coredump}}
+    mkdir -p /target/run/systemd
+    mkdir -p /target/etc/modprobe.d
+    mkdir -p /target/home
+
+    # deployment-root boot mountpoints (initramfs bind-mounts sysroot/var/nex into the deployment)
+    mkdir -p /target/sysroot
+    # /nex/env is required as well: nex stage mounts an overlay there
+    # (stage.rs:108), and /nex sits on the read-only deployment root, so the
+    # mount point cannot be created at install time.
+    # /nex/store is the machine's content store, and only a mount point here:
+    # the store itself lives on the persistent root or on /var, and the
+    # initramfs binds it in at boot. A machine installed before the store was
+    # renamed keeps its objects under the older /var/nex/repo name, and
+    # store_bind_source() in initramfs-init.sh binds that directory onto this
+    # same /nex/store, so the data is never stranded by the new name.
+    mkdir -p /target/nex/store /target/nex/deployments /target/nex/users /target/nex/staging /target/nex/manifests /target/nex/env
+
+    # openssh libexec symlinks
+    mkdir -p /target/usr/libexec
+    for f in /target/nex/pkg/cli/net/openssh/*/*/usr/libexec/*; do
+      name=$(basename "$f")
+      relpath="${f#/target/}"
+      ln -sf "../../$relpath" "/target/usr/libexec/$name"
+    done
+
+    test "$(readlink /target/etc/ssl/certs)" = /run/ssl/certs
+    grep -Fq \
+      'ExecStart=/usr/bin/update-ca-certificates --output-dir /run/ssl/certs' \
+      /target/usr/lib/systemd/system/update-ca-certificates.service.d/runtime-store.conf
+    chroot /target /usr/bin/bash -c '
+      test -s /usr/lib/ssl/certs/ca-certificates.crt
+      test "$(find /usr/lib/ssl/certs -type l | wc -l)" -gt 0
+      test -f /usr/lib/security/namespace.conf
+    '
+
+    test -f /target/usr/lib/os-release
+    test ! -e /target/etc/os-release
+    test -f /target/usr/lib/inputrc
+    test -f /target/usr/lib/systemd/network/80-dhcp.network
+    test -f /target/usr/lib/systemd/system/nex-init-manifests.service
+    test -f /target/etc/pam.d/system-auth
+    test -f /target/etc/pam.d/other
+    test ! -e /target/etc/fstab
+    test ! -e /target/etc/sysctl.conf
+    test ! -e /target/etc/inputrc
+    test ! -e /target/etc/os-release
+    test ! -e /target/etc/security/namespace.conf
+    test ! -e /target/etc/systemd/network/80-dhcp.network
+    test ! -e /target/etc/systemd/system/nex-init-manifests.service
+    test ! -e /target/etc/pam.d/systemd-user
+    test ! -e /target/etc/pam.d/systemd-run0
+
+    echo "nex-systemd base configuration done."

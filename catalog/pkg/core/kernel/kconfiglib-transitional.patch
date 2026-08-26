@@ -1,0 +1,42 @@
+From: Nex package maintainers
+Subject: [PATCH] kconfiglib: parse Linux transitional symbols
+Source: Nex
+Upstream: not submitted; the pinned Kconfiglib revision predates this Linux syntax
+
+Teach the standalone parser about transitional symbols so it can read Linux
+6.18 Kconfig files and omit those symbols from generated configurations.
+
+--- a/kconfiglib.py
++++ b/kconfiglib.py
+@@ -3140,0 +3141,10 @@
++            if node.item.__class__ is Symbol and node.item.is_transitional:
++                if t0 is _T_DEFAULT or \
++                   t0 is _T_SELECT or \
++                   t0 is _T_IMPLY or \
++                   t0 is _T_RANGE or \
++                   t0 is _T_PROMPT or \
++                   t0 in _TYPE_TOKENS:
++                    self._parse_error(
++                        "transitional symbols can only have 'help' sections")
++
+@@ -3197,0 +3208,7 @@
++            elif t0 is _T_TRANSITIONAL:
++                if node.item.__class__ is not Symbol:
++                    self._parse_error("'transitional' is only valid for symbols")
++                node.item.is_transitional = True
++                if self._tokens[1] is not None:
++                    self._trailing_tokens_error()
++
+@@ -4290,0 +4308 @@
++        "is_transitional",
+@@ -4611 +4629 @@
+-        if not self._write_to_conf:
++        if not self._write_to_conf or self.is_transitional:
+@@ -4891,0 +4910 @@
++        self.is_transitional = \
+@@ -7015 +7034,2 @@
+-) = range(1, 51)
++    _T_TRANSITIONAL,
++) = range(1, 52)
+@@ -7061,0 +7082 @@
++    "transitional":   _T_TRANSITIONAL,

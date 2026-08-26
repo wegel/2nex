@@ -1,0 +1,1561 @@
+package:
+  schema: 1
+  name: cups
+  slug: cups
+  namespace: libs/printing
+  version: 2.4.7
+  description: Common UNIX Printing System
+  homepage: https://openprinting.github.io/cups/
+  checksum: 3f00592a85fd282a29de9aacceb10467524b1009a9b010c5ed395696e1e431cd
+
+sources:
+- name: cups
+  url: https://github.com/OpenPrinting/cups/releases/download/v2.4.7/cups-2.4.7-source.tar.gz
+  sha256: dd54228dd903526428ce7e37961afaed230ad310788141da75cebaa08362cf6c
+- name: uapi_config
+  file: pkg/libs/printing/cups-uapi-config.patch
+  sha256: 0bfc586816b66a4949e3dbf57390d5272e40682a29192c3038840e438ce5c954
+
+dependencies:
+- name: glibc
+  commit: x86_64/pkg/libs/system/glibc/2.39/bundles/dev
+- name: gmp
+  commit: x86_64/pkg/libs/system/gmp/6.3.0/bundles/dev
+- name: gcc
+  commit: x86_64/pkg/core/toolchain/gcc/13.2.0/bundles/dev
+- name: binutils
+  commit: x86_64/pkg/core/toolchain/binutils/2.42/bundles/dev
+- name: bash
+  commit: x86_64/pkg/cli/shells/bash/5.2.21/bundles/dev
+- name: ncurses
+  commit: x86_64/pkg/libs/system/ncurses/6.4-20230520/bundles/dev
+- name: acl
+  commit: x86_64/pkg/libs/system/acl/2.3.2/bundles/dev
+- name: attr
+  commit: x86_64/pkg/libs/system/attr/2.5.2/bundles/dev
+- name: sed
+  commit: x86_64/pkg/cli/text/sed/4.9/bundles/dev
+- name: grep
+  commit: x86_64/pkg/cli/text/grep/3.11/bundles/dev
+- name: gawk
+  commit: x86_64/pkg/cli/text/gawk/5.3.0/bundles/dev
+- name: tar
+  commit: x86_64/pkg/cli/archive/tar/1.35/bundles/dev
+- name: gzip
+  commit: x86_64/pkg/cli/archive/gzip/1.13/bundles/dev
+- name: zlib
+  commit: x86_64/pkg/libs/system/zlib/1.3.1/bundles/dev
+- name: coreutils
+  commit: x86_64/pkg/core/userland/coreutils/9.5/bundles/dev
+- name: findutils
+  commit: x86_64/pkg/core/userland/findutils/4.9.0/bundles/dev
+- name: make
+  commit: x86_64/pkg/core/toolchain/make/4.4.1/bundles/dev
+- name: linux-headers
+  commit: x86_64/pkg/libs/system/linux-headers/6.4.1/bundles/dev
+- name: libcap
+  commit: x86_64/pkg/libs/security/libcap/2.69/bundles/dev
+- name: libpng
+  commit: x86_64/pkg/libs/graphics/libpng/1.6.51/bundles/dev
+- name: libjpeg-turbo
+  commit: x86_64/pkg/libs/graphics/libjpeg-turbo/3.1.2/bundles/dev
+- name: openssl3
+  commit: x86_64/pkg/dev/libs/openssl3/3.3.1/bundles/dev
+- name: libxcrypt
+  commit: x86_64/pkg/libs/system/libxcrypt/4.4.36/bundles/dev
+- name: patch
+  commit: x86_64/pkg/core/toolchain/patch/2.7.6/bundles/dev
+
+build:
+  environment: 248c5014338ab55a89b9c261e303e111e6847aec
+  profile: [4133:2100, 8240:3247, 12352:6648, 16469:9987, 20578:12549, 24675:12712, 28774:16942, 37002:17012, 45234:17274, 47688:17975]
+
+  script: |
+    set -eu
+
+    tar --no-same-owner -xf "/${SOURCE_cups}" -C "${WORK_DIR}" --strip-components=1
+    cd "${WORK_DIR}"
+    patch --batch --fuzz=0 -Np1 -i "/${SOURCE_uapi_config}"
+
+    mkdir -p /etc
+    if [ ! -f /etc/passwd ]; then
+      cat > /etc/passwd <<'EOF'
+    root:x:0:0:root:/root:/bin/sh
+    nobody:x:65534:65534:nobody:/:
+    EOF
+    elif ! grep -q '^root:' /etc/passwd; then
+      printf '%s\n' 'root:x:0:0:root:/root:/bin/sh' >> /etc/passwd
+    fi
+
+    if [ ! -f /etc/group ]; then
+      cat > /etc/group <<'EOF'
+    root:x:0:
+    nobody:x:65534:
+    EOF
+    elif ! grep -q '^root:' /etc/group; then
+      printf '%s\n' 'root:x:0:' >> /etc/group
+    fi
+
+    ./configure \
+      --prefix=/usr \
+      --sysconfdir=/etc \
+      --localstatedir=/var \
+      --runstatedir=/run \
+      --sbindir=/usr/bin \
+      --libdir=/usr/lib \
+      --with-cachedir=/var/cache/cups \
+      --with-logdir=/var/log/cups \
+      --with-rundir=/run/cups \
+      --disable-static \
+      --disable-systemd \
+      --without-rcdir \
+      --without-dbus
+
+    make
+    make DESTDIR="${OUT_DIR}" install
+
+    install -d "${OUT_DIR}/usr/lib/cups"
+    for config in cups-files.conf cupsd.conf snmp.conf; do
+      mv "${OUT_DIR}/etc/cups/${config}" \
+        "${OUT_DIR}/usr/lib/cups/${config}"
+      rm "${OUT_DIR}/etc/cups/${config}.default"
+    done
+    rmdir \
+      "${OUT_DIR}/etc/cups/ppd" \
+      "${OUT_DIR}/etc/cups/ssl" \
+      "${OUT_DIR}/etc/cups" \
+      "${OUT_DIR}/etc" \
+      "${OUT_DIR}/run/cups/certs" \
+      "${OUT_DIR}/run/cups" \
+      "${OUT_DIR}/run" \
+      "${OUT_DIR}/var/cache/cups/rss" \
+      "${OUT_DIR}/var/cache/cups" \
+      "${OUT_DIR}/var/cache" \
+      "${OUT_DIR}/var/log/cups" \
+      "${OUT_DIR}/var/log" \
+      "${OUT_DIR}/var/spool/cups/tmp" \
+      "${OUT_DIR}/var/spool/cups" \
+      "${OUT_DIR}/var/spool" \
+      "${OUT_DIR}/var"
+
+    cups_pid=
+    cleanup_cups_smoke() {
+      if [ -n "${cups_pid}" ]; then
+        kill "${cups_pid}" 2>/dev/null || true
+        wait "${cups_pid}" 2>/dev/null || true
+      fi
+      rm -f \
+        /etc/cups/cups-files.conf \
+        /etc/cups/cupsd.conf \
+        /etc/cups/client.conf \
+        /etc/cups/snmp.conf \
+        /run/cups/cups-files.conf \
+        /run/cups/cupsd.conf \
+        /run/cups/client.conf \
+        /run/cups/snmp.conf \
+        /usr/lib/cups/cups-files.conf \
+        /usr/lib/cups/cupsd.conf \
+        /usr/lib/cups/client.conf \
+        /usr/lib/cups/snmp.conf
+      rmdir /etc/cups /run/cups /usr/lib/cups 2>/dev/null || true
+    }
+    trap cleanup_cups_smoke EXIT HUP INT TERM
+
+    test ! -e /etc/cups/cups-files.conf
+    test ! -e /etc/cups/cupsd.conf
+    test ! -e /etc/cups/snmp.conf
+    test ! -e /run/cups/cups-files.conf
+    test ! -e /run/cups/cupsd.conf
+    test ! -e /run/cups/snmp.conf
+    test ! -e /usr/lib/cups/cups-files.conf
+    test ! -e /usr/lib/cups/cupsd.conf
+    test ! -e /usr/lib/cups/snmp.conf
+    mkdir -p /etc/cups /run/cups /usr/lib/cups
+
+    cp "${OUT_DIR}/usr/lib/cups/cups-files.conf" /usr/lib/cups/cups-files.conf
+    cp "${OUT_DIR}/usr/lib/cups/cupsd.conf" /usr/lib/cups/cupsd.conf
+
+    cupsd_bin="${OUT_DIR}/usr/bin/cupsd"
+    cups_library_path="${OUT_DIR}/usr/lib"
+    check_cupsd_paths() {
+      expected_main="$1"
+      expected_files="$2"
+      set +e
+      output="$(LD_LIBRARY_PATH="${cups_library_path}" "${cupsd_bin}" -t 2>&1)"
+      status=$?
+      set -e
+      if [ "${status}" -ne 0 ] ||
+        ! printf '%s\n' "${output}" | grep -Fq "\"${expected_files}\" is OK." ||
+        ! printf '%s\n' "${output}" | grep -Fq "\"${expected_main}\" is OK."; then
+        printf '%s\n' \
+          "cupsd -t failed: status=${status}" \
+          "expected main: ${expected_main}" \
+          "expected files: ${expected_files}" >&2
+        printf '%s\n' "${output}" >&2
+        return 1
+      fi
+    }
+
+    check_cupsd_paths \
+      /usr/lib/cups/cupsd.conf \
+      /usr/lib/cups/cups-files.conf
+
+    cp /usr/lib/cups/cupsd.conf /run/cups/cupsd.conf
+    check_cupsd_paths \
+      /run/cups/cupsd.conf \
+      /usr/lib/cups/cups-files.conf
+
+    cp /usr/lib/cups/cups-files.conf /run/cups/cups-files.conf
+    check_cupsd_paths \
+      /run/cups/cupsd.conf \
+      /run/cups/cups-files.conf
+
+    cp /usr/lib/cups/cupsd.conf /etc/cups/cupsd.conf
+    check_cupsd_paths \
+      /etc/cups/cupsd.conf \
+      /run/cups/cups-files.conf
+
+    cp /usr/lib/cups/cups-files.conf /etc/cups/cups-files.conf
+    check_cupsd_paths \
+      /etc/cups/cupsd.conf \
+      /etc/cups/cups-files.conf
+
+    : > /etc/cups/cupsd.conf
+    check_cupsd_paths \
+      /etc/cups/cupsd.conf \
+      /etc/cups/cups-files.conf
+
+    cp /usr/lib/cups/cupsd.conf /etc/cups/cupsd.conf
+    : > /etc/cups/cups-files.conf
+    check_cupsd_paths \
+      /etc/cups/cupsd.conf \
+      /etc/cups/cups-files.conf
+
+    explicit_root="${WORK_DIR}/cups-explicit"
+    mkdir -p "${explicit_root}"
+    cp /usr/lib/cups/cupsd.conf "${explicit_root}/chosen-cupsd.conf"
+    cp /usr/lib/cups/cups-files.conf "${explicit_root}/chosen-cups-files.conf"
+    output="$(LD_LIBRARY_PATH="${cups_library_path}" \
+      "${cupsd_bin}" -t \
+      -c "${explicit_root}/chosen-cupsd.conf" \
+      -s "${explicit_root}/chosen-cups-files.conf" 2>&1)"
+    printf '%s\n' "${output}" | \
+      grep -Fq "\"${explicit_root}/chosen-cups-files.conf\" is OK."
+    printf '%s\n' "${output}" | \
+      grep -Fq "\"${explicit_root}/chosen-cupsd.conf\" is OK."
+
+    cat > "${WORK_DIR}/cups-snmp-smoke.c" <<'EOF'
+    #include <stdio.h>
+    extern const char *_cupsSNMPDefaultCommunity(void);
+    int main(void) {
+      puts(_cupsSNMPDefaultCommunity());
+      return 0;
+    }
+    EOF
+    gcc \
+      -L"${OUT_DIR}/usr/lib" \
+      -Wl,-rpath,"${OUT_DIR}/usr/lib" \
+      -o "${WORK_DIR}/cups-snmp-smoke" \
+      "${WORK_DIR}/cups-snmp-smoke.c" \
+      -lcups
+
+    snmp_smoke="${WORK_DIR}/cups-snmp-smoke"
+    snmp_backend="${OUT_DIR}/usr/lib/cups/backend/snmp"
+    check_snmp_tier() {
+      expected_path="$1"
+      expected_community="$2"
+      output="$(LD_LIBRARY_PATH="${cups_library_path}" "${snmp_backend}" 2>&1)"
+      printf '%s\n' "${output}" | grep -Fq "${expected_path}"
+      test "$(LD_LIBRARY_PATH="${cups_library_path}" "${snmp_smoke}")" = \
+        "${expected_community}"
+    }
+
+    printf '%s\n' 'Community vendor' > /usr/lib/cups/snmp.conf
+    check_snmp_tier /usr/lib/cups/snmp.conf vendor
+
+    printf '%s\n' 'Community transient' > /run/cups/snmp.conf
+    check_snmp_tier /run/cups/snmp.conf transient
+
+    printf '%s\n' 'Community administrator' > /etc/cups/snmp.conf
+    check_snmp_tier /etc/cups/snmp.conf administrator
+
+    : > /etc/cups/snmp.conf
+    check_snmp_tier /etc/cups/snmp.conf public
+
+    snmp_explicit="${WORK_DIR}/cups-snmp-explicit"
+    mkdir -p "${snmp_explicit}"
+    printf '%s\n' 'Community explicit' > "${snmp_explicit}/snmp.conf"
+    output="$(CUPS_SERVERROOT="${snmp_explicit}" \
+      LD_LIBRARY_PATH="${cups_library_path}" "${snmp_backend}" 2>&1)"
+    printf '%s\n' "${output}" | grep -Fq "${snmp_explicit}/snmp.conf"
+    test "$(CUPS_SERVERROOT="${snmp_explicit}" \
+      LD_LIBRARY_PATH="${cups_library_path}" "${snmp_smoke}")" = explicit
+
+    rm /etc/cups/snmp.conf
+    output="$(CUPS_SERVERROOT=/etc/cups \
+      LD_LIBRARY_PATH="${cups_library_path}" "${snmp_backend}" 2>&1)"
+    printf '%s\n' "${output}" | grep -Fq /etc/cups/snmp.conf
+    test "$(CUPS_SERVERROOT=/etc/cups \
+      LD_LIBRARY_PATH="${cups_library_path}" "${snmp_smoke}")" = public
+
+    # client.conf, cupsfilter, cupsctl, and the mailto notifier now share the
+    # libcups selector, so each must see a vendor or transient file that only
+    # the scheduler used to see.
+    cat > "${WORK_DIR}/cups-client-smoke.c" <<'EOF'
+    #include <stdio.h>
+    #include <cups/cups.h>
+    int main(void) {
+      puts(cupsServer());
+      return 0;
+    }
+    EOF
+    gcc \
+      -I"${OUT_DIR}/usr/include" \
+      -L"${OUT_DIR}/usr/lib" \
+      -Wl,-rpath,"${OUT_DIR}/usr/lib" \
+      -o "${WORK_DIR}/cups-client-smoke" \
+      "${WORK_DIR}/cups-client-smoke.c" \
+      -lcups
+
+    client_smoke="${WORK_DIR}/cups-client-smoke"
+    check_client_tier() {
+      actual="$(LD_LIBRARY_PATH="${cups_library_path}" "${client_smoke}")"
+      if [ "${actual}" != "$1" ]; then
+        printf 'client.conf: expected ServerName %s, got %s\n' "$1" "${actual}" >&2
+        exit 1
+      fi
+    }
+
+    rm -f /etc/cups/client.conf /run/cups/client.conf /usr/lib/cups/client.conf
+    printf 'ServerName uapi-vendor\n' > /usr/lib/cups/client.conf
+    check_client_tier uapi-vendor
+    printf 'ServerName uapi-transient\n' > /run/cups/client.conf
+    check_client_tier uapi-transient
+    printf 'ServerName uapi-admin\n' > /etc/cups/client.conf
+    check_client_tier uapi-admin
+    rm /etc/cups/client.conf /run/cups/client.conf /usr/lib/cups/client.conf
+
+    printf 'cups UAPI smoke: cupsd, snmp, and client.conf honoured all tiers\n'
+
+    daemon_root="${WORK_DIR}/cups-daemon-smoke"
+    daemon_socket="${daemon_root}/cups.sock"
+    mkdir -p \
+      "${daemon_root}/cache" \
+      "${daemon_root}/request" \
+      "${daemon_root}/server" \
+      "${daemon_root}/state" \
+      "${daemon_root}/tmp"
+    chmod 777 \
+      "${daemon_root}" \
+      "${daemon_root}/cache" \
+      "${daemon_root}/request" \
+      "${daemon_root}/server" \
+      "${daemon_root}/state" \
+      "${daemon_root}/tmp"
+
+    cat > "${daemon_root}/server/cupsd.conf" <<EOF
+    Listen ${daemon_socket}
+    Browsing Off
+    WebInterface No
+    <Location />
+      Order allow,deny
+      Allow all
+    </Location>
+    EOF
+    cat > "${daemon_root}/server/cups-files.conf" <<EOF
+    User nobody
+    Group nobody
+    SystemGroup root
+    AccessLog stderr
+    ErrorLog stderr
+    PageLog stderr
+    CacheDir ${daemon_root}/cache
+    DataDir ${OUT_DIR}/usr/share/cups
+    DocumentRoot ${OUT_DIR}/usr/share/doc/cups
+    RequestRoot ${daemon_root}/request
+    ServerBin ${OUT_DIR}/usr/lib/cups
+    StateDir ${daemon_root}/state
+    TempDir ${daemon_root}/tmp
+    EOF
+
+    LD_LIBRARY_PATH="${cups_library_path}" \
+      "${cupsd_bin}" -f \
+      -c "${daemon_root}/server/cupsd.conf" \
+      -s "${daemon_root}/server/cups-files.conf" \
+      > "${daemon_root}/cupsd.log" 2>&1 &
+    cups_pid=$!
+
+    attempts=0
+    while [ ! -S "${daemon_socket}" ]; do
+      kill -0 "${cups_pid}"
+      attempts=$((attempts + 1))
+      test "${attempts}" -lt 100
+      sleep 0.05
+    done
+
+    output="$(CUPS_SERVER="${daemon_socket}" \
+      LD_LIBRARY_PATH="${cups_library_path}" \
+      "${OUT_DIR}/usr/bin/lpstat" -r)"
+    test "${output}" = 'scheduler is running'
+    kill "${cups_pid}"
+    wait "${cups_pid}" || true
+    cups_pid=
+
+    cleanup_cups_smoke
+    trap - EXIT HUP INT TERM
+
+    find ${OUT_DIR} -type f -executable -exec strip --strip-unneeded {} \; 2>/dev/null || true
+    find ${OUT_DIR} -name '*.a' -exec objcopy --enable-deterministic-archives {} \; 2>/dev/null || true
+    find "${OUT_DIR}" -exec touch -d "2024-01-01T00:00:00+00:00" {} \;
+
+bundles:
+  dev:
+  - bin
+  - dev
+  - lib
+
+  full:
+  - bin
+  - dev
+  - doc
+  - lib
+
+outputs:
+  bin:
+    files:
+    - path: /usr/bin/cancel
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/cups-config
+    - path: /usr/bin/cupstestppd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+      - /usr/lib/libm.so.6
+    - path: /usr/bin/ippeveprinter
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/ipptool
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/lp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/lpoptions
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/lpq
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/lpr
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/lprm
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/lpstat
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/ppdc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/ppdhtml
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/ppdi
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/bin/ppdmerge
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/ppdpo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+
+  dev:
+    files:
+    - path: /usr/include/cups/adminutil.h
+    - path: /usr/include/cups/array.h
+    - path: /usr/include/cups/backend.h
+    - path: /usr/include/cups/cups.h
+    - path: /usr/include/cups/dir.h
+    - path: /usr/include/cups/file.h
+    - path: /usr/include/cups/http.h
+    - path: /usr/include/cups/ipp.h
+    - path: /usr/include/cups/language.h
+    - path: /usr/include/cups/ppd.h
+    - path: /usr/include/cups/pwg.h
+    - path: /usr/include/cups/raster.h
+    - path: /usr/include/cups/sidechannel.h
+    - path: /usr/include/cups/transcode.h
+    - path: /usr/include/cups/versioning.h
+    - path: /usr/lib/pkgconfig/cups.pc
+
+  doc:
+    files:
+    - path: /usr/share/doc/cups/apple-touch-icon.png
+    - path: /usr/share/doc/cups/cups-printable.css
+    - path: /usr/share/doc/cups/cups.css
+    - path: /usr/share/doc/cups/da/index.html
+    - path: /usr/share/doc/cups/de/index.html
+    - path: /usr/share/doc/cups/es/index.html
+    - path: /usr/share/doc/cups/fr/index.html
+    - path: /usr/share/doc/cups/help/accounting.html
+    - path: /usr/share/doc/cups/help/admin.html
+    - path: /usr/share/doc/cups/help/api-admin.html
+    - path: /usr/share/doc/cups/help/api-filter.html
+    - path: /usr/share/doc/cups/help/api-ppd.html
+    - path: /usr/share/doc/cups/help/cgi.html
+    - path: /usr/share/doc/cups/help/cupspm.html
+    - path: /usr/share/doc/cups/help/encryption.html
+    - path: /usr/share/doc/cups/help/firewalls.html
+    - path: /usr/share/doc/cups/help/glossary.html
+    - path: /usr/share/doc/cups/help/kerberos.html
+    - path: /usr/share/doc/cups/help/license.html
+    - path: /usr/share/doc/cups/help/man-backend.html
+    - path: /usr/share/doc/cups/help/man-cancel.html
+    - path: /usr/share/doc/cups/help/man-classes.conf.html
+    - path: /usr/share/doc/cups/help/man-client.conf.html
+    - path: /usr/share/doc/cups/help/man-cups-config.html
+    - path: /usr/share/doc/cups/help/man-cups-files.conf.html
+    - path: /usr/share/doc/cups/help/man-cups-lpd.html
+    - path: /usr/share/doc/cups/help/man-cups-snmp.html
+    - path: /usr/share/doc/cups/help/man-cups.html
+    - path: /usr/share/doc/cups/help/man-cupsaccept.html
+    - path: /usr/share/doc/cups/help/man-cupsd-helper.html
+    - path: /usr/share/doc/cups/help/man-cupsd-logs.html
+    - path: /usr/share/doc/cups/help/man-cupsd.conf.html
+    - path: /usr/share/doc/cups/help/man-cupsd.html
+    - path: /usr/share/doc/cups/help/man-cupsenable.html
+    - path: /usr/share/doc/cups/help/man-cupstestppd.html
+    - path: /usr/share/doc/cups/help/man-filter.html
+    - path: /usr/share/doc/cups/help/man-ippevepcl.html
+    - path: /usr/share/doc/cups/help/man-ippeveprinter.html
+    - path: /usr/share/doc/cups/help/man-ipptool.html
+    - path: /usr/share/doc/cups/help/man-ipptoolfile.html
+    - path: /usr/share/doc/cups/help/man-lp.html
+    - path: /usr/share/doc/cups/help/man-lpadmin.html
+    - path: /usr/share/doc/cups/help/man-lpc.html
+    - path: /usr/share/doc/cups/help/man-lpinfo.html
+    - path: /usr/share/doc/cups/help/man-lpmove.html
+    - path: /usr/share/doc/cups/help/man-lpoptions.html
+    - path: /usr/share/doc/cups/help/man-lpq.html
+    - path: /usr/share/doc/cups/help/man-lpr.html
+    - path: /usr/share/doc/cups/help/man-lprm.html
+    - path: /usr/share/doc/cups/help/man-lpstat.html
+    - path: /usr/share/doc/cups/help/man-mime.convs.html
+    - path: /usr/share/doc/cups/help/man-mime.types.html
+    - path: /usr/share/doc/cups/help/man-notifier.html
+    - path: /usr/share/doc/cups/help/man-ppdc.html
+    - path: /usr/share/doc/cups/help/man-ppdhtml.html
+    - path: /usr/share/doc/cups/help/man-ppdi.html
+    - path: /usr/share/doc/cups/help/man-ppdmerge.html
+    - path: /usr/share/doc/cups/help/man-ppdpo.html
+    - path: /usr/share/doc/cups/help/man-printers.conf.html
+    - path: /usr/share/doc/cups/help/man-subscriptions.conf.html
+    - path: /usr/share/doc/cups/help/network.html
+    - path: /usr/share/doc/cups/help/options.html
+    - path: /usr/share/doc/cups/help/overview.html
+    - path: /usr/share/doc/cups/help/policies.html
+    - path: /usr/share/doc/cups/help/postscript-driver.html
+    - path: /usr/share/doc/cups/help/ppd-compiler.html
+    - path: /usr/share/doc/cups/help/raster-driver.html
+    - path: /usr/share/doc/cups/help/ref-ppdcfile.html
+    - path: /usr/share/doc/cups/help/security.html
+    - path: /usr/share/doc/cups/help/sharing.html
+    - path: /usr/share/doc/cups/help/spec-banner.html
+    - path: /usr/share/doc/cups/help/spec-command.html
+    - path: /usr/share/doc/cups/help/spec-design.html
+    - path: /usr/share/doc/cups/help/spec-ipp.html
+    - path: /usr/share/doc/cups/help/spec-ppd.html
+    - path: /usr/share/doc/cups/help/spec-raster.html
+    - path: /usr/share/doc/cups/help/spec-stp.html
+    - path: /usr/share/doc/cups/help/translation.html
+    - path: /usr/share/doc/cups/images/cups-block-diagram.png
+    - path: /usr/share/doc/cups/images/cups-command-chain.png
+    - path: /usr/share/doc/cups/images/cups-postscript-chain.png
+    - path: /usr/share/doc/cups/images/cups-raster-chain.png
+    - path: /usr/share/doc/cups/images/cups.png
+    - path: /usr/share/doc/cups/images/raster-organization.png
+    - path: /usr/share/doc/cups/images/raster.png
+    - path: /usr/share/doc/cups/images/sample-image.png
+    - path: /usr/share/doc/cups/images/smiley.jpg
+    - path: /usr/share/doc/cups/images/wait.gif
+    - path: /usr/share/doc/cups/index.html
+    - path: /usr/share/doc/cups/ja/index.html
+    - path: /usr/share/doc/cups/pt_BR/index.html
+    - path: /usr/share/doc/cups/robots.txt
+    - path: /usr/share/doc/cups/ru/index.html
+
+  lib:
+    files:
+    - path: /usr/lib/cups/backend/http
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/backend/https
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/backend/ipp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/backend/ipps
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/backend/lpd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/backend/snmp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/backend/socket
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/backend/usb
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/cgi-bin/admin.cgi
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/cgi-bin/classes.cgi
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/cgi-bin/help.cgi
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/cgi-bin/jobs.cgi
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/cgi-bin/printers.cgi
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/command/ippevepcl
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/command/ippeveps
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/cups-files.conf
+    - path: /usr/lib/cups/cupsd.conf
+    - path: /usr/lib/cups/daemon/cups-deviced
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/daemon/cups-driverd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+      - /usr/lib/libgcc_s.so.1
+      - /usr/lib/libstdc++.so.6
+    - path: /usr/lib/cups/daemon/cups-exec
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+    - path: /usr/lib/cups/daemon/cups-lpd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/filter/commandtops
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/filter/gziptoany
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/filter/pstops
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/filter/rastertoepson
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/filter/rastertohp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/filter/rastertolabel
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/filter/rastertopwg
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/monitor/bcp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/monitor/tbcp
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/notifier/mailto
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/notifier/rss
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/cups/snmp.conf
+    - path: /usr/lib/libcups.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libcups.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libcrypto.so.3
+      - /usr/lib/libm.so.6
+      - /usr/lib/libssl.so.3
+      - /usr/lib/libz.so.1
+    - path: /usr/lib/libcupsimage.so
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/lib/libcupsimage.so.2
+      needs:
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+
+  locale:
+    files:
+    - path: /usr/share/locale/ca/cups_ca.po
+    - path: /usr/share/locale/cs/cups_cs.po
+    - path: /usr/share/locale/da/cups_da.po
+    - path: /usr/share/locale/de/cups_de.po
+    - path: /usr/share/locale/en/cups_en.po
+    - path: /usr/share/locale/es/cups_es.po
+    - path: /usr/share/locale/fr/cups_fr.po
+    - path: /usr/share/locale/it/cups_it.po
+    - path: /usr/share/locale/ja/cups_ja.po
+    - path: /usr/share/locale/pt_BR/cups_pt_BR.po
+    - path: /usr/share/locale/ru/cups_ru.po
+    - path: /usr/share/locale/zh_CN/cups_zh_CN.po
+
+  man:
+    files:
+    - path: /usr/share/man/man1/cancel.1
+    - path: /usr/share/man/man1/cups-config.1
+    - path: /usr/share/man/man1/cups.1
+    - path: /usr/share/man/man1/cupstestppd.1
+    - path: /usr/share/man/man1/ippeveprinter.1
+    - path: /usr/share/man/man1/ipptool.1
+    - path: /usr/share/man/man1/lp.1
+    - path: /usr/share/man/man1/lpoptions.1
+    - path: /usr/share/man/man1/lpq.1
+    - path: /usr/share/man/man1/lpr.1
+    - path: /usr/share/man/man1/lprm.1
+    - path: /usr/share/man/man1/lpstat.1
+    - path: /usr/share/man/man1/ppdc.1
+    - path: /usr/share/man/man1/ppdhtml.1
+    - path: /usr/share/man/man1/ppdi.1
+    - path: /usr/share/man/man1/ppdmerge.1
+    - path: /usr/share/man/man1/ppdpo.1
+    - path: /usr/share/man/man5/classes.conf.5
+    - path: /usr/share/man/man5/client.conf.5
+    - path: /usr/share/man/man5/cups-files.conf.5
+    - path: /usr/share/man/man5/cups-snmp.conf.5
+    - path: /usr/share/man/man5/cupsd-logs.5
+    - path: /usr/share/man/man5/cupsd.conf.5
+    - path: /usr/share/man/man5/ipptoolfile.5
+    - path: /usr/share/man/man5/mailto.conf.5
+    - path: /usr/share/man/man5/mime.convs.5
+    - path: /usr/share/man/man5/mime.types.5
+    - path: /usr/share/man/man5/ppdcfile.5
+    - path: /usr/share/man/man5/printers.conf.5
+    - path: /usr/share/man/man5/subscriptions.conf.5
+    - path: /usr/share/man/man7/backend.7
+    - path: /usr/share/man/man7/filter.7
+    - path: /usr/share/man/man7/ippevepcl.7
+    - path: /usr/share/man/man7/ippeveps.7
+    - path: /usr/share/man/man7/notifier.7
+    - path: /usr/share/man/man8/cups-deviced.8
+    - path: /usr/share/man/man8/cups-driverd.8
+    - path: /usr/share/man/man8/cups-exec.8
+    - path: /usr/share/man/man8/cups-lpd.8
+    - path: /usr/share/man/man8/cups-snmp.8
+    - path: /usr/share/man/man8/cupsaccept.8
+    - path: /usr/share/man/man8/cupsctl.8
+    - path: /usr/share/man/man8/cupsd-helper.8
+    - path: /usr/share/man/man8/cupsd.8
+    - path: /usr/share/man/man8/cupsdisable.8
+    - path: /usr/share/man/man8/cupsenable.8
+    - path: /usr/share/man/man8/cupsfilter.8
+    - path: /usr/share/man/man8/cupsreject.8
+    - path: /usr/share/man/man8/lpadmin.8
+    - path: /usr/share/man/man8/lpc.8
+    - path: /usr/share/man/man8/lpinfo.8
+    - path: /usr/share/man/man8/lpmove.8
+
+  misc:
+    files:
+    - path: /usr/bin/cupsaccept
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/cupsctl
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/cupsd
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libacl.so.1
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcrypt.so.2
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/cupsdisable
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/cupsenable
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/cupsfilter
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/cupsreject
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/lpadmin
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/lpc
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/lpinfo
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/bin/lpmove
+      needs:
+      - /usr/lib/ld-linux-x86-64.so.2
+      - /usr/lib/libc.so.6
+      - /usr/lib/libcups.so.2
+    - path: /usr/share/applications/cups.desktop
+    - path: /usr/share/cups/drv/sample.drv
+    - path: /usr/share/cups/examples/color.drv
+    - path: /usr/share/cups/examples/constraint.drv
+    - path: /usr/share/cups/examples/custom.drv
+    - path: /usr/share/cups/examples/grouping.drv
+    - path: /usr/share/cups/examples/laserjet-basic.drv
+    - path: /usr/share/cups/examples/laserjet-pjl.drv
+    - path: /usr/share/cups/examples/minimum.drv
+    - path: /usr/share/cups/examples/postscript.drv
+    - path: /usr/share/cups/examples/r300-basic.drv
+    - path: /usr/share/cups/examples/r300-colorman.drv
+    - path: /usr/share/cups/examples/r300-remote.drv
+    - path: /usr/share/cups/ipptool/cancel-current-job.test
+    - path: /usr/share/cups/ipptool/color.jpg
+    - path: /usr/share/cups/ipptool/create-job-format.test
+    - path: /usr/share/cups/ipptool/create-job-sheets.test
+    - path: /usr/share/cups/ipptool/create-job-timeout.test
+    - path: /usr/share/cups/ipptool/create-job.test
+    - path: /usr/share/cups/ipptool/create-printer-subscription.test
+    - path: /usr/share/cups/ipptool/cups-create-local-printer.test
+    - path: /usr/share/cups/ipptool/document-a4.pdf
+    - path: /usr/share/cups/ipptool/document-a4.ps
+    - path: /usr/share/cups/ipptool/document-letter.pdf
+    - path: /usr/share/cups/ipptool/document-letter.ps
+    - path: /usr/share/cups/ipptool/fax-job.test
+    - path: /usr/share/cups/ipptool/get-completed-jobs.test
+    - path: /usr/share/cups/ipptool/get-devices.test
+    - path: /usr/share/cups/ipptool/get-job-attributes.test
+    - path: /usr/share/cups/ipptool/get-job-attributes2.test
+    - path: /usr/share/cups/ipptool/get-job-template-attributes.test
+    - path: /usr/share/cups/ipptool/get-jobs.test
+    - path: /usr/share/cups/ipptool/get-notifications.test
+    - path: /usr/share/cups/ipptool/get-ppd-printer.test
+    - path: /usr/share/cups/ipptool/get-ppd.test
+    - path: /usr/share/cups/ipptool/get-ppds-drv-only.test
+    - path: /usr/share/cups/ipptool/get-ppds-language.test
+    - path: /usr/share/cups/ipptool/get-ppds-make-and-model.test
+    - path: /usr/share/cups/ipptool/get-ppds-make.test
+    - path: /usr/share/cups/ipptool/get-ppds-product.test
+    - path: /usr/share/cups/ipptool/get-ppds-psversion.test
+    - path: /usr/share/cups/ipptool/get-ppds.test
+    - path: /usr/share/cups/ipptool/get-printer-attributes-suite.test
+    - path: /usr/share/cups/ipptool/get-printer-attributes.test
+    - path: /usr/share/cups/ipptool/get-printer-description-attributes.test
+    - path: /usr/share/cups/ipptool/get-printers-printer-id.test
+    - path: /usr/share/cups/ipptool/get-printers.test
+    - path: /usr/share/cups/ipptool/get-subscriptions.test
+    - path: /usr/share/cups/ipptool/gray.jpg
+    - path: /usr/share/cups/ipptool/identify-printer-display.test
+    - path: /usr/share/cups/ipptool/identify-printer-multiple.test
+    - path: /usr/share/cups/ipptool/identify-printer.test
+    - path: /usr/share/cups/ipptool/ipp-1.1.test
+    - path: /usr/share/cups/ipptool/ipp-2.0.test
+    - path: /usr/share/cups/ipptool/ipp-2.1.test
+    - path: /usr/share/cups/ipptool/ipp-2.2.test
+    - path: /usr/share/cups/ipptool/ipp-backend.test
+    - path: /usr/share/cups/ipptool/ipp-everywhere.test
+    - path: /usr/share/cups/ipptool/onepage-a4.pdf
+    - path: /usr/share/cups/ipptool/onepage-a4.ps
+    - path: /usr/share/cups/ipptool/onepage-letter.pdf
+    - path: /usr/share/cups/ipptool/onepage-letter.ps
+    - path: /usr/share/cups/ipptool/print-job-and-wait.test
+    - path: /usr/share/cups/ipptool/print-job-deflate.test
+    - path: /usr/share/cups/ipptool/print-job-gzip.test
+    - path: /usr/share/cups/ipptool/print-job-hold.test
+    - path: /usr/share/cups/ipptool/print-job-letter.test
+    - path: /usr/share/cups/ipptool/print-job-manual.test
+    - path: /usr/share/cups/ipptool/print-job-media-col.test
+    - path: /usr/share/cups/ipptool/print-job-media-needed.test
+    - path: /usr/share/cups/ipptool/print-job-password.test
+    - path: /usr/share/cups/ipptool/print-job.test
+    - path: /usr/share/cups/ipptool/print-uri.test
+    - path: /usr/share/cups/ipptool/set-attrs-hold.test
+    - path: /usr/share/cups/ipptool/testfile.jpg
+    - path: /usr/share/cups/ipptool/testfile.pcl
+    - path: /usr/share/cups/ipptool/testfile.pdf
+    - path: /usr/share/cups/ipptool/testfile.ps
+    - path: /usr/share/cups/ipptool/testfile.txt
+    - path: /usr/share/cups/ipptool/validate-job.test
+    - path: /usr/share/cups/mime/mime.convs
+    - path: /usr/share/cups/mime/mime.types
+    - path: /usr/share/cups/ppdc/epson.h
+    - path: /usr/share/cups/ppdc/font.defs
+    - path: /usr/share/cups/ppdc/hp.h
+    - path: /usr/share/cups/ppdc/label.h
+    - path: /usr/share/cups/ppdc/media.defs
+    - path: /usr/share/cups/ppdc/raster.defs
+    - path: /usr/share/cups/templates/add-class.tmpl
+    - path: /usr/share/cups/templates/add-printer.tmpl
+    - path: /usr/share/cups/templates/admin.tmpl
+    - path: /usr/share/cups/templates/choose-device.tmpl
+    - path: /usr/share/cups/templates/choose-make.tmpl
+    - path: /usr/share/cups/templates/choose-model.tmpl
+    - path: /usr/share/cups/templates/choose-serial.tmpl
+    - path: /usr/share/cups/templates/choose-uri.tmpl
+    - path: /usr/share/cups/templates/class-added.tmpl
+    - path: /usr/share/cups/templates/class-confirm.tmpl
+    - path: /usr/share/cups/templates/class-deleted.tmpl
+    - path: /usr/share/cups/templates/class-jobs-header.tmpl
+    - path: /usr/share/cups/templates/class-modified.tmpl
+    - path: /usr/share/cups/templates/class.tmpl
+    - path: /usr/share/cups/templates/classes-header.tmpl
+    - path: /usr/share/cups/templates/classes.tmpl
+    - path: /usr/share/cups/templates/command.tmpl
+    - path: /usr/share/cups/templates/da/add-class.tmpl
+    - path: /usr/share/cups/templates/da/add-printer.tmpl
+    - path: /usr/share/cups/templates/da/admin.tmpl
+    - path: /usr/share/cups/templates/da/choose-device.tmpl
+    - path: /usr/share/cups/templates/da/choose-make.tmpl
+    - path: /usr/share/cups/templates/da/choose-model.tmpl
+    - path: /usr/share/cups/templates/da/choose-serial.tmpl
+    - path: /usr/share/cups/templates/da/choose-uri.tmpl
+    - path: /usr/share/cups/templates/da/class-added.tmpl
+    - path: /usr/share/cups/templates/da/class-confirm.tmpl
+    - path: /usr/share/cups/templates/da/class-deleted.tmpl
+    - path: /usr/share/cups/templates/da/class-jobs-header.tmpl
+    - path: /usr/share/cups/templates/da/class-modified.tmpl
+    - path: /usr/share/cups/templates/da/class.tmpl
+    - path: /usr/share/cups/templates/da/classes-header.tmpl
+    - path: /usr/share/cups/templates/da/classes.tmpl
+    - path: /usr/share/cups/templates/da/command.tmpl
+    - path: /usr/share/cups/templates/da/edit-config.tmpl
+    - path: /usr/share/cups/templates/da/error-op.tmpl
+    - path: /usr/share/cups/templates/da/error.tmpl
+    - path: /usr/share/cups/templates/da/header.tmpl
+    - path: /usr/share/cups/templates/da/help-header.tmpl
+    - path: /usr/share/cups/templates/da/help-printable.tmpl
+    - path: /usr/share/cups/templates/da/help-trailer.tmpl
+    - path: /usr/share/cups/templates/da/job-cancel.tmpl
+    - path: /usr/share/cups/templates/da/job-hold.tmpl
+    - path: /usr/share/cups/templates/da/job-move.tmpl
+    - path: /usr/share/cups/templates/da/job-moved.tmpl
+    - path: /usr/share/cups/templates/da/job-release.tmpl
+    - path: /usr/share/cups/templates/da/job-restart.tmpl
+    - path: /usr/share/cups/templates/da/jobs-header.tmpl
+    - path: /usr/share/cups/templates/da/jobs.tmpl
+    - path: /usr/share/cups/templates/da/list-available-printers.tmpl
+    - path: /usr/share/cups/templates/da/modify-class.tmpl
+    - path: /usr/share/cups/templates/da/modify-printer.tmpl
+    - path: /usr/share/cups/templates/da/norestart.tmpl
+    - path: /usr/share/cups/templates/da/option-boolean.tmpl
+    - path: /usr/share/cups/templates/da/option-conflict.tmpl
+    - path: /usr/share/cups/templates/da/option-header.tmpl
+    - path: /usr/share/cups/templates/da/option-pickmany.tmpl
+    - path: /usr/share/cups/templates/da/option-pickone.tmpl
+    - path: /usr/share/cups/templates/da/option-trailer.tmpl
+    - path: /usr/share/cups/templates/da/pager.tmpl
+    - path: /usr/share/cups/templates/da/printer-accept.tmpl
+    - path: /usr/share/cups/templates/da/printer-added.tmpl
+    - path: /usr/share/cups/templates/da/printer-cancel-jobs.tmpl
+    - path: /usr/share/cups/templates/da/printer-configured.tmpl
+    - path: /usr/share/cups/templates/da/printer-confirm.tmpl
+    - path: /usr/share/cups/templates/da/printer-default.tmpl
+    - path: /usr/share/cups/templates/da/printer-deleted.tmpl
+    - path: /usr/share/cups/templates/da/printer-jobs-header.tmpl
+    - path: /usr/share/cups/templates/da/printer-modified.tmpl
+    - path: /usr/share/cups/templates/da/printer-reject.tmpl
+    - path: /usr/share/cups/templates/da/printer-start.tmpl
+    - path: /usr/share/cups/templates/da/printer-stop.tmpl
+    - path: /usr/share/cups/templates/da/printer.tmpl
+    - path: /usr/share/cups/templates/da/printers-header.tmpl
+    - path: /usr/share/cups/templates/da/printers.tmpl
+    - path: /usr/share/cups/templates/da/restart.tmpl
+    - path: /usr/share/cups/templates/da/search.tmpl
+    - path: /usr/share/cups/templates/da/set-printer-options-header.tmpl
+    - path: /usr/share/cups/templates/da/set-printer-options-trailer.tmpl
+    - path: /usr/share/cups/templates/da/test-page.tmpl
+    - path: /usr/share/cups/templates/da/trailer.tmpl
+    - path: /usr/share/cups/templates/da/users.tmpl
+    - path: /usr/share/cups/templates/de/add-class.tmpl
+    - path: /usr/share/cups/templates/de/add-printer.tmpl
+    - path: /usr/share/cups/templates/de/admin.tmpl
+    - path: /usr/share/cups/templates/de/choose-device.tmpl
+    - path: /usr/share/cups/templates/de/choose-make.tmpl
+    - path: /usr/share/cups/templates/de/choose-model.tmpl
+    - path: /usr/share/cups/templates/de/choose-serial.tmpl
+    - path: /usr/share/cups/templates/de/choose-uri.tmpl
+    - path: /usr/share/cups/templates/de/class-added.tmpl
+    - path: /usr/share/cups/templates/de/class-confirm.tmpl
+    - path: /usr/share/cups/templates/de/class-deleted.tmpl
+    - path: /usr/share/cups/templates/de/class-jobs-header.tmpl
+    - path: /usr/share/cups/templates/de/class-modified.tmpl
+    - path: /usr/share/cups/templates/de/class.tmpl
+    - path: /usr/share/cups/templates/de/classes-header.tmpl
+    - path: /usr/share/cups/templates/de/classes.tmpl
+    - path: /usr/share/cups/templates/de/command.tmpl
+    - path: /usr/share/cups/templates/de/edit-config.tmpl
+    - path: /usr/share/cups/templates/de/error-op.tmpl
+    - path: /usr/share/cups/templates/de/error.tmpl
+    - path: /usr/share/cups/templates/de/header.tmpl
+    - path: /usr/share/cups/templates/de/help-header.tmpl
+    - path: /usr/share/cups/templates/de/help-printable.tmpl
+    - path: /usr/share/cups/templates/de/help-trailer.tmpl
+    - path: /usr/share/cups/templates/de/job-cancel.tmpl
+    - path: /usr/share/cups/templates/de/job-hold.tmpl
+    - path: /usr/share/cups/templates/de/job-move.tmpl
+    - path: /usr/share/cups/templates/de/job-moved.tmpl
+    - path: /usr/share/cups/templates/de/job-release.tmpl
+    - path: /usr/share/cups/templates/de/job-restart.tmpl
+    - path: /usr/share/cups/templates/de/jobs-header.tmpl
+    - path: /usr/share/cups/templates/de/jobs.tmpl
+    - path: /usr/share/cups/templates/de/list-available-printers.tmpl
+    - path: /usr/share/cups/templates/de/modify-class.tmpl
+    - path: /usr/share/cups/templates/de/modify-printer.tmpl
+    - path: /usr/share/cups/templates/de/norestart.tmpl
+    - path: /usr/share/cups/templates/de/option-boolean.tmpl
+    - path: /usr/share/cups/templates/de/option-conflict.tmpl
+    - path: /usr/share/cups/templates/de/option-header.tmpl
+    - path: /usr/share/cups/templates/de/option-pickmany.tmpl
+    - path: /usr/share/cups/templates/de/option-pickone.tmpl
+    - path: /usr/share/cups/templates/de/option-trailer.tmpl
+    - path: /usr/share/cups/templates/de/pager.tmpl
+    - path: /usr/share/cups/templates/de/printer-accept.tmpl
+    - path: /usr/share/cups/templates/de/printer-added.tmpl
+    - path: /usr/share/cups/templates/de/printer-cancel-jobs.tmpl
+    - path: /usr/share/cups/templates/de/printer-configured.tmpl
+    - path: /usr/share/cups/templates/de/printer-confirm.tmpl
+    - path: /usr/share/cups/templates/de/printer-default.tmpl
+    - path: /usr/share/cups/templates/de/printer-deleted.tmpl
+    - path: /usr/share/cups/templates/de/printer-jobs-header.tmpl
+    - path: /usr/share/cups/templates/de/printer-modified.tmpl
+    - path: /usr/share/cups/templates/de/printer-reject.tmpl
+    - path: /usr/share/cups/templates/de/printer-start.tmpl
+    - path: /usr/share/cups/templates/de/printer-stop.tmpl
+    - path: /usr/share/cups/templates/de/printer.tmpl
+    - path: /usr/share/cups/templates/de/printers-header.tmpl
+    - path: /usr/share/cups/templates/de/printers.tmpl
+    - path: /usr/share/cups/templates/de/restart.tmpl
+    - path: /usr/share/cups/templates/de/search.tmpl
+    - path: /usr/share/cups/templates/de/set-printer-options-header.tmpl
+    - path: /usr/share/cups/templates/de/set-printer-options-trailer.tmpl
+    - path: /usr/share/cups/templates/de/test-page.tmpl
+    - path: /usr/share/cups/templates/de/trailer.tmpl
+    - path: /usr/share/cups/templates/de/users.tmpl
+    - path: /usr/share/cups/templates/edit-config.tmpl
+    - path: /usr/share/cups/templates/error-op.tmpl
+    - path: /usr/share/cups/templates/error.tmpl
+    - path: /usr/share/cups/templates/es/add-class.tmpl
+    - path: /usr/share/cups/templates/es/add-printer.tmpl
+    - path: /usr/share/cups/templates/es/admin.tmpl
+    - path: /usr/share/cups/templates/es/choose-device.tmpl
+    - path: /usr/share/cups/templates/es/choose-make.tmpl
+    - path: /usr/share/cups/templates/es/choose-model.tmpl
+    - path: /usr/share/cups/templates/es/choose-serial.tmpl
+    - path: /usr/share/cups/templates/es/choose-uri.tmpl
+    - path: /usr/share/cups/templates/es/class-added.tmpl
+    - path: /usr/share/cups/templates/es/class-confirm.tmpl
+    - path: /usr/share/cups/templates/es/class-deleted.tmpl
+    - path: /usr/share/cups/templates/es/class-jobs-header.tmpl
+    - path: /usr/share/cups/templates/es/class-modified.tmpl
+    - path: /usr/share/cups/templates/es/class.tmpl
+    - path: /usr/share/cups/templates/es/classes-header.tmpl
+    - path: /usr/share/cups/templates/es/classes.tmpl
+    - path: /usr/share/cups/templates/es/command.tmpl
+    - path: /usr/share/cups/templates/es/edit-config.tmpl
+    - path: /usr/share/cups/templates/es/error-op.tmpl
+    - path: /usr/share/cups/templates/es/error.tmpl
+    - path: /usr/share/cups/templates/es/header.tmpl
+    - path: /usr/share/cups/templates/es/help-header.tmpl
+    - path: /usr/share/cups/templates/es/help-printable.tmpl
+    - path: /usr/share/cups/templates/es/help-trailer.tmpl
+    - path: /usr/share/cups/templates/es/job-cancel.tmpl
+    - path: /usr/share/cups/templates/es/job-hold.tmpl
+    - path: /usr/share/cups/templates/es/job-move.tmpl
+    - path: /usr/share/cups/templates/es/job-moved.tmpl
+    - path: /usr/share/cups/templates/es/job-release.tmpl
+    - path: /usr/share/cups/templates/es/job-restart.tmpl
+    - path: /usr/share/cups/templates/es/jobs-header.tmpl
+    - path: /usr/share/cups/templates/es/jobs.tmpl
+    - path: /usr/share/cups/templates/es/list-available-printers.tmpl
+    - path: /usr/share/cups/templates/es/modify-class.tmpl
+    - path: /usr/share/cups/templates/es/modify-printer.tmpl
+    - path: /usr/share/cups/templates/es/norestart.tmpl
+    - path: /usr/share/cups/templates/es/option-boolean.tmpl
+    - path: /usr/share/cups/templates/es/option-conflict.tmpl
+    - path: /usr/share/cups/templates/es/option-header.tmpl
+    - path: /usr/share/cups/templates/es/option-pickmany.tmpl
+    - path: /usr/share/cups/templates/es/option-pickone.tmpl
+    - path: /usr/share/cups/templates/es/option-trailer.tmpl
+    - path: /usr/share/cups/templates/es/pager.tmpl
+    - path: /usr/share/cups/templates/es/printer-accept.tmpl
+    - path: /usr/share/cups/templates/es/printer-added.tmpl
+    - path: /usr/share/cups/templates/es/printer-cancel-jobs.tmpl
+    - path: /usr/share/cups/templates/es/printer-configured.tmpl
+    - path: /usr/share/cups/templates/es/printer-confirm.tmpl
+    - path: /usr/share/cups/templates/es/printer-default.tmpl
+    - path: /usr/share/cups/templates/es/printer-deleted.tmpl
+    - path: /usr/share/cups/templates/es/printer-jobs-header.tmpl
+    - path: /usr/share/cups/templates/es/printer-modified.tmpl
+    - path: /usr/share/cups/templates/es/printer-reject.tmpl
+    - path: /usr/share/cups/templates/es/printer-start.tmpl
+    - path: /usr/share/cups/templates/es/printer-stop.tmpl
+    - path: /usr/share/cups/templates/es/printer.tmpl
+    - path: /usr/share/cups/templates/es/printers-header.tmpl
+    - path: /usr/share/cups/templates/es/printers.tmpl
+    - path: /usr/share/cups/templates/es/restart.tmpl
+    - path: /usr/share/cups/templates/es/search.tmpl
+    - path: /usr/share/cups/templates/es/set-printer-options-header.tmpl
+    - path: /usr/share/cups/templates/es/set-printer-options-trailer.tmpl
+    - path: /usr/share/cups/templates/es/test-page.tmpl
+    - path: /usr/share/cups/templates/es/trailer.tmpl
+    - path: /usr/share/cups/templates/es/users.tmpl
+    - path: /usr/share/cups/templates/fr/add-class.tmpl
+    - path: /usr/share/cups/templates/fr/add-printer.tmpl
+    - path: /usr/share/cups/templates/fr/admin.tmpl
+    - path: /usr/share/cups/templates/fr/choose-device.tmpl
+    - path: /usr/share/cups/templates/fr/choose-make.tmpl
+    - path: /usr/share/cups/templates/fr/choose-model.tmpl
+    - path: /usr/share/cups/templates/fr/choose-serial.tmpl
+    - path: /usr/share/cups/templates/fr/choose-uri.tmpl
+    - path: /usr/share/cups/templates/fr/class-added.tmpl
+    - path: /usr/share/cups/templates/fr/class-confirm.tmpl
+    - path: /usr/share/cups/templates/fr/class-deleted.tmpl
+    - path: /usr/share/cups/templates/fr/class-jobs-header.tmpl
+    - path: /usr/share/cups/templates/fr/class-modified.tmpl
+    - path: /usr/share/cups/templates/fr/class.tmpl
+    - path: /usr/share/cups/templates/fr/classes-header.tmpl
+    - path: /usr/share/cups/templates/fr/classes.tmpl
+    - path: /usr/share/cups/templates/fr/command.tmpl
+    - path: /usr/share/cups/templates/fr/edit-config.tmpl
+    - path: /usr/share/cups/templates/fr/error-op.tmpl
+    - path: /usr/share/cups/templates/fr/error.tmpl
+    - path: /usr/share/cups/templates/fr/header.tmpl
+    - path: /usr/share/cups/templates/fr/help-header.tmpl
+    - path: /usr/share/cups/templates/fr/help-printable.tmpl
+    - path: /usr/share/cups/templates/fr/help-trailer.tmpl
+    - path: /usr/share/cups/templates/fr/job-cancel.tmpl
+    - path: /usr/share/cups/templates/fr/job-hold.tmpl
+    - path: /usr/share/cups/templates/fr/job-move.tmpl
+    - path: /usr/share/cups/templates/fr/job-moved.tmpl
+    - path: /usr/share/cups/templates/fr/job-release.tmpl
+    - path: /usr/share/cups/templates/fr/job-restart.tmpl
+    - path: /usr/share/cups/templates/fr/jobs-header.tmpl
+    - path: /usr/share/cups/templates/fr/jobs.tmpl
+    - path: /usr/share/cups/templates/fr/list-available-printers.tmpl
+    - path: /usr/share/cups/templates/fr/modify-class.tmpl
+    - path: /usr/share/cups/templates/fr/modify-printer.tmpl
+    - path: /usr/share/cups/templates/fr/norestart.tmpl
+    - path: /usr/share/cups/templates/fr/option-boolean.tmpl
+    - path: /usr/share/cups/templates/fr/option-conflict.tmpl
+    - path: /usr/share/cups/templates/fr/option-header.tmpl
+    - path: /usr/share/cups/templates/fr/option-pickmany.tmpl
+    - path: /usr/share/cups/templates/fr/option-pickone.tmpl
+    - path: /usr/share/cups/templates/fr/option-trailer.tmpl
+    - path: /usr/share/cups/templates/fr/pager.tmpl
+    - path: /usr/share/cups/templates/fr/printer-accept.tmpl
+    - path: /usr/share/cups/templates/fr/printer-added.tmpl
+    - path: /usr/share/cups/templates/fr/printer-cancel-jobs.tmpl
+    - path: /usr/share/cups/templates/fr/printer-configured.tmpl
+    - path: /usr/share/cups/templates/fr/printer-confirm.tmpl
+    - path: /usr/share/cups/templates/fr/printer-default.tmpl
+    - path: /usr/share/cups/templates/fr/printer-deleted.tmpl
+    - path: /usr/share/cups/templates/fr/printer-jobs-header.tmpl
+    - path: /usr/share/cups/templates/fr/printer-modified.tmpl
+    - path: /usr/share/cups/templates/fr/printer-reject.tmpl
+    - path: /usr/share/cups/templates/fr/printer-start.tmpl
+    - path: /usr/share/cups/templates/fr/printer-stop.tmpl
+    - path: /usr/share/cups/templates/fr/printer.tmpl
+    - path: /usr/share/cups/templates/fr/printers-header.tmpl
+    - path: /usr/share/cups/templates/fr/printers.tmpl
+    - path: /usr/share/cups/templates/fr/restart.tmpl
+    - path: /usr/share/cups/templates/fr/search.tmpl
+    - path: /usr/share/cups/templates/fr/set-printer-options-header.tmpl
+    - path: /usr/share/cups/templates/fr/set-printer-options-trailer.tmpl
+    - path: /usr/share/cups/templates/fr/test-page.tmpl
+    - path: /usr/share/cups/templates/fr/trailer.tmpl
+    - path: /usr/share/cups/templates/fr/users.tmpl
+    - path: /usr/share/cups/templates/header.tmpl
+    - path: /usr/share/cups/templates/help-header.tmpl
+    - path: /usr/share/cups/templates/help-printable.tmpl
+    - path: /usr/share/cups/templates/help-trailer.tmpl
+    - path: /usr/share/cups/templates/ja/add-class.tmpl
+    - path: /usr/share/cups/templates/ja/add-printer.tmpl
+    - path: /usr/share/cups/templates/ja/admin.tmpl
+    - path: /usr/share/cups/templates/ja/choose-device.tmpl
+    - path: /usr/share/cups/templates/ja/choose-make.tmpl
+    - path: /usr/share/cups/templates/ja/choose-model.tmpl
+    - path: /usr/share/cups/templates/ja/choose-serial.tmpl
+    - path: /usr/share/cups/templates/ja/choose-uri.tmpl
+    - path: /usr/share/cups/templates/ja/class-added.tmpl
+    - path: /usr/share/cups/templates/ja/class-confirm.tmpl
+    - path: /usr/share/cups/templates/ja/class-deleted.tmpl
+    - path: /usr/share/cups/templates/ja/class-jobs-header.tmpl
+    - path: /usr/share/cups/templates/ja/class-modified.tmpl
+    - path: /usr/share/cups/templates/ja/class.tmpl
+    - path: /usr/share/cups/templates/ja/classes-header.tmpl
+    - path: /usr/share/cups/templates/ja/classes.tmpl
+    - path: /usr/share/cups/templates/ja/command.tmpl
+    - path: /usr/share/cups/templates/ja/edit-config.tmpl
+    - path: /usr/share/cups/templates/ja/error-op.tmpl
+    - path: /usr/share/cups/templates/ja/error.tmpl
+    - path: /usr/share/cups/templates/ja/header.tmpl
+    - path: /usr/share/cups/templates/ja/help-header.tmpl
+    - path: /usr/share/cups/templates/ja/help-printable.tmpl
+    - path: /usr/share/cups/templates/ja/help-trailer.tmpl
+    - path: /usr/share/cups/templates/ja/job-cancel.tmpl
+    - path: /usr/share/cups/templates/ja/job-hold.tmpl
+    - path: /usr/share/cups/templates/ja/job-move.tmpl
+    - path: /usr/share/cups/templates/ja/job-moved.tmpl
+    - path: /usr/share/cups/templates/ja/job-release.tmpl
+    - path: /usr/share/cups/templates/ja/job-restart.tmpl
+    - path: /usr/share/cups/templates/ja/jobs-header.tmpl
+    - path: /usr/share/cups/templates/ja/jobs.tmpl
+    - path: /usr/share/cups/templates/ja/list-available-printers.tmpl
+    - path: /usr/share/cups/templates/ja/modify-class.tmpl
+    - path: /usr/share/cups/templates/ja/modify-printer.tmpl
+    - path: /usr/share/cups/templates/ja/norestart.tmpl
+    - path: /usr/share/cups/templates/ja/option-boolean.tmpl
+    - path: /usr/share/cups/templates/ja/option-conflict.tmpl
+    - path: /usr/share/cups/templates/ja/option-header.tmpl
+    - path: /usr/share/cups/templates/ja/option-pickmany.tmpl
+    - path: /usr/share/cups/templates/ja/option-pickone.tmpl
+    - path: /usr/share/cups/templates/ja/option-trailer.tmpl
+    - path: /usr/share/cups/templates/ja/pager.tmpl
+    - path: /usr/share/cups/templates/ja/printer-accept.tmpl
+    - path: /usr/share/cups/templates/ja/printer-added.tmpl
+    - path: /usr/share/cups/templates/ja/printer-cancel-jobs.tmpl
+    - path: /usr/share/cups/templates/ja/printer-configured.tmpl
+    - path: /usr/share/cups/templates/ja/printer-confirm.tmpl
+    - path: /usr/share/cups/templates/ja/printer-default.tmpl
+    - path: /usr/share/cups/templates/ja/printer-deleted.tmpl
+    - path: /usr/share/cups/templates/ja/printer-jobs-header.tmpl
+    - path: /usr/share/cups/templates/ja/printer-modified.tmpl
+    - path: /usr/share/cups/templates/ja/printer-reject.tmpl
+    - path: /usr/share/cups/templates/ja/printer-start.tmpl
+    - path: /usr/share/cups/templates/ja/printer-stop.tmpl
+    - path: /usr/share/cups/templates/ja/printer.tmpl
+    - path: /usr/share/cups/templates/ja/printers-header.tmpl
+    - path: /usr/share/cups/templates/ja/printers.tmpl
+    - path: /usr/share/cups/templates/ja/restart.tmpl
+    - path: /usr/share/cups/templates/ja/search.tmpl
+    - path: /usr/share/cups/templates/ja/set-printer-options-header.tmpl
+    - path: /usr/share/cups/templates/ja/set-printer-options-trailer.tmpl
+    - path: /usr/share/cups/templates/ja/test-page.tmpl
+    - path: /usr/share/cups/templates/ja/trailer.tmpl
+    - path: /usr/share/cups/templates/ja/users.tmpl
+    - path: /usr/share/cups/templates/job-cancel.tmpl
+    - path: /usr/share/cups/templates/job-hold.tmpl
+    - path: /usr/share/cups/templates/job-move.tmpl
+    - path: /usr/share/cups/templates/job-moved.tmpl
+    - path: /usr/share/cups/templates/job-release.tmpl
+    - path: /usr/share/cups/templates/job-restart.tmpl
+    - path: /usr/share/cups/templates/jobs-header.tmpl
+    - path: /usr/share/cups/templates/jobs.tmpl
+    - path: /usr/share/cups/templates/list-available-printers.tmpl
+    - path: /usr/share/cups/templates/modify-class.tmpl
+    - path: /usr/share/cups/templates/modify-printer.tmpl
+    - path: /usr/share/cups/templates/norestart.tmpl
+    - path: /usr/share/cups/templates/option-boolean.tmpl
+    - path: /usr/share/cups/templates/option-conflict.tmpl
+    - path: /usr/share/cups/templates/option-header.tmpl
+    - path: /usr/share/cups/templates/option-pickmany.tmpl
+    - path: /usr/share/cups/templates/option-pickone.tmpl
+    - path: /usr/share/cups/templates/option-trailer.tmpl
+    - path: /usr/share/cups/templates/pager.tmpl
+    - path: /usr/share/cups/templates/printer-accept.tmpl
+    - path: /usr/share/cups/templates/printer-added.tmpl
+    - path: /usr/share/cups/templates/printer-cancel-jobs.tmpl
+    - path: /usr/share/cups/templates/printer-configured.tmpl
+    - path: /usr/share/cups/templates/printer-confirm.tmpl
+    - path: /usr/share/cups/templates/printer-default.tmpl
+    - path: /usr/share/cups/templates/printer-deleted.tmpl
+    - path: /usr/share/cups/templates/printer-jobs-header.tmpl
+    - path: /usr/share/cups/templates/printer-modified.tmpl
+    - path: /usr/share/cups/templates/printer-reject.tmpl
+    - path: /usr/share/cups/templates/printer-start.tmpl
+    - path: /usr/share/cups/templates/printer-stop.tmpl
+    - path: /usr/share/cups/templates/printer.tmpl
+    - path: /usr/share/cups/templates/printers-header.tmpl
+    - path: /usr/share/cups/templates/printers.tmpl
+    - path: /usr/share/cups/templates/pt_BR/add-class.tmpl
+    - path: /usr/share/cups/templates/pt_BR/add-printer.tmpl
+    - path: /usr/share/cups/templates/pt_BR/admin.tmpl
+    - path: /usr/share/cups/templates/pt_BR/choose-device.tmpl
+    - path: /usr/share/cups/templates/pt_BR/choose-make.tmpl
+    - path: /usr/share/cups/templates/pt_BR/choose-model.tmpl
+    - path: /usr/share/cups/templates/pt_BR/choose-serial.tmpl
+    - path: /usr/share/cups/templates/pt_BR/choose-uri.tmpl
+    - path: /usr/share/cups/templates/pt_BR/class-added.tmpl
+    - path: /usr/share/cups/templates/pt_BR/class-confirm.tmpl
+    - path: /usr/share/cups/templates/pt_BR/class-deleted.tmpl
+    - path: /usr/share/cups/templates/pt_BR/class-jobs-header.tmpl
+    - path: /usr/share/cups/templates/pt_BR/class-modified.tmpl
+    - path: /usr/share/cups/templates/pt_BR/class.tmpl
+    - path: /usr/share/cups/templates/pt_BR/classes-header.tmpl
+    - path: /usr/share/cups/templates/pt_BR/classes.tmpl
+    - path: /usr/share/cups/templates/pt_BR/command.tmpl
+    - path: /usr/share/cups/templates/pt_BR/edit-config.tmpl
+    - path: /usr/share/cups/templates/pt_BR/error-op.tmpl
+    - path: /usr/share/cups/templates/pt_BR/error.tmpl
+    - path: /usr/share/cups/templates/pt_BR/header.tmpl
+    - path: /usr/share/cups/templates/pt_BR/help-header.tmpl
+    - path: /usr/share/cups/templates/pt_BR/help-printable.tmpl
+    - path: /usr/share/cups/templates/pt_BR/help-trailer.tmpl
+    - path: /usr/share/cups/templates/pt_BR/job-cancel.tmpl
+    - path: /usr/share/cups/templates/pt_BR/job-hold.tmpl
+    - path: /usr/share/cups/templates/pt_BR/job-move.tmpl
+    - path: /usr/share/cups/templates/pt_BR/job-moved.tmpl
+    - path: /usr/share/cups/templates/pt_BR/job-release.tmpl
+    - path: /usr/share/cups/templates/pt_BR/job-restart.tmpl
+    - path: /usr/share/cups/templates/pt_BR/jobs-header.tmpl
+    - path: /usr/share/cups/templates/pt_BR/jobs.tmpl
+    - path: /usr/share/cups/templates/pt_BR/list-available-printers.tmpl
+    - path: /usr/share/cups/templates/pt_BR/modify-class.tmpl
+    - path: /usr/share/cups/templates/pt_BR/modify-printer.tmpl
+    - path: /usr/share/cups/templates/pt_BR/norestart.tmpl
+    - path: /usr/share/cups/templates/pt_BR/option-boolean.tmpl
+    - path: /usr/share/cups/templates/pt_BR/option-conflict.tmpl
+    - path: /usr/share/cups/templates/pt_BR/option-header.tmpl
+    - path: /usr/share/cups/templates/pt_BR/option-pickmany.tmpl
+    - path: /usr/share/cups/templates/pt_BR/option-pickone.tmpl
+    - path: /usr/share/cups/templates/pt_BR/option-trailer.tmpl
+    - path: /usr/share/cups/templates/pt_BR/pager.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printer-accept.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printer-added.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printer-cancel-jobs.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printer-configured.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printer-confirm.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printer-default.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printer-deleted.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printer-jobs-header.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printer-modified.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printer-reject.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printer-start.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printer-stop.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printer.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printers-header.tmpl
+    - path: /usr/share/cups/templates/pt_BR/printers.tmpl
+    - path: /usr/share/cups/templates/pt_BR/restart.tmpl
+    - path: /usr/share/cups/templates/pt_BR/search.tmpl
+    - path: /usr/share/cups/templates/pt_BR/set-printer-options-header.tmpl
+    - path: /usr/share/cups/templates/pt_BR/set-printer-options-trailer.tmpl
+    - path: /usr/share/cups/templates/pt_BR/test-page.tmpl
+    - path: /usr/share/cups/templates/pt_BR/trailer.tmpl
+    - path: /usr/share/cups/templates/pt_BR/users.tmpl
+    - path: /usr/share/cups/templates/restart.tmpl
+    - path: /usr/share/cups/templates/ru/add-class.tmpl
+    - path: /usr/share/cups/templates/ru/add-printer.tmpl
+    - path: /usr/share/cups/templates/ru/admin.tmpl
+    - path: /usr/share/cups/templates/ru/choose-device.tmpl
+    - path: /usr/share/cups/templates/ru/choose-make.tmpl
+    - path: /usr/share/cups/templates/ru/choose-model.tmpl
+    - path: /usr/share/cups/templates/ru/choose-serial.tmpl
+    - path: /usr/share/cups/templates/ru/choose-uri.tmpl
+    - path: /usr/share/cups/templates/ru/class-added.tmpl
+    - path: /usr/share/cups/templates/ru/class-confirm.tmpl
+    - path: /usr/share/cups/templates/ru/class-deleted.tmpl
+    - path: /usr/share/cups/templates/ru/class-jobs-header.tmpl
+    - path: /usr/share/cups/templates/ru/class-modified.tmpl
+    - path: /usr/share/cups/templates/ru/class.tmpl
+    - path: /usr/share/cups/templates/ru/classes-header.tmpl
+    - path: /usr/share/cups/templates/ru/classes.tmpl
+    - path: /usr/share/cups/templates/ru/command.tmpl
+    - path: /usr/share/cups/templates/ru/edit-config.tmpl
+    - path: /usr/share/cups/templates/ru/error-op.tmpl
+    - path: /usr/share/cups/templates/ru/error.tmpl
+    - path: /usr/share/cups/templates/ru/header.tmpl
+    - path: /usr/share/cups/templates/ru/help-header.tmpl
+    - path: /usr/share/cups/templates/ru/help-printable.tmpl
+    - path: /usr/share/cups/templates/ru/help-trailer.tmpl
+    - path: /usr/share/cups/templates/ru/job-cancel.tmpl
+    - path: /usr/share/cups/templates/ru/job-hold.tmpl
+    - path: /usr/share/cups/templates/ru/job-move.tmpl
+    - path: /usr/share/cups/templates/ru/job-moved.tmpl
+    - path: /usr/share/cups/templates/ru/job-release.tmpl
+    - path: /usr/share/cups/templates/ru/job-restart.tmpl
+    - path: /usr/share/cups/templates/ru/jobs-header.tmpl
+    - path: /usr/share/cups/templates/ru/jobs.tmpl
+    - path: /usr/share/cups/templates/ru/list-available-printers.tmpl
+    - path: /usr/share/cups/templates/ru/modify-class.tmpl
+    - path: /usr/share/cups/templates/ru/modify-printer.tmpl
+    - path: /usr/share/cups/templates/ru/norestart.tmpl
+    - path: /usr/share/cups/templates/ru/option-boolean.tmpl
+    - path: /usr/share/cups/templates/ru/option-conflict.tmpl
+    - path: /usr/share/cups/templates/ru/option-header.tmpl
+    - path: /usr/share/cups/templates/ru/option-pickmany.tmpl
+    - path: /usr/share/cups/templates/ru/option-pickone.tmpl
+    - path: /usr/share/cups/templates/ru/option-trailer.tmpl
+    - path: /usr/share/cups/templates/ru/pager.tmpl
+    - path: /usr/share/cups/templates/ru/printer-accept.tmpl
+    - path: /usr/share/cups/templates/ru/printer-added.tmpl
+    - path: /usr/share/cups/templates/ru/printer-cancel-jobs.tmpl
+    - path: /usr/share/cups/templates/ru/printer-configured.tmpl
+    - path: /usr/share/cups/templates/ru/printer-confirm.tmpl
+    - path: /usr/share/cups/templates/ru/printer-default.tmpl
+    - path: /usr/share/cups/templates/ru/printer-deleted.tmpl
+    - path: /usr/share/cups/templates/ru/printer-jobs-header.tmpl
+    - path: /usr/share/cups/templates/ru/printer-modified.tmpl
+    - path: /usr/share/cups/templates/ru/printer-reject.tmpl
+    - path: /usr/share/cups/templates/ru/printer-start.tmpl
+    - path: /usr/share/cups/templates/ru/printer-stop.tmpl
+    - path: /usr/share/cups/templates/ru/printer.tmpl
+    - path: /usr/share/cups/templates/ru/printers-header.tmpl
+    - path: /usr/share/cups/templates/ru/printers.tmpl
+    - path: /usr/share/cups/templates/ru/restart.tmpl
+    - path: /usr/share/cups/templates/ru/search.tmpl
+    - path: /usr/share/cups/templates/ru/set-printer-options-header.tmpl
+    - path: /usr/share/cups/templates/ru/set-printer-options-trailer.tmpl
+    - path: /usr/share/cups/templates/ru/test-page.tmpl
+    - path: /usr/share/cups/templates/ru/trailer.tmpl
+    - path: /usr/share/cups/templates/ru/users.tmpl
+    - path: /usr/share/cups/templates/search.tmpl
+    - path: /usr/share/cups/templates/set-printer-options-header.tmpl
+    - path: /usr/share/cups/templates/set-printer-options-trailer.tmpl
+    - path: /usr/share/cups/templates/test-page.tmpl
+    - path: /usr/share/cups/templates/trailer.tmpl
+    - path: /usr/share/cups/templates/users.tmpl
+    - path: /usr/share/icons/hicolor/16x16/apps/cups.png
+    - path: /usr/share/icons/hicolor/32x32/apps/cups.png
+    - path: /usr/share/icons/hicolor/64x64/apps/cups.png
+    - path: /usr/share/icons/hicolor/128x128/apps/cups.png
+
+resolution:
+  /usr/lib/libacl.so.1: acl
+  /usr/lib/libgcc_s.so.1: gcc
+  /usr/lib/libstdc++.so.6: gcc
+  /usr/lib/ld-linux-x86-64.so.2: glibc
+  /usr/lib/libc.so.6: glibc
+  /usr/lib/libm.so.6: glibc
+  /usr/lib/libcrypt.so.2: libxcrypt
+  /usr/lib/libcrypto.so.3: openssl3
+  /usr/lib/libssl.so.3: openssl3
+  /usr/lib/libcups.so.2: self
+  /usr/lib/libz.so.1: zlib
